@@ -1,0 +1,8 @@
+{
+  "Features": {
+    "tactical_doctrines": true,
+    "strategic_doctrines": true
+  },
+  // Сколько дней ИИ ждёт перед сменой стратегического курса: курс задаётся надолго.
+  "StrategicAiChangeCooldownDays": 540
+}

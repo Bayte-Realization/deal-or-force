@@ -1,0 +1,77 @@
+{
+  "chronicle.promise_made": "{0} обещает публично: {2}.",
+  "chronicle.promise_kept": "{0} исполняет своё публичное обещание: {2}.",
+  "chronicle.promise_broken": "{0} не исполняет своё публичное обещание: {2}.",
+
+  "PROMISES": "ОБЕЩАНИЯ",
+  "Promise": "Обещание",
+  "Make promise": "Обещать публично",
+  "Days left: {0}": "Осталось дней: {0}",
+  "Deadline {0} days": "Срок {0} дней",
+  "Already promised to the public": "Уже обещано публично",
+  "The government can only keep {0} promises at once": "Правительство может держать слово не больше чем в {0} обещаниях сразу",
+  "A promise made in public. Keeping it earns trust; missing the deadline costs more than never promising. The result is measured the same way every other condition in the game is.": "Обещание, данное публично. Исполненное приносит доверие; пропущенный срок стоит дороже, чем молчание. Результат меряется тем же словарём, что и всякие другие условия в игре.",
+  "If kept:": "Если исполнено:",
+  "If missed:": "Если сорвано:",
+  "Promises: {0} active · {1} available": "Обещания: активно {0} · доступно {1}",
+  "The promise is concluded the day its outcome is true, even before the deadline. Past the deadline it is broken whatever the trend.": "Обещание закрывается в день, когда результат верен, — хотя бы до срока. После срока оно нарушено, каким бы ни был тренд.",
+
+  "Mend the war scars": "Заживить военные шрамы",
+  "Promise in public that the ruined regions will be rebuilt within two years. The promise is kept the day no region is badly damaged any more.": "Обещать публично, что разрушенные регионы будут отстроены за два года. Обещание исполнено в день, когда ни один регион больше не лежит в руинах.",
+  "Nothing is ruined badly enough to promise its repair": "Разрушений не настолько много, чтобы обещать их отстройку",
+
+  "Settle the schools": "Покончить с неучёбой",
+  "Promise in public that within three years the country will not be counted among the poorly schooled any more.": "Обещать публично, что через три года страна перестанет считаться плохо обученной.",
+  "Literacy is not low enough for this promise to mean anything": "Грамотность недостаточно низка, чтобы такое обещание что-то значило",
+
+  "Raise the floor": "Поднять уровень жизни",
+  "Promise in public that within two years the standard of living will clear the line under which a country counts as hungry for work.": "Обещать публично, что через два года уровень жизни поднимется выше черты, за которой страна считается голодной до работы.",
+  "Living standards are not low enough for this promise to mean anything": "Уровень жизни недостаточно низок, чтобы такое обещание что-то значило",
+
+  "Refill the treasury": "Наполнить казну",
+  "Promise in public that within eighteen months the treasury will be solvent again.": "Обещать публично, что через полтора года казна снова станет платёжеспособной.",
+  "The treasury is not empty enough to make this a promise": "Казна недостаточно пуста, чтобы это было обещанием",
+
+  "Curb runaway inflation": "Обуздать растущую инфляцию",
+  "Promise in public to bring annual inflation back under 4% within eighteen months.": "Обещать публично, что за полтора года годовая инфляция опустится ниже 4%.",
+  "Inflation is not high enough to make bringing it down a public pledge": "Инфляция недостаточно высока, чтобы её снижение стало публичным обязательством",
+
+  "Stem the brain drain": "Остановить утечку умов",
+  "Promise in public that the flight of talent and educated youth will be halted within two years.": "Обещать публично, что за два года отток специалистов и образованной молодёжи будет остановлен.",
+  "The country is not losing skilled citizens at an alarming rate": "Страна не теряет специалистов в масштабах, требующих публичного обязательства",
+
+  "Restore domestic order": "Восстановить порядок в стране",
+  "Promise in public to pacify social agitation and bring national stability above 65% within eighteen months.": "Обещать публично, что за полтора года общественные волнения утихнут, а стабильность превысит 65%.",
+  "Domestic order is not fractured enough for this to be a public pledge": "Порядок в стране не нарушен настолько, чтобы давать об этом публичные обещания",
+
+  "Public trust": "Общественное доверие",
+  "The government promised a thing in public and delivered it. Institutions feel a little firmer while the memory lasts.": "Правительство публично обещало и исполнило. Пока жива память, институты чувствуют себя чуть твёрже.",
+  "Broken promise": "Нарушенное обещание",
+  "A promise was made in public and missed. People remember the date, and they bring it up.": "Обещание было дано публично и сорвано. Люди помнят дату — и напоминают о ней.",
+
+  "Promise on track: {0}": "Обещание выполняется: {0}",
+  "Government promise: {0}": "Обещание правительства: {0}",
+  "The promised outcome is met and will conclude.": "Обещанный результат достигнут и ожидает зачёта.",
+  "{0} days remaining to achieve the outcome.": "Осталось {0} дн. для достижения результата.",
+  "Fulfilling the promise raises public trust; breaking it damages government credibility.": "Исполнение обещания укрепляет общественное доверие; срыв подрывает авторитет власти.",
+  "Promised outcome": "Обещанный результат",
+  "Deadline in": "Срок через",
+  "Status now": "Текущий статус",
+  "Fulfilled (pending conclusion)": "Достигнуто (ожидает зачёта)",
+  "In progress": "В процессе",
+  "Review the government commitment": "Проверить обязательство правительства",
+
+  "Regional unrest: {0}": "Волнения в регионе: {0}",
+  "Devastated region: {0}": "Опустошённый регион: {0}",
+  "Local radicalism and secession pressure are reaching critical levels.": "Местный радикализм и тяга к отделению достигают опасных значений.",
+  "Extensive war destruction is paralyzing the regional economy.": "Масштабные военные разрушения парализуют экономику региона.",
+  "Failure to conciliate or protect the region could provoke riots or separatism.": "Отсутствие примирения или защиты региона может спровоцировать беспорядки или сепаратизм.",
+  "Unreconstructed infrastructure retards supply routes and living conditions.": "Невосстановленная инфраструктура тормозит снабжение и роняет уровень жизни.",
+  "Rebuilding war damage restores production capacity and regional stability.": "Восстановление военных разрушений возвращает производственные мощности и региональную стабильность.",
+  "Unrest heat": "Накал волнений",
+  "Secession pressure": "Тяга к отделению",
+  "Government approval": "Одобрение правительства",
+  "War damage": "Военные разрушения",
+  "Inspect regional crisis": "Открыть кризис региона",
+  "Open regional construction": "Открыть стройку в регионе"
+}

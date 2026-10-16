@@ -138,7 +138,9 @@ public static class FrontManager
         foreach (var army in Idle)
         {
             var nation = campaign.NationById(army.NationId);
-            if (nation is null || nation.IsHuman) continue;
+            // A player's divisions stay where they were put, unless the general staff in the
+            // field was handed over. Then the same call-up every other country gets applies.
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             var atWar = false;
             foreach (var war in campaign.Wars)
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }

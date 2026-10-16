@@ -290,6 +290,9 @@ public partial class DealOrForceGame
                 Math.Abs(leaning) < 0.05f ? "" : leaning > 0f ? Tr(" · hardening") : Tr(" · softening")),
             MovementMethods.Of(nation), defines.MovementArmedAt, methodsToken,
             Tr("How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.")));
+        var pressure = MovementMethods.LoudestPressure(_campaign, nation);
+        if (pressure.Length > 0)
+            _movementRows.AddChild(Title(pressure, 13, Ui.Colour(leaning > 0.05f ? "state.warning" : "text.body_soft")));
         var heatToken = state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative"
             : state.Heat >= defines.MovementExpelHeat * 0.45f ? "state.warning" : "state.info";
         if (state.Landless)
@@ -298,6 +301,9 @@ public partial class DealOrForceGame
                 defines.MovementExpelHeat, heatToken,
                 Simulation.Loc.Format("Everything it does on the host's ground warms the host's temper, and it cools by itself. At {0} the host expels the headquarters.",
                     Fmt.Percent(defines.MovementExpelHeat))));
+        var patience = MovementRules.Patience(_campaign, nation);
+        if (patience.Length > 0)
+            _movementRows.AddChild(Title(patience, 13, Ui.Colour(state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative" : "state.warning")));
 
         // ---- its following ------------------------------------------------------------
         _movementRows.AddChild(MovementHeading("ITS FOLLOWING"));
@@ -557,7 +563,7 @@ public partial class DealOrForceGame
             button.Icon = FlagTexture(nation.Tag) ?? (ResourceLoader.Exists(flagPath) ? GD.Load<Texture2D>(flagPath) : null);
             button.ExpandIcon = false;
             button.AddThemeConstantOverride("icon_max_width", 20);
-            button.AddThemeFontSizeOverride("font_size", 12);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(nation)?.Description ?? "") + "\n" +
                 Simulation.Loc.Format("Local following: {0} of all residents. Recognition is not political support.",
                     Fmt.Percent(MovementReach.ResidentSupport(_campaign, nation, region))));
@@ -623,7 +629,7 @@ public partial class DealOrForceGame
         heading.SetMeta(LocSourceMeta, source);
         heading.SetMeta(LocAppliedMeta, heading.Text);
         heading.AddThemeColorOverride("font_color", Ui.Colour("text.accent_dim"));
-        heading.AddThemeFontSizeOverride("font_size", 12);
+        heading.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.heading_small", 12));
         return heading;
     }
 

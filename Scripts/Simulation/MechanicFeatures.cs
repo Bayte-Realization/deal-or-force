@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -16,11 +16,16 @@ public sealed partial class Defines
         ["politics"] = true, ["movements"] = true, ["colonisation"] = true,
         ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true,
         ["war_damage"] = true, ["war_weariness"] = true, ["militia"] = true,
-        ["historical_norms"] = true, ["public_reputation"] = true, ["seasonal_water"] = true, ["movement_lifecycle"] = true,
+        ["historical_norms"] = true, ["public_reputation"] = true, ["seasons"] = true, ["seasonal_water"] = true, ["seasonal_roads"] = true, ["weather"] = true, ["movement_lifecycle"] = true,
         ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true, ["deals"] = true,
-        ["resident_awareness"] = true, ["domestic_crises"] = true, ["organizations"] = true,
+        ["resident_awareness"] = true, ["domestic_crises"] = true, ["political_cohorts"] = true, ["federal_fracture"] = true, ["organizations"] = true,
         ["escalation"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true, ["coups"] = true,
-        ["foreign_assistance"] = true
+        ["foreign_assistance"] = true, ["government_promises"] = true, ["strategic_goals"] = true, ["state_identity"] = true,
+        ["tactical_doctrines"] = true, ["strategic_doctrines"] = true,
+        // Intelligence networks and the world-order emergency on top: dormant content the
+        // console `feature` command can turn on, and a save that predates them agrees with
+        // what the shipped data declares because the data declares the same thing.
+        ["intelligence"] = true, ["world_order_emergency"] = false
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -116,9 +121,11 @@ public static class MechanicFeatures
         "long_range_forces", "aviation", "drones", "artillery", "air_defence", "navy",
         "research", "construction", "recruitment", "decisions", "events", "politics",
         "movements", "colonisation", "subjects", "formable_nations", "secession",
-        "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasonal_water", "movement_lifecycle", "public_debt",
-        "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises",
-        "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance"
+        "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasons", "seasonal_water", "seasonal_roads", "weather", "movement_lifecycle", "public_debt",
+        "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
+        "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
+        "government_promises", "strategic_goals", "state_identity", "intelligence", "world_order_emergency", "tactical_doctrines",
+        "strategic_doctrines"
     };
 
     public static Dictionary<string, string> CommandDefaults()
@@ -132,7 +139,7 @@ public static class MechanicFeatures
         Bind("recruitment", "RaiseArmyCommand");
         Bind("decisions", "TakeDecisionCommand");
         Bind("politics", "ChangePoliticsCommand", "SetPolicyRateCommand", "SetGovernmentFocusCommand");
-        Bind("domestic_crises", "StartCrisisResponseCommand");
+        Bind("domestic_crises", "StartCrisisResponseCommand", "ConciliateRegionCommand");
         Bind("movements", "MovementActionCommand", "MovementDealingCommand");
         Bind("colonisation", "ColoniseCommand");
         Bind("subjects", "OfferSubmissionCommand");
@@ -142,9 +149,15 @@ public static class MechanicFeatures
         Bind("public_debt", "ManageDebtCommand");
         Bind("escalation", "HoldTalksCommand");
         Bind("proxy_wars", "SponsorWarCommand");
-        Bind("deals", "ProposeDealCommand", "RespondDealCommand");
+        Bind("deals", "ProposeDealCommand", "RespondDealCommand", "AskForCorridorCommand");
         Bind("foreign_assistance", "RequestForeignAssistanceCommand", "RespondForeignAssistanceCommand");
         Bind("organizations", "OrganizationCommand");
+        Bind("intelligence", "IntelNetworkCommand");
+        Bind("government_promises", "MakePromiseCommand");
+        Bind("strategic_goals", "AdoptGoalCommand", "AbandonGoalCommand");
+        Bind("state_identity", "DeclareStateIdentityCommand");
+        Bind("tactical_doctrines", "StudyDoctrineCommand");
+        Bind("strategic_doctrines", "AdoptStrategicDoctrineCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
     }

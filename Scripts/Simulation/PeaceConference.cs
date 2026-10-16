@@ -324,6 +324,17 @@ public static class PeaceConference
         war.DefenderFront.Clear();
         war.UnopposedProgress.Clear();
 
+        var unfinishedClaim = false;
+        if (war.ClaimedStateMapIndex > 0 && campaign.ProvinceMap is { } topology)
+        {
+            var claimedState = campaign.States.FirstOrDefault(s => s.MapIndex == war.ClaimedStateMapIndex);
+            if (claimedState is not null && claimedState.NationMapIndex != winner.MapIndex &&
+                !demand.Provinces.Any(p => topology.ProvinceToState[p] == claimedState.MapIndex))
+            {
+                unfinishedClaim = true;
+            }
+        }
+
         // Every pair across the two sides. One war, one settlement, one truce for all of
         // the people who were in it - a coalition that has to sign thirty separate treaties
         // is thirty wars wearing a coat.
@@ -338,6 +349,8 @@ public static class PeaceConference
                 relation.TruceUntil = truceUntil;
                 relation.LastActionDay = campaign.ElapsedDays;
                 relation.Opinion = MathF.Min(relation.Opinion, bitterness);
+                if (unfinishedClaim && (attackingId == winner.Id || defendingId == winner.Id))
+                    OpinionSystem.Remember(campaign, relation, "unfinished_war_claim");
             }
 
         foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))

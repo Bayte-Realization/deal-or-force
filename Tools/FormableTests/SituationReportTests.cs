@@ -21,6 +21,19 @@ static class SituationReportTests
         Check(before == CampaignFingerprint.Of(c) && c.Random.State == random, "reading twice changes neither simulation nor random stream");
         Check(c.StatesOf(n).All(s => s.ResidentAwareness < 0), "old-save awareness is not initialized by the interface");
 
+        var region = c.StatesOf(n).OrderByDescending(s => s.Population).First();
+        region.PoliticalDivergence = .72f; region.LawApproval = .30f; region.GovernmentApproval = .25f;
+        n.Stability = .30f;
+        var strain = SituationReport.Read(c, n).FirstOrDefault(i => i.Id == "political_strain");
+        Check(strain is not null && strain.Route == SituationRoute.Crises && strain.Facts.Length == 5
+            && strain.Facts.Any(fact => fact.Label == "Why" || fact.Label == Loc.Get("Why")),
+            "a region pulling away is explained before anyone opens the crisis desk");
+        c.Armies.Add(new Army { Id = 9, NationId = n.Id, Name = "Test corps", OrderKind = ArmyOrder.AdvanceFront,
+            PlanActive = true, Organisation = .05f, SupplyLevel = .90f, ReadyDay = -1 });
+        var waiting = SituationReport.Read(c, n).Single(i => i.Id == "assault_waiting");
+        Check(waiting.Route == SituationRoute.Army && waiting.TargetId == 9 && waiting.Causes.Length == 1,
+            "a formation unfit to assault is named instead of silently standing still");
+
         n.Market[Commodity.Food] = new MarketQuote { Commodity = Commodity.Food, Demand = 100, Production = 40,
             Imports = 10, Exports = 0, Satisfaction = .5f };
         var shortage = SituationReport.Read(c, n).Single(i => i.Id == "shortage:Food");
@@ -86,6 +99,24 @@ static class SituationReportTests
         Check(bounded.Count <= 8 && bounded.Select(i => i.Id).Distinct().Count() == bounded.Count, "large report is bounded and identity-stable");
         Check(bounded.Where(i => i.DeadlineDay >= 0).Select(i => i.DeadlineDay).SequenceEqual(
             bounded.Where(i => i.DeadlineDay >= 0).Select(i => i.DeadlineDay).OrderBy(i => i)), "equally ranked letters retain deadline order");
+
+        c.DealOffers.Clear(); c.Defines.SituationItemLimit = 40;
+        n.Promises.Add(new ActivePromise { Id = "refill_the_treasury", DueDay = c.ElapsedDays + 45 });
+        var promiseReport = SituationReport.Read(c, n);
+        Check(promiseReport.Any(i => i.Id == "promise:refill_the_treasury" && i.DeadlineDay == c.ElapsedDays + 45 && i.Route == SituationRoute.Crises),
+            "an open government promise is tracked in the situation room with its real deadline");
+
+        var testState = c.StatesOf(n).First();
+        testState.SecessionPressure = 0.65f;
+        var unrestReport = SituationReport.Read(c, n);
+        Check(unrestReport.Any(i => i.Id.StartsWith("regional_unrest:") && i.TargetId == testState.MapIndex),
+            "high regional unrest heat produces a targeted early warning");
+
+        testState.WarDamage = 0.45f;
+        var damageReport = SituationReport.Read(c, n);
+        Check(damageReport.Any(i => i.Id.StartsWith("regional_damage:") && i.TargetId == testState.MapIndex && i.Route == SituationRoute.Construction),
+            "severe regional war damage produces a reconstruction opportunity");
+        n.Promises.Clear(); testState.SecessionPressure = 0f; testState.WarDamage = 0f;
 
         Attention();
         SoundCatalog.Load(); var cue = SoundCatalog.Get("situation_alert");

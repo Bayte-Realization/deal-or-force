@@ -1,0 +1,89 @@
+// Cultural founding paths for the historic states in 10_historic.json that had only a list of
+// tags and no answer to "what if the people who lived in it are the ones who rebuild it".
+//
+// These are additive on purpose. A formable declared here keeps every territory, stability,
+// cost, politics and treaty check it already had; what changes is only who is allowed to lead
+// the attempt. A people that once shared a state can be the one that proclaims it again, and
+// that no longer depends on which government happens to be in office today.
+//
+// Every culture named here exists in common/cultures, and none of these ids carries an
+// `eligible_cultures` list anywhere else, so nothing written before is replaced.
+{
+  "british_isles": {
+    "eligible_cultures": ["english", "scottish", "welsh", "irish", "scottish_gaelic", "cornish"]
+  },
+  "european_federation": {
+    "eligible_cultures": ["german", "french", "italian", "dutch", "flemish", "walloon", "spanish",
+      "portuguese", "greek", "irish", "polish", "czech", "slovak", "hungarian", "romanian",
+      "danish", "swedish", "finnish", "estonian", "latvian", "lithuanian", "slovene", "croatian"]
+  },
+  "north_american_union": {
+    "eligible_cultures": ["english", "canadian", "quebecois", "spanish"]
+  },
+  "west_african_union": {
+    "eligible_cultures": ["yoruba", "igbo", "hausa", "fulani", "wolof", "akan"]
+  },
+  "east_african_federation": {
+    "eligible_cultures": ["swahili", "kikuyu", "luo", "amhara", "somali", "oromo", "tigrayan", "dinka"]
+  },
+  "australasia": {
+    "eligible_cultures": ["english", "maori", "samoan", "tongan", "fijian", "papuan_highlander"]
+  },
+  "kalmar_union": {
+    "eligible_cultures": ["norwegian", "swedish", "danish", "finnish", "icelandic"]
+  },
+  "senegambia": {
+    "eligible_cultures": ["wolof", "fulani"]
+  },
+  "eurasian_union": {
+    "eligible_cultures": ["russian", "belarusian", "ukrainian", "kazakh"]
+  },
+  "byzantium": {
+    "eligible_cultures": ["greek", "aromanian"]
+  },
+  "intermarium": {
+    "name": "Intermarium",
+    "description": "Pilsudski's old proposal made real: the lands between the seas - Poland, the Baltics, Belarus and Ukraine, with the Danube powers welcome - as one federation that neither Berlin nor Moscow may order about.",
+    "eligible_tags": ["POL", "UKR", "LTU", "LVA", "EST", "BLR", "CZE", "SVK", "ROU", "HUN"],
+    "eligible_cultures": ["polish", "ukrainian", "lithuanian", "latvian", "estonian", "belarusian", "czech", "slovak", "romanian", "hungarian"],
+    "required_tags": ["POL", "LTU"],
+    "supersedes": ["visegrad_union", "baltic_union"],
+    "minimum_stability": 0.7,
+    "gdp_cost_share": 0.028,
+    "governance_gain": 0.035,
+    "productivity_gain": 0.015,
+    "colour": "#a84a54",
+    "peaceful_accession": true,
+    "subject_integration": true
+  },
+  "slavic_union": {
+    "name": "Union of Slavic States",
+    "description": "Pan-Slavism carried to its end: every state where a Slavic people governs, from the Elbe to the Pacific, one union of the related - not a restoration of anyone's empire, and written so in its charter.",
+    "eligible_tags": ["RUS", "UKR", "BLR", "POL", "CZE", "SVK", "SRB", "HRV", "BIH", "BGR", "MKD", "SVN", "MNE"],
+    "eligible_cultures": ["russian", "ukrainian", "belarusian", "polish", "czech", "slovak", "serbian", "croatian", "bosniak", "bulgarian", "macedonian", "slovene"],
+    "required_tags": ["RUS", "POL", "BGR"],
+    "supersedes": ["soviet_union", "union_state", "yugoslavia"],
+    "minimum_stability": 0.74,
+    "gdp_cost_share": 0.03,
+    "governance_gain": 0.035,
+    "productivity_gain": 0.015,
+    "colour": "#5f7f9f",
+    "peaceful_accession": true,
+    "subject_integration": true
+  },
+  "latin_community": {
+    "name": "Hispanic Community of Nations",
+    "description": "The community of the Spanish-speaking peoples as one federal state: Spain and the republics of the Americas in a union of equal members, the ocean a domestic sea rather than a distance.",
+    "eligible_tags": ["ESP", "MEX", "ARG", "CHL", "COL", "PER", "VEN", "CUB", "DOM", "GTM", "HND", "SLV", "NIC", "CRI", "PAN", "BOL", "ECU", "PRY", "URY"],
+    "eligible_cultures": ["spanish", "hispanic_american"],
+    "required_tags": ["ESP", "MEX", "COL"],
+    "supersedes": ["gran_colombia", "iberia_greater"],
+    "minimum_stability": 0.72,
+    "gdp_cost_share": 0.03,
+    "governance_gain": 0.035,
+    "productivity_gain": 0.016,
+    "colour": "#a8853f",
+    "peaceful_accession": true,
+    "subject_integration": true
+  }
+}

@@ -8,6 +8,7 @@ public partial class DealOrForceGame
     private VBoxContainer _hudTopStack, _hudIdentityBox;
     private HBoxContainer _hudTopRow, _hudStatRow;
     private VBoxContainer _hudClockBox;
+    private Button _mediaButton = null!;
     private float _hudHeaderExtra;
 
     private void LayoutHudReadability()

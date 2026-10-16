@@ -19,6 +19,8 @@ static class Program
         if (args.Contains("--coalition-combat-only")) { CoalitionCombatTests.Run(); return; }
         if (args.Contains("--assault-readiness-only")) { AssaultReadinessTests.Run(); return; }
         if (args.Contains("--ai-front-recovery-only")) { AiFrontRecoveryTests.Run(); return; }
+        if (args.Contains("--advance-rotation-only")) { AdvanceTargetTests.Run(); return; }
+        if (args.Contains("--mobilisation-only")) { MobilisationTests.Run(); return; }
         if (args.Contains("--plan-erasing-only")) { PlanErasingTests.Run(); return; }
         PlanErasingTests.Run();
         if (args.Contains("--features-only")) { FeatureTests.Run(); return; }

@@ -31,6 +31,7 @@ public partial class DealOrForceGame
     private Label _countryCardStanding;
     private VBoxContainer _countryCardRows;
     private VBoxContainer _countryCardActionsHost;
+    private ScrollContainer _countryFactsScroll;
     private HBoxContainer _countryCardLinks;
 
     private PanelContainer _regionCard;
@@ -96,24 +97,68 @@ public partial class DealOrForceGame
         _countryCardStanding.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_countryCardStanding);
 
-        var bodyScroll = new ScrollContainer { Name = "CountryFactsScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
-        rows.AddChild(bodyScroll);
-        var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 7);
-        bodyScroll.AddChild(body);
+        // The card is a static top, a facts panel, and an actions panel, in that order.
+        //
+        // The top - flag, name, caption, standing - never scrolls. It says what the card is about,
+        // and a reader who has scrolled down to the buttons should still be able to see whose
+        // buttons they are.
+        //
+        // The actions are a panel with a scrollbar of their own rather than the tail of the facts.
+        // They are what the card is open for, they are the part that grows - with the stance, with
+        // a subject, with a war - and a list you have to scroll somebody's dossier past to reach is
+        // a list in the wrong place.
+        //
+        // The facts take the height their own contents ask for, up to half the card. Not an
+        // expanded share: two expanded panels split the card evenly, and the half the facts did not
+        // need was a 240-pixel hole between "Full diplomacy" and the first action. And not a
+        // measurement taken here either - Godot settles minimum sizes during the layout pass, so
+        // asking at build time measures zero-height labels and the panel falls back to its cap.
+        // SyncCountryFactsHeight keeps that height true every frame, which is the only moment the
+        // answer exists.
+        var countryFactsScroll = new ScrollContainer
+        {
+            Name = "CountryFactsScroll",
+            SizeFlagsVertical = Control.SizeFlags.Fill,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            FollowFocus = true
+        };
+        _countryFactsScroll = countryFactsScroll;
+        rows.AddChild(countryFactsScroll);
+        var facts = new VBoxContainer { Name = "CountryFacts", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        facts.AddThemeConstantOverride("separation", 7);
+        countryFactsScroll.AddChild(facts);
 
         _countryCardRows = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         _countryCardRows.AddThemeConstantOverride("separation", 2);
-        body.AddChild(_countryCardRows);
+        facts.AddChild(_countryCardRows);
 
-        _countryCardLinks = new HBoxContainer();
+        _countryCardLinks = new HBoxContainer { Name = "CountryCardLinks" };
         _countryCardLinks.AddThemeConstantOverride("separation", 5);
-        body.AddChild(_countryCardLinks);
+        facts.AddChild(_countryCardLinks);
 
-        _countryCardActionsHost = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        body.AddChild(_countryCardActionsHost);
+        // The floor keeps the actions panel from being squeezed out by a long dossier, and the
+        // scrollbar is why `MouseForcePassScrollEvents` is off: over a list of buttons the wheel
+        // should move the buttons rather than whatever is behind the card.
+        var actionsScroll = new ScrollContainer
+        {
+            Name = "CountryActionsScroll",
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 140),
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
+            FollowFocus = true, MouseForcePassScrollEvents = false
+        };
+        rows.AddChild(actionsScroll);
+
+        // Where the diplomatic buttons go while this card is open. They are one set of buttons
+        // with one set of rules, and they move between here and the dossier rather than existing
+        // twice and disagreeing.
+        _countryCardActionsHost = new VBoxContainer { Name = "CountryActionsHost",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        actionsScroll.AddChild(_countryCardActionsHost);
 
         // ---- the region and the province, along the bottom.
         _regionCard = TexturedPanel(_hudLayer, PanelSurface.Command);
@@ -377,6 +422,8 @@ public partial class DealOrForceGame
         // What they have signed, in one line each and only when there is something to say.
         if (relation.Stance == DiplomaticStance.Allied)
             CardRow(_countryCardRows, "Alliance", Tr("signed with you"), null, "state.positive");
+        if (InternationalOrganizations.DefencePartners(_campaign, player.Id).Contains(nation.Id))
+            CardRow(_countryCardRows, "Collective defence pact", Tr("signed with you"), null, "state.positive");
         if (relation.NonAggressionPact)
             CardRow(_countryCardRows, "Non-aggression pact", Tr("signed with you"));
         if (relation.GuaranteedBy(player.Id))
@@ -395,6 +442,18 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Trade through them", Simulation.Loc.Format("{0} a week · {1:P0} of all your trade",
                 Fmt.Money(through), player.TradeDependenceOn(nation.Id)));
 
+        if (relation.OpinionDrivers.Entries.Count > 0)
+        {
+            var topDrivers = relation.OpinionDrivers.Entries
+                .OrderByDescending(entry => Math.Abs(entry.Value))
+                .Take(2);
+            foreach (var driver in topDrivers)
+            {
+                var val = driver.Value >= 0 ? $"+{driver.Value:0}" : $"{driver.Value:0}";
+                CardRow(_countryCardRows, TranslateOpinionDriver(driver.Source), val, null, driver.Value >= 0 ? "state.positive" : "state.negative");
+            }
+        }
+
         var full = ActionButton("Full diplomacy", () =>
         {
             _selectedNation = nation;
@@ -408,6 +467,30 @@ public partial class DealOrForceGame
 
         HostCountryActions(_countryCardActionsHost);
         RefreshCountryActions(nation);
+    }
+
+    /// <summary>
+    /// Keep the facts panel as tall as the facts, and no taller.
+    ///
+    /// Two expanded panels in a column split the space evenly, and the part the facts do not need
+    /// becomes empty card - that was a 240-pixel hole between "Full diplomacy" and the first action.
+    /// Sizing the panel once, when the card is built, does not work either: Godot settles minimum
+    /// sizes during the layout pass, so the rows are still zero-height labels at that moment and the
+    /// measurement comes back as nothing. Rather than guess which frame the layout lands on, the
+    /// measurement is taken every frame and the answer is written only when it changes - a settled
+    /// card therefore costs one walk of a small tree and no writes at all.
+    /// </summary>
+    private void SyncCountryFactsHeight()
+    {
+        if (_countryFactsScroll is null || !_countryFactsScroll.IsVisibleInTree()) return;
+        if (_countryFactsScroll.GetChildCount() == 0) return;
+        var facts = _countryFactsScroll.GetChild(0) as Control;
+        if (facts is null) return;
+        // Half the card at most, so a dossier that has grown - alliances, subjects, opinion
+        // drivers - can never squeeze the buttons out of the panel that exists for them.
+        var ceiling = Math.Max(140f, _countryCard.Size.Y * 0.5f);
+        var wanted = new Vector2(0, Math.Min(facts.GetCombinedMinimumSize().Y, ceiling));
+        if (_countryFactsScroll.CustomMinimumSize != wanted) _countryFactsScroll.CustomMinimumSize = wanted;
     }
 
     /// <summary>
@@ -623,7 +706,7 @@ public partial class DealOrForceGame
             CustomMinimumSize = new Vector2(24, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
             AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = value ?? ""
         };
-        figure.AddThemeFontSizeOverride("font_size", 13);
+        figure.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 13));
         figure.AddThemeColorOverride("font_color", Ui.Colour(valueToken));
         figure.MouseFilter = Control.MouseFilterEnum.Ignore;
         row.AddChild(figure);

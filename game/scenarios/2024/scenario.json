@@ -1,5 +1,16 @@
+// The world in 2024, as a scenario.
+//
+// This file is the second half of the base campaign. The world itself is assembled from
+// history/ - which is where its countries, their figures, their regions, their treaties and
+// their wars live - and what is left over is scenario-shaped rather than world-shaped, so it
+// is written here.
+//
+//   player_country   who the scenario hands the player before they have chosen anybody.
+//                    Any tag in map_data works, and the country picker can still change it:
+//                    this is the seat the campaign opens on, not a restriction.
 {
   "id": "2024",
   "name": "The world in 2024",
-  "description": "Contemporary starting conditions. This bootstrap belongs only to this scenario."
+  "description": "Contemporary starting conditions. This bootstrap belongs only to this scenario.",
+  "player_country": "KOR"
 }

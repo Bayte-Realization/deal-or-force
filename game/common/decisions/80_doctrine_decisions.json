@@ -1,0 +1,50 @@
+// Decisions of the war doctrines (TacticalDoctrines, StrategicDoctrines, MilitaryExperience).
+//
+// The four currencies the doctrines are paid in are fields like any other now, so a decision can
+// grant them ("the exercise taught the army something") or gate on them ("without the credit,
+// the reform is not pushed through"). The political entry is the interesting one: it spends
+// political credit to make the staff learn faster, which is the same credit a rewrite needs -
+// a government can only spend its authority once.
+{
+  "grand_manoeuvres": {
+    "name": "Grand manoeuvres",
+    "description": "Take the whole army to the field for a season: a rehearsal of the campaign that will not be fought, at the price of the campaign that might.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "Divisions cannot rehearse a campaign while they are fighting one",
+    "trigger": { "at_war": false },
+    "ai_will_do": "ai_grand_manoeuvres",
+    "effects": { "army_experience": 10 }
+  },
+
+  "flight_school": {
+    "name": "Expand the flight school",
+    "description": "Buy hours for the wings: navigation, night flying, and the kind of weather that cannot be chosen.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "The air service needs funding and aerodromes to learn anything new",
+    "ai_will_do": "ai_flight_school",
+    "effects": { "air_experience": 6 }
+  },
+
+  "fleet_review": {
+    "name": "Fleet review and long cruise",
+    "description": "Send the squadrons to sea on a schedule: gunnery, station-keeping, and the long passages that make a fleet a fleet.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "There is no fleet to take to sea, or no money to keep it there",
+    "ai_will_do": "ai_fleet_review",
+    "effects": { "naval_experience": 6 }
+  },
+
+  "push_the_reform": {
+    "name": "Push the reform through",
+    "description": "Spend the government's credit on the staff: the new articles are forced through the schools and the depots before the argument is finished.",
+    "cooldown_days": 270,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The government does not have the credit to force it through",
+    "trigger": { "min_political_points": 8 },
+    "ai_will_do": "ai_push_the_reform",
+    "effects": { "political_points": -8, "army_experience": 6 }
+  }
+}

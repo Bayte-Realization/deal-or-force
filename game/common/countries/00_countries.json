@@ -122,7 +122,7 @@
   "IND": { "name": "India", "color": "#c9622e", "capital_name": "New Delhi" },
   "IOA": { "name": "Indian Ocean Territories", "color": "#2d867c" },
   "IOT": { "name": "British Indian Ocean Territory", "color": "#cabb43" },
-  "IRL": { "name": "Ireland", "color": "#c97627", "capital_name": "Dublin" },
+  "IRL": { "name": "Ireland", "color": "#1f9d63", "capital_name": "Dublin" },
   "IRN": { "name": "Iran", "color": "#3f7a4a", "capital_name": "Tehran" },
   "IRQ": { "name": "Iraq", "color": "#ce4b4d", "capital_name": "Baghdad" },
   "ISL": { "name": "Iceland", "color": "#5e6cc9", "capital_name": "Reykjavik" },

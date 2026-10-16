@@ -41,44 +41,73 @@ public partial class DealOrForceGame
         return style;
     }
 
+    /// <summary>
+    /// Which campaign screen is up, and how to put it away - answered in one place.
+    ///
+    /// This used to be three parallel lists that had to agree by hand: a switch answering
+    /// "is it open", a chain of "else if" answering "how do I close it", and a third naming the
+    /// workspaces Escape may close. A screen added to one and not the others is exactly how a
+    /// window stopped answering the key that closes it, so the three are now one table.
+    /// </summary>
+    private (bool Open, System.Action Close) CampaignScreen(string screen) => screen switch
+    {
+        "Situation"     => (_situationLayer?.Visible == true, CloseSituationRoom),
+        "State Affairs" => (_stateAffairsLayer?.Visible == true, CloseStateAffairs),
+        "Ledger"        => (_ledgerLayer?.Visible == true, () => _ledgerLayer.Visible = false),
+        "Wars"          => (_warLedgerLayer?.Visible == true, () => _warLedgerLayer.Visible = false),
+        "Diplomacy"     => (_diplomacyLayer?.Visible == true, CloseDiplomacyScreen),
+        "Laws"          => (_policyLayer?.Visible == true, ClosePolicyWorkspace),
+        "Doctrines"     => (_doctrineLayer?.Visible == true, CloseDoctrineScreen),
+        "Trade"         => (_tradeScreenLayer?.Visible == true, CloseTradeScreen),
+        "Production"    => (_productionLayer?.Visible == true, CloseProductionScreen),
+        "Support"       => (_supportLayer?.Visible == true, CloseSupportScreen),
+        "Research"      => (_researchLayer?.Visible == true, CloseResearchScreen),
+        "Conflicts"     => (_conflictsLayer?.Visible == true, CloseConflictsScreen),
+        // An Economy that is only the sovereign-finance window; when that is closed, Economy is
+        // an ordinary side panel and falls through to the last case with it.
+        "Economy" when _sovereignFinanceLayer?.Visible == true => (true, CloseSovereignFinance),
+        // Everything without a layer of its own - the country card, the region dossier - shares
+        // the one side panel.
+        _ => (_sidePanel?.Visible == true && _openScreen == screen, CloseSidePanel),
+    };
+
     private void ToggleCampaignScreen(string screen)
     {
-        var open = screen switch
-        {
-            "Situation" => _situationLayer?.Visible == true,
-            "State Affairs" => _stateAffairsLayer?.Visible == true,
-            "Ledger" => _ledgerLayer?.Visible == true,
-            "Wars" => _warLedgerLayer?.Visible == true,
-            "Diplomacy" => _diplomacyLayer?.Visible == true,
-            "Laws" => _policyLayer?.Visible == true,
-            "Trade" => _tradeScreenLayer?.Visible == true,
-            "Production" => _productionLayer?.Visible == true,
-            "Support" => _supportLayer?.Visible == true,
-            "Research" => _researchLayer?.Visible == true,
-            "Conflicts" => _conflictsLayer?.Visible == true,
-            "Economy" when _sovereignFinanceLayer?.Visible == true => true,
-            _ => _sidePanel?.Visible == true && _openScreen == screen
-        };
+        var (open, close) = CampaignScreen(screen);
         if (!open)
         {
             if (screen == "Nation") _selectedNation = _campaign.Player;
             OpenScreen(screen);
             return;
         }
-        if (screen == "Situation") CloseSituationRoom();
-        else if (screen == "State Affairs") CloseStateAffairs();
-        else if (screen == "Ledger") _ledgerLayer.Visible = false;
-        else if (screen == "Wars") _warLedgerLayer.Visible = false;
-        else if (screen == "Diplomacy") CloseDiplomacyScreen();
-        else if (screen == "Laws") ClosePolicyWorkspace();
-        else if (screen == "Trade") CloseTradeScreen();
-        else if (screen == "Production") CloseProductionScreen();
-        else if (screen == "Support") CloseSupportScreen();
-        else if (screen == "Research") CloseResearchScreen();
-        else if (screen == "Conflicts") CloseConflictsScreen();
-        else if (screen == "Economy" && _sovereignFinanceLayer?.Visible == true) CloseSovereignFinance();
-        else CloseSidePanel();
+        close();
         UpdateScreenButtons();
+    }
+
+    /// <summary>
+    /// The workspaces that cover the navigation which opened them, in the order they are drawn
+    /// over each other. A full-screen layer swallows the clicks meant for that navigation, so
+    /// without a way out a player is shut inside the window they came to look at - and every
+    /// other panel in the game (the province card, the diplomacy menu, the situation room, the
+    /// media library) already answers Escape. These did not. The situation room and the province
+    /// card answer it themselves and are deliberately not listed here.
+    /// </summary>
+    private static readonly string[] WorkspaceScreens =
+    {
+        "State Affairs", "Ledger", "Wars", "Diplomacy", "Laws", "Doctrines",
+        "Trade", "Production", "Support", "Research", "Conflicts",
+    };
+
+    /// <summary>Close whatever workspace is up. True if there was one to close.</summary>
+    internal bool CloseVisibleCampaignScreen()
+    {
+        foreach (var screen in WorkspaceScreens)
+            if (CampaignScreen(screen).Open)
+            {
+                ToggleCampaignScreen(screen);
+                return true;
+            }
+        return false;
     }
 
     private void LayoutCampaignShell()
@@ -154,7 +183,7 @@ public partial class DealOrForceGame
             }, 0, InterfaceSkin.Metric("shell.tab_height", 34));
             button.ClipText = true;
             // Five policy tabs share a narrow dossier; keep Russian labels readable.
-            if (screen == "Laws") button.AddThemeFontSizeOverride("font_size", 12);
+            if (screen == "Laws") button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             Tip(button, tab.Label);
             _dossierTabButtons.Add(tab.Id, button);
@@ -186,6 +215,8 @@ public partial class DealOrForceGame
         _sideDetail.Visible = _dossierScreen != "Economy" || _dossierTab is "Budget" or "Finance";
         if (_economyControls is not null)
             _economyControls.Visible = _dossierScreen == "Economy" && _dossierTab is not ("Budget" or "Finance");
+        if (_economyDesk is not null)
+            _economyDesk.Visible = _dossierScreen == "Economy";
         if (_economyBuildRows is not null) _economyBuildRows.Visible = _dossierTab == "Construction";
         if (_economyMarketRows is not null) _economyMarketRows.Visible = _dossierTab == "Market";
         foreach (var child in _sideDetail.GetChildren())

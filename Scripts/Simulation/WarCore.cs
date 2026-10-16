@@ -51,6 +51,19 @@ public sealed partial class StrategicWar
     public int ClaimedStateMapIndex = -1;
 
     /// <summary>
+    /// What the attacking government told the world it was fighting for, as the id the
+    /// simulation reasons in - see <see cref="CasusBelliNames"/>.
+    ///
+    /// It lives on the war rather than on the country because it belongs to the war: a
+    /// government that declared twice kept only the second reason, so the first war on the map
+    /// was described by an argument made about a different one. It is worked out at the
+    /// declaration, priced into the attacker's standing at the same moment, and until now
+    /// thrown away - which is why a player could see that a war had begun and never why.
+    /// An empty string is the expensive kind: a war nobody can give a reason for.
+    /// </summary>
+    public string Justification = "";
+
+    /// <summary>
     /// The day before which neither AI belligerent will sit down. A war a scenario opens
     /// with is a war both governments have already refused to end; leaving that to the
     /// ordinary appetite for peace let the third year of the Russo-Ukrainian war be settled
@@ -487,7 +500,8 @@ public static partial class FrontPlanner
     {
         var war = c.Wars.Find(w => !w.Ended && w.Id == army.AssignedWarId);
         var nation = c.NationById(army.NationId);
-        if (war is null || nation is null || nation.IsHuman) return;
+        if (war is null || nation is null) return;
+        if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return;
         var profile = AiStrategyCatalog.Resolve(c, war, nation);
         var peers = c.Armies.Where(a => a.NationId == nation.Id && a.AssignedWarId == war.Id &&
             a.TemplateId != MilitiaCore.TemplateId).ToArray();

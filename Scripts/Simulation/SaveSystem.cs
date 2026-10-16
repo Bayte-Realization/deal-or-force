@@ -362,10 +362,7 @@ public static class SaveSystem
         public SaveMetadata Commit()
         {
             Directory.CreateDirectory(_root);
-            // A text save is laid out for a person reading it: small things on a line each,
-            // large things broken into lines (SaveTextLayout) - half the size of the
-            // serializer's own indentation, and still ordinary JSON.
-            var json = _text ? SaveTextLayout.Relayout(Whole()) : Whole();
+            var json = Whole();
             if (_text)
             {
                 // Readable and deliberately unguarded. The point of a text save is that a
@@ -706,6 +703,8 @@ public static class SaveSystem
         public List<InternationalOrganization> Organizations = new();
         public List<DealOffer> DealOffers = new();
         public int NextDealOfferId = 1;
+        public List<UltimatumPaper> UltimatumPapers = new();
+        public int NextUltimatumId = 1;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -762,6 +761,10 @@ public static class SaveSystem
         /// </summary>
         [JsonPropertyOrder(1)]
         public Dictionary<int, List<NationHistorySample>> History = new();
+        public HashSet<int> DestroyedProvinces = new();
+        public HashSet<long> CrossoverScars = new();
+        public List<CrossoverWork> CrossoverWorks = new();
+        public List<CrossoverImpact> CrossoverImpacts = new();
         public ushort[] ProvinceController = Array.Empty<ushort>();
         public float[] ProvinceOccupation = Array.Empty<float>();
 
@@ -815,6 +818,8 @@ public static class SaveSystem
             Organizations = new List<InternationalOrganization>(campaign.Organizations),
             DealOffers = campaign.DealOffers.Select(DealNegotiations.Copy).ToList(),
             NextDealOfferId = campaign.NextDealOfferId,
+            UltimatumPapers = campaign.UltimatumPapers.Select(Ultimatum.Copy).ToList(),
+            NextUltimatumId = campaign.NextUltimatumId,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -836,6 +841,10 @@ public static class SaveSystem
             BuildingIds = BuildingIdTable(),
             ProvinceController = campaign.ProvinceController is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceController.Clone(),
             ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone(),
+            DestroyedProvinces = new HashSet<int>(campaign.DestroyedProvinces),
+            CrossoverScars = new HashSet<long>(campaign.CrossoverScars),
+            CrossoverWorks = campaign.CrossoverWorks.Select(w => w.Copy()).ToList(),
+            CrossoverImpacts = new List<CrossoverImpact>(campaign.CrossoverImpacts),
             ProvinceOwner = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToNation.Clone(),
             ProvinceState = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToState.Clone()
         };
@@ -872,6 +881,7 @@ public static class SaveSystem
             Replace(campaign.Sponsorships, Sponsorships);
             Replace(campaign.Organizations, Organizations ?? new());
             DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId);
+            Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();
@@ -894,6 +904,10 @@ public static class SaveSystem
             campaign.History.Restore(History);
             campaign.ObserverMode = ObserverMode;
             foreach (var (id, value) in Settings) campaign.Settings[id] = value;
+            campaign.DestroyedProvinces.UnionWith(DestroyedProvinces ?? new HashSet<int>());
+            campaign.CrossoverScars.UnionWith(CrossoverScars ?? new());
+            campaign.CrossoverWorks.AddRange((CrossoverWorks ?? new()).Select(w => w.Copy()));
+            campaign.CrossoverImpacts.AddRange(CrossoverImpacts ?? new());
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
                 ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);

@@ -270,6 +270,43 @@ public static class Statecraft
                 return "intervention";
         }
 
+        // And then everything else the two of them remember, weighed the way the opinion panel
+        // already weighs it.
+        //
+        // Until now only two of the things a country can hold against another were ever read here
+        // - land taken and an ultimatum refused - so a government whose non-aggression pact had
+        // been torn up, whose trade had been cut off, whose rebels had been armed and whose
+        // waters had been fished by the same neighbour still had, in its own estimation, "nothing
+        // to say", and a war it badly wanted could not be begun. Measured over five years of the
+        // world: eighty-eight wars worth having, sixty-five of them dropped for want of a reason,
+        // and not one declaration. The reasons were all there, in the opinion the game has been
+        // keeping since the day it was written. Nothing was reading them.
+        //
+        // The gravest single grievance, not the sum of them: a decade of small slights is not a
+        // reason for a war, and a country that could add up denunciations and moved border markers
+        // into a declaration would be declaring wars nobody could explain. The weight is the
+        // modifier's own, from data, so how deep a grudge has to go before it is worth a war is a
+        // decision a mod can make - see <see cref="Defines.CasusBelliGrudgeFloor"/>.
+        if (relation is not null)
+        {
+            var gravest = "";
+            var gravestWeight = 0f;
+            foreach (var reason in relation.Reasons)
+            {
+                var definition = OpinionCatalog.Find(reason.Id);
+                if (definition is null || definition.Value.Opinion >= 0f) continue;
+                // Doing it twice is worse than doing it once, but the fifth time is not five
+                // times worse than the first: a grudge shared between clauses of the opinion
+                // panel should not quietly become a war aim by repetition alone.
+                var weight = definition.Value.Opinion * M.Min(2f, Math.Max(1, reason.Stacks));
+                if (weight >= gravestWeight) continue;
+                gravestWeight = weight;
+                gravest = reason.Id;
+            }
+            if (!string.IsNullOrEmpty(gravest) && gravestWeight <= campaign.Defines.CasusBelliGrudgeFloor)
+                return gravest;
+        }
+
         return "";
     }
 
@@ -605,8 +642,10 @@ public static class Statecraft
         // Already fighting a war of its own is the commonest and most honest excuse.
         foreach (var war in campaign.Wars)
             if (!war.Ended && war.Involves(friend.Id)) return false;
+        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Insolvent) return false;
 
         var willingness = bond.Opinion / 100f;
+        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Default) willingness -= 0.35f;
         if (bond.Stance == DiplomaticStance.Allied) willingness += favour ? 0.25f : 0.55f;
         if (!favour && InternationalOrganizations.DefencePartners(campaign, defender.Id).Contains(friend.Id)) willingness += .55f;
         if (bond.GuaranteedBy(friend.Id)) willingness += favour ? 0.15f : 0.45f;
@@ -639,3 +678,38 @@ public sealed partial class Defines
     /// war rather than only for a border war.</summary>
     public int AiClashesCauseAfterDays { get; set; } = 180;
 }
+
+/// <summary>
+/// A casus belli, said out loud.
+///
+/// The simulation reasons in ids - "reconquest", "broke_non_aggression_pact" - because that is
+/// what can be compared, stored and modded. A player reasons in sentences. This is the one place
+/// the two are joined, so a war on the map can be explained in the same words whichever screen
+/// is doing the explaining.
+///
+/// The six the simulation names for itself are listed here. Everything else is a remembered
+/// grievance, and a grievance is already named in the data the opinion panel reads - so a mod
+/// that renames "Broke our non-aggression pact" renames it in the war ledger too, in the
+/// player's own language, without this file being touched at all.
+/// </summary>
+public static class CasusBelliNames
+{
+    private static readonly Dictionary<string, string> Reasons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["reconquest"] = "Took our land",
+        ["ultimatum_refusal"] = "Refused our ultimatum",
+        ["irredentism"] = "Our people live there",
+        ["defence_of_an_ally"] = "Attacked a country we are bound to",
+        ["border_clashes"] = "Months of shooting across the border",
+        ["intervention"] = "Fighting people we armed"
+    };
+
+    /// <summary>The sentence a reason is said in, or an empty string when there is no reason.</summary>
+    public static string Of(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "";
+        if (Reasons.TryGetValue(id, out var named)) return named;
+        return OpinionCatalog.Find(id)?.Name ?? "";
+    }
+}
+

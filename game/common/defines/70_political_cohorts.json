@@ -1,0 +1,18 @@
+{
+  "Features": {
+    "political_cohorts": true,
+    "federal_fracture": true
+  },
+  "CohortDriftPerDay": 0.0012,
+  "CenterRegionIdeologySplit": 0.55,
+  "FederalGovernmentApprovalCeiling": 0.42,
+  "FederalStabilityCeiling": 0.50,
+  "FederalShortageStress": 0.28,
+  "FederalLivingGap": 0.12,
+  "FederalPressureScale": 1.0,
+  "ScandalApproval": 0.36,
+  "ScandalOrder": 0.62,
+  "ScandalCooldownDays": 480,
+  "ScandalStabilityCost": 0.015,
+  "CoupGovernmentDisapprovalWeight": 0.28
+}

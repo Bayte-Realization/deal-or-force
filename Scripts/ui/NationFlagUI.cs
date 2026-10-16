@@ -34,6 +34,29 @@ public partial class DealOrForceGame
     internal static Texture2D FlagTextureFor(string tag) => FlagTexture(tag);
     internal static string FlagSpriteFor(string tag) => string.IsNullOrWhiteSpace(tag) ? "" : FlagSprite(tag, out _);
 
+    /// <summary>
+    /// A flag beside a name in a list, on the button that carries the name.
+    ///
+    /// The picker's country rows were built without one while the movement rows under them had
+    /// one, so half the list said what a country was called and only the other half said which
+    /// country it was. One helper now, so the next list that shows a country cannot forget: the
+    /// flag is read now rather than left to the background loader, because the list is built the
+    /// moment the screen opens, before the loader has reached flags nobody has asked for yet.
+    /// Not expanded: an expanded icon adds nothing to a button's minimum width, and a button in
+    /// a flowing row is given exactly its minimum - the flag would get no room at all.
+    /// </summary>
+    internal static void ListFlag(Button button, Nation nation, int width = 22)
+    {
+        if (button is null || nation is null || string.IsNullOrWhiteSpace(nation.Tag)) return;
+        var name = $"flag_{nation.Tag.ToLowerInvariant()}";
+        var path = SpriteCatalog.TextureOf(name, $"res://game/gfx/flags/{name}.png");
+        button.Icon = FlagTexture(nation.Tag) ??
+            (ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null);
+        button.ExpandIcon = false;
+        button.AddThemeConstantOverride("icon_max_width", width);
+    }
+
+
     private static Texture2D FlagTexture(string tag)
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;

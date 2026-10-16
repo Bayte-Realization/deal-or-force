@@ -229,6 +229,7 @@ public partial class DealOrForceGame
         RefreshCentralBank(nation);
         RefreshPolicyRates(nation);
         RefreshPolitics(nation);
+        RefreshIdentity(nation);
         RefreshAddress(nation);
         _updatingStateAffairs = false;
 

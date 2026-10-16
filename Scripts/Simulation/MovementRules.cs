@@ -433,6 +433,55 @@ public static class MovementRules
             host?.DisplayName ?? "", refuge.DisplayName);
     }
 
+    /// <summary>
+    /// What the host should hear before the headquarters is thrown out. Empty while the
+    /// welcome still has room. Reading it does not cool or spend the patience.
+    /// </summary>
+    public static string Patience(Campaign c, Nation movement)
+    {
+        var state = movement?.Movement;
+        if (c is null || state is null || state.Dissolved || !state.Landless) return "";
+        if (state.HeadquartersStateMapIndex < 0) return "";
+        var line = MathF.Max(0.05f, c.Defines.MovementExpelHeat);
+        if (state.Heat < line * 0.45f) return "";
+        var armed = MovementMethods.StageOf(c, movement) >= MovementStage.Armed;
+        if (state.Heat >= line * 0.75f)
+            return armed
+                ? "The welcome is almost gone: what it will do on this ground has used it up."
+                : "The welcome is almost gone. Another hard week and the headquarters is thrown out.";
+        return armed
+            ? "The host is losing patience with what this movement is willing to do here."
+            : "The host is losing patience. A headquarters that works in the open spends it.";
+    }
+
+    /// <summary>A short mark for the province card. Empty while <see cref="Patience"/> is empty.</summary>
+    public static string PatienceChip(Campaign c, Nation movement)
+    {
+        var state = movement?.Movement;
+        if (c is null || state is null || Patience(c, movement).Length == 0) return "";
+        var line = MathF.Max(0.05f, c.Defines.MovementExpelHeat);
+        return state.Heat >= line * 0.75f ? "welcome almost gone" : "welcome wearing thin";
+    }
+
+    /// <summary>The headquarters on this country's ground that is closest to being thrown out, if any.</summary>
+    public static Nation WornWelcome(Campaign c, Nation host)
+    {
+        if (c is null || host is null) return null;
+        Nation worn = null;
+        var heat = -1f;
+        foreach (var movement in c.Nations)
+        {
+            var state = movement.Movement;
+            if (state is null || state.Dissolved || !state.Landless) continue;
+            if (Movements.HostOf(c, movement) != host) continue;
+            if (Patience(c, movement).Length == 0) continue;
+            if (state.Heat <= heat) continue;
+            heat = state.Heat;
+            worn = movement;
+        }
+        return worn;
+    }
+
     /// <summary>A region of the friendliest country that is not at war with it, not the one throwing it out.</summary>
     internal static ScenarioState BestRefuge(Campaign campaign, Nation nation, Nation except)
     {
@@ -576,6 +625,8 @@ public static class MovementRules
     internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
         bool peacefully = false, bool restoration = false)
     {
+        // A restoration is its own kind of return: the country is already the country it was, so
+        // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
         if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
         if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
         if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||
@@ -629,6 +680,7 @@ public static class MovementRules
         var seat = campaign.StatesOf(nation).OrderByDescending(candidate => candidate.Population).FirstOrDefault();
         if (wasLandless && seat is not null) CapitalCore.Establish(campaign, nation, seat);
         campaign.LocateCapitals();
+        // A restoration keeps the government the country had when it fell; nothing was founded anew.
         if (!restoration) nation.Government = peacefully ? definition.Government : "provisional_government";
         nation.PoliticsChangedDay = campaign.ElapsedDays;
 

@@ -1,12 +1,17 @@
-// Population: the two axes the same people are counted along.
+// Population: the two axes the same people are counted along, and the one they are not.
 //
 // `class` is the rung of the ladder - lower, middle, upper - and `sector` is what a trade
 // lives off. The heading used to read SOCIAL CLASSES over a list that was secretly three
 // different axes at once; it still reads that way here, because in English it is now true.
+//
+// POLITICS is the third question about the same people: not who they are but what they
+// believe. It is the same list of ideologies the government itself is chosen from, read
+// region by region from that region's own conditions, its laws and its form of government.
 {
   "PEOPLES": "PEOPLES",
   "FAITHS": "FAITHS",
   "TRADES": "TRADES",
+  "POLITICS": "POLITICS",
   "SOCIAL CLASSES": "SOCIAL CLASSES",
   "SECTORS": "SECTORS",
 
@@ -16,6 +21,10 @@
 
   "Services": "Services",
   "Ownership": "Ownership",
+
+  "{0} people lean this way": "{0} people lean this way",
+  "The position the government itself holds. What it holds here is the mandate it governs this region with.": "The position the government itself holds. What it holds here is the mandate it governs this region with.",
+  "An opposition position. A region whose largest leaning is not the government's is a region nobody in the capital is speaking for.": "An opposition position. A region whose largest leaning is not the government's is a region nobody in the capital is speaking for.",
 
   "Everyone the country has, by how well off they are": "Everyone the country has, by how well off they are"
 }

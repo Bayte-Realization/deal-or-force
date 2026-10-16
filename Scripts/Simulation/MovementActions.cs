@@ -286,6 +286,7 @@ public static class MovementActions
             case "restore":
                 Restoration.Return(campaign, nation, region);
                 break;
+
             case "campaign":
             case "services":
             {

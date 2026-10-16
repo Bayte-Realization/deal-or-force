@@ -10,6 +10,12 @@ public enum SecessionCause
     /// <summary>It is their country. The people whose grievance this whole thing is.</summary>
     Nationality,
 
+    /// <summary>
+    /// It is the same people, and it has stopped being the same politics. A federal region
+    /// leaving a centre it no longer accepts.
+    /// </summary>
+    Federal,
+
     /// <summary>It went with them. Angry, ungoverned, and on the wrong side of the new line.</summary>
     Discontent
 }
@@ -140,7 +146,9 @@ public static class SecessionEvents
             {
                 MapIndex = state.MapIndex,
                 Name = state.Name,
-                Cause = SecessionCause.Nationality,
+                Cause = SecessionCore.IsFederalBreak(campaign, parent, state)
+                    ? SecessionCause.Federal
+                    : SecessionCause.Nationality,
                 Population = state.Population
             });
         }
@@ -185,8 +193,8 @@ public static class SecessionEvents
     }
 
     /// <summary>
-    /// The grievance the whole thing is about: the biggest contiguous group of ripe regions
-    /// that share a people the state is not for.
+    /// The grievance the whole thing is about: a contiguous minority homeland, or a bloc
+    /// whose own people meet every condition of the separate federal road.
     /// </summary>
     private static List<ScenarioState> Core(Campaign campaign, Nation owner,
         List<ScenarioState> ripe, out string culture)
@@ -196,12 +204,20 @@ public static class SecessionEvents
         long bestPeople = 0;
 
         var byCulture = new Dictionary<string, List<ScenarioState>>(StringComparer.OrdinalIgnoreCase);
+        var federal = new List<ScenarioState>();
         foreach (var state in ripe)
         {
+            // A political break does not need a fabricated foreign population. Recheck
+            // the current conditions: old pressure alone cannot make a healthy or
+            // unreviewed region leave, nor bypass either mechanic's switch.
+            if (SecessionCore.IsFederalBreak(campaign, owner, state))
+            {
+                federal.Add(state);
+                continue;
+            }
             var largest = EconomySystem.Cultures(state).FirstOrDefault();
             if (largest.Culture is null || largest.Size <= 0) continue;
-            // Only a people the state is not for. A region full of the country's own people
-            // that has had enough is a revolution, and that is a different mechanic.
+            // The existing ethnic road still needs a people the state is not for.
             if (DemographyCatalog.IsPrimary(owner.Tag, largest.Culture)) continue;
             if (!byCulture.TryGetValue(largest.Culture, out var list))
                 byCulture[largest.Culture] = list = new List<ScenarioState>();
@@ -218,6 +234,19 @@ public static class SecessionEvents
                 bestPeople = here;
                 culture = people;
             }
+        // Federal regions share their political rejection, not necessarily one language.
+        // Keep them separate from an ethnic bloc and apply the same connectivity and
+        // subsequent population cap as every other secession.
+        foreach (var bloc in Contiguous(federal))
+        {
+            var here = bloc.Sum(state => state.Population);
+            if (best.Count > 0 && here <= bestPeople) continue;
+            best = bloc;
+            bestPeople = here;
+            var seat = bloc.OrderByDescending(state => state.Population).First();
+            culture = EconomySystem.Cultures(seat).FirstOrDefault().Culture
+                ?? DemographyCatalog.PrimaryCulture(owner.Tag);
+        }
         return best;
     }
 
@@ -401,9 +430,13 @@ public static class SecessionEvents
     private static string RevoltKind(Nation parent, IReadOnlyList<SecessionPiece> leaving,
         string culture, long people)
     {
-        long national = 0;
+        long national = 0, federal = 0;
         foreach (var piece in leaving)
+        {
             if (piece.Cause == SecessionCause.Nationality) national += piece.Population;
+            else if (piece.Cause == SecessionCause.Federal) federal += piece.Population;
+        }
+        if (people > 0 && federal / (double)people >= 0.5) return "federal";
         if (people <= 0 || national / (double)people < 0.5) return "discontent";
 
         // Faith, not language, is what separates the remaining two - and the first draft of
@@ -660,7 +693,7 @@ public static class SecessionEvents
 
         SecessionPiece seat = null;
         foreach (var piece in leaving)
-            if (piece.Cause == SecessionCause.Nationality &&
+            if (piece.Cause is SecessionCause.Nationality or SecessionCause.Federal &&
                 (seat is null || piece.Population > seat.Population)) seat = piece;
         seat ??= leaving[0];
         var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
@@ -783,6 +816,7 @@ public static class SecessionEvents
     /// </summary>
     public static bool NamedForItsPeople(Campaign campaign, string culture, IReadOnlyList<SecessionPiece> leaving) =>
         !string.IsNullOrWhiteSpace(culture) &&
+        !leaving.Any(piece => piece.Cause == SecessionCause.Federal) &&
         (!leaving.Any(piece => piece.Cause == SecessionCause.Discontent) || LeadsTheGround(campaign, culture, leaving));
 
     /// <summary>Whether this people is the largest on the ground that is leaving, counted region by region.</summary>

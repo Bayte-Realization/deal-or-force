@@ -1,4 +1,5 @@
 {
+  "Features": { "weather": true },
   "CloudOpacity": 0.50,
   "CloudEdgeSoftness": 0.20,
   "CloudDetailStrength": 0.08,

@@ -1,0 +1,58 @@
+// More of what happens between two countries short of a war.
+//
+// 00_incidents.json held twelve, and eleven of the world's actual ways of getting from
+// friction to shooting were not among them. An energy supply is cut before a war, not after
+// it; a trade embargo arrives before the tanks; a border is moved by markers long before it
+// is moved by artillery; two countries fight each other for years in a third country's
+// desert without a single soldier crossing their own shared border. None of that had a name
+// in this game, so none of it could happen in it.
+//
+// The rate is deliberately NOT raised by this file. How often a pair has an incident at all
+// is worked out from their tension and their distance (Escalation.cs), and only the KIND of
+// incident is drawn from this table by weight. Adding incidents here therefore makes the road
+// to war more varied, not shorter - which is the part that was missing.
+{
+  // ------------------------------------------------------------------ at sea and at the line --
+  //
+  // The small incidents. Every one of them is the opening of a real dispute rather than a
+  // step towards a war, which is why they stay available at every stage: friction does not
+  // stop being possible because things have got worse.
+  "fishing_boat_seized": {
+    "name": "Fishing boat seized",
+    "description": "A trawler was boarded and taken into port, with its crew. Both governments say the water is theirs.",
+    "stage": 1, "max_stage": 3, "weight": 2, "tension": 3, "opinion": "fishing_boat_seized", "naval": true
+  },
+  "border_marker_removed": {
+    "name": "Border markers moved",
+    "description": "Posts and markers along the line were found moved overnight, several hundred metres into the other's side.",
+    "stage": 1, "max_stage": 3, "weight": 1.5, "tension": 3, "grievance": 0.3,
+    "opinion": "border_marker_removed", "border": true
+  },
+  "damaged_cable": {
+    "name": "Cables cut",
+    "description": "A cable or a pipeline on the seabed was severed. A ship was seen slowing above it and then leaving.",
+    "stage": 1, "max_stage": 3, "weight": 1.5, "tension": 3, "opinion": "damaged_cable", "naval": true
+  },
+
+  // ---------------------------------------------------------------- the pressure is applied --
+  //
+  // The middle of the road to a war, and the part the game was missing most completely: a
+  // country that wants something does not usually start by shooting. It turns off the gas,
+  // closes the ports, and lets the other side's economy make the argument for it.
+  "energy_cutoff": {
+    "name": "Energy supply cut",
+    "description": "The pipelines and the tankers stopped. Officially it is maintenance, and it will last as long as the dispute does.",
+    "stage": 2, "max_stage": 3, "weight": 1.5, "tension": 6, "grievance": 0.5, "opinion": "energy_cutoff"
+  },
+  "trade_embargo": {
+    "name": "Trade embargo",
+    "description": "Ports closed to the other's shipping, goods banned, and the companies that traded across the line told to stop.",
+    "stage": 2, "max_stage": 3, "weight": 2, "tension": 4, "opinion": "trade_embargo"
+  },
+  "refugee_flood": {
+    "name": "Refugees pushed across the border",
+    "description": "Thousands crossed in a week, with no papers and nowhere to be sent back to. The other side says it was arranged.",
+    "stage": 2, "max_stage": 3, "weight": 1.5, "tension": 4, "grievance": 0.5,
+    "opinion": "refugee_flood", "border": true
+  }
+}

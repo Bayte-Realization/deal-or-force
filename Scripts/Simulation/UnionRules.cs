@@ -2,15 +2,15 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
-    public int UnionAiReviewDays { get; set; } = 90;
+    public int UnionAiReviewDays { get; set; } = 75;
     public int UnionAiEarliestDay { get; set; } = 180;
-    public float UnionAiMinimumOwnedShare { get; set; } = .35f;
+    public float UnionAiMinimumOwnedShare { get; set; } = .30f;
     public float UnionAiTreasuryReserveShare { get; set; } = .12f;
     public int UnionConsentDays { get; set; } = 730;
     public int UnionInvitationCooldownDays { get; set; } = 365;
     public int UnionInvitationExpiryDays { get; set; } = 60;
     public float UnionMinimumOpinion { get; set; } = 50f;
-    public float UnionAiAcceptance { get; set; } = 80f;
+    public float UnionAiAcceptance { get; set; } = 62f;
     public float UnionMinimumPartnerStability { get; set; } = .55f;
     public float UnionMaximumSubjectLiberty { get; set; } = .25f;
     public float UnionCultureWeight { get; set; } = 30f;

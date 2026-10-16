@@ -29,6 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'PlayerModPackaging.ps1')
+. (Join-Path $PSScriptRoot 'PackInspection.ps1')
 $project = Split-Path -Parent $PSScriptRoot
 # The folder that ships, named the way it should look on somebody else's desktop. It is also
 # the folder that goes into the archive whole - an archive whose entries sit at its root
@@ -44,6 +45,12 @@ $exe = Join-Path $out "Deal or Force.exe"
 
 if (-not $Godot -or -not (Test-Path -LiteralPath $Godot)) {
     throw "Pass -Godot <matching Godot .NET executable>, or set GODOT_EXECUTABLE. This branch requires the engine version declared in DealOrForce.csproj."
+}
+# With redirected output the Windows console wrapper may remain alive after
+# its engine child has finished. Invoke the matching engine directly instead.
+if ([IO.Path]::GetFileName($Godot).EndsWith('_console.exe', [StringComparison]::OrdinalIgnoreCase)) {
+    $nativeEngine = $Godot.Substring(0, $Godot.Length - '_console.exe'.Length) + '.exe'
+    if (Test-Path -LiteralPath $nativeEngine -PathType Leaf) { $Godot = $nativeEngine }
 }
 $engineVersion = (& $Godot --version | Select-Object -Last 1).Trim()
 $sdkVersion = ([xml](Get-Content (Join-Path $project 'DealOrForce.csproj') -Raw)).Project.Sdk
@@ -65,7 +72,7 @@ function Assert-BuildChild([string]$Target) {
 function Copy-PlayerTree([string]$Source, [string]$Destination, [string[]]$ExcludedNames = @()) {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
-        if ($item.Name -in @('bin', 'obj', 'build') -or $item.Name -in $ExcludedNames -or
+        if ($item.Name -in @('bin', 'obj', 'build', 'bridge.local.json') -or $item.Name -in $ExcludedNames -or
             ($item.Name.StartsWith('.') -and $item.Name -ne '.gdignore') -or
             ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
         $target = Join-Path $Destination $item.Name
@@ -131,6 +138,20 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 foreach ($folder in @('Scripts', 'Scenes', 'game')) {
     Copy-PlayerTree (Join-Path $project $folder) (Join-Path $stage $folder)
 }
+# game/map_data is read by filesystem path (MapRasterCatalog, TerrainCatalog, WorldMapSource),
+# never through res://, and Godot ignores exclude_filter for any PNG that has a .import
+# sidecar: it packs the .import and the multimegabyte .ctex into the .pck anyway. Dropping
+# the .import sidecars and placing a .gdignore in the staged map_data folder keeps the
+# exported .pck completely free of map_data while dotnet publish still ships the real files.
+$stagedMapData = Join-Path $stage 'game\map_data'
+if (Test-Path -LiteralPath $stagedMapData) {
+    Get-ChildItem -LiteralPath $stagedMapData -Recurse -File -Filter '*.import' | Remove-Item -Force
+    New-Item -ItemType File -Path (Join-Path $stagedMapData '.gdignore') -Force | Out-Null
+}
+# The export-verification probe is game code that lives under Tools/ (see DealOrForce.csproj).
+# It is compiled into the assembly, so the staged copy the export builds from has to carry it,
+# or the staged project would not compile and the release gate would fail for the wrong reason.
+Copy-PlayerTree (Join-Path $project 'Tools\ExportVerification') (Join-Path $stage 'Tools\ExportVerification')
 foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
     Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
 }
@@ -322,6 +343,7 @@ $forbidden = @(
     @{ Path = ".kilo"; Why = "private nested source checkouts" },
     @{ Path = ".fennara"; Why = "private editor tooling and logs" },
     @{ Path = ".git"; Why = "repository metadata" }
+    @{ Path = "bridge.local.json"; Why = "private bridge configuration and connection token" }
 )
 
 $assemblies = Get-ChildItem -Path $out -Recurse -Force -Filter "DealOrForce.dll" -ErrorAction SilentlyContinue |
@@ -371,6 +393,31 @@ $size = [math]::Round((Get-ChildItem -Path $out -Recurse -Force | Measure-Object
 Write-Host "  every data folder the game needs is in the build ($size MB)" -ForegroundColor Green
 Write-Host "  nothing in the build that should not be there" -ForegroundColor Green
 
+# ------------------------------------------------------------- one copy of the map, not two
+# Everything under game/map_data is read by filesystem path and nothing in the game loads it
+# through res://, so the export preset excludes it from the archive and the csproj Content
+# items put it in as real files. Both halves have to hold, and the failure is silent in both
+# directions: a raster inside the .pck is tens of megabytes nobody ever reads, and a raster
+# missing from the folder is a game that starts and shows an empty world. So the archive is
+# asked directly, and the folder is asked as well.
+$pck = Join-Path $out 'Deal or Force.pck'
+if (Test-Path -LiteralPath $pck) {
+    $packedMap = Get-PackSize -Path $pck -Filter 'game/map_data/*'
+    if ($packedMap.Count -gt 0) {
+        Write-Host ""
+        Write-Host "The archive still packs $($packedMap.Count) game/map_data entr(y/ies) ($([math]::Round($packedMap.Bytes/1MB,2)) MB)," -ForegroundColor Red
+        Write-Host "and the same rasters are also sitting beside it as real files - the game reads them by path and" -ForegroundColor Red
+        Write-Host "never opens the copies in the archive." -ForegroundColor Red
+        throw "Map rasters are packaged twice."
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $out 'game\map_data\provinces.png'))) {
+    Write-Host ""
+    Write-Host "The real files the map loader needs are not beside the executable. They arrive" -ForegroundColor Red
+    Write-Host "through the Content items in DealOrForce.csproj - check them before shipping." -ForegroundColor Red
+    throw "Map rasters are missing from the build."
+}
+Write-Host "  the map rasters ship once, as real files the loader can open" -ForegroundColor Green
 if (-not $SkipRuntimeVerification) {
     Write-Host '== verifying the actual exported executable ==' -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification')

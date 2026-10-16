@@ -26,6 +26,7 @@ public sealed class InternationalOrganization
     public int Id, FounderId, FoundedDay, LastReviewDay = -1, NextMotionId = 1;
     public string Name = "", CharterId = "", LastOutcome = "";
     public string GeneratedCountryTag = "";
+    public string DoctrineId = "";
     public int LastYes, LastVoters;
     public float Budget, Cohesion = .65f;
     public bool Dissolved;

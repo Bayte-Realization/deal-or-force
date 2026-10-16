@@ -21,10 +21,14 @@ public partial class DealOrForceGame
 {
     private HFlowContainer _governmentButtons = null!;
     private HFlowContainer _ideologyButtons = null!;
+    private HFlowContainer _religionButtons = null!;
+    private HFlowContainer _cultureButtons = null!;
     private Label _politicsSummary = null!;
     private Label _politicsFeedback = null!;
+    private Label _identityFeedback = null!;
     private readonly Dictionary<string, Button> _governmentButtonById = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Button> _ideologyButtonById = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<(string Id, Button Button, bool Religion)> _identityButtons = new();
     private readonly Dictionary<string, (TextureRect Flag, Label Caption)> _politicsPreviews = new();
 
     private void BuildPoliticsControls(VBoxContainer rows)
@@ -74,6 +78,129 @@ public partial class DealOrForceGame
         _politicsFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
         _politicsFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_politicsFeedback);
+
+        BuildIdentityControls(rows);
+    }
+
+    // What the state says it is, over what its people are. The buttons are the country's own
+    // faiths and peoples, largest first, each refused with its reason - usually the share a
+    // define asks for - and the secular answers, which need nobody's permission.
+    private void BuildIdentityControls(VBoxContainer rows)
+    {
+        StateSection(rows, "STATE IDENTITY",
+            "The faith the state declares and the people it declares itself of. A declaration " +
+            "needs the group to live in the country in a share large enough to carry the name; " +
+            "declaring a secular state needs nobody's permission. A declaration against the " +
+            "majority costs the country's calm.");
+
+        rows.AddChild(RowLabel("STATE RELIGION", 11, Ui.Colour("text.caption")));
+        _religionButtons = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _religionButtons.AddThemeConstantOverride("h_separation", 5);
+        _religionButtons.AddThemeConstantOverride("v_separation", 4);
+        rows.AddChild(_religionButtons);
+
+        rows.AddChild(RowLabel("STATE CULTURE", 11, Ui.Colour("text.caption")));
+        _cultureButtons = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _cultureButtons.AddThemeConstantOverride("h_separation", 5);
+        _cultureButtons.AddThemeConstantOverride("v_separation", 4);
+        rows.AddChild(_cultureButtons);
+
+        _identityFeedback = RowLabel("", 11, Ui.Colour("text.accent_dim"));
+        _identityFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(_identityFeedback);
+    }
+
+    private void RefreshIdentity(Nation nation)
+    {
+        if (_religionButtons is null || nation is null) return;
+        if (!_campaign.FeatureEnabled("state_identity"))
+        {
+            _religionButtons.Visible = _cultureButtons.Visible = false;
+            return;
+        }
+        _religionButtons.Visible = _cultureButtons.Visible = true;
+        ClearRuntimeChildren(_religionButtons);
+        ClearRuntimeChildren(_cultureButtons);
+        _identityButtons.Clear();
+
+        foreach (var (id, share) in Simulation.StateIdentity.Candidates(_campaign, nation, true).Take(8))
+        {
+            var captured = id;
+            var button = ActionButton(Simulation.DemographyCatalog.ReligionName(id),
+                () => DeclareIdentity(captured, ""), 212, 38);
+            button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0} of the country holds this faith.",
+                Fmt.Percent(share)));
+            _religionButtons.AddChild(button);
+            _identityButtons.Add((id, button, true));
+        }
+        foreach (var secular in Simulation.StateIdentity.Secular.OrderBy(id => id))
+        {
+            if (Simulation.StateIdentity.ReligionShare(_campaign, nation, secular) <= 0f &&
+                Simulation.DemographyCatalog.Religion(secular) is null) continue;
+            var captured = secular;
+            var button = ActionButton(Simulation.DemographyCatalog.ReligionName(secular),
+                () => DeclareIdentity(captured, ""), 212, 38);
+            button.TooltipText = Ui.Tip(Tr("A secular answer needs no congregation: the state may always decline to have a church."));
+            _religionButtons.AddChild(button);
+            _identityButtons.Add((secular, button, true));
+        }
+
+        foreach (var (id, share) in Simulation.StateIdentity.Candidates(_campaign, nation, false).Take(8))
+        {
+            var captured = id;
+            var button = ActionButton(Simulation.DemographyCatalog.CultureName(id),
+                () => DeclareIdentity("", captured), 212, 38);
+            button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0} of the country are this people.",
+                Fmt.Percent(share)));
+            _cultureButtons.AddChild(button);
+            _identityButtons.Add((id, button, false));
+        }
+
+        foreach (var (id, button, religion) in _identityButtons)
+        {
+            var current = religion
+                ? id.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase)
+                : id.Equals(nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase);
+            ApplyLedgerButtonState(button, current);
+            if (current)
+            {
+                button.Disabled = true;
+                button.TooltipText = Ui.Tip(Tr("Current course"));
+            }
+            else
+            {
+                var refusal = Simulation.StateIdentity.BlockReason(_campaign, nation,
+                    religion ? id : "", religion ? "" : id);
+                button.Disabled = refusal.Length > 0;
+                button.TooltipText = Ui.Tip(refusal.Length > 0 ? Tr(refusal) : Tr("Declare this identity"));
+            }
+        }
+
+        var settling = _campaign.Defines.StateIdentityCooldownDays - (_campaign.ElapsedDays - nation.IdentityChangedDay);
+        _identityFeedback.Text = settling > 0
+            ? Simulation.Loc.Format("The last declaration is still fresh. {0} day(s) to go.", settling)
+            : Simulation.Loc.Format("A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.",
+                _campaign.Defines.StateIdentityStabilityCost.ToString("0%"), _campaign.Defines.StateIdentityCooldownDays);
+    }
+
+    private void DeclareIdentity(string religion, string culture)
+    {
+        if (_campaign?.Player is null) return;
+        var refusal = Simulation.StateIdentity.BlockReason(_campaign, _campaign.Player, religion, culture);
+        if (refusal.Length > 0)
+        {
+            _identityFeedback.Text = Tr(refusal);
+            return;
+        }
+        _campaign.Commands.Enqueue(new DeclareStateIdentityCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            Religion = religion,
+            Culture = culture
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        PlayStrategicCue("save_complete");
+        RefreshStateAffairs();
     }
 
     private void ChangePolitics(string government, string ideology)

@@ -28,6 +28,21 @@ public static class StructuredData
     public static bool IsDocument(string path) => Path.GetExtension(path).ToLowerInvariant()
         is ".json" or ".yaml" or ".yml";
 
+    /// <summary>
+    /// True for a #rgb or #rrggbb colour, which is what a colour written in data has to be.
+    ///
+    /// Checked rather than trusted because a colour is not read back until something is drawn: a
+    /// typo here is invisible until it is a screen the wrong colour, and by then nothing points at
+    /// the file that caused it.
+    /// </summary>
+    public static bool IsHexColour(string text)
+    {
+        if (text is null || (text.Length != 4 && text.Length != 7) || text[0] != '#') return false;
+        for (var i = 1; i < text.Length; i++)
+            if (!Uri.IsHexDigit(text[i])) return false;
+        return true;
+    }
+
     public static string[] Files(string directory, SearchOption search = SearchOption.TopDirectoryOnly) =>
         !Directory.Exists(directory) ? Array.Empty<string>() :
         Directory.EnumerateFiles(directory, "*", search).Where(IsDocument)

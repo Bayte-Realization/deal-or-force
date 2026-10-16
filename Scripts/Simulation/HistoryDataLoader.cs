@@ -273,6 +273,16 @@ public static class HistoryDataLoader
                 if (IdeologyCatalog.Knows(id)) nation.Ideology = id;
                 else errors?.Add($"{entry.Name}: no ideology called '{id}'.");
             }
+            // A country's own colour, for the ones whose colour is a fact about them rather than a
+            // shade off the map's palette. The scenario builder gives everybody a palette colour
+            // first, so a country that says nothing here keeps the one it was dealt - and a mod
+            // wanting to recolour a continent writes one more file in this folder rather than
+            // editing the table that ships.
+            // Names, the map's colours and capitals are NOT read here. A country's name, the colour
+            // it is painted and the city its government sits in are what it IS, and they live in
+            // common/countries/ - CountryDefinitions.Apply reads them, and it has already run by
+            // the time this does. What this file is for is what a country HAD in the year the
+            // bookmark opens, which is a different question asked by a different person.
             // Whose state it is. The base game's are read with the catalogue of peoples, which
             // has to know them before any campaign exists; this is for a mod that says it again.
             if (value.TryGetProperty("primary_cultures", out var primary) && primary.ValueKind == JsonValueKind.Array)

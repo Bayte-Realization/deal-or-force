@@ -44,8 +44,28 @@
 
   "capital_share": 0.35,
 
-  "war": 0.06,
-  "war_support": 0.10,
+  // What a war costs the state that is fighting it, and what a war nobody wants any more
+  // costs on top.
+  //
+  // These were 0.06 and 0.10, which put a ceiling of 0.16 on the entire cost of a war - and
+  // that ceiling was the reason a country could lose a war, be occupied, watch its war
+  // support fall through the floor and still sit at 0.70 stability, permanently above the
+  // civil-war line. Measured: after five years of the 2024 world, the tenth percentile of
+  // stability was 0.42 against a civil-war threshold of 0.32, and not one new civil war had
+  // begun anywhere - the four in the world were the four the scenario authored.
+  //
+  // A war the people still believe in is now a real cost but a survivable one (0.14 plus a
+  // fifth of 0.40). A war they have stopped believing in is 0.44, which takes a country from
+  // 0.70 to 0.26 - below the line - and that is the causal chain that was missing: Russia in
+  // 1917, Germany in 1918, Austria-Hungary, the Ottomans. Defeat is how a state comes apart,
+  // and it has to actually cost that much for the mechanic to mean anything.
+  "war": 0.14,
+  "war_support": 0.40,
+
+  // What it costs to have someone else's army standing in the region. Raised with the war
+  // terms for the same reason: occupied ground is the state visibly not governing, and it was
+  // priced as a footnote.
+  "occupation": 0.68,
 
   // How much of the gap to its target a country closes in a week. A tenth means a shock
   // takes a season to arrive rather than a week, which is about how fast a country

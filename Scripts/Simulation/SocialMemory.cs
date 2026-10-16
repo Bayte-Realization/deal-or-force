@@ -228,7 +228,15 @@ public static class SocialMemory
             if (!Due(c.ElapsedDays, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
             var days = s.LastBorderReviewDay < 0 ? 1 : Math.Min(3650, c.ElapsedDays - s.LastBorderReviewDay);
             s.LastBorderReviewDay = c.ElapsedDays;
-            if (s.RememberedOwner != s.NationMapIndex)
+            if (s.RememberedOwner < 0)
+            {
+                // The border the scenario drew is not a conquest. Only a later change of
+                // owner starts the clock again.
+                s.RememberedOwner = s.NationMapIndex;
+                s.SettledBorderDays = (int)MathF.Round(MathF.Max(1f, c.Defines.BorderHabitYears) * 365f * 3f);
+                s.BorderHabit = Habit(s.SettledBorderDays, c.Defines.BorderHabitYears);
+            }
+            else if (s.RememberedOwner != s.NationMapIndex)
             { s.RememberedOwner = s.NationMapIndex; s.SettledBorderDays = 0; s.BorderHabit = 0f; }
             if (!owners.TryGetValue(s.NationMapIndex, out var owner)) continue;
             var occupied = StabilityCore.OccupiedShare(c, s, owner);

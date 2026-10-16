@@ -50,20 +50,35 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var region = pick.State;
 
-        // A layer over the map that closes the card on any click outside it.
+        // A layer over the map that closes the card on a click outside it.
+        // The wheel is not a click. At the end of the list the scroll stops taking it,
+        // and the leftover tick used to land here and dismiss the card.
         _provinceCardLayer = new Control { Name = "ProvinceCardLayer", MouseFilter = MouseFilterEnum.Stop };
         _provinceCardLayer.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _provinceCardLayer.GuiInput += e =>
         {
+            if (e is InputEventMouseButton wheel && wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown
+                    or MouseButton.WheelLeft or MouseButton.WheelRight)
+            {
+                _provinceCardLayer.AcceptEvent();
+                return;
+            }
             if (e is InputEventMouseButton { Pressed: true }) CloseProvinceCard();
             else if (e is InputEventKey { Pressed: true, Keycode: Key.Escape }) CloseProvinceCard();
         };
         _hudLayer.AddChild(_provinceCardLayer);
         _provinceCard = TexturedPanel(_provinceCardLayer, PanelSurface.Command);
         _provinceCard.Name = "ProvinceCard";
-        _provinceCard.CustomMinimumSize = new Vector2(330, 0);
+        // Top-left, sized to its rows. A full-rect parent would otherwise stretch this
+        // panel down the whole map and leave an empty frame under the last button.
+        _provinceCard.SetAnchorsPreset(LayoutPreset.TopLeft);
+        _provinceCard.GrowHorizontal = GrowDirection.End;
+        _provinceCard.GrowVertical = GrowDirection.End;
+        _provinceCard.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
+        _provinceCard.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+        _provinceCard.CustomMinimumSize = new Vector2(320, 0);
         _provinceCard.MouseFilter = MouseFilterEnum.Stop;
-        var rows = PanelRows(_provinceCard, 14, 12, 6);
+        var rows = ScrollablePanelRows(_provinceCard, 10, 8, 3);
 
         // ---- the head: flag, region, owner, its people and its order.
         var head = new HBoxContainer();
@@ -73,11 +88,11 @@ public partial class DealOrForceGame
         var names = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         names.AddThemeConstantOverride("separation", 0);
         head.AddChild(names);
-        names.AddChild(Title(region?.DisplayName ?? owner.DisplayName, 17, Ui.Colour("text.bright")));
+        names.AddChild(Fixed(Title(region?.DisplayName ?? owner.DisplayName, 17, Ui.Colour("text.bright"))));
         var sub = region is null
             ? owner.DisplayName
             : Simulation.Loc.Format("{0} · {1} people · stability {2}", owner.DisplayName, Fmt.People(region.Population), Fmt.Percent(region.Stability));
-        names.AddChild(Title(sub, 11, Ui.Colour("text.caption")));
+        names.AddChild(Fixed(Title(sub, 11, Ui.Colour("text.caption"))));
         var close = ActionButton("×", CloseProvinceCard, 26, 24);
         close.SizeFlagsVertical = SizeFlags.ShrinkBegin;
         head.AddChild(close);
@@ -87,7 +102,7 @@ public partial class DealOrForceGame
         facts.AddThemeConstantOverride("h_separation", 6);
         facts.AddThemeConstantOverride("v_separation", 4);
         rows.AddChild(facts);
-        void Fact(string text, string token) => facts.AddChild(Title(text, 11, Ui.Colour(token)));
+        void Fact(string text, string token) => facts.AddChild(Fixed(Title(text, 11, Ui.Colour(token))));
         if (controller.Id != owner.Id) Fact(Simulation.Loc.Format("held by {0}", controller.DisplayName), "state.warning");
         var other = controller.Id != player.Id ? controller : owner.Id != player.Id ? owner : null;
         if (other is not null && other.Movement is null)
@@ -104,15 +119,39 @@ public partial class DealOrForceGame
             if (network > 0f) Fact(Simulation.Loc.Format("our network {0}", Fmt.Percent(network)), "text.accent");
         }
         if (region is not null && region.WarDamage >= 0.02f) Fact(Simulation.Loc.Format("war damage {0}", Fmt.Percent(region.WarDamage)), "state.warning");
+        if (region is not null)
+        {
+            var ground = _campaign.ProvinceMap;
+            var roads = ground is null ? 1f : WaterConditions.RoadThroughput(_campaign, ground.CenterOf(pick.ProvinceId).Latitude);
+            if (roads < 0.995f)
+                Fact(Simulation.Loc.Format("winter roads {0:P0}", roads), "text.accent_dim");
+            if (region.PoliticalDivergence >= 0f && region.GovernmentApproval >= 0f)
+                Fact(Simulation.Loc.Format("laws {0:P0} · government {1:P0}", region.LawApproval, region.GovernmentApproval),
+                    region.GovernmentApproval < 0.42f ? "state.warning" : "text.body_soft");
+            if (region.SecessionPressure >= 0.08f)
+                Fact(Simulation.Loc.Format("leaving {0:P0}", region.SecessionPressure),
+                    region.SecessionPressure >= 0.5f ? "state.warning" : "text.accent_dim");
+            if (_campaign.FeatureEnabled("political_cohorts"))
+            {
+                var (_, chip) = PoliticalCohorts.CauseOf(_campaign, owner, region);
+                if (chip.Length > 0 && PoliticalCohorts.UnrestHeat(region) >= 0.35f)
+                    Fact(chip, "state.warning");
+            }
+            if (_campaign.FeatureEnabled("historical_norms") && region.RememberedOwner >= 0)
+                Fact(region.BorderHabit >= 0.75f
+                        ? Tr("an old border")
+                        : Simulation.Loc.Format("a new border, {0:0.0} years", region.SettledBorderDays / 365f),
+                    region.BorderHabit >= 0.75f ? "text.body_soft" : "state.warning");
+        }
         var movements = region is null ? new List<(Nation Movement, float Support)>() : MovementsIn(region);
         foreach (var (movement, support) in movements.Take(2))
             Fact(Simulation.Loc.Format("{0} {1}", movement.DisplayName, Fmt.Percent(support)), "text.body_soft");
 
         // ---- the actions.
-        void Section(string caption) => rows.AddChild(Caption(caption));
+        void Section(string caption) => rows.AddChild(Fixed(Caption(caption)));
         void Action(string icon, string text, System.Action act, string refusal = "", string help = "")
         {
-            var button = ActionButton(Tr(text), () => { act(); }, 0, 30);
+            var button = ActionButton(Tr(text), () => { act(); }, 0, 24);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.Alignment = HorizontalAlignment.Left;
             var path = SpriteCatalog.TextureOf("icon_" + icon, $"res://game/gfx/interface/icons/icon_{icon}.png");
@@ -122,8 +161,10 @@ public partial class DealOrForceGame
                 button.ExpandIcon = true;
                 button.AddThemeConstantOverride("icon_max_width", 18);
             }
-            button.Disabled = refusal.Length > 0 || _observerMode;
+            button.Disabled = refusal.Length > 0;
             var tip = refusal.Length > 0 ? refusal : help;
+            if (_observerMode && refusal.Length == 0 && tip.Length > 0)
+                tip = tip + "\n" + Tr("Observer mode still acts as the country in the corner. The other governments keep running.");
             if (tip.Length > 0) button.TooltipText = Ui.Tip(tip);
             rows.AddChild(button);
         }
@@ -137,26 +178,51 @@ public partial class DealOrForceGame
             if (ours)
             {
                 Action("military", "Recruit here", () => { CloseProvinceCard(); OpenRecruitment(region.MapIndex); });
-                Action("relief", "Rebuild what the war broke", () =>
-                {
-                    _campaign.Commands.Enqueue(new RebuildRegionCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
-                    _campaign.Commands.ApplyAll(_campaign);
-                    CloseProvinceCard();
-                }, region.WarDamage >= 0.02f ? "" : Tr("Nothing here is in ruins."));
-                Action("laws", "Regional laws", () => { CloseProvinceCard(); _selectedState = region; OpenScreen("Laws"); SelectPolicyTab("Regional"); });
-                var capitalRefusal = CapitalCore.Refusal(_campaign, player, region);
-                Action("nation", capitalArmed
-                        ? Simulation.Loc.Format("Confirm: move the capital here ({0})", Fmt.Money(CapitalCore.Cost(_campaign, player)))
-                        : "Move the capital here",
-                    () =>
+                if (region.WarDamage >= 0.02f)
+                    Action("relief", "Rebuild what the war broke", () =>
                     {
-                        // The second press confirms: a capital is not moved by a slip of the hand.
-                        if (!capitalArmed) { BuildProvinceCard(pick, owner, controller, at, capitalArmed: true); return; }
-                        _campaign.Commands.Enqueue(new MoveCapitalCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                        _campaign.Commands.Enqueue(new RebuildRegionCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
                         _campaign.Commands.ApplyAll(_campaign);
                         CloseProvinceCard();
-                    }, capitalRefusal.Length > 0 ? Tr(capitalRefusal) : "",
-                    Simulation.Loc.Format("The government moves here. It costs {0} and a little order while it settles.", Fmt.Money(CapitalCore.Cost(_campaign, player))));
+                    });
+                Action("laws", "Regional laws", () => { CloseProvinceCard(); _selectedState = region; OpenScreen("Laws"); SelectPolicyTab("Regional"); });
+                if (region.PoliticalDivergence >= 0.35f && region.GovernmentApproval >= 0f && region.GovernmentApproval < 0.5f)
+                    Action("unrest", "Why this region is uneasy", () =>
+                    {
+                        CloseProvinceCard();
+                        _crisisSelectedRegion = region.MapIndex;
+                        OpenScreen("Laws");
+                        SelectPolicyTab("Crises");
+                    }, help: Tr("The opinion here, and how close it is to leaving. Opening it changes nothing."));
+                var settling = player.DomesticCrisis is { ConciliationUntilDay: >= 0 } memory
+                    && memory.ConciliationUntilDay > _campaign.ElapsedDays && memory.ConciliationRegion == region.MapIndex;
+                if (settling || PoliticalCohorts.UnrestHeat(region) >= _campaign.Defines.CrisisConciliationHeat || region.SecessionPressure >= 0.12f)
+                {
+                    var refusal = DomesticCrises.ConciliationRefusal(_campaign, player, region);
+                    Action("laws", settling ? "Settlement under way" : "Settle this region", () =>
+                    {
+                        _campaign.Commands.Enqueue(new ConciliateRegionCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                        _campaign.Commands.ApplyAll(_campaign);
+                        CloseProvinceCard();
+                    }, refusal, Simulation.Loc.Format(
+                        "Pay {0} to cool this region for {1} days: the pull to leave, the anger, and the distance from the government. One region at a time. A border is not redrawn.",
+                        Fmt.Money(DomesticCrises.ConciliationCost(_campaign, player, region)),
+                        _campaign.Defines.CrisisConciliationDays));
+                }
+                var capitalRefusal = CapitalCore.Refusal(_campaign, player, region);
+                if (capitalRefusal.Length == 0 || capitalArmed)
+                    Action("nation", capitalArmed
+                            ? Simulation.Loc.Format("Confirm: move the capital here ({0})", Fmt.Money(CapitalCore.Cost(_campaign, player)))
+                            : "Move the capital here",
+                        () =>
+                        {
+                            // The second press confirms: a capital is not moved by a slip of the hand.
+                            if (!capitalArmed) { BuildProvinceCard(pick, owner, controller, at, capitalArmed: true); return; }
+                            _campaign.Commands.Enqueue(new MoveCapitalCommand { IssuerId = player.Id, StateMapIndex = region.MapIndex });
+                            _campaign.Commands.ApplyAll(_campaign);
+                            CloseProvinceCard();
+                        }, capitalRefusal.Length > 0 ? Tr(capitalRefusal) : "",
+                        Simulation.Loc.Format("The government moves here. It costs {0} and a little order while it settles.", Fmt.Money(CapitalCore.Cost(_campaign, player))));
             }
         }
 
@@ -181,10 +247,12 @@ public partial class DealOrForceGame
                     IntelNetworks.Refusal(_campaign, player, foreign),
                     Simulation.Loc.Format("Agents in their country, for {0}. It grows week by week and shows more as it grows.", Fmt.Money(IntelNetworks.Cost(_campaign, player))));
             var atWar = CampaignDiplomacy.AtWar(_campaign, player.Id, foreign.Id);
-            var flight = ReconFlightFor(player, pick.ProvinceId);
-            Action("drone", "Send reconnaissance flights here", () => { ReconFromMenu(flight); CloseProvinceCard(); },
-                !atWar ? Tr("Reconnaissance flies over an enemy's ground, in a war.") :
-                flight is null ? Tr("No aircraft or drone of ours that can fly reconnaissance reaches this province.") : "");
+            if (atWar)
+            {
+                var flight = ReconFlightFor(player, pick.ProvinceId);
+                Action("drone", "Send reconnaissance flights here", () => { ReconFromMenu(flight); CloseProvinceCard(); },
+                    flight is null ? Tr("No aircraft or drone of ours that can fly reconnaissance reaches this province.") : "");
+            }
             if (region is not null)
                 Action("unrest", "Disputes over this region", () => { CloseProvinceCard(); _territoryRegion = region.MapIndex; _conflictTab = 3; OpenScreen("Conflicts"); });
             AddCovertCardActions(foreign, region, Section, Action);
@@ -208,12 +276,43 @@ public partial class DealOrForceGame
             }
         }
 
+        if (ours && region is not null)
+        {
+            Nation hosted = null;
+            foreach (var nation in _campaign.Nations)
+            {
+                var hq = nation.Movement;
+                if (hq is not { Landless: true, Dissolved: false }) continue;
+                if (hq.HeadquartersStateMapIndex != region.MapIndex) continue;
+                if (Movements.HostOf(_campaign, nation) != player) continue;
+                if (MovementRules.PatienceChip(_campaign, nation).Length == 0) continue;
+                hosted = nation;
+                break;
+            }
+            if (hosted is not null)
+            {
+                Fact(MovementRules.PatienceChip(_campaign, hosted), "state.warning");
+                var expel = MovementDealings.Refusal(_campaign, player, hosted, "expel");
+                var guest = hosted;
+                Action("close", "Expel the headquarters", () =>
+                {
+                    _campaign.Commands.Enqueue(new MovementDealingCommand { IssuerId = player.Id, MovementId = guest.Id, Action = "expel" });
+                    _campaign.Commands.ApplyAll(_campaign);
+                    CloseProvinceCard();
+                }, expel, MovementRules.Patience(_campaign, guest));
+            }
+        }
+
         // Down and to the right of the cursor, so the head is never under it; kept on screen.
-        _provinceCard.ResetSize();
-        var size = _provinceCard.GetCombinedMinimumSize();
+        // The scroll does not pass its child's height up, so the card is measured from the
+        // rows and then capped. Anything past about half the window scrolls inside the card.
+        var content = rows.GetCombinedMinimumSize();
         var screen = GetViewport().GetVisibleRect().Size;
-        var x = Math.Clamp(at.X + 16f, 8f, MathF.Max(8f, screen.X - size.X - 8f));
-        var y = Math.Clamp(at.Y + 10f, 8f, MathF.Max(8f, screen.Y - size.Y - 8f));
+        var width = Math.Max(320f, content.X + 4f);
+        var height = Math.Min(Math.Max(content.Y + 4f, 72f), screen.Y * 0.46f);
+        _provinceCard.Size = new Vector2(width, height);
+        var x = Math.Clamp(at.X + 16f, 8f, MathF.Max(8f, screen.X - width - 8f));
+        var y = Math.Clamp(at.Y + 10f, 8f, MathF.Max(8f, screen.Y - height - 8f));
         _provinceCard.Position = new Vector2(x, y);
     }
 

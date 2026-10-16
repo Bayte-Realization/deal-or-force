@@ -153,25 +153,37 @@ public static partial class TerrainCatalog
         catch (Exception e) { errors.Add($"{path}: {e.Message}"); }
     }
 
-    public static TerrainDefinition[] Bind(ProvinceTopology topology)
+    /// <summary>The ground picture, decoded, or null where there is none - for reading it beside the provinces' own.</summary>
+    public static RgbDataMap LoadTerrainMap() => string.IsNullOrEmpty(TerrainPath) ? null : DataMapPng.LoadRgb(TerrainPath);
+
+    public static TerrainDefinition[] Bind(ProvinceTopology topology) => Bind(topology, null);
+
+    /// <summary>The terrain of every province, from the ground picture - decoded here unless it already was.</summary>
+    public static TerrainDefinition[] Bind(ProvinceTopology topology, RgbDataMap decoded)
     {
         var types = All;
         var result = Enumerable.Repeat(Get("plains"), topology.ProvinceCount + 1).ToArray();
         if (string.IsNullOrEmpty(TerrainPath)) return result; // tiny synthetic topology tests
-        var map = DataMapPng.LoadRgb(TerrainPath);
+        var map = decoded ?? DataMapPng.LoadRgb(TerrainPath);
         if (map.Width != topology.Width || map.Height != topology.Height)
             throw new InvalidDataException($"terrain.png must match provinces.png ({topology.Width}x{topology.Height}).");
         var slots = types.Select((t, index) => (t.Color, index)).ToDictionary(t => t.Color, t => t.index);
         var counts = new int[(topology.ProvinceCount + 1) * types.Count];
         var surface = new byte[topology.CellToProvince.Length];
+        // Ground comes in runs of one colour: the colour just looked up is the likeliest next.
+        var lastColor = -1;
+        var lastSlot = 0;
         for (var cell = 0; cell < topology.CellToProvince.Length; cell++)
         {
             var province = topology.CellToProvince[cell];
             if (province == 0 || topology.IsWater(province)) continue;
             var p = cell * 3;
             var color = map.Pixels[p] << 16 | map.Pixels[p + 1] << 8 | map.Pixels[p + 2];
-            if (!slots.TryGetValue(color, out var slot))
+            int slot;
+            if (color == lastColor) slot = lastSlot;
+            else if (!slots.TryGetValue(color, out slot))
                 throw new InvalidDataException($"Unknown terrain color #{color:X6} at {cell % map.Width},{cell / map.Width}, province {province}.");
+            else (lastColor, lastSlot) = (color, slot);
             counts[province * types.Count + slot]++;
             surface[cell] = (byte)slot;
         }

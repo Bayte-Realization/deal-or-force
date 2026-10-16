@@ -167,7 +167,7 @@ public partial class DealOrForceGame
             var button = ActionButton(caption, () => ReviewFinanceAction(captured), 0, 36);
             button.Name = "FinanceAction_" + id;
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.AddThemeFontSizeOverride("font_size", 13);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 13));
             actions.AddChild(button); _financeActions[id] = button;
         }
         _financePreview = WrappedUltimatumText("", 12); _financePreview.Name = "FinanceActionPreview"; actions.AddChild(_financePreview);
@@ -182,7 +182,10 @@ public partial class DealOrForceGame
         panel.AddThemeStyleboxOverride("panel", ShellRowStyle(false)); parent.AddChild(panel);
         var rows = PanelRows(panel, 9, 7, 3);
         rows.AddChild(Title(caption, 12, Ui.Colour("text.caption")));
-        var value = Title("—", 23, Ui.Colour("text.bright")); value.Name = name; rows.AddChild(value);
+        var value = Title("—", 23, Ui.Colour("text.bright"));
+        value.Name = name;
+        value.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        rows.AddChild(value);
         rows.AddChild(WrappedUltimatumText(description, 11)); return value;
     }
 
@@ -200,8 +203,12 @@ public partial class DealOrForceGame
         panel.TooltipText = Ui.Tip(Tr(tip)); parent.AddChild(panel);
         var rows = PanelRows(panel, 7, 4, 2);
         rows.AddChild(WrappedUltimatumText(caption, 11));
-        var value = Title("—", 15, Ui.Colour("text.bright")); value.Name = "FinanceValue_" + key;
-        value.AutowrapMode = TextServer.AutowrapMode.Off; rows.AddChild(value); _financeValues[key] = value;
+        var value = Title("—", 15, Ui.Colour("text.bright"));
+        value.Name = "FinanceValue_" + key;
+        value.AutowrapMode = TextServer.AutowrapMode.Off;
+        value.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        rows.AddChild(value);
+        _financeValues[key] = value;
     }
 
     private void FinanceGauge(VBoxContainer parent, string caption, string key)
@@ -293,7 +300,13 @@ public partial class DealOrForceGame
         var sheet = SovereignBalanceSheet.Read(_campaign, n);
         var amount = (float)_financeAmount.Value;
         var refusal = FinanceActionRefusal(n, sheet, action, amount);
-        if (refusal.Length > 0) { _financeFeedback.Text = Tr(refusal); _financePendingAction = ""; return; }
+        if (refusal.Length > 0)
+        {
+            _financeFeedback.Text = Tr(refusal);
+            _financePendingAction = "";
+            PlayStrategicCue("action_denied");
+            return;
+        }
         var now = new FinanceConfirmation(n.Id, _campaign.ElapsedDays, amount, sheet.Cash, sheet.Principal,
             sheet.Arrears, sheet.NewCredit, n.DebtCondition);
         if (_financePendingAction != action || now != _financeConfirmation)
@@ -309,6 +322,7 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         _financePendingAction = "";
         EconomySystem.Explain(_campaign);
+        PlayStrategicCue("save_complete");
         _financeFeedback.Text = Tr("Financial operation completed. Budget balance excludes bond proceeds and principal repayments.");
         RefreshSovereignFinanceWorkspace(); Refresh();
     }

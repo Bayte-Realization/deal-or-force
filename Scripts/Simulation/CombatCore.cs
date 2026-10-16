@@ -723,9 +723,16 @@ public static partial class Warfare
             // explicitly paused offensive and a formation below the live assault minimum
             // are not free reserves for it. The same readout gates starting and joining,
             // rather than allowing a second path to override the staff's waiting decision.
+            var assessment = AssaultReadiness.Assess(campaign, army);
+            var attackerReady = assessment.Ready ||
+                (assessment.Reason == AssaultReadiness.Reason.PlanPaused &&
+                 army.FrontLineId < 0 && army.Planning > 0f &&
+                 campaign.NationById(army.NationId)?.IsHuman != true &&
+                 assessment.Organisation > assessment.MinimumOrganisation &&
+                 assessment.Supply > assessment.MinimumSupply);
             if (WarCoalition.SameSide(war, army.NationId, battle.AttackerId) &&
                 (army.OrderKind == ArmyOrder.AdvanceFront || army.OrderKind == ArmyOrder.Spearhead) &&
-                AssaultReadiness.Assess(campaign, army).Ready &&
+                attackerReady &&
                 (!army.DirectOrder ||
                  (army.PlannedRoute.Count > 0 ? army.PlannedRoute[0] : army.OrderProvinceId) == battle.ProvinceId) &&
                 attackerAdded < 2)

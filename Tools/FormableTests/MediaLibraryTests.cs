@@ -10,7 +10,7 @@ static class MediaLibraryTests
     public static void Run()
     {
         MediaLibraryCatalog.Load();
-        Check(MediaLibraryCatalog.All.Count() == 13, "base library lists delivered assets and preserved recordings");
+        Check(MediaLibraryCatalog.All.Count() == 14, "base library lists delivered assets and preserved recordings");
         Check(MediaLibraryCatalog.All.All(x => x.Kind != LibraryMediaKind.Video), "unapproved video render is not claimed or loaded as delivered media");
         Check(MediaLibraryCatalog.All.Where(x => x.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound)
             .All(x => x.DurationSeconds > 0 && x.Peaks is { Count: > 0 } && x.Peaks.Count <= 512 && x.Peaks.Any(p => p > 0 && p < 1)),

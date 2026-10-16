@@ -76,6 +76,7 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || target is null || target.Id == _campaign.Player.Id) return;
         CloseDealComposer();
         CloseUltimatumComposer();
+        PlayStrategicCue("diplomacy_page");
         _dealReturnFocus = GetViewport().GuiGetFocusOwner();
         _dealTarget = target.Id;
         _dealComposer = FullLayer("DealComposer");

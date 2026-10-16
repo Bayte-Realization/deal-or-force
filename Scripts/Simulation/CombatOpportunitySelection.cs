@@ -9,6 +9,7 @@ namespace DealOrForce.Simulation;
 public static partial class Warfare
 {
     private static readonly List<int> Candidates = new();
+    private static readonly List<int> Neighbours = new();
     private static readonly HashSet<int> CoverSeen = new();
     private static readonly List<int> CoverRing = new();
     private static readonly List<int> CoverNext = new();
@@ -20,16 +21,21 @@ public static partial class Warfare
         foreach (var province in topology.Neighbors[army.ProvinceId])
             if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
         if (Candidates.Count == 0) return -1;
+        Neighbours.Clear();
+        Neighbours.AddRange(Candidates);
+        var pinned = 0;
         if (army.PlannedRoute.Count > 0 && Candidates.Contains(army.PlannedRoute[0]))
         {
             var nextPlannedProvince = army.PlannedRoute[0];
             Candidates.Clear();
             Candidates.Add(nextPlannedProvince);
+            pinned = nextPlannedProvince;
         }
         if (army.OrderProvinceId > 0 && Candidates.Contains(army.OrderProvinceId))
         {
             Candidates.Clear();
             Candidates.Add(army.OrderProvinceId);
+            pinned = army.OrderProvinceId;
         }
         if (army.OrderKind == ArmyOrder.Spearhead && army.ObjectiveStateMapIndex >= 0)
         {
@@ -43,6 +49,30 @@ public static partial class Warfare
                     Candidates[kept++] = province;
             }
             if (kept > 0) Candidates.RemoveRange(kept, Candidates.Count - kept);
+        }
+        // A pin that the country cannot take today must not fence the army inside itself.
+        // An advance whose objective was refused for cover used to keep that objective as
+        // its one candidate for good: the pin was re-chosen, refused again, and the sectors
+        // beside it were never re-read - the confirmed shape of the advance deadlock
+        // (COD-C01: objective 280 pinned, covered, re-picked, while 317/329 went unchecked).
+        // So a pin that has stood for at least an order-settle interval is set aside for this
+        // pass and every sector is scored again; the pin comes back on its own the day its
+        // cover lifts, because the narrowing that made it is still here. A pin issued today -
+        // by a player's RMB or a fresh plan - keeps the old strictness: the order is new, and
+        // the measure that produced the cover rule was of standing fronts, not fresh aims.
+        if (pinned > 0 && Candidates.Count == 1 && Candidates[0] == pinned && !army.DirectOrder &&
+            campaign.ElapsedDays - army.OrderIssuedDay >= campaign.Defines.OrderSettleDays &&
+            CoverRefuses(campaign, topology, war, army, pinned))
+        {
+            Candidates.Clear();
+            foreach (var province in Neighbours)
+            {
+                if (province == pinned) continue;
+                if (army.OrderKind == ArmyOrder.Spearhead && army.ObjectiveStateMapIndex >= 0 &&
+                    topology.ProvinceToState[province] != army.ObjectiveStateMapIndex) continue;
+                Candidates.Add(province);
+            }
+            if (Candidates.Count == 0) Candidates.Add(pinned);
         }
         // The front AI probes weak sectors and prefers dry crossings. Spearheads
         // accept more terrain risk, while regular advances strongly avoid
@@ -73,6 +103,26 @@ public static partial class Warfare
             target = province;
         }
         return target;
+    }
+
+    /// <summary>
+    /// The one refusal an autonomous advance meets: a province empty of defenders but so
+    /// outmatched by the enemy within reach that walking in is dying in a gap, not probing
+    /// one. Selection asks it of a pinned target before letting the pin fence the army in;
+    /// <see cref="CombatCore"/> asks it again of whichever target was chosen, and stays the
+    /// authority - this is the same rule read twice, not a second one. A direct order is
+    /// refused by neither.
+    /// </summary>
+    private static bool CoverRefuses(Campaign campaign, ProvinceTopology topology,
+        StrategicWar war, Army army, int target)
+    {
+        if (army.DirectOrder) return false;
+        foreach (var other in InProvince(target))
+            if (war.Opposes(army.NationId, other.NationId) && other.Divisions >= 0.1f) return false;
+        var coveringPower = 0f;
+        var covering = 0f;
+        Cover(campaign, topology, target, war, army.NationId, ref coveringPower, ref covering);
+        return coveringPower > PushingOn(campaign, topology, war, army, target) * campaign.Defines.GapExploitAdvantage;
     }
 
     /// <summary>

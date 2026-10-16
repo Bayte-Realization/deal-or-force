@@ -78,6 +78,7 @@ public partial class DealOrForceGame
 
         if (_dossierTab == "Finance")
         {
+            RefreshEconomyDesk();
             ShowSovereignFinance(player);
             ApplyDossierTab();
             return;

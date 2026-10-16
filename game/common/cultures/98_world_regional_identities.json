@@ -1,0 +1,57 @@
+// Further regional identities for authored population mixes, in the same shape as
+// 96_regional_identities.json. Like those, they are never assigned to a region automatically
+// and are never treated as an independence vote: a scenario or a mod names them, and a
+// foundation can then read them the way it reads any other people.
+//
+// `group` is one of the groups common/cultures/00_cultures.json already declares, so a
+// culture added here joins an existing family rather than inventing one - which is what
+// makes `eligible_culture_groups` in common/formable_nations keep working.
+{
+  "scottish_gaelic": {"name":"Scottish Gaelic","group":"celtic","colour":"#4a6fa5","religion":{"protestant":0.7,"irreligion":0.3}},
+  "welsh": {"name":"Welsh","group":"celtic","colour":"#3f7f6f","religion":{"protestant":0.55,"irreligion":0.45}},
+  "breton": {"name":"Breton","group":"celtic","colour":"#5f7f9f","religion":"catholic"},
+  "corsican": {"name":"Corsican","group":"latin","colour":"#7f9fa8","religion":"catholic"},
+  "sardinian": {"name":"Sardinian","group":"latin","colour":"#8f9f7f","religion":"catholic"},
+  "sicilian": {"name":"Sicilian","group":"latin","colour":"#9f8f6f","religion":"catholic"},
+  "andalusian": {"name":"Andalusian","group":"latin","colour":"#a88f5f","religion":{"catholic":0.8,"irreligion":0.2}},
+  "frisian": {"name":"Frisian","group":"germanic","colour":"#5f8f7f","religion":"protestant"},
+  "sorbian": {"name":"Sorbian","group":"west_slavic","colour":"#8f7f5f","religion":{"catholic":0.6,"protestant":0.4}},
+  "moravian": {"name":"Moravian","group":"west_slavic","colour":"#9f8f6f","religion":{"catholic":0.6,"irreligion":0.4}},
+  "transylvanian_saxon": {"name":"Transylvanian Saxon","group":"germanic","colour":"#6f8f9f","religion":"protestant"},
+  "szekely": {"name":"Szekely","group":"uralic","colour":"#8f6f7f","religion":{"catholic":0.5,"protestant":0.35,"irreligion":0.15}},
+  "rusyn": {"name":"Rusyn","group":"east_slavic","colour":"#6f7f9f","religion":{"orthodox":0.6,"catholic":0.3,"irreligion":0.1}},
+  "gagauz": {"name":"Gagauz","group":"turkic","colour":"#a07f5f","religion":"orthodox"},
+  "karakalpak": {"name":"Karakalpak","group":"turkic","colour":"#8f7f8f","religion":"sunni"},
+  "uyghur": {"name":"Uyghur","group":"turkic","colour":"#7f8f5f","religion":"sunni"},
+  "baloch": {"name":"Baloch","group":"iranian","colour":"#8f8f6f","religion":"sunni"},
+  "assamese": {"name":"Assamese","group":"indo_aryan","colour":"#7f9f6f","religion":{"hindu":0.75,"sunni":0.25}},
+  "odia": {"name":"Odia","group":"indo_aryan","colour":"#9f7f5f","religion":{"hindu":0.9,"sunni":0.1}},
+  "sinhalese": {"name":"Sinhalese","group":"indo_aryan","colour":"#a08f5f","religion":{"buddhist":0.85,"sunni":0.1,"catholic":0.05}},
+  "moro": {"name":"Moro","group":"austronesian","colour":"#6f8f8f","religion":"sunni"},
+  "cham": {"name":"Cham","group":"austronesian","colour":"#8f6f5f","religion":{"sunni":0.6,"hindu":0.4}},
+  "acehnese": {"name":"Acehnese","group":"austronesian","colour":"#7f8f7f","religion":"sunni"},
+  "moluccan": {"name":"Moluccan","group":"austronesian","colour":"#5f8f9f","religion":{"protestant":0.7,"sunni":0.3}},
+
+  // Africa, the Americas and Oceania. Same rule as above: a group the game already has, and
+  // a religion id from common/religions, never a group name used as if it were a faith.
+  "shona": {"name":"Shona","group":"bantu","colour":"#8f9f5f","religion":{"protestant":0.6,"animist":0.25,"catholic":0.15}},
+  "tswana": {"name":"Tswana","group":"bantu","colour":"#9f8f5f","religion":{"protestant":0.65,"animist":0.25,"catholic":0.1}},
+  "ovambo": {"name":"Ovambo","group":"bantu","colour":"#7f9f8f","religion":{"protestant":0.75,"animist":0.25}},
+  "oromo": {"name":"Oromo","group":"cushitic","colour":"#9f7f5f","religion":{"sunni":0.5,"protestant":0.3,"orthodox":0.2}},
+  "tigrayan": {"name":"Tigrayan","group":"semitic","colour":"#7f8f9f","religion":{"orthodox":0.85,"sunni":0.15}},
+  "dinka": {"name":"Dinka","group":"nilotic","colour":"#8f7f6f","religion":{"animist":0.6,"catholic":0.4}},
+  "tuareg": {"name":"Tuareg","group":"berber","colour":"#a08f6f","religion":"sunni"},
+  "kabyle": {"name":"Kabyle","group":"berber","colour":"#8f8f7f","religion":{"sunni":0.85,"irreligion":0.15}},
+  "sahrawi": {"name":"Sahrawi","group":"arabic","colour":"#9f9f6f","religion":"sunni"},
+  "guarani": {"name":"Guarani","group":"amerindian","colour":"#6f8f5f","religion":{"catholic":0.8,"animist":0.2}},
+  "mapuche": {"name":"Mapuche","group":"amerindian","colour":"#7f6f8f","religion":{"catholic":0.6,"animist":0.4}},
+  "hawaiian": {"name":"Hawaiian","group":"polynesian","colour":"#5f9f9f","religion":{"protestant":0.5,"catholic":0.3,"animist":0.2}},
+  "fijian": {"name":"Fijian","group":"polynesian","colour":"#6f9f8f","religion":{"protestant":0.6,"hindu":0.25,"sunni":0.15}},
+  "chamorro": {"name":"Chamorro","group":"austronesian","colour":"#8f9f9f","religion":"catholic"},
+  "hmong": {"name":"Hmong","group":"austroasiatic","colour":"#9f6f7f","religion":{"folk":0.7,"animist":0.3}},
+  "khmer_krom": {"name":"Khmer Krom","group":"austroasiatic","colour":"#a08f5f","religion":{"buddhist":0.9,"animist":0.1}},
+  "karen": {"name":"Karen","group":"tibeto_burman","colour":"#7f8f6f","religion":{"buddhist":0.6,"protestant":0.3,"animist":0.1}},
+  "kachin": {"name":"Kachin","group":"tibeto_burman","colour":"#6f9f6f","religion":{"protestant":0.7,"buddhist":0.2,"animist":0.1}},
+  "zomi": {"name":"Zomi","group":"tibeto_burman","colour":"#8f9f8f","religion":{"protestant":0.8,"animist":0.2}},
+  "papuan_highlander": {"name":"Papuan highlander","group":"papuan","colour":"#7f7f5f","religion":{"protestant":0.75,"animist":0.25}}
+}

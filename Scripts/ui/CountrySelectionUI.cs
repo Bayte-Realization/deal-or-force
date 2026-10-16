@@ -140,10 +140,10 @@ public partial class DealOrForceGame
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
         actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
-        var clouds = MapVisualToggle("map_clouds", "Clouds", "Hide or show clouds without changing what your country can see.", 96);
-        clouds.Name = "PickerClouds"; actionRow.AddChild(clouds);
-        var fog = MapVisualToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
-        fog.Name = "PickerFog"; actionRow.AddChild(fog);
+        // The globe here is a map being studied for its borders, and clouds are in the way of it.
+        actionRow.AddChild(WeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96));
+        var pickerFog = WeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
+        pickerFog.Name = "PickerFog"; actionRow.AddChild(pickerFog);
 
         // The seed the next world is built from. The same seed builds the same world to the
         // digit - which is what a bug report is made of - and a different seed builds a
@@ -367,6 +367,9 @@ public partial class DealOrForceGame
             var button = ActionButton($"{nation.Tag}   {nation.DisplayName}", () => SetPickerNation(captured, true), 0, 31,
                 _pickerHotseatMode ? _campaign.HumanSeats.Contains(nation.Id) : nation == _pickerNation);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            // The flag beside the tag, which the movement rows below always had and these rows
+            // did not: the list is where a player learns which country is which.
+            ListFlag(button, nation, 24);
             _pickerResults.AddChild(button);
         }
 

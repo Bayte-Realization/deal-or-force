@@ -383,7 +383,9 @@ public partial class DealOrForceGame
     private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)
     {
         WaitForPendingSave();
-        var result = SaveSystem.Load(SaveRoot, slot, ModFingerprint);
+        // Gzip and the save graph are plain data. Parsing them off this thread lets the
+        // loading plate keep drawing; the campaign is swapped in only after the parse returns.
+        var result = await System.Threading.Tasks.Task.Run(() => SaveSystem.Load(SaveRoot, slot, ModFingerprint));
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {

@@ -187,9 +187,12 @@ public static class LogisticsSystem
             // A modern state moves its army on railways and roads, not on the three
             // divisions' worth of throughput a bare province used to allow. Infrastructure
             // is what a player builds to widen this, so it carries the most weight.
-            var capacity = campaign.Defines.BaseStateSupplyThroughput +
+            // Winter narrows the same road. It does not invent a second supply network.
+            var centre = topology.CenterOf(province);
+            var capacity = (campaign.Defines.BaseStateSupplyThroughput +
                            infrastructure * campaign.Defines.SupplyPerInfrastructure +
-                           barracks * campaign.Defines.SupplyPerBarracks;
+                           barracks * campaign.Defines.SupplyPerBarracks) *
+                          WaterConditions.RoadThroughput(campaign, centre.Latitude);
             var demand = MathF.Max(0.01f, DemandBySource.GetValueOrDefault(sourceState));
             var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
@@ -199,7 +202,6 @@ public static class LogisticsSystem
             // A fleet sitting off the coast takes what arrives by sea. This is the one
             // thing a navy does that a land player feels immediately: an army on a
             // blockaded shore stops being supplied, and stops being able to attack.
-            var centre = topology.CenterOf(province);
             var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
             var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
             var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *

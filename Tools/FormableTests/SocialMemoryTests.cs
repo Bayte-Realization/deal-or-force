@@ -20,6 +20,7 @@ static class SocialMemoryTests
         Day(7); SocialMemory.Tick(c);
         Day(3657); SocialMemory.Tick(c);
         Check(a.InstitutionalHabit > 0.65f && region.BorderHabit > 0.5f, "peaceful years establish habits");
+        Check(region.BorderHabit > 0.8f, "the world as it was drawn is already an old border");
         Check(SocialMemory.BorderRelief(c, region) <= 0.25f, "old borders never erase all secession pressure");
         var age = a.InstitutionAgeDays; SocialMemory.Tick(c);
         Check(a.InstitutionAgeDays == age, "repeated daily calls do not age the world twice");

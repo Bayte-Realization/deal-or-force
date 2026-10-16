@@ -76,5 +76,13 @@
   "Institutional review in progress": "Institutional review in progress",
   "quiet_coup": "Army takeover",
   "The army takes over": "The army takes over",
-  "No terms have been sent. Change the package to resolve this restriction.": "No terms have been sent. Change the package to resolve this restriction."
+  "No terms have been sent. Change the package to resolve this restriction.": "No terms have been sent. Change the package to resolve this restriction.",
+  "POLITICAL MOOD": "POLITICAL MOOD",
+  "Governing mandate": "Governing mandate",
+  "The share of the country that leans towards the government's own ideology. Below the plurality line, holding office breeds unrest every week.": "The share of the country that leans towards the government's own ideology. Below the plurality line, holding office breeds unrest every week.",
+  "The largest other current is {0} at {1:P1}.": "The largest other current is {0} at {1:P1}.",
+  "DEMOGRAPHY AND MOOD": "DEMOGRAPHY AND MOOD",
+  "{0} · {1}": "{0} · {1}",
+  "{0:P0} → {1}": "{0:P0} → {1}",
+  "Each group leans the way its own regions do, not the way its name does.": "Each group leans the way its own regions do, not the way its name does."
 }

@@ -1,0 +1,30 @@
+// The deep frontier set: names and descriptions of common/technologies/62_deep_frontier.json.
+{
+  "Modular reactor programme": "Modular reactor programme",
+  "Small reactors built in series rather than cathedrals built one at a time, for a grid that has to survive losing a province.": "Small reactors built in series rather than cathedrals built one at a time, for a grid that has to survive losing a province.",
+  "Additive manufacturing at scale": "Additive manufacturing at scale",
+  "Printing a spare part where the machine broke, instead of shipping it across a continent and waiting.": "Printing a spare part where the machine broke, instead of shipping it across a continent and waiting.",
+  "Materials recovery networks": "Materials recovery networks",
+  "Every city sorted and every alloy traced, so a wrecked factory is a stockpile rather than a loss.": "Every city sorted and every alloy traced, so a wrecked factory is a stockpile rather than a loss.",
+  "Autonomous mining fleets": "Autonomous mining fleets",
+  "Driverless haulage and survey drones working a deposit nobody wants to live on.": "Driverless haulage and survey drones working a deposit nobody wants to live on.",
+
+  "Civic mediation service": "Civic mediation service",
+  "A standing corps that talks to an angry region before the army has to, and is cheaper than either.": "A standing corps that talks to an angry region before the army has to, and is cheaper than either.",
+  "Open statistics office": "Open statistics office",
+  "Numbers published on a schedule nobody in the government can move, which is what makes them worth reading.": "Numbers published on a schedule nobody in the government can move, which is what makes them worth reading.",
+  "Pandemic readiness corps": "Pandemic readiness corps",
+  "Reservists, stockpiles and drills kept current in the years when nothing is happening.": "Reservists, stockpiles and drills kept current in the years when nothing is happening.",
+
+  "Layered air-defence network": "Layered air-defence network",
+  "Short, medium and long reach answering to one command, so a strike has to beat all three to arrive.": "Short, medium and long reach answering to one command, so a strike has to beat all three to arrive.",
+  "Distributed munitions production": "Distributed munitions production",
+  "Shells made in a hundred workshops instead of three arsenals, which is what keeps a front fed in a long war.": "Shells made in a hundred workshops instead of three arsenals, which is what keeps a front fed in a long war.",
+  "Deep-strike reconnaissance": "Deep-strike reconnaissance",
+  "Finding the depot, the bridge and the headquarters behind the line, and keeping them under watch.": "Finding the depot, the bridge and the headquarters behind the line, and keeping them under watch.",
+
+  "Continental rail resilience": "Continental rail resilience",
+  "Double track, alternate gauges and repair trains, so one cut line is a delay rather than a stoppage.": "Double track, alternate gauges and repair trains, so one cut line is a delay rather than a stoppage.",
+  "Resilient port network": "Resilient port network",
+  "Every port able to take what the biggest one takes, so closing one is a reroute and not an embargo.": "Every port able to take what the biggest one takes, so closing one is a reroute and not an embargo."
+}

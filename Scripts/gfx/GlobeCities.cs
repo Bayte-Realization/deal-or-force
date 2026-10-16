@@ -282,6 +282,7 @@ public sealed partial class GlobePresentation
 
                 var pin = CityPinAt(used++);
                 if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, font, fontSize);
+                pin.Name.Modulate = Ui.Colour("globe.city_capital");
                 pin.Node.Position = _cityRoot.ToLocal(marker.GlobalPosition);
                 var pixel = _flatMap ? 1f : fixedPixel;
                 pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
@@ -321,6 +322,8 @@ public sealed partial class GlobePresentation
         {
             room = default;
             var city = _cities[index];
+            var anchorAt = _cityAnchors[index];
+            if (TerrainGone(anchorAt.Latitude, anchorAt.Longitude)) return false;
             Vector3 local;
             if (_flatMap)
             {
@@ -354,6 +357,8 @@ public sealed partial class GlobePresentation
             if (side != 0) SetLabelSide(pin, side, dot, fontSize, tierPixels);
             pin.Dot.PixelSize = pixel * dot / 32f;
             pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
+            pin.Name.Modulate = city.IsNationalCapital ? Ui.Colour("globe.city_capital") : Ui.Colour("globe.city");
+            pin.Dot.Modulate = Colors.White;
             pin.Node.Visible = true;
             // A crowded name may be omitted, but its geographical point must remain.
             return side != 0;

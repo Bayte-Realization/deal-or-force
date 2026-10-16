@@ -139,6 +139,7 @@ public sealed partial class Campaign
     {
         SimulationFault = reason ?? "simulation error";
         IsPaused = true;
+        CrashEnvelope.Dump(this, null, reason);
         MarkStrategicChange();
     }
 }

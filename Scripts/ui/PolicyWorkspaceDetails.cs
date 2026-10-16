@@ -54,6 +54,11 @@ public partial class DealOrForceGame
         if (_policyPreview is null || _campaign?.Player is not { } n) return;
         if (_policyTab == "Crises") return;
         ClearPolicyRows(_policyPreview); _policyEnact = null;
+        if (_policyTab == "Doctrines")
+        {
+            ShowDoctrinePreview(n);
+            return;
+        }
         if (_policyTab == "Course")
         {
             PolicyHeading(_policyPreview, "WHY THIS COURSE?");
@@ -82,8 +87,17 @@ public partial class DealOrForceGame
         var lines = NationalModifiers.Lines(p.Modifiers).ToList();
         if (p.ForeignTrust != 0) lines.Add(Simulation.Loc.Format("Sustainable alliance trust: {0:P0}", p.ForeignTrust));
         PolicyText(_policyPreview, string.Join("\n", lines.Count > 0 ? lines : new[] { Tr("Neutral institutional baseline") }));
+        var currentLaw = PolicyIsAgenda ? null : PoliticalPolicies.Effective(n, p, _lawTarget, _lawRegion);
+        var comparisonLines = PolicyDeltaLines(n, currentLaw, p, PolicyScope == "national" && !PolicyIsAgenda);
+        if (comparisonLines.Count > 0)
+        {
+            PolicyHeading(_policyPreview, "IMPACT VS CURRENT LAW");
+            PolicyText(_policyPreview, string.Join("\n", comparisonLines));
+        }
         PolicyHeading(_policyPreview, "REFORM TERMS");
-        PolicyStat(_policyPreview, "Reform cost", Fmt.Money(n.Gdp * p.CostShare), "economy");
+        var reformCost = n.Gdp * p.CostShare;
+        PolicyStat(_policyPreview, "Reform cost",
+            Simulation.Loc.Format("{0} ({1} → {2})", Fmt.Money(reformCost), Fmt.Money(n.Treasury), Fmt.Money(n.Treasury - reformCost)), "economy");
         PolicyStat(_policyPreview, "Cooling-off period", Simulation.Loc.Format("{0} days", p.CooldownDays), "history");
         if (PolicyScope == "region") PolicyStat(_policyPreview, "Governed region",
             _campaign.StatesOf(n).FirstOrDefault(s => s.MapIndex == _lawRegion)?.DisplayName ?? Tr("No governed regions"), "nation");
@@ -124,7 +138,12 @@ public partial class DealOrForceGame
         var n = _campaign.Player;
         var p = PoliticalPolicyCatalog.Find(_policySelected, PolicyIsAgenda);
         if (!PoliticalPolicies.CanAdopt(_campaign, n, p, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal))
-        { _policyWorkspaceFeedback.Text = Tr(refusal); RefreshPolicyPreview(); return; }
+        {
+            _policyWorkspaceFeedback.Text = Tr(refusal);
+            PlayStrategicCue("action_denied");
+            RefreshPolicyPreview();
+            return;
+        }
         if (_policyConfirmation != p.Id)
         {
             _policyConfirmation = p.Id;
@@ -135,6 +154,7 @@ public partial class DealOrForceGame
         _campaign.Commands.Enqueue(new AdoptPoliticalPolicyCommand { IssuerId = n.Id, PolicyId = p.Id,
             TargetTag = PolicyScope == "foreign" ? _lawTarget : "", Region = PolicyScope == "region" ? _lawRegion : 0, Agenda = PolicyIsAgenda });
         _campaign.Commands.ApplyAll(_campaign);
+        PlayStrategicCue("policy_changed");
         _policyWorkspaceFeedback.Text = Simulation.Loc.Format("Adopted: {0}.", Tr(p.Name));
         ShowPolicyOptions(); _policyBuiltDay = -1; RefreshPolicyWorkspace();
     }
@@ -156,6 +176,39 @@ public partial class DealOrForceGame
             Modulate = ArtColour("icon_" + icon, "text.accent") });
         var text = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; line.AddChild(text);
         text.AddChild(Title(caption, 12, Ui.Colour("text.caption")));
-        text.AddChild(Title(value, 15, Ui.Colour("text.bright")));
+        var val = Title(value, 15, Ui.Colour("text.bright"));
+        val.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        text.AddChild(val);
+    }
+
+    private static List<string> PolicyDeltaLines(Nation n, PoliticalPolicy current, PoliticalPolicy candidate, bool nationalScope)
+    {
+        var result = new List<string>();
+        if (n is null || candidate is null || current?.Id == candidate.Id) return result;
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (current?.Modifiers is not null) foreach (var k in current.Modifiers.Keys) keys.Add(k);
+        if (candidate.Modifiers is not null) foreach (var k in candidate.Modifiers.Keys) keys.Add(k);
+        foreach (var key in keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
+        {
+            var oldVal = current?.Modifiers?.GetValueOrDefault(key) ?? 0f;
+            var newVal = candidate.Modifiers?.GetValueOrDefault(key) ?? 0f;
+            var delta = newVal - oldVal;
+            if (MathF.Abs(delta) < 0.0001f) continue;
+            var def = NationalModifiers.Of(key);
+            var label = Tr(def?.Name ?? key);
+            var deltaText = (delta * 100f).ToString("+0.##;-0.##;0.##", System.Globalization.CultureInfo.CurrentCulture) + "%";
+            if (nationalScope)
+            {
+                var totalNow = NationalModifiers.Of(n, key);
+                var totalAfter = totalNow + delta;
+                result.Add(Simulation.Loc.Format("· {0}: {1} → {2} ({3})",
+                    label, Fmt.Percent(totalNow), Fmt.Percent(totalAfter), deltaText));
+            }
+            else
+            {
+                result.Add(Simulation.Loc.Format("· {0}: {1}", label, deltaText));
+            }
+        }
+        return result;
     }
 }

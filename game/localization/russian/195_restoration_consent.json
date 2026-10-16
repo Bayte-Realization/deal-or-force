@@ -1,6 +1,4 @@
 {
-  "chronicle.restoration": "Государство {0} восстановлено в регионе {3}.",
-  "Invalid simulation values prevent this action. Pause and inspect the campaign.": "Некорректные значения симуляции не позволяют выполнить действие. Поставьте игру на паузу и проверьте кампанию.",
   "Restore the country": "Восстановить страну",
   "Only a country that still has a government can be restored.": "Восстановить можно только страну, у которой сохранилось правительство.",
   "This is not a government in exile.": "Это не правительство в изгнании.",

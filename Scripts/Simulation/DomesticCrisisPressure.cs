@@ -32,6 +32,12 @@ public static partial class DomesticCrises
         { target += d.CoupDefaultWeight; drivers?.Add("Debt payment crisis"); }
         if (PoliticsCore.IsMismatched(n))
         { target += d.CoupPoliticalMismatchWeight; drivers?.Add("Political mismatch"); }
+        var mood = PoliticalCohorts.Mood(c, n);
+        if (mood.Reviewed && mood.Government < d.ScandalApproval)
+        {
+            target += (d.ScandalApproval - mood.Government) * MathF.Max(0f, d.CoupGovernmentDisapprovalWeight);
+            drivers?.Add("The governed do not accept the government");
+        }
         var memory = n.DomesticCrisis;
         if (memory is not null && memory.ResponseUntilDay > c.ElapsedDays)
         {
@@ -39,6 +45,8 @@ public static partial class DomesticCrises
             { target -= d.CrisisDialoguePressureRelief; drivers?.Add("Public dialogue in progress"); }
             if (memory.ResponseId == "institutional_review")
             { target -= d.CrisisReviewPressureRelief; drivers?.Add("Institutional review in progress"); }
+            if (memory.ConciliationUntilDay > c.ElapsedDays)
+                drivers?.Add("A region is being settled with money");
         }
         return M.Clamp01(target);
     }

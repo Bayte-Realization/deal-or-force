@@ -1,0 +1,20 @@
+{
+  "A piece of the country is cut off": "Кусок страны отрезан",
+  "{0} provinces are cut off from the rest. {1} holds the shortest way, {2} provinces, for about {3}.": "{0} провинций отрезаны от остального. Кратчайший путь держит {1}: {2} провинций, примерно за {3}.",
+  "{0} provinces are cut off from the rest. {1}": "{0} провинций отрезаны от остального. {1}",
+  "No short way through a neighbour can be bought.": "Короткий путь через соседа не купить.",
+  "The piece is not joined to the rest by land. A purchase asks for the regions the way runs through, not a war.": "Кусок не соединён с остальным по суше. Покупка просит регионы, через которые идёт путь, а не войну.",
+  "Asking spends nothing until they accept. The detached piece itself is not offered for sale.": "Просьба ничего не тратит, пока они не согласятся. Сам отрезанный кусок на продажу не выставляется.",
+  "There is nothing to send just now. The piece stays where it is.": "Сейчас послать нечего. Кусок остаётся где был.",
+  "Cut off": "Отрезано",
+  "The way": "Путь",
+  "Ask for the way through": "Попросить проход",
+  "See why it cannot be asked": "Почему просить нельзя",
+  "The ask has been sent.": "Просьба отправлена.",
+  "Joining detached land is switched off.": "Соединение отрезанной земли выключено.",
+  "The country is in one piece.": "Страна составляет одно целое.",
+  "The way through is not a country that can sell it.": "Путь лежит не через страну, которая может его продать.",
+  "They cannot be asked just now.": "Их сейчас нельзя просить.",
+  "There is no price they would take.": "Нет цены, за которую они бы отдали.",
+  "The way through costs more than this country will spend.": "Проход стоит больше, чем эта страна готова потратить."
+}

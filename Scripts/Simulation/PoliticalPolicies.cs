@@ -115,8 +115,10 @@ public static class PoliticalPolicies
                 if (n.AgendasActive && n.Agenda is not { Completed: false })
                 {
                     var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :
-                        n.StandardOfLiving < .65f ? "social_compact" : "national_reconciliation";
-                    Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
+                        n.Stability >= .62f && !c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) ? "peace_dividend" :
+                        n.StandardOfLiving >= .61f ? "social_compact" : "national_reconciliation";
+                    if (n.DebtCondition >= DebtCondition.Stressed || n.Stability >= .56f || n.StandardOfLiving >= .61f)
+                        Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
                 }
             }
             if (n.LawsActive)

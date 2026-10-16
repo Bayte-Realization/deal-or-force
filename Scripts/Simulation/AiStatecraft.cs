@@ -430,6 +430,7 @@ public static partial class AiStatecraft
         // somebody attacks, it is decided in one week rather than two years, and it makes
         // the country asking measurably less worth invading, because the war judgement
         // counts a guarantor exactly as it counts an ally.
+        using (SimProfiler.Measure("    dip:shelter"))
         if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
             CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival) >
             Strength(campaign, nation) * defines.AiCounterweightFear &&
@@ -446,6 +447,7 @@ public static partial class AiStatecraft
         // Check the cheap refusal gates first. Naval feasibility performs real route
         // searches; an existing pact or an insufficient threat makes that work pointless.
         // The weekly opinion pass has already refreshed this rival's intelligence estimate.
+        using (SimProfiler.Measure("    dip:buy_peace"))
         if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
             CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is { NonAggressionPact: false } &&
             ThreatPosture.ThreatOf(campaign, nation, worstRival) >= defines.AiBuyPeaceThreat &&
@@ -453,10 +455,18 @@ public static partial class AiStatecraft
             BuyPeace(campaign, nation, worstRival))
             return;
 
+        // A week spent on our own people across the fence, before a week spent on being liked.
+        // The cheque is the deal table's. A player on the other side of it still has to sign.
+        using (SimProfiler.Measure("    dip:kindred"))
+        if (TryBuyKindredLand(campaign, nation))
+            return;
+
         // Nothing has crossed a threshold yet, which is where every relationship starts:
         // neighbours dislike each other by default, so warmth has to be worked at. A
         // country spends the week courting whichever neighbour it is least unhappy with.
         // Left to drift alone, no two countries in the world would ever sign anything.
+        using (SimProfiler.Measure("    dip:courting"))
+        {
         if (bestFriend is not null && (worstRival is null || bestOpinion > defines.AiRivalryThreshold))
         {
             var relation = CampaignDiplomacy.Get(campaign, nation.Id, bestFriend.Id);
@@ -490,6 +500,7 @@ public static partial class AiStatecraft
             // guarantee brings an army, they are worth doing: sanction a rival who needs us
             // more than we need them, or shelter whoever is next on their list.
             ActShortOfWar(campaign, nation, worstRival);
+        }
         }
     }
 
@@ -563,10 +574,16 @@ public static partial class AiStatecraft
             if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
         if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
         if (!campaign.Defines.AiMayDeclareWar) return;
-        var fiscal = AiFiscalPolicy.Assess(campaign, nation, campaign.Defines.AiTreasuryFloor);
-        if (!fiscal.CanSpend) { Count("war_fiscal_" + fiscal.Reason); return; }
-
         var defines = campaign.Defines;
+        var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
+        if (!fiscal.CanSpend)
+        {
+            if (fiscal.Reason != AiFiscalReason.ShortRunway || nation.Treasury < nation.Gdp * defines.AiTreasuryFloor)
+            {
+                Count("war_fiscal_" + fiscal.Reason);
+                return;
+            }
+        }
 
         // First, whatever we already decided to do about somebody. A country with a plan
         // spends its week on the plan rather than on shopping for a different war.
@@ -583,12 +600,25 @@ public static partial class AiStatecraft
             if (other is null || other.Id == nation.Id) continue;
             Count("considered");
             if (other.IsHuman && !defines.AiMayAttackPlayer) continue;
-            if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, other.Id, out _)) { Count("blocked"); continue; }
+
+            // An ally is the one target whose refusal has nothing to do with appetite -
+            // CanDeclareWar answers "break the alliance first" - so for an ally the sum has to be
+            // worked out first, or every ally in the world stays hidden from the arithmetic and an
+            // alliance remains a permanent fact rather than an arrangement. For everybody else the
+            // cheap refusal gates stay exactly where they were: a truce, a pact or a missing route
+            // makes the sum pointless work, and this loop asks about every neighbour of every
+            // country every week.
+            var allied = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is { Stance: DiplomaticStance.Allied };
+            if (!allied && !CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, other.Id, out _))
+            { Count("blocked"); continue; }
 
             // What it is worth, minus what it costs. Subtracted rather than multiplied,
             // because the price has to be able to win the argument outright - and under the
             // old multiplicative rule nothing ever could.
             var judgement = WarJudgement(campaign, nation, other);
+            // And an ally is let past only when that sum cleared the nerve inside WarJudgement,
+            // which is the one path that returns a positive number for one.
+            if (allied && judgement <= 0f) { Count("blocked"); continue; }
             if (!CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, other.MapIndex))
                 judgement -= defines.AiOverseasCaution;
             if (judgement > 0f) Count("wanted");
@@ -627,7 +657,17 @@ public static partial class AiStatecraft
         // does not forget the idea - it keeps the target, builds, and starts prising the
         // target's friends away. That is the whole of the difference between an AI that is
         // less aggressive and one that is simply slower.
-        if (bestJudgement < defines.AiWarDesireThreshold)
+        //
+        // The threshold is not a fixed number, because a government is not a thermostat. It is
+        // drawn from the country and the week, so it holds steady inside a week and is identical
+        // on every machine playing this seed, and it is swung by that country's volatility: a
+        // staid government's threshold barely moves, an ordinary one's moves by a quarter of the
+        // swing, and a mercurial one's by nearly all of it. The swing is symmetric, so it does
+        // not make the world more warlike - it makes it less schedulable, which is the thing a
+        // player actually notices.
+        var mercurial = 1f + (Roll(campaign.Seed, nation.Id, campaign.ElapsedDays / 7) - 0.5f) * 2f *
+                        defines.AiVolatilitySwing * M.Clamp01(AiTemperament.Of(campaign, nation).Volatility);
+        if (bestJudgement < defines.AiWarDesireThreshold * mercurial)
         {
             if (nation.WarPlanTargetId == target.Id) return;
             nation.WarPlanTargetId = target.Id;
@@ -647,11 +687,39 @@ public static partial class AiStatecraft
         // roads moved the Russo-Ukrainian front by twenty provinces, and no measurement of
         // one system could be trusted after a change to any other.
         var roll = Roll(campaign.Seed, nation.Id, campaign.ElapsedDays);
-        if (roll > defines.AiWarChance * bestJudgement) return;
+        // How readily this country actually moves, as opposed to how good its case is: the
+        // doctrine's aggression multiplies the chance, so a cautious state waits for a better
+        // hand and a reckless one acts on a worse one. Everything else - the cause, the
+        // readiness, the reach and the ultimatum - still has to be in place before this line.
+        if (roll > defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression) return;
 
         // A country that has been preparing for this one goes sooner; the preparation is the
         // point of having made the plan.
         if (nation.WarPlanTargetId == target.Id) ClearWarPlan(nation);
+
+        // Turning on an ally is done openly and in two acts: the promise ends, then the war
+        // begins. Folding the break into the declaration would let a country attack a friend
+        // while still shown as its friend, and would rob the second act of the thing that makes
+        // it mean anything. Everybody watching learns what this signature is worth, and pays
+        // attention to the next one this country signs.
+        if (CampaignDiplomacy.Peek(campaign, nation.Id, target.Id) is { Stance: DiplomaticStance.Allied })
+        {
+            // Ending a friendship is not a thing to do and then discover was pointless. Breaking
+            // the alliance clears the alliance and nothing else: a shared collective-defence
+            // organisation still forbids the war whatever the two countries signed, and a
+            // government that breaks first and finds that out afterwards has spent everybody's
+            // opinion of it on a war it cannot start. Ask that one question before the act that
+            // cannot be taken back.
+            if (InternationalOrganizations.DefencePartners(campaign, nation.Id).Contains(target.Id))
+            { Count("blocked"); return; }
+            new BreakAllianceCommand { IssuerId = nation.Id, TargetId = target.Id }.Apply(campaign);
+            nation.Notoriety += defines.AiBetrayalNotoriety;
+            Count("betrayed");
+            // And whatever is left - a truce nobody remembered, a subject that answers to the
+            // target - is still refused here rather than declared through.
+            if (!CampaignDiplomacy.CanDeclareWar(campaign, nation.Id, target.Id, out _)) { Count("blocked"); return; }
+        }
+
         var recovery = TerritorialClaims.RecoveryGoal(campaign, nation, target);
         if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id,
             recovery?.MapIndex ?? -1, recovery is null ? "" : "reconquest") is not null) Count("declared");
@@ -663,16 +731,18 @@ public static partial class AiStatecraft
     /// if there is one, else its most populous - once a year at most for each target, and only
     /// to a government nobody plays and when we have no reason of our own already.
     /// </summary>
-    private static bool TryUltimatumFirst(Campaign campaign, Nation nation, Nation target)
+    internal static bool TryUltimatumFirst(Campaign campaign, Nation nation, Nation target)
     {
         var defines = campaign.Defines;
-        if (!defines.AiUltimatumsBeforeWar || target.IsHuman) return false;
-        if (!string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target))) return false;
+        if (!defines.AiUltimatumsBeforeWar) return false;
+        if (Ultimatum.PendingBetween(campaign, nation.Id, target.Id)) return true;
+        var cause = Statecraft.CasusBelli(campaign, nation, target);
+        if (!string.IsNullOrEmpty(cause) && cause != "irredentism") return false;
         var key = "ultimatum/" + target.Id;
         if (nation.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
         var map = campaign.ProvinceMap;
-        var controllers = campaign.ProvinceController;
-        if (map is null || controllers is null) return false;
+        if (map is null) return false;
+        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
 
         // Only for ground there is a case for: ours once, or our own people's. China asking
         // Mongolia for Dornod because Mongolia could not say no is not a demand anybody makes.
@@ -707,6 +777,20 @@ public static partial class AiStatecraft
         if (best is null) { Count("ultimatum_no_region"); return false; }
 
         var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
+        if (target.IsHuman)
+        {
+            if (!Ultimatum.ValidateTerms(campaign, nation, target, demand, out var humanReason))
+            {
+                Count("ultimatum_invalid");
+                DiagnosticLogs.Write("ai", $"AI_ULTIMATUM_INVALID {nation.Tag}->{target.Tag} region={best.Id} reason={humanReason}");
+                return false;
+            }
+            nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiUltimatumIntervalDays);
+            var delivered = Ultimatum.Deliver(campaign, nation, target, demand);
+            if (!delivered.Accepted) return false;
+            Count("ultimatum_delivered");
+            return true;
+        }
         var assessment = Ultimatum.Assess(campaign, nation, target, demand);
         if (!assessment.Valid)
         {

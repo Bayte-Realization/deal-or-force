@@ -1,0 +1,34 @@
+// One line for every law in 10_new_policy_areas.json. The policy workspace reads its
+// explanation from here rather than from the law itself, so a law with no entry shows up
+// blank - which is what the icon test catches. The icon may be restated here to point at a
+// sprite the law file does not name.
+{
+  "trade_balanced": { "description": "Ordinary trade rules." },
+  "trade_open": { "description": "Cheaper imports and a wider reach, at the cost of the industries that cannot compete." },
+  "trade_protected": { "description": "Domestic industry first: more output and self-sufficiency, less trade and dearer credit." },
+  "trade_strategic": { "description": "Export controls and stockpiles on what a war would need, and the paperwork that comes with them." },
+
+  "currency_hard": { "description": "Ordinary monetary arrangement." },
+  "currency_managed": { "description": "The central bank leans against the market: steadier trade, less room to spend." },
+  "currency_development": { "description": "Credit is directed at what the state wants built, and carries the inflation that comes with it." },
+
+  "energy_import": { "description": "Ordinary energy supply." },
+  "energy_diversify": { "description": "Many suppliers and many routes, so no single one can hold the country to ransom." },
+  "energy_sovereign": { "description": "Domestic production at whatever it costs, and the insulation from a closed border that buys." },
+
+  "research_basic": { "description": "Ordinary research priorities." },
+  "research_applied": { "description": "Work that reaches a factory within the year, rather than a paper within the decade." },
+  "research_military": { "description": "The laboratories answer to the general staff: better equipment, thinner civilian shelves." },
+
+  "pension_basic": { "description": "Ordinary pension provision." },
+  "pension_universal": { "description": "Everyone who reaches the age is covered, and the contributions come out of the working country." },
+  "pension_funded": { "description": "Individual accounts invested in the economy: deeper capital markets and a thinner safety net." },
+
+  "development_balanced": { "description": "Ordinary regional development." },
+  "development_frontier": { "icon": "industry", "description": "Money goes where the country is thin rather than where it is already rich: the region lives better and resents less." },
+  "development_capital": { "icon": "industry", "description": "Concentrate on the place that already works: the centre lives better, and the periphery notices what it is not getting." },
+
+  "foreign_neutral": { "description": "No standing doctrine towards this country." },
+  "foreign_aligned": { "description": "Stand openly with this country, in public and in treaties." },
+  "foreign_opportunist": { "description": "Deal by deal, with no promises kept past the deal." }
+}

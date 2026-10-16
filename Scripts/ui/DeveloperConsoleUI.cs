@@ -76,7 +76,7 @@ public partial class DealOrForceGame
                    Bb("state.info") + "help NAME[/color] explains one · Tab completes · " +
                    "Up and Down are the history\nCommands are local and deterministic."
         };
-        _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", 14);
+        _developerConsoleOutput.AddThemeFontSizeOverride("normal_font_size", (int)Ui.Metric("ui.font.console", 14));
         rows.AddChild(_developerConsoleOutput);
 
         // Through Placeholder rather than straight into the field, so the hint follows a change

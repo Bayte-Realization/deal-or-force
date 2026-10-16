@@ -82,9 +82,21 @@ public static class CountryNames
         return Loc.Has($"country.{tag}.name") ? Loc.Get($"country.{tag}.name") : tag;
     }
 
+    /// <summary>
+    /// Whose rows a country's name is read from: its own, the state it has proclaimed itself -
+    /// or, for a country brought back (FormableRestorations), the country it brought back, so
+    /// a restored Montenegro is called Montenegro in every form its politics can give it.
+    /// </summary>
+    private static string Identity(Nation nation)
+    {
+        var restored = FormableRestorations.RestoredTag(nation.FormedNationId);
+        if (restored is not null) return "country." + restored;
+        return string.IsNullOrEmpty(nation.FormedNationId) ? "country." + nation.Tag : "formable." + nation.FormedNationId;
+    }
+
     public static string Resolve(Nation nation, bool map)
     {
-        var identity = string.IsNullOrEmpty(nation.FormedNationId) ? "country." + nation.Tag : "formable." + nation.FormedNationId;
+        var identity = Identity(nation);
         var role = map ? ".map" : ".name";
         Variants.TryGetValue(nation.Tag ?? "", out var variant);
         foreach (var key in new[] { identity + ".government." + nation.Government + ".ideology." + nation.Ideology + role,
@@ -210,7 +222,7 @@ public static class CountryNames
     public static string Compact(Nation nation)
     {
         if (nation is null) return "";
-        var identity = string.IsNullOrEmpty(nation.FormedNationId) ? "country." + nation.Tag : "formable." + nation.FormedNationId;
+        var identity = Identity(nation);
         return Loc.GetOr(identity + ".short_name", nation.DisplayName);
     }
 }

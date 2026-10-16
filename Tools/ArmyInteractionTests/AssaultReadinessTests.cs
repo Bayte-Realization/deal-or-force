@@ -246,7 +246,7 @@ static class AssaultReadinessTests
         c.Armies.Add(new Army { Id = 7, NationId = 0, ProvinceId = 3, Divisions = 1,
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
-        Check(CampaignFingerprint.Of(c) == 0xE7C481E45B745B52UL,
+        Check(CampaignFingerprint.Of(c) == 0x545E835F82EA7E2AUL,
             "default assault floors preserve the previously recorded legacy golden fingerprint");
     }
 

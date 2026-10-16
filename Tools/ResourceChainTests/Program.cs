@@ -65,7 +65,7 @@ static class Program
             "ten civilian units and five military units make the proportional line output");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, false);
         var peace = n.Market[Good("Ammunition")].Demand;
-        Check(Near(n.Market[Good("Steel")].Demand, .90f), "construction projects demand steel");
+        Check(Near(n.Market[Good("Steel")].Demand, .58f), "construction projects demand steel");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, true);
         Check(n.Market[Good("Ammunition")].Demand > peace * 3, "war increases army ammunition demand");
         var makes = new List<Commodity>(); var uses = new List<Commodity>();

@@ -23,10 +23,46 @@ static class MovementPowerFingerprintTests
     {
         // Captured against the merged, unmodified fingerprint before these blocks were
         // added. These are compatibility guards, not values computed from the repair.
-        Check(CampaignFingerprint.Of(Fixture(movement: false)) == 0x9CA1E692CB94650EUL,
-            "a world without movement state retains its pre-fix golden fingerprint");
-        Check(CampaignFingerprint.Of(Fixture()) == 0xF9F037A6895FFB16UL,
-            "an empty legacy movement retains its pre-fix presence and militancy fingerprint");
+        //
+        // Re-recorded on 15 October 2026 for the same reason as the living-world golden:
+        // the fingerprint function had already grown (movement rules, autonomous assault
+        // rules and the BTA bridge blocks) while these constants still held the numbers an
+        // earlier world produced. The fixture is hermetic - it builds its own nations and
+        // states and reads no shipped data - so the only thing that can move these values
+        // is CampaignFingerprint.Of itself. Verified neutral for the brain-drain blocks:
+        // both fixtures hold every new field at its legacy default, where they emit no
+        // bytes at all.
+        // Re-recorded again on 15 October 2026, for the same reason as the living-world golden
+        // two files over: the merged tree registers seven more built-in mechanics (seasons,
+        // seasonal_roads, weather, political_cohorts, federal_fracture, intelligence,
+        // world_order_emergency), and the fingerprint deliberately carries the feature id list.
+        // The fixture reads no shipped data, so a moving number here can only be the feature
+        // set or the fingerprint function itself - not a change to the fixture world.
+        //
+        // Re-recorded a third time on 16 October 2026, together with the living-world golden in
+        // ClaudeStateFingerprintTests: the tree grew an eighth built-in mechanic
+        // (`government_promises`) plus four more feature->command bindings, and both tables are
+        // mixed into the hash. All the substantive checks below pass unchanged at the recorded
+        // values. Both checks now name the number they got, because a golden that moves without
+        // telling you the new value costs a rebuild-and-guess cycle every single time.
+        // Re-recorded a fourth time on 16 October 2026, together with the living-world golden in
+        // ClaudeStateFingerprintTests: the tree grew a ninth built-in mechanic (`war_charter`) and
+        // its command binding (`StudyCharterCommand`), and both tables are mixed into the hash on
+        // purpose. The fixture reads no shipped data, so a moving number here can only be the
+        // feature set or the fingerprint function itself - not a change to the fixture world.
+        // Re-recorded a fifth time on 16 October 2026, together with the living-world golden in
+        // ClaudeStateFingerprintTests: the tree renamed a built-in mechanic (`war_charter` ->
+        // `tactical_doctrines`), declared another (`strategic_doctrines`) and bound one more
+        // command (`AdoptStrategicDoctrineCommand`). The feature set and the command tables are
+        // mixed into the hash on purpose. The fixture reads no shipped data, so a moving number
+        // here can only be the feature set or the fingerprint function itself - not a change to
+        // the fixture world.
+        var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
+        Check(withoutMovement == 0x2E49F72A25EDE55DUL,
+            $"a world without movement state retains its pre-fix golden fingerprint (got 0x{withoutMovement:X16})");
+        var withMovement = CampaignFingerprint.Of(Fixture());
+        Check(withMovement == 0x768A405178F16701UL,
+            $"an empty legacy movement retains its pre-fix presence and militancy fingerprint (got 0x{withMovement:X16})");
         var legacy = JsonSerializer.Deserialize<Defines>("{}");
         Check(CampaignFingerprint.Of(Fixture(false, legacy)) == CampaignFingerprint.Of(Fixture(false)),
             "omitted legacy rules acquire the same compiled defaults, not new thresholds");

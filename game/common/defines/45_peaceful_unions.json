@@ -1,13 +1,26 @@
 {
-  "UnionAiReviewDays": 90,
+  // How readily an AI country pursues a union its neighbours share a history with. These are
+  // the only values the AI reads: a human invitation is still gated by UnionMinimumOpinion, so
+  // loosening them makes the world move, not the player's own choices.
+  //
+  // Acceptance was 80, which no pair of real neighbours reaches: willingness is opinion (45 at
+  // most), cultural affinity (30), an alliance (20), a trade agreement (10) and matching
+  // government and ideology (15) together. A country that genuinely wants the union and has
+  // spent years on the relationship lands in the sixties, so 80 meant "never". It is 62 now:
+  // still a real relationship, no longer an impossible one.
+  "UnionAiReviewDays": 75,
   "UnionAiEarliestDay": 180,
-  "UnionAiMinimumOwnedShare": 0.35,
+  // A founder used to need a third of the union's land before it would even ask. Serbia holds
+  // rather less than that of Yugoslavia, so the most obvious consolidation in the game could
+  // not start. Thirty per cent lets the largest successor lead while the rest still has to be
+  // brought in by treaty.
+  "UnionAiMinimumOwnedShare": 0.30,
   "UnionAiTreasuryReserveShare": 0.12,
   "UnionConsentDays": 730,
   "UnionInvitationCooldownDays": 365,
   "UnionInvitationExpiryDays": 60,
   "UnionMinimumOpinion": 50,
-  "UnionAiAcceptance": 80,
+  "UnionAiAcceptance": 62,
   "UnionMinimumPartnerStability": 0.55,
   "UnionMaximumSubjectLiberty": 0.25,
   "UnionCultureWeight": 30,

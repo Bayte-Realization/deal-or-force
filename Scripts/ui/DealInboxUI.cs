@@ -12,30 +12,38 @@ public partial class DealOrForceGame
     private ScrollContainer _dealInboxScroll;
     private HFlowContainer _dealInboxActions;
     private bool _dealInboxVisible;
-    private int _dealInboxSelected = -1, _dealInboxConfirm = -1;
+    private int _dealInboxSelected = -1, _dealInboxConfirm = -1, _ultimatumInboxSelected = -1, _ultimatumInboxConfirm = -1;
     private string _dealInboxKey = "", _dealInboxConfirmKey = "", _dealInboxMessage = "";
     private int _dealNoticeViewer = -1;
     private bool _dealNoticeObserver;
     private System.Collections.Generic.HashSet<int> _dealNoticeIds = new();
+    private System.Collections.Generic.HashSet<int> _ultimatumNoticeIds = new();
 
     private string DealInboxKey()
     {
         var paper = _campaign.DealOffers.FirstOrDefault(o => o.Id == _dealInboxSelected);
+        var demand = _campaign.UltimatumPapers.FirstOrDefault(candidate => candidate.Id == _ultimatumInboxSelected);
         return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
-            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|{AssistanceInboxKey()}";
+            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}";
     }
 
     private void RefreshNegotiationNotifications()
     {
-        var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id) + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id);
+        var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id)
+            + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id)
+            + Ultimatum.Incoming(_campaign, _campaign.Player.Id);
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
+            .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
+        var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var assistance = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.AssistanceRequests
             .Where(r => r.State == ForeignAssistanceState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
         // A load or hotseat change primes quietly; receipt still is not a signature.
         if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id &&
-            (incoming.Except(_dealNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any())) PlayStrategicCue("deal_received");
+            (incoming.Except(_dealNoticeIds).Any() || ultimatums.Except(_ultimatumNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any()))
+            PlayStrategicCue("deal_received");
+        _ultimatumNoticeIds = ultimatums;
         _assistanceNoticeIds = assistance;
         _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
         if (IsInstanceValid(_dealInboxHudButton))
@@ -95,9 +103,15 @@ public partial class DealOrForceGame
         _dealInboxActions = new HFlowContainer { Name = "DealInboxActions", Visible = false };
         _dealInboxActions.AddThemeConstantOverride("h_separation", 10);
         detailColumn.AddChild(_dealInboxActions);
+        if (!_campaign.UltimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected && paper.ToId == _campaign.Player.Id && paper.Pending))
+            _ultimatumInboxSelected = -1;
         if (!_campaign.DealOffers.Any(o => o.Id == _dealInboxSelected && (o.FromId == _campaign.Player.Id || o.ToId == _campaign.Player.Id)))
             _dealInboxSelected = _campaign.DealOffers.Where(o => o.ToId == _campaign.Player.Id && o.Pending)
                 .OrderBy(o => o.ExpiresDay).Select(o => o.Id).DefaultIfEmpty(-1).First();
+        if (_ultimatumInboxSelected < 0 && _dealInboxSelected < 0 && _assistanceInboxSelected < 0)
+            _ultimatumInboxSelected = _campaign.UltimatumPapers.Where(paper => paper.Pending && paper.ToId == _campaign.Player.Id && paper.ExpiresDay > _campaign.ElapsedDays)
+                .OrderBy(paper => paper.ExpiresDay).Select(paper => paper.Id).DefaultIfEmpty(-1).First();
+        if (_ultimatumInboxSelected >= 0) _dealInboxSelected = -1;
         RefreshDealInbox(force: true);
     }
 
@@ -114,7 +128,7 @@ public partial class DealOrForceGame
         if (!_dealInboxVisible || !IsInstanceValid(_dealInboxRows)) return;
         var key = DealInboxKey();
         if (!force && (key == _dealInboxKey || InterfaceInteractionGuard.Busy(_dealComposer))) return;
-        if (key != _dealInboxKey) { _dealInboxConfirm = -1; _dealInboxMessage = ""; }
+        if (key != _dealInboxKey) { _dealInboxConfirm = -1; _ultimatumInboxConfirm = -1; _dealInboxMessage = ""; }
         _dealInboxKey = key;
         var scroll = _dealInboxScroll.ScrollVertical;
         foreach (var child in _dealInboxRows.GetChildren()) { _dealInboxRows.RemoveChild(child); child.QueueFree(); }
@@ -131,16 +145,42 @@ public partial class DealOrForceGame
             var row = ActionButton(Loc.Format("{0} · {1}\n{2}", paper.ToId == player.Id ? Tr("Incoming") : Tr("Outgoing"),
                 counterpart?.DisplayName ?? "?", Tr(OfferStateKey(paper))), () =>
             {
-                _dealInboxSelected = id; _assistanceInboxSelected = -1; _dealInboxMessage = ""; _dealInboxConfirm = -1;
+                _dealInboxSelected = id; _ultimatumInboxSelected = -1; _assistanceInboxSelected = -1;
+                _dealInboxMessage = ""; _dealInboxConfirm = -1;
                 RefreshDealInbox(force: true);
-            }, 0, 54, id == _dealInboxSelected);
+            }, 0, 54, id == _dealInboxSelected && _ultimatumInboxSelected < 0);
             row.Name = $"DiplomaticOffer_{id}"; row.TooltipText = Loc.Format("Offer #{0}", id);
             _dealInboxRows.AddChild(row);
         }
-        var assistanceSelected = AddAssistanceInboxRows();
+        var ultimatumPapers = _campaign.UltimatumPapers.Where(paper => paper.FromId == player.Id || paper.ToId == player.Id)
+            .OrderBy(paper => !paper.Pending).ThenBy(paper => paper.Pending ? paper.ExpiresDay : -paper.Id).ToArray();
+        foreach (var demand in ultimatumPapers)
+        {
+            var id = demand.Id;
+            var demander = _campaign.NationById(demand.FromId);
+            var row = ActionButton(Loc.Format("Ultimatum · {0}\n{1}", demander?.DisplayName ?? "?",
+                Tr(demand.Pending ? "Awaiting reply" : demand.State == UltimatumPaperState.Yielded ? "Yielded" : "Refused")), () =>
+            {
+                _ultimatumInboxSelected = id; _dealInboxSelected = -1; _assistanceInboxSelected = -1;
+                _dealInboxMessage = ""; _ultimatumInboxConfirm = -1;
+                RefreshDealInbox(force: true);
+            }, 0, 54, id == _ultimatumInboxSelected);
+            row.Name = $"Ultimatum_{id}";
+            row.TooltipText = Loc.Format("Ultimatum #{0}", id);
+            _dealInboxRows.AddChild(row);
+        }
+        var showUltimatum = ultimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected);
+        if (!showUltimatum) _ultimatumInboxSelected = -1;
+        var assistanceSelected = AddAssistanceInboxRows(showDetail: !showUltimatum);
         if (papers.Length == 0 && _dealInboxRows.GetChildCount() == 0)
             _dealInboxRows.AddChild(WrappedUltimatumText("No offers yet. Propose a deal from a country's diplomacy page.", 14));
         _dealInboxScroll.SetDeferred("scroll_vertical", scroll);
+        if (showUltimatum)
+        {
+            ShowUltimatumPaper(ultimatumPapers.First(paper => paper.Id == _ultimatumInboxSelected));
+            _dealInboxKey = DealInboxKey();
+            return;
+        }
         if (assistanceSelected) { _dealInboxKey = DealInboxKey(); return; }
         var selected = papers.FirstOrDefault(o => o.Id == _dealInboxSelected) ?? papers.FirstOrDefault();
         if (selected is null)
@@ -207,6 +247,83 @@ public partial class DealOrForceGame
         else if (selected.Pending && selected.FromId == player.Id)
             actions.AddChild(ActionButton("Withdraw offer", () => ReplyToDeal(selected.Id, DealReply.Withdraw), 170, 36));
         if (_dealInboxMessage.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
+    }
+
+    private void ShowUltimatumPaper(UltimatumPaper demand)
+    {
+        var from = _campaign.NationById(demand.FromId);
+        var to = _campaign.NationById(demand.ToId);
+        var state = demand.State switch
+        {
+            UltimatumPaperState.Pending => "Awaiting reply",
+            UltimatumPaperState.Yielded => "Yielded",
+            UltimatumPaperState.Refused => "Refused",
+            UltimatumPaperState.Expired => "Expired",
+            _ => "No longer valid"
+        };
+        _dealInboxDetail.AddChild(Title(Loc.Format("Ultimatum #{0} · {1}", demand.Id, Tr(state)), 20, Ui.Colour("text.accent")));
+        var countries = new HBoxContainer();
+        countries.AddThemeConstantOverride("separation", 10);
+        _dealInboxDetail.AddChild(countries);
+        countries.AddChild(FlagBadge(from?.Tag ?? "", 26));
+        var names = WrappedUltimatumText(Loc.Format("{0} → {1}", from?.DisplayName ?? "?", to?.DisplayName ?? "?"), 17);
+        countries.AddChild(names);
+        countries.AddChild(FlagBadge(to?.Tag ?? "", 26));
+        var remaining = Math.Max(0, demand.ExpiresDay - _campaign.ElapsedDays);
+        _dealInboxDetail.AddChild(WrappedUltimatumText(demand.Pending
+            ? Loc.Format("Reply within {0} days · offered on campaign day {1}", remaining, demand.CreatedDay)
+            : Loc.Format("Closed on campaign day {0}", demand.ClosedDay), 13));
+        _dealInboxDetail.AddChild(WrappedUltimatumText("Nothing has been handed over. Yielding gives them the regions on this paper and starts a truce. Refusing keeps the land and gives them a reason for war.", 13));
+        _dealInboxDetail.AddChild(new HSeparator());
+        _dealInboxDetail.AddChild(WrappedUltimatumText(Ultimatum.Summary(_campaign, demand.Terms), 16));
+        var preview = new DealTerritoryPreview();
+        _dealInboxDetail.AddChild(preview);
+        preview.Refresh(_campaign, System.Array.Empty<int>(), demand.Regions, false, false);
+        _dealInboxDetail.AddChild(WrappedUltimatumText("Green: they are asking you to give this. Gold is not used on an ultimatum.", 12));
+        var refusal = "";
+        var legal = demand.Pending && from is not null && to is not null &&
+            Ultimatum.ValidateTerms(_campaign, from, to, demand.Terms, out refusal);
+        if (demand.Pending && !legal) _dealInboxDetail.AddChild(WrappedUltimatumText(refusal, 14));
+        else if (!demand.Pending && demand.Reason.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(Tr(demand.Reason), 14));
+        _dealInboxActions.Visible = demand.Pending && demand.ToId == _campaign.Player.Id;
+        if (!_dealInboxActions.Visible)
+        {
+            if (_dealInboxMessage.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
+            return;
+        }
+        var yield = ActionButton(_ultimatumInboxConfirm == demand.Id ? "CONFIRM YIELD" : "Yield", () =>
+        {
+            if (_ultimatumInboxConfirm != demand.Id || _dealInboxConfirmKey != DealInboxKey())
+            {
+                _ultimatumInboxConfirm = demand.Id;
+                _dealInboxConfirmKey = DealInboxKey();
+                RefreshDealInbox(force: true);
+                return;
+            }
+            ReplyToUltimatum(demand.Id, Ultimatum.Answer.Yield);
+        }, 180, 36, true);
+        yield.Name = "YieldUltimatum";
+        yield.Disabled = !legal || remaining == 0;
+        yield.TooltipText = Ui.Tip(!legal ? refusal : Tr("Two clicks hand over the regions on this paper. Opening or reading it never counts as yielding."));
+        _dealInboxActions.AddChild(yield);
+        var refuse = ActionButton("Refuse", () => ReplyToUltimatum(demand.Id, Ultimatum.Answer.Refuse), 120, 36);
+        refuse.Name = "RefuseUltimatum";
+        refuse.TooltipText = Ui.Tip(Tr("The land stays. They remember the refusal and may go to war after the short truce."));
+        _dealInboxActions.AddChild(refuse);
+        if (_dealInboxMessage.Length > 0) _dealInboxDetail.AddChild(WrappedUltimatumText(_dealInboxMessage, 14));
+    }
+
+    private void ReplyToUltimatum(int id, Ultimatum.Answer reply)
+    {
+        var command = new AnswerUltimatumCommand { IssuerId = _campaign.Player.Id, PaperId = id, Reply = reply };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+        ForceDiplomacyRefresh();
+        Refresh();
+        _dealInboxMessage = _networkConnected && !_networkIsHost
+            ? Tr("Answer sent to the host. Awaiting confirmation.") : command.Outcome.Note;
+        _ultimatumInboxConfirm = -1;
+        RefreshDealInbox(force: true);
     }
 
     private void ReplyToDeal(int id, DealReply reply)

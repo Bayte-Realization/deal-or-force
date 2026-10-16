@@ -53,5 +53,42 @@ static class SourceTableTests
         WorldMapTables.ResetCatalog();
         Check(WorldMapTables.CountryRows.SequenceEqual(countries) && WorldMapTables.StateRows.SequenceEqual(states),
             "catalog reset restores external vanilla data, not compiled fallback");
+
+        // ---- the map's colours, which were the last of the world's tables to be spoken in code
+        //
+        // Spot values are transcribed by hand from the fourteen families that were deleted from the
+        // scenario builder. Hand-transcribed on purpose: a test whose expectations came out of the
+        // same file it is checking would agree with any typo in it, and a wrong colour on a map is
+        // not an error anybody gets told about.
+        Check(WorldMapTables.MapPalette.Length == 14, "the palette carries its fourteen colour families");
+        Check(WorldMapTables.MapPalette[0].Length == 1 && WorldMapTables.MapPalette[0][0] == "#949494",
+            "the grey family is still the one shade a country with no family gets");
+        Check(WorldMapTables.MapPalette[6][0] == "#32814c", "the green family starts where it always did");
+        Check(WorldMapTables.MapPalette[13][0] == "#b33262", "and the magenta family still ends the spectrum");
+        Check(WorldMapTables.MapPalette.All(family => family.Length is > 0 and <= 4),
+            "every family is one to four shades, which is what the id hash picks a shade from");
+
+        static bool SamePalette(string[][] left, string[][] right) =>
+            left.Length == right.Length && left.Zip(right).All(pair => pair.First.SequenceEqual(pair.Second));
+
+        var shipped = WorldMapTables.MapPalette;
+        var shippedErrors = new List<string>();
+        Merge(new { palette = new[] { new[] { "#000000" }, new[] { "#ffffff" } } }, shippedErrors);
+        Check(shippedErrors.Count == 0 && WorldMapTables.MapPalette.Length == 2 &&
+            WorldMapTables.MapPalette[1][0] == "#ffffff", "a shipped palette replaces the whole spectrum");
+        var held = WorldMapTables.MapPalette;
+        var shadeErrors = new List<string>();
+        Merge(new { palette = new[] { new[] { "not a colour" } } }, shadeErrors);
+        Check(shadeErrors.Count == 1 && ReferenceEquals(held, WorldMapTables.MapPalette),
+            "a shade that is not a colour rejects the whole palette and leaves the old one standing");
+        var shortErrors = new List<string>();
+        Merge(new { palette = new[] { new[] { "#12345" } } }, shortErrors);
+        Check(shortErrors.Count == 1, "a shade that is the wrong length is refused too");
+        var shapeErrors = new List<string>();
+        Merge(new { palette = new object[] { new[] { "#ffffff" }, "not an array" } }, shapeErrors);
+        Check(shapeErrors.Count == 1, "a family that is not an array is refused");
+        WorldMapTables.ResetCatalog();
+        Check(SamePalette(shipped, WorldMapTables.MapPalette),
+            "and resetting the catalog brings the shipped spectrum back, shade for shade");
     }
 }

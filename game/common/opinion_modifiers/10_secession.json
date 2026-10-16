@@ -25,5 +25,14 @@
     "days": 7300,
     "decays": true,
     "max_stacks": 2
+  },
+
+  // And the other direction entirely: a friend gave a government in exile its country back
+  // (Restoration). Held by the restored government about the country that handed it home.
+  "restored_us": {
+    "name": "Gave us our country back",
+    "opinion": 40,
+    "days": 5500,
+    "decays": true
   }
 }

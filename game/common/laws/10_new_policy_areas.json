@@ -1,0 +1,42 @@
+// More law areas for the policy workspace (PoliticalPolicyCatalog).
+//
+// Each `category` is a question the government answers once, and every option in it is an
+// answer; exactly one option per category carries `"default": true` and is what a country
+// starts with. A `modifiers` block uses the keys in Scripts/Simulation/NationalModifiers.cs,
+// and `icon` names a sprite without the `icon_` prefix, exactly as the shipped areas do.
+//
+// The rule the whole file follows: every option is a trade, not an upgrade. A country that
+// opens its markets loses something it was protecting, and a country that closes them pays
+// for the protection somewhere else.
+{
+  "//": "New policy areas: each category is one question with two or three answers, none of them free.",
+
+  "trade_balanced": { "name": "Balanced trade rules", "category": "Trade policy", "default": true, "icon": "trade", "modifiers": {} },
+  "trade_open": { "name": "Open markets", "category": "Trade policy", "icon": "trade", "description": "Cheap imports and wider reach, at the cost of the industries that cannot compete.", "modifiers": { "trade_reach": 0.10, "output": -0.02, "borrowing_cost": -0.03 } },
+  "trade_protected": { "name": "Protected markets", "category": "Trade policy", "icon": "trade", "description": "Domestic industry first: more output and more self-sufficiency, less trade and dearer credit.", "modifiers": { "output": 0.05, "trade_reach": -0.08, "borrowing_cost": 0.05 } },
+  "trade_strategic": { "name": "Strategic controls", "category": "Trade policy", "icon": "trade", "description": "Export controls and stockpiles on what a war would need, with the paperwork that comes with them.", "modifiers": { "supply": 0.06, "trade_reach": -0.04, "tax_efficiency": -0.02 } },
+
+  "currency_hard": { "name": "Hard currency anchor", "category": "Currency regime", "default": true, "icon": "treasury", "modifiers": {} },
+  "currency_managed": { "name": "Managed float", "category": "Currency regime", "icon": "treasury", "description": "A central bank that leans against the market: steadier trade, less room to spend.", "modifiers": { "trade_reach": 0.04, "borrowing_cost": -0.04, "output": -0.01 } },
+  "currency_development": { "name": "Development mandate", "category": "Currency regime", "icon": "treasury", "description": "Credit directed at what the state wants built, and the inflation that comes with it.", "modifiers": { "construction_speed": 0.10, "construction_cost": -0.05, "borrowing_cost": 0.12 } },
+
+  "energy_import": { "name": "Import dependence", "category": "Energy policy", "default": true, "icon": "energy", "modifiers": {} },
+  "energy_diversify": { "name": "Diversified supply", "category": "Energy policy", "icon": "energy", "description": "Many suppliers and many routes, so no single one can hold the country to ransom.", "modifiers": { "supply": 0.04, "trade_reach": 0.02, "construction_cost": 0.03 } },
+  "energy_sovereign": { "name": "Energy sovereignty", "category": "Energy policy", "icon": "energy", "description": "Domestic production at whatever it costs, and the insulation from a closed border that buys.", "modifiers": { "supply": 0.07, "output": -0.02, "living_weekly": -0.0003 } },
+
+  "research_basic": { "name": "Basic research", "category": "Research policy", "default": true, "icon": "research", "modifiers": {} },
+  "research_applied": { "name": "Applied research", "category": "Research policy", "icon": "research", "description": "Work that reaches a factory within the year, rather than a paper within the decade.", "modifiers": { "research_speed": 0.06, "construction_speed": 0.04, "living_weekly": -0.0002 } },
+  "research_military": { "name": "Military research priority", "category": "Research policy", "icon": "research", "description": "The laboratories answer to the general staff: better equipment, thinner civilian shelves.", "modifiers": { "army_attack": 0.04, "army_defense": 0.03, "output": -0.03 } },
+
+  "pension_basic": { "name": "Basic pensions", "category": "Pension policy", "default": true, "icon": "population", "modifiers": {} },
+  "pension_universal": { "name": "Universal pensions", "category": "Pension policy", "icon": "population", "description": "Everyone who reaches the age is covered, and the contributions come out of the working country.", "modifiers": { "living_weekly": 0.0006, "radicalism_weekly": -0.0004, "tax_efficiency": -0.05 } },
+  "pension_funded": { "name": "Funded pensions", "category": "Pension policy", "icon": "treasury", "description": "Individual accounts invested in the economy: deeper capital markets and a thinner safety net.", "modifiers": { "credit_capacity": 0.06, "living_weekly": -0.0003, "radicalism_weekly": 0.0002 } },
+
+  "development_balanced": { "name": "Balanced regional development", "category": "Regional development", "scope": "region", "default": true, "icon": "industry", "modifiers": {} },
+  "development_frontier": { "name": "Frontier investment", "category": "Regional development", "scope": "region", "icon": "industry", "description": "Money goes where the country is thin rather than where it is already rich.", "modifiers": { "living_weekly": 0.0006, "radicalism_weekly": -0.0004 } },
+  "development_capital": { "name": "Capital-first development", "category": "Regional development", "scope": "region", "icon": "industry", "description": "Concentrate on the place that already works: the centre lives better, and the periphery notices what it is not getting.", "modifiers": { "living_weekly": 0.0002, "stability_weekly": 0.0002, "radicalism_weekly": 0.0005 } },
+
+  "foreign_neutral": { "name": "Neutral posture", "category": "Foreign posture", "scope": "foreign", "default": true, "icon": "treaty", "foreign_trust": 0 },
+  "foreign_aligned": { "name": "Alignment doctrine", "category": "Foreign posture", "scope": "foreign", "icon": "treaty", "description": "Stand openly with this country, in public and in treaties.", "foreign_trust": 0.10 },
+  "foreign_opportunist": { "name": "Transactional engagement", "category": "Foreign posture", "scope": "foreign", "icon": "treaty", "description": "Deal by deal, with no promises kept past the deal.", "foreign_trust": -0.06 }
+}

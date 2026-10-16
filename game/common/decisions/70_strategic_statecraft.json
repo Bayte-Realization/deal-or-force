@@ -1,0 +1,66 @@
+// Strategic statecraft decisions (DecisionCore / TakeDecisionCommand).
+//
+// Extends the national decisions deck with core geopolitical instruments:
+// grain reserves, defense industrial consolidation, infrastructure hardening, and war bonds.
+{
+  "strategic_food_reserve": {
+    "name": "Strategic food reserve",
+    "description": "Store surplus grain in state silos to buffer the population against global price shocks and wartime blockades.",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0015,
+    "unavailable": "Requires peacetime conditions and sufficient treasury funds to stock the silos",
+    "trigger": { "use": [ "at_peace", "solvent" ] },
+    "effects": { "stability": 0.015, "standard_of_living": 0.008 },
+    "ai_will_do": "ai_grain_reserve"
+  },
+  "defence_industry_consolidation": {
+    "name": "Consolidate defence production",
+    "description": "Integrate state arsenals and establish priority supply chains to accelerate equipment and materiel replenishment.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0028,
+    "unavailable": "Defence production consolidation requires an active wartime footing",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "military_spending": 0.012, "war_support": 0.025, "stability": -0.008 },
+    "ai_will_do": "ai_defence_consolidation"
+  },
+  "critical_infrastructure_hardening": {
+    "name": "Harden critical infrastructure",
+    "description": "Reinforce power grids, communications networks, and transport arteries against sabotage and precision strikes.",
+    "cooldown_days": 600,
+    "gdp_cost_share": 0.0024,
+    "unavailable": "Requires adequate treasury reserves to fund structural engineering works",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.012, "state.infrastructure": 0.008 },
+    "ai_will_do": "ai_infrastructure_drive"
+  },
+  "emergency_war_bonds": {
+    "name": "Issue sovereign war bonds",
+    "description": "Appeal to patriotic citizens to fund the armed forces in a protracted struggle, raising immediate treasury liquidity.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0,
+    "unavailable": "War bonds may only be issued during an active armed conflict",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "treasury_percent": 0.025, "war_support": 0.015, "stability": -0.010 },
+    "ai_will_do": "ai_war_bonds"
+  },
+  "red_sea_maritime_security": {
+    "name": "Red Sea maritime escort",
+    "description": "Deploy naval escorts and reroute merchant shipping away from missile danger corridors around Bab-el-Mandeb, securing international trade flow.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "Requires adequate treasury liquidity to maintain naval patrols and convoy routing",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.010, "state.infrastructure": 0.006 },
+    "ai_will_do": "ai_maritime_escort"
+  },
+  "semiconductor_supply_shield": {
+    "name": "Microelectronics sovereign initiative",
+    "description": "Subsidise advanced semiconductor fabrication and stockpile rare earth inputs to defend industrial autonomy against supply-chain disruption.",
+    "cooldown_days": 500,
+    "gdp_cost_share": 0.0032,
+    "unavailable": "Requires sufficient industrial capacity and treasury reserves",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "productivity": 0.012, "stability": 0.008 },
+    "ai_will_do": "ai_chip_initiative"
+  }
+}

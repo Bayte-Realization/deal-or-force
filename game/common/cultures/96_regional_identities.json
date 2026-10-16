@@ -12,5 +12,8 @@
   "livonian":{"name":"Livonian","group":"uralic","colour":"#5b977a","religion":"protestant"},
   "ladin":{"name":"Ladin","group":"latin","colour":"#7891a3","religion":"catholic"},
   "friulian":{"name":"Friulian","group":"latin","colour":"#7494aa","religion":"catholic"},
-  "megleno_romanian":{"name":"Megleno-Romanian","group":"latin","colour":"#a17c56","religion":{"orthodox":0.7,"sunni":0.3}}
+  "megleno_romanian":{"name":"Megleno-Romanian","group":"latin","colour":"#a17c56","religion":{"orthodox":0.7,"sunni":0.3}},
+  "south_tirol":{"name":"South Tyrolean","group":"germanic","colour":"#7fa86b","religion":"catholic","country":"South Tyrol"},
+  "ligurian":{"name":"Ligurian","group":"latin","colour":"#7c93a6","religion":"catholic"},
+  "venetian":{"name":"Venetian","group":"latin","colour":"#6f9ab0","religion":"catholic"}
 }

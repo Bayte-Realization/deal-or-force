@@ -363,7 +363,7 @@ public partial class DealOrForceGame
         page.AddChild(line.Range);
         page.AddChild(ProductionLabel("Page", 10, "text.caption"));
         line.PagePicker = new SpinBox { Name = "CapacityPage", MinValue = 1, MaxValue = 1, Step = 1, CustomMinimumSize = new Vector2(62, 24) };
-        line.PagePicker.AddThemeFontSizeOverride("font_size", 11);
+        line.PagePicker.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 11));
         line.PagePicker.ValueChanged += value => { if (!line.Updating) { line.Page = (int)value - 1; RefreshProductionLines(); } };
         page.AddChild(line.PagePicker);
         var controlRows = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };

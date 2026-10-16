@@ -18,6 +18,9 @@ namespace DealOrForce.Simulation;
 /// angry, it has stopped being governed, and the state holding it looks unable to stop it.
 /// None of them alone is enough, which is the point - a poor region is not a secession, an
 /// angry region is not a secession, and a foreign region in a country that works is Wales.
+/// A region of the state's own people can still leave, by the federal road: its politics
+/// have diverged, it has stopped accepting the government, the centre is illegitimate, and
+/// an economic stress is already on the books. Size alone never opens that road.
 ///
 /// What comes out is a country: a tag, a name, a flag, a capital, a government, and an
 /// army of exactly the kind people who have just decided something have. Whether the state
@@ -120,7 +123,7 @@ public sealed class SecessionReport
     public string Reason = "";
 
     /// <summary>
-    /// `national`, `sectarian` or `discontent` - see <see cref="Nation.FoundedInRevolt"/>.
+    /// `national`, `sectarian`, `federal` or `discontent` - see <see cref="Nation.FoundedInRevolt"/>.
     /// </summary>
     public string Revolt = "";
 
@@ -200,7 +203,8 @@ public static class SecessionCore
         var weights = Weights;
 
         var foreign = EconomySystem.ForeignShare(state, owner.Tag);
-        if (foreign < weights.MinimumForeignShare) return 0f;
+        var federal = foreign < weights.MinimumForeignShare && IsFederalBreak(campaign, owner, state);
+        if (!federal && foreign < weights.MinimumForeignShare) return 0f;
         if (state.Population < weights.MinimumPopulation) return 0f;
 
         var losing = false;
@@ -218,14 +222,50 @@ public static class SecessionCore
             if (score < 0f) { losing = true; break; }
         }
 
+        var identity = federal ? M.Clamp01(state.PoliticalDivergence) : M.Clamp01(foreign);
+        var scale = federal ? MathF.Max(0f, campaign.Defines.FederalPressureScale) : 1f;
         return weights.Base
-               * MathF.Pow(M.Clamp01(foreign), MathF.Max(0.01f, weights.Nationality))
+               * MathF.Pow(identity, MathF.Max(0.01f, weights.Nationality))
                * (weights.RadicalismFloor + weights.Radicalism * M.Clamp01(state.Radicalism))
                * (1f - M.Clamp01(state.Stability))
                * (weights.WeaknessFloor + weights.Weakness * (1f - M.Clamp01(owner.Stability)))
                * (losing ? weights.WarMultiplier : 1f)
                * (torn ? campaign.Defines.SecessionCivilWarMultiplier : 1f)
-               * (1f - SocialMemory.BorderRelief(campaign, state));
+               * (1f - SocialMemory.BorderRelief(campaign, state))
+               * scale;
+    }
+
+    /// <summary>
+    /// A region of the country's own people, politically finished with the centre.
+    ///
+    /// The ethnic gate above is what keeps Wales in a Britain that works. It also kept
+    /// every state of a union that works on paper and has stopped working in fact: the
+    /// people are the country's own, so the pressure was defined to be zero. This is the
+    /// other road. It needs the region's politics to have diverged, the region to have
+    /// stopped accepting the government, the centre to be illegitimate, and an economic
+    /// stress that is already on the books — debt, shortage, or a region much poorer than
+    /// the country it is taxed by. None of those is a penalty for being large, and none
+    /// of them names a tag.
+    /// </summary>
+    public static bool IsFederalBreak(Campaign campaign, Nation owner, ScenarioState state)
+    {
+        if (campaign is null || owner is null || state is null) return false;
+        if (!campaign.FeatureEnabled("federal_fracture") || !campaign.FeatureEnabled("political_cohorts")) return false;
+        if (!campaign.FeatureEnabled("secession")) return false;
+        if (state.MapIndex == owner.CapitalStateMapIndex || state.Population < Weights.MinimumPopulation) return false;
+        if (EconomySystem.ForeignShare(state, owner.Tag) >= Weights.MinimumForeignShare) return false;
+        if (state.PoliticalDivergence < campaign.Defines.CenterRegionIdeologySplit) return false;
+        if (state.GovernmentApproval < 0f || state.GovernmentApproval > campaign.Defines.FederalGovernmentApprovalCeiling) return false;
+        if (owner.Stability > campaign.Defines.FederalStabilityCeiling) return false;
+        var defines = campaign.Defines;
+        if (owner.ShortageIndex >= defines.FederalShortageStress) return true;
+        if (campaign.FeatureEnabled("public_debt"))
+        {
+            var debt = owner.DebtCondition;
+            if (debt == DebtCondition.Stressed || debt == DebtCondition.Default
+                || debt == DebtCondition.Insolvent || debt == DebtCondition.Restructuring) return true;
+        }
+        return state.StandardOfLiving + defines.FederalLivingGap < owner.StandardOfLiving;
     }
 
     /// <summary>

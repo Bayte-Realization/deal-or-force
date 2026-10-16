@@ -290,3 +290,4 @@ static class AiFiscalPolicyTests
             "a dormant queue does not reserve nonexistent payments while its construction system is disabled");
     }
 }
+

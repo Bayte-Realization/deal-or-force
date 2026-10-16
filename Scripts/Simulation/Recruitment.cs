@@ -24,6 +24,19 @@ public sealed class RecruitmentOrder
     public int LastProcessedDay;
 }
 
+public sealed partial class Defines
+{
+    /// <summary>Training batches one country may have in the queue at once in peace.</summary>
+    public int RecruitmentBatchCap { get; set; } = 12;
+
+    /// <summary>
+    /// The same once the country is at war. A mass army takes months to train whatever a
+    /// mobilisation says, and the queue is how those months are expressed - so a war doubles
+    /// the schools' book rather than deleting it. A define either way, so a mod runs its own.
+    /// </summary>
+    public int RecruitmentWartimeBatchCap { get; set; } = 24;
+}
+
 public static class RecruitmentSystem
 {
     public static string Validate(Campaign c, int issuer, int stateId, string templateId, int count)
@@ -35,7 +48,14 @@ public static class RecruitmentSystem
         if (state is null || state.NationMapIndex != nation.MapIndex) return "Choose an owned training region.";
         if (template is null || count < 1 || count > 6) return "Choose a valid template and 1–6 divisions.";
         if (DeploymentProvince(c, issuer, stateId) <= 0) return "No controlled province in this region.";
-        if (c.Recruitment.Count(o => o.NationId == issuer) >= 12) return "Training capacity reached: 12 batches.";
+        // The queue a country may hold doubles the day it is at war: mobilisation runs the
+        // training schools in shifts, it does not abolish the idea of a booking system.
+        var atWar = false;
+        foreach (var war in c.Wars)
+            if (!war.Ended && war.Involves(issuer)) { atWar = true; break; }
+        var cap = atWar ? c.Defines.RecruitmentWartimeBatchCap : c.Defines.RecruitmentBatchCap;
+        if (c.Recruitment.Count(o => o.NationId == issuer) >= cap)
+            return Loc.Format("Training capacity reached: {0} batches.", cap);
         if (nation.Treasury < CostOf(nation, template) * count) return "Insufficient treasury.";
         if (nation.ManpowerReserve < template.RecruitmentPersonnel * count) return "Insufficient manpower reserve.";
         return "";

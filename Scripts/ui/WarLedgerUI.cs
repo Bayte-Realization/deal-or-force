@@ -572,6 +572,12 @@ public partial class DealOrForceGame
         var standing = new List<string> { WarStanding(war, attacker, defender) };
         standing.Add(Simulation.Loc.Format("{0} province(s) of front", (war.AttackerFront.Count + war.DefenderFront.Count).ToString("N0")));
         if (battles > 0) standing.Add(Simulation.Loc.Format("{0} battle(s)", battles.ToString("N0")));
+        // Why it was declared. A war the map opened with has no reason recorded because nobody
+        // in this campaign declared it - a scenario's wars are history, not decisions - and
+        // saying "no reason given" about them would be the ledger inventing an accusation the
+        // simulation never made. So the segment is shown when there is something to show.
+        var reason = WarReason(war);
+        if (reason.Length > 0) standing.Add(reason);
         row.Standing.Text = string.Join("  ·  ", standing);
 
         row.Losses.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
@@ -610,6 +616,17 @@ public partial class DealOrForceGame
         return Simulation.Loc.Format("{0} · {1} ahead", score,
             (war.WarScore > 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody"));
     }
+
+    /// <summary>
+    /// Why this war was declared, in the words of whoever declared it.
+    ///
+    /// A war a government could give no reason for is the expensive kind - it costs it standing
+    /// at home and abroad - and until now a player had no way to tell those wars apart from the
+    /// justified ones. The reason was worked out at the declaration, charged for, and thrown
+    /// away. It is kept on the war now, and said here, so the map explains itself.
+    /// </summary>
+    private string WarReason(StrategicWar war) =>
+        Tr(Simulation.CasusBelliNames.Of(war.Justification));
 
     private ScenarioState WarObjective(StrategicWar war) =>
         war.ClaimedStateMapIndex < 0

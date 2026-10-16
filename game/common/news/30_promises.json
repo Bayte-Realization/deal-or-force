@@ -1,0 +1,11 @@
+// How much promise news matters. Making a promise is routine business (1) - the reports
+// carry it, the rail shows it only for the player's own country. The date arriving, either
+// way, is worth the rail (2): a kept promise is rare enough to be worth saying, and a
+// broken one is the kind of thing people repeat for years.
+{
+  "importance": {
+    "promise_made": 1,
+    "promise_kept": 2,
+    "promise_broken": 2
+  }
+}

@@ -31,3 +31,4 @@ The three `interface/support_*.wav` cues were generated for this game with Creat
 | `support_order` | Queue a long-range formation | https://cdn.creativeclaw.co/u/c8554121/audio/6d8b6115-eb5e-43c9-b733-4c6f9eafa234.pcm |
 | `support_mission` | Change its mission | https://cdn.creativeclaw.co/u/c8554121/audio/fc077033-0f3f-4ceb-87d7-3623801f8b07.pcm |
 | `support_ready` | Training finishes | https://cdn.creativeclaw.co/u/c8554121/audio/1a7b3d30-c07d-416d-b443-08691ddd4ff8.pcm |
+| `world_event` | A modern wire-service tone when a split, a new country or a scandal reaches the rail | https://cdn.creativeclaw.co/u/c8554121/audio/3f452598-76f7-4143-96cd-076f67282c8e.wav |

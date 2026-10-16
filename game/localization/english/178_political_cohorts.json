@@ -1,0 +1,13 @@
+{
+  "Law approval": "Law approval",
+  "Government approval": "Government approval",
+  "Political divergence": "Political divergence",
+  "Share of the region that accepts the laws it lives under. It moves with living standards and shortages, not with a button.": "Share of the region that accepts the laws it lives under. It moves with living standards and shortages, not with a button.",
+  "Share of the region that accepts the government over it. A low figure with a still-orderly state is a scandal. A low figure with a failing state feeds coups and breaks.": "Share of the region that accepts the government over it. A low figure with a still-orderly state is a scandal. A low figure with a failing state feeds coups and breaks.",
+  "How far this region's politics have moved from the centre. High divergence is a state with its own mind. It is not a foreign people, and it does not by itself draw a border.": "How far this region's politics have moved from the centre. High divergence is a state with its own mind. It is not a foreign people, and it does not by itself draw a border.",
+  "Political opinion has not been reviewed yet. It is read with the country, once a day.": "Political opinion has not been reviewed yet. It is read with the country, once a day.",
+  "The governed do not accept the government": "The governed do not accept the government",
+  "Laws {0:P0} · government {1:P0} · divergence {2:P0}": "Laws {0:P0} · government {1:P0} · divergence {2:P0}",
+  "chronicle.political_scandal": "{0} is orderly and unloved: the laws hold, and the people under them do not.",
+  "Reading the world's conflicts.": "Reading the world's conflicts."
+}

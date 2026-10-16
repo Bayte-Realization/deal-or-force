@@ -5,8 +5,19 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// A joint undertaking inside an alliance: what it is called, how long it runs, what it costs the
+/// sponsor each week, and how much cohesion finishing it is worth.
+///
+/// <see cref="OpinionOnCompletion"/> is the reason both sides remember it afterwards: a named entry
+/// in common/opinion_modifiers, which appears in the country card beside everything else two
+/// countries hold against or for each other. A programme without one is a programme that was paid
+/// for and forgotten, which is a legitimate thing for a mod to want and is what setting the key to
+/// nothing gets.
+/// </summary>
 public sealed record AllianceProgramDefinition(string Id, string Name, int DurationDays = 84,
-    float WeeklyGdpShare = .00002f, float TrustBudget = .12f, bool Relief = false);
+    float WeeklyGdpShare = .00002f, float TrustBudget = .12f, bool Relief = false,
+    string OpinionOnCompletion = "");
 
 public static class AllianceProgramCatalog
 {
@@ -38,12 +49,27 @@ public static class AllianceProgramCatalog
                         throw new FormatException(key + " is outside its supported range");
                     return value;
                 }
+                // The reason both sides remember a finished programme, or nothing. Checked here
+                // rather than at the moment of remembering, because OpinionSystem.Remember ignores
+                // an id it does not know: a typo would mean a programme that quietly leaves no
+                // trace at all, and nobody ever reports a thing that does nothing.
+                string Opinion()
+                {
+                    if (!s.TryGetProperty("opinion_on_completion", out var raw)) return current.OpinionOnCompletion;
+                    if (raw.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(raw.GetString()))
+                        throw new FormatException("opinion_on_completion has to be an opinion modifier id");
+                    var id = raw.GetString()!;
+                    if (OpinionCatalog.Find(id) is null)
+                        throw new FormatException($"opinion_on_completion names '{id}', and there is no such opinion modifier");
+                    return id;
+                }
                 var next = current with {
                     Name = s.TryGetProperty("name", out var name) ? name.GetString() : current.Name,
                     DurationDays = (int)Number("duration_days", current.DurationDays, 7, 730),
                     WeeklyGdpShare = Number("weekly_gdp_share", current.WeeklyGdpShare, .000001f, .01f),
                     TrustBudget = Number("trust_budget", current.TrustBudget, 0, .25f),
-                    Relief = s.TryGetProperty("relief", out var relief) ? relief.GetBoolean() : current.Relief
+                    Relief = s.TryGetProperty("relief", out var relief) ? relief.GetBoolean() : current.Relief,
+                    OpinionOnCompletion = Opinion()
                 };
                 Entries[entry.Name] = next;
             }
@@ -122,7 +148,14 @@ public static class AlliancePrograms
                 r.AllianceProgramLastPaid += 7;
                 if (r.AllianceProgramLastPaid - r.AllianceProgramStarted >= r.AllianceProgramDuration)
                 {
-                    c.Chronicle.Record(c, "alliance_program_completed", sponsor.Id, r.Other(sponsor.Id), AllianceProgramCatalog.Find(r.AllianceProgram)?.Name ?? r.AllianceProgram);
+                    var finished = AllianceProgramCatalog.Find(r.AllianceProgram);
+                    c.Chronicle.Record(c, "alliance_program_completed", sponsor.Id, r.Other(sponsor.Id), finished?.Name ?? r.AllianceProgram);
+                    // Both sides remember it, and it is one memory for the pair rather than one
+                    // each, because a joint undertaking is a thing that happened to the two of them.
+                    // This is the trace of a programme that finished, as opposed to the cohesion
+                    // that a programme that lapsed takes away.
+                    if (finished is { OpinionOnCompletion.Length: > 0 } remembered)
+                        OpinionSystem.Remember(c, r, remembered.OpinionOnCompletion);
                     Clear(r); break;
                 }
                 if (r.EmbargoByA || r.EmbargoByB || sponsor.Treasury < r.AllianceProgramWeeklyCost)

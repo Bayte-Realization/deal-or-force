@@ -191,6 +191,12 @@ public partial class DealOrForceGame
         _diplomacyDetailBody = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            // The same idiom as the action column below: a VBoxContainer inside a ScrollContainer
+            // is sized to its content unless it is told to fill, so the page's inset panels stop
+            // short of the viewport and the column reads as unfinished rather than as a page that
+            // simply has less on it today. The children keep their own flags, so nothing moves -
+            // the container is the thing that now reaches the bottom.
+            SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(420, 0)
         };
         _diplomacyDetailBody.AddThemeConstantOverride("separation", 12);
@@ -215,7 +221,7 @@ public partial class DealOrForceGame
             FollowFocus = true, MouseForcePassScrollEvents = false
         };
         actions.AddChild(actionScroll);
-        _diplomacyActionRows = new VBoxContainer { Name = "WideDiplomaticActions", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _diplomacyActionRows = new VBoxContainer { Name = "WideDiplomaticActions", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         _diplomacyActionRows.AddThemeConstantOverride("separation", 7);
         actionScroll.AddChild(_diplomacyActionRows);
 
@@ -291,6 +297,11 @@ public partial class DealOrForceGame
         _diplomacyIntegrateButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _diplomacySubjectActions.AddChild(_diplomacyIntegrateButton);
 
+        // Spacer takes all leftover vertical room so the action buttons never float in an
+        // empty actions column when only a few actions are available for the selected country.
+        var _ = new Control { SizeFlagsVertical = SizeFlags.ExpandFill };
+        _diplomacyActionRows.AddChild(_);
+
         _diplomacyFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _diplomacyFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _diplomacyFeedback.CustomMinimumSize = new Vector2(0, 44);
@@ -338,7 +349,8 @@ public partial class DealOrForceGame
         if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
         if (_productionLayer is not null) _productionLayer.Visible = false;
         if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
-        if (_selectedNation is null) _selectedNation = _campaign.Player;
+        if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
+            _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
         _diplomacySelectedId = _selectedNation?.Id ?? -1;
         _diplomacyLayer.Visible = true;
         _diplomacyLayer.MoveToFront();
@@ -346,6 +358,15 @@ public partial class DealOrForceGame
         ForceDiplomacyRefresh();
         UpdateScreenButtons();
     }
+
+    /// <summary>
+    /// Who diplomacy opens on when the player has not chosen anybody: the neighbour the player
+    /// is on worst terms with, or the largest country in the world if there is no land
+    /// neighbour. The choice itself lives in the simulation (<see cref="CampaignDiplomacy.DefaultPartner"/>)
+    /// so it can be tested without a scene; this only asks for it.
+    /// </summary>
+    private Nation DiplomacyDefaultPartner() =>
+        CampaignDiplomacy.DefaultPartner(_campaign, _campaign?.Player);
 
     private void CloseDiplomacyScreen()
     {
@@ -579,7 +600,7 @@ public partial class DealOrForceGame
         };
         chip.AddThemeConstantOverride("icon_max_width", 22);
         chip.AddThemeConstantOverride("h_separation", 6);
-        chip.AddThemeFontSizeOverride("font_size", 12);
+        chip.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 12));
         chip.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
         chip.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
         StyleBoxFlat Style(bool hover)
@@ -736,6 +757,11 @@ public partial class DealOrForceGame
         who.AddChild(Giving(Text(nation.DisplayName, 22, Ui.Colour("text.bright"))));
         who.AddChild(Giving(Text(Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name)), 12, Ui.Colour("text.caption"))));
+        // What the state says it is, over what its people are - the line a diplomat reads
+        // before deciding whom they are actually talking to.
+        who.AddChild(Giving(Text(Simulation.Loc.Format("{0}: {1} · {2}: {3}",
+            Tr("State religion"), Simulation.StateIdentity.Caption(_campaign, nation, true),
+            Tr("State culture"), Simulation.StateIdentity.Caption(_campaign, nation, false)), 12, Ui.Colour("text.body_soft"))));
         who.AddChild(Giving(Text(canSee
             ? Simulation.Loc.Format("{0} people · GDP {1} · stability {2}",
                 Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Percent(nation.Stability))
@@ -882,7 +908,7 @@ public partial class DealOrForceGame
             var value = (float)entry.Value;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(Giving(Text(Tr(entry.Source), 12, Ui.Colour("text.body_soft"))));
+            row.AddChild(Giving(Text(TranslateOpinionDriver(entry.Source), 12, Ui.Colour("text.body_soft"))));
             var bar = Bar(8, 120);
             bar.Lean(value / largest, positive, negative);
             row.AddChild(bar);
@@ -1193,7 +1219,7 @@ public partial class DealOrForceGame
         StyleButton(_diplomacyUltimatumButton, false);
         _diplomacyUltimatumButton.Text = Tr("Issue ultimatum");
         var canDeal = Ultimatum.CanNegotiateDeal(_campaign, player, nation, out var dealRefusal);
-        _diplomacyDealButton.Disabled = !canDeal || _observerMode;
+        _diplomacyDealButton.Disabled = !canDeal;
         _diplomacyDealButton.TooltipText = Ui.Tip(!canDeal ? dealRefusal : nation.IsHuman
             ? Tr("Send an offer to this player's inbox. They must explicitly accept; nothing is signed automatically.")
             : Tr("Compose a peaceful exchange of cash, treaties or regions. Review before sending."));

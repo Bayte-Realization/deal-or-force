@@ -1,0 +1,45 @@
+// The rest of the road to a war, and the way back from it.
+//
+// The last escalatory incident here - reserves called up and moved to the frontier - is the
+// one that is no longer really an incident: it is the week before a war, and it is priced
+// accordingly, with the largest grievance and the largest rally in the table.
+//
+// The three below it calm a crisis instead of deepening it, and they are not decoration.
+// Every review is another chance for a rivalry to get worse, and a table of incidents that
+// only escalates turns every rivalry into a war eventually. Great powers do hold summits,
+// sign arms control and let mediators broker ceasefires - and a game about 2024 needs a
+// world where that is possible, or the only diplomacy that matters is the ultimatum.
+{
+  "proxy_battle": {
+    "name": "Proxies in the field",
+    "description": "Their advisers and their weapons were found on the wrong side of somebody else's war, and so were ours.",
+    "stage": 2, "max_stage": 3, "weight": 1.5, "tension": 5, "grievance": 1, "opinion": "proxy_battle"
+  },
+  "submarine_incident": {
+    "name": "Submarine hunted",
+    "description": "Ships and aircraft held a submarine under water for two days, dropping charges. Nobody admits whose it was.",
+    "stage": 2, "max_stage": 3, "weight": 1.2, "tension": 4, "opinion": "submarine_incident", "naval": true
+  },
+  "mass_mobilisation": {
+    "name": "Mobilisation on the border",
+    "description": "Reserves were called up and moved to the frontier. Leave was cancelled. Both sides say they are only defending themselves.",
+    "stage": 3, "max_stage": 3, "weight": 2, "tension": 8, "grievance": 1.5,
+    "war_support": 0.02, "opinion": "mass_mobilisation", "border": true
+  },
+
+  "summit_held": {
+    "name": "Summit held",
+    "description": "The two governments met, in a third country, for the first time in years, and said afterwards that they had talked frankly.",
+    "stage": 1, "max_stage": 3, "weight": 2, "tension": -8, "opinion": "summit_held"
+  },
+  "arms_control_signed": {
+    "name": "Arms control signed",
+    "description": "Limits on the weapons nearest the other's border, inspection, and a hotline that is answered. It took four years to negotiate.",
+    "stage": 2, "max_stage": 3, "weight": 1, "tension": -10, "opinion": "arms_control_signed"
+  },
+  "mediated_ceasefire": {
+    "name": "Ceasefire brokered",
+    "description": "Mediators got both sides to stop where they were standing. The shooting stopped before anybody had to admit anything.",
+    "stage": 3, "max_stage": 3, "weight": 1, "tension": -12, "grievance": -0.5, "opinion": "mediated_ceasefire"
+  }
+}

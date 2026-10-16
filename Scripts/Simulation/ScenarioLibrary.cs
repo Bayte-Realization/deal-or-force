@@ -36,7 +36,7 @@ public static class ScenarioLibrary
     }
 
     public static Campaign Create(ScenarioEntry entry, int seed, int expectedProvinceCount = 0) => entry.Id == "2024" && entry.WorldFile.Length == 0
-        ? ScenarioCatalog.CreateBaseCampaign(seed) : SaveSystem.ImportScenarioJson(File.ReadAllText(entry.WorldFile), entry.Id, expectedProvinceCount, seed);
+        ? ScenarioCatalog.CreateBaseCampaign(seed, entry.ManifestFile) : SaveSystem.ImportScenarioJson(File.ReadAllText(entry.WorldFile), entry.Id, expectedProvinceCount, seed);
 
     public static string SafePath(string root, string relative)
     {

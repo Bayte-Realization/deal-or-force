@@ -72,12 +72,14 @@ public sealed class ProvinceTopology
     /// rule that will be forgotten at one of them.
     /// </summary>
     public bool[] WaterByProvince { get; private set; }
+    public bool[] DestroyedByProvince { get; private set; }
     public int RiverCrossingCount => _riverCrossings.Count;
     public TerrainDefinition[] TerrainByProvince { get; private set; } = Array.Empty<TerrainDefinition>();
     public byte[] TerrainSurfaceSlots { get; internal set; } = Array.Empty<byte>();
     public TerrainDefinition TerrainAt(int province) => province > 0 && province < TerrainByProvince.Length
         ? TerrainByProvince[province] : TerrainCatalog.Get("plains");
     public void AttachTerrain() => TerrainByProvince = TerrainCatalog.Bind(this);
+    public void AttachTerrain(RgbDataMap decoded) => TerrainByProvince = TerrainCatalog.Bind(this, decoded);
     private readonly Dictionary<long, byte> _riverCrossings = new();
 
     private ProvinceTopology(
@@ -102,6 +104,7 @@ public sealed class ProvinceTopology
         RiverIntensityByProvince = new byte[ProvinceCount + 1];
         LakeAccessByProvince = new bool[ProvinceCount + 1];
         WaterByProvince = new bool[ProvinceCount + 1];
+        DestroyedByProvince = new bool[ProvinceCount + 1];
         for (var province = 1; province <= ProvinceCount; province++)
             WaterByProvince[province] = LakeRegions.IsLakeRegion(ProvinceToState[province]);
     }
@@ -241,6 +244,10 @@ public sealed class ProvinceTopology
         var provinceToState = new ushort[maxProvince + 1];
         var provinceToNation = new ushort[maxProvince + 1];
         var seen = new bool[maxProvince + 1];
+        // A province is a run of one colour along most rows: the colour just looked up is the
+        // likeliest next one, and asking the table again for it was most of this loop.
+        var lastColor = -1;
+        var lastProvince = 0;
         for (var cell = 0; cell < states.Length; cell++)
         {
             var read = cell * 3;
@@ -254,8 +261,11 @@ public sealed class ProvinceTopology
                 if (color != 0) throw new InvalidDataException($"provinces.png colours ocean pixel {cell}.");
                 continue;
             }
-            if (color == 0 || !colorToProvince.TryGetValue(color, out var province))
+            int province;
+            if (color != 0 && color == lastColor) province = lastProvince;
+            else if (color == 0 || !colorToProvince.TryGetValue(color, out province))
                 throw new InvalidDataException($"Land pixel {cell} uses unknown province colour #{color:X6}.");
+            else (lastColor, lastProvince) = (color, province);
             cellToProvince[cell] = province;
             if (!seen[province])
             {
@@ -597,6 +607,7 @@ public sealed class ProvinceTopology
             _authoredState.Length != ProvinceToState.Length) return false;
         Array.Copy(_authoredNation, ProvinceToNation, _authoredNation.Length);
         Array.Copy(_authoredState, ProvinceToState, _authoredState.Length);
+        Array.Clear(DestroyedByProvince);
         return true;
     }
 
@@ -676,7 +687,7 @@ public sealed class ProvinceTopology
 
     /// <summary>Whether this province is water. Nothing on foot may enter or cross one.</summary>
     public bool IsWater(int provinceId) => provinceId > 0 && WaterByProvince is not null &&
-        provinceId < WaterByProvince.Length && WaterByProvince[provinceId];
+        provinceId < WaterByProvince.Length && (WaterByProvince[provinceId] || DestroyedByProvince[provinceId]);
 
     private bool AreNeighbors(int first, int second)
     {

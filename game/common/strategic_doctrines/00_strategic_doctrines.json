@@ -1,0 +1,76 @@
+// Стратегические доктрины: как страна собирается выигрывать войны, а не как её дивизии дерутся.
+// Тактическая доктрина — дерево статей; стратегическая — один выбор на страну из семи путей.
+//
+// Каждая даёт: пакет национальных модификаторов (те же ключи, что у технологий), множители к
+// тому, как армия учится (`training_slots` — сколько соединений ИИ держит на учениях,
+// `drill_experience` — опыт за учения, `battle_experience` — опыт за бой, `air_experience` и
+// `naval_experience` — опыт соответствующих родов войск), и `tactical_bias` — какую тактическую
+// доктрину правительство этого склада тянет первой (у кадровой армии своя голова, у неё
+// пристрастия нет).
+//
+// Первый выбор бесплатен политически; смена курса стоит `political_cost` политических очков —
+// то же, чем платят за переписывание тактической доктрины.
+{
+  "manoeuvre_war": {
+    "name": "War of manoeuvre",
+    "description": "The war is won by arriving first: columns, fuel and the open flank, not the fortified line.",
+    "political_cost": 10,
+    "modifiers": { "army_speed": 0.06, "supply": 0.04, "organisation_recovery": 0.04 },
+    "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.25,
+    "air_experience": 1.0, "naval_experience": 1.0,
+    "tactical_bias": "manoeuvre"
+  },
+  "attrition_war": {
+    "name": "War of attrition",
+    "description": "The war is a bill presented to the other side until it cannot pay: replacements, shells and patience.",
+    "political_cost": 10,
+    "modifiers": { "reinforcement_rate": 0.10, "supply": 0.03, "recruitment_cost": -0.05 },
+    "training_slots": 0.8, "drill_experience": 0.75, "battle_experience": 1.4,
+    "air_experience": 1.0, "naval_experience": 1.0,
+    "tactical_bias": "fire"
+  },
+  "homeland_defence": {
+    "name": "Defence of the homeland",
+    "description": "The war is fought where the soldiers live: the line holds, the districts arm themselves, and the enemy spends.",
+    "political_cost": 10,
+    "modifiers": { "army_defense": 0.06, "entrenchment_speed": 0.10, "militia_readiness": 0.12 },
+    "training_slots": 1.0, "drill_experience": 0.9, "battle_experience": 1.1,
+    "air_experience": 1.0, "naval_experience": 1.0,
+    "tactical_bias": "fortress"
+  },
+  "professional_cadre": {
+    "name": "Professional cadre",
+    "description": "Few divisions, all of them good, and a peace-time budget that keeps them so: what the army knows before the first shot.",
+    "political_cost": 12,
+    "modifiers": { "organisation_recovery": 0.06, "recruitment_cost": -0.08, "entrenchment_speed": 0.05 },
+    "training_slots": 1.6, "drill_experience": 1.4, "battle_experience": 0.9,
+    "air_experience": 1.1, "naval_experience": 1.1
+  },
+  "universal_levy": {
+    "name": "Universal levy",
+    "description": "The nation itself is the reserve: every district forms its company, and the replacements are already standing in them.",
+    "political_cost": 10,
+    "modifiers": { "recruitment_speed": 0.12, "militia_readiness": 0.10, "reinforcement_rate": 0.06 },
+    "training_slots": 0.8, "drill_experience": 0.8, "battle_experience": 1.25,
+    "air_experience": 1.0, "naval_experience": 1.0,
+    "tactical_bias": "levy"
+  },
+  "air_power": {
+    "name": "Command of the air",
+    "description": "The war is decided overhead: whoever holds the sky spends less blood for the same ground.",
+    "political_cost": 12,
+    "modifiers": { "support_recovery": 0.08, "support_losses": -0.06 },
+    "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.0,
+    "air_experience": 1.5, "naval_experience": 1.0,
+    "tactical_bias": "sky"
+  },
+  "sea_power": {
+    "name": "Command of the sea",
+    "description": "The war is decided in the water: trade arrives or does not, and nothing on land outlasts a closed sea.",
+    "political_cost": 12,
+    "modifiers": { "naval_speed": 0.06, "shipbuilding_speed": 0.08 },
+    "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.0,
+    "air_experience": 1.0, "naval_experience": 1.5,
+    "tactical_bias": "coast"
+  }
+}

@@ -94,3 +94,4 @@ public static class AiFiscalPolicy
 
     private static AiFiscalAssessment Invalid() => new(AiFiscalReason.InvalidAccounts, 0, 0, 0, 0, 0, 0);
 }
+

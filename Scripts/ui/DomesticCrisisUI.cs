@@ -23,12 +23,28 @@ public partial class DealOrForceGame
             "Education and civic networks accumulate independently of anger. Awareness is not a desire for violence.", "agenda");
         CrisisGauge(_policyList, "Radicalism", situation.Radicalism, 0f,
             "Dissatisfaction with existing institutions. High radicalism is different from peaceful civic participation.", "stability");
+        if (_campaign.FeatureEnabled("political_cohorts"))
+        {
+            var mood = PoliticalCohorts.Mood(_campaign, nation);
+            if (!mood.Reviewed)
+                PolicyText(_policyList, "Political opinion has not been reviewed yet. It is read with the country, once a day.");
+            else
+            {
+                CrisisGauge(_policyList, "Law approval", mood.Law, 0f,
+                    "Share of the region that accepts the laws it lives under. It moves with living standards and shortages, not with a button.", "agenda");
+                CrisisGauge(_policyList, "Government approval", mood.Government, 0f,
+                    "Share of the region that accepts the government over it. A low figure with a still-orderly state is a scandal. A low figure with a failing state feeds coups and breaks.", "government");
+                CrisisGauge(_policyList, "Political divergence", mood.Divergence, _campaign.Defines.CenterRegionIdeologySplit,
+                    "How far this region's politics have moved from the centre. High divergence is a state with its own mind. It is not a foreign people, and it does not by itself draw a border.", "stability");
+            }
+        }
         CrisisGauge(_policyList, "Coup pressure", situation.CoupPressure, situation.CoupThreshold,
             "A coup requires sustained institutional pressure and an eligible political transition. Crossing a line for one day is not enough.", "government");
         PolicyStat(_policyList, "Critical pressure sustained", Loc.Format("{0} / {1} days",
             situation.DaysAboveThreshold, situation.RequiredDays), "history");
         if (situation.CooldownDays > 0)
             PolicyStat(_policyList, "Aftermath protection", Loc.Format("{0} days", situation.CooldownDays), "stability");
+        PoliticalMoodBlock(_policyList, nation);
         PolicyHeading(_policyList, "CIVIL-WAR WARNING");
         var civilReason = CivilWarOutbreak.EligibilityReason(_campaign, nation);
         var civilChance = civilReason.Length == 0 ? CivilWarOutbreak.Chance(_campaign, nation) : 0f;
@@ -52,11 +68,14 @@ public partial class DealOrForceGame
         var query = _policySearch.Text.Trim();
         var regions = situation.Regions.Where(row => query.Length == 0 ||
                 row.Region.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(row => row.SecessionPressure).ThenByDescending(row => row.Radicalism)
+            .OrderByDescending(row => PoliticalCohorts.UnrestHeat(row.Region)).ThenByDescending(row => row.SecessionPressure)
             .ThenBy(row => row.Region.DisplayName, StringComparer.Ordinal).ToArray();
         var maximum = (int)Math.Clamp(Ui.Metric("crises.regions_shown", 40), 5, 150);
+        // The people come before the provinces: who lives here, and which way each group leans,
+        // is the summary the regional detail below is evidence for.
+        DemographyMoodBlock(_policyOptions, nation);
         PolicyHeading(_policyOptions, "REGIONAL PRESSURES");
-        PolicyText(_policyOptions, "Regions are ordered by accumulated secession pressure. Select one to inspect the causes and locate it on the map.");
+        PolicyText(_policyOptions, "Regions are ordered by how hot they are on the unrest map: radicalism, the pull to leave, and a government the region has stopped accepting. Select one to inspect the causes and locate it on the map.");
         if (regions.Length == 0) PolicyText(_policyOptions, "No matching governed regions. Clear the search.");
         if (!situation.Regions.Any(row => row.Region.MapIndex == _crisisSelectedRegion))
             _crisisSelectedRegion = regions.FirstOrDefault()?.Region.MapIndex ?? -1;
@@ -74,6 +93,13 @@ public partial class DealOrForceGame
                 "Accumulated separatist pressure is separate from radicalism and awareness. Independence still requires the simulation's political and territorial conditions.", "stability");
             PolicyText(content, Loc.Format("Awareness {0:P0} · radicalism {1:P0}{2}", row.Awareness,
                 row.Radicalism, row.IsCapital ? " · " + Tr("Capital region") : ""), "text.body_soft");
+            if (_campaign.FeatureEnabled("political_cohorts") && row.Region.PoliticalDivergence >= 0f)
+            {
+                PolicyText(content, Loc.Format("Laws {0:P0} · government {1:P0} · divergence {2:P0}",
+                    row.Region.LawApproval, row.Region.GovernmentApproval, row.Region.PoliticalDivergence), "text.body_soft");
+                var (cause, _) = PoliticalCohorts.CauseOf(_campaign, nation, row.Region);
+                if (cause.Length > 0) PolicyText(content, cause, "text.caption");
+            }
         }
         if (regions.Length > maximum)
             PolicyText(_policyOptions, Loc.Format("Showing {0} of {1}. Search to inspect another region.", maximum, regions.Length));
@@ -96,10 +122,83 @@ public partial class DealOrForceGame
                 _globe.FocusOn(latitude, longitude, 6.8f);
                 OpenScreen("Region"); ShowRegionOverview();
             }, 0, 34, iconPath: "res://game/gfx/interface/icons/icon_population.png"));
+            var runningHere = nation.DomesticCrisis is { ConciliationUntilDay: >= 0 } paid
+                && paid.ConciliationUntilDay > _campaign.ElapsedDays && paid.ConciliationRegion == selected.Region.MapIndex;
+            if (runningHere || PoliticalCohorts.UnrestHeat(selected.Region) >= _campaign.Defines.CrisisConciliationHeat
+                || selected.Region.SecessionPressure >= 0.12f)
+            {
+                var refusal = DomesticCrises.ConciliationRefusal(_campaign, nation, selected.Region);
+                PolicyStat(_policyPreview, "Settle this region",
+                    Fmt.Money(DomesticCrises.ConciliationCost(_campaign, nation, selected.Region)), "agenda");
+                PolicyText(_policyPreview, "Money for this region alone. While it lasts, the pull to leave, the anger and the political distance cool. The border stays where it is.");
+                var settle = ActionButton(_crisisResponseConfirmation == "settle" ? "Confirm settlement" : "Settle this region", () =>
+                {
+                    if (_crisisResponseConfirmation != "settle") { _crisisResponseConfirmation = "settle"; ShowDomesticCrisisWorkspace(); return; }
+                    _campaign.Commands.Enqueue(new ConciliateRegionCommand { IssuerId = nation.Id, StateMapIndex = selected.Region.MapIndex });
+                    _campaign.Commands.ApplyAll(_campaign);
+                    _crisisResponseConfirmation = "";
+                    ShowDomesticCrisisWorkspace();
+                    Refresh();
+                }, 0, 32, _crisisResponseConfirmation == "settle", "res://game/gfx/interface/icons/icon_laws.png");
+                settle.Name = "ConciliateRegion";
+                settle.Disabled = refusal.Length > 0;
+                settle.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Loc.Format("{0} days. One region at a time.", _campaign.Defines.CrisisConciliationDays));
+                _policyPreview.AddChild(settle);
+                if (refusal.Length > 0) PolicyText(_policyPreview, refusal, "state.warning");
+            }
         }
         if (response is { LastOutcomeId.Length: > 0 })
             PolicyText(_policyPreview, Loc.Format("Last institutional outcome: {0} · campaign day {1}",
                 Tr(response.LastOutcomeId), response.LastOutcomeDay), "text.caption");
+    }
+
+    /// <summary>
+    /// What the country actually believes, rather than what its government does. The shares come
+    /// from <see cref="PoliticalMood"/>: the residents' own position on the same two axes the
+    /// ideologies are placed on, read from what they have and what is being done to them. A
+    /// government below the plurality line holds office without a mandate, and that is where the
+    /// unrest in the numbers above comes from.
+    /// </summary>
+    private void PoliticalMoodBlock(VBoxContainer rows, Nation nation)
+    {
+        var shares = PoliticalMood.Shares(_campaign, nation);
+        if (shares.Count == 0) return;
+        PolicyHeading(rows, "POLITICAL MOOD");
+        var threshold = MathF.Max(0f, _campaign.Defines.PoliticalMoodMandateMultiple) /
+            MathF.Max(1f, IdeologyCatalog.All.Count);
+        CrisisGauge(rows, "Governing mandate", PoliticalMood.Mandate(_campaign, nation), threshold,
+            "The share of the country that leans towards the government's own ideology. Below the plurality line, holding office breeds unrest every week.", "government");
+        PoliticalMoodShare runnerUp = null;
+        for (var index = 0; index < shares.Count && index < 4; index++)
+        {
+            var share = shares[index];
+            PolicyStat(rows, Tr(share.Name), share.Share.ToString("P1"), share.Governing ? "government" : "agenda");
+            if (runnerUp is null && !share.Governing) runnerUp = share;
+        }
+        if (runnerUp is not null)
+            PolicyText(rows, Loc.Format("The largest other current is {0} at {1:P1}.", Tr(runnerUp.Name), runnerUp.Share), "text.caption");
+    }
+
+    /// <summary>
+    /// The country's people as the data actually keeps them - culture and religion - with the
+    /// current each group leans towards. Class and profession are not modelled by this game, so
+    /// they are not shown here: a chart of a number nobody keeps is worse than no chart. What is
+    /// shown is real: each group leans the way its own regions do.
+    /// </summary>
+    private void DemographyMoodBlock(VBoxContainer rows, Nation nation)
+    {
+        var groups = PoliticalMood.GroupLeans(_campaign, nation);
+        if (groups.Count == 0) return;
+        PolicyHeading(rows, "DEMOGRAPHY AND MOOD");
+        foreach (var group in groups)
+        {
+            var name = string.IsNullOrEmpty(group.ReligionName) || group.ReligionName == group.CultureName
+                ? Tr(group.CultureName)
+                : Loc.Format("{0} · {1}", Tr(group.CultureName), Tr(group.ReligionName));
+            PolicyStat(rows, name, Loc.Format("{0:P0} → {1}", group.Share, Tr(group.IdeologyName)),
+                group.Governing ? "government" : "agenda");
+        }
+        PolicyText(rows, "Each group leans the way its own regions do, not the way its name does.", "text.caption");
     }
 
     private void CrisisGauge(VBoxContainer rows, string caption, float value, float threshold, string help, string icon)

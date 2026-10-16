@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "top_stats":["TREASURY","DEBT","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER"],
+    "top_stats":["TREASURY","DEBT","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER","ARMY XP","AIR XP","NAVY XP","POLITICAL CAPITAL"],
     "outliner_order":["FIRST STEPS","WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [
@@ -15,6 +15,7 @@
       {"screen": "Research", "label": "Technologies", "short": "Science", "group": "ECONOMY", "icon": "research", "help": "Technology tree, prerequisites and research progress."},
       {"screen": "Military", "short": "Army", "group": "FORCES", "icon": "military", "help": "Recruitment, readiness and supply."},
       {"screen": "Support", "label": "Long-range forces", "short": "Long-range", "group": "FORCES", "icon": "artillery", "help": "Artillery, aviation, drones and air defence: bases, training and missions."},
+      {"screen": "Doctrines", "label": "Book of war", "short": "Doctrines", "group": "FORCES", "icon": "agenda", "help": "The army's own hands: the books it fights by, the articles they are made of, and what each costs."},
       {"screen": "Wars", "short": "Wars", "group": "FORCES", "icon": "wars", "help": "Wars and peace negotiations."},
       {"screen": "Diplomacy", "short": "Diplomacy", "group": "WORLD", "icon": "diplomacy", "help": "Relations with the selected country."},
       {"screen": "Conflicts", "short": "Conflicts", "group": "WORLD", "icon": "unrest", "help": "Standoffs and crises between countries, every war and the countries backing each side."},
@@ -39,5 +40,26 @@
   // that one, so a copy here silently wins whatever it says. A zero sat here for a while
   // and the sky behind the globe simply stopped being drawn, with the right value sitting
   // in the right file the whole time.
-  "metrics":{"shell.navigation_size":82,"shell.navigation_height":50,"shell.tab_height":34,"shell.row_padding":9,"shell.outliner_height":600,"shell.outliner_collapsed":48}
+  "metrics":{
+    "shell.navigation_size":82,
+    "shell.navigation_height":50,
+    "shell.tab_height":34,
+    "shell.row_padding":9,
+    "shell.outliner_height":600,
+    "shell.outliner_collapsed":48,
+    // Campaign navigation rail (ResponsiveCampaignNavigationUI.cs). These were literal
+    // numbers in the layout code; they are named now so a mod can retune the rail without
+    // recompiling. Each is read with the same value as its fallback, so behaviour is
+    // unchanged until a mod or the base game moves one.
+    "shell.navigation_row_inset":64,
+    "shell.navigation_row_gap":4,
+    "shell.navigation_category_height":32,
+    "shell.navigation_media_height":42,
+    // Right-hand outliner / situation rail (StrategicHudUI.cs): gap between the stacked
+    // groups and between the rows inside them. Same fallback-as-current rule.
+    "shell.outliner_group_gap":10,
+    "shell.outliner_stack_gap":6,
+    "shell.outliner_row_gap":4,
+    "shell.outliner_section_gap":3
+  }
 }

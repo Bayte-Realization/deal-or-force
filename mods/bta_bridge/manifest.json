@@ -1,0 +1,15 @@
+{
+  "id": "bta_bridge",
+  "name": "Deal or Force × Better Than Adventure — Trickster Sandbox",
+  "version": "0.1.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "ship_with_base": false,
+  "load_order": 300,
+  "dependencies": [],
+  "frontend_actions": [
+    { "id": "launch", "caption": "Launch BTA Flat World" },
+    { "id": "status", "caption": "BTA bridge status" }
+  ],
+  "corecode_assembly": "corecode/bin/Release/net10.0/DealOrForce.BtaBridge.dll"
+}

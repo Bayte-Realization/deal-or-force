@@ -135,16 +135,26 @@ public partial class DealOrForceGame
         // surface and leave the roster the flexible part of the panel.
         var commandTabs = new TabContainer
         {
+            Name = "ArmyCommandTabs",
             SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 180),
             ClipContents = true
         };
-        commandTabs.AddThemeFontSizeOverride("font_size", 12);
+        commandTabs.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
         shell.AddChild(commandTabs);
 
         var plansPage = CommandPage(commandTabs, "ORDERS");
         var doctrinePage = CommandPage(commandTabs, "STANCE");
         var organisationPage = CommandPage(commandTabs, "ORGANISE");
+        // The country's book of war belongs with the army rather than with the laws: it is paid
+        // for in the experience the army's own formations earn, and it is the army that reads it.
+        var warBookPage = CommandPage(commandTabs, "DOCTRINES");
+        _armyCommandTabs = commandTabs;
+        _armyDoctrineTab = commandTabs.GetTabIdxFromControl((Control)warBookPage.GetParent());
+        _armyDoctrineRows = new VBoxContainer { Name = "DoctrineRows" };
+        _armyDoctrineRows.AddThemeConstantOverride("separation", 8);
+        warBookPage.AddChild(_armyDoctrineRows);
+        commandTabs.TabChanged += _ => RefreshArmyPanel();
 
         _armyAssaultReadiness = new VBoxContainer { Name = "AssaultReadiness", Visible = false };
         _armyAssaultReadiness.AddThemeConstantOverride("separation", 2);
@@ -292,6 +302,14 @@ public partial class DealOrForceGame
         // The old order controls lived in the generic side panel; the panel is that
         // container now, so the visibility flags the rest of the HUD sets still land.
         _armyOrders = commandTabs;
+        // Switching to the book of war must draw it. The page is built by the panel's own refresh,
+        // which runs on a campaign day - and a player who opens the tab while time is paused would
+        // otherwise look at an empty page until tomorrow.
+        commandTabs.TabChanged += _ =>
+        {
+            _armyDoctrineDay = -1;
+            RefreshArmyPanel();
+        };
     }
 
     private static VBoxContainer CommandPage(TabContainer tabs, string name)
@@ -425,15 +443,48 @@ public partial class DealOrForceGame
         var divisions = _selectedArmies.Count > 0
             ? _selectedArmies.Where(army => army is not null).ToList()
             : _selectedArmy is null ? new List<Army>() : new List<Army> { _selectedArmy };
-        if (divisions.Count == 0) { SetArmyPanelVisible(false); return; }
+        var readingDoctrine = _armyCommandTabs is not null && _armyCommandTabs.CurrentTab == _armyDoctrineTab;
+        // The book is a country-level workspace. A hidden, expanding empty roster must
+        // not reserve half the drawer above it, even when formations are selected.
+        _armyRoster.GetParent<Control>().Visible = !readingDoctrine;
+        _armyRosterHint.Visible = !readingDoctrine;
+        _armyPanelCount.Visible = !readingDoctrine;
+        if (divisions.Count == 0)
+        {
+            // A country with no divisions still has a book of war, and the Doctrines tab is where
+            // it is read: the panel stays open for that tab alone.
+            if (_armyCommandTabs is null || _armyCommandTabs.CurrentTab != _armyDoctrineTab)
+            { SetArmyPanelVisible(false); return; }
+        }
 
         // Daily refresh must not replace the roster row between mouse-down and
         // mouse-up, nor dismiss a command popup that the player is reading.
         if (InterfaceInteractionGuard.Busy(_armyPanel)) return;
 
+        SetArmyPanelVisible(true);
+
+        // The book of war, redrawn once a campaign day. Its tree keeps its zoom and its scroll
+        // across those redraws: the canvas is held and updated, never rebuilt (DoctrineTreeUI).
+        if (_armyDoctrineRows is not null && _armyDoctrineDay != _campaign.ElapsedDays)
+        {
+            _armyDoctrineDay = _campaign.ElapsedDays;
+            ClearPolicyRows(_armyDoctrineRows);
+            ShowDoctrineWorkspace(_campaign.Player, _armyDoctrineRows);
+        }
+
+        // A book of war belongs to the country, not to divisions[0]. A doctrine can
+        // be read before recruitment or after the last selected formation is lost.
+        _armyComposition.Visible = divisions.Count > 0 && !readingDoctrine;
+        if (divisions.Count == 0)
+        {
+            _armyPanelTitle.Text = Tr("DOCTRINES");
+            _armyPanelSubtitle.Text = _campaign.Player.DisplayName;
+            _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", 0);
+            _armyAssaultReadiness.Visible = false;
+            return;
+        }
         var owner = _campaign.NationById(divisions[0].NationId);
         var mine = owner == _campaign.Player;
-        SetArmyPanelVisible(true);
 
         // Also follows language/font changes made while the campaign is open.
         foreach (var button in _armyCaptionIconButtons) ReserveArmyIconSpace(button);
@@ -458,7 +509,7 @@ public partial class DealOrForceGame
         RefreshRoster(divisions, mine);
         RefreshAssaultReadiness(divisions);
 
-        _armyRosterHint.Visible = mine;
+        _armyRosterHint.Visible = mine && !readingDoctrine;
         foreach (var (order, button) in _armyOrderButtons)
         {
             button.Disabled = !mine;
@@ -538,7 +589,7 @@ public partial class DealOrForceGame
             };
             row.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
             row.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
-            row.AddThemeFontSizeOverride("font_size", 12);
+            row.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             var captured = army;
             row.Pressed += () => OnRosterRowPressed(captured);
             line.AddChild(row);

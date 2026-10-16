@@ -208,20 +208,23 @@ public static class WorldWar
 
         var pairs = Pairs(c);
         if (pairs.Count == 0) return;
-        var worst = (pairs[0].A, pairs[0].B);
-        // Which of the two is the one at the other's border: try both ways round.
-        foreach (var (power, rival) in new[] { (worst.A, worst.B), (worst.B, worst.A) })
+        for (var i = 0; i < Math.Min(pairs.Count, 8); i++)
         {
-            var source = c.NationById(power);
-            var front = FrontierPartner(c, power, rival);
-            if (source is null || front is null) continue;
-            var relation = CampaignDiplomacy.Get(c, power, front.Id);
-            if (relation is null || relation.Stance == DiplomaticStance.AtWar) continue;
-            relation.GrievanceA = MathF.Max(relation.GrievanceA, 0f) + c.Defines.WorldIncidentGrievance;
-            relation.GrievanceB = MathF.Max(relation.GrievanceB, 0f) + c.Defines.WorldIncidentGrievance;
-            c.Chronicle.Record(c, "world_incident", power, front.Id);
-            c.MarkStrategicChange();
-            return;
+            var worst = (pairs[i].A, pairs[i].B);
+            // Which of the two is the one at the other's border: try both ways round.
+            foreach (var (power, rival) in new[] { (worst.A, worst.B), (worst.B, worst.A) })
+            {
+                var source = c.NationById(power);
+                var front = FrontierPartner(c, power, rival) ?? c.NationById(rival);
+                if (source is null || front is null || source.Id == front.Id) continue;
+                var relation = CampaignDiplomacy.Get(c, power, front.Id);
+                if (relation is null || relation.Stance is DiplomaticStance.AtWar or DiplomaticStance.Allied) continue;
+                relation.GrievanceA = MathF.Max(relation.GrievanceA, 0f) + c.Defines.WorldIncidentGrievance;
+                relation.GrievanceB = MathF.Max(relation.GrievanceB, 0f) + c.Defines.WorldIncidentGrievance;
+                c.Chronicle.Record(c, "world_incident", power, front.Id);
+                c.MarkStrategicChange();
+                return;
+            }
         }
     }
 

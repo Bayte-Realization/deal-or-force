@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -92,6 +92,8 @@ public static class NationalModifiers
     {
         if (nation is null) yield break;
         foreach (var source in NationalCourses.Sources(nation)) yield return source;
+        foreach (var source in TacticalDoctrines.Sources(nation)) yield return source;
+        foreach (var source in StrategicDoctrines.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology && technology.Effects.Count > 0)

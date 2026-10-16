@@ -1,0 +1,38 @@
+{
+  "Brain drain": "Утечка мозгов",
+  "Skilled specialists and households are leaving the country.": "Квалифицированные специалисты и домохозяйства покидают страну.",
+  "War damage, instability, low living standards or a lack of research and university positions are pushing educated residents abroad.": "Разрушения от войны, нестабильность, низкий уровень жизни или нехватка исследовательских и университетских мест выталкивают образованных жителей за рубеж.",
+  "The primary destination is {0}.": "Основное направление эмиграции — {0}.",
+  "Migrants are relocating to safer, wealthier economies.": "Мигранты перебираются в более безопасные и богатые страны.",
+  "Continued emigration erodes population, literacy and long-term industrial productivity.": "Продолжающаяся эмиграция подрывает население, грамотность и долгосрочную производительность промышленности.",
+  "Universities, research laboratories, higher stability and talent retention programmes anchor specialists at home.": "Университеты, исследовательские лаборатории, высокая стабильность и программы удержания талантов удерживают специалистов дома.",
+  "Talent inflow": "Приток специалистов",
+  "Skilled specialists from abroad are settling in your regions.": "Квалифицированные специалисты из-за рубежа обосновываются в ваших регионах.",
+  "Peace, stability and higher living standards are attracting specialists from {0} and other states.": "Мир, стабильность и высокий уровень жизни притягивают специалистов из {0} и других государств.",
+  "Peace, stability and higher living standards are attracting foreign specialists.": "Мир, стабильность и высокий уровень жизни притягивают иностранных специалистов.",
+  "Incoming professionals expand the workforce and raise literacy and productivity.": "Приезжие специалисты расширяют рабочую силу и повышают грамотность и производительность.",
+  "Review regional development": "Открыть развитие региона",
+  "Expand industrial and research capacity": "Расширить промышленность и науку",
+
+  "Weekly outflow": "Выбывает за неделю",
+  "Cumulative migration": "Накопленная миграция",
+  "Brain drain pressure": "Давление утечки мозгов",
+  "Most affected region": "Самый пострадавший регион",
+  "Weekly inflow": "Прибывает за неделю",
+
+  "Net migration": "Чистая миграция",
+  "Weekly migration {0} (cumulative {1}). Skilled specialists are moving primarily to {2}.": "Миграция за неделю {0} (накопленно {1}). Специалисты уезжают в основном в {2}.",
+  "Weekly migration {0} (cumulative {1}). Skilled specialists are arriving primarily from {2}.": "Миграция за неделю {0} (накопленно {1}). Специалисты приезжают в основном из {2}.",
+  "Weekly migration {0} (cumulative {1}).": "Миграция за неделю {0} (накопленно {1}).",
+  "Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them.": "Поток человеческого капитала: война, низкая стабильность и слабый уровень жизни выталкивают образованных специалистов за рубеж; университеты, исследовательские лаборатории и высокий уровень жизни удерживают и привлекают их.",
+  "balanced": "равновесие",
+  "Net weekly movement of residents into or out of this region.": "Чистое недельное перемещение жителей в регион или из него.",
+  "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.": "Доля образованных специалистов, которых подталкивают покинуть этот регион из-за войны, нестабильности или низкого уровня жизни. Университеты и исследовательские лаборатории удерживают их здесь.",
+
+  "Skilled specialists and households are emigrating. Inspect the Situation Room or Decisions to anchor talent at home.": "Специалисты и домохозяйства эмигрируют. Откройте ситуационную комнату или решения, чтобы удержать таланты дома.",
+
+  "Talent retention programme": "Программа удержания талантов",
+  "Research grants, housing subsidies and return fellowships keep engineers, doctors and scientists working at home.": "Исследовательские гранты, жилищные субсидии и стипендии для возвращения удерживают инженеров, врачей и учёных на родине.",
+  "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.": "Финансирование университетских стипендий, исследовательских грантов и льгот для возвращения на родину, чтобы остановить эмиграцию инженеров, врачей и учёных.",
+  "Requires active brain drain and funds to counter it": "Требуется активная утечка мозгов и средства на её преодоление"
+}

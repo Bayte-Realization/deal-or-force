@@ -413,6 +413,16 @@ public static class FlagCatalog
         var tag = Slug(nation.Tag);
         if (tag.Length == 0) return names;
 
+        // A country brought back flies its own flag again, in the form its politics give it,
+        // ahead of anything the country that restored it ever flew.
+        if (FormableRestorations.RestoredTag(nation.FormedNationId) is { } restored)
+        {
+            var old = Slug(restored);
+            names.Add($"flag_{old}_{Slug(nation.Government)}");
+            names.Add($"flag_{old}_{Slug(nation.Ideology)}");
+            names.Add($"flag_{old}");
+        }
+
         // The qualifiers that have something to say about this country today, each as the
         // chain of values it will answer to: what it actually is, then whatever that value
         // has been declared to stand in for.

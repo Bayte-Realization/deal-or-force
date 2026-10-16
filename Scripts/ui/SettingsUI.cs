@@ -63,7 +63,9 @@ public partial class DealOrForceGame
         tabs.AddThemeConstantOverride("h_separation", 6);
         tabs.AddThemeConstantOverride("v_separation", 5);
         headRows.AddChild(tabs);
-        foreach (var category in SettingsCatalog.Categories())
+        var categories = DealOrForce.Modding.LauncherSelection.IsEditorRun
+            ? SettingsCatalog.Categories().Append("editor_mods") : SettingsCatalog.Categories();
+        foreach (var category in categories.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var captured = category;
             // The English, not the translation: `ActionButton` translates what it is
@@ -135,6 +137,11 @@ public partial class DealOrForceGame
             ApplyLedgerButtonState(button, string.Equals(id, category, StringComparison.OrdinalIgnoreCase));
 
         foreach (var child in _settingsRows.GetChildren()) child.QueueFree();
+        if (category == "editor_mods" && DealOrForce.Modding.LauncherSelection.IsEditorRun)
+        {
+            EditorModRows.Build(_settingsRows, true, () => { _settingsNeedRestart = true; RefreshRestartNotice(); });
+            return;
+        }
         foreach (var definition in SettingsCatalog.In(category))
             SettingsRows.Build(definition, _settingsRows, ApplySetting);
         RefreshRestartNotice();
@@ -142,7 +149,8 @@ public partial class DealOrForceGame
 
     private void ResetSettingsCategory()
     {
-        SettingsRows.ResetCategory(_settingsCategory, ApplySetting);
+        if (_settingsCategory == "editor_mods") EditorModRows.Reset();
+        else SettingsRows.ResetCategory(_settingsCategory, ApplySetting);
         ShowSettingsCategory(_settingsCategory);
     }
 

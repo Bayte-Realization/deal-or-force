@@ -1,0 +1,21 @@
+// The interface's spacing grid, in pixels.
+//
+// Panels read these tokens through Ui.Metric instead of hard-coding their own margins, so the
+// rhythm of the interface can be retuned from data without recompiling. spacing.xs is the base
+// unit: every step above it is a multiple of it, which is what keeps unrelated panels looking
+// like one product rather than a collection of screens built on different days.
+//
+// These are values, not a redesign. Each caller passes the number it used before as its
+// fallback, so nothing moves until a mod or the base game changes a token here.
+{
+  "metrics": {
+    "spacing.xs": 4,
+    "spacing.sm": 8,
+    "spacing.md": 12,
+    "spacing.lg": 16,
+    "spacing.xl": 24,
+    "panel.gutter": 12,
+    "panel.pad": 12,
+    "hud.density": 1
+  }
+}

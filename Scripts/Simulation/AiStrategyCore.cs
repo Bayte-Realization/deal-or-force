@@ -14,7 +14,25 @@ public sealed record AiStrategyDefinition(
     float DefendShare,
     ArmyStance OffensiveStance,
     ArmyStance DefensiveStance,
-    float ExecutePlanningThreshold);
+    float ExecutePlanningThreshold)
+{
+    /// <summary>
+    /// How readily this country starts a war it has already decided it wants, as a multiple.
+    /// One is the ordinary case; a cautious state at 0.6 needs a better hand before it moves
+    /// and a reckless one at 1.5 needs less. It multiplies the same die roll the war decision
+    /// has always used, so it changes how often a country acts, never whether it is allowed to:
+    /// the cause, the readiness, the reach and the ultimatum all still have to be there.
+    /// </summary>
+    public float Aggression { get; init; } = 1f;
+
+    /// <summary>
+    /// How readily this country looks for friends, as a multiple on the opinion it wants
+    /// before it offers trade, a pact or an alliance. Above one it waits longer; below one it
+    /// reaches out sooner. A trading state and a hermit with the same neighbours and the same
+    /// opinions should not behave alike, and with this they do not.
+    /// </summary>
+    public float Sociability { get; init; } = 1f;
+}
 
 /// <summary>Moddable operational doctrine profiles used by the same order commands as players.</summary>
 public static class AiStrategyCatalog
@@ -33,6 +51,13 @@ public static class AiStrategyCatalog
 
     private static readonly Dictionary<string, AiStrategyDefinition> Definitions = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string> CountryProfiles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Every doctrine the catalogue holds, by id - for a bench, a test or a console.</summary>
+    public static IReadOnlyDictionary<string, AiStrategyDefinition> Profiles => Definitions;
+
+    /// <summary>The doctrine assigned to a country tag in data, or null when nothing assigned one.</summary>
+    public static string ProfileOf(string tag) =>
+        tag is not null && CountryProfiles.TryGetValue(tag, out var id) ? id : null;
 
     static AiStrategyCatalog() => ResetCatalog();
 
@@ -60,7 +85,10 @@ public static class AiStrategyCatalog
         {
             var value = entry.Value;
             var baseline = Definitions.GetValueOrDefault(entry.Name) ?? Definitions["default"] with { Id = entry.Name };
-            float Number(string key, float fallback) => value.TryGetProperty(key, out var element) && element.TryGetSingle(out var number)
+            // ValueKind first: TryGetSingle throws on a string rather than answering false, so
+            // a mod that writes a number as text used to take the whole catalogue down with it.
+            float Number(string key, float fallback) => value.TryGetProperty(key, out var element) &&
+                element.ValueKind == JsonValueKind.Number && element.TryGetSingle(out var number)
                 ? number : fallback;
             ArmyStance Stance(string key, ArmyStance fallback) => value.TryGetProperty(key, out var element) &&
                 element.ValueKind == JsonValueKind.String && Enum.TryParse<ArmyStance>(element.GetString(), true, out var stance)
@@ -73,7 +101,12 @@ public static class AiStrategyCatalog
                 DefendShare = M.Clamp01(Number("defend_share", baseline.DefendShare)),
                 OffensiveStance = Stance("offensive_stance", baseline.OffensiveStance),
                 DefensiveStance = Stance("defensive_stance", baseline.DefensiveStance),
-                ExecutePlanningThreshold = M.Clamp01(Number("execute_planning_threshold", baseline.ExecutePlanningThreshold))
+                ExecutePlanningThreshold = M.Clamp01(Number("execute_planning_threshold", baseline.ExecutePlanningThreshold)),
+                // A country's character, read from the same file as its doctrine. Clamped to a
+                // range rather than to 0..1: the point of an aggressive profile is to be above
+                // one, and of a cautious one to be below it.
+                Aggression = M.Clamp(Number("aggression", baseline.Aggression), 0.25f, 2.5f),
+                Sociability = M.Clamp(Number("sociability", baseline.Sociability), 0.25f, 2.5f)
             };
             if (profile.SpearheadShare > profile.AdvanceShareAttacker || profile.AdvanceShareAttacker + profile.DefendShare > 1.05f)
             {
@@ -86,7 +119,7 @@ public static class AiStrategyCatalog
             foreach (var entry in countries.EnumerateObject())
                 if (entry.Value.ValueKind == JsonValueKind.String && Definitions.ContainsKey(entry.Value.GetString() ?? ""))
                     CountryProfiles[entry.Name] = entry.Value.GetString()!;
-                else errors?.Add($"Country '{entry.Name}' references an unknown AI profile.");
+                else errors?.Add($"Country '{entry.Name}' references an unknown AI profile '{entry.Value.GetString()}'.");
     }
 
     /// <summary>
@@ -144,11 +177,22 @@ public static class AiStrategyCatalog
     /// </summary>
     public static AiStrategyDefinition Resolve(Campaign campaign, StrategicWar war, Nation nation)
     {
-        if (CountryProfiles.TryGetValue(nation.Tag, out var explicitProfile)) return Definitions[explicitProfile];
         var posture = PostureOf(campaign, nation);
-        if (nation.WarSupport < 0.45f || posture.Organisation < 0.46f || posture.Supply < 0.48f)
+        if (war is not null && (nation.WarSupport < 0.45f || posture.Organisation < 0.46f || posture.Supply < 0.48f))
             return Definitions["defensive"];
+        if (CountryProfiles.TryGetValue(nation.Tag, out var explicitProfile)) return Definitions[explicitProfile];
         if (nation.Gdp >= 500f || posture.Formations >= 8) return Definitions["major_offensive"];
         return posture.Formations <= 2 ? Definitions["minor_power"] : Definitions["default"];
     }
+
+    /// <summary>
+    /// Which doctrine this country follows, without needing a war to ask about.
+    ///
+    /// Everything that reads a country's character - how readily it attacks, how readily it
+    /// makes friends - goes through here rather than through a second table, so a profile
+    /// assigned in data governs the whole of that country's behaviour at once, and a mod that
+    /// moves one country's profile moves all of it.
+    /// </summary>
+    public static AiStrategyDefinition Of(Campaign campaign, Nation nation) =>
+        nation is null ? Definitions["default"] : Resolve(campaign, null, nation);
 }

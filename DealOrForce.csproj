@@ -11,7 +11,7 @@
       is the honest fix; a `Compile Remove` would leave Content and None still pointing at
       several hundred megabytes of output.
     -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;**\.kilo\**;**\.fennara\**;**\.git\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
   </PropertyGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a
@@ -27,12 +27,34 @@
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
+    <!--
+      Play from the editor was sitting on "Building C# project" with no end.
+      The shared Roslyn server keeps one pipe for every Godot, and a second
+      game left running makes the next build wait on that pipe forever.
+      Analyzers were also walking every gameplay file on that same press of Play.
+    -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
   </PropertyGroup>
   <Import Project="Scripts/Simulation/StructuredData.Dependencies.props" />
-  <!-- Mod source projects live below mods but are compiled into their own DLLs. -->
+  <!-- Mod source projects live below mods and Tools live below Tools; both are excluded via DefaultItemExcludes. -->
   <ItemGroup>
     <Compile Remove="mods\**\*.cs" />
     <Compile Remove="Tools\**\*.cs" />
+    <!-- Scratch copies of sources (mojibake repair backups and the like) must never be
+         compiled as part of the game: they are snapshots, and a snapshot that compiles is
+         a duplicate-definition error waiting for the next build. -->
+    <Compile Remove="tmp\**\*.cs" />
+    <Compile Remove="tmp_playtest\**\*.cs" />
+    <!--
+      One deliberate exception to the line above: the export-verification probe is game code,
+      not a tool. It is compiled into this assembly and runs inside the shipped executable
+      under the `verify-build` flag, which is how the release gate in Tools/build.ps1 tests the
+      actual pack rather than a stand-in. Its source lives under Tools/ because that is where
+      tooling belongs; the build still has to carry it, so it is added back here, and
+      Tools/build.ps1 stages this one folder beside Scripts, Scenes and game.
+    -->
+    <Compile Include="Tools\ExportVerification\**\*.cs" />
     <Content Include="game\**\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.yaml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="game\**\*.yml" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

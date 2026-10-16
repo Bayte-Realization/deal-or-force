@@ -407,8 +407,17 @@ public static class SubjectSystem
         want += (1f - M.Clamp01(overlord.Stability)) * weights.OverlordInstabilityPull;
 
         // And whether it is busy.
+        var civilWar = false;
         foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(overlord.Id)) { want += weights.OverlordAtWarPull; break; }
+        {
+            if (war.Ended || !war.Involves(overlord.Id)) continue;
+            want += weights.OverlordAtWarPull;
+            if (war.CivilConflict) civilWar = true;
+            break;
+        }
+        if (civilWar) want += weights.OverlordAtWarPull * 1.25f;
+        if (campaign.FeatureEnabled("public_debt") && overlord.DebtCondition >= DebtCondition.Default)
+            want += weights.OverlordInstabilityPull * 0.65f;
 
         // Against all of which: being small and held by something enormous is an argument.
         var ratio = subject.Population <= 0 ? 1f : M.Clamp01(subject.Population / (float)theirs);
@@ -492,7 +501,12 @@ public static class SubjectSystem
             if (MayAnnex(campaign, overlord, subject, out _)) absorbing.Add(subject);
         }
 
-        foreach (var subject in leaving) Release(campaign, subject, broke: true);
+        foreach (var subject in leaving)
+        {
+            var overlordId = subject.OverlordId;
+            Release(campaign, subject, broke: true);
+            if (overlordId >= 0) campaign.Chronicle.Record(campaign, "subject_broke_free", subject.Id, overlordId);
+        }
         foreach (var subject in absorbing)
         {
             var overlord = campaign.NationById(subject.OverlordId);

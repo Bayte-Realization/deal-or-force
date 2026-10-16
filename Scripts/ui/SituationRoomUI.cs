@@ -16,7 +16,7 @@ public partial class DealOrForceGame
     private LineEdit _situationSearch;
     private Button _situationAction, _situationClose, _situationRailButton;
     private readonly Dictionary<string, Button> _situationFilters = new();
-    private readonly Dictionary<string, (Button Button, Label Title, Label Summary, Label Priority)> _situationCards = new();
+    private readonly Dictionary<string, (Button Button, Label Title, Label Summary, Label Priority, ColorRect Rail)> _situationCards = new();
     private IReadOnlyList<SituationItem> _situations = Array.Empty<SituationItem>();
     private readonly SituationAttention _situationAttention = new();
     private string _situationSelected = "", _situationFilter = "All", _situationDetailKey = "", _situationReturn = "";
@@ -32,45 +32,45 @@ public partial class DealOrForceGame
         var panel = TexturedPanel(_situationLayer); panel.Name = "SituationRoomPanel"; Ui.Place(panel, "workspace.situation");
         _situationPanel = panel;
         var rows = PanelRows(panel, 22, 18, 10);
-        var header = new HBoxContainer(); header.AddThemeConstantOverride("separation", 10); rows.AddChild(header);
+        var header = new HBoxContainer(); header.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.header_gap", 10)); rows.AddChild(header);
         var title = SituationText("SITUATION ROOM", 25, "text.accent"); title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
         header.AddChild(HandbookButton("situation_room"));
         _situationClose = ActionButton("×", CloseSituationRoom, 38, 32); _situationClose.Name = "CloseSituationRoom";
         _situationClose.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(_situationClose);
         _situationSummary = SituationText("", 13, "text.body_soft"); _situationSummary.Name = "SituationSummary"; rows.AddChild(_situationSummary);
-        var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", 6); filters.AddThemeConstantOverride("v_separation", 4);
+        var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", (int)Ui.Metric("situation.filter_h_gap", 6)); filters.AddThemeConstantOverride("v_separation", (int)Ui.Metric("situation.filter_v_gap", 4));
         rows.AddChild(filters);
         foreach (var key in new[] { "All", "Urgent", "Foreign", "Society", "Economy", "Forces", "Development" })
         {
             var captured = key;
             var button = ActionButton(SituationFilterName(key), () =>
             { _situationFilter = captured; RefreshSituationList(); }, 0, 30);
-            button.Name = "SituationFilter_" + key; button.AddThemeFontSizeOverride("font_size", 12);
+            button.Name = "SituationFilter_" + key; button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             filters.AddChild(button); _situationFilters[key] = button;
         }
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
-        var left = new VBoxContainer { CustomMinimumSize = new(320, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+        body.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.body_gap", 16)); rows.AddChild(body);
+        var left = new VBoxContainer { CustomMinimumSize = new(Ui.Metric("situation.detail_column_width", 320), 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsStretchRatio = .75f, SizeFlagsVertical = SizeFlags.ExpandFill };
-        left.AddThemeConstantOverride("separation", 8); body.AddChild(left);
+        left.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.column_gap", 8)); body.AddChild(left);
         _situationSearch = Placeholder(new LineEdit { Name = "SituationSearch", ClearButtonEnabled = true }, "Find an issue or country...");
         _situationSearch.TextChanged += _ => RefreshSituationList(); left.AddChild(_situationSearch);
         var listScroll = new ScrollContainer { Name = "SituationListScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, FollowFocus = true };
         left.AddChild(listScroll);
         _situationList = new VBoxContainer { Name = "SituationList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _situationList.AddThemeConstantOverride("separation", 7); listScroll.AddChild(_situationList);
+        _situationList.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.list_gap", 7)); listScroll.AddChild(_situationList);
         _situationEmpty = SituationText("", 14, "text.body_soft"); _situationList.AddChild(_situationEmpty);
         var right = new PanelContainer { Name = "SituationDetailFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsStretchRatio = 1.3f, SizeFlagsVertical = SizeFlags.ExpandFill };
         right.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 14)); body.AddChild(right);
         var detail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
-        detail.AddThemeConstantOverride("separation", 10); right.AddChild(detail);
+        detail.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.detail_gap", 10)); right.AddChild(detail);
         _situationDetailScroll = new ScrollContainer { Name = "SituationDetailScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, FollowFocus = true };
         detail.AddChild(_situationDetailScroll);
         _situationDetail = new VBoxContainer { Name = "SituationDetail", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _situationDetail.AddThemeConstantOverride("separation", 10); _situationDetailScroll.AddChild(_situationDetail);
+        _situationDetail.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.detail_gap", 10)); _situationDetailScroll.AddChild(_situationDetail);
         _situationStatus = SituationText("", 12, "text.caption"); _situationStatus.Name = "SituationStatus"; detail.AddChild(_situationStatus);
         _situationAction = ActionButton("", FollowSituation, 0, 40, true);
         _situationAction.Name = "SituationAction"; _situationAction.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -216,11 +216,27 @@ public partial class DealOrForceGame
                 title.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis; content.AddChild(title);
                 var summary = SituationText("", 12, "text.body_soft"); summary.MaxLinesVisible = 2;
                 summary.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis; content.AddChild(summary);
-                card = (button, title, summary, priority); _situationCards[id] = card; _situationList.AddChild(button);
+                // A rail down the card's left edge, in the priority's own colour. The list used
+                // to be a column of same-weight cards whose only difference was a word at the
+                // top of each; scanning it meant reading six captions to learn which one mattered.
+                // Now the shape of the column says it before any of the words are read.
+                var rail = new ColorRect
+                {
+                    Name = "SituationRail",
+                    Color = Ui.Colour(SituationColour(SituationPriority.Critical)),
+                    MouseFilter = MouseFilterEnum.Ignore,
+                    CustomMinimumSize = new Vector2(3, 0)
+                };
+                rail.SetAnchorsAndOffsetsPreset(LayoutPreset.LeftWide);
+                rail.OffsetLeft = 0;
+                rail.OffsetRight = 3;
+                button.AddChild(rail);
+                card = (button, title, summary, priority, rail); _situationCards[id] = card; _situationList.AddChild(button);
             }
             card.Button.Visible = true; _situationList.MoveChild(card.Button, index++);
             card.Title.Text = item.Title; card.Summary.Text = item.Summary;
             card.Priority.Text = Tr(SituationPriorityName(item.Priority)); card.Priority.AddThemeColorOverride("font_color", Ui.Colour(SituationColour(item.Priority)));
+            card.Rail.Color = Ui.Colour(SituationColour(item.Priority));
             card.Button.AccessibilityName = item.Title + ". " + item.Summary;
             card.Button.TooltipText = Ui.Tip(item.Title + "\n" + item.Summary);
             StyleButton(card.Button, item.Id == _situationSelected);
@@ -272,6 +288,78 @@ public partial class DealOrForceGame
         // Re-read on click: an army can disappear and an offer can expire while a page is open.
         var item = SituationReport.Read(_campaign, _campaign.Player, _observerMode).FirstOrDefault(i => i.Id == _situationSelected);
         if (item is null || !SituationDestinationEnabled(item)) { RefreshSituationRoom(force: true); return; }
+        if (item.Id == "detached_land")
+        {
+            var note = Corridors.ProposeBuy(_campaign, _campaign.Player);
+            if (note.Length == 0)
+            {
+                SetArmyFeedback(Tr("The ask has been sent."));
+                _situationLayer.Visible = false;
+                _situationReturn = "Inbox";
+                OpenDealInbox();
+                UpdateScreenButtons();
+            }
+            else
+            {
+                SetArmyFeedback(note);
+                RefreshSituationRoom(force: true);
+            }
+            return;
+        }
+        if (item.Id == "host_temper")
+        {
+            var movement = _campaign.Nations.Find(candidate => candidate.Id == item.TargetId);
+            if (movement?.Movement is null)
+            {
+                SetArmyFeedback(Tr("That headquarters is no longer here."));
+                RefreshSituationRoom(force: true);
+                return;
+            }
+            _situationLayer.Visible = false;
+            _situationReturn = "Movements";
+            ShowMovement(movement);
+            UpdateScreenButtons();
+            return;
+        }
+        if (item.Id.StartsWith("ultimatum:", StringComparison.Ordinal))
+        {
+            _ultimatumInboxSelected = item.TargetId;
+            _dealInboxSelected = -1;
+            _assistanceInboxSelected = -1;
+            _situationLayer.Visible = false;
+            _situationReturn = "Inbox";
+            OpenDealInbox();
+            UpdateScreenButtons();
+            return;
+        }
+        if (item.Id == "enclave_swap")
+        {
+            var note = Corridors.ProposeSwap(_campaign, _campaign.Player);
+            if (note.Length == 0)
+            {
+                SetArmyFeedback(Tr("The exchange has been offered."));
+                _situationLayer.Visible = false;
+                _situationReturn = "Inbox";
+                OpenDealInbox();
+                UpdateScreenButtons();
+            }
+            else SetArmyFeedback(note);
+            return;
+        }
+        if (item.Id == "border_pore")
+        {
+            var note = Corridors.ProposePore(_campaign, _campaign.Player);
+            if (note.Length == 0)
+            {
+                SetArmyFeedback(Tr("The ask has been sent."));
+                _situationLayer.Visible = false;
+                _situationReturn = "Inbox";
+                OpenDealInbox();
+                UpdateScreenButtons();
+            }
+            else SetArmyFeedback(note);
+            return;
+        }
         _situationLayer.Visible = false; _situationReturn = "";
         switch (item.Route)
         {
@@ -282,7 +370,9 @@ public partial class DealOrForceGame
                 _selectedOrganization = item.TargetId; _conflictTab = 4; OpenScreen("Conflicts"); _situationReturn = "Conflicts"; break;
             case SituationRoute.Conflict:
                 _conflictTab = 2; OpenScreen("Conflicts"); _situationReturn = "Conflicts"; break;
-            case SituationRoute.Crises: OpenScreen("Laws"); SelectPolicyTab("Crises"); _situationReturn = "Laws"; break;
+            case SituationRoute.Crises:
+                if (item.TargetId > 0) _crisisSelectedRegion = item.TargetId;
+                OpenScreen("Laws"); SelectPolicyTab("Crises"); _situationReturn = "Laws"; break;
             case SituationRoute.Finance: OpenSovereignFinance(); _situationReturn = "Finance"; break;
             case SituationRoute.Market:
                 OpenEconomyTab("Market"); _marketSearch.Text = Tr(CommodityCatalog.Get(item.Good.Value).Name);
@@ -291,7 +381,9 @@ public partial class DealOrForceGame
                 var army = _campaign.Armies.FirstOrDefault(a => a.Id == item.TargetId && a.NationId == _campaign.Player.Id);
                 if (army is not null) { FocusArmy(army); _situationReturn = "Army"; }
                 break;
-            case SituationRoute.Construction: OpenEconomyTab("Construction"); _situationReturn = "Economy"; break;
+            case SituationRoute.Construction:
+                if (item.TargetId > 0) _selectedState = _campaign.States.FirstOrDefault(s => s.MapIndex == item.TargetId);
+                OpenEconomyTab("Construction"); _situationReturn = "Economy"; break;
         }
         UpdateScreenButtons();
     }

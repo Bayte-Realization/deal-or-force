@@ -1,0 +1,8 @@
+{
+  "Features": {
+    "government_promises": true
+  },
+  "MaxConcurrentPromises": 2,
+  // Per own week, at the plain character: how often an AI government promises in public.
+  "AiPromiseAppetite": 0.03
+}

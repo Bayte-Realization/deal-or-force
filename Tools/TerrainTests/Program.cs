@@ -37,6 +37,24 @@ static class Program
         Check(MathF.Abs(WaterConditions.AttackMultiplier(campaign, .9f, 0) - campaign.Defines.MajorRiverAttackMultiplier) < .00001f,
             "disabled season preserves old major river combat multiplier");
         campaign.SetFeature("seasonal_water", true);
+        campaign.Date = new GameDate(2024, 1, 15);
+        Check(WaterConditions.RoadThroughput(campaign, 60) < 0.9f
+              && WaterConditions.RoadThroughput(campaign, -60) > 0.98f
+              && WaterConditions.RoadThroughput(campaign, 0) == 1f,
+            "January roads slow only the northern winter");
+        campaign.Date = new GameDate(2024, 7, 15);
+        Check(WaterConditions.RoadThroughput(campaign, -60) < WaterConditions.RoadThroughput(campaign, 60),
+            "July roads slow the southern winter");
+        campaign.SetFeature("seasonal_roads", false);
+        Check(WaterConditions.RoadThroughput(campaign, 60) == 1f, "road season can be switched off");
+        campaign.SetFeature("seasonal_roads", true);
+        campaign.Date = new GameDate(2024, 1, 15);
+        campaign.SetFeature("seasons", false);
+        Check(WaterConditions.RoadThroughput(campaign, 60) == 1f
+              && WaterConditions.CrossingDifficulty(campaign, 55) == 1f
+              && WaterConditions.LakeAvailability(campaign, 60) == 1f,
+            "seasons master switch returns water and roads to fair weather");
+        campaign.SetFeature("seasons", true);
         MapRasterCatalog.ResetCatalog();
         TerrainCatalog.ResetCatalog();
         Check(TerrainCatalog.All.Count == 12, "12 terrain types and source assets loaded");

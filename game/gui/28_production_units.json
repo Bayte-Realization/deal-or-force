@@ -21,9 +21,18 @@
     "production.focus": "#f5dfa2"
   },
   "layout": {
+    // The production workspace.
+    //
+    // Its left edge used to be a share of the window (0.044) while every other workspace used
+    // 0.055 - and the navigation rail it has to clear is a FIXED 82 pixels
+    // (shell.navigation_size), not a share of anything. At 1920 the two almost agreed (84 px),
+    // which is why it looked right where it was first checked; at 1280 the same share is 56 px
+    // and the panel sat under the rail. A fixed rail wants a fixed offset: 92 px leaves it an
+    // honest ten-pixel gutter at any window width, and the panel keeps its 850 px of content
+    // beside it. The vertical edges now match the other workspaces as well.
     "modal.production": {
-      "anchors": [0.044, 0.084, 0.044, 0.944],
-      "offsets": [0, 0, 850, 0]
+      "anchors": [0, 0.115, 0, 0.9],
+      "offsets": [92, 0, 942, 0]
     }
   }
 }

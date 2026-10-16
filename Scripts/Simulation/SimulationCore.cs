@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -147,7 +147,12 @@ public sealed class CampaignCommandQueue
     public void ApplyAll(Campaign campaign)
     {
         campaign.FinishStep();
-        while (_pending.Count > 0) DiagnosticLogs.TraceCommand(campaign, _pending.Dequeue());
+        while (_pending.Count > 0)
+        {
+            var command = _pending.Dequeue();
+            CrashEnvelope.Record(campaign, command);
+            DiagnosticLogs.TraceCommand(campaign, command);
+        }
     }
 }
 
@@ -566,6 +571,9 @@ public sealed partial class Campaign
         if (scenarioRules is null) GameDataLoader.ApplyDefines(Defines);
         else Defines = scenarioRules;
         Date = new GameDate(Defines.StartYear, Defines.StartMonth, Defines.StartDay);
+        // The crash envelope keeps this as the campaign a fatal handler reports on, so a
+        // dump names the world that was playing even before the first order was issued.
+        CrashEnvelope.Track(this);
     }
 
     /// <summary>Builds the current-world base scenario from the source catalogue.</summary>
@@ -714,9 +722,10 @@ public sealed partial class Campaign
                 if (clock.Elapsed.TotalMilliseconds >= milliseconds) break;
             }
         }
-        catch
+        catch (Exception ex)
         {
             finished = true;
+            CrashEnvelope.Dump(this, ex);
             throw;
         }
         finally
@@ -781,6 +790,11 @@ public sealed partial class Campaign
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
+        // What the services learned from that fighting, and what the army is reading: articles of
+        // the war doctrine are studied by the day, and they are shares of the same arithmetic.
+        using (SimProfiler.Measure("military experience")) MilitaryExperience.Tick(this);
+        using (SimProfiler.Measure("tactical doctrines")) TacticalDoctrines.Tick(this);
+        using (SimProfiler.Measure("strategic doctrines")) StrategicDoctrines.Tick(this);
         using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
         yield return 0;
 
@@ -806,6 +820,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
+            using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
             if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)
@@ -830,6 +845,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("organization life")) OrganizationDynamics.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
+            using (SimProfiler.Measure("ultimatum desk")) Ultimatum.Tick(this);
             using (SimProfiler.Measure("foreign assistance")) ForeignAssistance.Tick(this);
             yield return 0;
             foreach (var _ in MovementRules.TickStages(this)) yield return 0;
@@ -879,6 +895,30 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
+            yield return 0;
+            // And whether the country still agrees with the government that holds it. Derived
+            // from what the residents have and believe, never a bonus or penalty per tag.
+            using (SimProfiler.Measure("political mood")) PoliticalMood.Tick(this);
+            yield return 0;
+
+            // And whether a promise made in public has come true or missed its date. Checked
+            // continuously, so early fulfilment is credited the day it happens; a government
+            // with no promises out costs nothing to ask.
+            using (SimProfiler.Measure("government promises")) GovernmentPromises.Tick(this);
+            yield return 0;
+            // And whether a government the player does not run says something in public about
+            // its own crisis: the same bet on the same terms, taken by everyone else.
+            using (SimProfiler.Measure("ai promises")) AiPromises.Tick(this);
+            yield return 0;
+
+            // And what the player's own pinned goals say now that the day's facts are in.
+            // Private bookkeeping: a goal met changes nothing in the world but the record.
+            using (SimProfiler.Measure("strategic goals")) StrategicGoals.Tick(this);
+            yield return 0;
+
+            // And first sight of identities: a country that declares nothing yet declares
+            // what it already is - its own plurality, silently and at nobody's cost.
+            StateIdentity.EnsureDeclared(this);
             yield return 0;
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
@@ -1040,8 +1080,12 @@ public sealed partial class Campaign
 
         // The political map is data. The raster says where the provinces are; this says who
         // owns them, and a mod that moves one border only has to name that one province.
+        // Only for the full 2024 map: synthetic test fixtures build tiny topologies (e.g. 16x8)
+        // while keeping the default ScenarioId, and applying 2024's province IDs and lat/lon
+        // point entries to a 1-province test grid overwrites the test's own province owner.
         ProvinceController = (ushort[])topology.ProvinceToNation.Clone();
-        var politicalOverrides = ScenarioId == "2024" ? ProvinceOwnership.Apply(this, topology, ProvinceController) : 0;
+        var politicalOverrides = ScenarioId == "2024" && topology.ProvinceCount > 1000
+            ? ProvinceOwnership.Apply(this, topology, ProvinceController) : 0;
         if (politicalOverrides > 0) PoliticalOverridesApplied = politicalOverrides;
         // Water is nobody's, which the file already says by naming none of it - but the raster
         // still painted an owner under sixty-seven sea provinces off the South Orkneys, and it
@@ -1085,6 +1129,13 @@ public sealed partial class Campaign
             Array.Copy(_pendingProvinceState, topology.ProvinceToState, _pendingProvinceState.Length);
         _pendingProvinceOwner = null;
         _pendingProvinceState = null;
+        foreach (var province in DestroyedProvinces)
+            if (province > 0 && province <= topology.ProvinceCount)
+            {
+                topology.DestroyedByProvince[province] = true;
+                topology.ProvinceToNation[province] = 0;
+                ProvinceController[province] = 0;
+            }
 
         // Now that the map knows who owns what, make the region list agree with it. Both
         // passes are no-ops on a world that is already consistent, which is what makes them

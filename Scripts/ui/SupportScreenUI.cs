@@ -460,7 +460,7 @@ public partial class DealOrForceGame
             FocusMode = FocusModeEnum.None,
             ClipText = true
         };
-        section.Caption.AddThemeFontSizeOverride("font_size", 12);
+        section.Caption.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
         section.Caption.Pressed += () => FocusSupportBase(stateMapIndex);
         section.Caption.TooltipText = Ui.Tip("Show this base on the map.");
         header.AddChild(section.Caption);
@@ -945,7 +945,7 @@ public partial class DealOrForceGame
                 button.ToggleMode = true;
                 button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 button.ClipText = true;
-                button.AddThemeFontSizeOverride("font_size", 11);
+                button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 11));
                 button.ExpandIcon = false;
                 button.AddThemeConstantOverride("icon_max_width", 22);
                 _supportTypeGrid.AddChild(button);

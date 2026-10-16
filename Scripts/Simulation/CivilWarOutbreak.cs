@@ -13,8 +13,8 @@ public sealed partial class Defines
     /// CivilWarCoupMemoryDays doubles it.
     /// </summary>
     public bool CivilWarOutbreaks { get; set; } = true;
-    public float CivilWarStabilityThreshold { get; set; } = 0.30f;
-    public float CivilWarWeeklyChance { get; set; } = 0.010f;
+    public float CivilWarStabilityThreshold { get; set; } = 0.32f;
+    public float CivilWarWeeklyChance { get; set; } = 0.012f;
     /// <summary>The most civil wars the whole world begins in a year. A century-old campaign
     /// whose stability has drifted down everywhere began thirteen in one year - Japan and
     /// Spain among them - without it.</summary>

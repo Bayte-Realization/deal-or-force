@@ -94,7 +94,7 @@ public static class Consolidation
         var nationalist = string.Equals(nation.Ideology, "nationalism", StringComparison.OrdinalIgnoreCase) ? 0.25f : 0f;
         var settled = M.Clamp((nation.Stability - 0.40f) * 0.8f, -0.3f, 0.4f);
         var restraint = AiStatecraft.Restraint(c, nation);
-        return M.Clamp01(0.30f + 0.35f * authority + nationalist + settled - 0.45f * restraint);
+        return M.Clamp01(0.36f + 0.35f * authority + nationalist + settled - 0.30f * restraint);
     }
 
     private static void Review(Campaign c, Nation founder)

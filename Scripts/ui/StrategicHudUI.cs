@@ -25,7 +25,7 @@ public partial class DealOrForceGame
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
         // One scrollable rail keeps alerts and dossiers inside the available viewport.
-        var outer = Margin(_outliner, 10, 8);
+        var outer = Margin(_outliner, (int)Ui.Metric("panel.pad", 10), (int)Ui.Metric("spacing.sm", 8));
         outer.ClipContents = true;
         var column = new VBoxContainer
         {
@@ -33,7 +33,7 @@ public partial class DealOrForceGame
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             ClipContents = true
         };
-        column.AddThemeConstantOverride("separation", 6);
+        column.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_stack_gap", 6));
         outer.AddChild(column);
         var toggle = ActionButton("Situation report  −", ToggleOutliner, 0, 30);
         toggle.Name = "OutlinerToggle";
@@ -64,10 +64,10 @@ public partial class DealOrForceGame
         _outlinerScroll = scroll;
         column.AddChild(scroll);
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 10);
+        body.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_group_gap", 10));
         scroll.AddChild(body);
         _alertRows = new VBoxContainer { Name = "StrategicAlerts" };
-        _alertRows.AddThemeConstantOverride("separation", 4);
+        _alertRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
         body.AddChild(_alertRows);
         _outlinerRows = new VBoxContainer
         {
@@ -75,7 +75,7 @@ public partial class DealOrForceGame
             CustomMinimumSize = Vector2.Zero,
             ClipContents = true
         };
-        _outlinerRows.AddThemeConstantOverride("separation", 4);
+        _outlinerRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
         body.AddChild(_outlinerRows);
     }
 
@@ -186,6 +186,12 @@ public partial class DealOrForceGame
                 () => OpenEconomyTab("Budget"),
                 Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
 
+        if (player.BrainDrainRate <= -0.10f && player.WeeklyNetMigration < 0)
+            AddAlert(player.BrainDrainRate <= -0.22f ? AlertLevel.Critical : AlertLevel.Warning, "literacy",
+                Simulation.Loc.Format("Brain drain: {0}", Fmt.Percent(MathF.Abs(player.BrainDrainRate))),
+                OpenSituationRoom,
+                Tr("Skilled specialists and households are emigrating. Inspect the Situation Room or Decisions to anchor talent at home."));
+
         if (construction.Length == 0 && _campaign.FeatureEnabled("construction"))
             AddAlert(AlertLevel.Notice, "alert_construction", Tr("Nothing being built"),
                 () => OpenEconomyTab("Construction"), Tr("Construction capacity is idle."));
@@ -204,21 +210,17 @@ public partial class DealOrForceGame
         // otherwise collapsing a group or changing language erases the already read news.
         // What matters, not everything: aid sent and buildings finished stay in the reports.
         foreach (var line in NewsFeed.Headlines(_campaign,
-                     (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 6), 1, 20)))
+                     (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 3), 1, 12)))
         {
-            var actor = line.ActorId > 0 ? _campaign.NationById(line.ActorId) : null;
             NewsFeed.Line captured = line;
-            AddOutlinerButton(line.Text, actor is null ? null : () =>
-                {
-                    _selectedNation = actor;
-                    OpenDiplomacyScreen();
-                },
-                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day));
+            AddOutlinerButton(line.Text, () => FocusNews(captured),
+                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day)
+                + System.Environment.NewLine + Tr("Show it on the map."));
             if (_outlinerGroupRows.GetChild(_outlinerGroupRows.GetChildCount() - 1) is Button news)
             {
                 news.Name = "WorldNews_" + line.Sequence;
                 news.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-                news.AddThemeFontSizeOverride("font_size", 12);
+                news.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 12));
                 news.CustomMinimumSize = new Vector2(0, 48);
             }
         }
@@ -414,7 +416,7 @@ public partial class DealOrForceGame
             var age = now - _alertFirstSeen[key];
 
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 6);
+            row.AddThemeConstantOverride("separation", (int)Ui.Metric("hud.alert_row_gap", 6));
             _alertRows.AddChild(row);
 
             // The level as a stripe down the row's edge, read before the words are.
@@ -512,7 +514,7 @@ public partial class DealOrForceGame
         var hidden = CampaignUiCatalog.HiddenOutliner.Contains(text);
         var group = new VBoxContainer { Visible = !collapsed && !hidden };
         group.SetMeta("outliner_section", text);
-        group.AddThemeConstantOverride("separation", 3);
+        group.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_section_gap", 3));
         var button = ActionButton((collapsed ? "▸ " : "▾ ") + Tr(text), () =>
         {
             if (!_collapsedOutlinerGroups.Add(text)) _collapsedOutlinerGroups.Remove(text);
@@ -524,7 +526,7 @@ public partial class DealOrForceGame
         button.Visible = !hidden;
         button.Alignment = HorizontalAlignment.Left;
         button.ClipText = true;
-        button.AddThemeFontSizeOverride("font_size", 12);
+        button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
         _outlinerRows.AddChild(button);
         _outlinerRows.AddChild(group);
         var position = 0;

@@ -2,5 +2,18 @@
   "layout": {
     "workspace.situation": {"anchors": [0.07, 0.115, 0.94, 0.90], "offsets": [0, 0, 0, 0]}
   },
-  "metrics": { "hud.two_row_below": 1600, "hud.second_row_height": 52 }
+  "metrics": {
+    "hud.two_row_below": 1600,
+    "hud.second_row_height": 52,
+    // Situation room internal spacing (SituationRoomUI.cs). Named so the room's density is
+    // data a mod can retune; each reads with its current literal as the fallback.
+    "situation.header_gap": 10,
+    "situation.filter_h_gap": 6,
+    "situation.filter_v_gap": 4,
+    "situation.body_gap": 16,
+    "situation.column_gap": 8,
+    "situation.list_gap": 7,
+    "situation.detail_gap": 10,
+    "situation.detail_column_width": 320
+  }
 }

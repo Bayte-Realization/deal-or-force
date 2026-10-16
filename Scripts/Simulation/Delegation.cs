@@ -88,6 +88,16 @@ public static class Delegation
     }
 
     /// <summary>
+    /// Whether the AI runs this government's cabinet: a country that is not a human's seat at
+    /// all, or one whose cabinet the player handed over. Read by the promise layer, so a
+    /// delegated cabinet pledges in public on exactly the terms an AI one does - the cabinet
+    /// already takes decisions through the same door (Delegation.Tick), and a government that
+    /// spends the budget but never speaks would be half a delegation.
+    /// </summary>
+    public static bool RunByAi(Nation nation) =>
+        nation is not null && (!(nation.IsHuman || nation.IsPlayer) || Holds(nation, Cabinet));
+
+    /// <summary>
     /// A month of whatever the player has handed over.
     ///
     /// Only the player's country passes through here. Everybody else is governed by

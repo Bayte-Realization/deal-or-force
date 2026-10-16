@@ -51,7 +51,7 @@ public partial class DealOrForceGame
             var button = ActionButton(tab.Label, () => SelectPolicyTab(id), 0, 34,
                 iconPath: "res://game/gfx/interface/icons/icon_" + (id == "Course" || id == "Agendas" ? "agenda" : "laws") + ".png");
             button.Name = "PolicyTab_" + id; button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.AddThemeFontSizeOverride("font_size", 12);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.ClipText = true; button.TooltipText = Ui.Tip(Tr(tab.Label));
             tabs.AddChild(button); _policyTabs[id] = button;
         }
@@ -85,7 +85,15 @@ public partial class DealOrForceGame
 
     private static void ClearPolicyRows(Control parent)
     {
-        foreach (var child in parent.GetChildren()) { parent.RemoveChild(child); child.QueueFree(); }
+        foreach (var child in parent.GetChildren())
+        {
+            // A canvas is not a row. The doctrine tree and its row of books are built once and
+            // held across the page's rebuilds, because rebuilding a tree every day would lose the
+            // zoom, the scroll and the card the player was reading (DoctrineTreeUI).
+            if (child.HasMeta(KeepOnRefresh)) { parent.RemoveChild(child); continue; }
+            parent.RemoveChild(child);
+            child.QueueFree();
+        }
     }
 
     private void ShowPoliticalPolicies()
@@ -111,6 +119,9 @@ public partial class DealOrForceGame
     private void SelectPolicyTab(string tab)
     {
         if (!_policyTabs.ContainsKey(tab)) return;
+        // Compatibility entry retained for older GUI mods: one book of war, one owner.
+        // Do not render laws underneath a tab labelled Doctrines.
+        if (tab == "Doctrines") { ClosePolicyWorkspace(); OpenArmyDoctrinePage(); return; }
         _policyTab = tab; _policyCategory = ""; _policySelected = ""; _policySearch.Text = "";
         foreach (var (id, button) in _policyTabs) StyleButton(button, id == tab);
         _policyOptionsScroll.ScrollVertical = 0;
@@ -198,6 +209,8 @@ public partial class DealOrForceGame
             ShowNationalCourse(n, _policyOptions);
             _policyOptionsScroll.ScrollVertical = scroll;
         }
+        // Doctrines are the army's book now: they are read on the Army panel's own tab
+        // (DoctrineTreeUI, ArmyPanelUI), and paid for in the experience the army earns.
         RefreshPolicyPreview();
     }
 }

@@ -1,0 +1,9 @@
+{
+  "Launch BTA Flat World": "Запустить плоский мир BTA",
+  "BTA bridge status": "Состояние коннектора BTA",
+  "BTA bridge is not configured. Run Tools/BtaBridge/setup.ps1 first.": "Коннектор BTA не настроен. Сначала выполните Tools/BtaBridge/setup.ps1.",
+  "BTA bridge is ready for this local campaign.": "Коннектор BTA готов к этой локальной кампании.",
+  "Prepare the BTA Flat World instance with Tools/BtaBridge/flat/create-instance.ps1.": "Подготовьте плоский мир BTA скриптом Tools/BtaBridge/flat/create-instance.ps1.",
+  "Prism launch requested. Keep this local campaign open.": "Запуск Prism запрошен. Оставьте локальную кампанию открытой.",
+  "Prism could not be started.": "Не удалось запустить Prism."
+}

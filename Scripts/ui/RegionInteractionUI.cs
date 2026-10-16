@@ -105,6 +105,15 @@ public partial class DealOrForceGame
 
         DetailHeading("PEOPLE");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        if (_selectedState.ReviewNetMigration != 0 || _selectedState.BrainDrainPressure >= 0.04f)
+        {
+            DetailRow("Net migration", Fmt.PeopleDelta(_selectedState.ReviewNetMigration),
+                "Net weekly movement of residents into or out of this region.");
+            DetailRow("Brain drain", Fmt.Percent(_selectedState.BrainDrainPressure),
+                "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.",
+                _selectedState.BrainDrainPressure > 0.25f ? "state.negative" :
+                _selectedState.BrainDrainPressure > 0.10f ? "state.warning" : "text.bright");
+        }
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
             "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");
         DetailRow("Standard of living", Fmt.Percent(_selectedState.StandardOfLiving),
@@ -266,6 +275,11 @@ public partial class DealOrForceGame
         DetailDemographicReference();
         DetailComposition("PEOPLES", CultureSlices(_selectedState, owner), total);
         DetailComposition("FAITHS", ReligionSlices(_selectedState), total, 6);
+        // What the same people believe, not who they are: the ideologies the government itself
+        // is chosen from, read from this region's own conditions, its laws and its government.
+        // Placed with the other two cuts because "who lives here" and "what they want" are the
+        // same question asked twice, and the region is where the difference shows.
+        DetailComposition("POLITICS", PoliticalSlices(_selectedState, owner), total, 6);
         // Ten rows for ten trades. At nine the last one vanished into "and 1 more", and
         // the two summaries below stopped adding up to anything a reader could check -
         // which is exactly the complaint that led to splitting the axes in the first place.

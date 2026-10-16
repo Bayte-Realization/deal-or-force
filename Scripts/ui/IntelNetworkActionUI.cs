@@ -25,7 +25,7 @@ public partial class DealOrForceGame
         if (player.IntelNetworks.ContainsKey(nation.Id))
         {
             _diplomacyIntelButton.Text = Simulation.Loc.Format("Recall the network ({0})", Fmt.Percent(strength));
-            _diplomacyIntelButton.Disabled = _observerMode;
+            _diplomacyIntelButton.Disabled = false;
             _diplomacyIntelButton.TooltipText = Ui.Tip(Simulation.Loc.Format(
                 "Our agents there have reached {0}. They show that share of the country through the fog, " +
                 "a truer and fresher estimate of its forces, and from {1} its dossier. " +
@@ -36,7 +36,7 @@ public partial class DealOrForceGame
         }
         var refusal = IntelNetworks.Refusal(_campaign, player, nation);
         _diplomacyIntelButton.Text = Tr("Found an intelligence network");
-        _diplomacyIntelButton.Disabled = refusal.Length > 0 || _observerMode;
+        _diplomacyIntelButton.Disabled = refusal.Length > 0;
         _diplomacyIntelButton.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Simulation.Loc.Format(
             "Agents in their country, for {0}. The network grows a week at a time - slower against a state " +
             "that watches its own - and as it grows it shows more. If it is found, it is lost, and they will " +

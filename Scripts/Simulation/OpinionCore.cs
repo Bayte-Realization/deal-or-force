@@ -127,14 +127,20 @@ public static class OpinionSystem
         foreach (var reason in relation.Reasons)
             if (string.Equals(reason.Id, id, StringComparison.OrdinalIgnoreCase)) { held = reason; break; }
 
-        if (held is null)
+        // Whether this is the first time it has been held - asked of the list, not of the day.
+        // The old test was `GrantedDay == 0`, which is also exactly what "never granted" looks
+        // like, so a reason first remembered on the opening day of the campaign carried a
+        // GrantedDay of zero and its first repetition was silently swallowed. Forgetting a reason
+        // and remembering it again is a first time as well, which is what makes a pact broken,
+        // forgiven and broken again count as twice.
+        var fresh = held is null;
+        if (fresh)
         {
             held = new OpinionReason { Id = item.Id };
             relation.Reasons.Add(held);
         }
-        // A standing condition is refreshed, not repeated: a border shared for ten years
-        // is one border. Only reasons that can happen again count up.
-        var fresh = held.GrantedDay == 0 && held.Stacks <= 1;
+        // A standing condition is refreshed, not repeated: a border shared for ten years is one
+        // border. Only reasons the declaration says can happen again count up at all.
         held.GrantedDay = campaign.ElapsedDays;
         held.ExpiresDay = item.Days > 0 ? campaign.ElapsedDays + item.Days : 0;
         held.Scale = scale;
@@ -160,6 +166,16 @@ public static class OpinionSystem
             removed = true;
         }
         if (removed) Settle(campaign, relation);
+    }
+
+    /// <summary>Whether a relation currently holds a specific opinion modifier reason.</summary>
+    public static bool Has(DiplomaticRelation relation, string id)
+    {
+        if (relation?.Reasons is null) return false;
+        for (var index = 0; index < relation.Reasons.Count; index++)
+            if (string.Equals(relation.Reasons[index].Id, id, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
     }
 
     /// <summary>What one reason is worth today, having faded for as long as it has been held.</summary>

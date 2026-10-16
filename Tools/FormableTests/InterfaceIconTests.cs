@@ -12,9 +12,61 @@ static class InterfaceIconTests
         Console.WriteLine("PASS icon roles: " + message);
     }
 
+    /// <summary>
+    /// The lightest panel background the interface actually renders.
+    ///
+    /// Sampled from a captured frame (tmp_playtest/ui-scenarios-1, the scenario library). A
+    /// panel is a texture tinted by `surface.panel_tint`, so its finished colour is not a
+    /// palette token and cannot be looked up in the skin - which is why this is a measured
+    /// constant with its provenance written down rather than a token.
+    /// </summary>
+    private const string PanelBackground = "#21272E";
+
+    private static float Channel(int value)
+    {
+        var c = value / 255f;
+        return c <= 0.03928f ? c / 12.92f : MathF.Pow((c + 0.055f) / 1.055f, 2.4f);
+    }
+
+    /// <summary>WCAG relative luminance of a `#rrggbb` string.</summary>
+    private static float Luminance(string hex)
+    {
+        var r = Convert.ToInt32(hex.Substring(1, 2), 16);
+        var g = Convert.ToInt32(hex.Substring(3, 2), 16);
+        var b = Convert.ToInt32(hex.Substring(5, 2), 16);
+        return 0.2126f * Channel(r) + 0.7152f * Channel(g) + 0.0722f * Channel(b);
+    }
+
+    private static float Contrast(string foreground, string background)
+    {
+        var a = Luminance(foreground);
+        var b = Luminance(background);
+        return (MathF.Max(a, b) + 0.05f) / (MathF.Min(a, b) + 0.05f);
+    }
+
     public static void Run()
     {
         InterfaceSkin.ResetCatalog();
+
+        // The text ramp has to be readable, not only coherent.
+        //
+        // The two dimmest steps are what the smallest text uses - footnotes and captions,
+        // where a low ratio is hardest to read - and they were the two that failed: measured
+        // against the lightest panel the interface renders, `text.faint` sat at 3.84:1 and
+        // `text.hint` at 4.62:1 against WCAG AA's 4.5:1. Both were raised. This covers the
+        // whole ramp rather than the two that happened to be wrong, so a future retint cannot
+        // quietly dim the bottom of it again.
+        var ramp = new[] { "text.bright", "text.body", "text.body_soft", "text.muted", "text.caption", "text.hint", "text.faint" };
+        foreach (var token in ramp)
+        {
+            Check(InterfaceSkin.Has(token), "the text ramp declares " + token);
+            var ratio = Contrast(InterfaceSkin.Colour(token), PanelBackground);
+            Check(ratio >= 4.5f, token + " clears WCAG AA on a panel at " + ratio.ToString("0.00") + ":1");
+        }
+        for (var i = 1; i < ramp.Length; i++)
+            Check(Luminance(InterfaceSkin.Colour(ramp[i - 1])) > Luminance(InterfaceSkin.Colour(ramp[i])),
+                "the ramp stays in order: " + ramp[i - 1] + " is brighter than " + ramp[i]);
+
         foreach (var file in new[] { "DiplomacyScreenUI.cs", "NationalCourseUI.cs", "PolicyWorkspaceUI.cs", "PolicyWorkspaceDetails.cs", "SovereignFinanceUI.cs" })
         {
             var source = Path.Combine(GameDataLoader.DataFolder(), "..", "Scripts", "ui", file);

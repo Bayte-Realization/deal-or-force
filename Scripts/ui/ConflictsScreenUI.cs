@@ -72,7 +72,7 @@ public partial class DealOrForceGame
             var captured = index;
             var tab = ActionButton(ConflictTabNames[index], () => ChangeConflictTab(captured), 0, 32);
             tab.Name = "ConflictTab" + index;
-            tab.AddThemeFontSizeOverride("font_size", 13);
+            tab.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.tab", 13));
             tab.TooltipText = Ui.Tip(Tr(ConflictTabNames[index]));
             _conflictTabs[index] = tab;
             tabs.AddChild(tab);

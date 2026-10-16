@@ -1,0 +1,17 @@
+// Переучивание: страна переписывает военную доктрину. Старые привычки сняты вместе со старыми
+// статьями, новые ещё не вбиты в людей. Не наказание ради наказания: цена того, что реформа
+// вообще возможна - армия не может менять книгу войны бесплатно.
+{
+  "doctrine_retraining": {
+    "name": "Retraining under a new doctrine",
+    "description": "The old book is abandoned and the new one is not learned yet. Divisions drill it into their officers by day, and it shows until they have.",
+    "days": 180,
+    "positive": false,
+    "effects": {},
+    "modifiers": {
+      "organisation_recovery": -0.18,
+      "army_attack": -0.06,
+      "army_speed": -0.04
+    }
+  }
+}

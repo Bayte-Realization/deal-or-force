@@ -18,6 +18,7 @@ public partial class DealOrForceGame
     private string _audioPolitics = "", _audioFormation = "";
     private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
     private readonly HashSet<int> _audioSupportFormations = new();
+    private int _audioKnownTechCount = -1;
 
     /// <summary>
     /// Put the player's three volumes onto the players.
@@ -198,6 +199,7 @@ public partial class DealOrForceGame
         _audioObservedNation = -1;
         _audioConstruction.Clear();
         _audioSupportFormations.Clear();
+        _audioKnownTechCount = -1;
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
             _knownEndedBattles.Add(battle.Id);
     }
@@ -265,5 +267,10 @@ public partial class DealOrForceGame
         _audioSupportFormations.Clear();
         _audioSupportFormations.UnionWith(supportNow);
         if (supportReady) PlayStrategicCue("support_ready");
+
+        var techCount = nation.Technologies.Count;
+        if (!initial && _audioKnownTechCount >= 0 && techCount > _audioKnownTechCount)
+            PlayStrategicCue("save_complete");
+        _audioKnownTechCount = techCount;
     }
 }

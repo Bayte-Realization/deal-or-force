@@ -1,0 +1,17 @@
+{
+  "importance": {
+    "world_war_began": 3,
+    "world_incident": 2,
+    "political_scandal": 2,
+    "institutional_crisis_warning": 2,
+    "institutional_coup": 3,
+    "organization_founded": 2,
+    "organization_left": 2,
+    "organization_expelled": 2,
+    "organization_split": 3,
+    "organization_dissolved": 3,
+    "general_strike": 2,
+    "march_concessions": 2,
+    "march_toppled": 3
+  }
+}

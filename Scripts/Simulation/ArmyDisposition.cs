@@ -166,10 +166,13 @@ public static class ArmyDisposition
             var post = region.MapIndex == nation.CapitalStateMapIndex && nation.CapitalProvinceId > 0 &&
                        controllers[nation.CapitalProvinceId] == nation.MapIndex
                 ? nation.CapitalProvinceId
-                : Enumerable.Range(1, map.ProvinceCount).FirstOrDefault(p => map.ProvinceToState[p] == region.MapIndex &&
-                      controllers[p] == nation.MapIndex && !map.IsWater(p));
+                : StandingProvince(campaign, map, controllers, nation, region.MapIndex);
             if (post <= 0) continue;
-            var heap = heaps.FirstOrDefault(h => h.Count > 1);
+            // A stack already standing on a foreign border stays. The extras that fill the
+            // interior come from heaps behind the line, and only from the border if that is
+            // the only pile the country has.
+            var heap = heaps.FirstOrDefault(group => group.Count > 1 && !BordersSomeone(map, controllers, nation, group[0].ProvinceId))
+                ?? heaps.FirstOrDefault(group => group.Count > 1);
             if (heap is null) break;
             var centre = map.CenterOf(post);
             var army = heap.OrderBy(a => NavalOperations.Distance(a.Latitude, a.Longitude, centre.Latitude, centre.Longitude))
@@ -180,6 +183,29 @@ public static class ArmyDisposition
             held.Add(region.MapIndex);
             moves++; Garrisoned++;
         }
+    }
+
+    private static int StandingProvince(Campaign campaign, ProvinceTopology map, ushort[] controllers, Nation nation, int state)
+    {
+        var indexed = Corridors.FirstProvince(campaign, state);
+        if (indexed > 0 && indexed < controllers.Length && controllers[indexed] == (ushort)nation.MapIndex && !map.IsWater(indexed))
+            return indexed;
+        for (var province = 1; province <= map.ProvinceCount && province < controllers.Length; province++)
+            if (map.ProvinceToState[province] == state && controllers[province] == (ushort)nation.MapIndex && !map.IsWater(province))
+                return province;
+        return 0;
+    }
+
+    private static bool BordersSomeone(ProvinceTopology map, ushort[] controllers, Nation nation, int province)
+    {
+        if (province <= 0 || province > map.ProvinceCount) return false;
+        foreach (var next in map.Neighbors[province])
+        {
+            if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
+            var who = controllers[next];
+            if (who != 0 && who != (ushort)nation.MapIndex) return true;
+        }
+        return false;
     }
 
     private static bool Move(Campaign campaign, Nation nation, Army army, int province)

@@ -25,6 +25,36 @@ public partial class ExplainedStat : VBoxContainer
     /// <summary>What to say when there is nothing to explain yet - the first week, mostly.</summary>
     public string Plain = "";
 
+    /// <summary>
+    /// Set when hovered by the mouse pointer, providing subtle tactile feedback
+    /// that this top-bar instrument gauge is interactive and can be inspected.
+    /// </summary>
+    public bool Hot;
+
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+        if (what == NotificationMouseEnter)
+        {
+            Hot = true;
+            QueueRedraw();
+        }
+        else if (what == NotificationMouseExit)
+        {
+            Hot = false;
+            QueueRedraw();
+        }
+    }
+
+    public override void _Draw()
+    {
+        if (!Hot) return;
+        var rect = new Rect2(Vector2.Zero, Size);
+        // Soft instrument card wash and subtle brass accent along the top edge
+        DrawRect(rect, Ui.Colour("button.fill_hover", 0.28f), true);
+        DrawRect(new Rect2(0, 0, Size.X, 1.5f), Ui.Colour("button.border_hover", 0.65f), true);
+    }
+
     public override GodotObject _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
 }
 
@@ -52,19 +82,57 @@ public partial class ExplainedRow : HBoxContainer
     /// <summary>The colour to fill with - the row's own value colour, so the two agree.</summary>
     public Color Fill = new(1, 1, 1);
 
+    /// <summary>
+    /// Set when the row is alive to the pointer, so a figure can say "hover me" the way a
+    /// button does. A dense dossier is a wall of numbers; the one under the cursor is the
+    /// one being asked about, and until it answered back the only way to tell was to move
+    /// the mouse and see whether anything happened.
+    /// </summary>
+    public bool Hot;
+
     public override GodotObject _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
 
     public override void _Draw()
     {
-        if (Share < 0f) return;
-        var width = Size.X * Mathf.Clamp(Share, 0f, 1f);
-        if (width <= 1f) return;
+        var width = Size.X;
+        if (Share >= 0f)
+        {
+            var filled = Mathf.Clamp(Share, 0f, 1f) * width;
+            if (filled > 1f)
+            {
+                // Quiet enough to sit behind a whole screen of rows without any of them shouting,
+                // and a hairline at the head of the bar so the exact value is readable rather than
+                // guessed from a gradient's edge.
+                DrawRect(new Rect2(0, 2, filled, Size.Y - 4), new Color(Fill, Hot ? 0.16f : 0.10f));
+                DrawRect(new Rect2(filled - 1f, 2, 1f, Size.Y - 4), new Color(Fill, Hot ? 0.55f : 0.38f));
+            }
+        }
+        if (!Hot) return;
+        // Two marks, both cheap: a wash over the row and a tick down its left edge in the
+        // row's own colour. The tick is what makes the shape of a column of percentages
+        // readable when the bars themselves are at ten per cent.
+        DrawRect(new Rect2(0, 0, width, Size.Y), new Color(Fill, 0.06f));
+        DrawRect(new Rect2(0, 2, 2f, Size.Y - 4), new Color(Fill, 0.5f));
+    }
 
-        // Quiet enough to sit behind a whole screen of rows without any of them shouting,
-        // and a hairline at the head of the bar so the exact value is readable rather than
-        // guessed from a gradient's edge.
-        DrawRect(new Rect2(0, 2, width, Size.Y - 4), new Color(Fill, 0.10f));
-        DrawRect(new Rect2(width - 1f, 2, 1f, Size.Y - 4), new Color(Fill, 0.38f));
+    public override void _GuiInput(InputEvent @event)
+    {
+        if (@event is not InputEventMouseMotion motion) return;
+        var hot = GetGlobalRect().HasPoint(motion.Position);
+        if (hot == Hot) return;
+        Hot = hot;
+        QueueRedraw();
+    }
+
+    public override void _Notification(int what)
+    {
+        // The pointer left the row entirely - a mouse-exit is not delivered to a control whose
+        // filter is Ignore, and this one is Stop only when it has something to explain.
+        if (what == NotificationMouseExit && Hot)
+        {
+            Hot = false;
+            QueueRedraw();
+        }
     }
 }
 

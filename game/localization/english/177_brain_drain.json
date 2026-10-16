@@ -1,0 +1,38 @@
+{
+  "Brain drain": "Brain drain",
+  "Skilled specialists and households are leaving the country.": "Skilled specialists and households are leaving the country.",
+  "War damage, instability, low living standards or a lack of research and university positions are pushing educated residents abroad.": "War damage, instability, low living standards or a lack of research and university positions are pushing educated residents abroad.",
+  "The primary destination is {0}.": "The primary destination is {0}.",
+  "Migrants are relocating to safer, wealthier economies.": "Migrants are relocating to safer, wealthier economies.",
+  "Continued emigration erodes population, literacy and long-term industrial productivity.": "Continued emigration erodes population, literacy and long-term industrial productivity.",
+  "Universities, research laboratories, higher stability and talent retention programmes anchor specialists at home.": "Universities, research laboratories, higher stability and talent retention programmes anchor specialists at home.",
+  "Talent inflow": "Talent inflow",
+  "Skilled specialists from abroad are settling in your regions.": "Skilled specialists from abroad are settling in your regions.",
+  "Peace, stability and higher living standards are attracting specialists from {0} and other states.": "Peace, stability and higher living standards are attracting specialists from {0} and other states.",
+  "Peace, stability and higher living standards are attracting foreign specialists.": "Peace, stability and higher living standards are attracting foreign specialists.",
+  "Incoming professionals expand the workforce and raise literacy and productivity.": "Incoming professionals expand the workforce and raise literacy and productivity.",
+  "Review regional development": "Review regional development",
+  "Expand industrial and research capacity": "Expand industrial and research capacity",
+
+  "Weekly outflow": "Weekly outflow",
+  "Cumulative migration": "Cumulative migration",
+  "Brain drain pressure": "Brain drain pressure",
+  "Most affected region": "Most affected region",
+  "Weekly inflow": "Weekly inflow",
+
+  "Net migration": "Net migration",
+  "Weekly migration {0} (cumulative {1}). Skilled specialists are moving primarily to {2}.": "Weekly migration {0} (cumulative {1}). Skilled specialists are moving primarily to {2}.",
+  "Weekly migration {0} (cumulative {1}). Skilled specialists are arriving primarily from {2}.": "Weekly migration {0} (cumulative {1}). Skilled specialists are arriving primarily from {2}.",
+  "Weekly migration {0} (cumulative {1}).": "Weekly migration {0} (cumulative {1}).",
+  "Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them.": "Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them.",
+  "balanced": "balanced",
+  "Net weekly movement of residents into or out of this region.": "Net weekly movement of residents into or out of this region.",
+  "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.": "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.",
+
+  "Skilled specialists and households are emigrating. Inspect the Situation Room or Decisions to anchor talent at home.": "Skilled specialists and households are emigrating. Inspect the Situation Room or Decisions to anchor talent at home.",
+
+  "Talent retention programme": "Talent retention programme",
+  "Research grants, housing subsidies and return fellowships keep engineers, doctors and scientists working at home.": "Research grants, housing subsidies and return fellowships keep engineers, doctors and scientists working at home.",
+  "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.": "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.",
+  "Requires active brain drain and funds to counter it": "Requires active brain drain and funds to counter it"
+}

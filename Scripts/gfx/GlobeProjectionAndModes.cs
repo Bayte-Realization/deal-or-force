@@ -436,7 +436,7 @@ public sealed partial class GlobePresentation
         if (_mapMode == StrategicMapMode.Unrest)
         {
             // Whichever is worse: how radical the region is, or how far it is towards leaving.
-            RefreshRegionalPalette(state => UnrestRamp(MathF.Max(state.Radicalism, Math.Clamp(state.SecessionPressure, 0f, 1f))));
+            RefreshRegionalPalette(state => UnrestRamp(PoliticalCohorts.UnrestHeat(state)));
             return;
         }
         if (_mapMode is StrategicMapMode.Political or StrategicMapMode.Terrain or StrategicMapMode.Relief)

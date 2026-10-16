@@ -21,18 +21,12 @@ public partial class DealOrForceGame
     private void BuildCountryActionControls(VBoxContainer parent)
     {
         _countryActions = new VBoxContainer { Name = "CountryActions", Visible = false, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        _countryActions.AddThemeConstantOverride("separation", 6);
+        _countryActions.AddThemeConstantOverride("separation", 8);
         parent.AddChild(_countryActions);
         _countryActions.AddChild(Title("DIPLOMATIC ACTIONS", 12, Ui.Colour("text.caption")));
-        var scroll = new ScrollContainer { Name = "DiplomaticActionScroll",
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, System.Math.Clamp(InterfaceSkin.Metric("diplomacy.actions_min_height", 220), 120, 480)),
-            MouseForcePassScrollEvents = false, FollowFocus = true };
-        _countryActions.AddChild(scroll);
         var list = new VBoxContainer { Name = "DiplomaticActionList", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        list.AddThemeConstantOverride("separation", 6); scroll.AddChild(list);
+        list.AddThemeConstantOverride("separation", 6);
+        _countryActions.AddChild(list);
         var row = new VBoxContainer { Name = "RelationsActions" };
         row.AddThemeConstantOverride("separation", 5);
         list.AddChild(Title("Relations and treaties", 12, Ui.Colour("text.caption")));

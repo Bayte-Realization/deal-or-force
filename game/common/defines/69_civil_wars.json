@@ -1,0 +1,73 @@
+// Civil wars that begin, rather than only the ones 2024 already had.
+//
+// These numbers lived only in the code until now, which meant that the one part of the game
+// a player is most likely to want to argue with - how often a country actually comes apart -
+// was the one part a mod could not touch at all. Everything here is the same value the game
+// already ran on; this file makes it visible, changeable, and explainable.
+//
+// The rule the mechanic follows is a state that has been coming apart for long enough comes
+// apart. Below the stability threshold, once a week, there is a chance - this much at zero
+// stability and less above it - that part of the country goes over to an armed opposition.
+// A coup in the last year doubles it, and a country losing a war abroad multiplies it by
+// one and a half, because that is when the army is somewhere else.
+//
+// Nothing here is a countdown and nothing here is a schedule. A country that stays above the
+// threshold never has one, whatever the world is doing.
+{
+  // Whether the mechanic runs at all. Off means the only civil wars in the world are the
+  // ones the 2024 scenario opens with.
+  "CivilWarOutbreaks": true,
+
+  // The line. Institutions above it are simply not coming apart, and no roll is made.
+  // Deliberately low: 0.32 is a state that has already lost most of its consent, not a state
+  // having a bad year.
+  "CivilWarStabilityThreshold": 0.32,
+
+  // A week's chance for a country at ZERO stability, scaled by how far below the line it
+  // actually is. A country halfway to zero gets half of this. At the floor of its stability
+  // and left alone, this is a country that comes apart in months; at 0.30 it is measured in
+  // decades.
+  "CivilWarWeeklyChance": 0.012,
+
+  // The most civil wars the whole world begins in a year.
+  //
+  // This is a limit on the WORLD, not on a country, and it is here because of a measured
+  // failure rather than a preference: a century-old campaign whose stability had drifted
+  // down everywhere began thirteen in one year - Japan and Spain among them - and that is a
+  // world shredding itself, not a world with politics in it. Raise it for a bloodier
+  // century; set it to 0 to freeze the map.
+  "CivilWarWorldPerYear": 3,
+
+  // How long a coup stays in the country's memory for this purpose. A state whose army has
+  // just decided something is a state where it can decide something again.
+  "CivilWarCoupMemoryDays": 365,
+
+  // The opening protection period, in days. A campaign should not come apart before the
+  // player has been given the chance to see what it is.
+  "CivilWarEarliestDay": 120,
+
+  // How long a country is protected from ANOTHER outbreak after one. Five years of recovery,
+  // so a state that survives a civil war is not immediately fed back into the grinder.
+  "CivilWarCooldownDays": 1825,
+
+  // Who can have one. A country below either of these cannot be split territorially: there
+  // is not enough of it to divide, and a civil war in a city-state is a riot with a flag.
+  // This is a count of people, so a mod may set it well above the range of a 32-bit number.
+  "CivilWarMinimumPopulation": 2000000,
+  "CivilWarMinimumRegions": 4,
+
+  // How much of the country the rising takes, as a share of its people. The roll is between
+  // the two. Low enough that the state usually survives, high enough that it hurts.
+  "CivilWarRebelShareMin": 0.15,
+  "CivilWarRebelShareMax": 0.40,
+
+  // How much faster a state's minorities leave while it fights a civil war. Three times is
+  // the partial collapse a weak centre invites - Yugoslavia and Somalia - and it is the
+  // reason a civil war is worse than the stability it costs.
+  "SecessionCivilWarMultiplier": 3.0
+
+  // `CivilWarStrikesPlayers` is deliberately NOT here. It belongs to the campaign option
+  // `civil_wars_players`, which the player sets in the menu and which SettingsApply writes
+  // after this file is read. A default in data would fight the menu for the same field, and
+  // a toggle that the menu shows and the game ignores is worse than no toggle.
+}

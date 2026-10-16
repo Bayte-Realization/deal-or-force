@@ -250,5 +250,53 @@
         "add": 0.8
       }
     ]
+  },
+
+  "ai_grand_manoeuvres": {
+    "base": 0.35,
+    "modifiers": [
+      {
+        "trigger": { "use": [ "settled", "solvent" ] },
+        "add": 0.9
+      },
+      {
+        "trigger": { "use": [ "at_war" ] },
+        "factor": 0.1
+      }
+    ]
+  },
+
+  "ai_flight_school": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": { "use": [ "solvent" ] },
+        "add": 0.7
+      }
+    ]
+  },
+
+  "ai_fleet_review": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": { "use": [ "solvent" ] },
+        "add": 0.7
+      }
+    ]
+  },
+
+  "ai_push_the_reform": {
+    "base": 0.15,
+    "modifiers": [
+      {
+        "trigger": { "min_political_points": 12, "max_army_experience": 30 },
+        "add": 1.1
+      },
+      {
+        "trigger": { "use": [ "at_war" ] },
+        "add": 0.3
+      }
+    ]
   }
 }

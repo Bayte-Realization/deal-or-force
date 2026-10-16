@@ -357,20 +357,20 @@ public partial class DealOrForceGame
         _ledgerLineB.SetData("Commodity price index", "100 equals each good's scenario base price", days,
             CommodityCatalog.All.Select(commodity => Series(CommodityCatalog.Get(commodity).Name,
                 CommodityColor(commodity), samples, sample => sample.PriceIndex(commodity))).ToArray(), StrategicChartFormat.Index);
-        _ledgerBarsA.SetData("Demand satisfaction", "Shortages reduce growth and living standards", CommodityCatalog.All.Select(commodity =>
+        _ledgerBarsA.SetData("Demand satisfaction", "Shortages reduce growth and living standards. The shortest are first.", CommodityCatalog.All.Select(commodity =>
         {
             var quote = nation.Market[commodity];
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Satisfaction,
                 quote.IsShortage ? Red : Green,
                 Simulation.Loc.Format("Production {0:0.0} · demand {1:0.0}", quote.Production, quote.Demand));
-        }).ToArray(), StrategicChartFormat.Percent);
-        _ledgerBarsB.SetData("Net commodity flow", "Positive is surplus; negative requires imports", CommodityCatalog.All.Select(commodity =>
+        }).OrderBy(entry => entry.Value).ThenBy(entry => entry.Name, StringComparer.Ordinal).ToArray(), StrategicChartFormat.Percent);
+        _ledgerBarsB.SetData("Net commodity flow", "Positive is surplus; negative requires imports. The largest gaps are first.", CommodityCatalog.All.Select(commodity =>
         {
             var quote = nation.Market[commodity];
             return new StrategicBarEntry(CommodityCatalog.Get(commodity).Name, quote.Net,
                 quote.Net >= 0f ? Green : Red,
                 Simulation.Loc.Format("Imports {0:0.0} · exports {1:0.0}", quote.Imports, quote.Exports));
-        }).ToArray(), StrategicChartFormat.Number);
+        }).OrderBy(entry => entry.Value).ThenBy(entry => entry.Name, StringComparer.Ordinal).ToArray(), StrategicChartFormat.Number);
     }
 
     private void ShowLedgerPopulation(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)

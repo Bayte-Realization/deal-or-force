@@ -37,5 +37,11 @@ static class OpportunityAtlasTests
         nation.FormedNationId = "united_korea";
         Check(OpportunityAtlas.Read(campaign, nation).Formations.Length == 0, "proclaimed identity is not advertised again");
         Check(OpportunityAtlas.Read(null, null).Decisions.Length == 0, "no campaign yields an empty atlas");
+        Check(DecisionCatalog.All.All(definition => !string.IsNullOrWhiteSpace(definition.Name) &&
+                !string.IsNullOrWhiteSpace(definition.Description)),
+            "every decision can fill an action card with a name and a description");
+        var scripted = DecisionCatalog.All.Where(definition => definition.Kind == DecisionKind.Scripted).ToArray();
+        Check(scripted.Length > 0 && scripted.All(definition => ScriptedEffects.Lines(definition.Effect).Count > 0),
+            "every scripted decision prints at least one guaranteed result line on its action card");
     }
 }

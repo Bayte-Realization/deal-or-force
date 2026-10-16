@@ -1,0 +1,39 @@
+{
+  "GOALS": "ЦЕЛИ",
+  "Pin goal": "Поставить цель",
+  "Abandon goal": "Снять цель",
+  "Completed": "Исполнено",
+  "Adopted {0} days ago": "Поставлена {0} дн. назад",
+  "{0} milestones": "Вехи: {0}",
+  "Already pinned": "Уже поставлена",
+  "Only {0} goals may be pinned at once": "Одновременно можно держать не больше {0} целей",
+  "Goals: {0} pinned · {1} completed": "Цели: в работе {0} · исполнено {1}",
+  "A goal is private: nothing in the world changes when it is pinned, dropped or met. The record is the point.": "Цель приватна: когда её ставят, снимают или исполняют, в мире ничего не меняется. Смысл — в самой записи.",
+
+  "The peace dividend": "Дивиденд мира",
+  "Bring the country to a place where the war is paid for by what it no longer spends, not by what it borrows: solvent, quiet and without troops in the field.": "Привести страну туда, где война оплачена тем, что она больше не тратит, а не тем, что она занимает: платёжеспособная, тихая, без войск в поле.",
+  "At peace, with no formation committed to a war": "Мир, ни одна часть не занята войной",
+  "The treasury is solvent again": "Казна снова платёжеспособна",
+  "The country is settled, not merely tired": "Страна устоялась, а не просто устала",
+
+  "An educated generation": "Образованное поколение",
+  "Leave the country more schooled than it was found: literacy above four fifths, universities worth the name, and a standard of living that keeps the schooled at home.": "Передать страну более учёной, чем она была получена: грамотность выше четырёх пятых, университеты, которые стоят этого имени, и уровень жизни, при котором учёные не уезжают.",
+  "Four fifths of the country can read": "Четыре пятых страны умеют читать",
+  "Nobody is leaving for want of a living": "Никто не уезжает из-за безденежья",
+
+  "An honest state": "Честное государство",
+  "Leave no ruin standing, no classroom half empty and no province under the palm of a radical: heal the war's damage, school the country and hold it steady.": "Не оставить ни одной руины, ни одного полупустого класса и ни одной провинции под ладонью радикала: залечить раны войны, выучить страну и держать её спокойно.",
+  "No region of the country is still in ruins": "Ни один регион страны больше не в руинах",
+  "Three quarters of the country can read": "Три четверти страны умеют читать",
+  "Radicalism has nowhere to stand": "Радикализму негде стоять",
+
+  "A market of ones own": "Собственный рынок",
+  "Make the domestic economy worth its own name: output past half a trillion, no dependence on a single supplier worth noticing, books that balance.": "Сделать внутреннюю экономику стоящей собственного имени: выпуск за полтриллиона, ни одной заметной зависимости от единственного поставщика, сходящиеся книги.",
+  "The economy produces past half a trillion a year": "Экономика выпускает больше полутриллиона в год",
+  "The treasury never has to borrow to exist": "Казне не приходится занимать, чтобы жить",
+
+  "The voice of the region": "Голос региона",
+  "Become the country the neighbours measure themselves against: no war lost, opinions warm, and the economy the largest on the continent.": "Стать страной, с которой соседи меряют себя: ни одной проигранной войны, тёплые мнения и крупнейшая экономика континента.",
+  "No neighbour holds an old grievance worth a war": "Ни у одного соседа нет старой обиды, стоящей войны",
+  "The economy is the largest on the continent": "Экономика крупнейшая на континенте"
+}

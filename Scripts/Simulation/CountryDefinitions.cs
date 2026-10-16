@@ -26,18 +26,39 @@ public static class CountryDefinitions
     {
         foreach (var document in GameDataLoader.DataDocuments("common", "countries"))
             using (document)
-            {
-                if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
-                foreach (var entry in document.RootElement.EnumerateObject())
-                {
-                    if (entry.Value.ValueKind != JsonValueKind.Object) continue;
-                    var nation = campaign.NationByTag(entry.Name);
-                    if (nation is null) continue;
-                    Read(entry.Value, "name", text => nation.Name = text);
-                    Read(entry.Value, "color", text => nation.Color = text);
-                    Read(entry.Value, "capital_name", text => nation.CapitalName = text);
-                }
-            }
+                Apply(campaign, document.RootElement);
+    }
+
+    /// <summary>
+    /// Layer one document over the scenario's own values.
+    ///
+    /// Separate from the folder walk because a mod package's files and the base game's arrive
+    /// through the same door, and because a single document is the only way to check any of this
+    /// without writing a file into the shipped folder to see what happens.
+    /// </summary>
+    public static void Apply(Campaign campaign, JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) return;
+        foreach (var entry in root.EnumerateObject())
+        {
+            if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+            var nation = campaign.NationByTag(entry.Name);
+            if (nation is null) continue;
+            Read(entry.Value, "name", text => nation.Name = text);
+            Read(entry.Value, "color", text => nation.Color = text);
+            Read(entry.Value, "capital_name", text => nation.CapitalName = text);
+            // Where that city is. Renaming a capital and moving one are different jobs - a mod
+            // renaming a city has no business restating its coordinates, and one laying out a
+            // different map has no name to keep - so both are optional and neither clears the
+            // other. The starting seat is the region nearest this point, so moving the point
+            // moves the government with it.
+            //
+            // Clamped to the surface of the planet: a decimal point in the wrong place would
+            // otherwise put a capital in orbit, where the nearest region is nobody's and the
+            // country quietly loses its seat.
+            Number(entry.Value, "capital_latitude", value => nation.CapitalLatitude = M.Clamp(value, -90f, 90f));
+            Number(entry.Value, "capital_longitude", value => nation.CapitalLongitude = M.Clamp(value, -180f, 180f));
+        }
     }
 
     private static void Read(JsonElement value, string key, Action<string> set)
@@ -45,6 +66,17 @@ public static class CountryDefinitions
         if (value.TryGetProperty(key, out var field) && field.ValueKind == JsonValueKind.String &&
             field.GetString() is { Length: > 0 } text)
             set(text);
+    }
+
+    /// <summary>
+    /// A number, if the file gave one. NaN and infinities are not coordinates and are left alone
+    /// rather than clamped, because clamping them would invent a place rather than refuse one.
+    /// </summary>
+    private static void Number(JsonElement value, string key, Action<float> set)
+    {
+        if (value.TryGetProperty(key, out var field) && field.ValueKind == JsonValueKind.Number &&
+            field.TryGetSingle(out var number) && float.IsFinite(number))
+            set(number);
     }
 
     /// <summary>

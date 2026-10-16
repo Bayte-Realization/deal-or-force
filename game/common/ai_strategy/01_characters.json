@@ -1,0 +1,137 @@
+// Operational doctrines and national characters for the AI (AiStrategyCatalog).
+//
+// A profile is two things at once. The force shares and stances say HOW a country fights -
+// they are read by the same order commands a player uses. `aggression` and `sociability` say
+// WHETHER it looks for a fight or a friend at all: aggression multiplies the chance a country
+// acts on a war it has already decided it wants, and sociability bends the opinion it wants
+// before it offers trade, a pact or an alliance. One is the ordinary case for both.
+//
+// Nothing here removes a check. An aggressive profile still needs a cause, a prepared plan,
+// reachable ground and a government that could give the reason. It only decides how often a
+// country with all of that actually moves - which is the difference between a world where
+// every state behaves like the same cautious accountant and one where it does not.
+{
+  "profiles": {
+    // --- the four the game shipped with, now with their character written down ------------
+    "default": {
+      "spearhead_share": 0.12, "advance_share_attacker": 0.58, "advance_share_defender": 0.34,
+      "defend_share": 0.26, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.18, "aggression": 1.0, "sociability": 1.0
+    },
+    "major_offensive": {
+      "spearhead_share": 0.20, "advance_share_attacker": 0.72, "advance_share_defender": 0.46,
+      "defend_share": 0.18, "offensive_stance": "Aggressive", "defensive_stance": "Balanced",
+      "execute_planning_threshold": 0.28, "aggression": 1.15, "sociability": 0.9
+    },
+    "defensive": {
+      "spearhead_share": 0.06, "advance_share_attacker": 0.38, "advance_share_defender": 0.18,
+      "defend_share": 0.44, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.42, "aggression": 0.7, "sociability": 1.0
+    },
+    "minor_power": {
+      "spearhead_share": 0.10, "advance_share_attacker": 0.52, "advance_share_defender": 0.28,
+      "defend_share": 0.30, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.24, "aggression": 0.85, "sociability": 1.15
+    },
+
+    // --- the characters a country can have instead ----------------------------------------
+    // All the weight on one thrust, and nothing held back: takes ground quickly or loses
+    // everything it committed. Commits sooner and asks fewer questions first.
+    "blitzkrieg": {
+      "spearhead_share": 0.30, "advance_share_attacker": 0.82, "advance_share_defender": 0.50,
+      "defend_share": 0.12, "offensive_stance": "Aggressive", "defensive_stance": "Balanced",
+      "execute_planning_threshold": 0.22, "aggression": 1.5, "sociability": 0.8
+    },
+    // Grinds forward and keeps what it takes. Slow to start, hard to stop, and it does not
+    // care much how many men the ground costs.
+    "attrition": {
+      "spearhead_share": 0.06, "advance_share_attacker": 0.40, "advance_share_defender": 0.14,
+      "defend_share": 0.64, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.42, "aggression": 1.05, "sociability": 0.85
+    },
+    // Every formation on its own ground and none of them anywhere else. Attacks almost never,
+    // and is unpleasant to attack.
+    "fortress": {
+      "spearhead_share": 0.04, "advance_share_attacker": 0.30, "advance_share_defender": 0.14,
+      "defend_share": 0.52, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.46, "aggression": 0.55, "sociability": 0.95
+    },
+    // Fights far from home, which needs a navy, a plan and a reason: goes to war readily but
+    // only where it can actually arrive.
+    "expeditionary": {
+      "spearhead_share": 0.18, "advance_share_attacker": 0.62, "advance_share_defender": 0.40,
+      "defend_share": 0.22, "offensive_stance": "Aggressive", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.30, "aggression": 1.25, "sociability": 1.0
+    },
+    // A large army that exists to hold the country together and to be seen holding it
+    // together. Rarely leaves, rarely invites anybody in.
+    "garrison_state": {
+      "spearhead_share": 0.05, "advance_share_attacker": 0.32, "advance_share_defender": 0.16,
+      "defend_share": 0.48, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.44, "aggression": 0.5, "sociability": 0.85
+    },
+    // Treaties before battles: reaches out early and often, and keeps its army small enough
+    // that it has to.
+    "trading_state": {
+      "spearhead_share": 0.08, "advance_share_attacker": 0.44, "advance_share_defender": 0.24,
+      "defend_share": 0.34, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.36, "aggression": 0.6, "sociability": 1.35
+    },
+    // Has a list of things it considers its own, and works down it. The most dangerous
+    // character here, and the one most likely to be isolated for it.
+    "irredentist": {
+      "spearhead_share": 0.16, "advance_share_attacker": 0.70, "advance_share_defender": 0.42,
+      "defend_share": 0.22, "offensive_stance": "Aggressive", "defensive_stance": "Balanced",
+      "execute_planning_threshold": 0.20, "aggression": 1.4, "sociability": 0.75
+    },
+    // Wants to be left alone by everybody, including its own neighbours.
+    "isolated": {
+      "spearhead_share": 0.06, "advance_share_attacker": 0.40, "advance_share_defender": 0.20,
+      "defend_share": 0.42, "offensive_stance": "Balanced", "defensive_stance": "Cautious",
+      "execute_planning_threshold": 0.40, "aggression": 0.8, "sociability": 0.6
+    }
+  },
+
+  // Who has a character rather than a posture. Read by tag, so a mod can move a country from
+  // one character to another without touching a line of code, and a tag that is not in this
+  // list simply keeps the posture its own army earns it.
+  "country_profiles": {
+    "USA": "expeditionary",
+    "GBR": "expeditionary",
+    "FRA": "expeditionary",
+    "JPN": "expeditionary",
+    "AUS": "expeditionary",
+    "CHN": "major_offensive",
+    "RUS": "major_offensive",
+    "IND": "attrition",
+    "KOR": "attrition",
+    "UKR": "attrition",
+    "POL": "attrition",
+    "BRA": "attrition",
+    "EGY": "attrition",
+    "VNM": "attrition",
+    "NGA": "attrition",
+    "PRK": "fortress",
+    "IRN": "fortress",
+    "FIN": "fortress",
+    "TWN": "fortress",
+    "CHE": "trading_state",
+    "SGP": "trading_state",
+    "NLD": "trading_state",
+    "DEU": "trading_state",
+    "CAN": "trading_state",
+    "SWE": "trading_state",
+    "NOR": "trading_state",
+    "ISL": "trading_state",
+    "IRL": "trading_state",
+    "THA": "trading_state",
+    "MYS": "trading_state",
+    "CHL": "trading_state",
+    "ZAF": "trading_state",
+    "SAU": "trading_state",
+    "AFG": "garrison_state",
+    "KAZ": "garrison_state",
+    "MNG": "garrison_state",
+    "AZE": "garrison_state"
+  }
+}

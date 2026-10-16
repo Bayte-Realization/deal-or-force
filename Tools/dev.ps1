@@ -107,7 +107,7 @@ function Invoke-Game {
     New-Item -ItemType Directory -Force -Path $captures | Out-Null
     $arguments = @('--path', $project)
     if ($Headless) { $arguments = @('--headless') + $arguments }
-    $arguments += @('--', '--verify-build', '--verify-build-output', $captures)
+    $arguments += @('--', '--verify-build', '--verify-development', '--verify-build-output', $captures)
     $log = Join-Path $captures 'run.log'
     $exit = Invoke-LoggedNative (Find-Godot) $arguments $log
     $result = Select-String -Path $log -Pattern 'EXPORT_VERIFY failures=(\d+)' | Select-Object -Last 1

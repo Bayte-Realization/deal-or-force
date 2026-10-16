@@ -47,6 +47,7 @@ public partial class DealOrForceGame
         var choose = new SetResearchCommand { IssuerId = _campaign.Player.Id, TechnologyId = technologyId };
         _campaign.Commands.Enqueue(choose);
         _campaign.Commands.ApplyAll(_campaign);
+        PlayStrategicCue("save_complete");
         if (MapSelectionShowing) ShowMapSelectionContent();
         RefreshResearchScreen();
     }

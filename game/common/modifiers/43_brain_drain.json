@@ -1,0 +1,17 @@
+// National spirit granted by the talent retention & repatriation programme (BrainDrain.cs).
+{
+  "talent_retention": {
+    "name": "Talent retention programme",
+    "description": "Research grants, housing subsidies and return fellowships keep engineers, doctors and scientists working at home.",
+    "days": 365,
+    "positive": true,
+    "effects": {
+      "literacy": 0.0005,
+      "stability": 0.0004
+    },
+    "modifiers": {
+      "output": 0.03,
+      "research_speed": 0.08
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "Week {0}": "Неделя {0}",
+  "Treasury {0}": "Казна {0}",
+  "Sites {0}/{1}": "Стройки {0}/{1}",
+  "Open the week's taxes and spending.": "Открыть налоги и расходы этой недели.",
+  "Open the treasury and the debt.": "Открыть казну и долг.",
+  "Open this good on the market.": "Открыть этот товар на рынке.",
+  "Open the construction queue.": "Открыть очередь строительства.",
+  "Winter roads carry {0:P0} of fair-weather traffic.": "Зимние дороги везут {0:P0} от летней пропускной способности.",
+  "Winter roads there carry {0:P0} of fair-weather traffic.": "Зимние дороги там везут {0:P0} от летней пропускной способности."
+}

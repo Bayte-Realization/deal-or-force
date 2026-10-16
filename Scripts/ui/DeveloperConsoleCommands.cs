@@ -141,6 +141,9 @@ public partial class DealOrForceGame
         Add("pops", "PEOPLE", "pops [region name]",
             "A region's people three ways: by trade, by class, and by sector. The selected " +
             "region unless one is named.", ConsolePops, "population");
+        Add("migration", "PEOPLE", "migration [DEU]",
+            "Brain drain, talent inflow and regional migration balance for a country.",
+            ConsoleMigration, "braindrain");
 
         // ------------------------------------------------------------------------- the war --
         Add("wars", "WAR", "wars", "Every war being fought, with its score and its fronts.", _ => ConsoleWars());
@@ -809,6 +812,26 @@ public partial class DealOrForceGame
             "  SECTORS\n" + Bar(EconomySystem.Sectors(state).Select(row => (row.Sector, row.Size))) + "\n" +
             "  PEOPLES\n" + Bar(EconomySystem.Cultures(state)
                 .Take(6).Select(row => (DemographyCatalog.CultureName(row.Culture), row.Size))));
+    }
+
+    private string ConsoleMigration(string argument)
+    {
+        var nation = ConsoleNation(argument);
+        if (nation is null || _campaign is null) return "No such country.";
+        var dest = _campaign.NationById(nation.BrainDrainDestinationId);
+        var src = _campaign.NationById(nation.BrainGainSourceId);
+        var states = _campaign.StatesOf(nation)
+            .OrderByDescending(s => Math.Abs(s.ReviewNetMigration))
+            .ThenByDescending(s => s.BrainDrainPressure)
+            .Take(6)
+            .Select(s => $"    {s.Name,-24} net {Fmt.PeopleDelta(s.ReviewNetMigration),10} · pressure {Fmt.Percent(s.BrainDrainPressure)} · literacy {Fmt.Percent(s.Literacy)}");
+        return EscapeBb(
+            $"{nation.Name} ({nation.Tag}) · weekly {Fmt.PeopleDelta(nation.WeeklyNetMigration)} · cumulative {Fmt.PeopleDelta(nation.CumulativeNetMigration)}\n" +
+            $"  brain flow   {nation.BrainDrainRate:+0.0%;-0.0%;0.0%} · " +
+            (dest is not null ? $"primary outflow to {dest.Name} ({dest.Tag})"
+                : src is not null ? $"primary inflow from {src.Name} ({src.Tag})"
+                : "no active cross-border stream") + "\n" +
+            "  REGIONS\n" + string.Join("\n", states));
     }
 
     // =====================================================================================

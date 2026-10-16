@@ -72,17 +72,53 @@ public static class TerritorialClaims
     {
         var rows = new List<TerritorialDispute>();
         if (c is null) return rows;
+        // Claimants are named on the region. Walking every country for every region made
+        // opening this list a scan of the whole world, and that scan was the freeze.
+        var byTag = new Dictionary<string, Nation>(StringComparer.OrdinalIgnoreCase);
+        var byMap = new Dictionary<int, Nation>();
+        foreach (var nation in c.Nations)
+        {
+            if (nation.MapIndex > 0 && !byMap.ContainsKey(nation.MapIndex)) byMap[nation.MapIndex] = nation;
+            if (!string.IsNullOrEmpty(nation.Tag) && !byTag.ContainsKey(nation.Tag)) byTag[nation.Tag] = nation;
+        }
+        var homeByRegion = new Dictionary<int, List<int>>();
+        foreach (var (id, regions) in c.Homelands)
+        {
+            if (regions is null) continue;
+            foreach (var regionId in regions)
+            {
+                if (!homeByRegion.TryGetValue(regionId, out var list))
+                    homeByRegion[regionId] = list = new List<int>();
+                list.Add(id);
+            }
+        }
         foreach (var region in c.States.OrderBy(s => s.MapIndex))
         {
-            var holder = c.Nations.Find(n => n.MapIndex == region.NationMapIndex);
-            if (holder is null || region.Unclaimed || region.Population <= 0) continue;
-            foreach (var nation in c.Nations)
+            if (region.Unclaimed || region.Population <= 0) continue;
+            if (!byMap.TryGetValue(region.NationMapIndex, out var holder)) continue;
+            var seen = new HashSet<int>();
+            void Consider(Nation nation, TerritorialTitle title)
             {
-                if (nation.Id == holder.Id || nation.Movement is not null || nation.Population <= 0 ||
-                    holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) continue;
-                var title = TitleOf(c, nation, region);
-                if (title != TerritorialTitle.None) rows.Add(new(region, nation, holder, title));
+                if (nation is null || title == TerritorialTitle.None || !seen.Add(nation.Id)) return;
+                if (nation.Id == holder.Id || nation.Movement is not null || nation.Population <= 0) return;
+                if (holder.AnswersTo(nation.Id) || nation.AnswersTo(holder.Id)) return;
+                if (nation.RenouncedTerritoryOrigins.Contains(Origin(region))) return;
+                rows.Add(new TerritorialDispute(region, nation, holder, title));
             }
+            if (region.CoreTags is not null)
+                foreach (var tag in region.CoreTags)
+                    if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Homeland);
+            void Homes(int id)
+            {
+                if (!homeByRegion.TryGetValue(id, out var claimants)) return;
+                foreach (var claimantId in claimants) Consider(c.NationById(claimantId), TerritorialTitle.Homeland);
+            }
+            Homes(region.MapIndex);
+            var origin = Origin(region);
+            if (origin != region.MapIndex) Homes(origin);
+            if (region.Claims is not null)
+                foreach (var tag in region.Claims)
+                    if (byTag.TryGetValue(tag, out var nation)) Consider(nation, TerritorialTitle.Claim);
         }
         return rows;
     }

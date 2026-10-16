@@ -1,0 +1,23 @@
+// National decision to counter brain drain and attract returning specialists (BrainDrain.cs).
+{
+  "talent_retention_programme": {
+    "name": "Talent retention programme",
+    "description": "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0022,
+    "unavailable": "Requires active brain drain and funds to counter it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ],
+      "max_brain_drain": -0.05
+    },
+    "effects": {
+      "add_modifier": {
+        "talent_retention": 0
+      },
+      "literacy": 0.004,
+      "research": 10
+    }
+  }
+}

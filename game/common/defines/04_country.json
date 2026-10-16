@@ -75,6 +75,12 @@
   "RadicalismDecay": 0.03,
   "StartingTreasury": 5000000000,
   "DefaultTaxRate": 0.21,
+  // What a country history/countries says nothing about opens with, as a share of its yearly
+  // income, and what one whose income is unknown is assumed to earn per head. Both are
+  // fallbacks: a country that states a treasury or a GDP in history keeps its own figure, and
+  // the base game's Korea states a treasury.
+  "BaseTreasuryGdpShare": 0.10,
+  "MicrostateGdpPerHead": 15,
   "BuildingUpkeep": 18000,
   "ConstructionRate": 0.008,
   "MilitaryEligibleShare": 0.42,

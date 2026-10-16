@@ -74,7 +74,7 @@ public static class PeacefulFormation
     {
         if (campaign is null || founder is null || partner is null || definition is null) return "Choose a founding country and a partner.";
         if (!definition.PeacefulAccession) return "This proclamation has no peaceful accession route.";
-        if (!FormableNations.Eligible(founder, definition) || founder.Id == partner.Id || founder.IsSubject ||
+        if (!FormableNations.Eligible(campaign, founder, definition) || founder.Id == partner.Id || founder.IsSubject ||
             !FormableNations.CompatibleProclamation(founder, definition)) return "This country cannot lead the foundation.";
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return "Territorial map ready";
         if (!AtPeace(campaign, founder) || !AtPeace(campaign, partner)) return "Both countries must be at peace.";
@@ -129,7 +129,7 @@ public static class PeacefulFormation
     {
         // Recheck irreversible facts when an old, saved invitation is answered.
         if (founder is null || partner is null || definition is null || !definition.PeacefulAccession ||
-            !FormableNations.Eligible(founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
+            !FormableNations.Eligible(campaign, founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
             founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability ||
             !FormableNations.ReligionMandate(campaign, founder, definition) ||
             !AtPeace(campaign, founder) || !AtPeace(campaign, partner) ||
@@ -169,7 +169,9 @@ public static class PeacefulFormation
             partner.Population = remaining;
             if (campaign.StatesOf(partner).Length > 0) continue;
             // Joining is not defeat. Keep people, savings, equipment, training and research.
-            // Retain homeland titles, but a consenting government has not fled a conquest.
+            // The former government signed its accession, rather than fleeing a conquest.
+            // Retain its homeland titles for future organic separatism, but do not create
+            // a government in exile on the very next MovementFall pass.
             campaign.Fallen.Add(partner.Id);
             SovereignFinance.MergeAccounts(campaign, founder, partner);
             founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;

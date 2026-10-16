@@ -40,7 +40,7 @@ public partial class DealOrForceGame
             FitToLongestItem = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false
         };
-        _campaignNavigationCategory.AddThemeFontSizeOverride("font_size", 11);
+        _campaignNavigationCategory.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 11));
         _campaignNavigationCategory.TooltipText = Ui.Tip(Tr("Choose a group of screens. Every destination remains available on small displays."));
         _campaignNavigationCategory.AccessibilityName = Tr("Navigation category");
         stack.AddChild(_campaignNavigationCategory);
@@ -57,7 +57,7 @@ public partial class DealOrForceGame
             TooltipText = Ui.Tip(Tr("Type to filter the navigation rail. Clearing it shows every destination again.")),
             AccessibilityName = Tr("Navigation search")
         }, "Search");
-        _campaignNavigationSearch.AddThemeFontSizeOverride("font_size", 12);
+        _campaignNavigationSearch.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 12));
         _campaignNavigationSearch.TextChanged += text =>
         {
             _campaignNavigationFilter = text.Trim();
@@ -101,7 +101,7 @@ public partial class DealOrForceGame
             button.Name = "Nav" + item.Screen.Replace(" ", "");
             button.SetMeta("navigation_short", item.Short);
             button.SetMeta("icon_above", true); button.ClipText = true;
-            button.AddThemeFontSizeOverride("font_size", 10);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10));
             button.AddThemeConstantOverride("icon_max_width", 23);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.RemoveMeta("icon_caption_minimum"); button.CustomMinimumSize = new(0, 50);
@@ -114,7 +114,7 @@ public partial class DealOrForceGame
             SpriteCatalog.TextureOf("icon_ledger", "res://game/gfx/interface/icons/icon_ledger.png"));
         media.Name = "OpenMediaLibraryNavigation"; media.SetMeta("icon_above", true); StyleButton(media, false);
         media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, Ui.Metric("shell.navigation_media_height", 42));
-        media.ClipText = true; media.AddThemeFontSizeOverride("font_size", 10); media.AddThemeConstantOverride("icon_max_width", 18);
+        media.ClipText = true; media.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10)); media.AddThemeConstantOverride("icon_max_width", 18);
         media.AccessibilityName = Tr("Sound and artwork");
         Tip(media, "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.");
         var mediaGroup = _campaignNavigationGroups.LastOrDefault() ?? "OTHER SCREENS";

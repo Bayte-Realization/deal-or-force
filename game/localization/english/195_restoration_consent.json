@@ -1,6 +1,4 @@
 {
-  "chronicle.restoration": "{0} is restored in {3}.",
-  "Invalid simulation values prevent this action. Pause and inspect the campaign.": "Invalid simulation values prevent this action. Pause and inspect the campaign.",
   "Restore the country": "Restore the country",
   "Only a country that still has a government can be restored.": "Only a country that still has a government can be restored.",
   "This is not a government in exile.": "This is not a government in exile.",

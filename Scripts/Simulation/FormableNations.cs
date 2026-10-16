@@ -14,11 +14,18 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     public bool SubjectIntegration { get; init; }
     public bool AiFoundation { get; init; }
     public string[] EligibleCultures { get; init; } = Array.Empty<string>();
+    /// <summary>Families of peoples any of whose states may found it: "south_slavic" opens
+    /// Yugoslavia to every South Slavic state without naming each (common/cultures "group").</summary>
     public string[] EligibleCultureGroups { get; init; } = Array.Empty<string>();
+    /// <summary>Faiths whose states may found it - a caliphate, a Christian union - by the faith
+    /// the founder's own people mostly hold.</summary>
+    public string[] EligibleReligions { get; init; } = Array.Empty<string>();
     /// <summary>Optional civic mandate from actual residents, not an assumption about a tag.</summary>
     public string[] RequiredReligions { get; init; } = Array.Empty<string>();
     public string[] RequiredReligionGroups { get; init; } = Array.Empty<string>();
     public float MinimumReligionShare { get; init; } = .5f;
+    /// <summary>For a restoration (FormableRestorations), the vanished country it brings back.</summary>
+    public string Restores { get; init; } = "";
     /// <summary>Regions by id, for a state whose ground the scenario writes under other
     /// countries' tags - a Kurdistan of Erbil, Duhok and Sulaymaniyah.</summary>
     public string[] RequiredRegions { get; init; } = Array.Empty<string>();
@@ -43,17 +50,51 @@ public static class FormableNations
             using (doc) Merge(doc.RootElement, null);
     }
     public static FormableNation Find(string id) => id is not null ? Definitions.GetValueOrDefault(id) : null;
+
+    /// <summary>One state by id, a restoration included: those exist only in a campaign.</summary>
+    public static FormableNation Find(Campaign campaign, string id) =>
+        Find(id) ?? FormableRestorations.Find(campaign, id);
+
+    /// <summary>Every state that may be proclaimed in this campaign: the catalogue, and every
+    /// country of the starting world that has vanished and may be brought back.</summary>
+    public static IEnumerable<FormableNation> AvailableIn(Campaign campaign) =>
+        All.Concat(FormableRestorations.In(campaign));
     public static bool CompatibleProclamation(Nation nation, FormableNation definition) =>
         nation is not null && definition is not null && !nation.FormedNationHistory.Contains(definition.Id) &&
         (string.IsNullOrEmpty(nation.FormedNationId) || definition.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase));
-    public static bool Eligible(Nation nation, FormableNation definition) =>
-        nation is not null && definition is not null &&
-        (definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase) ||
-         definition.EligibleCultures.Any(c => DemographyCatalog.IsPrimary(nation.Tag, c) ||
-            nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase)) ||
-         definition.EligibleCultureGroups.Length > 0 &&
-            DemographyCatalog.PrimaryCultures(nation.Tag).Concat(nation.FoundedCultures).Any(c =>
-                definition.EligibleCultureGroups.Contains(DemographyCatalog.Culture(c)?.Group ?? "", StringComparer.OrdinalIgnoreCase)));
+    public static bool Eligible(Nation nation, FormableNation definition) => Eligible(null, nation, definition);
+
+    /// <summary>
+    /// Who may found it: a country named; a state of a people named; a state of a family of
+    /// peoples named; a state whose people mostly hold a faith named. For a restoration, the
+    /// rules of FormableRestorations.MayRestore - its own people, a rising on its ground, its
+    /// government in exile - and never the country that holds it otherwise.
+    /// </summary>
+    public static bool Eligible(Campaign campaign, Nation nation, FormableNation definition)
+    {
+        if (nation is null || definition is null) return false;
+        if (!string.IsNullOrEmpty(definition.Restores))
+            return FormableRestorations.MayRestore(campaign, nation, definition.Restores);
+        if (definition.EligibleTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase)) return true;
+        if (definition.EligibleCultures.Any(c => DemographyCatalog.IsPrimary(nation.Tag, c) ||
+                nation.FoundedCultures.Contains(c, StringComparer.OrdinalIgnoreCase))) return true;
+        if (definition.EligibleCultureGroups.Length == 0 && definition.EligibleReligions.Length == 0) return false;
+        var peoples = DemographyCatalog.PrimaryCultures(nation.Tag).Concat(nation.FoundedCultures);
+        foreach (var people in peoples)
+        {
+            var culture = DemographyCatalog.Culture(people);
+            if (culture is not null && definition.EligibleCultureGroups.Contains(culture.Group, StringComparer.OrdinalIgnoreCase))
+                return true;
+            if (definition.EligibleReligions.Length > 0)
+            {
+                var faith = DemographyCatalog.FaithOf(people).FirstOrDefault();
+                if (faith.Share >= 0.5f && definition.EligibleReligions.Contains(faith.Religion, StringComparer.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+        return false;
+    }
+    public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
 
     /// <summary>The declared faiths/groups form one union: no resident is counted twice.
     /// Only current, owned-state population groups count. Missing religion data fails closed;
@@ -83,7 +124,6 @@ public static class FormableNations
     public static bool ReligionMandate(Campaign campaign, Nation nation, FormableNation definition) =>
         definition is not null && (definition.RequiredReligions.Length == 0 && definition.RequiredReligionGroups.Length == 0 ||
             ReligionShare(campaign, nation, definition) >= definition.MinimumReligionShare);
-    public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
 
     /// <summary>Validate an editor overlay against current data without changing the
     /// live catalogue. Bad drafts cannot delete or rewrite countries in a running game.</summary>
@@ -122,6 +162,7 @@ public static class FormableNations
                 {
                     EligibleCultures = Ids("eligible_cultures", old?.EligibleCultures),
                     EligibleCultureGroups = Ids("eligible_culture_groups", old?.EligibleCultureGroups),
+                    EligibleReligions = Ids("eligible_religions", old?.EligibleReligions),
                     RequiredReligions = Ids("required_religions", old?.RequiredReligions),
                     RequiredReligionGroups = Ids("required_religion_groups", old?.RequiredReligionGroups),
                     MinimumReligionShare = Number("minimum_religion_share", old?.MinimumReligionShare ?? .5f),
@@ -134,7 +175,7 @@ public static class FormableNations
                     AiFoundation = e.TryGetProperty("ai_foundation", out var ai)
                         ? ai.GetBoolean() : old?.AiFoundation ?? false
                 };
-                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0 && d.EligibleCultureGroups.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
+                if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0 && d.EligibleCultureGroups.Length == 0 && d.EligibleReligions.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
                     d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain, d.MinimumReligionShare }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
                 if (d.RequiredIdeology.Any(id => !IdeologyCatalog.Knows(id)))
@@ -161,7 +202,7 @@ public static class FormableNations
         var map = campaign.ProvinceMap;
         var requirements = new List<FormationRequirement>
         {
-            new(Loc.Get("Eligible founding country"), Eligible(nation, d)),
+            new(Loc.Get("Eligible founding country"), Eligible(campaign, nation, d)),
             new(Loc.Get("This proclamation has not already been made"), !nation.FormedNationHistory.Contains(d.Id)),
             new(Loc.Get("Compatible previous proclamation"), string.IsNullOrEmpty(nation.FormedNationId) ||
                 d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase)),
@@ -173,8 +214,7 @@ public static class FormableNations
         provinces.UnionWith(PeacefulFormation.RegionProvinces(campaign, d));
         foreach (var tag in d.RequiredTags)
         {
-            var authored = campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
-                campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>());
+            var authored = FormableRestorations.Authored(campaign, tag);
             requirements.Add(new(Loc.Format("Scenario territory: {0}", tag), authored.Length > 0));
             provinces.UnionWith(authored);
         }
@@ -229,7 +269,7 @@ public sealed class FormNationCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
-        var d = FormableNations.Find(FormableId);
+        var d = FormableNations.Find(campaign, FormableId);
         var status = FormableNations.Evaluate(campaign, nation, d);
         if (!status.CanForm) return;
         nation.Treasury -= status.Cost;
@@ -239,6 +279,18 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
         nation.Name = d.Name;
+        // A restored country is that country again: its people are the state's people, so the
+        // land it took back is home rather than a province of strangers.
+        // Declared rather than assumed: a declaration replaces what the catalogue said, so the
+        // country's own peoples are written first and the restored ones after them.
+        if (!string.IsNullOrEmpty(d.Restores))
+        {
+            if (nation.FoundedCultures.Count == 0) nation.FoundedCultures.AddRange(DemographyCatalog.PrimaryCultures(nation.Tag));
+            foreach (var culture in DemographyCatalog.PrimaryCultures(d.Restores))
+                if (!nation.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase))
+                    nation.FoundedCultures.Add(culture);
+            DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
+        }
         // And its own colour, where one was declared. A proclaimed state that keeps the
         // founder's colour has changed nothing on the one screen a player spends the game
         // looking at. The flag needs no line here: FlagCatalog reads what has been

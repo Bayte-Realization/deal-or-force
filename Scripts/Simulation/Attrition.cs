@@ -17,6 +17,23 @@ public sealed partial class Defines
 
     /// <summary>The most formations a country being overrun raises at once.</summary>
     public int ArmyEmergencyRaises { get; set; } = 3;
+
+    /// <summary>
+    /// The most formations a country short of its front raises in one look. Routine rebuilding
+    /// stays one at a time - an army recovers over months, which is what losing one should
+    /// cost - but a front that exists today cannot be held by a queue that delivers a single
+    /// division a month: the shortage itself is the reason the queue runs several wide.
+    /// </summary>
+    public int ArmyWartimeRaiseBatch { get; set; } = 3;
+
+    /// <summary>
+    /// How far over its establishment a country at peace lets its army sit before one formation
+    /// goes home at each look. Tighter than the wartime margin on purpose: the war is over and
+    /// the army it demanded is a bill still being paid, so demobilisation begins visibly rather
+    /// than after a year of drift. A country still fighting uses the wartime margin and is not
+    /// disarmed by a peace it has not made.
+    /// </summary>
+    public float ArmyPeaceDisbandMargin { get; set; } = 1.05f;
 }
 
 public sealed partial class Nation
@@ -303,14 +320,15 @@ public static class Attrition
             nation.EstablishedDivisions = M.Lerp(nation.EstablishedDivisions,
                 Establishment(campaign, nation), defines.ArmyEstablishmentDrift);
 
-            // Over establishment and at peace: one formation goes home. Without this the
-            // world only ever ratchets upwards - every war leaves the winner permanently
-            // larger, and nothing ever comes back down.
-            if (strength > nation.EstablishedDivisions * defines.ArmyDisbandMargin)
+            // Over establishment: one formation goes home - at peace sooner than at war, and
+            // only in peace outright. Without this the world only ever ratchets upwards -
+            // every war leaves the winner permanently larger, and nothing ever comes back down.
+            var fighting = false;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
+            if (strength > nation.EstablishedDivisions *
+                (fighting ? defines.ArmyDisbandMargin : defines.ArmyPeaceDisbandMargin))
             {
-                var fighting = false;
-                foreach (var war in campaign.Wars)
-                    if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
                 if (!fighting)
                 {
                     StandDown(campaign, nation);
@@ -335,7 +353,9 @@ public static class Attrition
 
             var home = HomeState(campaign, nation);
             if (home < 0) continue;
-            var raises = overrun ? Math.Max(1, Math.Min(defines.ArmyEmergencyRaises, (int)MathF.Ceiling((target - strength) / 3f))) : 1;
+            var raises = overrun ? Math.Max(1, Math.Min(defines.ArmyEmergencyRaises, (int)MathF.Ceiling((target - strength) / 3f)))
+                : shortOfFront ? Math.Max(1, Math.Min(defines.ArmyWartimeRaiseBatch, (int)MathF.Ceiling(target - strength)))
+                : 1;
             for (var raise = 0; raise < raises; raise++)
             {
                 if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;

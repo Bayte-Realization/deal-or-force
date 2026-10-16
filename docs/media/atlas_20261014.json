@@ -99,6 +99,54 @@
       "source": "game/gfx/atmosphere/night_signal.png",
       "dest": "game/gfx/atmosphere/night_signal.png",
       "prompt": "A single full-frame key image for an animated contemporary grand-strategy atlas atmosphere, 16:9. Dark slate-blue archival paper #101D29 viewed completely flat from above, sparse worn brass contour curves and fine latitude-like drafting lines, a few subtle dull amber signal dots near the edges. The center is spacious almost plain slate for optional interface overlay. Abstract field of signals and routes, deliberately no real coastlines, borders, named countries or invented readable map. Quiet postmodern analog instrument mood, tactile hand-printed grain, understated warmth and gentle tension. Flat composition with no perspective, no words, digits, logos, frame, neon or epic battlefield."
+    },
+    {
+      "id": "promise_seal",
+      "kind": "sfx",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/promise_seal.mp3",
+      "dest": "game/sound/audio/atlas/promise_seal.wav",
+      "prompt": "A single wax seal pressed into a letter on a wooden desk: soft paper settle, the seal's firm short press, one clean lift. Close dry Foley, modest warmth, quiet state-room feel, one motion only."
+    },
+    {
+      "id": "goal_pinned",
+      "kind": "sfx",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/goal_pinned.mp3",
+      "dest": "game/sound/audio/atlas/goal_pinned.wav",
+      "prompt": "A pencil makes one short deliberate tick on a paper ledger, then the pencil is set down softly on the wood. Close, dry, handwritten and human."
+    },
+    {
+      "id": "goal_complete",
+      "kind": "sfx",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/goal_complete.mp3",
+      "dest": "game/sound/audio/atlas/goal_complete.wav",
+      "prompt": "A small ledger closes with a soft felt thump and one gentle wooden knock, like a clerk finishing a page at day's end. Quietly satisfied, not celebratory."
+    },
+    {
+      "id": "diplomacy_page",
+      "kind": "sfx",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/diplomacy_page.mp3",
+      "dest": "game/sound/audio/atlas/diplomacy_page.wav",
+      "prompt": "One thin diplomatic letter is unfolded once and laid flat on a wooden desk, paper fibres whispering, ending with a tiny brass corner pressed flat by two fingers."
+    },
+    {
+      "id": "statecraft_papers",
+      "kind": "music",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/statecraft_papers.mp3",
+      "dest": "game/music/audio/statecraft_papers.ogg",
+      "prompt": "Slow, restrained chamber piece for a diplomacy desk late at night: felt-muted piano, distant string quartet, one dry woodwind. No percussion, no vocals, under 70 bpm, about three minutes."
+    },
+    {
+      "id": "western_wind",
+      "kind": "music",
+      "url": "(creativeclaw cdn, session 2026-10-16)",
+      "source": ".fennara/media-source-20261016/western_wind.mp3",
+      "dest": "game/music/audio/western_wind.ogg",
+      "prompt": "Calm, wide-open instrumental for a study window over farmland and coast at dawn: nylon-string guitar arpeggios, brushed wood, warm analog pad. Gentle optimism without fanfare, about three minutes."
     }
   ],
   "failed": [

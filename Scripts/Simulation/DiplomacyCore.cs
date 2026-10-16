@@ -304,8 +304,13 @@ public static class CampaignDiplomacy
         };
         campaign.Wars.Add(war);
         campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);
-        Statecraft.RecordDeclaration(campaign, attacker, defender,
-            justification ?? Statecraft.CasusBelli(campaign, attacker, defender));
+        // Worked out once, at the declaration, and kept on the war. It is what the attacker's
+        // standing is charged for, and it is what the player is owed when they ask why the map
+        // moved - the same string answers both, so the ledger cannot say one thing and the
+        // notoriety have been paid for another.
+        var cause = justification ?? Statecraft.CasusBelli(campaign, attacker, defender);
+        war.Justification = cause;
+        Statecraft.RecordDeclaration(campaign, attacker, defender, cause);
         Warfare.RebuildFronts(campaign);
         FrontPlanner.ReassignAi(campaign, war);
         campaign.MarkStrategicChange();
@@ -356,6 +361,43 @@ public static class CampaignDiplomacy
         Borders(campaign).TryGetValue(mapIndex, out var set)
             ? set
             : (IReadOnlyCollection<int>)Array.Empty<int>();
+
+    /// <summary>
+    /// Who a diplomacy screen should open on when the player has chosen nobody: the land
+    /// neighbour they are on worst terms with, and the largest country in the world if they
+    /// have no land neighbour at all.
+    ///
+    /// Never the player's own country. Every panel on that screen is a comparison, and a
+    /// country compared with itself is a screen of zeroes - which is what it used to open on.
+    /// Ties go to the larger country, and then to the lower id, so the answer is the same on
+    /// every machine that runs the same world.
+    /// </summary>
+    public static Nation DefaultPartner(Campaign campaign, Nation player)
+    {
+        if (campaign is null || player is null) return null;
+        Nation worst = null;
+        var worstOpinion = float.MaxValue;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
+            if (!SharesLandBorder(campaign, player.MapIndex, nation.MapIndex)) continue;
+            var opinion = Peek(campaign, player.Id, nation.Id)?.Opinion ?? 0f;
+            if (worst is not null &&
+                (opinion > worstOpinion ||
+                 (opinion == worstOpinion && (nation.Population < worst.Population ||
+                  (nation.Population == worst.Population && nation.Id > worst.Id))))) continue;
+            worst = nation;
+            worstOpinion = opinion;
+        }
+        if (worst is not null) return worst;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
+            if (worst is null || nation.Population > worst.Population ||
+                (nation.Population == worst.Population && nation.Id < worst.Id)) worst = nation;
+        }
+        return worst;
+    }
 
     /// <summary>How many times the border table has been rebuilt. Diagnostic only.</summary>
     public static int Rebuilds;

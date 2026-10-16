@@ -134,3 +134,5 @@ public static partial class AiStatecraft
         }.Apply(campaign);
     }
 }
+
+

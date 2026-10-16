@@ -1,6 +1,23 @@
 {
   "country_columns": "index|iso|name|continent|region|population|gdpMillions|mapColour|type|adm0a3",
   "state_columns": "index|name|countryIndex|isoCode|type",
+  "//palette": "The map's colour families, counted by the mapColour column above. A country takes the family its row names and the shade its own id picks, so neighbours in one family are related but not identical. Replaced whole by a later file: a mod wanting a different map states the whole spectrum. Runs grey, red, orange, yellow, green, teal, blue, violet, magenta.",
+  "palette": [
+    ["#949494"],
+    ["#c42b40", "#ce4b4d", "#ce3a2c", "#d26f56"],
+    ["#bf4f27", "#ce7640", "#c97627", "#d39d4b"],
+    ["#ad7228", "#c59639", "#b69629", "#cabb43"],
+    ["#8e9136", "#98a649", "#809937", "#8db24c"],
+    ["#5e8f37", "#68a44b", "#4d9739", "#58b04f"],
+    ["#32814c", "#459669", "#348963", "#48a284"],
+    ["#2d867c", "#3e9d9d", "#2e848f", "#4292a9"],
+    ["#3596b0", "#4f9abf", "#3680ba", "#5989c4"],
+    ["#3573bb", "#547cc4", "#3659c4", "#5e6cc9"],
+    ["#4642b2", "#7063ba", "#6244bb", "#8b6dc0"],
+    ["#6f3ea7", "#8f58b6", "#8d40b0", "#aa62bc"],
+    ["#b13ba1", "#bd58a3", "#ba3c8d", "#c26294"],
+    ["#b33262", "#c24c6b", "#bc3348", "#c7575a"]
+  ],
   "countries": [
     [
       "1",

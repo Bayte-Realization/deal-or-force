@@ -83,3 +83,4 @@ static class ConstructionFundingTests
         if (failures > 0) throw new Exception($"construction funding: {failures} failed checks");
     }
 }
+

@@ -206,6 +206,7 @@ public sealed partial class GlobePresentation
     // Texture arrays isolate each tile's mip chain: neighbouring atlas slots cannot bleed.
     private void ApplyTerrainPresentation(ProvinceTopology topology)
     {
+        _crossoverGroundPixels = null;
         if (TerrainCatalog.LoadError.Length > 0) GD.PushWarning("[dof] terrain catalog: " + TerrainCatalog.LoadError);
         var definitions = TerrainCatalog.All;
         var prepared = TakeTerrainImages(definitions);

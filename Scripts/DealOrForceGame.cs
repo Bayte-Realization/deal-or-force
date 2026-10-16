@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -26,6 +27,13 @@ public partial class DealOrForceGame : Control
     private StatReadout _inflation = null!;
     private StatReadout _gdp = null!;
     private StatReadout _population = null!;
+    // The four currencies the war doctrines are paid in (MilitaryExperience, TacticalDoctrines,
+    // StrategicDoctrines). Reserved on the bar from the first day the mechanic ships: they are
+    // what a player watches while deciding which article to study next.
+    private StatReadout _armyExperience;
+    private StatReadout _airExperience;
+    private StatReadout _navyExperience;
+    private StatReadout _politicalPoints;
     private readonly Trend _treasuryTrend = new();
     private readonly Trend _gdpTrend = new();
     private readonly Trend _populationTrend = new();
@@ -114,6 +122,9 @@ public partial class DealOrForceGame : Control
         // Before any of the early returns below it: a panel is read while the game is
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
         LayoutAudit.Watch(this, delta);
+        // The country card's facts panel is sized to its own contents, and that height is only
+        // knowable after the layout pass rather than when the card is built. See the method.
+        SyncCountryFactsHeight();
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
         // The lens and the roll move while a key is held, so the line that reports them
@@ -122,7 +133,15 @@ public partial class DealOrForceGame : Control
         NetworkProcess(delta);
         // Everything that happened since the interface last drew, drawn once - for a network
         // client as well, whose world arrives by the host's steps rather than its own.
-        if (_campaign is not null) FlushInterfaceIfDue(delta);
+        if (_campaign is not null)
+        {
+            FlushInterfaceIfDue(delta);
+            _modLoader.CaptureCrossoverSurface ??= () => _globe?.CaptureCrossoverSurface();
+            _modLoader.CaptureCrossoverHydrology ??= () => _globe?.CaptureCrossoverHydrology();
+            _modLoader.PresentCrossoverVoxels ??= blocks => _globe?.PresentCrossoverVoxels(blocks);
+            _modLoader.PresentCrossoverWorks ??= works => _globe?.PresentCrossoverWorks(works);
+            _modLoader.OnFrame(_campaign, delta);
+        }
         if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
         // Reported whether or not time is running: a measurement that only arrives when
@@ -260,6 +279,9 @@ public partial class DealOrForceGame : Control
     public override void _Input(InputEvent inputEvent)
     {
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
+        // The big trees are read before the map is: a wheel over a graph is a wheel about the
+        // graph, and must not also march the camera or scroll the page behind it.
+        if (HandleTreeViewportInput(inputEvent)) return;
         if (HandleMapControlsInput(inputEvent)) return;
         if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
@@ -360,6 +382,8 @@ public partial class DealOrForceGame : Control
         }
         if (key.Keycode == Key.Escape && _researchLayer is { Visible: true })
         { CloseResearchScreen(); GetViewport().SetInputAsHandled(); return; }
+        if (key.Keycode == Key.Escape && _doctrineLayer is { Visible: true })
+        { CloseDoctrineScreen(); GetViewport().SetInputAsHandled(); return; }
         // Escape takes back a rebase that is waiting for its region first, then the panel.
         if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
         {
@@ -474,6 +498,14 @@ public partial class DealOrForceGame : Control
         if (inputEvent is InputEventKey && GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return;
         if (_developerConsoleLayer is { Visible: true }) return;
         if (_sovereignFinanceLayer is { Visible: true }) return;
+        // A workspace covers the navigation that opened it, so Escape is the way back out of
+        // it - the same answer the province card and the diplomacy menu already give.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } &&
+            CloseVisibleCampaignScreen())
+        {
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
 
@@ -630,6 +662,7 @@ public partial class DealOrForceGame : Control
         AddChild(background);
 
         _globe = new GlobePresentation();
+        _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
         _globe.CountryPicked += OnCountryPicked;
         _globe.UnclaimedPicked += OnUnclaimedPicked;
         _globe.ArmyPicked += OnArmyPicked;
@@ -664,320 +697,15 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>
-    /// Do the thing the front door was pressed for, once, on the way up.
-    ///
-    /// The intent is cleared as it is read: a campaign that later returns to the menu and
-    /// comes back must be told again what it is for, and a stale "load the last save" is the
-    /// kind of bug that only shows up on the second game of a session.
-    /// </summary>
-    private void OpenWhateverWasAskedFor()
-    {
-        var wanted = MainMenuScene.Wanted;
-        MainMenuScene.Wanted = MenuIntent.None;
-        var modAction = MainMenuScene.WantedModAction;
-        MainMenuScene.WantedModAction = "";
-        _menuLayer.Visible = false;
-
-        switch (wanted)
-        {
-            case MenuIntent.NewCampaign: OpenScenarioLibrary(); break;
-            case MenuIntent.ModAction:
-                _modLoader.TryRunFrontendAction(modAction, out var modNote);
-                GD.Print("[mod action] " + Tr(modNote));
-                OpenScenarioLibrary();
-                ShowModFrontendResult(modNote);
-                break;
-            case MenuIntent.LoadLatest: LoadLatestSave(); break;
-            case MenuIntent.LoadSlot:
-                var slot = MainMenuScene.WantedSlot;
-                MainMenuScene.WantedSlot = "";
-                if (string.IsNullOrWhiteSpace(slot)) LoadLatestSave();
-                else LoadFromSlot(slot);
-                break;
-            case MenuIntent.Multiplayer: OpenNetworkMultiplayer(); break;
-            case MenuIntent.Settings: ShowSettings(); break;
-            // Opened directly - from the editor, or by a scene reload - so there is nothing
-            // to act on. Only the layer is shown, not the whole hide-everything routine:
-            // that one pauses the campaign, and at this point in the boot there is not one.
-            default: _menuLayer.Visible = true; break;
-        }
-    }
-
-    private void BuildMainMenu()
-    {
-        _menuLayer = FullLayer("MainMenu");
-        AddChild(_menuLayer);
-
-        var panel = TexturedPanel(_menuLayer);
-        // Runtime-created Controls need explicit anchors and offsets. Setting
-        // Position after a preset leaves them relative to (0, 0) on some
-        // Godot 4.x builds, which pushed this panel off-screen.
-        Ui.Place(panel, "menu.main");
-
-        var rows = PanelRows(panel, 28, 24, 9);
-        var logo = new TextureRect
-        {
-            Texture = Art("brand_logo_banner", "res://game/gfx/interface/brand_logo_banner.png"),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
-            CustomMinimumSize = new Vector2(0, 184),
-            MouseFilter = Control.MouseFilterEnum.Ignore,
-            TooltipText = Ui.Tip(Tr("Deal or Force"))
-        };
-        rows.AddChild(logo);
-        rows.AddChild(Title(
-            "Choose a world. Shape its future.",
-            15,
-            Ui.Colour("text.muted")));
-
-        // The heading that used to sit here said "Scenarios & workshop" over two status
-        // lines about the world that is loaded and the mods that are not. It named a
-        // section that is not on this screen - the workshop is a window reached from a
-        // campaign - and a player reading the menu top to bottom was told they were
-        // looking at something they were not. The two lines say what they are.
-        _scenarioSummary = Title("Preparing campaign data…", 14, Ui.Colour("text.hint"));
-        rows.AddChild(_scenarioSummary);
-
-        _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
-        _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: user://mods"));
-        rows.AddChild(_modStatus);
-
-        rows.AddChild(ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true));
-        var modActions = ModFrontendMenu.Create(_modLoader.FrontendActions, id =>
-        {
-            _modLoader.TryRunFrontendAction(id, out var note);
-            GD.Print("[mod action] " + Tr(note));
-            OpenScenarioLibrary();
-            ShowModFrontendResult(note);
-        });
-        modActions.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
-        modActions.OffsetLeft = 24; modActions.OffsetRight = 214;
-        modActions.OffsetTop = -70; modActions.OffsetBottom = -34;
-        _menuLayer.AddChild(modActions);
-        rows.AddChild(ActionButton("Load latest campaign", LoadLatestSave, 330, 42));
-
-        var multiplayer = ActionButton("Multiplayer · LAN / IP", OpenNetworkMultiplayer, 330, 42);
-        multiplayer.TooltipText = Ui.Tip(Tr("Host or join a campaign over LAN, by IPv4 address, or through a virtual LAN such as Radmin VPN."));
-        rows.AddChild(multiplayer);
-
-        _mainProjectionButton = ActionButton("Map view: 3D globe", ToggleProjection, 330, 42);
-        _mainProjectionButton.TooltipText = Ui.Tip(Tr("Switch between globe and classic infinitely wrapping map (F2)."));
-        rows.AddChild(_mainProjectionButton);
-        _smoothingButton = ActionButton(SmoothingButtonLabel(), ToggleMapSmoothing, 330, 42);
-        _smoothingButton.TooltipText = Ui.Tip(
-            Tr("Smoothing rebuilds country, region and terrain boundaries so the map has no visible " +
-            "texel grid. Turn it off for the raster exactly as authored - pixels and all - which " +
-            "is also the cheaper picture on a slower machine (F3)."));
-        rows.AddChild(_smoothingButton);
-        rows.AddChild(ActionButton("Settings", ShowSettings, 330, 42));
-        _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
-        _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
-        rows.AddChild(_languageButton);
-        rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
-
-        _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13,
-            Ui.Colour("text.hint"));
-        _navigationHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_navigationHint);
-        var version = Title(GameBuildInfo.VersionLabel, 12, Ui.Colour("text.caption"));
-        version.Name = "GameVersion"; version.HorizontalAlignment = HorizontalAlignment.Right;
-        version.MouseFilter = MouseFilterEnum.Ignore; version.ClipText = true;
-        version.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
-        version.OffsetLeft = 24; version.OffsetRight = -24;
-        version.OffsetTop = -40; version.OffsetBottom = -18;
-        _menuLayer.AddChild(version);
-    }
-
     private void BuildHud()
     {
         _hudLayer = FullLayer("GameHud");
         _hudLayer.Visible = false;
         AddChild(_hudLayer);
 
-        var top = TexturedPanel(_hudLayer);
-        _hudTopPanel = top;
-        top.Name = "CampaignTopBar";
-        Ui.Place(top, "hud.top");
-
-        var margin = Margin(top, 12, 6);
-        _hudTopStack = new VBoxContainer(); _hudTopStack.AddThemeConstantOverride("separation", 4);
-        margin.AddChild(_hudTopStack);
-        var row = new HBoxContainer();
-        _hudTopRow = row;
-        row.AddThemeConstantOverride("separation", 12);
-        _hudTopStack.AddChild(row);
-
-        // Whose war this is, said in the one way that needs no reading.
-        _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
-        row.AddChild(_identityFlag);
-
-        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(154, 0) };
-        _hudIdentityBox = identityBox;
-        identityBox.AddThemeConstantOverride("separation", 2);
-        row.AddChild(identityBox);
-        _identity = Title("South Korea", 18, Ui.Colour("text.accent"));
-        _identity.ClipText = true;
-        _identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        // The bar is two lines tall and no more. A name too wide for the column has to
-        // widen the column, not wrap into the line underneath it - which is what
-        // "South Korea" did the moment it became "Южная Корея".
-        _identity.AutowrapMode = TextServer.AutowrapMode.Off;
-        identityBox.AddChild(_identity);
-        _identityTag = Title("KOR · player nation", 13, Ui.Colour("text.muted"));
-        _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
-        identityBox.AddChild(_identityTag);
-
-        var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _hudStatRow = stats;
-        stats.AddThemeConstantOverride("separation", 7);
-        row.AddChild(stats);
-        foreach (var field in CampaignUiCatalog.TopStats)
-            switch (field)
-            {
-                case "TREASURY": _treasury = Stat(stats, field, "Cash on hand. The line below is the change over the last week of campaign time."); break;
-                case "DEBT":
-                    _publicDebt = Stat(stats, field, "Borrowed principal, separate from cash. Open sovereign finance to inspect interest, overdue bills and credit access.");
-                    BindDebtHeadline();
-                    break;
-                case "BALANCE": _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget); break;
-                case "GDP": _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces."); break;
-                case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week."); break;
-                case "STABILITY": _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers); break;
-                case "MANPOWER": _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends."); break;
-                // Hover for the reasons, the same as stability: a rate with nothing behind
-                // it cannot answer the question a player actually asks about it.
-                case "INFLATION": _inflation = Stat(stats, field, "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.", () => _campaign?.Player?.InflationDrivers); break;
-            }
-
-        var clock = new VBoxContainer { CustomMinimumSize = new Vector2(224, 0) };
-        _hudClockBox = clock;
-        clock.AddThemeConstantOverride("separation", 2);
-        row.AddChild(clock);
-        _date = Title("1 January 2024", 15, Ui.Colour("text.bright"));
-        _date.HorizontalAlignment = HorizontalAlignment.Right;
-        clock.AddChild(_date);
-
-        var speeds = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        speeds.AddThemeConstantOverride("separation", 5);
-        clock.AddChild(speeds);
-
-        // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
-        // plays grand strategy for an audience reported that the game had no way out to the
-        // main menu - it had two, Escape and this, and neither of them said so.
-        var handbook = ActionButton("Handbook", () => OpenHandbook(), 0, 28);
-        handbook.Name = "OpenHandbook";
-        handbook.TooltipText = Ui.Tip(Tr("What every screen is for and what its figures mean (F1)."));
-        speeds.AddChild(handbook);
-        _dealInboxHudButton = ActionButton("Deals", OpenDealInbox, 0, 28);
-        _dealInboxHudButton.Name = "PendingDiplomaticOffers";
-        _dealInboxHudButton.Visible = false;
-        speeds.AddChild(_dealInboxHudButton);
-        var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
-        menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
-        speeds.AddChild(menu);
-        _pause = ActionButton("II", TogglePause, 32, 28, true);
-        _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space)."));
-        speeds.AddChild(_pause);
-        _speedButtons.Clear();
-        for (var speed = 1; speed <= 5; speed++)
-        {
-            var captured = speed;
-            var button = ActionButton(speed.ToString(), () => SetSpeed(captured), 27, 28);
-            _speedButtons.Add(button);
-            speeds.AddChild(button);
-        }
-        UpdateSpeedButtons();
-        speeds.AddChild(MusicShortcut());
-
+        BuildTopBar();
         BuildCampaignNavigation();
-
-        _sidePanel = TexturedPanel(_hudLayer);
-        _sidePanel.Name = "CampaignDossier";
-        Ui.Place(_sidePanel, "hud.side_panel");
-        _sidePanel.Visible = false;
-
-        var dossierRows = PanelRows(_sidePanel, 16, 12, 10);
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        dossierRows.AddChild(header);
-        _sideFlag = FlagBadge("", 26);
-        _sideFlag.Visible = false;
-        header.AddChild(_sideFlag);
-        _sideTitle = Title("Nation", 24, Ui.Colour("text.bright"));
-        _sideTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _sideTitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        _sideTitle.ClipText = true;
-        _sideTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        header.AddChild(_sideTitle);
-        _sideBackToOrders = ActionButton("← Orders", ReturnToArmyOrders, 0, 34);
-        _sideBackToOrders.TooltipText = Ui.Tip(Tr("Back to the orders of the divisions this dossier was opened from (Esc)."));
-        _sideBackToOrders.Visible = false;
-        header.AddChild(_sideBackToOrders);
-        var dossierHelp = ActionButton("?", () => OpenHandbook(HandbookCatalog.ForScreen(_openScreen)), 34, 34);
-        dossierHelp.Name = "DossierHandbook";
-        Tip(dossierHelp, "Open the handbook at the page about this screen (F1).");
-        header.AddChild(dossierHelp);
-        header.AddChild(ActionButton("×", CloseSidePanel, 38, 34));
-
-        _dossierTabs = new HBoxContainer();
-        _dossierTabs.AddThemeConstantOverride("separation", 4);
-        dossierRows.AddChild(_dossierTabs);
-        _dossierScroll = new ScrollContainer
-        {
-            Name = "DossierScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            FollowFocus = true
-        };
-        dossierRows.AddChild(_dossierScroll);
-        var sideRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        sideRows.AddThemeConstantOverride("separation", 10);
-        _dossierScroll.AddChild(sideRows);
-
-        _sideBody = Title("", 16, Ui.Colour("text.body"));
-        _sideBody.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _sideBody.SizeFlagsVertical = SizeFlags.Fill;
-        sideRows.AddChild(_sideBody);
-
-        // Figures belong in aligned rows, not in a paragraph. A player comparing two
-        // numbers should not have to find them inside a sentence first.
-        _sideDetail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _sideDetail.AddThemeConstantOverride("separation", 3);
-        sideRows.AddChild(_sideDetail);
-
-        // Where to go next from whatever is being read.
-        //
-        // A number on this panel is almost always a number somebody wants to do something
-        // about, and until now doing something about it meant knowing which of eight buttons
-        // at the top of the screen owned it. These are the same destinations, put beside the
-        // figures that lead to them.
-        _sideLinks = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _sideLinks.AddThemeConstantOverride("h_separation", 5);
-        _sideLinks.AddThemeConstantOverride("v_separation", 4);
-        sideRows.AddChild(_sideLinks);
-
-        
-        BuildCountryActionControls(sideRows);
-        BuildRegionInteractionControls(sideRows);
-        BuildEconomyControls(sideRows);
-        BuildDecisionControls(sideRows);
-        BuildBattleDetailControls(sideRows);
-
-        _militarySpending = new HSlider
-        {
-            MinValue = 0,
-            MaxValue = 1,
-            Step = 0.01,
-            Scrollable = false,
-            TooltipText = Ui.Tip(Tr("How much the state spends on the armed forces."))
-        };
-        _militarySpending.ValueChanged += OnSpendingChanged;
-        sideRows.AddChild(_militarySpending);
-
-        // A bare slider tells the player nothing about what they just set. The readout
-        // below it names the figure and what it costs, and hides with the slider.
-        _militarySpendingReadout = Title("", 12, Ui.Colour("text.caption"));
-        _militarySpendingReadout.Visible = false;
-        sideRows.AddChild(_militarySpendingReadout);
+        BuildDossierSidePanel();
 
         BuildArmyPanel();
         BuildFleetPanel(_hudLayer);
@@ -991,6 +719,7 @@ public partial class DealOrForceGame : Control
         BuildProductionScreen();
         BuildSupportScreen();
         BuildResearchScreen();
+        BuildDoctrineScreen();
         BuildHandbook();
         BuildConflictsScreen();
         BuildMapControls();
@@ -1016,38 +745,6 @@ public partial class DealOrForceGame : Control
         Refresh();
     }
 
-    /// <summary>
-    /// Leave the campaign and go back to the front door.
-    ///
-    /// One funnel, called by the pause menu, the lobby and the country picker's Back button,
-    /// so there is one path out of a campaign rather than three that have to agree. The
-    /// world is dropped with the scene, which is what "quit to menu" always meant and never
-    /// used to do - the old menu was a panel over a world that carried on existing.
-    /// </summary>
-    private void ShowMainMenu()
-    {
-        MainMenuScene.ReturnTo(GetTree());
-    }
-
-    /// <summary>The panel the campaign scene shows when it is opened without an intent.</summary>
-    private void ShowLegacyMenuPanel()
-    {
-        if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
-        if (_eventLayer is not null) _eventLayer.Visible = false;
-        if (_campaign is not null) _campaign.IsPaused = true;
-        if (_pause is not null) _pause.Text = Tr("▶");
-        _hudLayer.Visible = false;
-        _pickerLayer.Visible = false;
-        _menuLayer.Visible = true;
-        _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_hotseatHud is not null) _hotseatHud.Visible = false;
-        if (_handoverLayer is not null) _handoverLayer.Visible = false;
-        if (_networkLayer is not null) _networkLayer.Visible = false;
-        if (_networkHud is not null) _networkHud.Visible = false;
-        if (_sovereignFinanceLayer is not null) _sovereignFinanceLayer.Visible = false;
-    }
-
     private void OpenScreen(string screen)
     {
         if (screen == "Situation") { OpenSituationRoom(); return; }
@@ -1069,7 +766,9 @@ public partial class DealOrForceGame : Control
         if (screen != "Support" && _supportLayer is { Visible: true }) CloseSupportScreen();
         if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         if (_researchLayer is not null) _researchLayer.Visible = false;
+        if (_doctrineLayer is not null) _doctrineLayer.Visible = false;
         if (screen == "Research") { OpenResearchScreen(); return; }
+        if (screen == "Doctrines") { OpenDoctrineScreen(); return; }
         if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
         if (_fleetPanel is not null) _fleetPanel.Visible = false;
         PrepareDossierTabs(screen);
@@ -1208,12 +907,35 @@ public partial class DealOrForceGame : Control
                     Tr(PoliticsCore.GovernmentOf(nation).Description));
                 DetailRow("Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
                     Tr(PoliticsCore.IdeologyOf(nation).Description));
+                // What the state says it is, over what its people are.
+                if (_campaign.FeatureEnabled("state_identity"))
+                {
+                    DetailRow("State religion", Simulation.StateIdentity.Caption(_campaign, nation, true),
+                        Tr("The faith the state declares. Declaring one needs the faithful to be a share of the country; a secular declaration needs nobody's permission."));
+                    DetailRow("State culture", Simulation.StateIdentity.Caption(_campaign, nation, false),
+                        Tr("The people the state declares itself of, by the share of the country that lives it."));
+                }
                 var coup = Coups.Outlook(_campaign, nation);
                 DetailRow("Coup risk",
                     Tr(coup switch { "plot" => "a plot is under way", "high" => "high", "low" => "low", _ => "none" }),
                     Simulation.Loc.Format("Below {0} stability officers may start plotting, the more the lower it falls - most of all against a junta or a provisional government, when a war is being lost, or after a coup next door. A plot ripens in {1} days unless stability is back above the line.",
                         Fmt.Percent(_campaign.Defines.CoupStabilityThreshold), _campaign.Defines.CoupPlotDays),
                     coup switch { "plot" => "state.critical", "high" => "state.warning", _ => "text.bright" });
+                // A promise the government has made in public is a fact of this dossier: the
+                // date is public, and so is the day it was kept or missed.
+                if (nation.Promises.Count > 0)
+                {
+                    DetailHeading("PROMISES");
+                    foreach (var active in nation.Promises.OrderBy(promise => promise.DueDay))
+                    {
+                        if (PromiseCatalog.Find(active.Id) is not { } definition) continue;
+                        var daysLeft = Math.Max(0, active.DueDay - _campaign.ElapsedDays);
+                        DetailRow("Promise", Simulation.Loc.Format("{0} · {1}", Tr(definition.Name),
+                                Simulation.Loc.Format("Days left: {0}", daysLeft)),
+                            Tr("A promise made in public. Keeping it earns trust; missing the deadline costs more than never promising. The result is measured the same way every other condition in the game is."),
+                            daysLeft <= 0 ? "state.warning" : "text.bright");
+                    }
+                }
                 if (nation != _campaign.Player)
                     DetailRow("Politics", PoliticsCore.Affinity(_campaign, _campaign.Player.Id, nation.Id) >= 0f
                             ? Tr("close to ours") : Tr("unlike ours"),
@@ -1227,6 +949,50 @@ public partial class DealOrForceGame : Control
                 DetailRow("Stability", Fmt.Percent(nation.Stability),
                     "Below a third, radicalism starts to bite.",
                     nation.Stability < 0.34f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "state.positive");
+                var seasonThere = Simulation.WaterConditions.SeasonCaption(_campaign, nation.CapitalLatitude);
+                if (seasonThere.Length > 0)
+                    DetailRow("Season", seasonThere,
+                        "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
+                var mood = Simulation.PoliticalCohorts.StrainCaption(_campaign, nation);
+                if (mood.Length > 0)
+                    DetailRow("Public mood", mood,
+                        "Political opinion, read from the regions. A liked country is allowed to say so.",
+                        mood == "Liked enough to argue in the open." ? "state.positive" : "state.warning");
+                var loud = Simulation.PoliticalCohorts.Loudest(_campaign, nation);
+                if (loud is not null && (loud.Cause.Length > 0 || loud.Heat >= 0.35f))
+                    DetailRow("Loudest region", loud.Name.Length > 0 ? loud.Name : "—",
+                        loud.Cause.Length > 0
+                            ? loud.Cause
+                            : "The region whose politics have left the government furthest. The unrest map uses the same heat.",
+                        loud.Heat >= 0.55f ? "state.critical" : loud.Heat >= 0.35f ? "state.warning" : "text.bright");
+                var worn = Simulation.MovementRules.WornWelcome(_campaign, nation);
+                if (worn is not null)
+                    DetailRow("Headquarters here", worn.DisplayName,
+                        Simulation.MovementRules.Patience(_campaign, worn),
+                        worn.Movement.Heat >= _campaign.Defines.MovementExpelHeat * 0.75f ? "state.negative" : "state.warning");
+                if (nation.WeeklyNetMigration != 0 || nation.CumulativeNetMigration != 0 || MathF.Abs(nation.BrainDrainRate) >= 0.01f)
+                {
+                    var destNation = _campaign.NationById(nation.BrainDrainDestinationId);
+                    var srcNation = _campaign.NationById(nation.BrainGainSourceId);
+                    var migrationTip = destNation is not null
+                        ? Simulation.Loc.Format("Weekly migration {0} (cumulative {1}). Skilled specialists are moving primarily to {2}.",
+                            Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration), destNation.DisplayName)
+                        : srcNation is not null
+                            ? Simulation.Loc.Format("Weekly migration {0} (cumulative {1}). Skilled specialists are arriving primarily from {2}.",
+                                Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration), srcNation.DisplayName)
+                            : Simulation.Loc.Format("Weekly migration {0} (cumulative {1}).",
+                                Fmt.PeopleDelta(nation.WeeklyNetMigration), Fmt.PeopleDelta(nation.CumulativeNetMigration));
+                    DetailRow("Net migration", Fmt.PeopleDelta(nation.WeeklyNetMigration), migrationTip,
+                        nation.WeeklyNetMigration < 0 ? "state.warning" : nation.WeeklyNetMigration > 0 ? "state.positive" : "text.bright");
+                    DetailRow("Brain drain",
+                        nation.BrainDrainRate < -0.005f
+                            ? Simulation.Loc.Format("−{0}", Fmt.Percent(MathF.Abs(nation.BrainDrainRate)))
+                            : nation.BrainDrainRate > 0.005f
+                                ? Simulation.Loc.Format("+{0}", Fmt.Percent(nation.BrainDrainRate))
+                                : Tr("balanced"),
+                        Tr("Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them."),
+                        nation.BrainDrainRate < -0.15f ? "state.negative" : nation.BrainDrainRate < -0.04f ? "state.warning" : nation.BrainDrainRate > 0.04f ? "state.positive" : "text.bright");
+                }
                 break;
 
             case "Economy":
@@ -1245,6 +1011,8 @@ public partial class DealOrForceGame : Control
 
                 DetailHeading("FORCES");
                 _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
+                _sideDetail.AddChild(ActionButton("Doctrines tab", OpenArmyDoctrinePage, 180, 38,
+                    iconPath: "res://game/gfx/interface/icons/icon_military.png"));
                 DetailRow("Divisions", divisions.ToString("0.#"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");
@@ -1345,67 +1113,15 @@ public partial class DealOrForceGame : Control
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
         UpdateScreenButtons();
+        // A left click on the map always opens the picked country's card on the left and its
+        // ground along the bottom. The floating diplomacy popup stays behind the flag.
         ShowMapSelection(pick);
-    }
 
-    private Control _freeCameraOverlay = null!;
-    private Label _freeCameraReadout = null!;
-    private bool _freeCameraReadoutVisible = true;
-
-    /// <summary>
-    /// One line in the corner saying what the flying camera is doing.
-    ///
-    /// A cinematic camera has more state than a player can hold in their head - a lens, a
-    /// roll, a turntable that may or may not be turning itself - and a shot ruined by not
-    /// knowing which of those was on is a shot taken twice. H hides it, because the one
-    /// thing that must not be in the footage is the readout.
-    /// </summary>
-    private void BuildFreeCameraOverlay()
-    {
-        _freeCameraOverlay = FullLayer("FreeCameraOverlay");
-        _freeCameraOverlay.Visible = false;
-        AddChild(_freeCameraOverlay);
-
-        _freeCameraReadout = Title("", 13, Ui.Colour("text.hint"));
-        _freeCameraReadout.AutowrapMode = TextServer.AutowrapMode.Off;
-        _freeCameraReadout.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomLeft);
-        _freeCameraReadout.Position = new Vector2(22, -46);
-        _freeCameraOverlay.AddChild(_freeCameraReadout);
-    }
-
-    private void RefreshFreeCameraReadout()
-    {
-        if (_freeCameraOverlay is null || _globe is null) return;
-        var flying = _globe.FreeCamera;
-        _freeCameraOverlay.Visible = flying && _freeCameraReadoutVisible;
-        if (!_freeCameraOverlay.Visible) return;
-
-        _freeCameraReadout.Text = Simulation.Loc.Format(
-            "{0} · lens {1:0}° · roll {2:0}° · {3} · {4}\n" +
-            "QE roll · R level · ZX lens · F lens back · G turntable · T self-turning · C smoothing · H hide",
-            _globe.FreeOrbiting ? Tr("turntable") : Tr("free flight"),
-            _globe.FreeFieldOfView,
-            Mathf.RadToDeg(_globe.FreeRoll),
-            _globe.FreeSmoothing ? Tr("smoothed") : Tr("raw"),
-            _globe.FreeAutoOrbit > 0.0001f ? Tr("turning itself") : Tr("still"));
-    }
-
-    /// <summary>Take the camera off its rig, or put it back and restore the interface.</summary>
-    private void ToggleFreeCamera()
-    {
-        if (_globe is null) return;
-        var enabled = !_globe.FreeCamera;
-        _freeCameraMode = enabled;
-        _globe.SetFreeCamera(enabled);
-        RefreshFreeCameraReadout();
-        if (enabled && _peaceLayer is { Visible: true }) ClosePeaceConference();
-        if (_hudLayer is not null) _hudLayer.Visible = !enabled && _campaign is not null && !_menuLayer.Visible;
-        if (enabled)
-        {
-            if (_menuLayer is not null) _menuLayer.Visible = false;
-            if (_pickerLayer is not null) _pickerLayer.Visible = false;
-            CloseDeveloperConsole();
-        }
+        // Direct inter-country actions from the map: a floating diplomacy menu at the cursor,
+        // only for a country that is not ours. It closes on a click outside or on Escape.
+        if (_mapLeftClickInteractionEnabled &&
+            pick.Nation is not null && pick.Nation != _campaign.Player && _hudLayer.Visible)
+            ShowMapDiplomacyMenu(pick.Nation, GetViewport().GetMousePosition());
     }
 
     private void TogglePause()
@@ -1461,81 +1177,7 @@ public partial class DealOrForceGame : Control
         _globe?.RefreshCountryNames();
 
         var player = _campaign.Player;
-        _identity.Text = CountryNames.Compact(player);
-        _identity.TooltipText = Ui.Tip(player.DisplayName);
-        var identityFont = _identity.GetThemeFont("font");
-        var identitySize = 18;
-        while (identitySize > 12 && identityFont.GetStringSize(_identity.Text, HorizontalAlignment.Left, -1, identitySize).X >
-               System.Math.Max(154, _identity.Size.X)) identitySize--;
-        _identity.AddThemeFontSizeOverride("font_size", identitySize);
-        // No tag for nobody: "OBS" read in Russian as "НАБ", a word nobody could place.
-        _identityTag.Text = _observerMode
-            ? Tr("Observer mode")
-            : player.Tag + " · " + Tr("player nation");
-        SetFlag(_identityFlag, player.Tag, 34);
-        // The clock, whenever the campaign is running on something shorter than a day. At a
-        // whole-day step the hour is always midnight and printing it would be noise; below
-        // that it is the whole point, and it moves.
-        _date.Text = _campaign.Date.Display(_campaign.TickHours < 24);
-
-        var day = _campaign.ElapsedDays;
-        _treasuryTrend.Sample(day, player.Treasury);
-        _gdpTrend.Sample(day, player.Gdp);
-        _populationTrend.Sample(day, player.Population);
-
-        WriteStat(_treasury, Fmt.Money(player.Treasury), Fmt.MoneyExact(player.Treasury),
-            Fmt.MoneyDelta((float)_treasuryTrend.Delta), Fmt.Direction(_treasuryTrend.Delta, 0.005d));
-        RefreshDebtHeadline(player);
-        WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
-            Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
-        WriteStat(_population, Fmt.People(player.Population), Fmt.PeopleExact(player.Population),
-            Fmt.PeopleDelta(_populationTrend.Delta), Fmt.Direction(_populationTrend.Delta, 1d));
-
-        // A stock without its flow is half a number: a treasury that reads the same two
-        // weeks running is a very different country depending on which way it is heading.
-        var balanced = player.Budget.HasEntries;
-        WriteStat(_balance,
-            balanced ? Fmt.MoneyDelta(player.WeeklyBalance) : "—",
-            balanced
-                ? Simulation.Loc.Format("{0} a week", Fmt.MoneyExact(player.WeeklyBalance))
-                : Tr("The first economic week has not closed yet."),
-            balanced ? Tr("a week") : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
-        WriteStat(_stability, Fmt.Percent(player.Stability),
-            Simulation.Loc.Format("Stability {0:P1}", player.Stability),
-            player.WarSupport > 0f
-                ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport))
-                : "", 0);
-        WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
-            Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity)), 0);
-
-        // Rising prices are bad news, so the arrow points the other way from every other
-        // stat on this bar: up is not good here.
-        if (_inflation is not null)
-        {
-            var comfort = Simulation.InflationCore.Weights.Comfort;
-            var rate = player.Inflation;
-            WriteStat(_inflation, rate.ToString("P1"),
-                Simulation.Loc.Format("Prices are rising at {0} a year", rate.ToString("P2")),
-                rate < 0f ? Tr("prices falling")
-                    : rate > comfort ? Tr("above the comfortable rate")
-                    : Tr("comfortable"),
-                rate > comfort ? -1 : rate < 0f ? -1 : 0);
-        }
-
-        // The half-year threads under the figures.
-        _treasury?.Spark?.Push(day, player.Treasury);
-        _gdp?.Spark?.Push(day, player.Gdp);
-        _population?.Spark?.Push(day, player.Population);
-        if (balanced) _balance?.Spark?.Push(day, player.WeeklyBalance);
-        _stability?.Spark?.Push(day, player.Stability);
-        _manpower?.Spark?.Push(day, player.ManpowerReserve);
-        _inflation?.Spark?.Push(day, player.Inflation);
-        WriteMovementTopBar(player);
-
-        _militarySpending.SetValueNoSignal(player.MilitarySpending);
-        UpdateSpendingReadout(player);
-        UpdateSpeedButtons();
-        UpdateScreenButtons();
+        RefreshTopBar(player);
         RefreshStrategicAudio();
         RefreshEventInterface();
         RefreshPeaceOfferInterface();
@@ -1551,6 +1193,7 @@ public partial class DealOrForceGame : Control
         if (_warLedgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_warLedgerLayer)) RefreshWarLedger();
         if (_diplomacyLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_diplomacyLayer)) RefreshDiplomacyScreen();
         if (_policyLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_policyLayer)) RefreshPolicyWorkspace();
+        if (_doctrineLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_doctrineLayer)) RefreshDoctrineScreen();
         if (_conflictsLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_conflictsLayer)) RefreshConflictsScreen();
         if (_tradeScreenLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_tradeScreenLayer)) RefreshTradeScreen();
         if (_productionLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_productionLayer)) RefreshProductionScreen();
@@ -1564,6 +1207,45 @@ public partial class DealOrForceGame : Control
             RefreshSideScreenContents(_openScreen);
             Callable.From(() => { if (_dossierScroll is not null) _dossierScroll.ScrollVertical = scroll; }).CallDeferred();
         }
+    }
+
+    /// <summary>
+    /// A world line in the right rail flies the camera to the same place a map ring would.
+    /// It stays silent. The world writes several of these a day, and a cue on each one
+    /// is noise, not news.
+    /// </summary>
+    private void FocusNews(NewsFeed.Line line)
+    {
+        if (_campaign is null || _globe is null) return;
+        if (!NewsPlace(line.ActorId, line.TargetId, line.Kind, out var latitude, out var longitude)) return;
+        _globe.FocusOn(latitude, longitude, 5.5f);
+    }
+
+    private bool NewsPlace(int actorId, int targetId, string kind, out float latitude, out float longitude)
+    {
+        latitude = longitude = 0f;
+        var actor = _campaign.NationById(actorId);
+        var target = _campaign.NationById(targetId);
+        if (actor?.Movement is not null && target is not null) (actor, target) = (target, null);
+        if (actor is null && target is null) return false;
+        if (actor is not null && target is not null && target.Movement is null)
+        {
+            var dLon = target.CapitalLongitude - actor.CapitalLongitude;
+            while (dLon > 180f) dLon -= 360f;
+            while (dLon < -180f) dLon += 360f;
+            if (MathF.Abs(target.CapitalLatitude - actor.CapitalLatitude) + MathF.Abs(dLon) < 18f)
+            {
+                latitude = (actor.CapitalLatitude + target.CapitalLatitude) * 0.5f;
+                longitude = actor.CapitalLongitude + dLon * 0.5f;
+                return true;
+            }
+            if (kind is "war_started" or "border_war" or "world_war_began") actor = target;
+        }
+        var at = actor ?? target;
+        if (at.CapitalLatitude == 0f && at.CapitalLongitude == 0f) return false;
+        latitude = at.CapitalLatitude;
+        longitude = at.CapitalLongitude;
+        return true;
     }
 
     // What the side panel was last built for. Refresh runs many times a second; the panel
@@ -1589,464 +1271,6 @@ public partial class DealOrForceGame : Control
         if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit or SpinBox &&
             _sidePanel.IsAncestorOf(GetViewport().GuiGetFocusOwner())) return false;
         return SideScreenKey() != _sideScreenBuiltKey;
-    }
-
-    /// <summary>
-    /// One headline figure in the top bar: its caption, the compact value, and the week's
-    /// movement underneath. A number with no direction is only half the information a
-    /// player needs - "$40B" answers nothing that "$40B, −$1.2B this week" does not.
-    /// </summary>
-    private sealed class StatReadout
-    {
-        internal Label Value = null!;
-        internal Label Delta = null!;
-        internal Label Caption = null!;
-        internal TextureRect Glyph;
-        internal string CountryCaption = "";
-        internal Control Box;
-        /// <summary>Half a year of the figure under it (Sparkline).</summary>
-        internal Sparkline Spark;
-    }
-
-
-    /// <summary>
-    /// Which symbol stands for a figure on the top bar.
-    ///
-    /// Defaults live here; campaign.icons lets a mod remap roles without replacing art
-    /// shared by other controls. A missing sprite keeps the text caption.
-    /// </summary>
-    private static string StatIcon(string caption) => CampaignUiCatalog.Icon("hud." + caption, caption switch
-    {
-        "TREASURY" => "treasury",
-        "DEBT" => "coins",
-        "BALANCE" => "balance",
-        "GDP" => "gdp",
-        "INFLATION" => "inflation",
-        "POPULATION" => "population",
-        "STABILITY" => "stability",
-        "MANPOWER" => "manpower",
-        _ => ""
-    });
-
-    private StatReadout Stat(Container parent, string caption, string tooltip,
-        System.Func<Simulation.Breakdown> explain = null)
-    {
-        // A figure that can be hovered for the parts it is made of, when there are parts to
-        // show; an ordinary tooltip when there are not.
-        var box = new ExplainedStat
-        {
-            Name = "HudStat_" + caption.Replace(' ', '_'),
-            CustomMinimumSize = new Vector2(68, 0),
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            Explain = explain,
-            Plain = explain is null ? "" : Tr(tooltip)
-        };
-        // The caption is in the tooltip now rather than gone: a symbol a player has not
-        // learned yet has to be able to say what it is.
-        Tip(box, Tr(caption) + " \u00b7 " + Tr(tooltip));
-        box.AddThemeConstantOverride("separation", 1);
-        box.MouseFilter = MouseFilterEnum.Stop;
-        parent.AddChild(box);
-        // Keep a short label beside the symbol: unfamiliar icons must not hide meaning.
-        var heading = new HBoxContainer { Name = "StatHeading", MouseFilter = MouseFilterEnum.Ignore };
-        heading.AddThemeConstantOverride("separation", 5);
-        box.AddChild(heading);
-        TextureRect glyph = null;
-        var symbol = StatIcon(caption);
-        if (symbol.Length > 0 && SpriteCatalog.Has("icon_" + symbol))
-        {
-            glyph = new TextureRect
-            {
-                Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                // Both dimensions. A minimum height with a width of zero is a rect with no
-                // width, which is a texture nobody ever sees - and the alert rail's icons
-                // rendered fine the whole time, which is what said it was the size and not
-                // the sprite.
-                CustomMinimumSize = new Vector2(16, 16),
-                MouseFilter = MouseFilterEnum.Ignore,
-                Modulate = Ui.Colour("text.accent_dim")
-            };
-            glyph.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
-            heading.AddChild(glyph);
-        }
-        var statCaption = Title(caption, 10, Ui.Colour("text.caption"));
-        statCaption.Name = "StatCaption";
-        statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        statCaption.ClipText = true;
-        statCaption.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        statCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        statCaption.Visible = InterfaceSkin.Metric("hud.stat_labels", 1) > 0 || glyph is null;
-        heading.AddChild(statCaption);
-
-        var readout = new StatReadout
-        {
-            Caption = statCaption,
-            Glyph = glyph,
-            CountryCaption = caption,
-            Box = box,
-            Value = Title("—", 17, Ui.Colour("text.bright")),
-            Delta = Title("", 11, Ui.Colour("text.faint"))
-        };
-        // Neither of these may wrap. The bar is one row tall and the column is sized to the
-        // widest thing in it, so a line that wraps grows downwards out of the bar instead of
-        // widening its column - which is what "war support 63 %" did the moment it became
-        // "поддержка войны 63 %".
-        readout.Value.AutowrapMode = TextServer.AutowrapMode.Off;
-        readout.Delta.AutowrapMode = TextServer.AutowrapMode.Off;
-        readout.Value.ClipText = true;
-        readout.Delta.ClipText = true;
-        readout.Delta.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        box.AddChild(readout.Value);
-        // The week's movement and, beside it, the half-year it belongs to.
-        var movement = new HBoxContainer { Name = "StatMovement", MouseFilter = MouseFilterEnum.Ignore };
-        movement.AddThemeConstantOverride("separation", 4);
-        readout.Spark = new Sparkline { Name = "StatSpark", Flash = readout.Value,
-            HigherIsBetter = caption is not ("INFLATION" or "DEBT") };
-        movement.AddChild(readout.Spark);
-        readout.Delta.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        movement.AddChild(readout.Delta);
-        box.AddChild(movement);
-        return readout;
-    }
-
-    /// <summary>
-    /// Write one headline figure and its movement. The exact figure goes into the tooltip:
-    /// the compact form is for scanning, and the moment a player wants the real number
-    /// they want every digit of it.
-    /// </summary>
-    private static void WriteStat(StatReadout stat, string compact, string exact, string delta, int direction)
-    {
-        if (stat is null) return;
-        stat.Value.Text = compact;
-        // Fit the whole amount instead of silently clipping its last digits on a narrow HUD.
-        var availableWidth = stat.Value.Size.X;
-        var font = stat.Value.GetThemeFont("font");
-        var fontSize = 17;
-        while (availableWidth > 0 && fontSize > 11 &&
-               font.GetStringSize(compact, HorizontalAlignment.Left, -1, fontSize).X > availableWidth) fontSize--;
-        stat.Value.AddThemeFontSizeOverride("font_size", fontSize);
-        stat.Value.TooltipText = Ui.Tip(exact);
-        stat.Value.MouseFilter = MouseFilterEnum.Stop;
-        stat.Delta.Text = delta;
-        stat.Delta.TooltipText = Ui.Tip(delta);
-        stat.Delta.MouseFilter = MouseFilterEnum.Stop;
-        stat.Delta.AddThemeColorOverride("font_color", direction switch
-        {
-            > 0 => Ui.Colour("state.positive"),
-            < 0 => Ui.Colour("state.negative"),
-            _ => Ui.Colour("text.faint")
-        });
-    }
-
-    /// <summary>
-    /// A rolling week of daily samples of one figure, so the top bar can show real movement
-    /// rather than a number that simply is what it is. Kept to eight days: the campaign
-    /// advances one day at a time, and a week is the horizon a player plans against.
-    /// </summary>
-    private sealed class Trend
-    {
-        private readonly System.Collections.Generic.List<(int Day, double Value)> _samples = new();
-
-        internal void Sample(int day, double value)
-        {
-            if (_samples.Count > 0 && _samples[^1].Day == day)
-            {
-                _samples[^1] = (day, value);
-                return;
-            }
-            _samples.Add((day, value));
-            while (_samples.Count > 1 && day - _samples[0].Day > 7) _samples.RemoveAt(0);
-        }
-
-        /// <summary>Movement across the sampled window; exactly zero until a second day exists.</summary>
-        internal double Delta => _samples.Count < 2 ? 0d : _samples[^1].Value - _samples[0].Value;
-
-        internal void Reset() => _samples.Clear();
-    }
-
-    /// <summary>Empty the structured rows before a screen writes its own.</summary>
-    private void ClearDetail()
-    {
-        _detailGroup = "";
-        if (_sideDetail is null) return;
-        foreach (var child in _sideDetail.GetChildren())
-        {
-            _sideDetail.RemoveChild(child);
-            child.QueueFree();
-        }
-    }
-
-    /// <summary>One caption/value row, the caption left and the value right against it.</summary>
-
-    /// <summary>
-    /// The proportion a formatted figure represents, or -1 when it is not one.
-    ///
-    /// Only a percentage counts, and only one between nought and a hundred: a war score of
-    /// -40 % and an inflation of 300 % are both real figures and neither is a proportion of
-    /// anything, so drawing them as a full or empty bar would be inventing information. The
-    /// separator is read either way round, because the game formats numbers in the player's
-    /// culture and Russian writes 74,5 where English writes 74.5.
-    /// </summary>
-    private static float ShareOf(string value)
-    {
-        if (string.IsNullOrEmpty(value)) return -1f;
-        var text = value.Trim();
-        if (!text.EndsWith("%", System.StringComparison.Ordinal)) return -1f;
-        text = text[..^1].Trim().Replace(',', '.').Replace("\u00a0", "").Replace(" ", "");
-        if (!float.TryParse(text, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var percent)) return -1f;
-        if (percent < 0f || percent > 100f) return -1f;
-        return percent / 100f;
-    }
-
-    private void DetailRow(string caption, string value, string tooltip = null, string valueToken = "text.bright",
-        System.Func<Simulation.Breakdown> explain = null)
-    {
-        // Every screen in the game builds its rows here, so a breakdown offered here is a
-        // breakdown offered everywhere: the figure on the right, and what it is made of
-        // under the cursor.
-        var row = new ExplainedRow
-        {
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            Explain = explain,
-            Plain = tooltip ?? "",
-            // A figure printed as a percentage is a share, and a share can be drawn. Read
-            // off the text rather than passed in by eighty-nine call sites, because the
-            // formatter is the same one everywhere and this is what its output means.
-            Share = ShareOf(value),
-            Fill = Ui.Colour(valueToken)
-        };
-        row.QueueRedraw();
-        if (!string.IsNullOrEmpty(tooltip) || explain is not null)
-        {
-            row.TooltipText = Ui.Tip(tooltip ?? caption);
-            row.MouseFilter = MouseFilterEnum.Stop;
-        }
-
-        row.CustomMinimumSize = new Vector2(0, 30);
-        row.AddThemeConstantOverride("separation", 14);
-        // The same mark for the same idea wherever it appears. Reusing one symbol across
-        // the top bar, the alert rail and every dossier row is the whole of what makes an
-        // icon set worth having, and a caption with no symbol declared simply has none.
-        var symbol = RowIcon(caption);
-        if (symbol.Length > 0 && SpriteCatalog.Has("icon_" + symbol))
-            row.AddChild(new TextureRect
-            {
-                Texture = Art("icon_" + symbol, $"res://game/gfx/interface/icons/icon_{symbol}.png"),
-                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-                StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-                CustomMinimumSize = new Vector2(15, 15),
-                SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
-                SizeFlagsVertical = SizeFlags.ShrinkCenter,
-                MouseFilter = MouseFilterEnum.Ignore,
-                Modulate = ArtColour("icon_" + symbol, "text.faint")
-            });
-
-        var label = Title(CampaignUiCatalog.DetailLabel(_dossierScreen, caption, caption), 14, Ui.Colour("text.body_soft"));
-        label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        label.SizeFlagsStretchRatio = 1.1f;
-        row.AddChild(label);
-
-        var figure = Title(value, 14, Ui.Colour(valueToken));
-        figure.HorizontalAlignment = HorizontalAlignment.Right;
-        figure.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        figure.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        row.AddChild(figure);
-
-        var card = new PanelContainer();
-        card.SetMeta("dossier_field", caption);
-        card.SetMeta("dossier_group", _detailGroup);
-        card.AddThemeStyleboxOverride("panel", ShellRowStyle(_sideDetail.GetChildCount() % 2 == 0));
-        card.AddChild(row);
-        _sideDetail.AddChild(card);
-    }
-
-    /// <summary>A small capitalised rule between groups of rows.</summary>
-
-    /// <summary>
-    /// Which symbol stands for a dossier row, by its caption.
-    ///
-    /// Deliberately partial. A caption nobody has drawn for has no symbol and the row simply
-    /// carries none, so a mod or a new screen never has to supply art before it can add a
-    /// line - and the marks that ARE here are the same ones the top bar and the alert rail
-    /// use for the same ideas, which is the point of having a set at all.
-    /// </summary>
-
-    /// <summary>
-    /// A symbol, at the size and weight every other symbol in the interface is drawn at.
-    ///
-    /// Returns null when nothing is declared for that name, so a caller can put it straight
-    /// into a row and get nothing rather than a missing-texture box: a screen is never
-    /// obliged to have art before it can list something.
-    /// </summary>
-    private TextureRect Symbol(string name, int size = 16, string colourToken = "text.faint")
-    {
-        if (string.IsNullOrEmpty(name) || !SpriteCatalog.Has("icon_" + name)) return null;
-        return new TextureRect
-        {
-            Texture = Art("icon_" + name, $"res://game/gfx/interface/icons/icon_{name}.png"),
-            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(size, size),
-            SizeFlagsHorizontal = SizeFlags.ShrinkBegin,
-            SizeFlagsVertical = SizeFlags.ShrinkCenter,
-            MouseFilter = MouseFilterEnum.Ignore,
-            // Commodity PNGs carry their own palette; do not multiply that gold twice.
-            Modulate = name.StartsWith("good_", System.StringComparison.Ordinal)
-                ? ArtColour("icon_" + name, colourToken) : Ui.Colour(colourToken)
-        };
-    }
-
-    /// <summary>Named after the data ID, not a numeric enum slot for mod-added goods.</summary>
-    private static string GoodIcon(Simulation.Commodity commodity) =>
-        CommodityCatalog.IconNameOf(commodity);
-
-    /// <summary>And for one building. Seventeen, named the same way.</summary>
-    private static string BuildingIcon(Simulation.BuildingKind building) =>
-        "building_" + building.ToString().ToLowerInvariant();
-
-    private static string RowIcon(string caption) => CampaignUiCatalog.Icon("field." + caption, caption switch
-    {
-        // ---- the country -------------------------------------------------------------
-        "Population" or "Largest people" or "Largest minority" or "Minorities" => "population",
-        "Capital" or "Form of government" or "Politics" or "Ideology" or "Status" => "government",
-        "Literacy" => "literacy",
-        "Standard of living" => "living",
-        "Radicalism" or "Wants out" => "unrest",
-        "Stability" => "stability",
-        "Urbanisation" or "Urbanization" => "urbanisation",
-        "Buildings" => "production_capacity",
-        "Productivity" => "productivity",
-        "Largest faith" => "faith",
-
-        // ---- the money ---------------------------------------------------------------
-        "Treasury" => "treasury",
-        "GDP" or "GDP per head" => "gdp",
-        // Money coming and going is the cash-flow mark; money the state takes is the scales
-        // with coins on them - the two used to share the scales, which read as justice.
-        "Balance" or "Expenses" or "Military spending" => "balance",
-        "Taxes" or "Tax rate" or "Tariffs" or "Tribute" => "taxes",
-        "Income" => "income",
-        "Trade balance" or "Market access" => "trade",
-        "Inflation" => "inflation",
-
-        // ---- the ground --------------------------------------------------------------
-        // A province is a pin on the map and whoever holds it is a flag; the globe is kept
-        // for the one row that really is about the world around a country.
-        "Provinces" or "States held" => "province",
-        "Owner" or "Controller" => "nation",
-        "Neighbours" => "world",
-        "Occupation" => "war",
-        "Terrain" => "terrain",
-        "River crossings" or "Lake shore" => "water",
-
-        // ---- the forces --------------------------------------------------------------
-        "Divisions" or "Divisions here" or "Field armies" or "Visible divisions"
-            or "Fighting strength" or "Reserve" or "Daily reinforcement" => "manpower",
-        "Fleets" => "navy",
-        "Supply" or "Cut off" => "alert_supply",
-        "Organisation" => "alert_battle",
-        "War score" => "victory",
-
-        // ---- the neighbours ----------------------------------------------------------
-        "Opinion" or "Stance" or "Intelligence" => "diplomacy",
-        "Guarantees" or "Guaranteed by" or "Answers to" or "Arranged" => "alliance",
-        "Non-aggression pact" or "Offered" => "treaty",
-
-        _ => ""
-    });
-
-    private void DetailHeading(string text)
-    {
-        _detailGroup = text;
-        // A rule along the baseline, in the same brass the dossier frame uses. A heading was
-        // a dim line of small capitals with nothing between it and the rows above, so a
-        // window read as one column with occasional shouting in it; this is what makes the
-        // divisions inside a window agree with the window.
-        var source = CampaignUiCatalog.DetailLabel(_dossierScreen, "#" + text, text);
-        var heading = new SectionHeading
-        {
-            Text = Tr(source),
-            Rule = Ui.Colour("button.primary_border"),
-            AutowrapMode = TextServer.AutowrapMode.WordSmart
-        };
-        // The same three marks Title sets, so a heading follows a language change like every
-        // other caption in the game rather than freezing in whatever it was built in.
-        heading.SetMeta(LocSourceMeta, source);
-        heading.SetMeta(LocAppliedMeta, heading.Text);
-        heading.AddThemeColorOverride("font_color", Ui.Colour("text.accent_dim"));
-        heading.AddThemeFontSizeOverride("font_size", 12);
-        heading.SetMeta("dossier_field", "#" + text);
-        heading.SetMeta("dossier_group", text);
-        heading.CustomMinimumSize = new Vector2(0, 32);
-        heading.VerticalAlignment = VerticalAlignment.Bottom;
-        _sideDetail.AddChild(heading);
-    }
-
-    /// <summary>
-    /// What the military slider is actually setting. The slider itself carries no units,
-    /// and "0.34" means nothing until it is named as a share of output and priced.
-    /// </summary>
-    private void UpdateSpendingReadout(Nation player)
-    {
-        if (_militarySpendingReadout is null || player is null) return;
-        var annual = player.Gdp * player.MilitarySpending;
-        _militarySpendingReadout.Text =
-            Simulation.Loc.Format("{0} of output · about {1} a year", Fmt.Percent(player.MilitarySpending), Fmt.Money(annual));
-    }
-
-    /// <summary>Forget the week of history behind the top bar - a new campaign has none.</summary>
-    private void ResetTrends()
-    {
-        _treasuryTrend.Reset();
-        _gdpTrend.Reset();
-        _populationTrend.Reset();
-        foreach (var stat in new[] { _treasury, _gdp, _population, _balance, _stability, _manpower, _inflation })
-            stat?.Spark?.Reset();
-    }
-
-    /// <summary>The speed the campaign is actually running at, lit so the player can see it.</summary>
-    private void UpdateSpeedButtons()
-    {
-        var running = _campaign is not null && !_campaign.IsPaused;
-        for (var index = 0; index < _speedButtons.Count; index++)
-        {
-            var button = _speedButtons[index];
-            if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleButton(button, running && index + 1 == _speed);
-            button.TooltipText = Ui.Tip(_campaign is null
-                ? Simulation.Loc.Format("Campaign speed {0}", index + 1)
-                : Simulation.Loc.Format("Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step",
-                    index + 1, 24f / Mathf.Max(0.001f, _campaign.Defines.SecondsForSpeed(index + 1)), _campaign.TickHours));
-        }
-    }
-
-    /// <summary>The screen currently open, lit in the bottom bar.</summary>
-    private void UpdateScreenButtons()
-    {
-        var open =
-            _situationLayer is { Visible: true } ? "Situation" :
-            _sovereignFinanceLayer is { Visible: true } ? "Economy" :
-            _stateAffairsLayer is { Visible: true } ? "State Affairs" :
-            _ledgerLayer is { Visible: true } ? "Ledger" :
-            _warLedgerLayer is { Visible: true } ? "Wars" :
-            _supportLayer is { Visible: true } ? "Support" :
-            _productionLayer is { Visible: true } ? "Production" :
-            _researchLayer is { Visible: true } ? "Research" :
-            _tradeScreenLayer is { Visible: true } ? "Trade" :
-            _diplomacyLayer is { Visible: true } ? "Diplomacy" :
-            _conflictsLayer is { Visible: true } ? "Conflicts" :
-            _policyLayer is { Visible: true } ? "Laws" :
-            _sidePanel is { Visible: true } ? _openScreen : "";
-        foreach (var (screen, button) in _screenButtons)
-        {
-            if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleButton(button, screen == open);
-        }
-        RefreshMapVisualToggles();
     }
 
     private Control FullLayer(string name)
@@ -2234,6 +1458,15 @@ public partial class DealOrForceGame : Control
         label.VerticalAlignment = VerticalAlignment.Center;
         if (minimumWidth > 0f) label.CustomMinimumSize = new Vector2(minimumWidth, 0);
         return label;
+    }
+
+    public static string TranslateOpinionDriver(string source)
+    {
+        if (string.IsNullOrEmpty(source)) return "";
+        var paren = source.LastIndexOf(" (x", StringComparison.Ordinal);
+        if (paren > 0 && source.EndsWith(")"))
+            return Tr(source.Substring(0, paren)) + source.Substring(paren);
+        return Tr(source);
     }
 
     private static Label Title(string text, int size, Color color, bool upper = false)
@@ -2496,57 +1729,6 @@ public partial class DealOrForceGame : Control
         }
 
         foreach (var child in node.GetChildren()) RefreshLocalisedText(child);
-    }
-
-    /// <summary>
-    /// Both halves are localised: the word, through the ordinary lookup, and the language's
-    /// own name, which every table gives in that language ("Русский", not "Russian").
-    /// </summary>
-    private static string LanguageButtonLabel() =>
-        $"{Tr("Language")}: {Simulation.Loc.DisplayName(Simulation.Loc.Language)}";
-
-    /// <summary>
-    /// Steps through every language that actually has a table loaded, base game or mod.
-    /// </summary>
-    private string SmoothingButtonLabel() =>
-        Tr(_globe is null || _globe.MapSmoothing ? "Map smoothing: on" : "Map smoothing: off");
-
-    private void ToggleMapSmoothing()
-    {
-        if (_globe is null) return;
-        _globe.MapSmoothing = !_globe.MapSmoothing;
-        if (_smoothingButton is not null && GodotObject.IsInstanceValid(_smoothingButton))
-        {
-            // Written straight onto the button rather than through the localisation sweep,
-            // for the same reason the language button is: the caption is built from a state
-            // rather than from a source string, so a generic refresh would overwrite it.
-            var label = Tr(SmoothingButtonLabel());
-            _smoothingButton.Text = label;
-            PlayerSettings.Set("map_smoothing", _globe.MapSmoothing);
-            _smoothingButton.SetMeta(LocAppliedMeta, label);
-        }
-    }
-
-    private void CycleLanguage()
-    {
-        var languages = Simulation.Loc.Languages;
-        if (languages.Count <= 1) return;
-
-        var index = languages.ToList().FindIndex(item =>
-            string.Equals(item, Simulation.Loc.Language, System.StringComparison.OrdinalIgnoreCase));
-        Simulation.Loc.Language = languages[(index + 1) % languages.Count];
-
-        RefreshLocalisedText();
-
-        // Written after the sweep, not before: this caption is built from the language's
-        // own name rather than from a source string, so the generic refresh cannot
-        // produce it and would otherwise overwrite it with the English it was created as.
-        if (_languageButton is not null && GodotObject.IsInstanceValid(_languageButton))
-        {
-            var label = LanguageButtonLabel();
-            _languageButton.Text = label;
-            _languageButton.SetMeta(LocAppliedMeta, label);
-        }
     }
 
     /// <summary>

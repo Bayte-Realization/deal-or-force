@@ -1,0 +1,20 @@
+{
+  "A piece of the country is cut off": "A piece of the country is cut off",
+  "{0} provinces are cut off from the rest. {1} holds the shortest way, {2} provinces, for about {3}.": "{0} provinces are cut off from the rest. {1} holds the shortest way, {2} provinces, for about {3}.",
+  "{0} provinces are cut off from the rest. {1}": "{0} provinces are cut off from the rest. {1}",
+  "No short way through a neighbour can be bought.": "No short way through a neighbour can be bought.",
+  "The piece is not joined to the rest by land. A purchase asks for the regions the way runs through, not a war.": "The piece is not joined to the rest by land. A purchase asks for the regions the way runs through, not a war.",
+  "Asking spends nothing until they accept. The detached piece itself is not offered for sale.": "Asking spends nothing until they accept. The detached piece itself is not offered for sale.",
+  "There is nothing to send just now. The piece stays where it is.": "There is nothing to send just now. The piece stays where it is.",
+  "Cut off": "Cut off",
+  "The way": "The way",
+  "Ask for the way through": "Ask for the way through",
+  "See why it cannot be asked": "See why it cannot be asked",
+  "The ask has been sent.": "The ask has been sent.",
+  "Joining detached land is switched off.": "Joining detached land is switched off.",
+  "The country is in one piece.": "The country is in one piece.",
+  "The way through is not a country that can sell it.": "The way through is not a country that can sell it.",
+  "They cannot be asked just now.": "They cannot be asked just now.",
+  "There is no price they would take.": "There is no price they would take.",
+  "The way through costs more than this country will spend.": "The way through costs more than this country will spend."
+}

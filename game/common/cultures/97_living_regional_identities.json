@@ -6,5 +6,7 @@
   "garifuna": {"name": "Garifuna", "group": "arawakan", "colour": "#aa8b56"},
   "miskito": {"name": "Miskitu", "group": "misumalpan", "colour": "#6d9a89"},
   "mixtec": {"name": "Mixtec", "group": "oto_manguean", "colour": "#a46c61"},
-  "zapotec": {"name": "Zapotec", "group": "oto_manguean", "colour": "#b49a60"}
+  "zapotec": {"name": "Zapotec", "group": "oto_manguean", "colour": "#b49a60"},
+  "coptic": {"name": "Coptic", "group": "other", "colour": "#b08a4f"},
+  "hokkien": {"name": "Hokkien", "group": "han", "colour": "#a0716f"}
 }

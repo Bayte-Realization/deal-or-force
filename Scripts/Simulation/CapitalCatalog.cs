@@ -6,7 +6,11 @@ namespace DealOrForce.Simulation;
 /// Historical capital locations for the base 2024 scenario.  The lookup is deliberately
 /// keyed by ISO-3166 alpha-3 so country boundaries, display names, and mod translations
 /// cannot move a capital accidentally.  Mods override the three Capital* fields on a
-/// NationDef instead of editing this catalogue.
+/// NationDef instead of editing this catalogue, and common/countries may set them too:
+/// `"capital_name": "Kyiv"` renames one, `"capital_latitude"` and `"capital_longitude"` move
+/// it, which is the way to change the shipped world. This table is what a country the
+/// definitions say nothing about gets, and where the coordinates come from when a mod gives
+/// a capital a name and no point.
 /// Source: World Bank country metadata, frozen for this scenario - except where its point was
 /// not the capital: for CAF, VEN, PAK, BOL, MDG, HND, MLI, LAO, GNB and CRI it was the middle of
 /// the country, for MMR Mandalay, and TUR, SWZ, LSO and PRI were off by 30-50 km. The starting

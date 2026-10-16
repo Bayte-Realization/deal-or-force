@@ -968,6 +968,12 @@ public static class EconomySystem
             // And then the country is pulled towards what its regions, its capital and its
             // wars actually add up to. A tenth of the gap a week: a shock arrives over a
             // season rather than in an afternoon.
+            if (atWar || nation.Stability < 0.42f || nation.DebtCondition >= DebtCondition.Default)
+                nation.StabilityBias *= 0.996f;
+            else if (nation.StabilityBias > 0.12f)
+                nation.StabilityBias = 0.12f + (nation.StabilityBias - 0.12f) * 0.999f;
+            else if (nation.StabilityBias < -0.10f)
+                nation.StabilityBias = -0.10f + (nation.StabilityBias + 0.10f) * 0.999f;
             var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
             nation.Stability = M.Lerp(nation.Stability, settledStability,
                 M.Clamp01(StabilityCore.Weights.Approach));

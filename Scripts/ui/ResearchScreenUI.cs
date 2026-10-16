@@ -15,6 +15,9 @@ public partial class DealOrForceGame
     private LineEdit _researchSearch;
     private OptionButton _researchCategoryPicker, _researchStatusPicker;
     private ScrollContainer _researchScroll, _researchListScroll, _researchDetailScroll;
+    private float _researchZoom = 1f;
+    private Vector2 _researchExtent = new(320, 160);
+    private Control _researchViewport;
     private TechnologyTreeCanvas _researchTree;
     private VBoxContainer _researchList, _researchDetails;
     private Label _researchDetailStatus, _researchDetailCost, _researchDetailTime, _researchDetailSpread, _researchDetailReason;
@@ -105,8 +108,13 @@ public partial class DealOrForceGame
         _researchListScroll.AddChild(_researchList);
         _researchScroll = new ScrollContainer { Name = "ResearchTreeScroll", SizeFlagsVertical = SizeFlags.ExpandFill, Visible = false };
         browser.AddChild(_researchScroll);
+        // The canvas lives inside a plain Control: a ScrollContainer writes its own child's
+        // transform on every layout pass (that is what made zooming do nothing at all), so the
+        // node that gets scaled has to be a step further down than the scroll.
+        _researchViewport = new Control { Name = "ResearchTreeViewport", MouseFilter = MouseFilterEnum.Pass };
+        _researchScroll.AddChild(_researchViewport);
         _researchTree = new TechnologyTreeCanvas { Name = "TechnologyGraph", MouseFilter = MouseFilterEnum.Pass };
-        _researchScroll.AddChild(_researchTree);
+        _researchViewport.AddChild(_researchTree);
         var paging = new HBoxContainer();
         browser.AddChild(paging);
         _researchPrevious = ActionButton("Previous", () => { _researchPage--; _researchListScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 28);
@@ -206,7 +214,11 @@ public partial class DealOrForceGame
         RefreshResearchScreen();
         if (!reveal) return;
         if (_researchGraph && _researchPositions.TryGetValue(id, out var position))
-            Callable.From(() => { _researchScroll.ScrollHorizontal = (int)Math.Max(0, position.X - 20); _researchScroll.ScrollVertical = (int)Math.Max(0, position.Y - 20); }).CallDeferred();
+            Callable.From(() =>
+            {
+                _researchScroll.ScrollHorizontal = (int)Math.Max(0, (position.X - 20) * _researchZoom);
+                _researchScroll.ScrollVertical = (int)Math.Max(0, (position.Y - 20) * _researchZoom);
+            }).CallDeferred();
         else if (!_researchGraph)
         {
             var index = Array.FindIndex(TechnologyCatalog.All.ToArray(), entry => string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -276,7 +288,9 @@ public partial class DealOrForceGame
         _researchPage = Math.Clamp(_researchPage, 0, pages - 1);
         var shown = _researchGraph ? found : found.Skip(_researchPage * ResearchPageSize).Take(ResearchPageSize).ToArray();
         _researchResults.Text = _researchPathOnly ? Tr("Selected project and all prerequisites") : Loc.Format("{0} matching technologies", found.Length);
-        _researchPageLabel.Text = _researchGraph ? Tr("Lines connect prerequisites to discoveries") : Loc.Format("Page {0} / {1}", _researchPage + 1, pages);
+        _researchPageLabel.Text = _researchGraph
+            ? Loc.Get("Lines connect prerequisites to discoveries") + " · " + TreeViewport.Hint
+            : Loc.Format("Page {0} / {1}", _researchPage + 1, pages);
         _researchPrevious.Visible = _researchNext.Visible = !_researchGraph;
         _researchPrevious.Disabled = _researchPage == 0;
         _researchNext.Disabled = _researchPage + 1 == pages;
@@ -365,7 +379,10 @@ public partial class DealOrForceGame
             extent.X = Math.Max(extent.X, card.Position.X + width + 16);
             extent.Y = Math.Max(extent.Y, card.Position.Y + height + 16);
         }
-        _researchTree.CustomMinimumSize = extent;
+        _researchExtent = extent;
+        _researchViewport.CustomMinimumSize = extent * _researchZoom;
+        _researchTree.PivotOffset = Vector2.Zero;
+        _researchTree.Scale = Vector2.One * _researchZoom;
         if (shown.Length == 0)
         {
             var empty = Title("No matching technologies", 16, Ui.Colour("text.muted"));

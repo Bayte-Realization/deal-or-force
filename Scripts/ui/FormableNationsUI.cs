@@ -50,7 +50,7 @@ public partial class DealOrForceGame
             cards.AddChild(Title("Your state can later grow into a larger one.", 13, Ui.Colour("text.body_soft")));
         }
         var term = _formationSearch.Trim();
-        var definitions = FormableNations.All.Where(d => (_showAllFormables || FormableNations.Eligible(nation, d)) &&
+        var definitions = FormableNations.AvailableIn(_campaign).Where(d => (_showAllFormables || FormableNations.Eligible(_campaign, nation, d)) &&
             (!_peacefulFormablesOnly || d.PeacefulAccession) &&
             (term.Length == 0 || Simulation.Loc.Get(d.Name).Contains(term, System.StringComparison.OrdinalIgnoreCase) ||
              d.Id.Contains(term, System.StringComparison.OrdinalIgnoreCase) || d.RequiredTags.Any(t => t.Contains(term, System.StringComparison.OrdinalIgnoreCase))))
@@ -77,6 +77,18 @@ public partial class DealOrForceGame
             heading.AddChild(Title(status.CanForm ? "Ready to proclaim" : d.PeacefulAccession ? "Treaty or territorial route" : "Territorial route",
                 12, Ui.Colour(status.CanForm ? "state.positive" : "text.body_soft")));
             future.AddChild(heading);
+            var statusBadge = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ShrinkEnd, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            var badgeStyle = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.card", status.CanForm ? 0.22f : 0.6f),
+                BorderColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.line_faint"),
+            };
+            badgeStyle.SetBorderWidthAll(1);
+            badgeStyle.SetCornerRadiusAll(4);
+            badgeStyle.SetContentMarginAll(6);
+            statusBadge.AddThemeStyleboxOverride("panel", badgeStyle);
+            statusBadge.AddChild(Title(status.CanForm ? Tr("Ready").ToUpperInvariant() : $"{status.Owned}/{status.Total}", 11, Ui.Colour(status.CanForm ? "state.positive" : "text.accent")));
+            future.AddChild(statusBadge);
             Tip(future, futureSprite.Length == 0 ? "No flag available" : "Flag after formation");
             card.AddChild(future);
             card.AddChild(Title(d.Description, 13, Ui.Colour("text.body_soft")));
@@ -88,11 +100,18 @@ public partial class DealOrForceGame
                 members.AddChild(flag);
             }
             card.AddChild(members);
-            card.AddChild(new ProgressBar
+            var pbar = new ProgressBar
             {
                 Name = "FormationTerritory_" + d.Id, MaxValue = System.Math.Max(1, status.Total), Value = status.Owned,
                 CustomMinimumSize = new Vector2(0, Ui.Metric("formation.progress_height", 10)), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore
-            });
+            };
+            var track = new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") };
+            track.SetCornerRadiusAll(3);
+            var fill = new StyleBoxFlat { BgColor = Ui.Colour(status.CanForm ? "state.positive" : "text.accent") };
+            fill.SetCornerRadiusAll(3);
+            pbar.AddThemeStyleboxOverride("background", track);
+            pbar.AddThemeStyleboxOverride("fill", fill);
+            card.AddChild(pbar);
             card.AddChild(Title(Simulation.Loc.Format("Foundation territory secured: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
             if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && FormableNations.CompatibleProclamation(nation, d))
                 AddFormationPartners(card, nation, d);

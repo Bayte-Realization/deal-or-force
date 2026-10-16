@@ -1,0 +1,84 @@
+// A second frontier tier, kept deliberately narrow: each line has to be something a
+// government could fund, see in the numbers, and regret if the war or the crisis it was built
+// for never came. Every prerequisite and every effect key already exists in the game.
+{
+  // ---------------------------------------------------------------- industry
+  "modular_reactor_programme": {
+    "name": "Modular reactor programme",
+    "description": "Small reactors built in series rather than cathedrals built one at a time, for a grid that has to survive losing a province.",
+    "category": "industry", "cost": 560, "requires": ["grid_scale_storage"], "icon": "icon_building_powerplant",
+    "effects": { "output": 0.02, "construction_speed": 0.015 }
+  },
+  "industrial_additive_scaling": {
+    "name": "Additive manufacturing at scale",
+    "description": "Printing a spare part where the machine broke, instead of shipping it across a continent and waiting.",
+    "category": "industry", "cost": 520, "requires": ["additive_manufacturing"], "icon": "icon_good_machinery",
+    "effects": { "output": 0.018, "supply": 0.012 }
+  },
+  "materials_recovery_networks": {
+    "name": "Materials recovery networks",
+    "description": "Every city sorted and every alloy traced, so a wrecked factory is a stockpile rather than a loss.",
+    "category": "industry", "cost": 470, "requires": ["advanced_material_recovery"], "icon": "icon_building_smelter",
+    "effects": { "reconstruction_speed": 0.03, "construction_cost": -0.015 }
+  },
+  "autonomous_mining_fleets": {
+    "name": "Autonomous mining fleets",
+    "description": "Driverless haulage and survey drones working a deposit nobody wants to live on.",
+    "category": "industry", "cost": 540, "requires": ["deep_sea_extraction"], "icon": "icon_building_extractionindustry",
+    "effects": { "output": 0.022, "research_speed": 0.01 }
+  },
+
+  // ---------------------------------------------------------------- society
+  "civic_mediation_service": {
+    "name": "Civic mediation service",
+    "description": "A standing corps that talks to an angry region before the army has to, and is cheaper than either.",
+    "category": "society", "cost": 420, "requires": ["civic_resilience_education"], "icon": "icon_laws",
+    "effects": { "stability_weekly": 0.07, "movement_activity": -0.10 }
+  },
+  "open_statistics_office": {
+    "name": "Open statistics office",
+    "description": "Numbers published on a schedule nobody in the government can move, which is what makes them worth reading.",
+    "category": "society", "cost": 400, "requires": ["civic_data_trusts"], "icon": "icon_ledger",
+    "effects": { "research_speed": 0.04, "tax_efficiency": 0.02 }
+  },
+  "pandemic_readiness_corps": {
+    "name": "Pandemic readiness corps",
+    "description": "Reservists, stockpiles and drills kept current in the years when nothing is happening.",
+    "category": "society", "cost": 460, "requires": ["public_health_networks"], "icon": "icon_building_hospital",
+    "effects": { "output": 0.012, "stability_weekly": 0.05 }
+  },
+
+  // ---------------------------------------------------------------- military
+  "layered_air_defence_network": {
+    "name": "Layered air-defence network",
+    "description": "Short, medium and long reach answering to one command, so a strike has to beat all three to arrive.",
+    "category": "military", "cost": 600, "requires": ["integrated_air_defence_command"], "icon": "icon_sam",
+    "effects": { "army_defense": 0.035, "support_losses": -0.025 }
+  },
+  "distributed_munitions_production": {
+    "name": "Distributed munitions production",
+    "description": "Shells made in a hundred workshops instead of three arsenals, which is what keeps a front fed in a long war.",
+    "category": "military", "cost": 580, "requires": ["autonomous_resupply_columns"], "icon": "icon_good_ammunition",
+    "effects": { "supply": 0.035, "reinforcement_rate": 0.03 }
+  },
+  "deep_strike_reconnaissance": {
+    "name": "Deep-strike reconnaissance",
+    "description": "Finding the depot, the bridge and the headquarters behind the line, and keeping them under watch.",
+    "category": "military", "cost": 560, "requires": ["precision_strike_network"], "icon": "icon_drone",
+    "effects": { "army_attack": 0.035, "support_recovery": 0.02 }
+  },
+
+  // ---------------------------------------------------------------- logistics
+  "continental_rail_resilience": {
+    "name": "Continental rail resilience",
+    "description": "Double track, alternate gauges and repair trains, so one cut line is a delay rather than a stoppage.",
+    "category": "logistics", "cost": 560, "requires": ["continental_freight_corridors"], "icon": "icon_rail",
+    "effects": { "trade_reach": 0.022, "supply": 0.02 }
+  },
+  "resilient_port_network": {
+    "name": "Resilient port network",
+    "description": "Every port able to take what the biggest one takes, so closing one is a reroute and not an embargo.",
+    "category": "logistics", "cost": 540, "requires": ["port_automation_networks"], "icon": "icon_port",
+    "effects": { "trade_reach": 0.025, "supply": 0.015 }
+  }
+}

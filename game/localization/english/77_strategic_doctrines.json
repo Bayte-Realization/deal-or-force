@@ -1,0 +1,23 @@
+{
+  "War of manoeuvre": "War of manoeuvre",
+  "The war is won by arriving first: columns, fuel and the open flank, not the fortified line.": "The war is won by arriving first: columns, fuel and the open flank, not the fortified line.",
+  "War of attrition": "War of attrition",
+  "The war is a bill presented to the other side until it cannot pay: replacements, shells and patience.": "The war is a bill presented to the other side until it cannot pay: replacements, shells and patience.",
+  "Defence of the homeland": "Defence of the homeland",
+  "The war is fought where the soldiers live: the line holds, the districts arm themselves, and the enemy spends.": "The war is fought where the soldiers live: the line holds, the districts arm themselves, and the enemy spends.",
+  "Professional cadre": "Professional cadre",
+  "Few divisions, all of them good, and a peace-time budget that keeps them so: what the army knows before the first shot.": "Few divisions, all of them good, and a peace-time budget that keeps them so: what the army knows before the first shot.",
+  "Universal levy": "Universal levy",
+  "The nation itself is the reserve: every district forms its company, and the replacements are already standing in them.": "The nation itself is the reserve: every district forms its company, and the replacements are already standing in them.",
+  "Command of the air": "Command of the air",
+  "The war is decided overhead: whoever holds the sky spends less blood for the same ground.": "The war is decided overhead: whoever holds the sky spends less blood for the same ground.",
+  "Command of the sea": "Command of the sea",
+  "The war is decided in the water: trade arrives or does not, and nothing on land outlasts a closed sea.": "The war is decided in the water: trade arrives or does not, and nothing on land outlasts a closed sea.",
+
+  "chronicle.strategy_adopted": "{0} declares its strategy: {2}.",
+  "chronicle.strategy_changed": "{0} changes its grand strategy: {2}.",
+
+  "No such strategy is written.": "No such strategy is written.",
+  "This is already the country's strategy.": "This is already the country's strategy.",
+  "Changing the grand strategy costs {0} political points.": "Changing the grand strategy costs {0} political points."
+}

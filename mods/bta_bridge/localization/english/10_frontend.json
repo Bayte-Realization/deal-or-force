@@ -1,0 +1,9 @@
+{
+  "Launch BTA Flat World": "Launch BTA Flat World",
+  "BTA bridge status": "BTA bridge status",
+  "BTA bridge is not configured. Run Tools/BtaBridge/setup.ps1 first.": "BTA bridge is not configured. Run Tools/BtaBridge/setup.ps1 first.",
+  "BTA bridge is ready for this local campaign.": "BTA bridge is ready for this local campaign.",
+  "Prepare the BTA Flat World instance with Tools/BtaBridge/flat/create-instance.ps1.": "Prepare the BTA Flat World instance with Tools/BtaBridge/flat/create-instance.ps1.",
+  "Prism launch requested. Keep this local campaign open.": "Prism launch requested. Keep this local campaign open.",
+  "Prism could not be started.": "Prism could not be started."
+}
