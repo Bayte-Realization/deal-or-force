@@ -19,6 +19,8 @@
 //   recognised_by  countries that recognise it on the first day
 //   treasury       billions; cadres people; legitimacy 0 to 1
 //   government / ideology   what it is while it has them; state_name what it calls its country
+//   territorial_faction    optional history/factions id of the SAME actor; no duplicate HQ
+//                          while that administration owns land (not a patron or an ally)
 //   traits         rules of its own:
 //     armed_wing           uprisings more likely to succeed and raise more militia; campaigns heat the host more
 //     tunnel_network       a failed uprising costs fewer cadres; its militia start dug in

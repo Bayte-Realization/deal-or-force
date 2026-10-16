@@ -10280,19 +10280,25 @@ public static class Program
         foreach (var definition in declared)
         {
             if (all.Any(nation => nation.Movement?.Id == definition.Id)) continue;
-            // Factions.Found runs first: SDF, AFC and STC already hold ground in the bookmark.
-            // Their exact declared tag must resolve to an authored territorial faction, not an
-            // arbitrary country with a colliding tag. Do not demand a second, landless nation.
-            var actor = campaign.NationByTag(definition.Tag);
+            // Exact tags or an explicit territorial_faction identity link may represent a
+            // movement already. Never substitute an unrelated country with a colliding name.
+            var actor = Movements.TerritorialActor(campaign, definition) ?? campaign.NationByTag(definition.Tag);
             var faction = Factions.Of(actor);
             if (actor is not null && actor.Movement is null && faction is not null &&
-                string.Equals(faction.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase) &&
+                (string.Equals(faction.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(faction.Id, definition.TerritorialFaction, StringComparison.Ordinal)) &&
                 campaign.StatesOf(actor).Length > 0)
             { representedAsFactions++; continue; }
             return $"movement {definition.Id}/{definition.Tag} has neither its movement nor an authored territorial faction";
         }
         Console.WriteLine($"  movement representation: {declared.Length} active definitions; " +
                           $"{all.Count} movement actors and {representedAsFactions} already-territorial factions.");
+        var houthis = campaign.NationByTag("HTH");
+        if (campaign.NationByTag("HOU") is not null || houthis?.FactionId != "ansar_allah" ||
+            campaign.StatesOf(houthis).Length == 0 || !campaign.Armies.Any(a => a.NationId == houthis.Id))
+            return "Ansar Allah must have one territorial administration with its land and army, not a duplicate HOU headquarters";
+        Console.WriteLine($"  Yemen: HTH owns {campaign.StatesOf(houthis).Length} regions; " +
+            $"{campaign.Armies.Count(a => a.NationId == houthis.Id)} formations; no duplicate HOU actor.");
         foreach (var movement in all)
         {
             if (!movement.Landless) return $"{movement.Tag} starts with land";

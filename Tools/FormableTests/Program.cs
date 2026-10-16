@@ -95,6 +95,7 @@ static class Program
         if (args.Contains("--country-definition-only")) { CountryDefinitionTests.Run(); return; }
         if (args.Contains("--alliance-program-only")) { AllianceProgramOutcomeTests.Run(); return; }
         if (args.Contains("--movement-catalog-only")) { MovementCatalogTests.Run(); return; }
+        if (args.Contains("--movement-representation-only")) { MovementRepresentationTests.Run(); return; }
         RegionalDemographyTests.Run();
         DynamicAllianceTests.Run();
         ConflictReadOnlyTests.Run();
@@ -119,6 +120,7 @@ static class Program
         ConstructionFundingTests.Run();
         MovementMethodsTests.Run();
         MovementCatalogTests.Run();
+        MovementRepresentationTests.Run();
         MovementPowerStateTests.Run();
         MovementPowerFingerprintTests.Run();
         PoliticalPolicyTests.Run();

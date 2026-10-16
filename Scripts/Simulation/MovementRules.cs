@@ -78,6 +78,7 @@ public static class MovementRules
         using (SimProfiler.Measure("movements"))
         using (SimProfiler.Measure("  mov:rules"))
         {
+            Movements.RetireDuplicateRepresentations(campaign);
             MovementLifecycle.Tick(campaign);
             // What the world decides about who has fallen happens on the week, as it did.
             if (campaign.ElapsedDays % week == 0)

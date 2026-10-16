@@ -40,6 +40,8 @@ public sealed class MovementDefinition
     public string Ideology = "nationalism";
     /// <summary>What it calls the country it founds, if not itself.</summary>
     public string StateName = "";
+    /// <summary>Optional history/factions id of the same organisation's territorial administration.</summary>
+    public string TerritorialFaction = "";
     public bool Playable = true;
     /// <summary>
     /// Not founded with the world: the pattern a country that falls and goes into exile is made
@@ -133,6 +135,7 @@ public static class MovementCatalog
             definition.Government = Text("government", definition.Government);
             definition.Ideology = Text("ideology", definition.Ideology);
             definition.StateName = Text("state_name", definition.StateName);
+            definition.TerritorialFaction = Text("territorial_faction", definition.TerritorialFaction);
             definition.Treasury = Number("treasury", definition.Treasury);
             definition.Cadres = Number("cadres", definition.Cadres);
             definition.Legitimacy = M.Clamp01(Number("legitimacy", definition.Legitimacy));
@@ -325,6 +328,7 @@ public static partial class Movements
         foreach (var definition in definitions)
         {
             if (string.IsNullOrWhiteSpace(definition.Tag) || definition.Template) continue;
+            if (TerritorialActor(campaign, definition) is not null) continue;
             var existing = campaign.Nations.FirstOrDefault(nation => nation.Movement?.Id == definition.Id ||
                                                string.Equals(nation.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase));
             if (existing is not null && (existing.Movement is not { Dissolved: true } || existing.IsHuman || campaign.StatesOf(existing).Length > 0))

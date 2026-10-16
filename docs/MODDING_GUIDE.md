@@ -1853,6 +1853,15 @@ host whose patience it spends. They live in `common/movements/*.json` - the head
 `00_movements.json` lists every field and trait - and later files win key by key, so a mod adds a
 movement with a key of its own and changes one by naming it again with only the fields it changes.
 
+- **One organisation, one territorial representative.** An optional
+  `"territorial_faction": "ansar_allah"` links a movement to the **id** of the same actor
+  in `history/factions`, not to its patron, ally or parent country. While that faction owns
+  territory, no extra movement is founded or activated. A scenario without the territorial
+  faction can still use the movement. To keep two deliberately distinct actors, override the
+  field with `""`. Old unused AI headquarters are retired on an advancing simulation day,
+  not during save/network import or map inspection. Player seats, exiles, actual land,
+  military formations/orders and an ongoing war protect an established campaign actor.
+  Retired nation ids and their authored flags remain available for old references.
 - **What it does.** Moves its headquarters, campaigns, fundraises, recruits, seeks recognition,
   sends fighters into a region ahead of a rising (days on the road by distance), and rises. A
   rising that succeeds makes it a country with a capital and militia - out of its cadres, its

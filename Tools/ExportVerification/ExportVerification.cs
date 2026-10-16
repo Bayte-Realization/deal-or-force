@@ -90,6 +90,7 @@ public partial class ExportVerification : Node
                 (game.FindChild("ClosePolicyWorkspace", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
                 await VerifyDealWorkspace(game);
                 await VerifyConflictWorkspaces(game);
+                await VerifyTerritorialMovementRepresentation(game);
                 await VerifyMovementBanners(game);
                 await VerifyMovementDiplomacy(game);
                 GD.Print(game.Call("ConsoleAdvance", "7").AsString());
@@ -311,6 +312,35 @@ public partial class ExportVerification : Node
         game.Call("OpenScreen", "Nation");
     }
 
+    private async Task VerifyTerritorialMovementRepresentation(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var actor = world.NationByTag("HTH");
+        Check(actor?.FactionId == "ansar_allah" && world.StatesOf(actor).Length > 0 &&
+            world.Armies.Any(a => a.NationId == actor.Id), "Ansar Allah retains its territorial administration and army");
+        Check(world.NationByTag("HOU") is null, "no duplicate Ansar Allah movement is founded");
+        if (actor is null) return;
+        var before = CampaignFingerprint.Of(world);
+        game.VerificationFocusAdministration(actor);
+        await Wait(.8);
+        Check(game.FindChild("Headquarters_HOU", true, false) is null,
+            "the rendered movement layer contains no duplicate HOU headquarters");
+        var language = Loc.Language;
+        foreach (var locale in new[] { "english", "russian" })
+        {
+            Loc.Language = locale;
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.3);
+                await Capture("yemen-territorial-" + locale + "-" + size.X);
+            }
+        }
+        Loc.Language = language;
+        GetTree().Root.Size = new(1920, 1080);
+        Check(before == CampaignFingerprint.Of(world), "inspecting Yemen does not change the campaign");
+    }
+
     private async Task VerifyMovementBanners(DealOrForceGame game)
     {
         var world = game.VerificationWorld;
@@ -409,4 +439,6 @@ public partial class DealOrForceGame
     internal void VerificationEnableFinancialOrders() { if (_observerMode) ToggleObserverMode(); }
     internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
+    internal void VerificationFocusAdministration(Nation nation) =>
+        _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude, 5.5f);
 }
