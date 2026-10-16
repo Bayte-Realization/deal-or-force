@@ -15,6 +15,7 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--combat-attrition-only")) { CombatAttritionRefactorTests.Run(); return; }
         if (args.Contains("--coalition-combat-only")) { CoalitionCombatTests.Run(); return; }
         if (args.Contains("--assault-readiness-only")) { AssaultReadinessTests.Run(); return; }
         if (args.Contains("--ai-front-recovery-only")) { AiFrontRecoveryTests.Run(); return; }
@@ -315,6 +316,7 @@ static class Program
         FrontStaffTests.Run(map);
         AiFrontRecoveryTests.Run();
         AssaultReadinessTests.Run();
+        CombatAttritionRefactorTests.Run();
         CoalitionCombatTests.Run();
         ModifierTests.Run(map);
     }

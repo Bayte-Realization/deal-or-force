@@ -276,6 +276,8 @@ public static class Program
         // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
         // Half an hour of bench for a question about manpower was too long a loop.
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
+        if (Array.IndexOf(args, "--data-readers-only") >= 0)
+            return Check("every folder of data is read by something", EveryFolderOfDataIsRead());
 
         // `--sea <png>` draws the sea lanes - water, basins, straits, ports and a handful of
         // voyages - and prints how long each voyage is and how long it took to plot. "The
@@ -11020,6 +11022,22 @@ public static class Program
         DiagnosticLogs.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         ScenarioInspectorCatalog.ResetCatalog();
+        // The sound/art workspace loads its inventory lazily, outside the headless
+        // campaign. Exercise the real reader rather than exempting its folder.
+        MediaLibraryCatalog.Load();
+        // Make this audit independent of which expensive campaign fixtures ran
+        // before it. These are real lazy catalog readers, not an allowlist of paths.
+        ScriptLibrary.ResetCatalog();
+        AddressToNation.ResetCatalog();
+        CovertOperations.ResetCatalog();
+        DecisionCatalog.ResetCatalog();
+        FlagCatalog.ResetCatalog();
+        FormableNations.ResetCatalog();
+        GovernanceEvents.ResetCatalog();
+        PeaceTermCatalog.ResetCatalog();
+        SecessionCore.ResetCatalog();
+        SocialIncidentCatalog.ResetCatalog();
+        _ = UnitTypeCatalog.All.Count();
         // And the catalogues read the first time something needs them - the handbook when F1 is
         // pressed, the news weights at the first headline, the coups at the first review - so a
         // bench that has not happened to need them yet does not report their folders as dead.
