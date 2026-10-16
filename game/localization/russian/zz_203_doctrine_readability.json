@@ -1,5 +1,6 @@
 {
   "DOCTRINES": "ДОКТРИНЫ",
+  "Show authored movement insignia when available. Disable to use their alternate plain banners.": "Показывать собственные эмблемы движений, если они есть. Отключите, чтобы использовать альтернативные простые знамёна.",
   "Doctrines tab": "Доктрины",
   "Doctrine of manoeuvre": "Манёвренная доктрина",
   "Doctrine of fire": "Огневая доктрина",

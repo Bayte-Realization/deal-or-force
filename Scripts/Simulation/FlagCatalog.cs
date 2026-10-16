@@ -69,6 +69,7 @@ public static class FlagCatalog
 {
     private static readonly List<FlagQualifier> Qualifiers = new();
     private static readonly List<string> Fallbacks = new();
+    private static bool PreferMovementBase = true;
     private static readonly Dictionary<string, string[]> GenericCultures = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string[]> GenericTags = new(StringComparer.OrdinalIgnoreCase);
 
@@ -154,6 +155,7 @@ public static class FlagCatalog
     {
         Qualifiers.Clear();
         Fallbacks.Clear();
+        PreferMovementBase = true;
         GenericCultures.Clear();
         GenericTags.Clear();
         Identities.Clear();
@@ -176,6 +178,9 @@ public static class FlagCatalog
     public static void Merge(JsonElement root, List<string> errors = null)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
+        if (root.TryGetProperty("prefer_movement_base", out var movementBase) &&
+            movementBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            PreferMovementBase = movementBase.GetBoolean();
 
         if (root.TryGetProperty("qualifiers", out var qualifiers) &&
             qualifiers.ValueKind == JsonValueKind.Object)
@@ -412,6 +417,13 @@ public static class FlagCatalog
 
         var tag = Slug(nation.Tag);
         if (tag.Length == 0) return names;
+
+        // A landless organisation's banner is its identity, not the hypothetical regime it
+        // might establish. Procedural government/ideology variants must not replace it.
+        // After taking territory or proclaiming a formable, ordinary dynamic rules resume.
+        if (PreferMovementBase && nation.Movement is { Landless: true, Exile: false } &&
+            string.IsNullOrEmpty(nation.FormedNationId))
+            names.Add($"flag_{tag}");
 
         // A country brought back flies its own flag again, in the form its politics give it,
         // ahead of anything the country that restored it ever flew.

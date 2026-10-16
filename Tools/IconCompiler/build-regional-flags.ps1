@@ -68,6 +68,19 @@ public static class RegionalFlagWorkshop {
 }
 '@
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
+# Restore protected, already-authored regional artwork before filling genuinely empty slots.
+# This keeps a missing tag PNG from silently becoming another workshop sun or mountain.
+$bannerManifest = Join-Path $PSScriptRoot 'Source/movement-banners.json'
+if (Test-Path -LiteralPath $bannerManifest) {
+    $banners = (Get-Content -LiteralPath $bannerManifest -Raw | ConvertFrom-Json).banners
+    foreach ($banner in $banners.PSObject.Properties) {
+        $destination = Join-Path $OutputDirectory ($banner.Name + '.png')
+        if (Test-Path -LiteralPath $destination) { continue }
+        $source = Join-Path 'game/gfx/flags' ($banner.Value + '.png')
+        if (-not (Test-Path -LiteralPath $source)) { throw "Missing authored movement banner source: $source" }
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
+}
 function Read-WorkshopJson([string]$Path) {
     # These three authored sources use only whole-line // comments, not a general JSON5 parser.
     (Get-Content -LiteralPath $Path | Where-Object { $_ -notmatch '^\s*//' }) -join "`n" | ConvertFrom-Json
@@ -82,10 +95,8 @@ foreach ($path in (Get-ChildItem 'game/common/movements' -Filter '*.json' | Sort
     foreach ($entry in $movementData.PSObject.Properties) {
         if ($entry.Name.StartsWith('//')) { continue }
         if ($null -eq $entry.Value.tag) { continue }
-        # Movements and formables are political actors: they get the full ideological and
-        # governmental variant set, so a movement that takes power or a republic that turns
-        # radical flies a flag of its own rather than a recoloured plain one.
-        $families += @{ name = 'flag_' + $entry.Value.tag.ToLowerInvariant(); colour = $entry.Value.colour; deep = $true }
+        # Preserve the organisation's own banner; no automatic ideological lookalikes.
+        $families += @{ name = 'flag_' + $entry.Value.tag.ToLowerInvariant(); colour = $entry.Value.colour; movement = $true }
     }
 }
 foreach ($path in (Get-ChildItem 'game/common/cultures' -Filter '*.json' | Sort-Object Name)) {
@@ -116,7 +127,9 @@ $count = 0
 $skipped = 0
 for ($index = 0; $index -lt $families.Count; $index++) {
     $family = $families[$index]
-    $variants = if ($family.deep) { $deepSuffixes } else { $suffixes }
+    # No synthetic political variants for named movements: their own banner identifies the
+    # organisation. A mod/artist can still author an actual variant explicitly.
+    $variants = if ($family.movement) { @('') } elseif ($family.deep) { $deepSuffixes } else { $suffixes }
     foreach ($suffix in $variants) {
         $flagPath = Join-Path $OutputDirectory ($family.name + $suffix + '.png')
         if (Test-Path -LiteralPath $flagPath) { $skipped++; continue }

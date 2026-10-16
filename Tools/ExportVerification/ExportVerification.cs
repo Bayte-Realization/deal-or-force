@@ -90,6 +90,7 @@ public partial class ExportVerification : Node
                 (game.FindChild("ClosePolicyWorkspace", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
                 await VerifyDealWorkspace(game);
                 await VerifyConflictWorkspaces(game);
+                await VerifyMovementBanners(game);
                 await VerifyMovementDiplomacy(game);
                 GD.Print(game.Call("ConsoleAdvance", "7").AsString());
                 foreach (var flag in new[] { "roman_empire_v2", "eastern_roman_empire_v2", "western_roman_empire" })
@@ -308,6 +309,33 @@ public partial class ExportVerification : Node
             Check(before == CampaignFingerprint.Of(world), "conflict workspace inspection does not modify institutions or titles");
         }
         game.Call("OpenScreen", "Nation");
+    }
+
+    private async Task VerifyMovementBanners(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var before = CampaignFingerprint.Of(world);
+        foreach (var tag in new[] { "HMS", "BVC" })
+        {
+            var movement = world.NationByTag(tag);
+            Check(movement?.Movement is not null, tag + " exists for the real flag presentation check");
+            if (movement is null) continue;
+            var stem = "flag_" + tag.ToLowerInvariant();
+            var expected = SettingsCatalog.Flag("movement_flags") && SpriteCatalog.Has(stem + "_insignia")
+                ? stem + "_insignia" : stem;
+            Check(DealOrForceGame.FlagSpriteFor(tag) == expected, tag + " map/profile resolve the authored banner");
+            Check(DealOrForceGame.FlagTextureFor(tag) is not null, tag + " real flag texture loads");
+            game.VerificationShowMovement(movement);
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                await Capture("restored-flag-" + tag.ToLowerInvariant() + "-" + size.X);
+            }
+            game.VerificationCloseMovement();
+        }
+        Check(before == CampaignFingerprint.Of(world), "movement flag inspection changes no simulation state");
+        GetTree().Root.Size = new(1920, 1080);
     }
 
     private async Task VerifyMovementDiplomacy(DealOrForceGame game)

@@ -198,8 +198,8 @@
   "movement_flags": {
     "category": "interface", "order": 262, "kind": "toggle",
     "name": "Movements fly their own flags",
-    "description": "Show the real flags of armed movements instead of plain banners in their colours. Off by default: some are banned in some countries and on video sites.",
-    "default": false
+    "description": "Show authored movement insignia when available. Disable to use their alternate plain banners.",
+    "default": true
   },
 
   // ---------------------------------------------------------------- what it looks like ---

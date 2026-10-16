@@ -1881,6 +1881,12 @@ movement with a key of its own and changes one by naming it again with only the 
   `movement.support`.
 - **Flags.** A movement's real flag, when it is the flag of an armed group, is
   `gfx/flags/flag_<tag>_insignia.png`, shown only with the `movement_flags` setting on.
+  This setting is on by default; an explicitly saved player choice is respected.
+  Landless movements prefer their own base banner before political variants.
+  A `common/flags` overlay can opt out with `"prefer_movement_base": false`.
+  The regional-banner recovery sources are listed in
+  `Tools/IconCompiler/Source/movement-banners.json`; these are not automatically
+  official party logos.
 - The numbers are defines named `Movement*` (see `Scripts/Simulation/MovementRules.cs`), set from
   any `common/defines` file.
 

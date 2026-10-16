@@ -76,9 +76,8 @@ public partial class DealOrForceGame
         var key = tag.ToLowerInvariant();
         var sprite = $"flag_{key}";
         nation = FlagWorld?.NationByTag(tag);
-        // A movement's own banner - `flag_<tag>_insignia` - only when the player has asked for
-        // them (`movement_flags`). It is off by default because a video showing an armed
-        // group's flag can be restricted for it; the file beside it is a banner in its colours.
+        // Authored insignia are shown by default. The player may choose plain alternatives
+        // explicitly; availability must not silently turn every movement into a placeholder.
         if (SettingsCatalog.Flag(MovementFlagsSetting) && SpriteCatalog.Has($"flag_{key}_insignia"))
             return $"flag_{key}_insignia";
         if (nation is null) return sprite;
@@ -88,7 +87,8 @@ public partial class DealOrForceGame
         // a few months into a war every answer was stale at once, and the first screen with a
         // list of flags on it worked out a hundred and sixty of them again on the frame that
         // opened it - ten seconds for the conflicts screen. A mod reload clears it instead.
-        var situation = key + "|" + string.Join("|", FlagCatalog.All.Select(q =>
+        var situation = key + "|" + (nation.Movement?.Landless ?? false) + "|" +
+            (nation.Movement?.Exile ?? false) + "|" + string.Join("|", FlagCatalog.All.Select(q =>
             FlagCatalog.ValueOf(q.Source, FlagWorld, country)));
         if (!ResolvedFlags.TryGetValue(situation, out var resolved))
             ResolvedFlags[situation] = resolved = FlagCatalog.Resolve(FlagWorld, nation);

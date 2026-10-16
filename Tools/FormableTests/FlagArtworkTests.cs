@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.Linq;
 using DealOrForce.Simulation;
 
@@ -21,6 +22,39 @@ using DealOrForce.Simulation;
 /// </summary>
 static class FlagArtworkTests
 {
+    // Recovery report only: no assets or catalogues are modified by this command.
+    public static void AuditMovementBanners()
+    {
+        SpriteCatalog.Load(); FlagCatalog.ResetCatalog();
+        var campaign = Campaign.CreateBootstrap(20260928); Movements.Found(campaign);
+        var mappings = new SortedDictionary<string, object>(StringComparer.Ordinal);
+        foreach (var nation in campaign.Nations.Where(n => n.Movement is not null))
+        {
+            var stem = "flag_" + nation.Tag.ToLowerInvariant();
+            if (!WorkshopSized(stem)) continue;
+            var previous = FlagCatalog.Candidates(campaign, nation).FirstOrDefault(name =>
+                name != stem && !name.StartsWith(stem + "_", StringComparison.Ordinal) &&
+                SpriteCatalog.Has(name) && Artwork(name) && !WorkshopSized(name));
+            if (previous is not null) mappings[stem] = new { texture = SpriteCatalog.TextureOf(previous) };
+        }
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(new { sprites = mappings },
+            new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static bool WorkshopSized(string sprite)
+    {
+        var path = SpriteCatalog.TextureOf(sprite);
+        if (!path.StartsWith("res://game/", StringComparison.Ordinal)) return false;
+        path = Path.Combine(GameDataLoader.DataFolder(), path["res://game/".Length..]);
+        if (!File.Exists(path)) return false;
+        using var stream = File.OpenRead(path);
+        Span<byte> header = stackalloc byte[24];
+        if (stream.Read(header) != 24 || header[0] != 137 || header[1] != 80 ||
+            header[2] != 78 || header[3] != 71) return false;
+        return System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header[16..20]) == 192 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(header[20..24]) == 120;
+    }
+
     static void Check(bool condition, string label)
     {
         if (!condition) throw new Exception(label);
@@ -36,6 +70,7 @@ static class FlagArtworkTests
         // does the same on a new game). The bare bootstrap has none, and a flag check with no
         // movements in it would pass while the picker's landless list showed grey rectangles.
         Movements.Found(campaign);
+        MovementBannersKeepTheirIdentity(campaign);
 
         // Countries and movements: what the map draws for each of them today.
         var missing = new List<string>();
@@ -92,6 +127,43 @@ static class FlagArtworkTests
             ? Directory.GetFiles(Path.Combine(GameDataLoader.DataFolder(), "gfx", "flags"), "flag_formable_*.png").Length
             : 0;
         Check(generic >= total, $"a file exists for every formable: {generic} files for {total} formables");
+    }
+
+    private static void MovementBannersKeepTheirIdentity(Campaign campaign)
+    {
+        foreach (var movement in campaign.Nations.Where(n => n.Movement is { Landless: true, Exile: false }))
+            Check(FlagCatalog.Resolve(campaign, movement) == "flag_" + movement.Tag.ToLowerInvariant(),
+                movement.Tag + " keeps its own banner ahead of procedural political variants");
+        var hamas = campaign.NationByTag("HMS");
+        Check(SpriteCatalog.Has("flag_hms_theocracy") && FlagCatalog.Resolve(campaign, hamas) == "flag_hms",
+            "the actual theocratic-placeholder regression does not replace Hamas's own flag");
+        var before = CampaignFingerprint.Of(campaign);
+        FlagCatalog.ResolvePreview(campaign, hamas, "theocracy", "theocratic_rule");
+        Check(CampaignFingerprint.Of(campaign) == before, "flag preview does not mutate a movement");
+        var landed = hamas.Movement.Landless;
+        try
+        {
+            hamas.Movement.Landless = false;
+            Check(FlagCatalog.Resolve(campaign, hamas) == "flag_hms_theocracy",
+                "territorial governments retain the normal dynamic flag rules");
+            hamas.Movement.Landless = true;
+            Check(FlagCatalog.ResolveFormationPreview(campaign, hamas, "benelux_union") != "flag_hms",
+                "a proclaimed formable outranks the movement's old banner");
+            FlagCatalog.Merge("{\"prefer_movement_base\":false}");
+            Check(FlagCatalog.Resolve(campaign, hamas) == "flag_hms_theocracy",
+                "mods can explicitly opt into political variants for landless movements");
+        }
+        finally { hamas.Movement.Landless = landed; FlagCatalog.ResetCatalog(); }
+        using var banners = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            GameDataLoader.DataFolder(), "..", "Tools", "IconCompiler", "Source", "movement-banners.json")));
+        foreach (var banner in banners.RootElement.GetProperty("banners").EnumerateObject())
+        {
+            var directory = Path.Combine(GameDataLoader.DataFolder(), "gfx", "flags");
+            var actual = SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, banner.Name + ".png")));
+            var original = SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, banner.Value.GetString() + ".png")));
+            Check(actual.SequenceEqual(original) && !WorkshopSized(banner.Name),
+                banner.Name + " retains its exact authored regional artwork, not a workshop placeholder");
+        }
     }
 
     private static bool Artwork(string sprite)
