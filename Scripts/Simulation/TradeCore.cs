@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -97,39 +98,30 @@ public static class TradeNetwork
     /// <summary>What a country can still get with no partners at all.</summary>
     private const float GreyMarketAccess = 0.34f;
 
+    // Scratch used atomically within one commodity. There is no yield in RouteOne.
+    // A campaign may yield BETWEEN commodities; everything surviving that yield is
+    // owned by its weak-keyed workspace below, not by another live world's market.
     private static readonly List<int> SellerIds = new();
     private static readonly List<float> SellerCapacity = new();
     private static readonly List<float> SellerScore = new();
     private static readonly List<int> SellerOrder = new();
     private static int[] _buyerIds;
     private static float[] _buyerKeys;
-
-    private static readonly Dictionary<int, float> Reach = new();
     private static readonly Dictionary<int, (int States, int Infrastructure, float Ports, int Rails)> Counts = new();
-    // The same pair trades several goods. Geography and diplomacy do not change within
-    // one market clearing; commodity-specific instructions still get checked each time.
-    private static readonly Dictionary<long, float> PartnerScores = new();
 
-    /// <summary>
-    /// Route objects, reused.
-    ///
-    /// Two thousand two hundred of them a week is ninety kilobytes of garbage for a list
-    /// that is emptied and refilled from scratch every time. They are plain data with no
-    /// identity, so the same objects are handed out again.
-    /// </summary>
-    private static readonly List<TradeRoute> RoutePool = new();
-    private static int _routesInUse;
-
-    private static float[] _distance;
-    private static int _distanceNations;
-
-    /// <summary>
-    /// Which campaign the distance table was built for. Two worlds with the same number of
-    /// countries are not the same world, and handing one the other's geography is a silent
-    /// divergence rather than an error.
-    /// </summary>
-    private static Campaign _distanceCampaign;
-    private static readonly Dictionary<int, (float Latitude, float Longitude)> DistanceCapitals = new();
+    private sealed class TradeWorkspace
+    {
+        internal readonly Dictionary<int, float> TransportReach = new();
+        internal readonly Dictionary<long, float> PartnerAffinityScores = new();
+        internal readonly List<TradeRoute> RouteRecords = new();
+        internal int UsedRouteRecords;
+        internal float[] DistanceTable;
+        internal int DistanceNationCount;
+        internal readonly Dictionary<int, (float Latitude, float Longitude)> CapitalCoordinates = new();
+    }
+    private static readonly ConditionalWeakTable<Campaign, TradeWorkspace> Workspaces = new();
+    private static TradeWorkspace Workspace(Campaign campaign) =>
+        Workspaces.GetValue(campaign, static _ => new TradeWorkspace());
 
     /// <summary>
     /// Match the world's shortfalls against the world's surpluses, and write the result
@@ -142,14 +134,15 @@ public static class TradeNetwork
 
     /// <summary>
     /// The routing in stages - the preparation, then one good at a time - for the smoothed step.
-    /// The scratch lists below are shared, which is safe because one campaign steps at a time
-    /// and a step in progress is finished before anything else steps (Campaign.FinishStep).
+    /// Commodity-local scratch is reused only during a single MoveNext. Route records,
+    /// affinity, reach and distance survive yields in each campaign's own workspace.
     /// </summary>
     public static IEnumerable<int> RouteStages(Campaign campaign)
     {
         var nations = campaign.Nations;
+        var work = Workspace(campaign);
         campaign.TradeRoutes.Clear();
-        _routesInUse = 0;
+        work.UsedRouteRecords = 0;
         foreach (var nation in nations)
         {
             nation.TradePartners.Clear();
@@ -164,21 +157,21 @@ public static class TradeNetwork
 
         using (SimProfiler.Measure("    mkt:trade"))
         {
-            EnsureDistances(campaign);
-            MeasureReach(campaign);
-            PartnerScores.Clear();
+            EnsureDistances(campaign, work);
+            MeasureReach(campaign, work);
+            work.PartnerAffinityScores.Clear();
         }
         yield return 0;
 
         foreach (var commodity in CommodityCatalog.All)
         {
-            using (SimProfiler.Measure("    mkt:trade")) RouteOne(campaign, commodity);
+            using (SimProfiler.Measure("    mkt:trade")) RouteOne(campaign, commodity, work);
             yield return 0;
         }
         campaign.TradeRoutesDay = campaign.ElapsedDays;
     }
 
-    private static void RouteOne(Campaign campaign, Commodity commodity)
+    private static void RouteOne(Campaign campaign, Commodity commodity, TradeWorkspace work)
     {
         var nations = campaign.Nations;
 
@@ -224,7 +217,7 @@ public static class TradeNetwork
             if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
             var shortfall = (quote.Demand - quote.Production) *
                             TradePolicyRules.ImportAccess(nation.TradePolicy) *
-                            Ceiling(campaign, nation) *
+                            Ceiling(campaign, nation, work) *
                             // A country that has capped its imports of this good goes short
                             // on purpose rather than depend on anybody for the rest.
                             M.Clamp01(TradeDesk.ForGood(nation, commodity, TradeDesk.ImportCeiling));
@@ -249,7 +242,7 @@ public static class TradeNetwork
             if (!buyer.Market.TryGetValue(commodity, out var buyerQuote)) continue;
             var deficit = (buyerQuote.Demand - buyerQuote.Production) *
                           TradePolicyRules.ImportAccess(buyer.TradePolicy) *
-                          Ceiling(campaign, buyer) *
+                          Ceiling(campaign, buyer, work) *
                           M.Clamp01(TradeDesk.ForGood(buyer, commodity, TradeDesk.ImportCeiling));
             if (deficit <= 0.0001f) continue;
 
@@ -261,7 +254,7 @@ public static class TradeNetwork
                 if (SellerCapacity[seat] <= 0.0001f || SellerIds[seat] == buyer.Id) continue;
                 var seller = campaign.NationById(SellerIds[seat]);
                 if (seller is null) continue;
-                var score = Affinity(campaign, buyer, seller, commodity);
+                var score = Affinity(campaign, buyer, seller, commodity, work);
                 if (score <= 0.0001f) continue;
                 Insert(SellerOrder, SellerScore, seat, score, int.MaxValue);
             }
@@ -283,7 +276,7 @@ public static class TradeNetwork
 
                 SellerCapacity[seat] -= take;
                 deficit -= take;
-                Deliver(campaign, seller, buyer, commodity, take);
+                Deliver(campaign, seller, buyer, commodity, take, work);
             }
 
             // Whatever no friend would sell. It arrives anyway, thinly and dearly, because
@@ -307,7 +300,7 @@ public static class TradeNetwork
         }
     }
 
-    private static void Deliver(Campaign campaign, Nation seller, Nation buyer, Commodity commodity, float volume)
+    private static void Deliver(Campaign campaign, Nation seller, Nation buyer, Commodity commodity, float volume, TradeWorkspace work)
     {
         var sellerQuote = seller.Market[commodity];
         var buyerQuote = buyer.Market[commodity];
@@ -315,8 +308,8 @@ public static class TradeNetwork
         buyerQuote.Imports += volume;
 
         var value = volume * MathF.Max(0.0001f, sellerQuote.Price);
-        if (_routesInUse >= RoutePool.Count) RoutePool.Add(new TradeRoute());
-        var route = RoutePool[_routesInUse++];
+        if (work.UsedRouteRecords >= work.RouteRecords.Count) work.RouteRecords.Add(new TradeRoute());
+        var route = work.RouteRecords[work.UsedRouteRecords++];
         route.SellerId = seller.Id;
         route.BuyerId = buyer.Id;
         route.Commodity = commodity;
@@ -334,24 +327,24 @@ public static class TradeNetwork
     /// How willing and able these two are to move goods between them, as a multiplier on
     /// nothing in particular - only the ranking matters. Zero means it cannot happen at all.
     /// </summary>
-    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity)
+    private static float Affinity(Campaign campaign, Nation buyer, Nation seller, Commodity commodity, TradeWorkspace work)
     {
         // What the two countries have said about each other, which is an embargo one good
         // wide when it names a good and the ordinary kind when it does not.
         if (TradeDesk.Forbidden(buyer, seller, commodity)) return 0f;
 
         var key = ((long)buyer.Id << 32) | (uint)seller.Id;
-        if (!PartnerScores.TryGetValue(key, out var score))
+        if (!work.PartnerAffinityScores.TryGetValue(key, out var score))
         {
-            score = PartnerAffinity(campaign, buyer, seller);
-            PartnerScores[key] = score;
+            score = PartnerAffinity(campaign, buyer, seller, work);
+            work.PartnerAffinityScores[key] = score;
         }
         return score * TradePolicyRules.ImportAccess(buyer.TradePolicy) *
                TradePolicyRules.ExportAccess(seller.TradePolicy) *
                TradeDesk.PreferenceBetween(buyer, seller, commodity);
     }
 
-    private static float PartnerAffinity(Campaign campaign, Nation buyer, Nation seller)
+    private static float PartnerAffinity(Campaign campaign, Nation buyer, Nation seller, TradeWorkspace work)
     {
 
         // A war stops trade, and so does either side forbidding it. These are the whole
@@ -378,9 +371,9 @@ public static class TradeNetwork
         {
             // A squared falloff rather than a fractional power: the same shape to the eye,
             // and not a hundred thousand calls to MathF.Pow every market week.
-            var span = Kilometres(campaign, buyer, seller) / HalfReachKilometres;
+            var span = Kilometres(campaign, buyer, seller, work) / HalfReachKilometres;
             var falloff = 1f / (1f + span * span);
-            var reach = (Reach.GetValueOrDefault(buyer.Id, 0.5f) + Reach.GetValueOrDefault(seller.Id, 0.5f)) * 0.5f;
+            var reach = (work.TransportReach.GetValueOrDefault(buyer.Id, 0.5f) + work.TransportReach.GetValueOrDefault(seller.Id, 0.5f)) * 0.5f;
             score *= falloff * reach;
         }
 
@@ -397,8 +390,8 @@ public static class TradeNetwork
     /// short of everything no matter how many friends it has - and can do something about
     /// it, by building.
     /// </summary>
-    private static float Ceiling(Campaign campaign, Nation nation) =>
-        M.Clamp(campaign.Defines.WorldMarketAccess * Reach.GetValueOrDefault(nation.Id, 0.5f), 0.30f, 1.05f);
+    private static float Ceiling(Campaign campaign, Nation nation, TradeWorkspace work) =>
+        M.Clamp(campaign.Defines.WorldMarketAccess * work.TransportReach.GetValueOrDefault(nation.Id, 0.5f), 0.30f, 1.05f);
 
     /// <summary>
     /// How far every country's goods travel, in one pass over the world's regions.
@@ -410,9 +403,9 @@ public static class TradeNetwork
     /// One pass rather than one per country: the same answer, and not two hundred and sixty
     /// walks of eighteen hundred regions every market week.
     /// </summary>
-    private static void MeasureReach(Campaign campaign)
+    private static void MeasureReach(Campaign campaign, TradeWorkspace work)
     {
-        Reach.Clear();
+        work.TransportReach.Clear();
         Counts.Clear();
         foreach (var state in campaign.States)
         {
@@ -431,7 +424,7 @@ public static class TradeNetwork
         {
             var counted = Counts.GetValueOrDefault(nation.MapIndex);
             var averageInfrastructure = counted.States == 0 ? 0f : counted.Infrastructure / (float)counted.States;
-            Reach[nation.Id] = M.Clamp(
+            work.TransportReach[nation.Id] = M.Clamp(
                 0.45f + averageInfrastructure * 0.06f + counted.Ports * 0.05f + counted.Rails * 0.035f +
                 NationalModifiers.Of(nation, "trade_reach"),
                 0.45f, 1.50f);
@@ -440,43 +433,42 @@ public static class TradeNetwork
 
     /// <summary>What one country's goods can reach, for anything that wants to show it.</summary>
     public static float ReachOf(Campaign campaign, Nation nation) =>
-        Reach.TryGetValue(nation.Id, out var reach) ? reach : 0.45f;
+        Workspace(campaign).TransportReach.TryGetValue(nation.Id, out var reach) ? reach : 0.45f;
 
     /// <summary>Great-circle distance between two capitals, cached for the whole campaign.</summary>
-    private static float Kilometres(Campaign campaign, Nation a, Nation b)
+    private static float Kilometres(Campaign campaign, Nation a, Nation b, TradeWorkspace work)
     {
-        var count = _distanceNations;
+        var count = work.DistanceNationCount;
         if (a.Id < 0 || b.Id < 0 || a.Id >= count || b.Id >= count) return 12000f;
-        return _distance[a.Id * count + b.Id];
+        return work.DistanceTable[a.Id * count + b.Id];
     }
 
-    private static void EnsureDistances(Campaign campaign)
+    private static void EnsureDistances(Campaign campaign, TradeWorkspace work)
     {
         var count = 0;
         foreach (var nation in campaign.Nations) count = Math.Max(count, nation.Id + 1);
-        var unchanged = _distance is not null && _distanceNations == count &&
-            ReferenceEquals(_distanceCampaign, campaign) && DistanceCapitals.Count == campaign.Nations.Count;
+        var unchanged = work.DistanceTable is not null && work.DistanceNationCount == count &&
+            work.CapitalCoordinates.Count == campaign.Nations.Count;
         if (unchanged)
             foreach (var nation in campaign.Nations)
-                if (!DistanceCapitals.TryGetValue(nation.Id, out var coordinates) ||
+                if (!work.CapitalCoordinates.TryGetValue(nation.Id, out var coordinates) ||
                     coordinates != (nation.CapitalLatitude, nation.CapitalLongitude)) { unchanged = false; break; }
         if (unchanged) return;
 
-        _distanceCampaign = campaign;
-        _distanceNations = count;
-        _distance = new float[count * count];
-        DistanceCapitals.Clear();
+        work.DistanceNationCount = count;
+        work.DistanceTable = new float[count * count];
+        work.CapitalCoordinates.Clear();
         foreach (var nation in campaign.Nations)
-            DistanceCapitals[nation.Id] = (nation.CapitalLatitude, nation.CapitalLongitude);
-        for (var index = 0; index < _distance.Length; index++) _distance[index] = 12000f;
+            work.CapitalCoordinates[nation.Id] = (nation.CapitalLatitude, nation.CapitalLongitude);
+        for (var index = 0; index < work.DistanceTable.Length; index++) work.DistanceTable[index] = 12000f;
         foreach (var a in campaign.Nations)
         foreach (var b in campaign.Nations)
         {
             if (a.Id < 0 || b.Id < a.Id) continue;
             var kilometres = GreatCircle(
                 a.CapitalLatitude, a.CapitalLongitude, b.CapitalLatitude, b.CapitalLongitude);
-            _distance[a.Id * count + b.Id] = kilometres;
-            _distance[b.Id * count + a.Id] = kilometres;
+            work.DistanceTable[a.Id * count + b.Id] = kilometres;
+            work.DistanceTable[b.Id * count + a.Id] = kilometres;
         }
     }
 

@@ -29,6 +29,13 @@ public partial class DealOrForceGame
 {
     private PanelContainer _movementPanel;
     private VBoxContainer _movementRows;
+    private ScrollContainer _movementScroll;
+    private Campaign _movementViewCampaign;
+    private readonly Dictionary<int, HashSet<string>> _movementExpanded = new();
+    private readonly Dictionary<int, int> _movementScrollPositions = new();
+    private int _movementViewNation = -1;
+    private int _movementViewRevision;
+    private bool _movementScrollRestorePending;
     private Nation _movementShown;
     private double _movementRefresh;
     private Simulation.Campaign _movementOpenedFor;
@@ -44,8 +51,9 @@ public partial class DealOrForceGame
         _movementPanel.Visible = false;
         Ui.Place(_movementPanel, InterfaceSkin.HasLayout("hud.movement") ? "hud.movement" : "hud.side_panel");
         var outer = PanelRows(_movementPanel, 16, 12, 6);
-        var scroll = new ScrollContainer
+        var scroll = _movementScroll = new ScrollContainer
         {
+            Name = "MovementScroll",
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
@@ -66,6 +74,7 @@ public partial class DealOrForceGame
     private void ShowMovement(Nation nation)
     {
         if (nation?.Movement is null || _movementPanel is null) return;
+        RememberMovementViewport();
         // On the picker, choose the movement rather than opening the hidden campaign HUD.
         if (_pickerLayer is { Visible: true })
         {
@@ -135,10 +144,12 @@ public partial class DealOrForceGame
     {
         var nation = _movementShown;
         if (_movementRows is null || nation?.Movement is null || _campaign is null) return;
+        RememberMovementViewport();
         var snapshot = MovementSnapshot(nation);
         if (snapshot == _movementBuiltFrom) return;
         _movementBuiltFrom = snapshot;
         ClearChildren(_movementRows);
+        RestoreMovementViewport(nation.Id);
 
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);

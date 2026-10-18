@@ -498,6 +498,9 @@ public static class SaveSystem
             var warning = string.Equals(payload.ModFingerprint ?? "", activeModFingerprint ?? "", StringComparison.Ordinal)
                 ? ""
                 : "Loaded with a different mod set; unknown content may use base definitions.";
+            // Local visual migration is authoritative on the loading host. ImportNetworkSnapshot
+            // must keep the colours that host actually sent, not run its own migration.
+            SecessionColours.MigrateLegacy(campaign);
             return new SaveLoadResult(campaign, metadata, warning);
         }
         catch (Exception exception)

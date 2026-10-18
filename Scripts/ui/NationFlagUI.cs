@@ -88,6 +88,7 @@ public partial class DealOrForceGame
         // list of flags on it worked out a hundred and sixty of them again on the frame that
         // opened it - ten seconds for the conflicts screen. A mod reload clears it instead.
         var situation = key + "|" + (nation.Movement?.Landless ?? false) + "|" +
+            FlagCatalog.CivilWarParentTag(nation) + "|" +
             (nation.Movement?.Exile ?? false) + "|" + string.Join("|", FlagCatalog.All.Select(q =>
             FlagCatalog.ValueOf(q.Source, FlagWorld, country)));
         if (!ResolvedFlags.TryGetValue(situation, out var resolved))

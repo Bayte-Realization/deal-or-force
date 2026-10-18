@@ -342,6 +342,7 @@ public static class CampaignDiplomacy
     // ruinous when an AI asks it twelve thousand times a year. It is built once per change
     // to the map and read from there.
     private static Dictionary<int, HashSet<int>> _borders;
+    private static readonly Dictionary<int, HashSet<int>> UnmappedBorders = new();
     private static int _borderRevision = -1;
     private static int _borderDay = -1;
 
@@ -451,7 +452,9 @@ public static class CampaignDiplomacy
         // Nothing to build from. Do not stamp the cache - a campaign whose map has not been
         // attached yet would otherwise be told for the rest of the day that it has no
         // neighbours at all, which is exactly the sort of answer nobody thinks to doubt.
-        if (topology is null || controllers is null) return _borders ??= new Dictionary<int, HashSet<int>>();
+        // Bootstrap markets may ask before their world has a map. Never lend them
+        // the previous world's real borders; that changes their starting suppliers.
+        if (topology is null || controllers is null) return UnmappedBorders;
 
         Rebuilds++;
         _borders ??= new Dictionary<int, HashSet<int>>();

@@ -1173,6 +1173,10 @@ public sealed partial class Campaign
         // the states they hold ground of, before stability is calibrated so their institutions
         // are measured from the world they open in. A new world only (Factions).
         Factions.Found(this);
+        // Initial homeland must exist BEFORE calibrating imperial overstretch;
+        // learning it afterwards would change a country's target on day zero.
+        // Never re-baseline a restored or network-adopted world's territorial memory.
+        if (!InitialDeploymentCompleted) MovementFall.RememberHomelands(this);
         if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
 
         // The countries without land: founded on a new world once its regions exist, and put

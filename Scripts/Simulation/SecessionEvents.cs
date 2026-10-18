@@ -718,7 +718,8 @@ public static class SecessionEvents
             Name = NameFor(campaign, theirs ? culture : "", seatState?.Id ?? "", seat.Name, parent),
             Continent = parent.Continent,
             Region = parent.Region,
-            Color = ColourFor(theirs ? culture : "", parent),
+            Color = SecessionColours.Choose(campaign, parent, tag, leaving.Select(p => p.MapIndex),
+                theirs ? DemographyCatalog.Culture(culture)?.Colour ?? "" : ""),
             MapIndex = mapIndex,
             CapitalName = seat.Name,
             Population = people,
@@ -894,38 +895,6 @@ public static class SecessionEvents
         // country named in Russian would stay Russian in an English game loaded from the save.
         var people = DemographyCatalog.CultureKey(culture);
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
-    }
-
-    /// <summary>
-    /// A colour that is not the colour it left. The people's own where the catalogue has
-    /// one - which is the map a player can read at a glance - and the parent's, shifted far
-    /// enough to be a different country, where it does not.
-    /// </summary>
-    private static string ColourFor(string culture, Nation parent)
-    {
-        var definition = DemographyCatalog.Culture(culture);
-        if (definition is not null && !string.IsNullOrWhiteSpace(definition.Colour) &&
-            !string.Equals(definition.Colour, parent.Color, StringComparison.OrdinalIgnoreCase))
-            return definition.Colour;
-
-        var packed = Hex(parent.Color);
-        var red = (packed >> 16) & 0xFF;
-        var green = (packed >> 8) & 0xFF;
-        var blue = packed & 0xFF;
-        // Rotate the channels and lift it. Cheap, deterministic, and reliably a colour
-        // nobody mistakes for the one next to it.
-        var shifted = (Math.Min(255, blue + 40) << 16) | (Math.Min(255, red + 20) << 8) | green;
-        return $"#{shifted:x6}";
-    }
-
-    private static int Hex(string colour)
-    {
-        var text = (colour ?? "").TrimStart('#');
-        return text.Length >= 6 && int.TryParse(text[..6],
-            System.Globalization.NumberStyles.HexNumber,
-            System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? value
-            : 0x6E7B8B;
     }
 
     /// <summary>

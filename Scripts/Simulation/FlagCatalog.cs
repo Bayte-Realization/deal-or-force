@@ -65,7 +65,7 @@ public sealed class FlagQualifier
 /// after it and never will, and falling back to the flag of the people who founded it is a
 /// better answer than a grey rectangle.
 /// </summary>
-public static class FlagCatalog
+public static partial class FlagCatalog
 {
     private static readonly List<FlagQualifier> Qualifiers = new();
     private static readonly List<string> Fallbacks = new();
@@ -158,6 +158,7 @@ public static class FlagCatalog
         PreferMovementBase = true;
         GenericCultures.Clear();
         GenericTags.Clear();
+        ContextRules.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -178,6 +179,7 @@ public static class FlagCatalog
     public static void Merge(JsonElement root, List<string> errors = null)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
+        MergeContextRules(root, errors);
         if (root.TryGetProperty("prefer_movement_base", out var movementBase) &&
             movementBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
             PreferMovementBase = movementBase.GetBoolean();
@@ -358,7 +360,7 @@ public static class FlagCatalog
     public static bool IsKnownSource(string source) => source switch
     {
         "ideology" or "government" or "culture" or "continent" or
-        "war" or "tag" or "focus" or "formable" or "revolt" or "subject" => true,
+        "war" or "tag" or "focus" or "formable" or "revolt" or "subject" or "overlord" => true,
         _ => false
     };
 
@@ -390,6 +392,7 @@ public static class FlagCatalog
             // other government installed from outside belongs: not a thing the country
             // believes, and not how it is arranged, but who it is arranged BY.
             "subject" => nation.IsSubject ? nation.SubjectType : "",
+            "overlord" => nation.IsSubject ? campaign?.NationById(nation.OverlordId)?.Tag ?? "" : "",
             _ => ""
         };
         return Slug(value);
@@ -528,7 +531,28 @@ public static class FlagCatalog
         // Kurdish monarchy, and a mechanic that produces new countries constantly is
         // exactly where that variety is worth having. `flag_culture_kurdish_communism`
         // beats `flag_culture_kurdish`, which beats nothing.
-        foreach (var source in Fallbacks) Family(names, source, campaign, nation, live, combined);
+        // A nationwide opposition challenges its parent government, not the national
+        // identity of whichever occupied/minority region happened to seed the rising.
+        // Explicit artwork for the new tag still wins. Existing saves carry the parent
+        // in their language-independent rising name, so this repairs their flags too.
+        var civilParent = CivilWarParentTag(nation);
+        if (civilParent.Length > 0)
+        {
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 1; mask < 1 << combined; mask++)
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) == size)
+                        Spread(names, "flag_" + civilParent + "_civil_war", live, combined, mask, 0, 0);
+            names.Add($"flag_{civilParent}_civil_war_{Slug(nation.Ideology)}");
+            names.Add($"flag_{civilParent}_civil_war");
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 1; mask < 1 << combined; mask++)
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) == size)
+                        Spread(names, "flag_" + civilParent, live, combined, mask, 0, 0);
+            if (Fits(campaign, nation, civilParent)) names.Add("flag_" + civilParent);
+            else if (Otherwise.TryGetValue(civilParent, out var alternative)) names.Add(alternative);
+        }
+        foreach (var source in Fallbacks)
+            if (civilParent.Length == 0 || source != "culture") Family(names, source, campaign, nation, live, combined);
 
         // Last of all, for a country whose own flag no longer fits and which nothing else
         // answered for: better the wrong flag than a grey rectangle, and a player can see
@@ -540,7 +564,15 @@ public static class FlagCatalog
             !accepted.Contains(culture, StringComparer.OrdinalIgnoreCase));
         names.RemoveAll(name => GenericTags.TryGetValue(name, out var accepted) && accepted.Length > 0 &&
             !accepted.Contains(tag, StringComparer.OrdinalIgnoreCase));
-        return names;
+        return ApplyContextRules(campaign, nation, names);
+    }
+
+    public static string CivilWarParentTag(Nation nation)
+    {
+        if (nation is null || !string.IsNullOrEmpty(nation.FormedNationId) ||
+            !nation.Name.StartsWith("rising:", StringComparison.Ordinal)) return "";
+        var parts = nation.Name.Split(':', 4);
+        return parts.Length >= 3 ? Slug(parts[2]) : "";
     }
 
     /// <summary>

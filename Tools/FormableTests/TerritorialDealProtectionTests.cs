@@ -40,7 +40,13 @@ static class TerritorialDealProtectionTests
         Check(Ultimatum.DealAcceptable(c, buyer, seller, deal), "a mod can explicitly restore cash-only homeland sales");
         c.Defines.DealProtectHomelandSales = true;
         land.PopulationGroups.Clear(); land.PopulationGroups.Add(new PopulationGroup { Culture = "polish", Size = 1000000 });
-        Check(Ultimatum.DealAcceptable(c, buyer, seller, deal), "foreign-peopled border regions remain negotiable");
+        Check(!Ultimatum.DealAcceptable(c, buyer, seller, deal), "a multiethnic homeland is not disposable because its majority differs from the state's primary culture");
+        c.Defines.DealProtectCivicHomelandSales = false;
+        Check(Ultimatum.DealAcceptable(c, buyer, seller, deal), "a mod can explicitly select the older culture-only homeland protection");
+        c.Defines.DealProtectCivicHomelandSales = true;
+        c.Homelands[seller.Id].Remove(3003);
+        Check(Ultimatum.DealAcceptable(c, buyer, seller, deal), "foreign acquisitions without a homeland title remain negotiable");
+        c.Homelands[seller.Id].Add(3003);
         land.PopulationGroups.Clear(); land.PopulationGroups.Add(new PopulationGroup { Culture = "korean", Size = 1000000 });
         var swap = new Ultimatum.Deal(new Ultimatum.Side { Regions = new[] { 3002 }, Cash = 1000 }, deal.To);
         Check(!Ultimatum.AssessDeal(c, buyer, seller, swap).TerritoryProtected, "real territorial swaps keep the existing valuation rather than a blanket ban");

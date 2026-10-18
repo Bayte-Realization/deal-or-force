@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
+    /// <summary>Unconditional surrender returns the winner's unrenounced homeland,
+    /// even when a successor movement broke from an intervening country.</summary>
+    public bool PeaceCapitulationRecoversHomeland { get; set; } = true;
     /// <summary>What a province of a breakaway costs the state it broke from at a peace, against an ordinary one.</summary>
     public float PeaceCostReclaimFactor { get; set; } = 0.25f;
     /// <summary>The war score, or the share of the breakaway's land held securely, at which its old state writes the whole of it back in.</summary>
@@ -127,6 +131,31 @@ public static class Reintegration
         if (map is null || nation is null) return result;
         for (var province = 1; province <= map.ProvinceCount; province++)
             if (map.ProvinceToNation[province] == nation.MapIndex && !map.IsWater(province)) result.Add(province);
+        return result;
+    }
+
+    internal static List<int> CapitulationGround(Campaign c, StrategicWar war, Nation beaten, Nation winner)
+    {
+        var result = new List<int>();
+        var map = c?.ProvinceMap;
+        if (map is null || war is null || beaten is null || winner is null) return result;
+        var directBreakaway = IsBreakawayOf(beaten, winner);
+        if (!directBreakaway && !c.Defines.PeaceCapitulationRecoversHomeland) return result;
+        var homes = new HashSet<int>();
+        foreach (var region in c.StatesOf(beaten))
+            if (directBreakaway || TerritorialClaims.TitleOf(c, winner, region) == TerritorialTitle.Homeland)
+                homes.Add(region.MapIndex);
+        var belligerents = war.Side(true).Concat(war.Side(false)).Select(c.NationById)
+            .Where(n => n is not null).Select(n => n.MapIndex).ToHashSet();
+        for (var p = 1; p <= map.ProvinceCount; p++)
+        {
+            if (map.IsWater(p) || map.ProvinceToNation[p] != beaten.MapIndex || !homes.Contains(map.ProvinceToState[p])) continue;
+            var controller = (c.ProvinceController ?? map.ProvinceToNation)[p];
+            // A surrender in this war cannot sign away a third party's occupation
+            // in another one. Leave its military settlement to the actual belligerents.
+            if (controller != beaten.MapIndex && controller != winner.MapIndex && !belligerents.Contains(controller)) continue;
+            result.Add(p);
+        }
         return result;
     }
 

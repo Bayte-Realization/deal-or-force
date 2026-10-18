@@ -99,6 +99,14 @@ public partial class ExportVerification : Node
                     GetTree().Quit(_failures == 0 ? 0 : 1);
                     return;
                 }
+                if (args.Contains("--verify-movement-only"))
+                {
+                    VerifyCivilWarBanners(game);
+                    await VerifyMovementDiplomacy(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 await VerifyAgendaWorkspace(game);
                 if (args.Contains("--verify-agenda-only"))
                 {
@@ -126,6 +134,7 @@ public partial class ExportVerification : Node
                 await VerifyTerritorialMovementRepresentation(game);
                 await VerifyMovementBanners(game);
                 await VerifyMovementDiplomacy(game);
+                VerifyCivilWarBanners(game);
                 GD.Print(game.Call("ConsoleAdvance", "7").AsString());
                 foreach (var flag in new[] { "roman_empire_v2", "eastern_roman_empire_v2", "western_roman_empire" })
                 {
@@ -512,6 +521,38 @@ public partial class ExportVerification : Node
                 Check(game.FindChildren(prefix + "Country_*", "Button", true, false).Count == expected,
                     prefix + " list reflects exact living records, not an invented count");
             }
+            var scroll = game.FindChild("MovementScroll", true, false) as ScrollContainer;
+            if (scroll is not null) scroll.ScrollVertical = 120;
+            await Wait(.1);
+            var position = scroll?.ScrollVertical ?? 0;
+            // Run actual campaign time, then force a fresh UI snapshot as the periodic
+            // driver does. Do not merely check the old, still-alive Control instances.
+            world.TickDay();
+            game.VerificationRefreshMovement();
+            await Wait(.2);
+            foreach (var prefix in new[] { "MovementRecognition", "MovementDesignation" })
+                Check((game.FindChild(prefix + "List", true, false) as Control)?.Visible == true,
+                    prefix + " remains expanded across a simulation day and rebuilt rows");
+            Check(scroll is not null && Math.Abs(scroll.ScrollVertical - position) <= 2,
+                "movement scrolling survives the same tick refresh");
+            var designation = game.FindChild("MovementDesignationToggle", true, false) as Button;
+            designation?.EmitSignal(BaseButton.SignalName.Pressed);
+            game.VerificationRefreshMovement(true); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "an explicitly collapsed section stays collapsed independently of the other section");
+            game.VerificationCloseMovement();
+            game.VerificationShowMovement(movement); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "closing and reopening the same movement preserves the user's disclosures");
+            var otherMovement = world.Nations.First(n => n.Id != movement.Id && n.Movement is { Dissolved: false });
+            game.VerificationShowMovement(otherMovement); await Wait(.1);
+            game.VerificationShowMovement(movement); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "another movement's rebuilt card does not overwrite these disclosure choices");
+            before = CampaignFingerprint.Of(world);
             foreach (var size in new[] { new Vector2I(1920,1080), new Vector2I(1280,720) })
             {
                 GetTree().Root.Size = size; await Wait(.2);
@@ -528,6 +569,37 @@ public partial class ExportVerification : Node
             game.VerificationCloseMovement();
         }
         GetTree().Root.Size = new(1920,1080);
+    }
+
+    private void VerifyCivilWarBanners(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        var opposition = world.AddNation(new Nation { Tag = "XCV", Name = "rising:transitional_council:RUS:Russia",
+            Government = "provisional_government", Ideology = "social_democracy", MapIndex = 60000 });
+        DemographyCatalog.Declare(opposition.Tag, new[] { "ukrainian" });
+        var ordinary = DealOrForceGame.FlagSpriteFor(opposition.Tag);
+        Check(ordinary.Length > 0 && SpriteCatalog.TextureOf(ordinary) != SpriteCatalog.TextureOf("flag_ukr"),
+            "a nationwide civil-war side does not fly its seed region's foreign flag in the real UI");
+        opposition.SubjectType = "puppet"; opposition.OverlordId = world.NationByTag("UKR").Id;
+        Check(DealOrForceGame.FlagSpriteFor(opposition.Tag) == "flag_rus_civil_war_ukr_social_democracy",
+            "real UI flag cache notices actual foreign dependence");
+        var texture = DealOrForceGame.FlagTextureFor(opposition.Tag);
+        using var image = texture?.GetImage();
+        Check(image is not null && image.GetWidth() == 300 && image.GetPixel(150,20).R > .9f &&
+            image.GetPixel(150,100).B > .9f && image.GetPixel(150,180).R > .9f,
+            "the dependent-opposition white-blue-white PNG imports and renders as a real texture");
+        opposition.SubjectType = "";
+        Check(DealOrForceGame.FlagSpriteFor(opposition.Tag) == ordinary,
+            "ending dependence immediately restores the ordinary civil-war banner");
+        var diaspora = world.AddNation(new Nation { Tag = "XCD", Name = "Regional government",
+            Government = "provisional_government", Ideology = "nationalism", MapIndex = 60001 });
+        DemographyCatalog.Declare(diaspora.Tag,new[]{"indian_diaspora"});
+        Check(DealOrForceGame.FlagSpriteFor(diaspora.Tag) == "flag_culture_hindustani",
+            "the independent diaspora provisional government does not display a British-style cross");
+        diaspora.SubjectType = "puppet"; diaspora.OverlordId = world.NationByTag("GBR").Id;
+        Check(DealOrForceGame.FlagSpriteFor(diaspora.Tag) == "flag_culture_indian_diaspora",
+            "a restricted colonial-style banner is enabled only by actual British dependence");
+        diaspora.SubjectType = "";
     }
 
     private void Check(bool condition, string caption)
@@ -557,6 +629,8 @@ public partial class DealOrForceGame
     internal void VerificationEnableFinancialOrders() { if (_observerMode) ToggleObserverMode(); }
     internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
+    internal void VerificationRefreshMovement(bool force = false)
+    { if (force) _movementBuiltFrom = ""; RefreshMovementPanel(); }
     internal void VerificationFocusAdministration(Nation nation) =>
         _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude, 5.5f);
     internal void VerificationRevealReligion()

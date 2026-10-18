@@ -197,6 +197,9 @@ public static class GameDataLoader
 
     private static object ConvertValue(JsonElement value, Type type)
     {
+        if (type == typeof(string[]))
+            return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(x => x.ValueKind == JsonValueKind.String)
+                ? value.EnumerateArray().Select(x => x.GetString()).ToArray() : null;
         if (type == typeof(Dictionary<string, bool>) || type == typeof(Dictionary<string, string>))
         {
             try { return value.ValueKind == JsonValueKind.Object ? value.Deserialize(type) : null; }

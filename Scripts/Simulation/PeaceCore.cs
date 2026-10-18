@@ -288,22 +288,23 @@ public static class PeaceNegotiation
             var winner = campaign.NationById(winnerId);
             var kept = new List<int>();
 
-            // A breakaway that surrenders goes back whole: every province it owns, held or not,
-            // returns to the state it broke from. It is not a conquest.
+            // Direct breakaways return whole. A successor rebel state may have broken
+            // from an intervening polity instead: unconditional surrender still returns
+            // the winner's real homeland, not just one secured province. No foreign
+            // acquisitions, renounced titles or third-party occupations are invented.
             var beaten = terms == PeaceTerms.Capitulate ? campaign.NationById(proposerId) : null;
-            if (winner is not null && Reintegration.IsBreakawayOf(beaten, winner))
+            var recovered = Reintegration.CapitulationGround(campaign, war, beaten, winner);
+            var recoveredSet = recovered.ToHashSet();
+            if (recovered.Count > 0)
             {
-                foreach (var pair in war.OriginalController)
-                    if (campaign.ProvinceMap.ProvinceToNation[pair.Key] != beaten.MapIndex)
-                        campaign.SetProvinceController(pair.Key, pair.Value);
-                var whole = Reintegration.Everything(campaign, beaten);
-                foreach (var province in whole) campaign.SetProvinceController(province, (ushort)winner.MapIndex);
-                var rejoined = StatePartition.Annex(campaign, whole, winner, asConquest: false);
-                war.AnnexedProvinces = whole.Count;
+                foreach (var province in recovered) campaign.SetProvinceController(province, (ushort)winner.MapIndex);
+                var rejoined = StatePartition.Annex(campaign, recovered, winner, asConquest: false);
+                war.AnnexedProvinces = recovered.Count;
                 war.CreatedStates = rejoined.Count;
             }
-            else foreach (var pair in war.OriginalController)
+            foreach (var pair in war.OriginalController)
             {
+                if (recoveredSet.Contains(pair.Key)) continue;
                 var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
                 var inGoal = terms != PeaceTerms.EnforceWarGoal ||
                              campaign.ProvinceMap?.ProvinceToState[pair.Key] == war.ClaimedStateMapIndex;
@@ -326,8 +327,8 @@ public static class PeaceNegotiation
                         campaign.SetProvinceController(province, was);
                 kept = tidied;
                 var created = StatePartition.Annex(campaign, kept, winner);
-                war.AnnexedProvinces = kept.Count;
-                war.CreatedStates = created.Count;
+                war.AnnexedProvinces += kept.Count;
+                war.CreatedStates += created.Count;
             }
         }
 

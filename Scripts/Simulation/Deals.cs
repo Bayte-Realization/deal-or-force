@@ -17,6 +17,9 @@ public sealed partial class Defines
     public float DealHomelandRegionWeight { get; set; } = 1.5f;
     public float DealClaimRegionWeight { get; set; } = 1.2f;
     public bool DealProtectHomelandSales { get; set; } = true;
+    /// <summary>A multiethnic homeland is not spare land merely because its residents
+    /// differ from the government's primary culture. Applies to ordinary AI cash sales.</summary>
+    public bool DealProtectCivicHomelandSales { get; set; } = true;
     public float DealHomelandSaleCultureShare { get; set; } = .5f;
 }
 
@@ -356,6 +359,7 @@ public static partial class Ultimatum
         if (c is null || owner is null || state is null || !c.Defines.DealProtectHomelandSales ||
             state.NationMapIndex != owner.MapIndex || TerritorialClaims.TitleOf(c, owner, state) != TerritorialTitle.Homeland)
             return false;
+        if (c.Defines.DealProtectCivicHomelandSales) return true;
         long total = 0, primary = 0;
         foreach (var group in state.PopulationGroups)
         {

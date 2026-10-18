@@ -192,7 +192,9 @@ public static partial class AiStatecraft
     {
         if (campaign?.ProvinceMap is null || buyer is null || buyer.Population <= 0) return false;
         if (!campaign.FeatureEnabled("deals")) return false;
-        if (DemographyCatalog.PrimarySet(buyer.Tag) is not { Count: > 0 }) return false;
+        if (DemographyCatalog.PrimarySet(buyer.Tag) is not { Count: > 0 } &&
+            (!campaign.Homelands.TryGetValue(buyer.Id, out var homes) || homes.Count == 0)) return false;
+        EnsureDailyTables(campaign);
         EnsureGeography(campaign);
         var map = campaign.ProvinceMap;
         // Instance state, reused: this runs for every country with a kindred border, and a
@@ -214,7 +216,7 @@ public static partial class AiStatecraft
 
         ScenarioState best = null;
         Nation seller = null;
-        var bestShare = campaign.Defines.AiKindredShare;
+        var bestScore = float.NegativeInfinity;
         foreach (var region in TouchingRegions)
         {
             if (!_stateByMapIndex.TryGetValue(region, out var state)) continue;
@@ -232,8 +234,12 @@ public static partial class AiStatecraft
             foreach (var group in state.PopulationGroups)
                 if (DemographyCatalog.IsPrimary(buyer.Tag, group.Culture)) ourPeople += group.Size;
             var share = ourPeople / (float)state.Population;
-            if (share < bestShare) continue;
-            bestShare = share;
+            var recovery = campaign.Defines.AiPrioritisesLostHomeland &&
+                TerritorialClaims.TitleOf(campaign, buyer, state) == TerritorialTitle.Homeland;
+            if (!recovery && share < campaign.Defines.AiKindredShare) continue;
+            var score = share + (recovery ? 2f : 0f);
+            if (score < bestScore || score == bestScore && best is not null && state.MapIndex > best.MapIndex) continue;
+            bestScore = score;
             best = state;
             seller = owner;
         }

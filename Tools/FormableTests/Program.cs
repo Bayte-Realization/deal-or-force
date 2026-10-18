@@ -58,6 +58,10 @@ static class Program
         if (args.Contains("--garrison-only")) { GarrisonPlannerTests.Run(); return; }
         if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); TerritorialDealProtectionTests.Run(); return; }
+        if (args.Contains("--territorial-recovery-only")) { TerritorialRecoveryTests.Run(); return; }
+        if (args.Length == 0) TerritorialRecoveryTests.Run();
+        if (args.Contains("--secession-colours-only")) { SecessionColourTests.Run(); return; }
+        if (args.Length == 0) SecessionColourTests.Run();
         if (args.Contains("--occupied-uprising-only")) { RevoltOccupationTests.Run(); return; }
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();
@@ -78,6 +82,8 @@ static class Program
         if (args.Contains("--names-only")) { CountryNameTests.Run(); return; }
         if (args.Contains("--federal-outcome-only")) { FederalFractureOutcomeTests.Run(); return; }
         if (args.Contains("--movement-power-state-only")) { MovementPowerStateTests.Run(); return; }
+        if (args.Contains("--campaign-isolation-only")) { CampaignIsolationTests.Run(); return; }
+        if (args.Length == 0) CampaignIsolationTests.Run();
         if (args.Contains("--movement-staging-only")) { MovementPowerStagingTests.Run(); return; }
         if (args.Length == 0) MovementPowerStagingTests.Run();
         if (args.Contains("--movement-power-fingerprint-only")) { MovementPowerFingerprintTests.Run(); return; }

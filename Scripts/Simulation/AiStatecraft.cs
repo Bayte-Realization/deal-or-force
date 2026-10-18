@@ -761,7 +761,7 @@ public static partial class AiStatecraft
         if (!defines.AiUltimatumsBeforeWar) return false;
         if (Ultimatum.PendingBetween(campaign, nation.Id, target.Id)) return true;
         var cause = Statecraft.CasusBelli(campaign, nation, target);
-        if (!string.IsNullOrEmpty(cause) && cause != "irredentism") return false;
+        if (!string.IsNullOrEmpty(cause) && cause is not ("irredentism" or "reconquest")) return false;
         var key = "ultimatum/" + target.Id;
         if (nation.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
         var map = campaign.ProvinceMap;

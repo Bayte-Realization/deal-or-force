@@ -12,6 +12,9 @@ public sealed partial class Defines
     public float MovementAiUprisingChance { get; set; } = 0.55f;
     /// <summary>The chance, in a week it could rise, that it does.</summary>
     public float MovementAiUprisingAppetite { get; set; } = 0.15f;
+    public bool MovementAiUseHomelandOpenings { get; set; } = true;
+    public float MovementAiHomelandOpeningChance { get; set; } = 0.8f;
+    public float MovementAiHomelandOpeningAppetite { get; set; } = 0.45f;
 }
 
 /// <summary>
@@ -22,6 +25,23 @@ public sealed partial class Defines
 /// </summary>
 public static class MovementAi
 {
+    /// <summary>A public crisis is an opening, not free support, cadres or a successful
+    /// uprising. Think still validates every command, cost, occupation and methods gate.</summary>
+    internal static float UprisingAppetite(Campaign c, Nation movement, MovementDefinition definition,
+        ScenarioState region, float chance)
+    {
+        if (c is null || movement is null || definition is null ||
+            !MovementMethods.WillRise(c, movement, definition)) return 0f;
+        var basic = M.Clamp01(c.Defines.MovementAiUprisingAppetite);
+        if (!c.Defines.MovementAiUseHomelandOpenings || region is null ||
+            !MovementDefinition.Listed(definition.Homeland,region.Id) ||
+            !float.IsFinite(chance) || chance < c.Defines.MovementAiHomelandOpeningChance) return basic;
+        var host = MovementRules.OwnerOf(c,region);
+        if (host is null || host.Id == movement.Id ||
+            (host.Stability >= .4f && !c.Wars.Any(w => !w.Ended && w.Involves(host.Id)))) return basic;
+        return MathF.Max(basic,M.Clamp01(c.Defines.MovementAiHomelandOpeningAppetite));
+    }
+
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in TickStages(campaign)) { }
@@ -111,7 +131,8 @@ public static class MovementAi
                 targetChance = chance;
             }
             if (target is not null &&
-                MovementRules.Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, 17) < defines.MovementAiUprisingAppetite)
+                MovementRules.Roll(campaign.Seed, nation.Id, campaign.ElapsedDays, 17) <
+                    UprisingAppetite(campaign,nation,definition,target,targetChance))
                 Try("rise", target.MapIndex);
         }
 

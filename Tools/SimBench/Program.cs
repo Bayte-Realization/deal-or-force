@@ -180,6 +180,8 @@ public static class Program
                 Check("effective shipped defines match the compiled defaults", ShippedDefinesMatchTheCode()) +
                 Check("the English table indexes visible captions", TheEnglishTableIsAnIndex()) +
                 Check("translations are sound", TranslationsAreSound());
+        if (Array.IndexOf(args, "--stability-only") >= 0)
+            return Check("a country is as settled as its regions and its capital say", StabilityIsWorkedOutRatherThanStored());
 
         // Authored national employment shares precede province-history transfers.
         // A coastal correction can give ABK residents from a Georgian region; their
@@ -196,6 +198,9 @@ public static class Program
         var mapped = AttachMap(campaign);
         DebugRegion("after map");
         var diagnoseWarAt = Array.IndexOf(args, "--diagnose-war");
+        var territoryAt = Array.IndexOf(args, "--diagnose-territory");
+        if (territoryAt >= 0 && territoryAt + 2 < args.Length)
+            return mapped ? TerritoryDiagnosisReport.Run(campaign, args[territoryAt + 1], args[territoryAt + 2]) : 2;
         var isolationAt = Array.IndexOf(args, "--isolation-only");
         if (isolationAt >= 0)
             return Check("two worlds in one process do not read each other's notes",
@@ -8578,7 +8583,7 @@ public static class Program
             var shipped = JsonSerializer.Serialize(shippedValue);
             var code = Convert.ToString(property.GetValue(compiled),
                 System.Globalization.CultureInfo.InvariantCulture) ?? "";
-            if (compiledValue is System.Collections.IDictionary) code = JsonSerializer.Serialize(compiledValue);
+            if (compiledValue is System.Collections.IDictionary or Array) code = JsonSerializer.Serialize(compiledValue);
             drifted.Add($"{entry.Name}: file {shipped}, code {code}");
         }
 
@@ -8594,6 +8599,13 @@ public static class Program
     {
         if (shipped is float number && compiled is float baseline)
             return MathF.Abs(number - baseline) < 0.0001f;
+        if (shipped is Array values && compiled is Array baselineValues)
+        {
+            if (values.Rank != 1 || baselineValues.Rank != 1 || values.Length != baselineValues.Length) return false;
+            for (var i = 0; i < values.Length; i++)
+                if (!DefineValuesAgree(values.GetValue(i), baselineValues.GetValue(i))) return false;
+            return true;
+        }
         if (shipped is System.Collections.IDictionary map && compiled is System.Collections.IDictionary defaults)
         {
             if (map.Count != defaults.Count) return false;
@@ -8632,6 +8644,12 @@ public static class Program
         if (DefineValuesAgree(0.25f, 0.5f)) return "a real numeric rebalance went undetected";
         right.Clear();
         if (DefineValuesAgree(left, right)) return "a missing feature went undetected";
+        if (!DefineValuesAgree(new[] { "#C57857", "#4F94C0" }, new[] { "#C57857", "#4F94C0" }))
+            return "equivalent ordered define arrays disagree";
+        if (DefineValuesAgree(new[] { "#C57857", "#4F94C0" }, new[] { "#4F94C0", "#C57857" }))
+            return "an array reorder went undetected";
+        if (DefineValuesAgree(new[] { "#C57857" }, new[] { "#C57857", "#4F94C0" }))
+            return "an array length change went undetected";
         return "";
     }
 
@@ -12877,29 +12895,38 @@ public static class Program
         // Both of them: whichever campaign ticks second is the one that reads the first
         // one's notes, so checking only the leader would miss the whole problem.
         var firstAlone = Campaign.CreateBootstrap(20250303);
+        IsolationTrace.Print(firstAlone, "first-created");
         var secondAlone = Campaign.CreateBootstrap(19991231);
+        IsolationTrace.Print(firstAlone, "after-second-created");
         if (!AttachMap(firstAlone) || !AttachMap(secondAlone))
             return "no province map, so there is nothing to share";
         // The two worlds have to be genuinely different, or a cache leaking between them
         // leaks nearly the right answer and nothing shows. Halving one world's armies makes
         // every strength comparison in it different from the other's.
         Halve(secondAlone);
+        IsolationTrace.Print(firstAlone, "first-mapped");
         firstAlone.IsPaused = false;
         secondAlone.IsPaused = false;
         for (var day = 0; day < days; day++) firstAlone.TickDay();
+        IsolationTrace.Print(firstAlone, "first-finished");
         for (var day = 0; day < days; day++) secondAlone.TickDay();
+        IsolationTrace.Print(firstAlone, "after-second-finished");
         var expectedFirst = CampaignFingerprint.Of(firstAlone);
         var expectedSecond = CampaignFingerprint.Of(secondAlone);
 
         var same = Campaign.CreateBootstrap(20250303);
+        IsolationTrace.Print(same, "repeat-created");
         var other = Campaign.CreateBootstrap(19991231);
+        IsolationTrace.Print(same, "repeat-after-other-created");
         if (!AttachMap(same) || !AttachMap(other)) return "the second pair got no province map";
         Halve(other);
+        IsolationTrace.Print(same, "repeat-mapped");
         same.IsPaused = false;
         other.IsPaused = false;
         for (var day = 0; day < days; day++)
         {
             same.TickDay();
+            IsolationTrace.Print(same, "repeat-ticked");
             other.TickDay();
         }
 
