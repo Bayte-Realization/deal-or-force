@@ -4,6 +4,13 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>Let a ready autonomous advance use a visible, unopposed opening
+    /// without waiting for the preparation needed by a defended assault.</summary>
+    public bool AiStartsUnopposedAdvance { get; set; } = true;
+}
+
 // Target selection and local cover share the same indexed army view as combat.
 // Scratch is reused by the single-threaded simulation; no campaign state lives here.
 public static partial class Warfare
@@ -13,6 +20,33 @@ public static partial class Warfare
     private static readonly HashSet<int> CoverSeen = new();
     private static readonly List<int> CoverRing = new();
     private static readonly List<int> CoverNext = new();
+    private static readonly HashSet<ushort> OpeningEnemyMaps = new();
+
+    internal static bool CanStartOpenAdvance(Campaign c, StrategicWar war, Army army)
+    {
+        if (c?.ProvinceMap is null || c.ProvinceController is null || army is null || war is null || war.Ended ||
+            !c.Defines.AiStartsUnopposedAdvance || !war.Involves(army.NationId) ||
+            army.OrderKind is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) ||
+            army.DirectOrder || army.SupportOnly || army.InBattle || army.IsMoving || army.EmbarkedFleetId >= 0 ||
+            army.ProvinceId <= 0 || army.ProvinceId > c.ProvinceMap.ProvinceCount) return false;
+        // Assess the proposed active plan with the same value-only F# rule as a
+        // real assault. This neither unpauses it nor duplicates strict/disabled
+        // floors, nonfinite handling and recovery semantics in another predicate.
+        var readiness = Rules.AssaultRules.Assess(true, true, true, true, false,
+            army.ReadyDay, c.ElapsedDays, army.Organisation, army.SupplyLevel,
+            c.Defines.AutonomousAssaultMinimumOrganisation, c.Defines.AutonomousAssaultMinimumSupply);
+        if (!readiness.Ready) return false;
+        EnsureIndexed(c);
+        OpeningEnemyMaps.Clear();
+        WarCoalition.FillControllers(c, war, !war.IsAttacking(army.NationId), OpeningEnemyMaps);
+        // Ask the same selector and cover rule the advance will actually use, not
+        // a second optimistic forecast. No arbitrary enemy targets or hidden armies.
+        var target = ChooseAssaultTarget(c, c.ProvinceMap, war, army, c.ProvinceController, OpeningEnemyMaps);
+        if (target <= 0 || !CampaignIntel.CanSeeProvince(c, army.NationId, target)) return false;
+        foreach (var defender in InProvince(target))
+            if (war.Opposes(army.NationId, defender.NationId) && defender.Divisions >= .1f) return false;
+        return !CoverRefuses(c, c.ProvinceMap, war, army, target);
+    }
 
     private static int ChooseAssaultTarget(Campaign campaign, ProvinceTopology topology,
         StrategicWar war, Army army, ushort[] controllers, HashSet<ushort> enemyMaps)

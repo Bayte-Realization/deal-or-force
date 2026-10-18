@@ -42,6 +42,28 @@ static class CatalogIdentityTests
             "the distinct Commonwealth restoration remains available");
 
         var c = Campaign.CreateBootstrap(20261018);
+        var originalLanguage = Loc.Language;
+        try
+        {
+            foreach (var tag in new[] { "ABZ", "CCC", "KSF", "PFS" })
+            foreach (var language in new[] { "english", "russian" })
+            {
+                Loc.Language = language;
+                // Landless movements are founded after bootstrap, not necessarily here.
+                var nation = c.NationByTag(tag) ?? new Nation { Tag = tag, Name = tag };
+                var key = "country." + tag + ".name";
+                var translated = Loc.Get(key);
+                var name = nation.Name;
+                try
+                {
+                    nation.Name = "A mod renamed the English source";
+                    Check(translated != key && CountryNames.Resolve(nation, false) == translated,
+                        tag + " keeps its " + language + " name after the source name is edited");
+                }
+                finally { nation.Name = name; }
+            }
+        }
+        finally { Loc.Language = originalLanguage; }
         foreach (var id in new[]{"arakan_army","southern_transition_council"})
         {
             var d = MovementCatalog.Of(id);

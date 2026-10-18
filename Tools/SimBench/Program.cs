@@ -327,6 +327,17 @@ public static class Program
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
         if (Array.IndexOf(args, "--data-readers-only") >= 0)
             return Check("every folder of data is read by something", EveryFolderOfDataIsRead());
+        if (Array.IndexOf(args, "--identity-regressions-only") >= 0)
+        {
+            // Expiry <= 0 means permanent. Exercise expiry after day one, not by
+            // accidentally turning the old date into the permanent sentinel.
+            campaign.IsPaused = false;
+            while (campaign.ElapsedDays < 2) campaign.TickDay();
+            var identityFailures = Check("a country flies a flag that answers to what it has become", FlagsFollowWhatACountryIs());
+            identityFailures += Check("a country is named by its tag, not by an English sentence", CountriesAreNamedByTag(campaign));
+            identityFailures += Check("a country remembers why it dislikes another", OpinionIsRememberedAndForgotten(campaign));
+            return identityFailures == 0 ? 0 : 1;
+        }
 
         // `--sea <png>` draws the sea lanes - water, basins, straits, ports and a handful of
         // voyages - and prints how long each voyage is and how long it took to plot. "The
@@ -6230,7 +6241,7 @@ public static class Program
         };
         DemographyCatalog.Declare("ZZZ", new[] { "chechen" });
         var borrowed = FlagCatalog.Resolve(campaign, invented);
-        if (borrowed != "flag_culture_chechen")
+        if (borrowed != "flag_culture_chechen_communism")
             return $"a country founded by Chechens resolved to '{borrowed}' rather than their flag";
 
         // And the same people, having decided something, may fly something else again.
@@ -6801,18 +6812,19 @@ public static class Program
         OpinionSystem.Settle(campaign, relation);
         // Two countries with no history of each other are not strangers any more: they can
         // see what the other is. So what is left when the reasons are cleared has to be
-        // exactly what their politics are worth to each other and what its public has come to
-        // think of the other's (SocialMemory, which is a reputation rather than a reason and
-        // is not cleared with them), and nothing else.
+        // politics, declared identity and public reputation. Identity is not a historical
+        // opinion reason either: clearing reasons does not abolish either state church.
         var politics = PoliticsCore.Affinity(campaign, first.Id, second.Id);
+        var identity = StateIdentity.Affinity(campaign, first.Id, second.Id);
         var reputation = SocialMemory.OpinionEffect(campaign, relation);
-        if (Math.Abs(relation.Opinion - Math.Clamp(politics + reputation, -100f, 100f)) > 0.01f)
+        var baseline = Math.Clamp(politics + identity + reputation, -100f, 100f);
+        if (Math.Abs(relation.Opinion - baseline) > 0.01f)
             return $"a country with no history of another has an opinion of {relation.Opinion:0.0}, " +
-                   $"where its politics account for {politics:0.0} and its public's view of the other for {reputation:0.0}";
+                   $"where politics account for {politics:0.0}, identity for {identity:0.0} and public reputation for {reputation:0.0}";
 
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         var remembered = relation.Opinion;
-        if (remembered > -50f + politics)
+        if (remembered > Math.Max(-100f, baseline - 50f))
             return $"a declaration of war moved opinion to {remembered:0.0}, which is barely a grudge";
 
         // What the screen shows has to equal what it is made of.
@@ -12806,12 +12818,13 @@ public static class Program
         client.IsPaused = false;
         if (Environment.GetEnvironmentVariable("SNAP_DIFF") == "1")
             Console.WriteLine("  snapshot at the moment of sending: " + SnapshotDifferences(host, client));
-        for (var day = 0; day < 10; day++)
+        var hourly = Environment.GetEnvironmentVariable("SNAP_HOURLY") == "1";
+        for (var day = 0; day < (hourly ? 240 : 10); day++)
         {
-            host.TickDay(); client.TickDay();
+            if (hourly) { host.Tick(); client.Tick(); } else { host.TickDay(); client.TickDay(); }
             if (CampaignFingerprint.Of(host) == CampaignFingerprint.Of(client)) continue;
             // The first day they part, and where: the saved worlds compared field by field.
-            return $"the two worlds agreed at the moment of the snapshot and diverged on day {day + 1}, " +
+            return $"the two worlds agreed at the moment of the snapshot and diverged on {(hourly ? "step" : "day")} {day + 1}, " +
                    "so something the simulation reads is not in it: " + WhatDiffers(host, client) +
                    " | first differences: " + SnapshotDifferences(host, client);
         }

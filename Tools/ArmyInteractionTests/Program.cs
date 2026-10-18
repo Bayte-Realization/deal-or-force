@@ -15,6 +15,9 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--open-advance-only")) { OpenAdvanceTests.Run(); return; }
+        if (args.Contains("--front-cache-isolation-only")) { FrontCacheIsolationTests.Run(); return; }
+        if (args.Contains("--march-continuity-only")) { MarchContinuityTests.Run(); return; }
         if (args.Contains("--combat-attrition-only")) { CombatAttritionRefactorTests.Run(); return; }
         if (args.Contains("--coalition-combat-only")) { CoalitionCombatTests.Run(); return; }
         if (args.Contains("--assault-readiness-only")) { AssaultReadinessTests.Run(); return; }
@@ -29,6 +32,9 @@ static class Program
         if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
+        OpenAdvanceTests.Run();
+        FrontCacheIsolationTests.Run();
+        MarchContinuityTests.Run();
         var c = Campaign.CreateBootstrap(20260906);
         // These isolated subsystem fixtures count steps in days, without running the
         // world's economy/AI. Do not silently inherit the campaign's hourly UI clock.

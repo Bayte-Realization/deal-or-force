@@ -1,0 +1,9 @@
+{
+  "Embarked: this formation cannot launch a land assault until it disembarks.": "В море: отряд не может начать сухопутный штурм до высадки.",
+  "Support fire only: this order helps a battle but does not occupy empty ground.": "Только огневая поддержка: отряд помогает в бою, но не занимает пустую территорию.",
+  "March order: {0:N0} route step(s) remain. Arrival at the assigned position is still pending.": "Приказ на марш: осталось участков пути — {0:N0}. Отряд ещё не прибыл на назначенную позицию.",
+  "The AI has not started this offensive plan ({0:P0} prepared). Readiness and strategy still determine when it can attack.": "ИИ пока не запустил наступление (план готов на {0:P0}). Момент атаки зависит от готовности отряда и выбранной стратегии.",
+  "Embarked: {0:N0}": "В море: {0:N0}",
+  "Support fire only: {0:N0}": "Только огневая поддержка: {0:N0}",
+  "Marching: {0:N0}": "На марше: {0:N0}"
+}

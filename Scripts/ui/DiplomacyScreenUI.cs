@@ -491,9 +491,11 @@ public partial class DealOrForceGame
         row.Identity = Title("", 10, Ui.Colour("text.muted"));
         row.Identity.Name = "DiplomacyCountryIdentity";
         row.Identity.ClipText = true;
-        row.Identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        row.Identity.AutowrapMode = TextServer.AutowrapMode.Off;
-        row.Identity.MaxLinesVisible = 1;
+        // Both demographics are useful when choosing a diplomatic partner. Ellipsising
+        // this line hid the culture almost everywhere, especially in Russian at 720p.
+        // Wrap in the existing column instead of widening the whole window over the map.
+        row.Identity.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        row.Identity.MaxLinesVisible = -1;
         text.AddChild(row.Identity);
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
         Fixed(row.Stance, 64);
@@ -558,7 +560,8 @@ public partial class DealOrForceGame
     // theme line spacing and the actual HBox width all affect the final height.
     private static float ReserveWrappedLabelLines(Label label)
     {
-        var lines = Math.Clamp(label.GetLineCount(), 1, Math.Max(1, label.MaxLinesVisible));
+        var lines = Math.Max(1, label.GetLineCount());
+        if (label.MaxLinesVisible > 0) lines = Math.Min(lines, label.MaxLinesVisible);
         var height = Mathf.Ceil(Math.Max(14f, label.GetLineHeight()) * lines +
             label.GetThemeConstant("line_spacing") * (lines - 1) + 2);
         label.CustomMinimumSize = new Vector2(label.CustomMinimumSize.X, height);
@@ -568,6 +571,7 @@ public partial class DealOrForceGame
     private static void FitDiplomacyName(DiplomacyRow row)
     {
         ReserveWrappedLabelLines(row.Name);
+        ReserveWrappedLabelLines(row.Identity);
         // Both the wrapped name AND identity line (plus flag/opinion) must fit.
         // Reserving only the first label shrank a two-line row to 28 pixels.
         var content = row.Name.GetParent().GetParent() as Control;

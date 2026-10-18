@@ -23,6 +23,7 @@ public partial class ExportVerification
                 await Wait(.25);
                 var rows = game.FindChild("DiplomacyListRows", true, false).GetChildren().OfType<Button>().Where(b => b.Visible).ToArray();
                 var fits = rows.Length > 0;
+                var identitiesReadable = fits;
                 foreach (var row in rows)
                 {
                     var name = row.FindChild("DiplomacyCountryName", true, false) as Label;
@@ -31,8 +32,14 @@ public partial class ExportVerification
                     var bottom = row.GetGlobalRect().End.Y;
                     fits &= identity.GetGlobalRect().End.Y <= bottom - 1 &&
                         name.GetGlobalRect().End.Y <= identity.GetGlobalRect().Position.Y + .5f;
+                    var needed = identity.GetLineHeight() * Math.Max(1, identity.GetLineCount()) +
+                        identity.GetThemeConstant("line_spacing") * Math.Max(0, identity.GetLineCount() - 1);
+                    identitiesReadable &= identity.AutowrapMode != TextServer.AutowrapMode.Off &&
+                        identity.MaxLinesVisible == -1 && identity.Size.Y + 1 >= needed &&
+                        identity.TooltipText.Length > 0;
                 }
                 Check(fits, "diplomacy country names AND identity lines fit their rows " + language + " " + size.X);
+                Check(identitiesReadable, "diplomacy demographics wrap without hiding faith or culture " + language + " " + size.X);
                 var materials = game.FindChildren("AtlasMaterial", "", true, false);
                 Check(materials.Count > 0 && materials.All(n => n is Node2D && n is not Control),
                     "panel decoration never participates in content layout " + language + " " + size.X);

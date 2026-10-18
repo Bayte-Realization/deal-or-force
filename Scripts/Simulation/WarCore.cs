@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -342,7 +343,7 @@ public static partial class FrontPlanner
     /// and kept until the front is redrawn or a province changes hands, which is exactly
     /// when the answer can change.
     /// </summary>
-    private static readonly Dictionary<long, (int Stamp, HashSet<int> Line)> ReserveLines = new();
+    private static readonly ConditionalWeakTable<Campaign, Dictionary<long, (int Stamp, HashSet<int> Line)>> ReserveLines = new();
 
     public static HashSet<int> ReserveLine(Campaign campaign, StrategicWar war, int nationId)
     {
@@ -354,7 +355,10 @@ public static partial class FrontPlanner
         var key = ((long)war.Id << 32) | (uint)nationId;
         var stamp = HashCode.Combine(war.LastFrontDay, campaign.MapRevision,
             war.AttackerFront.Count, war.DefenderFront.Count);
-        if (ReserveLines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
+        // A save being inspected beside a live world can use the same ids and
+        // revision on a different front. Neither may own the other's cached set.
+        var lines = ReserveLines.GetValue(campaign, static _ => new());
+        if (lines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
 
         var result = new HashSet<int>();
         var front = war.FriendlyFront(nationId);
@@ -363,7 +367,7 @@ public static partial class FrontPlanner
             if (!front.Contains(neighbor) && controllers[neighbor] == nation.MapIndex)
                 result.Add(neighbor);
         if (result.Count == 0) result = new HashSet<int>(front);
-        ReserveLines[key] = (stamp, result);
+        lines[key] = (stamp, result);
         return result;
     }
 
@@ -460,7 +464,7 @@ public static partial class FrontPlanner
             // was handed over, in which case they march by the same rule as everybody else's.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
-            if (army.Planning < profile.ExecutePlanningThreshold) continue;
+            if (army.Planning < profile.ExecutePlanningThreshold && !Warfare.CanStartOpenAdvance(campaign, war, army)) continue;
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
         }
     }
@@ -566,13 +570,14 @@ public static partial class FrontPlanner
             }
         if (SplitWars.Count < 2) return armies;
 
-        // Once a day: the passes for each war, and every redraw of a front in between, read the
-        // same split, so what one war's pass decides is not undone by the next war's.
+        // Once per simulation step: all wars read the same split within that step.
+        // A day-long derived cache survives hourly movement and cannot be reproduced
+        // by a cold client loading a snapshot halfway through that day.
         if (!Splits.TryGetValue(nationId, out var split)) Splits[nationId] = split = new ArmySplit();
-        if (!ReferenceEquals(split.Campaign, campaign) || split.Day != campaign.ElapsedDays || split.Stamp != stamp)
+        if (!ReferenceEquals(split.Campaign, campaign) || split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
         {
             split.Campaign = campaign;
-            split.Day = campaign.ElapsedDays;
+            split.Hour = campaign.ElapsedHours;
             split.Stamp = stamp;
             Split(campaign, nationId, SplitWars, armies, split.ByWar);
         }
@@ -582,7 +587,7 @@ public static partial class FrontPlanner
     private sealed class ArmySplit
     {
         public Campaign Campaign;
-        public int Day = -1;
+        public long Hour = -1;
         public int Stamp;
         public readonly Dictionary<int, List<Army>> ByWar = new();
     }

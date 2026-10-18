@@ -99,6 +99,13 @@ public partial class ExportVerification : Node
                     GetTree().Quit(_failures == 0 ? 0 : 1);
                     return;
                 }
+                if (args.Contains("--verify-army-activity-only"))
+                {
+                    await VerifyArmyActivity(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-movement-only"))
                 {
                     VerifyCivilWarBanners(game);

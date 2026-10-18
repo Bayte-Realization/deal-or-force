@@ -223,6 +223,10 @@ public static partial class Warfare
             foreach (var war in campaign.Wars)
             {
                 if (war.Ended) continue;
+                // A capture in the preceding war invalidates province/war indexes.
+                // Refresh BEFORE obtaining its formation list: rebuilding that list
+                // from inside the opportunity predicate would mutate an active foreach.
+                EnsureIndexed(campaign);
                 using (SimProfiler.Measure("    adv:execution")) FrontPlanner.UpdateAiExecution(campaign, war, In(ByWar, war.Id));
                 using (SimProfiler.Measure("    adv:resolve")) ResolveAdvances(campaign, war);
             }

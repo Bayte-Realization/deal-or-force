@@ -130,20 +130,20 @@ public static class AiStrategyCatalog
 
     private static readonly Dictionary<int, Posture> Postures = new();
     private static Campaign _postureCampaign;
-    private static int _postureDay = int.MinValue;
+    private static long _postureHour = long.MinValue;
 
     /// <summary>
-    /// Every country's army, counted once a day.
+    /// Every country's army, counted once per simulation step.
     ///
-    /// Stamped with the campaign it describes as well as the day, because a client
+    /// Stamped with the campaign it describes as well as the simulation hour, because a client
     /// rebuilding from a host's snapshot holds two campaigns at once and a table that only
     /// knows what day it is would answer one of them with the other's army.
     /// </summary>
     private static Posture PostureOf(Campaign campaign, Nation nation)
     {
-        if (_postureDay != campaign.ElapsedDays || !ReferenceEquals(_postureCampaign, campaign))
+        if (_postureHour != campaign.ElapsedHours || !ReferenceEquals(_postureCampaign, campaign))
         {
-            _postureDay = campaign.ElapsedDays;
+            _postureHour = campaign.ElapsedHours;
             _postureCampaign = campaign;
             Postures.Clear();
             foreach (var army in campaign.Armies)
@@ -172,7 +172,7 @@ public static class AiStrategyCatalog
     /// closure and two delegates for each: three quarters of everything the war pass
     /// allocated, and by a distance the largest single source of garbage in the game.
     ///
-    /// The answer only changes when the army does, so it is worked out once a day for
+    /// The answer changes with the army's hourly supply/recovery, so it is worked out once per step for
     /// everybody at once and read back here.
     /// </summary>
     public static AiStrategyDefinition Resolve(Campaign campaign, StrategicWar war, Nation nation)

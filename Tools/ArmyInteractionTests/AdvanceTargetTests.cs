@@ -24,7 +24,7 @@ static class AdvanceTargetTests
     // (col 2, row 2) and a strong enemy corps stands one hop further east, covering the pin.
     // The sectors north, west and south of the attacker are three hops from the corps -
     // outside the coverage radius - so the refused pin must give way to one of them.
-    static Campaign Fixture()
+    internal static Campaign Fixture()
     {
         const int width = 96, height = 96;
         var states = new ushort[width * height];
@@ -58,7 +58,7 @@ static class AdvanceTargetTests
         return c;
     }
 
-    static Army Unit(Campaign c, int id, int nation, int province, ArmyOrder order, float divisions = 1f)
+    internal static Army Unit(Campaign c, int id, int nation, int province, ArmyOrder order, float divisions = 1f)
     {
         var centre = c.ProvinceMap.CenterOf(province);
         var army = new Army { Id = id, NationId = nation, ProvinceId = province,

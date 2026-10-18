@@ -34,12 +34,15 @@ static class WarDiagnosisReport
         Console.WriteLine($"WAR_DIAG saved day={c.ElapsedDays} date={c.Date} focus={tag} wars={wars.Length}; replay={days} days; no save writes");
         Warfare.RebuildFronts(c);
         Print(c, wars, ids, "BEFORE");
+        var orderTrace = Environment.GetEnvironmentVariable("DOF_TRACE_ORDERS") == "1"
+            ? new WarOrderTrace(c, ids) : null;
         var owners = (ushort[])c.ProvinceMap.ProvinceToNation.Clone();
         var changed = 0;
         c.IsPaused = false;
         for (var day = 0; day < Math.Clamp(days, 0, 365); day++)
         {
             c.TickDay();
+            orderTrace?.Observe(c);
             for (var p = 1; p <= c.ProvinceMap.ProvinceCount; p++)
             {
                 if (controls[p] != c.ProvinceController[p])
@@ -64,6 +67,7 @@ static class WarDiagnosisReport
         var moved = positions.Count(kv => c.Armies.FirstOrDefault(a => a.Id == kv.Key) is { } a && a.ProvinceId != kv.Value);
         var battles = c.Battles.Count(b => b.StartedDay >= initialDay && wars.Any(w => w.Id == b.WarId));
         Console.WriteLine($"WAR_DIAG end day={c.ElapsedDays}; moved={moved}/{positions.Count}; control changes={controlChanges}; new battles={battles}; relevant ownership changes={changed}; fault={c.SimulationFault}");
+        orderTrace?.Print();
         return c.SimulationFault.Length == 0 ? 0 : 1;
     }
 

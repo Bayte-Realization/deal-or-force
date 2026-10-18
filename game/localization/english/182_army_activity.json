@@ -1,0 +1,9 @@
+{
+  "Embarked: this formation cannot launch a land assault until it disembarks.": "Embarked: this formation cannot launch a land assault until it disembarks.",
+  "Support fire only: this order helps a battle but does not occupy empty ground.": "Support fire only: this order helps a battle but does not occupy empty ground.",
+  "March order: {0:N0} route step(s) remain. Arrival at the assigned position is still pending.": "March order: {0:N0} route step(s) remain. Arrival at the assigned position is still pending.",
+  "The AI has not started this offensive plan ({0:P0} prepared). Readiness and strategy still determine when it can attack.": "The AI has not started this offensive plan ({0:P0} prepared). Readiness and strategy still determine when it can attack.",
+  "Embarked: {0:N0}": "Embarked: {0:N0}",
+  "Support fire only: {0:N0}": "Support fire only: {0:N0}",
+  "Marching: {0:N0}": "Marching: {0:N0}"
+}

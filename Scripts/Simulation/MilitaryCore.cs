@@ -933,6 +933,9 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         // at all, several times a week, for the whole war.
         var heldPost = army.OrderProvinceId;
         var servedWar = army.AssignedWarId;
+        var marchingFront = !army.DirectOrder && army.OrderKind != ArmyOrder.Manual && army.Route.Count > 0;
+        var previousStep = marchingFront ? army.Route[0] : -1;
+        var previousProgress = army.MoveProgress;
 
         army.OrderKind = Order;
         army.DirectOrder = false;
@@ -1043,6 +1046,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         army.PlannedRoute.AddRange(plannedRoute);
         army.OrderRouteSteps = plannedRoute.Length;
         army.OrderStepsCompleted = 0;
+        // A staff role is not a physical turn-around. Recompute and validate the
+        // route as usual, but don't erase distance already travelled on the same
+        // first edge merely because an advance was promoted/demoted. A changed
+        // direction, war, direct march or blocked route still starts cleanly.
+        if (marchingFront && servedWar == war.Id && route.Length > 0 && route[0] == previousStep)
+            army.MoveProgress = previousProgress;
         if (target > 0)
         {
             army.OrderProvinceId = target;
