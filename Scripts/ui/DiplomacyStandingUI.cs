@@ -82,6 +82,7 @@ public partial class DealOrForceGame
             var score = attacking ? war.WarScore : -war.WarScore;
             var enemies = war.EnemiesOf(nation.Id).Select(id => c.NationById(id)).Where(n => n is not null).ToList();
             var tug = bar(10, 140);
+            tug.Name = "DiplomacyStandingScoreBar" + war.Id;
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), WarSideColour(nation),
                 WarSideColour(enemies.FirstOrDefault() ?? nation));
             head.AddChild(tug);

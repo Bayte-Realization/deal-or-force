@@ -962,6 +962,7 @@ public partial class DealOrForceGame
             var score = attacking ? war.WarScore : -war.WarScore;
             var front = Field("AT WAR", WarNames.Of(_campaign, war), negative);
             var tug = Bar(18);
+            tug.Name = "DiplomacyPlayerScoreBar" + war.Id;
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), ourColour, theirColour);
             front.AddChild(tug);
             var line = new HBoxContainer();

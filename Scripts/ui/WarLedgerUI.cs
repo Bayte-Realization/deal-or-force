@@ -51,7 +51,7 @@ public partial class DealOrForceGame
     private int _warDetailBuiltFor = -1;
 
     /// <summary>How lopsided a war has to be before its front line reaches the end of the bar.</summary>
-    private static float WarLedgerBarScale => Ui.Metric("war_ledger.bar_scale", 40f);
+    private static float WarLedgerBarScale => Ui.Metric("war_ledger.bar_scale", 100f);
 
     /// <summary>The same for one part of a war's score, which is a fraction of the whole.</summary>
     private static float WarLedgerPartScale => Ui.Metric("war_ledger.part_scale", 20f);
@@ -530,6 +530,7 @@ public partial class DealOrForceGame
         var mine = _campaign.Player is not null && war.Involves(_campaign.Player.Id);
 
         row.WarId = war.Id;
+        row.Bar.Name = "WarLedgerScoreBar" + war.Id;
         var styled = mine ? 1 : 0;
         if (row.Styled != styled)
         {
@@ -803,10 +804,12 @@ public partial class DealOrForceGame
         standing.HorizontalAlignment = HorizontalAlignment.Center;
         front.AddChild(standing);
         var tug = Bar(24);
+        tug.Name = "WarLedgerDetailScoreBar";
         tug.Tug(Mathf.Clamp(war.WarScore / WarLedgerBarScale, -1f, 1f), attackerColour, defenderColour);
         front.AddChild(tug);
         var scale = Body(Simulation.Loc.Format("the front line is drawn at the war score; the end of the bar is {0}",
             WarLedgerBarScale.ToString("0")), 11, Ui.Colour("text.faint"));
+        scale.Name = "WarLedgerScaleCaption";
         scale.HorizontalAlignment = HorizontalAlignment.Center;
         front.AddChild(scale);
         faces.AddChild(front);
