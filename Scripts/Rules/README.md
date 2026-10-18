@@ -10,6 +10,12 @@ primitive values into `Rules.AssaultRules`. Its struct result maps back to the
 existing C# readout. No Godot, mutable world, IO, clock, RNG, save or command
 authority crosses this boundary. Scenes still use C#/GDScript: not Attach Script.
 
+`CatalogueWindow.Plan` supplies an overflow-safe value-only page slice for the
+retained decisions/promises/goals catalogue. It receives only counts, never
+controls or campaign objects. `--agenda-only` covers 729 integer boundary cases,
+zero-allocation warmed calls, translated search and read-only world invariants.
+This is a clarity/reuse boundary, not a claim that F# makes UI rendering faster.
+
 This migration isolates readable rules; it does not claim F# arithmetic is
 faster than C#. The allocation improvements in this pass are separate C#
 catalogue/traversal changes. Rust game migration is paused by the author.

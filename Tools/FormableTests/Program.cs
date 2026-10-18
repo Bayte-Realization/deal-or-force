@@ -13,11 +13,13 @@ static class Program
         if (args.Contains("--audit-movement-flags")) { FlagArtworkTests.AuditMovementBanners(); return; }
         if (args.Contains("--ownership-kernel-only")) { OwnershipComponentTests.Run(); return; }
         if (args.Contains("--core-refactor-only")) { CoreRefactorTests.Run(); return; }
+        if (args.Contains("--agenda-only")) { AgendaWorkspaceTests.Run(); return; }
         if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
         if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
         if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
         if (args.Length == 0) OwnershipComponentTests.Run();
         if (args.Length == 0) CoreRefactorTests.Run();
+        if (args.Length == 0) AgendaWorkspaceTests.Run();
         if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
         if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }

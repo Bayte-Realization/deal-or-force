@@ -11,5 +11,6 @@
   <ItemGroup>
     <PackageReference Include="FSharp.Core" Version="10.1.402" />
     <Compile Include="AssaultRules.fs" />
+    <Compile Include="CatalogueWindow.fs" />
   </ItemGroup>
 </Project>

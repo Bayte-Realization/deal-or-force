@@ -1,0 +1,7 @@
+{
+  "metrics": {
+    "agenda.page_size": 4,
+    "agenda.compact_height": 800,
+    "agenda.compact_page_size": 2
+  }
+}

@@ -80,6 +80,13 @@ public partial class ExportVerification : Node
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
+                await VerifyAgendaWorkspace(game);
+                if (args.Contains("--verify-agenda-only"))
+                {
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 await VerifySovereignFinance(game);
                 await VerifyReligionAndOccupation(game);
                 game.Call("OpenScreen", "Laws");

@@ -60,7 +60,7 @@ public partial class DealOrForceGame
             var resultBox = new VBoxContainer();
             resultBox.AddThemeConstantOverride("separation", 2);
             resultBox.AddChild(CardLine(Tr("Result") + ":", "text.caption"));
-            foreach (var line in result) card.AddChild(CardLine("· " + line, "text.body"));
+            foreach (var line in result) resultBox.AddChild(CardLine("· " + line, "text.body"));
             card.AddChild(resultBox);
         }
 

@@ -100,6 +100,8 @@ public partial class DealOrForceGame
     private void AtlasOpenTab(string tab, string targetName)
     {
         SelectDossierTab(tab);
+        if (tab == "Decisions" && targetName.StartsWith("Decision_", StringComparison.Ordinal))
+            SelectAgendaEntry(AgendaWorkspace.Section.Decisions, targetName[9..]);
         var target = _decisionControls.FindChildren("*", "Button", true, false).OfType<Control>().FirstOrDefault(c => c.Name == targetName);
         if (target?.GetParent() is Control card)
             _ = AtlasScrollToCard(card, tab);

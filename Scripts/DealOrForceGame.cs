@@ -1682,6 +1682,8 @@ public partial class DealOrForceGame : Control
         if (_armyPanel is { Visible: true }) RefreshArmyPanel();
 
         if (_campaign is not null && _dossierScreen == "Economy") ShowEconomyScreen();
+        if (_campaign is not null && _dossierScreen == "Decisions" && _dossierTab == "Decisions")
+            RefreshAgendaLanguage();
     }
 
     private static void RefreshLocalisedText(Node node)
