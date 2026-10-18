@@ -61,12 +61,15 @@ public static class SoundCatalog
     /// <summary>One mixing channel: how loud it is, and how it behaves against the others.</summary>
     public readonly struct Channel
     {
-        public Channel(string name, float volumeDb, int priority, bool independent)
+        public Channel(string name, float volumeDb, int priority, bool independent,
+            float musicDuckDb = 0, float ambienceDuckDb = 0)
         {
             Name = name ?? "";
             VolumeDb = volumeDb;
             Priority = priority;
             Independent = independent;
+            MusicDuckDb = DuckLevel(musicDuckDb);
+            AmbienceDuckDb = DuckLevel(ambienceDuckDb);
         }
 
         public string Name { get; }
@@ -85,6 +88,10 @@ public static class SoundCatalog
         /// just did, and feedback that arrives late is worse than none.
         /// </summary>
         public bool Independent { get; }
+        public float MusicDuckDb { get; }
+        public float AmbienceDuckDb { get; }
+
+        private static float DuckLevel(float value) => float.IsFinite(value) ? Math.Clamp(value, -24, 0) : 0;
     }
 
     private static readonly Dictionary<string, Cue> Cues = new(StringComparer.OrdinalIgnoreCase);
@@ -172,7 +179,8 @@ public static class SoundCatalog
                 if (declaration.Value.ValueKind == JsonValueKind.Number)
                 {
                     Channels[declaration.Name] = new Channel(declaration.Name,
-                        Single(declaration.Value, existing.VolumeDb), existing.Priority, existing.Independent);
+                        Single(declaration.Value, existing.VolumeDb), existing.Priority, existing.Independent,
+                        existing.MusicDuckDb, existing.AmbienceDuckDb);
                     continue;
                 }
                 if (declaration.Value.ValueKind != JsonValueKind.Object)
@@ -193,7 +201,12 @@ public static class SoundCatalog
                                   alone.ValueKind is JsonValueKind.True or JsonValueKind.False
                     ? alone.GetBoolean()
                     : existing.Independent;
-                Channels[declaration.Name] = new Channel(declaration.Name, volume, priority, independent);
+                var musicDuck = body.TryGetProperty("music_duck_db", out var duckMusic)
+                    ? Single(duckMusic, existing.MusicDuckDb) : existing.MusicDuckDb;
+                var ambienceDuck = body.TryGetProperty("ambience_duck_db", out var duckAmbience)
+                    ? Single(duckAmbience, existing.AmbienceDuckDb) : existing.AmbienceDuckDb;
+                Channels[declaration.Name] = new Channel(declaration.Name, volume, priority, independent,
+                    musicDuck, ambienceDuck);
             }
 
         if (!root.TryGetProperty("cues", out var cues) || cues.ValueKind != JsonValueKind.Object) return;

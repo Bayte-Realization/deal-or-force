@@ -97,6 +97,57 @@ static class MusicTransitionTests
         var rejected = false;
         try { mix.BeginSilence(7); } catch (InvalidOperationException) { rejected = true; }
         Check(rejected, "invalid direct interruption is rejected instead of silently stopping a loud deck");
+        Focus();
         Console.WriteLine($"Music transition checks: {_checks}");
+    }
+
+    private static void Focus()
+    {
+        var focus = new AudioFocusEnvelope();
+        Check(focus.Gain == 1, "cue focus leaves an idle soundtrack unchanged");
+        focus.Request(2, .5f);
+        Check(focus.Gain == 1, "cue focus attacks smoothly rather than stepping the recording's level");
+        focus.Advance(.3);
+        Check(focus.Gain > .5f && focus.Gain < .51f, "important cue makes room within a fraction of a second");
+        focus.Request(.5, .8f);
+        focus.Advance(.2);
+        Check(focus.Gain < .51f, "a weaker overlapping report cannot pump the music back up");
+        focus.Advance(1.5);
+        var low = focus.Gain;
+        focus.Advance(.75);
+        Check(focus.Gain > low && focus.Gain < 1, "quiet returns gradually after the actual report ends");
+        focus.Advance(30);
+        Check(focus.Gain == 1, "finished focus fully releases with no stale callbacks");
+        var longFrame = new AudioFocusEnvelope();
+        var shortFrames = new AudioFocusEnvelope();
+        longFrame.Request(2, .4f); shortFrames.Request(2, .4f);
+        longFrame.Advance(3);
+        for (var i = 0; i < 300; i++) shortFrames.Advance(.01);
+        Check(Near(longFrame.Gain, shortFrames.Gain), "focus timing is independent of the render frame rate");
+        focus.Request(double.NaN, .2f); focus.Request(2, float.NaN);
+        focus.Advance(double.NaN); focus.Advance(-1);
+        Check(focus.Gain == 1, "invalid times and levels cannot poison or silence the mix");
+        focus.Request(10000, -1); focus.Advance(100);
+        Check(focus.Gain == 1, "even a malformed long cue cannot hold ducking indefinitely");
+        focus.Request(2, .1f); focus.Advance(.1); focus.Reset();
+        Check(focus.Gain == 1, "changing scene or resetting the campaign clears old cue focus");
+        var channel = new SoundCatalog.Channel("test", 0, 1, false, 8, -100);
+        Check(channel.MusicDuckDb == 0 && channel.AmbienceDuckDb == -24,
+            "modded duck levels cannot amplify the score or exceed the attenuation limit");
+        var errors = new System.Collections.Generic.List<string>();
+        try
+        {
+            SoundCatalog.Merge("{\"channels\":{\"focus_test\":{\"music_duck_db\":-5,\"ambience_duck_db\":-9}}}",
+                "res://test", "focus", errors);
+            SoundCatalog.Merge("{\"channels\":{\"focus_test\":-12}}", "res://test", "focus", errors);
+            var patched = SoundCatalog.GetChannel("focus_test");
+            Check(errors.Count == 0 && patched.MusicDuckDb == -5 && patched.AmbienceDuckDb == -9 && patched.VolumeDb == -12,
+                "a volume-only mod overlay preserves inherited focus rules");
+            SoundCatalog.Merge("{\"channels\":{\"focus_test\":{\"music_duck_db\":0,\"ambience_duck_db\":0}}}",
+                "res://test", "focus", errors);
+            Check(SoundCatalog.GetChannel("focus_test").MusicDuckDb == 0 &&
+                SoundCatalog.GetChannel("focus_test").AmbienceDuckDb == 0, "mods can opt a channel out of ducking");
+        }
+        finally { SoundCatalog.Load(); }
     }
 }

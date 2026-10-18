@@ -12,6 +12,7 @@ public partial class MusicDirector : Node
     private static MusicDirector _instance;
     private readonly AudioStreamPlayer[] _decks = new AudioStreamPlayer[2];
     private readonly MusicPlaybackTransition _transition = new();
+    private readonly AudioFocusEnvelope _cueFocus = new();
     private readonly MusicCatalog.Track[] _tracks = new MusicCatalog.Track[2];
     private readonly Random _order = new();
     private readonly MusicMoodLatch _mood = new();
@@ -32,6 +33,12 @@ public partial class MusicDirector : Node
     public void SuppressForAudition(bool suppressed)
     { _auditionSuppressed = suppressed; RefreshVolume(); }
 
+    public void DuckForCue(double seconds, float decibels) =>
+        _cueFocus.Request(seconds, Mathf.DbToLinear(decibels));
+
+    public void ClearCueFocus() => _cueFocus.Reset();
+    internal float CueFocusGain => _cueFocus.Gain;
+
     public MusicMood CurrentMood => _mood.Current;
     public string CurrentTrack => _playing.Length == 0 ? "" : Loc.Get(_tracks[_transition.ActiveDeck].Label);
     public string CurrentReason => Loc.Get(_readout.Reason);
@@ -46,7 +53,7 @@ public partial class MusicDirector : Node
     }
 
     public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null)
-    { _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
+    { _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
 
     public override void _Ready()
     {
@@ -63,6 +70,7 @@ public partial class MusicDirector : Node
 
     public override void _Process(double delta)
     {
+        _cueFocus.Advance(delta);
         var completed = _transition.Advance(delta);
         if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
         else if (completed == MusicTransitionCompletion.Silence)
@@ -86,7 +94,7 @@ public partial class MusicDirector : Node
         {
             if (_decks[i] is null) continue;
             var share = _transition.Gain(i, SettingsCatalog.Number("volume_master"),
-                SettingsCatalog.Number("volume_music"), _auditionSuppressed);
+                SettingsCatalog.Number("volume_music"), _auditionSuppressed) * _cueFocus.Gain;
             _decks[i].VolumeDb = share <= .0005f ? -80f : SoundCatalog.GetChannel("music").VolumeDb + _tracks[i].VolumeDb + Mathf.LinearToDb(share);
         }
     }

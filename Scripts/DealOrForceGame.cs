@@ -1743,6 +1743,8 @@ public partial class DealOrForceGame : Control
         LayoutCampaignNavigation();
         _strategicHudFingerprint = int.MinValue;
         RefreshStrategicHud();
+        if (_hudLayer is { Visible: true } && _militarySpending is not null && _campaign?.Player is { } player)
+            RefreshTopBar(player);
 
         // The names across the map. Built as 3D text once and rebuilt only when a country
         // renames itself - which is what a change of language is, for every country at once.

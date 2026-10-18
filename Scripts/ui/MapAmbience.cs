@@ -20,9 +20,15 @@ public sealed partial class MapAmbience : Node
     private readonly Func<GlobePresentation> _globe;
     private readonly Func<Campaign> _campaign;
     private AudioStreamPlayer _high, _land, _front;
+    private readonly AudioFocusEnvelope _cueFocus = new();
     private float _frontNear;
     private double _frontCheck;
     public bool AuditionSuppressed { get; set; }
+
+    public void DuckForCue(double seconds, float decibels) =>
+        _cueFocus.Request(seconds, Mathf.DbToLinear(decibels));
+    public void ClearCueFocus() => _cueFocus.Reset();
+    internal float CueFocusGain => _cueFocus.Gain;
 
     public MapAmbience(Func<GlobePresentation> globe, Func<Campaign> campaign)
     {
@@ -43,6 +49,9 @@ public sealed partial class MapAmbience : Node
         var player = new AudioStreamPlayer { Name = "Ambience_" + file.Replace(".ogg", ""), VolumeDb = -80f };
         if (ResourceLoader.Exists(Folder + file) && GD.Load<AudioStream>(Folder + file) is AudioStream stream)
         {
+            // The library and the map may share an imported recording. Only this
+            // private playback copy loops; browsing it must not become endless.
+            stream = (AudioStream)stream.Duplicate();
             if (stream is AudioStreamOggVorbis ogg) ogg.Loop = true;
             player.Stream = stream;
         }
@@ -52,18 +61,20 @@ public sealed partial class MapAmbience : Node
 
     public override void _Process(double delta)
     {
-        if (AuditionSuppressed)
+        _cueFocus.Advance(delta);
+        var level = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects") *
+                    (SettingsCatalog.Flag("map_ambience") ? 1f : 0f);
+        if (AuditionSuppressed || level <= .0005f)
         {
             // Keep the loops' phases; audition must not restart or randomize the map's sound.
-            if (GodotObject.IsInstanceValid(_high)) _high.VolumeDb = -80;
-            if (GodotObject.IsInstanceValid(_land)) _land.VolumeDb = -80;
-            if (GodotObject.IsInstanceValid(_front)) _front.VolumeDb = -80;
+            Silence(_high, !AuditionSuppressed);
+            Silence(_land, !AuditionSuppressed);
+            Silence(_front, !AuditionSuppressed);
             return;
         }
         var globe = _globe();
         var campaign = _campaign();
-        var level = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects") *
-                    (SettingsCatalog.Flag("map_ambience") ? 1f : 0f);
+        level *= _cueFocus.Gain;
         var live = campaign is not null && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree() && level > 0.0005f;
 
         var height = live ? globe.ViewHeight : 12f;
@@ -117,5 +128,12 @@ public sealed partial class MapAmbience : Node
         }
         player.VolumeDb = Mathf.LinearToDb(next);
         if (!player.Playing) player.Play((float)GD.RandRange(0.0, Math.Max(0.0, player.Stream.GetLength() - 1.0)));
+    }
+
+    private static void Silence(AudioStreamPlayer player, bool stop)
+    {
+        if (!GodotObject.IsInstanceValid(player)) return;
+        player.VolumeDb = -80;
+        if (stop && player.Playing) player.Stop();
     }
 }

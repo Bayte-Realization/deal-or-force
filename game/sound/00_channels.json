@@ -9,8 +9,8 @@
 //                player just did, and feedback that arrives late is worse than none.
 {
   "channels": {
-    "strategic": { "volume_db": -7, "priority": 2 },
-    "battle": { "volume_db": -10, "priority": 1 },
+    "strategic": { "volume_db": -7, "priority": 2, "music_duck_db": -5, "ambience_duck_db": -9 },
+    "battle": { "volume_db": -10, "priority": 1, "music_duck_db": -2, "ambience_duck_db": -4 },
     "interface": { "volume_db": -15, "priority": 0, "independent": true }
   }
 }

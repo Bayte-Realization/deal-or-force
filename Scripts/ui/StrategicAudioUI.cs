@@ -164,6 +164,13 @@ public partial class DealOrForceGame
         player.VolumeDb = SoundCatalog.GetChannel(cue.Channel).VolumeDb + cue.VolumeDb + Mathf.LinearToDb(gain);
         player.Stream = stream;
         player.Play();
+        // Duck only a cue that actually started, not a queued or muted request.
+        // Interface clicks opt out in data so rapid navigation cannot pump the score.
+        var channel = SoundCatalog.GetChannel(cue.Channel);
+        if (channel.MusicDuckDb < 0)
+            MusicDirector.Ensure(this).DuckForCue(stream.GetLength(), channel.MusicDuckDb);
+        if (channel.AmbienceDuckDb < 0)
+            _mapAmbience?.DuckForCue(stream.GetLength(), channel.AmbienceDuckDb);
     }
 
     private void PlayNextStrategicCue()
@@ -193,6 +200,8 @@ public partial class DealOrForceGame
         _situationNation = -1;
         _dealNoticeViewer = -1; _dealNoticeIds.Clear();
         foreach (var player in _audioChannels.Values) player.Stop();
+        MusicDirector.Ensure(this).ClearCueFocus();
+        _mapAmbience?.ClearCueFocus();
         _strategicAudioQueue.Clear();
         _lastCueAt.Clear();
         _knownEndedBattles.Clear();
