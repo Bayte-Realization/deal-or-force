@@ -195,6 +195,10 @@ public static class Program
         DebugRegion("before map");
         var mapped = AttachMap(campaign);
         DebugRegion("after map");
+        var diagnoseWarAt = Array.IndexOf(args, "--diagnose-war");
+        if (diagnoseWarAt >= 0 && diagnoseWarAt + 1 < args.Length)
+            return mapped ? WarDiagnosisReport.Run(campaign, args[diagnoseWarAt + 1],
+                diagnoseWarAt + 2 < args.Length && int.TryParse(args[diagnoseWarAt + 2], out var replayDays) ? replayDays : 0) : 2;
         if (Array.IndexOf(args, "--waterfront-check") >= 0)
             return mapped ? WaterfrontReferenceCheck.Run(campaign) : 2;
         var tradeProfileAt = Array.IndexOf(args, "--trade-profile");
@@ -11280,6 +11284,7 @@ public static class Program
         CovertOperations.ResetCatalog();
         DecisionCatalog.ResetCatalog();
         PromiseCatalog.ResetCatalog();
+        GoalCatalog.ResetCatalog();
         FlagCatalog.ResetCatalog();
         FormableNations.ResetCatalog();
         GovernanceEvents.ResetCatalog();

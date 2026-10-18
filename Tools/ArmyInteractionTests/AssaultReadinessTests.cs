@@ -237,8 +237,10 @@ static class AssaultReadinessTests
         Check(CampaignFingerprint.Of(c) == baseline,
             "restoring both defaults restores the authoritative fingerprint");
 
-        // Same legacy fixture/golden recorded before the living-world fingerprint repair.
-        // New condition defaults must not invalidate old empty-state compatibility.
+        // Same fixture and current catalogue golden as ClaudeStateFingerprintTests.
+        // Verified on pristine 2b807905 before these war fixes: 0xA59805E352DD0319.
+        // The old 0x545E835F82EA7E2A predates the registered mechanic/command tables;
+        // default assault floors still add no bytes. Keep the actual value diagnostic.
         c = new Campaign(112017) { ScenarioId = "living_world_fingerprint_fixture" };
         for (var id = 0; id < 3; id++)
             c.Nations.Add(new Nation { Id = id, MapIndex = 501 + id, Tag = "FP" + id,
@@ -246,8 +248,9 @@ static class AssaultReadinessTests
         c.Armies.Add(new Army { Id = 7, NationId = 0, ProvinceId = 3, Divisions = 1,
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
-        Check(CampaignFingerprint.Of(c) == 0x545E835F82EA7E2AUL,
-            "default assault floors preserve the previously recorded legacy golden fingerprint");
+        var actual = CampaignFingerprint.Of(c);
+        Check(actual == 0xA59805E352DD0319UL,
+            $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
     }
 
     static Army Unit(Campaign c, int id, int nation, int province, ArmyOrder order)

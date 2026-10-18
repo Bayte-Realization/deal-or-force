@@ -78,6 +78,7 @@ public partial class ExportVerification : Node
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
                 await VerifySovereignFinance(game);
+                await VerifyReligionAndOccupation(game);
                 game.Call("OpenScreen", "Laws");
                 await Wait(.25);
                 Check(game.FindChild("PolicySearch", true, false) is not null, "laws workspace is available");
@@ -110,6 +111,69 @@ public partial class ExportVerification : Node
         }
         GD.Print("EXPORT_VERIFY failures=" + _failures);
         GetTree().Quit(_failures == 0 ? 0 : 1);
+    }
+
+    private async Task VerifyReligionAndOccupation(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var originalLanguage = Loc.Language;
+        foreach (var language in new[] { "english", "russian" })
+        {
+            Loc.Language = language;
+            game.Call("RefreshLocalisedText");
+            game.Call("OpenStateAffairs");
+            await Wait(.2);
+            var before = CampaignFingerprint.Of(world);
+            var buttons = game.FindChildren("StateReligion_*", "Button", true, false).OfType<Button>().ToArray();
+            Check(buttons.Count(b => b.Name == "StateReligion_irreligion") == 1,
+                language + " has exactly one irreligion option");
+            Check(buttons.Select(b => b.Name.ToString()).Distinct().Count() == buttons.Length,
+                language + " religion choices have unique identities");
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                game.VerificationRevealReligion(); await Wait(.15);
+                await Capture("religion-single-" + language + "-" + size.X);
+            }
+            Check(before == CampaignFingerprint.Of(world), "religion inspection changes no campaign state");
+            game.Call("CloseStateAffairs");
+        }
+        Loc.Language = originalLanguage; game.Call("RefreshLocalisedText");
+        GetTree().Root.Size = new(1920, 1080);
+        var map = world.ProvinceMap;
+        var owner = world.NationByTag("UKR");
+        var occupier = world.NationByTag("RUS");
+        var province = Enumerable.Range(1, map.ProvinceCount).First(p =>
+            map.ProvinceToNation[p] == owner.MapIndex && !map.IsWater(p) &&
+            world.Armies.All(a => a.ProvinceId != p) &&
+            CityCatalog.ProvinceUnder(map, map.CenterOf(p).Latitude, map.CenterOf(p).Longitude) == p);
+        var oldControl = world.ProvinceController[province];
+        world.SetProvinceController(province, (ushort)occupier.MapIndex);
+        var occupationBefore = CampaignFingerprint.Of(world);
+        game.VerificationFocusProvince(province); await Wait(1);
+        foreach (var language in new[] { "english", "russian" })
+        {
+            Loc.Language = language; game.Call("RefreshLocalisedText");
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.4);
+                var pick = game.VerificationCentrePick();
+                Check(pick.ProvinceId == province && pick.Nation?.Id == owner.Id,
+                    language + " actual map hit keeps Ukrainian ownership under Russian occupation");
+                var tooltip = game.VerificationCentreTooltip();
+                Check(tooltip.Contains(Loc.Format("Controlled by {0} · occupation {1:P0}", occupier.DisplayName, 0f)),
+                    language + " actual map tooltip distinguishes occupier from owner");
+                game.VerificationInspectPick(pick); await Wait(.15);
+                await Capture("occupation-not-title-" + language + "-" + size.X);
+            }
+        }
+        Check(map.ProvinceToNation[province] == owner.MapIndex && occupationBefore == CampaignFingerprint.Of(world),
+            "occupied map inspection never transfers title or alters the campaign");
+        world.SetProvinceController(province, oldControl);
+        Loc.Language = originalLanguage; game.Call("RefreshLocalisedText");
+        GetTree().Root.Size = new(1920, 1080);
+        game.Call("OpenScreen", "Nation");
     }
 
     private async Task VerifyDomesticWorkspace(DealOrForceGame game)
@@ -441,4 +505,21 @@ public partial class DealOrForceGame
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
     internal void VerificationFocusAdministration(Nation nation) =>
         _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude, 5.5f);
+    internal void VerificationRevealReligion()
+    {
+        for (Node parent = _religionButtons.GetParent(); parent is not null; parent = parent.GetParent())
+            if (parent is ScrollContainer scroll) { scroll.EnsureControlVisible(_religionButtons); break; }
+    }
+    internal void VerificationFocusProvince(int province)
+    {
+        var point = _campaign.ProvinceMap.CenterOf(province);
+        _globe.FocusOn(point.Latitude, point.Longitude, 5.5f);
+    }
+    internal GlobePick VerificationCentrePick()
+    {
+        _globe.VerificationPickAt(GetViewport().GetVisibleRect().Size / 2, out var pick);
+        return pick;
+    }
+    internal string VerificationCentreTooltip() => _globe._GetTooltip(GetViewport().GetVisibleRect().Size / 2);
+    internal void VerificationInspectPick(GlobePick pick) => ShowMapSelection(pick);
 }

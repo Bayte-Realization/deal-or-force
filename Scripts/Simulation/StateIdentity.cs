@@ -110,6 +110,22 @@ public static class StateIdentity
                 .ToList();
     }
 
+    /// <summary>Demographic faiths plus available secular policies, once per identity, not once per source.</summary>
+    public static List<(string Id, float Share)> ReligionChoices(Campaign campaign, Nation nation)
+    {
+        var result = Candidates(campaign, nation, true).Take(8).ToList();
+        var seen = new HashSet<string>(result.Select(choice => choice.Id), StringComparer.OrdinalIgnoreCase);
+        foreach (var id in Secular.OrderBy(id => id, StringComparer.Ordinal))
+        {
+            if (seen.Contains(id)) continue;
+            var share = ReligionShare(campaign, nation, id);
+            if (share <= 0 && DemographyCatalog.Religion(id) is null) continue;
+            seen.Add(id);
+            result.Add((id, share));
+        }
+        return result;
+    }
+
     public static string BlockReason(Campaign campaign, Nation nation, string religionId, string cultureId)
     {
         if (!campaign.FeatureEnabled("state_identity"))

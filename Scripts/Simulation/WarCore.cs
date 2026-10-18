@@ -535,8 +535,7 @@ public static partial class FrontPlanner
     /// </summary>
     private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
     {
-        var armies = campaign.Armies.FindAll(army =>
-            army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
+        var armies = FieldArmy(campaign, nationId);
         SplitWars.Clear();
         var stamp = armies.Count;
         foreach (var candidate in campaign.Wars)

@@ -23,6 +23,11 @@ static class StateIdentityTests
         Check(share >= 0.5f, $"the plurality really is a majority (got {share:P0})");
 
         var plain = CampaignFingerprint.Of(c);
+        var choices = StateIdentity.ReligionChoices(c, n);
+        Check(choices.Count(choice => choice.Id == "irreligion") == 1 &&
+            choices.Select(choice => choice.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() == choices.Count,
+            "irreligion appears once even when offered by both demography and secular policy");
+        Check(CampaignFingerprint.Of(c) == plain, "building religion choices does not mutate the campaign");
         new DeclareStateIdentityCommand { IssuerId = n.Id, Culture = n.DeclaredCulture }.Apply(c);
         Check(n.IdentityChangedDay >= 0 && CampaignFingerprint.Of(c) == plain,
             "re-declaring the same identity changes nothing");

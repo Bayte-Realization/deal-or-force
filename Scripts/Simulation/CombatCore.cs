@@ -185,10 +185,11 @@ public static partial class Warfare
                 foreach (var war in Stale) UpdateWarMetrics(campaign, war);
             using (SimProfiler.Measure("    fr:refresh"))
                 foreach (var war in Stale)
-                    if (Moved.Contains(war.Id)) FrontPlanner.RefreshAssignments(campaign, war);
+                    FrontPlanner.RefreshAssignments(campaign, war);
             using (SimProfiler.Measure("    fr:reassign"))
                 foreach (var war in Stale)
-                    if (Moved.Contains(war.Id)) FrontPlanner.ReassignAi(campaign, war);
+                    if (Moved.Contains(war.Id) || FrontPlanner.NeedsEmergencyStaff(campaign, war))
+                        FrontPlanner.ReassignAi(campaign, war);
         }
 
         // The staff keeps each front covered: every post held before any post is held twice.

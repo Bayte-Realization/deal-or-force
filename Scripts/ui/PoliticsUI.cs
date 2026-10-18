@@ -123,26 +123,17 @@ public partial class DealOrForceGame
         ClearRuntimeChildren(_cultureButtons);
         _identityButtons.Clear();
 
-        foreach (var (id, share) in Simulation.StateIdentity.Candidates(_campaign, nation, true).Take(8))
+        foreach (var (id, share) in Simulation.StateIdentity.ReligionChoices(_campaign, nation))
         {
             var captured = id;
             var button = ActionButton(Simulation.DemographyCatalog.ReligionName(id),
                 () => DeclareIdentity(captured, ""), 212, 38);
-            button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0} of the country holds this faith.",
-                Fmt.Percent(share)));
+            button.Name = "StateReligion_" + id;
+            button.TooltipText = Ui.Tip(Simulation.StateIdentity.IsSecular(id)
+                ? Tr("A secular answer needs no congregation: the state may always decline to have a church.")
+                : Simulation.Loc.Format("{0} of the country holds this faith.", Fmt.Percent(share)));
             _religionButtons.AddChild(button);
             _identityButtons.Add((id, button, true));
-        }
-        foreach (var secular in Simulation.StateIdentity.Secular.OrderBy(id => id))
-        {
-            if (Simulation.StateIdentity.ReligionShare(_campaign, nation, secular) <= 0f &&
-                Simulation.DemographyCatalog.Religion(secular) is null) continue;
-            var captured = secular;
-            var button = ActionButton(Simulation.DemographyCatalog.ReligionName(secular),
-                () => DeclareIdentity(captured, ""), 212, 38);
-            button.TooltipText = Ui.Tip(Tr("A secular answer needs no congregation: the state may always decline to have a church."));
-            _religionButtons.AddChild(button);
-            _identityButtons.Add((secular, button, true));
         }
 
         foreach (var (id, share) in Simulation.StateIdentity.Candidates(_campaign, nation, false).Take(8))

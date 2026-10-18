@@ -829,13 +829,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         pick = default;
         if (!TryLocate(pixel, out var latitude, out var longitude, out var cell, out var provinceId)) return false;
-        var nationMapIndex = provinceId > 0 && _campaign?.ProvinceController is { } liveControllers
-            ? liveControllers[provinceId]
+        // A country owning a province and an army occupying it are not the same thing.
+        // Picking the controller here also suppressed the tooltip's occupation line, since
+        // it then compared that controller to itself and called the occupier the owner.
+        var nationMapIndex = provinceId > 0 && _campaign?.ProvinceMap is { } map
+            ? map.ProvinceToNation[provinceId]
             : SourceEarthData.Control[cell];
         if (nationMapIndex == 0 || !_nationByMapIndex.TryGetValue(nationMapIndex, out var nation))
             return false;
         return FinishPick(nation, latitude, longitude, cell, provinceId, updateSelection, out pick);
     }
+
+    internal bool VerificationPickAt(Vector2 pixel, out GlobePick pick) => TryPick(pixel, out pick, false);
 
     /// <summary>
     /// Where on the Earth a pixel of the screen is: latitude and longitude, the raster cell,
