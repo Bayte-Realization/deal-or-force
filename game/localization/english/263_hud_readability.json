@@ -1,0 +1,23 @@
+{
+  "War sup. {0}": "War sup. {0}",
+  "Next: {0}": "Next: {0}",
+  "hud.footer.no_article": "No article",
+  "hud.footer.overdue": "Overdue",
+  "hud.footer.prices_falling": "Prices fall",
+  "hud.footer.above_comfort": "Above target",
+  "hud.footer.comfortable": "On target",
+  "hud.stat.short.TREASURY": "TREASURY",
+  "hud.stat.short.DEBT": "DEBT",
+  "hud.stat.short.BALANCE": "BALANCE",
+  "hud.stat.short.GDP": "GDP",
+  "hud.stat.short.INFLATION": "INFLAT.",
+  "hud.stat.short.POPULATION": "PEOPLE",
+  "hud.stat.short.STABILITY": "STABILITY",
+  "hud.stat.short.MANPOWER": "MANPOWER",
+  "hud.stat.short.ARMY XP": "ARMY XP",
+  "hud.stat.short.AIR XP": "AIR XP",
+  "hud.stat.short.NAVY XP": "NAVY XP",
+  "hud.stat.short.POLITICAL CAPITAL": "POL. CAP.",
+  "hud.stat.short.Host's temper": "Host heat",
+  "hud.stat.short.Vote readiness": "Vote ready"
+}

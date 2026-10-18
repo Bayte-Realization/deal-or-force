@@ -52,6 +52,35 @@ static class ResponsiveHudLayoutTests
         Charts();
         WorkspacesClearTheRail();
         SeverityRamp();
+        HudLocalisation();
+    }
+
+    private static void HudLocalisation()
+    {
+        var previous = Loc.Language;
+        try
+        {
+            string[] englishKeys = null;
+            foreach (var language in new[] { "english", "russian" })
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
+                    "localization", language, "263_hud_readability.json")));
+                var entries = document.RootElement.EnumerateObject().ToArray();
+                var keys = entries.Select(entry => entry.Name).OrderBy(key => key, StringComparer.Ordinal).ToArray();
+                Check(keys.Distinct(StringComparer.Ordinal).Count() == keys.Length, language + " HUD keys are unique");
+                if (englishKeys is null) englishKeys = keys;
+                else Check(keys.SequenceEqual(englishKeys), "compact HUD keys exist in both languages");
+                Loc.Language = language;
+                foreach (var entry in entries)
+                {
+                    var text = entry.Value.GetString();
+                    Check(!string.IsNullOrWhiteSpace(text) && Loc.Get(entry.Name) == text &&
+                        Loc.Placeholders(entry.Name).SetEquals(Loc.Placeholders(text)),
+                        language + " HUD text resolves with its placeholders: " + entry.Name);
+                }
+            }
+        }
+        finally { Loc.Language = previous; }
     }
 
     /// <summary>

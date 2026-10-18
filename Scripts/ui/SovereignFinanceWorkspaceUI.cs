@@ -51,7 +51,8 @@ public partial class DealOrForceGame
             Fmt.MoneyExact(principal), Fmt.MoneyExact(nation.DebtArrears), Fmt.MoneyExact(nation.PaymentArrears),
             Tr(SovereignBalanceSheet.ConditionName(nation.DebtCondition)));
         WriteStat(_publicDebt, Fmt.Money(principal), explanation, caption,
-            overdue > .000001f || nation.DebtCondition >= DebtCondition.Default ? -1 : 0);
+            overdue > .000001f || nation.DebtCondition >= DebtCondition.Default ? -1 : 0,
+            overdue > .000001f ? Tr("hud.footer.overdue") : caption);
         _publicDebt.Box.TooltipText = Ui.Tip(explanation);
         _publicDebt.Value.MouseFilter = MouseFilterEnum.Pass;
         _publicDebt.Delta.MouseFilter = MouseFilterEnum.Pass;

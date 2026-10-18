@@ -20,6 +20,14 @@ public sealed partial class Sparkline : Control
     private readonly List<double> _values = new();
     private int _lastDay = int.MinValue;
     private int _lastDirection;
+    private bool _layoutAllows = true;
+    internal bool HasHistory => _values.Count >= 2;
+
+    internal void AllowLayout(bool allowed)
+    {
+        _layoutAllows = allowed;
+        Visible = allowed && HasHistory;
+    }
 
     /// <summary>The label to flash when the figure turns.</summary>
     public Label Flash;
@@ -60,7 +68,7 @@ public sealed partial class Sparkline : Control
             while (_values.Count > Weeks) _values.RemoveAt(0);
             Turned();
         }
-        if (Visible != _values.Count >= 2) Visible = _values.Count >= 2;
+        if (Visible != (_layoutAllows && HasHistory)) Visible = _layoutAllows && HasHistory;
         QueueRedraw();
     }
 

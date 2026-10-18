@@ -87,6 +87,7 @@ public partial class DealOrForceGame
         if (_countryCard is { Visible: true }) HideMapSelection(false);
         _movementSideSeen = false;
         _movementShown = nation;
+        ShiftHudDock(_movementPanel);
         _movementPanel.Visible = true;
         _movementBuiltFrom = "";
         RefreshMovementPanel();
@@ -793,7 +794,7 @@ public partial class DealOrForceGame
         {
             var ready = _campaign.States.Count(r => CivilIndependence.Refusal(_campaign, player, r).Length == 0);
             TopBarAs(_manpower, "movement_legitimacy", Tr("A majority of all residents, public standing and the parent's consent are required."));
-            _manpower.Caption.Text = Tr("Vote readiness");
+            SetHudCaption(_manpower, "Vote readiness");
             WriteStat(_manpower, ready.ToString("N0"), Tr("regions ready for a vote"), "", ready > 0 ? 1 : 0);
         }
         else
@@ -815,7 +816,7 @@ public partial class DealOrForceGame
         box.Explain = null;
         box.Plain = "";
         box.TooltipText = Ui.Tip(tooltip);
-        stat.Caption.Text = Tr(icon switch
+        SetHudCaption(stat, icon switch
         {
             "income" => "Income",
             "movement_cadres" => "Cadres",
@@ -839,7 +840,7 @@ public partial class DealOrForceGame
             box.Explain = country.Explain;
             box.Plain = country.Plain;
             box.TooltipText = country.Tooltip;
-            stat.Caption.Text = Tr(stat.CountryCaption);
+            SetHudCaption(stat, stat.CountryCaption);
             if (stat.Glyph is { } glyph && country.Icon is not null) glyph.Texture = country.Icon;
         }
         _topBarAsCountry.Clear();

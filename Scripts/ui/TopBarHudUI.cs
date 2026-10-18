@@ -7,6 +7,8 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
+    private readonly List<StatReadout> _hudStats = new();
+
     private void BuildTopBar()
     {
         var top = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
@@ -44,6 +46,7 @@ public partial class DealOrForceGame
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
+        _hudStats.Clear();
         stats.AddThemeConstantOverride("separation", 7);
         row.AddChild(stats);
         foreach (var field in CampaignUiCatalog.TopStats)
@@ -111,6 +114,9 @@ public partial class DealOrForceGame
 
         _mediaButton = MusicShortcut();
         speeds.AddChild(_mediaButton);
+        var window = GetWindow();
+        window.SizeChanged += LayoutCampaignShell;
+        TreeExiting += () => window.SizeChanged -= LayoutCampaignShell;
     }
 
     private void RefreshTopBar(Nation player)
@@ -155,9 +161,13 @@ public partial class DealOrForceGame
         // deaths, migration and age structure behind it are read out where the number is
         // (DemographicCycle.Explain).
         if (_population?.Box is not null && _campaign?.Defines is not null)
+        {
+            var popExplain = DemographicCycle.Explain(_campaign, player);
+            _population.Box.Plain = popExplain;
             _population.Box.TooltipText = Ui.Tip(
                 Tr("Everyone living in your states, and how that has moved over the last week.") +
-                "\n\n" + DemographicCycle.Explain(_campaign, player));
+                "\n\n" + popExplain);
+        }
 
         // A stock without its flow is half a number: a treasury that reads the same two
         // weeks running is a very different country depending on which way it is heading.
@@ -172,7 +182,7 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("Stability {0:P1}", player.Stability),
             player.WarSupport > 0f
                 ? Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport))
-                : "", 0);
+                : "", 0, Simulation.Loc.Format("War sup. {0}", Fmt.Percent(player.WarSupport)));
         WriteStat(_manpower, Fmt.People(player.ManpowerReserve), Fmt.PeopleExact((long)player.ManpowerReserve),
             Simulation.Loc.Format("{0}/day", Fmt.People(player.ReinforcementCapacity)), 0);
 
@@ -185,7 +195,8 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("Army experience {0}", Fmt.Number(player.ArmyExperience)),
             nextArticle > 0f
                 ? Simulation.Loc.Format("next article {0}", Fmt.Number(nextArticle))
-                : Tr("no article open"), 0);
+                : Tr("no article open"), 0,
+            nextArticle > 0f ? Simulation.Loc.Format("Next: {0}", Fmt.Number(nextArticle)) : Tr("hud.footer.no_article"));
         WriteStat(_airExperience, Fmt.Number(player.AirExperience),
             Simulation.Loc.Format("Air experience {0}", Fmt.Number(player.AirExperience)),
             Simulation.Loc.Format("{0} flying", WingsFlying(player.Id)), 0);
@@ -209,7 +220,9 @@ public partial class DealOrForceGame
                 rate < 0f ? Tr("prices falling")
                     : rate > comfort ? Tr("above the comfortable rate")
                     : Tr("comfortable"),
-                rate > comfort ? -1 : rate < 0f ? -1 : 0);
+                rate > comfort ? -1 : rate < 0f ? -1 : 0,
+                rate < 0f ? Tr("hud.footer.prices_falling") : rate > comfort
+                    ? Tr("hud.footer.above_comfort") : Tr("hud.footer.comfortable"));
         }
 
         // The half-year threads under the figures.
@@ -221,6 +234,7 @@ public partial class DealOrForceGame
         _manpower?.Spark?.Push(day, player.ManpowerReserve);
         _inflation?.Spark?.Push(day, player.Inflation);
         WriteMovementTopBar(player);
+        foreach (var stat in _hudStats) FitHudStat(stat);
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);
@@ -240,7 +254,10 @@ public partial class DealOrForceGame
         internal Label Caption = null!;
         internal TextureRect Glyph;
         internal string CountryCaption = "";
-        internal Control Box;
+        internal string CaptionKey = "";
+        internal string FullDelta = "";
+        internal string ShortDelta = "";
+        internal ExplainedStat Box;
         /// <summary>Half a year of the figure under it (Sparkline).</summary>
         internal Sparkline Spark;
     }
@@ -362,6 +379,7 @@ public partial class DealOrForceGame
             Caption = statCaption,
             Glyph = glyph,
             CountryCaption = caption,
+            CaptionKey = caption,
             Box = box,
             Value = Title("—", 17, Ui.Colour("text.bright")),
             Delta = Title("", 11, Ui.Colour("text.faint"))
@@ -387,6 +405,9 @@ public partial class DealOrForceGame
         readout.Delta.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         movement.AddChild(readout.Delta);
         box.AddChild(movement);
+        _hudStats.Add(readout);
+        readout.Value.Resized += () => FitHudStat(readout);
+        readout.Delta.Resized += () => FitHudStat(readout);
         return readout;
     }
 
@@ -395,20 +416,15 @@ public partial class DealOrForceGame
     /// the compact form is for scanning, and the moment a player wants the real number
     /// they want every digit of it.
     /// </summary>
-    private static void WriteStat(StatReadout stat, string compact, string exact, string delta, int direction)
+    private static void WriteStat(StatReadout stat, string compact, string exact, string delta, int direction,
+        string shortDelta = null)
     {
         if (stat is null) return;
         stat.Value.Text = compact;
-        // Fit the whole amount instead of silently clipping its last digits on a narrow HUD.
-        var availableWidth = stat.Value.Size.X;
-        var font = stat.Value.GetThemeFont("font");
-        var fontSize = 17;
-        while (availableWidth > 0 && fontSize > 11 &&
-               font.GetStringSize(compact, HorizontalAlignment.Left, -1, fontSize).X > availableWidth) fontSize--;
-        stat.Value.AddThemeFontSizeOverride("font_size", fontSize);
         stat.Value.TooltipText = Ui.Tip(exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
-        stat.Delta.Text = delta;
+        stat.FullDelta = delta;
+        stat.ShortDelta = shortDelta ?? delta;
         stat.Delta.TooltipText = Ui.Tip(delta);
         stat.Delta.MouseFilter = MouseFilterEnum.Stop;
         stat.Delta.AddThemeColorOverride("font_color", direction switch
@@ -417,6 +433,56 @@ public partial class DealOrForceGame
             < 0 => Ui.Colour("state.negative"),
             _ => Ui.Colour("text.faint")
         });
+        FitHudStat(stat);
+    }
+
+    private static void SetHudCaption(StatReadout stat, string key)
+    {
+        stat.CaptionKey = key;
+        FitHudStat(stat);
+    }
+
+    // Text has priority over the optional history thread. Choose using the whole
+    // cell width, not the previous layout's delta width, to avoid resize oscillation.
+    private static void FitHudStat(StatReadout stat)
+    {
+        if (stat?.Box is null || !GodotObject.IsInstanceValid(stat.Box)) return;
+        var width = stat.Box.Size.X;
+        if (width <= 1) return; // Resized runs again after the first real layout.
+        var caption = Tr(stat.CaptionKey);
+        var shortKey = "hud.stat.short." + stat.CaptionKey;
+        var shortCaption = Simulation.Loc.Has(shortKey) ? Tr(shortKey) : caption;
+        var headingWidth = width - (stat.Glyph is { Visible: true } ? 21 : 0);
+        FitHudLine(stat.Caption, caption, shortCaption, headingWidth, 10, 10);
+        FitHudLine(stat.Value, stat.Value.Text, stat.Value.Text, width, 17, 11);
+        var full = stat.FullDelta;
+        var shorter = stat.ShortDelta;
+        var font = stat.Delta.GetThemeFont("font");
+        var fullWidth = font.GetStringSize(full, HorizontalAlignment.Left, -1, 11).X;
+        var shortWidth = font.GetStringSize(shorter, HorizontalAlignment.Left, -1, 11).X;
+        var graphWidth = stat.Spark.GetCombinedMinimumSize().X + 4;
+        var graph = stat.Spark.HasHistory && fullWidth + graphWidth <= width;
+        var shown = full;
+        if (fullWidth > width)
+        {
+            shown = shorter;
+            graph = stat.Spark.HasHistory && shortWidth + graphWidth <= width;
+        }
+        stat.Spark.AllowLayout(graph);
+        FitHudLine(stat.Delta, shown, shown, width - (graph ? graphWidth : 0), 11, 10);
+        stat.Delta.TooltipText = Ui.Tip(full);
+        stat.Caption.TooltipText = Ui.Tip(caption);
+        stat.Caption.MouseFilter = MouseFilterEnum.Stop;
+    }
+
+    private static void FitHudLine(Label label, string full, string shorter, float width, int preferred, int minimum)
+    {
+        var font = label.GetThemeFont("font");
+        var shown = font.GetStringSize(full, HorizontalAlignment.Left, -1, preferred).X <= width ? full : shorter;
+        var size = preferred;
+        while (size > minimum && font.GetStringSize(shown, HorizontalAlignment.Left, -1, size).X > width) size--;
+        if (label.Text != shown) label.Text = shown;
+        if (label.GetThemeFontSize("font_size") != size) label.AddThemeFontSizeOverride("font_size", size);
     }
 
     /// <summary>
