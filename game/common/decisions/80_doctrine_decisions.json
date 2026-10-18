@@ -22,7 +22,8 @@
     "description": "Buy hours for the wings: navigation, night flying, and the kind of weather that cannot be chosen.",
     "cooldown_days": 365,
     "gdp_cost_share": 0.0012,
-    "unavailable": "The air service needs funding and aerodromes to learn anything new",
+    "unavailable": "This exercise needs funding and an operational air formation at a controlled base",
+    "trigger": { "min_available_air_formations": 1 },
     "ai_will_do": "ai_flight_school",
     "effects": { "air_experience": 6 }
   },
@@ -32,7 +33,8 @@
     "description": "Send the squadrons to sea on a schedule: gunnery, station-keeping, and the long passages that make a fleet a fleet.",
     "cooldown_days": 365,
     "gdp_cost_share": 0.0012,
-    "unavailable": "There is no fleet to take to sea, or no money to keep it there",
+    "unavailable": "This exercise needs funding and serviceable ships not in combat or carrying troops",
+    "trigger": { "min_available_fleet_hulls": 1 },
     "ai_will_do": "ai_fleet_review",
     "effects": { "naval_experience": 6 }
   },

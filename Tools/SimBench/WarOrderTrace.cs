@@ -39,11 +39,11 @@ sealed class WarOrderTrace
             _last[a.Id] = now;
             if (!_counts.TryGetValue(a.Id, out var count))
                 _counts[a.Id] = count = new() { Tag = c.NationById(a.NationId)?.Tag ?? "gone" };
-            if (was.Goal > 0 && was.Position != was.Goal && now.Position == was.Goal) count.Arrivals++;
-            var retarget = was.Goal > 0 && now.Goal > 0 && was.Goal != now.Goal &&
-                was.Position != was.Goal && now.Position != was.Goal;
-            var restart = now.Goal == was.Goal && now.Position == was.Position &&
-                now.Issued != was.Issued && was.Progress > .001f && now.Progress < was.Progress;
+            var changes = ArmyOrderSample.Compare(new(was.Position, was.Goal, was.Issued, was.Progress),
+                new(now.Position, now.Goal, now.Issued, now.Progress));
+            if ((changes & ArmyOrderChange.Arrived) != 0) count.Arrivals++;
+            var retarget = (changes & ArmyOrderChange.Retargeted) != 0;
+            var restart = (changes & ArmyOrderChange.ProgressReset) != 0;
             if (retarget) count.Retargets++;
             if (restart) count.SameGoalResets++;
             if (!(retarget || restart) || _printed++ >= 120) continue;

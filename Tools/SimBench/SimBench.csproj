@@ -18,6 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared\ArmyOrderObservation.cs" />
     <Compile Include="..\..\Scripts\Simulation\**\*.cs" />
     <Compile Include="..\..\Scripts\Modding\ModOperations.cs" />
     <Compile Include="..\..\Scripts\Modding\ModContracts.cs" />

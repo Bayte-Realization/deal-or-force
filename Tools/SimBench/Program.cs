@@ -327,6 +327,12 @@ public static class Program
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
         if (Array.IndexOf(args, "--data-readers-only") >= 0)
             return Check("every folder of data is read by something", EveryFolderOfDataIsRead());
+        if (Array.IndexOf(args, "--decisions-only") >= 0)
+        {
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            return Check("governments take decisions written in data", GovernmentsTakeScriptedDecisions(campaign, days));
+        }
         if (Array.IndexOf(args, "--identity-regressions-only") >= 0)
         {
             // Expiry <= 0 means permanent. Exercise expiry after day one, not by
@@ -5873,9 +5879,11 @@ public static class Program
         var rusStart = HeldBy(rus);
 
         var idleDays = new Dictionary<int, int>();
-        var lastTarget = new Dictionary<int, int>();
+        var lastOrder = new Dictionary<int, ArmyOrderSample>();
+        var armyTags = new Dictionary<int, string>();
         var retargets = new Dictionary<int, int>();
         var arrivals = new Dictionary<int, int>();
+        var progressResets = 0;
         var lastProvince = new Dictionary<int, int>();
         var visited = new Dictionary<int, Dictionary<int, int>>();
         var everFought = new HashSet<int>();
@@ -5884,6 +5892,28 @@ public static class Program
         long engagedRounds = 0;
         var stuckPeak = 0;
 
+        void ObserveOrders(Campaign world)
+        {
+            foreach (var army in world.Armies)
+            {
+                armyTags[army.Id] = world.NationById(army.NationId)?.Tag ?? "unknown";
+                var now = ArmyOrderSample.Of(army);
+                if (lastOrder.TryGetValue(army.Id, out var before))
+                {
+                    var changes = ArmyOrderSample.Compare(before, now);
+                    if ((changes & ArmyOrderChange.Arrived) != 0)
+                        arrivals[army.Id] = arrivals.GetValueOrDefault(army.Id) + 1;
+                    if ((changes & ArmyOrderChange.Retargeted) != 0)
+                        retargets[army.Id] = retargets.GetValueOrDefault(army.Id) + 1;
+                    if ((changes & ArmyOrderChange.ProgressReset) != 0) progressResets++;
+                }
+                lastOrder[army.Id] = now;
+            }
+        }
+        ObserveOrders(campaign);
+        // A daily endpoint can miss an arrival followed by a new task on the same day.
+        // The observer issues no commands and runs after the authoritative step finishes.
+        campaign.StepCompleted += ObserveOrders;
         const int days = 365 * 3;
         for (var day = 0; day < days; day++)
         {
@@ -5905,21 +5935,6 @@ public static class Program
             // anywhere hides: it is always on its way somewhere.
             foreach (var army in campaign.Armies)
             {
-                // How often a formation is told to go somewhere ELSE. Route is a one-step
-                // queue and is refilled daily for anything that is moving, so counting days
-                // with a route measures nothing; what matters is how often the destination
-                // changes under a division that has not reached the last one.
-                if (!lastTarget.TryGetValue(army.Id, out var was2)) lastTarget[army.Id] = army.OrderProvinceId;
-                else if (was2 != army.OrderProvinceId)
-                {
-                    lastTarget[army.Id] = army.OrderProvinceId;
-                    if (army.OrderProvinceId > 0)
-                    {
-                        if (was2 > 0 && army.ProvinceId != was2) retargets[army.Id] = retargets.GetValueOrDefault(army.Id) + 1;
-                        else arrivals[army.Id] = arrivals.GetValueOrDefault(army.Id) + 1;
-                    }
-                }
-
                 if (!lastProvince.TryGetValue(army.Id, out var was)) lastProvince[army.Id] = army.ProvinceId;
                 else if (was != army.ProvinceId)
                 {
@@ -5956,6 +5971,7 @@ public static class Program
             }
         }
 
+        campaign.StepCompleted -= ObserveOrders;
         var ukrEnd = HeldBy(ukr);
         var rusEnd = HeldBy(rus);
 
@@ -6045,11 +6061,12 @@ public static class Program
         Console.WriteLine($"    orders: {churn:N0} re-target(s) of a division that had not arrived, " +
                           $"against {arrived:N0} arrival(s) - worst division re-tasked {worstChurn:N0} times " +
                           $"({campaign.NationById(churned?.NationId ?? -1)?.Tag}, {churned?.OrderKind})");
+        Console.WriteLine($"    orders observed at completed steps; same-goal progress resets: {progressResets:N0}");
         // By country, because a world with a dozen civil wars in it is a dozen armies being
         // commanded, and one of them can carry the whole figure.
         var churnBy = new Dictionary<string, (int Retargets, int Arrivals)>();
         string TagOfArmy(int armyId) =>
-            campaign.NationById(campaign.Armies.Find(a => a.Id == armyId)?.NationId ?? -1)?.Tag ?? "gone";
+            armyTags.GetValueOrDefault(armyId, "unknown");
         foreach (var (armyId, count) in retargets)
         {
             var tag = TagOfArmy(armyId);

@@ -932,7 +932,8 @@ public static class ScriptedValues
     /// What a trigger may ask about and no effect may set, because it is worked out rather than
     /// kept: the worst-hit region's war damage is a question about every region at once.
     /// </summary>
-    private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase) { "worst_war_damage" };
+    private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase)
+        { "worst_war_damage", "available_air_formations", "available_fleet_hulls" };
 
     public static bool IsReadOnly(string key) => key is not null &&
         (ReadOnly.Contains(key.Trim().Replace('-', '_')) || key.Equals("year", StringComparison.OrdinalIgnoreCase) ||
@@ -967,6 +968,8 @@ public static class ScriptedValues
             case "air_experience": value = nation.AirExperience; return true;
             case "naval_experience": value = nation.NavalExperience; return true;
             case "political_points": value = nation.PoliticalPoints; return true;
+            case "available_air_formations": value = AvailableAirFormations(campaign, nation); return true;
+            case "available_fleet_hulls": value = AvailableFleetHulls(campaign, nation); return true;
             case "state.brain_drain": value = Average(campaign, nation, state => state.BrainDrainPressure); return true;
             case "inflation": value = nation.Inflation; return true;
             case "key_rate": value = CentralBank.KeyRate(nation); return true;
@@ -991,6 +994,37 @@ public static class ScriptedValues
                 return true;
             default: return false;
         }
+    }
+
+    private static int AvailableAirFormations(Campaign campaign, Nation nation)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null) return 0;
+        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
+        var count = 0;
+        foreach (var formation in campaign.SupportFormations)
+        {
+            if (formation.NationId != nation.Id || !(formation.Strength > .05f) ||
+                !SupportTypeCatalog.TryGet(formation.TypeId, out var type) || type.Kind != SupportKind.Air ||
+                !SupportCore.Enabled(campaign, type)) continue;
+            var province = formation.BaseProvinceId;
+            if (province > 0 && province < controllers.Length && province < map.ProvinceToState.Length &&
+                controllers[province] == nation.MapIndex && map.ProvinceToState[province] == formation.StateMapIndex)
+                count++;
+        }
+        return count;
+    }
+
+    private static float AvailableFleetHulls(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("navy")) return 0;
+        var count = 0f;
+        foreach (var fleet in campaign.Fleets)
+            if (fleet.NationId == nation.Id && fleet.Hulls > 0 && fleet.Strength > .05f &&
+                fleet.Organisation > .05f && fleet.Supply > .05f && fleet.ReadyDay <= campaign.ElapsedDays &&
+                !fleet.InAction && !fleet.IsLoaded)
+                count += fleet.Hulls;
+        return count;
     }
 
     private static float Average(Campaign campaign, Nation nation, Func<ScenarioState, float> read)
