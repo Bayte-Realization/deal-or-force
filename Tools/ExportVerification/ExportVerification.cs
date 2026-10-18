@@ -99,6 +99,13 @@ public partial class ExportVerification : Node
                     GetTree().Quit(_failures == 0 ? 0 : 1);
                     return;
                 }
+                if (args.Contains("--verify-decision-resources-only"))
+                {
+                    await VerifyDecisionResources(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-hud-only"))
                 {
                     await VerifyHudText(game);

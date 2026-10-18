@@ -37,6 +37,9 @@ public readonly record struct DecisionDefinition(
 
     /// <summary>The scripted score an AI weighs this with. Nothing declared means never.</summary>
     public string AiWillDo { get; init; }
+    public IReadOnlyList<DecisionResourceCost> ResourceCosts { get; init; }
+    /// <summary>Extra balances the AI retains after this optional purchase, not a player tax.</summary>
+    public IReadOnlyList<DecisionResourceCost> AiResourceReserve { get; init; }
 }
 
 public static class DecisionCatalog
@@ -98,8 +101,14 @@ public static class DecisionCatalog
                 : null;
 
         var declared = Text("kind");
+        var previousIndex = Definitions.FindIndex(definition => string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyList<DecisionResourceCost> resources = null, reserve = null;
+        if (value.TryGetProperty("resource_costs", out var resourceBody) &&
+            !DecisionResources.Parse(resourceBody, "decision '" + id + "' resource_costs", errors, out resources)) return false;
+        if (value.TryGetProperty("ai_resource_reserve", out var reserveBody) &&
+            !DecisionResources.Parse(reserveBody, "decision '" + id + "' ai_resource_reserve", errors, out reserve)) return false;
         DecisionKind kind;
-        if (string.IsNullOrWhiteSpace(declared)) kind = DecisionKind.Scripted;
+        if (string.IsNullOrWhiteSpace(declared)) kind = previousIndex >= 0 ? Definitions[previousIndex].Kind : DecisionKind.Scripted;
         else if (!Enum.TryParse(declared, true, out kind))
         {
             errors?.Add($"decision '{id}': unknown kind '{declared}'.");
@@ -135,7 +144,9 @@ public static class DecisionCatalog
             Trigger = trigger ?? Definitions[index].Trigger,
             Effect = effect ?? Definitions[index].Effect,
             Unavailable = Text("unavailable") ?? Definitions[index].Unavailable,
-            AiWillDo = Text("ai_will_do") ?? Definitions[index].AiWillDo
+            AiWillDo = Text("ai_will_do") ?? Definitions[index].AiWillDo,
+            ResourceCosts = resources ?? Definitions[index].ResourceCosts,
+            AiResourceReserve = reserve ?? Definitions[index].AiResourceReserve
         };
         return true;
     }
@@ -176,6 +187,8 @@ public static class DecisionCatalog
         if (nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays)
             return $"Available in {nation.DecisionAvailableDay[definition.Id] - campaign.ElapsedDays} days";
         if (nation.Treasury < Cost(nation, definition)) return "Insufficient treasury";
+        var resourceRefusal = DecisionResources.Refusal(nation, definition);
+        if (resourceRefusal.Length > 0) return resourceRefusal;
         if (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation))
             return "Requires an active war";
         if (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation))
@@ -198,6 +211,7 @@ public static class DecisionCatalog
     public static bool IsBlocked(Campaign campaign, Nation nation, DecisionDefinition definition) =>
         !campaign.FeatureEnabled("decisions") || nation.DecisionAvailableDay.GetValueOrDefault(definition.Id) > campaign.ElapsedDays ||
         nation.Treasury < Cost(nation, definition) ||
+        !DecisionResources.CanAfford(nation, definition) ||
         (definition.Kind == DecisionKind.EmergencyMobilisation && !AtWar(campaign, nation)) ||
         (definition.Trigger is { IsEmpty: false } && !definition.Trigger.Matches(campaign, nation));
 
@@ -227,6 +241,7 @@ public sealed class TakeDecisionCommand : ICampaignCommand
             DecisionCatalog.BlockReason(campaign, nation, definition.Value).Length > 0) return;
 
         var item = definition.Value;
+        DecisionResources.Spend(nation, item);
         nation.Treasury -= DecisionCatalog.Cost(nation, item);
         nation.DecisionAvailableDay[item.Id] = campaign.ElapsedDays + item.CooldownDays;
         campaign.Chronicle.Record(campaign, "decision_taken", nation.Id, subject: item.Name, isPublic: false);

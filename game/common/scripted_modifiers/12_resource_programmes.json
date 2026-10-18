@@ -1,0 +1,55 @@
+{
+  "ai_logistics_staff_programme": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "at_war": true,
+          "min_army_experience": 60,
+          "min_political_points": 25
+        },
+        "add": 1.4
+      }
+    ]
+  },
+  "ai_joint_air_staff_course": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "at_war": false,
+          "min_available_air_formations": 1,
+          "min_army_experience": 50,
+          "min_air_experience": 50
+        },
+        "add": 1.1
+      }
+    ]
+  },
+  "ai_naval_rotation_programme": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "min_available_fleet_hulls": 1,
+          "min_naval_experience": 55,
+          "min_political_points": 25
+        },
+        "add": 1.05
+      }
+    ]
+  },
+  "ai_civil_service_compact": {
+    "base": 0,
+    "modifiers": [
+      {
+        "trigger": {
+          "at_war": false,
+          "min_political_points": 110,
+          "min_stability": 0.35
+        },
+        "add": 1.1
+      }
+    ]
+  }
+}

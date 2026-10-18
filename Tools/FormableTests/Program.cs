@@ -10,6 +10,8 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--decision-resources-only")) { DecisionResourceTests.Run(); return; }
+        if (args.Length == 0) DecisionResourceTests.Run();
         if (args.Contains("--service-exercises-only")) { ServiceExerciseTests.Run(); return; }
         if (args.Length == 0) ServiceExerciseTests.Run();
         if (args.Contains("--order-observation-only")) { ArmyOrderObservationTests.Run(); return; }

@@ -552,6 +552,7 @@ public static partial class AiStatecraft
         {
             if (string.IsNullOrEmpty(definition.AiWillDo)) continue;
             if (DecisionCatalog.IsBlocked(campaign, nation, definition)) continue;
+            if (!DecisionResources.CanAfford(nation, definition, keepAiReserve: true)) continue;
             var score = ScriptLibrary.Score(campaign, nation, definition.AiWillDo);
             if (score <= bestScore) continue;
             bestScore = score;

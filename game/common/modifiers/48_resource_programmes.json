@@ -1,0 +1,46 @@
+{
+  "logistics_staff_programme": {
+    "name": "Logistics staff programme",
+    "description": "Spend hard-earned field experience and political authority on depots, staff work and replacement schedules. Improves existing supply throughput and reinforcement for six months; it does not create equipment or open an encirclement.",
+    "days": 180,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "supply": 0.08,
+      "reinforcement_rate": 0.06
+    }
+  },
+  "joint_air_staff_course": {
+    "name": "Joint air-ground staff course",
+    "description": "Trade army and air experience for common procedures. Worn support formations recover more effectively and divisions reorganise faster for eight months. No aircraft or personnel are conjured.",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "support_recovery": 0.06,
+      "organisation_recovery": 0.04
+    }
+  },
+  "naval_rotation_programme": {
+    "name": "Naval rotation programme",
+    "description": "Spend fleet experience and political credit coordinating crews, repair slots and shipyard schedules. A modest eight-month improvement to sailing and shipbuilding, not an instant fleet or a free repair.",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "naval_speed": 0.03,
+      "shipbuilding_speed": 0.06
+    }
+  },
+  "civil_service_compact": {
+    "name": "Civil service implementation compact",
+    "description": "Use a substantial political mandate to coordinate procurement and tax administration. For nine months existing construction proceeds a little faster and more assessed tax arrives. The mandate is spent; nothing is built for free.",
+    "days": 270,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "construction_speed": 0.035,
+      "tax_efficiency": 0.025
+    }
+  }
+}

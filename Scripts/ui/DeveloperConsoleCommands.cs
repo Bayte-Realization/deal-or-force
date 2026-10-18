@@ -1517,9 +1517,11 @@ public partial class DealOrForceGame
         {
             var blocked = DecisionCatalog.BlockReason(_campaign, nation, definition);
             var cost = DecisionCatalog.Cost(nation, definition);
+            var resources = DecisionResources.PriceText(nation, definition);
+            var resourceLabel = resources.Length > 0 ? " · " + EscapeBb(resources) : "";
             return blocked.Length == 0
-                ? $"  {Bb("state.positive")}{definition.Id}[/color]  ${cost:0.00}B"
-                : $"  {Bb("text.muted")}{definition.Id}[/color]  ${cost:0.00}B  - {EscapeBb(blocked)}";
+                ? $"  {Bb("state.positive")}{definition.Id}[/color]  ${cost:0.00}B{resourceLabel}"
+                : $"  {Bb("text.muted")}{definition.Id}[/color]  ${cost:0.00}B{resourceLabel}  - {EscapeBb(blocked)}";
         }).ToArray();
         return rows.Length == 0 ? "The decision catalogue is empty." : string.Join("\n", rows);
     }

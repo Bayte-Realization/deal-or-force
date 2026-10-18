@@ -46,8 +46,10 @@
     "gdp_cost_share": 0.0006,
     "unavailable": "The government does not have the credit to force it through",
     "trigger": { "min_political_points": 8 },
+    "resource_costs": { "political_points": 8 },
+    "ai_resource_reserve": { "political_points": 15 },
     "ai_will_do": "ai_push_the_reform",
-    "effects": { "political_points": -8, "army_experience": 6 }
+    "effects": { "army_experience": 6 }
   },
 
   // Опыт тратится не только на статьи устава: его можно положить в курс, который делает армию
@@ -59,8 +61,10 @@
     "gdp_cost_share": 0.0009,
     "unavailable": "The army has not earned the experience this course spends",
     "trigger": { "min_army_experience": 25 },
+    "resource_costs": { "army_experience": 25 },
+    "ai_resource_reserve": { "army_experience": 30 },
     "ai_will_do": "ai_intensive_field_course",
-    "effects": { "army_experience": -25, "add_modifier": { "intensive_field_course": 240 } }
+    "effects": { "add_modifier": { "intensive_field_course": 240 } }
   },
 
   "airmanship_week": {
@@ -70,8 +74,10 @@
     "gdp_cost_share": 0.0006,
     "unavailable": "The air service has not earned the hours this week spends",
     "trigger": { "min_air_experience": 18 },
+    "resource_costs": { "air_experience": 18 },
+    "ai_resource_reserve": { "air_experience": 20 },
     "ai_will_do": "ai_airmanship_week",
-    "effects": { "air_experience": -18, "add_modifier": { "airmanship_week": 180 } }
+    "effects": { "add_modifier": { "airmanship_week": 180 } }
   },
 
   "the_long_cruise": {
@@ -81,7 +87,9 @@
     "gdp_cost_share": 0.0006,
     "unavailable": "The fleet has not earned the hours this cruise spends",
     "trigger": { "min_naval_experience": 18 },
+    "resource_costs": { "naval_experience": 18 },
+    "ai_resource_reserve": { "naval_experience": 20 },
     "ai_will_do": "ai_the_long_cruise",
-    "effects": { "naval_experience": -18, "add_modifier": { "long_cruise": 180 } }
+    "effects": { "add_modifier": { "long_cruise": 180 } }
   }
 }

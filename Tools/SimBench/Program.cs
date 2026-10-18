@@ -333,6 +333,15 @@ public static class Program
             for (var day = 0; day < days; day++) campaign.TickDay();
             return Check("governments take decisions written in data", GovernmentsTakeScriptedDecisions(campaign, days));
         }
+        if (Array.IndexOf(args, "--decision-resources") >= 0)
+        {
+            var resources = new DecisionResourceTrace(campaign);
+            campaign.StepCompleted += resources.Observe;
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            campaign.StepCompleted -= resources.Observe;
+            return resources.Print(campaign);
+        }
         if (Array.IndexOf(args, "--identity-regressions-only") >= 0)
         {
             // Expiry <= 0 means permanent. Exercise expiry after day one, not by

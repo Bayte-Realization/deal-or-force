@@ -116,6 +116,7 @@ public partial class DealOrForceGame
         _agendaTitle.AddThemeFontSizeOverride("font_size", 17);
         _agendaDescription = CardLine("", "text.body_soft");
         _agendaCost = CardLine("", "text.accent_dim");
+        _agendaCost.Name = "AgendaCost";
         _agendaEffects = CardLine("", "text.body"); _agendaEffects.Name = "AgendaEffects";
         _agendaReason = CardLine("", "state.warning"); _agendaReason.Name = "AgendaReason";
         _agendaApply = ActionButton("Enact decision", ExecuteSelectedAgenda, 0, 34);
@@ -212,6 +213,8 @@ public partial class DealOrForceGame
             var d = DecisionCatalog.All.FirstOrDefault(d => d.Id == row.Id);
             var price = DecisionCatalog.Cost(nation, d);
             _agendaCost.Text = Simulation.Loc.Format("Cost {0} · cooldown {1} days", Fmt.Money(price), d.CooldownDays);
+            var resources = DecisionResources.PriceText(nation, d);
+            if (resources.Length > 0) _agendaCost.Text += "\n" + resources;
             lines.AddRange(ScriptedEffects.PreviewForNation(_campaign, nation, d.Effect, price));
         }
         else if (_agendaSection == AgendaWorkspace.Section.Promises && PromiseCatalog.Find(row.Id) is { } promise)
