@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System.Text.Json;
 using DealOrForce.Simulation;
-using Experiment = DealOrForce.Tools.AssaultRulesExperiment.AssaultRules;
-using ExperimentalAssessment = DealOrForce.Tools.AssaultRulesExperiment.Assessment;
-using ExperimentalReason = DealOrForce.Tools.AssaultRulesExperiment.Reason;
+using Experiment = DealOrForce.Rules.AssaultRules;
+using ExperimentalAssessment = DealOrForce.Rules.Assessment;
+using ExperimentalReason = DealOrForce.Rules.Reason;
 
 internal static class Program
 {
@@ -159,7 +159,9 @@ internal static class Program
         SetHours(World, (long)elapsed * 24);
         Require(World.ElapsedDays == elapsed, "fixture clock round trip");
         var randomBefore = World.Random.State;
-        var expected = AssaultReadiness.Assess(hasCampaign ? World : null, hasArmy ? Formation : null);
+        var expected = LegacyAssaultReadiness.Assess(hasCampaign ? World : null, hasArmy ? Formation : null);
+        var integrated = AssaultReadiness.Assess(hasCampaign ? World : null, hasArmy ? Formation : null);
+        Require(Same(expected, integrated), "live C# adapter matches the frozen C# oracle in every field");
         var actual = Experiment.Assess(hasCampaign, hasArmy, order is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead,
             plan, direct, ready, elapsed, org, supply, orgFloor, supplyFloor);
         _cases++;
@@ -203,6 +205,11 @@ internal static class Program
             Bits(World.Defines.AutonomousAssaultMinimumSupply) == supplyFloor, "state/RNG unchanged");
         Console.WriteLine("PASS state/RNG unchanged: 4096 repeated calls per assessor; fingerprint, army, clock and floors unchanged");
     }
+
+    private static bool Same(AssaultAssessment a, AssaultAssessment b) =>
+        a.Ready == b.Ready && a.Reason == b.Reason && a.RecoveryDays == b.RecoveryDays &&
+        Bits(a.Organisation) == Bits(b.Organisation) && Bits(a.MinimumOrganisation) == Bits(b.MinimumOrganisation) &&
+        Bits(a.Supply) == Bits(b.Supply) && Bits(a.MinimumSupply) == Bits(b.MinimumSupply);
 
     private static uint Next()
     {

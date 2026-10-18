@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-namespace DealOrForce.Tools.AssaultRulesExperiment
+namespace DealOrForce.Rules
 
 /// Explicit values mirror the existing C# readout; this library owns no campaign state.
 type Reason =
@@ -23,7 +23,7 @@ type Assessment =
       MinimumSupply: single
       RecoveryDays: int }
 
-/// Tools-only, deterministic eligibility experiment. No Godot, IO, RNG or host reference.
+/// Deterministic game rules. No Godot, IO, RNG or reference to the mutable campaign.
 [<AbstractClass; Sealed>]
 type AssaultRules private () =
     static member Assess(

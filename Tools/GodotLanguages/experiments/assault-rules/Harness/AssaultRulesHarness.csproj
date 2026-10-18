@@ -9,8 +9,7 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../Rules/AssaultRules.fsproj" />
-    <!-- Actual game sources, as in ArmyInteractionTests; never a copied C# assessor. -->
+    <!-- Actual game sources plus a frozen pre-migration C# oracle. Rules arrive via the shared import. -->
     <Compile Include="../../../../../Scripts/Simulation/**/*.cs" />
     <Compile Include="../../../../../Scripts/Modding/ModContracts.cs" />
     <Compile Include="../../../../../Scripts/Modding/ModOperations.cs" />

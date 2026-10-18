@@ -1,5 +1,20 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
-# Tools-only F# assault eligibility experiment
+# F# assault-readiness differential harness
+
+## Current status — 2026-10-18
+
+The former Rules/ implementation has moved to the production library in
+[Scripts/Rules](../../../../Scripts/Rules/README.md). Both the actual F# method
+and the public C# game adapter are now compared against the frozen pre-migration
+C# oracle in Harness/LegacyAssaultReadiness.cs (ea4510cf). The oracle is test-only.
+The game and all headless hosts reference the same net8 library, with FSharp.Core
+explicitly pinned to 10.1.402. The game remains net10; no framework retargeting.
+
+The command below passed 624502 cases again on 2026-10-18, with exact float bits
+and unchanged state/RNG. This finite matrix/fuzz set is not exhaustive and does
+not prove a speedup, standalone deployment, or another export platform.
+
+## Historical experiment — 2026-10-16 (superseded by the status above)
 
 This is an optional pure-rules readability experiment, not a game backend or a performance claim.
 The original C# `AssaultReadiness.Assess` remains authoritative. No production project references

@@ -37,7 +37,8 @@ public sealed partial class Nation
 public static class PoliticalPolicies
 {
     public static string Slot(PoliticalPolicy p, string targetTag = "", int region = 0) =>
-        p.Scope + ":" + p.Category + (p.Scope == "foreign" ? ":" + targetTag : p.Scope == "region" ? ":" + region : "");
+        p.Scope == "foreign" ? p.SlotKey + ":" + targetTag :
+        p.Scope == "region" ? p.SlotKey + ":" + region : p.SlotKey;
 
     public static PoliticalPolicy Effective(Nation n, PoliticalPolicy p, string target = "", int region = 0) =>
         n.Laws.TryGetValue(Slot(p, target, region), out var law) ? PoliticalPolicyCatalog.Find(law.Id) :

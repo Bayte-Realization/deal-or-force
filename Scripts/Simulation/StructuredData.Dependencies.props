@@ -2,5 +2,6 @@
   <!-- Shared by the game and standalone tools that compile the simulation sources. -->
   <ItemGroup>
     <PackageReference Include="YamlDotNet" Version="18.1.0" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../Rules/DealOrForce.Rules.fsproj" />
   </ItemGroup>
 </Project>

@@ -156,6 +156,14 @@ public static partial class ForeignAssistance
         if (!Enabled(c)) return;
         var cadence = Math.Clamp(c.Defines.AiAidRequestReviewDays, 1, 365);
         var threshold = float.IsFinite(c.Defines.AiAidRequestWillingness) ? Math.Clamp(c.Defines.AiAidRequestWillingness, 0, 3) : .45f;
+        ReviewDonors(c, cadence, threshold);
+    }
+
+    // Assessments stay live: a prior grant can change the next donor's cash.
+    // Only traversal is shared within one review. Aid cannot create a country.
+    internal static void ReviewDonors(Campaign c, int cadence, float threshold)
+    {
+        Nation[] donors = null;
         foreach (var requester in c.Nations.Where(n => !n.IsHuman).OrderBy(n => n.Id))
         {
             if (((long)c.ElapsedDays + requester.Id) % cadence != 0 ||
@@ -163,8 +171,11 @@ public static partial class ForeignAssistance
             var amount = (double)requester.Gdp * c.Defines.AidShareOfRecipientGdp;
             if (!double.IsFinite(amount) || amount < .01 || amount > float.MaxValue) continue;
             var warId = c.Wars.Where(w => !w.Ended && w.Involves(requester.Id)).OrderBy(w => w.Id).FirstOrDefault()?.Id ?? -1;
+            // Same predicate as the live payment assessment: without need, no
+            // donor can accept. Avoid constructing every impossible assessment.
+            if (!HasCurrentNeed(c, requester, warId >= 0)) continue;
             Nation best = null; var bestScore = float.NegativeInfinity;
-            foreach (var donor in c.Nations.OrderBy(n => n.Id))
+            foreach (var donor in donors ??= c.Nations.OrderBy(n => n.Id).ToArray())
             {
                 var assessment = CanSubmit(c, requester.Id, donor.Id, (float)amount, warId);
                 if (!assessment.Allowed || assessment.Willingness < threshold || assessment.Willingness <= bestScore) continue;
@@ -256,9 +267,7 @@ public static partial class ForeignAssistance
         var war = warId < 0 ? c.Wars.FirstOrDefault(w => !w.Ended && w.Involves(requesterId)) : c.Wars.FirstOrDefault(w => w.Id == warId);
         if (warId >= 0 && (war is null || war.Ended || !war.Involves(requesterId)))
             return new(false, 0, 0, false, "The requested war is no longer active.");
-        var lowCash = requester.Treasury < Math.Max(.01, (double)requester.Gdp * c.Defines.AiAidCrisisTreasuryOfGdp);
-        var fiscalTrouble = requester.WeeklyBalance < 0 || requester.PaymentArrears > 0 || requester.DebtArrears > 0;
-        if (!lowCash || war is null && !fiscalTrouble)
+        if (!HasCurrentNeed(c, requester, war is not null))
             return new(false, 0, 0, false, "There is no current financial need for assistance.");
         var reserve = (double)donor.Gdp * c.Defines.AiAidReserveOfGdp;
         var payable = Math.Min(amount, Math.Min((double)requester.Gdp * c.Defines.AidShareOfRecipientGdp,
@@ -292,6 +301,10 @@ public static partial class ForeignAssistance
         var next = MathF.BitIncrement(magnitude);
         return float.IsFinite(next) ? (double)next - magnitude : (double)magnitude - MathF.BitDecrement(magnitude);
     }
+    private static bool HasCurrentNeed(Campaign c, Nation requester, bool atWar) =>
+        requester.Treasury < Math.Max(.01, (double)requester.Gdp * c.Defines.AiAidCrisisTreasuryOfGdp) &&
+        (atWar || requester.WeeklyBalance < 0 || requester.PaymentArrears > 0 || requester.DebtArrears > 0);
+
     private static float Willingness(Campaign c, Nation requester, Nation donor, StrategicWar war, DiplomaticRelation relation)
     {
         var opinion = relation?.Opinion ?? 0;

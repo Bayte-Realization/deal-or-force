@@ -41,22 +41,15 @@ public static class AssaultReadiness
     {
         if (campaign is null || army is null)
             return new(false, Reason.Unavailable, 0, .16f, 0, .20f, 0);
-        var organisationFloor = Floor(campaign.Defines.AutonomousAssaultMinimumOrganisation, .16f);
-        var supplyFloor = Floor(campaign.Defines.AutonomousAssaultMinimumSupply, .20f);
-        var organisation = BattleReadout.Unit(army.Organisation);
-        var supply = BattleReadout.Unit(army.SupplyLevel);
-        var days = (int)Math.Min(int.MaxValue, Math.Max(0L, (long)army.ReadyDay - campaign.ElapsedDays));
-        var reason = army.OrderKind is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) ? Reason.NoAssaultOrder :
-            !army.PlanActive ? Reason.PlanPaused :
-            days > 0 ? Reason.Recovering :
-            !float.IsFinite(army.Organisation) || !float.IsFinite(army.SupplyLevel) ? Reason.Unavailable :
-            army.DirectOrder ? Reason.DirectOrder :
-            organisationFloor > 0 && organisation <= organisationFloor ? Reason.LowOrganisation :
-            supplyFloor > 0 && supply <= supplyFloor ? Reason.LowSupply : Reason.Ready;
-        return new(reason is Reason.Ready or Reason.DirectOrder, reason,
-            organisation, organisationFloor, supply, supplyFloor, days);
+        // C# owns the live world; the value-only F# rule owns eligibility and priority.
+        var result = Rules.AssaultRules.Assess(true, true,
+            army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead,
+            army.PlanActive, army.DirectOrder, army.ReadyDay, campaign.ElapsedDays,
+            army.Organisation, army.SupplyLevel,
+            campaign.Defines.AutonomousAssaultMinimumOrganisation,
+            campaign.Defines.AutonomousAssaultMinimumSupply);
+        return new(result.Ready, (Reason)(int)result.Reason,
+            result.Organisation, result.MinimumOrganisation, result.Supply,
+            result.MinimumSupply, result.RecoveryDays);
     }
-
-    private static float Floor(float value, float fallback) =>
-        float.IsFinite(value) ? Math.Clamp(value, 0, 1) : fallback;
 }

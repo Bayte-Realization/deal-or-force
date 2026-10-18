@@ -35,6 +35,9 @@ public partial class ExportVerification : Node
         try
         {
             AudioServer.SetBusMute(0, true);
+            var pureRule = Rules.AssaultRules.Assess(true, true, true, true, false, 0, 0, 1, 1, .16f, .20f);
+            Check(pureRule.Ready && typeof(Rules.AssaultRules).Assembly.GetName().Name == "DealOrForce.Rules",
+                "production F# rules load and execute inside Godot");
             var tree = GetTree();
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();

@@ -9,8 +9,21 @@ public sealed record PoliticalPolicy
 {
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";
-    public string Category { get; init; } = "";
-    public string Scope { get; init; } = "nation";
+    private string _category = "";
+    private string _scope = "nation";
+    // Definition-owned and immutable after initialization, including record `with`.
+    // A national lookup must not allocate a new slot string for every country/day.
+    internal string SlotKey { get; private set; } = "nation:";
+    public string Category
+    {
+        get => _category;
+        init { _category = value; SlotKey = _scope + ":" + _category; }
+    }
+    public string Scope
+    {
+        get => _scope;
+        init { _scope = value; SlotKey = _scope + ":" + _category; }
+    }
     public string Description { get; init; } = "";
     public string Icon { get; init; } = "government";
     public bool Default { get; init; }
@@ -34,9 +47,9 @@ public static class PoliticalPolicyCatalog
         AllLaws.Where(p => p.Scope == "nation").GroupBy(p => p.Category).Select(g => g.First()).ToArray();
     public static PoliticalPolicy Baseline(PoliticalPolicy p)
     {
-        Baselines ??= AllLaws.Where(d => d.Default).GroupBy(d => d.Scope + ":" + d.Category)
+        Baselines ??= AllLaws.Where(d => d.Default).GroupBy(d => d.SlotKey)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
-        return Baselines.GetValueOrDefault(p.Scope + ":" + p.Category);
+        return Baselines.GetValueOrDefault(p.SlotKey);
     }
     public static IEnumerable<PoliticalPolicy> AllLaws => Laws.Values.OrderBy(p => p.Category).ThenBy(p => p.Id, StringComparer.Ordinal);
     public static IEnumerable<PoliticalPolicy> AllAgendas => Agendas.Values.OrderBy(p => p.Id, StringComparer.Ordinal);
