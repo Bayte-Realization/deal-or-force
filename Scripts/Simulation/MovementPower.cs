@@ -42,6 +42,28 @@ public sealed partial class Defines
 /// </summary>
 public static class MovementPower
 {
+    private static readonly Dictionary<int, float> ByHost = new();
+    private static readonly string[] MarchStrikeActions = { "march", "strike" };
+    private static readonly Dictionary<int, ScenarioState> StateByMapIndex = new();
+    private static Campaign _stateIndexCampaign;
+    private static int _stateIndexRevision = -1;
+    private static int _stateIndexCount = -1;
+
+    /// <summary>Regions by map index, rebuilt when the map or region list changes.</summary>
+    private static ScenarioState StateOf(Campaign campaign, int mapIndex)
+    {
+        if (!ReferenceEquals(_stateIndexCampaign, campaign) ||
+            _stateIndexRevision != campaign.MapRevision || _stateIndexCount != campaign.States.Count)
+        {
+            StateByMapIndex.Clear();
+            foreach (var state in campaign.States) StateByMapIndex[state.MapIndex] = state;
+            _stateIndexCampaign = campaign;
+            _stateIndexRevision = campaign.MapRevision;
+            _stateIndexCount = campaign.States.Count;
+        }
+        return StateByMapIndex.GetValueOrDefault(mapIndex);
+    }
+
     /// <summary>
     /// What the movement has become, 0 to 1, from the current authoritative inputs.
     /// Panel reads must not fix the value for the rest of a day: recognition, recruiting
@@ -54,6 +76,9 @@ public static class MovementPower
         long people = 0;
         var following = 0f;
         if (definition is not null)
+            // Deliberately the fresh walk, not the day-only people index: a panel read must
+            // see a population that changed while the world was paused, and the same-day
+            // command that follows must act on the number the panel showed.
             foreach (var region in c.States)
             {
                 var own = MovementRules.PeopleOf(region, definition, out var faithful) + faithful;
@@ -73,18 +98,29 @@ public static class MovementPower
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
         if (state is null || definition is null) return null;
-        var byHost = new Dictionary<int, float>();
-        foreach (var region in c.States)
+        // Only regions where the movement actually has support can contribute. The old walk
+        // visited every region in the world and then asked the same people question, which
+        // is why a movement with support in forty places paid for eighteen hundred. The
+        // people themselves are still counted fresh: support can be written while paused.
+        ByHost.Clear();
+        foreach (var (regionMapIndex, support) in state.Support)
         {
-            var support = state.Support.GetValueOrDefault(region.MapIndex);
-            if (support < 0.3f || region.NationMapIndex == nation.MapIndex) continue;
+            if (support < 0.3f) continue;
+            var region = StateOf(c, regionMapIndex);
+            if (region is null || region.NationMapIndex == nation.MapIndex) continue;
             var own = MovementRules.PeopleOf(region, definition, out var faithful) + faithful;
             if (own <= 0) continue;
-            byHost[region.NationMapIndex] = byHost.GetValueOrDefault(region.NationMapIndex) + own * support;
+            ByHost[region.NationMapIndex] = ByHost.GetValueOrDefault(region.NationMapIndex) + own * support;
         }
-        if (byHost.Count == 0) return null;
-        var best = byHost.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).First().Key;
-        return c.Nations.Find(n => n.MapIndex == best && n.Movement is null);
+        var best = -1;
+        var bestValue = 0f;
+        foreach (var (host, value) in ByHost)
+            if (value > bestValue || (value == bestValue && host < best))
+            {
+                best = host;
+                bestValue = value;
+            }
+        return best < 0 ? null : c.Nations.Find(n => n.MapIndex == best && n.Movement is null);
     }
 
     /// <summary>The country whose capital region follows it most - where it would march.</summary>
@@ -96,7 +132,7 @@ public static class MovementPower
         foreach (var host in c.Nations)
         {
             if (host.Movement is not null || host.Population <= 0 || host.Id == nation.Id) continue;
-            var capital = c.States.Find(s => s.MapIndex == host.CapitalStateMapIndex);
+            var capital = StateOf(c, host.CapitalStateMapIndex);
             if (capital is null || capital.NationMapIndex != host.MapIndex) continue;
             var support = state.Support.GetValueOrDefault(capital.MapIndex);
             if (support > best.Item3) best = (host, capital, support);
@@ -104,10 +140,10 @@ public static class MovementPower
         return best;
     }
 
-    internal static string Refusal(Campaign c, Nation nation, string action)
+    internal static string Refusal(Campaign c, Nation nation, string action, float? knownMomentum = null)
     {
         var defines = c.Defines;
-        var momentum = Momentum(c, nation);
+        var momentum = knownMomentum ?? Momentum(c, nation);
         var definition = Movements.DefinitionOf(nation);
         if (definition?.Has("for_hire") == true) return Loc.Get("A company for hire does not lead a people.");
         switch (action)
@@ -232,11 +268,17 @@ public static class MovementPower
             using (SimProfiler.Measure("movement power"))
             {
                 var momentum = Momentum(c, nation);
-                if (momentum >= defines.MovementParallelMomentum) Administer(c, nation, state);
+                if (momentum >= defines.MovementParallelMomentum)
+                {
+                    Administer(c, nation, state);
+                    // The levy raises the movement's weekly income, and momentum counts that
+                    // income. Read it again before asking whether the same movement may march.
+                    momentum = Momentum(c, nation);
+                }
                 if (!nation.IsHuman)
-                    foreach (var action in new[] { "march", "strike" })
+                    foreach (var action in MarchStrikeActions)
                     {
-                        if (MovementActions.Refusal(c, nation, action, -1, -1).Length > 0) continue;
+                        if (MovementActions.Refusal(c, nation, action, -1, -1, momentum).Length > 0) continue;
                         // A strike or a march is a decision, not a habit: one chance in four a week once possible.
                         if (MovementRules.Roll(c.Seed, nation.Id, c.ElapsedDays, action == "march" ? 4721 : 4722) > 0.25f) continue;
                         new MovementActionCommand { IssuerId = nation.Id, Action = action }.Apply(c);
@@ -252,12 +294,13 @@ public static class MovementPower
     {
         var defines = c.Defines;
         var levy = 0f;
-        foreach (var region in c.States)
+        var owners = MovementRules.Owners(c);
+        foreach (var (regionMapIndex, support) in state.Support)
         {
-            if (region.NationMapIndex == nation.MapIndex) continue;
-            if (state.Support.GetValueOrDefault(region.MapIndex) < defines.MovementParallelSupport) continue;
-            var host = c.Nations.Find(n => n.MapIndex == region.NationMapIndex);
-            if (host is null || host.Movement is not null) continue;
+            if (support < defines.MovementParallelSupport) continue;
+            var region = StateOf(c, regionMapIndex);
+            if (region is null || region.NationMapIndex == nation.MapIndex) continue;
+            if (!owners.TryGetValue(region.NationMapIndex, out var host) || host.Movement is not null) continue;
             // The region's share of the country's output, by its people.
             var output = MathF.Max(0f, host.Gdp) * region.Population / MathF.Max(1f, host.Population);
             var take = output * M.Clamp01(defines.MovementParallelLevy);

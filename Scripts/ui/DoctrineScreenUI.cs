@@ -23,10 +23,12 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private Control _doctrineLayer;
+    private CanvasLayer _doctrineCanvas;
     private VBoxContainer _doctrineBookList;
     private VBoxContainer _doctrineCentre;
     private VBoxContainer _doctrineSide;
     private VBoxContainer _doctrineScreenCurrencies;
+    private HBoxContainer _doctrineToolbar;
     private Label _doctrineScreenSummary;
     private Label _doctrineZoomLabel;
     private Button _doctrineTacticalView, _doctrineCourseView;
@@ -35,11 +37,19 @@ public partial class DealOrForceGame
 
     private void BuildDoctrineScreen()
     {
+        // A screen of its own, on a canvas of its own. Built as a sibling of the map inside the
+        // shared HUD Control, its plate drew perfectly and took no clicks and no wheel at all -
+        // the whole stack above it was happy to eat GUI input while _Input (which the tree's zoom
+        // goes through) worked fine. A CanvasLayer of its own removes the question: nothing in the
+        // HUD's child order can be above a layer, and a modal screen belongs on one anyway.
+        _doctrineCanvas = new CanvasLayer { Name = "DoctrineCanvas", Layer = 12 };
+        AddChild(_doctrineCanvas);
         _doctrineLayer = FullLayer("Doctrines");
         _doctrineLayer.Visible = false;
-        _hudLayer.AddChild(_doctrineLayer);
+        _doctrineCanvas.AddChild(_doctrineLayer);
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        shade.OffsetLeft = InterfaceSkin.Metric("shell.navigation_size", 82);
         _doctrineLayer.AddChild(shade);
         var panel = TexturedPanel(_doctrineLayer);
         Ui.Place(panel, "modal.doctrines");
@@ -66,12 +76,28 @@ public partial class DealOrForceGame
 
         _doctrineScreenSummary = Title("", 14, Ui.Colour("text.body"));
         _doctrineScreenSummary.Name = "DoctrineScreenSummary";
-        _doctrineScreenSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        // One line, ellipsised: a caption that wraps into a ladder of single words is worse than a
+        // caption that ends in an ellipsis, and the tooltip holds the whole sentence anyway.
+        _doctrineScreenSummary.AutowrapMode = TextServer.AutowrapMode.Off;
+        _doctrineScreenSummary.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _doctrineScreenSummary.ClipText = true;
         rows.AddChild(_doctrineScreenSummary);
 
-        var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        var bodyScroll = new ScrollContainer
+        {
+            Name = "DoctrineBodyScroll",
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        rows.AddChild(bodyScroll);
+        var body = new HBoxContainer
+        {
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         body.AddThemeConstantOverride("separation", 14);
-        rows.AddChild(body);
+        bodyScroll.AddChild(body);
 
         // Left: the six books, each saying how much of it is written down, and the four currencies
         // the books are paid in.
@@ -109,11 +135,7 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         HideMapSelection(true);
         SetArmyPanelVisible(false);
-        foreach (var other in new[] { _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _diplomacyLayer,
-                     _tradeScreenLayer, _productionLayer, _researchLayer, _policyLayer })
-            if (other is not null) other.Visible = false;
-        _doctrineLayer.Visible = true;
-        _doctrineLayer.MoveToFront();
+        RaiseWorkspaceLayer(_doctrineLayer);
         _doctrineScreenDay = -1;
         RefreshDoctrineScreen();
         UpdateScreenButtons();
@@ -144,11 +166,18 @@ public partial class DealOrForceGame
         var n = _campaign.Player;
         var weekly = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
-        _doctrineScreenSummary.Text = Loc.Format(
+        var summary = Loc.Format(
             "{0} · army experience {1}, air {2}, sea {3} · political credit {4} ({5} a week) · {6}",
             n.DisplayName, Fmt.Number(n.ArmyExperience), Fmt.Number(n.AirExperience),
             Fmt.Number(n.NavalExperience), Fmt.Number(n.PoliticalPoints), Fmt.Number(weekly),
             TreeViewport.Hint);
+        // This runs every frame while the screen is open, so the string is rebuilt only when a
+        // number in it actually changed - the same rule the retained HUD labels follow.
+        if (summary != _doctrineScreenSummary.Text)
+        {
+            _doctrineScreenSummary.Text = summary;
+            _doctrineScreenSummary.TooltipText = Ui.Tip(summary);
+        }
         StyleButton(_doctrineTacticalView, _doctrineView == "tactical");
         StyleButton(_doctrineCourseView, _doctrineView == "course");
         UpdateDoctrineZoomLabel();
@@ -160,13 +189,28 @@ public partial class DealOrForceGame
                 : TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
 
         ClearPolicyRows(_doctrineScreenCurrencies);
-        CurrencyStrip(_doctrineScreenCurrencies, n);
+        // Three services while a tactical book is open, and political credit added the moment the
+        // strategic courses are: a course is bought with credit, so the number it is bought with
+        // belongs on the screen that spends it.
+        CurrencyStrip(_doctrineScreenCurrencies, n, _doctrineView == "course", columns: 2);
         RebuildDoctrineBookList(n);
 
         ClearPolicyRows(_doctrineCentre);
         if (_doctrineView == "course")
         {
-            StrategicDoctrinePage(n, _doctrineCentre);
+            var courseScroll = new ScrollContainer
+            {
+                Name = "DoctrineCourseScroll",
+                SizeFlagsVertical = SizeFlags.ExpandFill,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                FollowFocus = true
+            };
+            _doctrineCentre.AddChild(courseScroll);
+            var courseRows = new VBoxContainer { Name = "DoctrineCourseRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            courseRows.AddThemeConstantOverride("separation", 8);
+            courseScroll.AddChild(courseRows);
+            StrategicDoctrinePage(n, courseRows);
         }
         else
         {
@@ -210,60 +254,62 @@ public partial class DealOrForceGame
     /// <summary>The toolbar: the two hands as buttons, for a layout where Alt is the window manager's.</summary>
     private void DoctrineTreeToolbar(Control rows)
     {
-        var bar = new HBoxContainer { Name = "DoctrineTreeToolbar" };
-        bar.AddThemeConstantOverride("separation", 6);
-        rows.AddChild(bar);
-        var further = ActionButton("−", () => NudgeDoctrineZoom(false), 46, 30);
-        further.Name = "DoctrineZoomOut";
-        further.TooltipText = Ui.Tip(Tr("Further away"));
-        bar.AddChild(further);
-        _doctrineZoomLabel = Title("100%", 13, Ui.Colour("text.body"));
-        _doctrineZoomLabel.Name = "DoctrineZoomLabel";
-        _doctrineZoomLabel.CustomMinimumSize = new Vector2(66, 0);
-        _doctrineZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        bar.AddChild(_doctrineZoomLabel);
-        var closer = ActionButton("+", () => NudgeDoctrineZoom(true), 46, 30);
-        closer.Name = "DoctrineZoomIn";
-        closer.TooltipText = Ui.Tip(Tr("Closer"));
-        bar.AddChild(closer);
-        var reset = ActionButton("100%", ResetDoctrineZoom, 88, 30);
-        reset.Name = "DoctrineZoomReset";
-        bar.AddChild(reset);
-        var hint = Title(TreeViewport.Hint, 12, Ui.Colour("text.caption"));
-        hint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        hint.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        bar.AddChild(hint);
+        if (_doctrineToolbar is null)
+        {
+            _doctrineToolbar = new HBoxContainer { Name = "DoctrineTreeToolbar" };
+            _doctrineToolbar.AddThemeConstantOverride("separation", 6);
+            _doctrineToolbar.SetMeta(KeepOnRefresh, true);
+            var further = ActionButton("−", () => NudgeDoctrineZoom(false), 46, 30);
+            further.Name = "DoctrineZoomOut";
+            further.TooltipText = Ui.Tip(Tr("Further away"));
+            _doctrineToolbar.AddChild(further);
+            _doctrineZoomLabel = Title("100%", 13, Ui.Colour("text.body"));
+            _doctrineZoomLabel.Name = "DoctrineZoomLabel";
+            _doctrineZoomLabel.CustomMinimumSize = new Vector2(66, 0);
+            _doctrineZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
+            _doctrineToolbar.AddChild(_doctrineZoomLabel);
+            var closer = ActionButton("+", () => NudgeDoctrineZoom(true), 46, 30);
+            closer.Name = "DoctrineZoomIn";
+            closer.TooltipText = Ui.Tip(Tr("Closer"));
+            _doctrineToolbar.AddChild(closer);
+            var reset = ActionButton("100%", ResetDoctrineZoom, 88, 30);
+            reset.Name = "DoctrineZoomReset";
+            _doctrineToolbar.AddChild(reset);
+            var hint = Title(TreeViewport.Hint, 12, Ui.Colour("text.caption"));
+            hint.Name = "DoctrineZoomHint";
+            hint.AutowrapMode = TextServer.AutowrapMode.Off;
+            hint.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            hint.ClipText = true;
+            hint.TooltipText = Ui.Tip(TreeViewport.Hint);
+            hint.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            _doctrineToolbar.AddChild(hint);
+        }
+        if (_doctrineToolbar.GetParent() is { } holder) holder.RemoveChild(_doctrineToolbar);
+        rows.AddChild(_doctrineToolbar);
+        if (_doctrineToolbar.GetNodeOrNull<Label>("DoctrineZoomHint") is { } hintLabel)
+        {
+            hintLabel.Text = TreeViewport.Hint;
+            hintLabel.TooltipText = Ui.Tip(TreeViewport.Hint);
+        }
+        UpdateDoctrineZoomLabel();
     }
 
     private void NudgeDoctrineZoom(bool closer)
     {
-        if (_doctrineScroll is null || _doctrineViewport is null || _doctrineTree is null)
-        {
-            GD.Print($"[zoom-nudge] plate missing: scroll={_doctrineScroll is not null} viewport={_doctrineViewport is not null} tree={_doctrineTree is not null}");
-            return;
-        }
-        var was = _doctrineZoom;
+        if (_doctrineScroll is null || _doctrineViewport is null || _doctrineTree is null) return;
         TreeViewport.Nudge(_doctrineScroll, _doctrineViewport, _doctrineTree, _doctrineExtent,
             ref _doctrineZoom, closer);
-        GD.Print($"[zoom-nudge] closer={closer} {was} -> {_doctrineZoom} scale={_doctrineTree.Scale.X}");
         UpdateDoctrineZoomLabel();
     }
 
     private void ResetDoctrineZoom()
     {
-        _doctrineZoom = 1f;
-        if (_doctrineTree is not null)
-        {
-            _doctrineTree.Scale = Vector2.One;
-            _doctrineTree.CustomMinimumSize = Vector2.Zero;
-        }
-        if (_doctrineViewport is not null) _doctrineViewport.CustomMinimumSize = _doctrineExtent;
+        TreeViewport.Reset(_doctrineViewport, _doctrineTree, _doctrineExtent, ref _doctrineZoom);
         UpdateDoctrineZoomLabel();
     }
 
     private void UpdateDoctrineZoomLabel()
     {
-        if (_doctrineZoomLabel is not null)
-            _doctrineZoomLabel.Text = Loc.Format("{0}%", Math.Round(_doctrineZoom * 100));
+        if (_doctrineZoomLabel is not null) _doctrineZoomLabel.Text = TreeViewport.PercentLabel(_doctrineZoom);
     }
 }

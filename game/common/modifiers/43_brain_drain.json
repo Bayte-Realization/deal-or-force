@@ -1,4 +1,4 @@
-// National spirit granted by the talent retention & repatriation programme (BrainDrain.cs).
+// National spirits for demography, migration, and human-capital retention (BrainDrain.cs, HouseholdEconomy.cs).
 {
   "talent_retention": {
     "name": "Talent retention programme",
@@ -12,6 +12,61 @@
     "modifiers": {
       "output": 0.03,
       "research_speed": 0.08
+    }
+  },
+  "pronatalist_drive": {
+    "name": "Pronatalist family programme",
+    "description": "Child allowances, maternity leave and family housing grants lift birth rates and slow demographic ageing.",
+    "days": 540,
+    "positive": true,
+    "effects": {
+      "stability": 0.0006,
+      "state.standard_of_living": 0.0005
+    },
+    "modifiers": {
+      "tax_efficiency": -0.02
+    }
+  },
+  "open_migration_doors": {
+    "name": "Open migration doors",
+    "description": "Fast-track work visas and residency permits draw large inflows of foreign workers and families, replenishing the workforce while accelerating cultural change.",
+    "days": 540,
+    "positive": true,
+    "effects": {
+      "productivity": 0.001,
+      "state.radicalism": 0.0008
+    },
+    "modifiers": {
+      "output": 0.04,
+      "construction_speed": 0.06
+    }
+  },
+  "strict_border_controls": {
+    "name": "Strict border controls",
+    "description": "Closed migration quotas and exit checks halt foreign immigration and slow specialist emigration, leaving the country to its own natural birth and ageing curve.",
+    "days": 540,
+    "positive": false,
+    "effects": {
+      "stability": 0.0005,
+      "state.radicalism": -0.0006
+    },
+    "modifiers": {
+      "trade_reach": -0.03,
+      "research_speed": -0.02
+    }
+  },
+  "demographic_boom": {
+    "name": "Demographic boom",
+    "description": "Rising confidence and young families produce a generation surge across the country's regions.",
+    "days": 540,
+    "positive": true,
+    "effects": {
+      "stability": 0.0005,
+      "productivity": 0.001
+    },
+    "modifiers": {
+      "output": 0.03,
+      "recruitment_speed": 0.08
     }
   }
 }

@@ -1,8 +1,13 @@
 {
+  "campaign": {
+    "screens": {
+      "Doctrines": { "tabs": [], "links": [] }
+    }
+  },
   "layout": {
     "modal.doctrines": {
-      "anchors": [0.035, 0.08, 0.985, 0.96],
-      "offsets": [0, 0, 0, 0]
+      "anchors": [0, 0.1, 0.975, 0.94],
+      "offsets": [92, 0, 0, 0]
     }
   }
 }

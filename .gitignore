@@ -27,6 +27,17 @@ addons/
 .vs/
 .vscode/
 .idea/
+# Local assistant instructions and generated agent state are not game content.
+/.agents/
+/.mimosa/
+/.mcp.json
+/.mcp.json.bak
+/.devin/config.local.json
+/tmp/
+/tmp_playtest/
+/Tools/BtaBridge/
+/crash_envelope*.json
+/DealOrForce.csproj.old*
 
 # --- Third-party demo content shipped with an addon, unused by the game ---
 demo/

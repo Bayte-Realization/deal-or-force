@@ -144,8 +144,11 @@ public static class CountryNames
     /// </summary>
     public static string Form(Nation nation)
     {
-        if (nation is null || nation.Movement is not null || !string.IsNullOrEmpty(nation.FormedNationId) ||
-            nation.Name.StartsWith("rising:", StringComparison.Ordinal) || string.IsNullOrEmpty(nation.StartGovernment)) return "";
+        var restored = FormableRestorations.RestoredTag(nation?.FormedNationId);
+        if (nation is null || nation.Movement is not null ||
+            (!string.IsNullOrEmpty(nation.FormedNationId) && restored is null) ||
+            nation.Name.StartsWith("rising:", StringComparison.Ordinal) ||
+            string.IsNullOrEmpty(nation.StartGovernment)) return "";
         string Row(string form) => Loc.Has("name.form." + form) ? "name.form." + form : "";
         if (nation.Ideology != nation.StartIdeology)
         {
@@ -154,7 +157,9 @@ public static class CountryNames
         }
         if (nation.Government == nation.StartGovernment) return "";
         static bool Monarchy(string government) => government is "absolute_monarchy" or "constitutional_monarchy";
+        static bool Republic(string government) => government is "parliamentary_republic" or "presidential_republic" or "direct_democracy";
         if (Monarchy(nation.Government)) return Monarchy(nation.StartGovernment) ? "" : Row("kingdom");
+        if (Monarchy(nation.StartGovernment) && Republic(nation.Government)) return Row("republic");
         return nation.Government switch
         {
             "theocracy" => Row(Muslim(nation) ? "islamic_republic" : "holy_state"),
@@ -167,7 +172,10 @@ public static class CountryNames
 
     private static bool Muslim(Nation nation)
     {
-        var culture = DemographyCatalog.Culture(DemographyCatalog.PrimaryCulture(nation.Tag));
+        if (!string.IsNullOrWhiteSpace(nation.DeclaredReligion) && !StateIdentity.IsSecular(nation.DeclaredReligion))
+            return nation.DeclaredReligion is "sunni" or "shia" or "ibadi" or "sufi";
+        var tag = FormableRestorations.RestoredTag(nation.FormedNationId) ?? nation.Tag;
+        var culture = DemographyCatalog.Culture(DemographyCatalog.PrimaryCulture(tag));
         if (culture is null) return false;
         var share = 0f;
         foreach (var (faith, weight) in culture.Religions)

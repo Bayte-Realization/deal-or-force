@@ -79,6 +79,8 @@
   "governance_limit": 0.15,
   "governance_decay": 0.004,
 
+  "imperial_overstretch": 0.18,
+
   "floor": 0.05,
   "ceiling": 0.98
 }

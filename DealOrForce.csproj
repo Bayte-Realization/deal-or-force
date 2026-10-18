@@ -13,6 +13,14 @@
     -->
     <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <!--
+      The first non-C# game rule: the pure assault-eligibility predicate. It is managed
+      .NET, compiled into the same export, and the C# path remains the fallback. See
+      Scripts/Rules/AssaultRules.fs and docs/LANGUAGE_KERNEL_EVALUATION_2026_10_16_RU.md.
+    -->
+    <ProjectReference Include="Scripts\Rules\DealOrForce.Rules.fsproj" />
+  </ItemGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a
     game whose main loop is a simulation of a hundred and forty wars across thirty-eight

@@ -514,15 +514,6 @@ public static class Statecraft
     }
 
     /// <summary>
-    /// Whether a country honours a promise it made in easier times.
-    ///
-    /// A player is never dragged in without being asked - their answer arrives as an offer
-    /// they can refuse, the same way a peace does - so this is only ever the computer
-    /// deciding, and it decides the way a government would: it keeps a promise it can afford
-    /// to keep, to a friend it still has, against an enemy it can survive.
-    /// </summary>
-
-    /// <summary>
     /// Everybody this country could ask to join a war it is already fighting.
     ///
     /// Allies and guarantors, and nobody who is in the war already. Whether any of them
@@ -632,6 +623,14 @@ public static class Statecraft
         return false;
     }
 
+    /// <summary>
+    /// Whether a country honours a promise it made in easier times.
+    ///
+    /// A player is never dragged in without being asked - their answer arrives as an offer
+    /// they can refuse, the same way a peace does - so this is only ever the computer
+    /// deciding, and it decides the way a government would: it keeps a promise it can afford
+    /// to keep, to a friend it still has, against an enemy it can survive.
+    /// </summary>
     private static bool WillAnswer(Campaign campaign, Nation friend, Nation defender, Nation attacker,
         DiplomaticRelation bond, bool favour = false)
     {

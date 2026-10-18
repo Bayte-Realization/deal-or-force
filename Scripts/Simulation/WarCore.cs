@@ -456,7 +456,9 @@ public static partial class FrontPlanner
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
             if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) continue;
             var nation = campaign.NationById(army.NationId);
-            if (nation is null || nation.IsHuman) continue;
+            // A player's divisions are the player's - unless the general staff in the field
+            // was handed over, in which case they march by the same rule as everybody else's.
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
             if (army.Planning < profile.ExecutePlanningThreshold) continue;
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
@@ -489,11 +491,29 @@ public static partial class FrontPlanner
             pressing = false;
             share *= 0.2f;
         }
+        else if (!attacking)
+        {
+            // A defender whose sovereignty or core provinces are threatened must not remain purely passive:
+            // counter-offensives actively contest lost ground when the army is intact.
+            var territoryThreatened = war.DefenderOccupiedValue > 0.005f || score < -2f;
+            var canPress = ours <= theirs * 2.5f && nation.WarSupport >= 0.20f;
+            if (territoryThreatened && canPress)
+            {
+                pressing = true;
+                share = MathF.Max(share, 0.45f);
+            }
+            else if (score > 4f && canPress)
+            {
+                // Exploiting clear battlefield momentum to end the war decisively.
+                pressing = true;
+                share = MathF.Max(share, 0.38f);
+            }
+        }
         return share;
     }
 
     private static int AdvanceCount(int count, float share, bool attacking) =>
-        Math.Min(count, Math.Max(attacking && share > 0 && count > 0 ? 1 : 0, (int)MathF.Round(count * share)));
+        Math.Min(count, Math.Max(share > 0 && count > 0 && (attacking || count <= 3) ? 1 : 0, (int)MathF.Round(count * share)));
 
     /// <summary>Fill missing roles with a replacement without reordering formations already marching.</summary>
     internal static void GiveIdleRole(Campaign c, Army army)
@@ -696,7 +716,12 @@ public static partial class FrontPlanner
     private static void AssignSide(Campaign campaign, StrategicWar war, int nationId, bool attacking)
     {
         var nation = campaign.NationById(nationId);
-        if (nation is null || nation.IsHuman) return;
+        // A country the computer runs takes its orders here. A player's does not - unless
+        // the general staff in the field was handed over (Delegation.Command), in which case
+        // its divisions are assigned and executed by exactly the same planner. Before this
+        // check the delegation moved a player's free reserve into posts but never gave it a
+        // role in a war, so an army handed to the staff stood on the front and did nothing.
+        if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) return;
         var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
         // Territorial defence is not part of the field army's order of battle. Militia holds
         // the region it stood up in; sweeping it into the front shares distorted them badly -
@@ -704,6 +729,8 @@ public static partial class FrontPlanner
         // militia pushed real divisions out of defending and into attacking, and Ukraine lost
         // two thirds of its ground to a mechanic written to help it hold.
         var armies = ArmiesFor(campaign, war, nationId);
+        if (armies.Count == 0) return;
+        var participantObjective = ObjectiveFor(campaign, war, nation);
         // Strongest first.
         //
         // Worth recording what does NOT work here, because it looks obviously right: Power
@@ -758,21 +785,36 @@ public static partial class FrontPlanner
             //
             // Or when it is being handed to this war from another one the country is fighting.
             if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
-                    army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex) ||
+                    army.ObjectiveStateMapIndex != participantObjective) ||
                 army.AssignedWarId != war.Id)
                 new SetArmyOrderCommand
                 {
                     IssuerId = nationId,
                     ArmyId = army.Id,
                     WarId = war.Id,
-                    ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
+                    ObjectiveStateMapIndex = participantObjective,
                     Order = order
                 }.Apply(campaign);
 
             if (army.Stance != stance)
                 new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
 
-            var execute = army.Planning >= profile.ExecutePlanningThreshold;
+            bool execute;
+            if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
+            {
+                execute = false;
+            }
+            else if (army.PlanActive)
+            {
+                // Active offensive plan continues unless the division is exhausted in organisation or supply.
+                var assessment = AssaultReadiness.Assess(campaign, army);
+                execute = assessment.Reason is not (AssaultReadiness.Reason.LowOrganisation or AssaultReadiness.Reason.LowSupply);
+            }
+            else
+            {
+                execute = army.Planning >= profile.ExecutePlanningThreshold;
+            }
+
             if (army.PlanActive != execute)
                 new SetArmyPlanExecutionCommand
                 {

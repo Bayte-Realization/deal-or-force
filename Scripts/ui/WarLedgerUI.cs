@@ -227,9 +227,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Wars";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        _warLedgerLayer.Visible = true;
-        _warLedgerLayer.MoveToFront();
+        RaiseWorkspaceLayer(_warLedgerLayer);
         ShowWarLedgerList();
     }
 
@@ -906,6 +904,23 @@ public partial class DealOrForceGame
         var defendingDivisions = war.Side(false).Sum(id => committed.GetValueOrDefault(id));
         Split(going, "DIVISIONS COMMITTED", attackingDivisions, defendingDivisions,
             Simulation.Loc.Format("{0} against {1}", attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
+        // A front where nobody is ordered to advance is not a broken front necessarily - it
+        // is a front that is holding - and a player looking at two armies standing still
+        // deserves to see which of the two it is, in numbers.
+        var advancing = 0;
+        var holding = 0;
+        var reserve = 0;
+        foreach (var army in _campaign.Armies)
+        {
+            if (army.AssignedWarId != war.Id) continue;
+            if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) advancing++;
+            else if (army.OrderKind == ArmyOrder.ReserveFront) reserve++;
+            else holding++;
+        }
+        going.AddChild(Yielding(Body(Simulation.Loc.Format(
+            "{0:N0} ordered to advance · {1:N0} holding · {2:N0} in reserve",
+            advancing, holding, reserve), 11,
+            advancing > 0 ? Ui.Colour("text.body_soft") : Ui.Colour("state.warning"))));
         if (attacker is not null && defender is not null)
         {
             going.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });

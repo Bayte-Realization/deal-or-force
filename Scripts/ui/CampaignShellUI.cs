@@ -30,6 +30,27 @@ public partial class DealOrForceGame
         return style;
     }
 
+    /// <summary>
+    /// The edge alone: the same line the shell draws, with nothing behind it, for a window whose
+    /// surface is already painted by artwork. Screens outside the campaign use the old panel
+    /// textures, which are a fine surface and a very faint frame - on their own the country picker,
+    /// the workshop and the settings read as flat dark rectangles with no edge at all. Drawing this
+    /// over the artwork gives them the line the game's own panels have, without replacing the art
+    /// the screens were painted with (DealOrForceGame.TexturedPanel).
+    /// </summary>
+    private static StyleBoxFlat ShellEdgeStyle()
+    {
+        var style = new StyleBoxFlat
+        {
+            DrawCenter = false,
+            BorderColor = Ui.Colour("shell.border"),
+            BorderWidthLeft = 2, BorderWidthRight = 2, BorderWidthBottom = 2, BorderWidthTop = 3,
+            ShadowColor = new Color(0, 0, 0, 0.22f), ShadowSize = 4, ShadowOffset = new Vector2(0, 3)
+        };
+        style.SetCornerRadiusAll(2);
+        return style;
+    }
+
     private static StyleBoxFlat ShellRowStyle(bool alternate)
     {
         var style = new StyleBoxFlat
@@ -108,6 +129,29 @@ public partial class DealOrForceGame
                 return true;
             }
         return false;
+    }
+
+    /// <summary>
+    /// Raises one workspace layer above the map and side docks while closing the other full
+    /// workspaces and keeping the left navigation rail above its backdrop shade, so the player
+    /// can switch directly from one workspace to another with a single click on the rail.
+    /// </summary>
+    private void RaiseWorkspaceLayer(Control layer)
+    {
+        foreach (var other in new[]
+        {
+            _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _diplomacyLayer, _policyLayer,
+            _doctrineLayer, _tradeScreenLayer, _productionLayer, _researchLayer, _conflictsLayer
+        })
+        {
+            if (other is not null && other != layer) other.Visible = false;
+        }
+        if (layer != _supportLayer && _supportLayer is { Visible: true }) CloseSupportScreen();
+        if (layer is null) return;
+        layer.Visible = true;
+        layer.MoveToFront();
+        _hudNavigationPanel?.MoveToFront();
+        if (_handbookLayer is { Visible: true }) _handbookLayer.MoveToFront();
     }
 
     private void LayoutCampaignShell()

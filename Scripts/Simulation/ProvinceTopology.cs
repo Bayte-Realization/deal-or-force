@@ -285,11 +285,6 @@ public sealed class ProvinceTopology
     }
 
     /// <summary>
-    /// Turns the seed-growth fallback into a restrained anisotropic Voronoi-like map
-    /// before it is baked to provinces.png. IDs, political/state borders and one seed
-    /// pixel per province remain fixed; only internal tactical borders are relaxed.
-    /// </summary>
-    /// <summary>
     /// A copy that shares the expensive parts and owns its own political arrays. Used to
     /// try a political override without touching the map the campaign is running on.
     /// </summary>
@@ -430,6 +425,11 @@ public sealed class ProvinceTopology
         return new ProvinceTopology(Pack(cells), states.ToArray(), nations.ToArray(), centers, neighbors, Width, Height);
     }
 
+    /// <summary>
+    /// Turns the seed-growth fallback into a restrained anisotropic Voronoi-like map
+    /// before it is baked to provinces.png. IDs, political/state borders and one seed
+    /// pixel per province remain fixed; only internal tactical borders are relaxed.
+    /// </summary>
     public ProvinceTopology RelaxShapes(ushort[] states, ushort[] control, int iterations = 3)
     {
         if (states.Length != CellToProvince.Length || control.Length != states.Length)

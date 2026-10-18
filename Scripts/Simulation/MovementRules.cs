@@ -130,6 +130,8 @@ public static class MovementRules
         region is not null && Owners(campaign).TryGetValue(region.NationMapIndex, out var owner) ? owner : null;
 
     private static readonly Dictionary<int, bool> OwnStateCache = new();
+    private static readonly HashSet<int> LiveRegions = new();
+    private static readonly List<int> StaleSupport = new();
 
     internal static void Week(Campaign campaign, Nation nation)
     {
@@ -158,12 +160,17 @@ public static class MovementRules
         long supporters = 0;
         long believers = 0;
         OwnStateCache.Clear();
-        foreach (var region in campaign.States)
+        LiveRegions.Clear();
+        // The regions where this movement has people, not every region on the map. The
+        // support dictionary is sparse, and the people index already knows its own keys.
+        foreach (var (region, known) in PeopleIn(campaign, definition))
         {
-            var own = PeopleOf(campaign, region, definition, out var faithful);
-            if (own <= 0 && faithful <= 0) { state.Support.Remove(region.MapIndex); continue; }
+            var own = known.Own;
+            var faithful = known.Faithful;
+            if (own <= 0 && faithful <= 0) continue;
             var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful);
-            if (supportCeiling <= 0f) { state.Support.Remove(region.MapIndex); continue; }
+            if (supportCeiling <= 0f) continue;
+            LiveRegions.Add(region.MapIndex);
             believers += faithful;
             var support = state.Support.GetValueOrDefault(region.MapIndex);
             var owner = OwnerOf(campaign, region);
@@ -182,6 +189,13 @@ public static class MovementRules
             support += (target - support) * defines.MovementSupportDrift;
             state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
             supporters += (long)(own * support);
+        }
+        if (state.Support.Count > LiveRegions.Count)
+        {
+            StaleSupport.Clear();
+            foreach (var key in state.Support.Keys)
+                if (!LiveRegions.Contains(key)) StaleSupport.Add(key);
+            foreach (var key in StaleSupport) state.Support.Remove(key);
         }
         var fromFaith = (long)(believers * defines.MovementFaithShare * 0.1f);
 
@@ -311,18 +325,7 @@ public static class MovementRules
     /// </summary>
     internal static long PeopleOf(Campaign campaign, ScenarioState region, MovementDefinition definition, out long faithful)
     {
-        if (!ReferenceEquals(_peopleCampaign, campaign) || _peopleDay != campaign.ElapsedDays ||
-            _peopleMapRevision != campaign.MapRevision || _peopleStates != campaign.States.Count)
-        {
-            PeopleToday.Clear();
-            _indexed = false;
-            _peopleCampaign = campaign;
-            _peopleDay = campaign.ElapsedDays;
-            _peopleMapRevision = campaign.MapRevision;
-            _peopleStates = campaign.States.Count;
-        }
-        if (!PeopleToday.TryGetValue(definition, out var regions))
-            PeopleToday[definition] = regions = CountPeople(campaign, definition);
+        var regions = PeopleIn(campaign, definition);
         if (regions.TryGetValue(region, out var known))
         {
             faithful = known.Faithful;
@@ -330,6 +333,34 @@ public static class MovementRules
         }
         faithful = 0;
         return 0;
+    }
+
+    /// <summary>
+    /// Every region with any of a movement's peoples or believers in it, for the current day.
+    ///
+    /// Callers that walk the whole map used to ask <see cref="PeopleOf"/> once per region, so
+    /// the answer was cheap but the walk was not: a movement with people in forty regions
+    /// still visited all eighteen hundred. The dictionary itself is the shorter list.
+    /// </summary>
+    internal static Dictionary<ScenarioState, (long Own, long Faithful)> PeopleIn(
+        Campaign campaign, MovementDefinition definition)
+    {
+        EnsurePeopleCache(campaign);
+        if (!PeopleToday.TryGetValue(definition, out var regions))
+            PeopleToday[definition] = regions = CountPeople(campaign, definition);
+        return regions;
+    }
+
+    private static void EnsurePeopleCache(Campaign campaign)
+    {
+        if (ReferenceEquals(_peopleCampaign, campaign) && _peopleDay == campaign.ElapsedDays &&
+            _peopleMapRevision == campaign.MapRevision && _peopleStates == campaign.States.Count) return;
+        PeopleToday.Clear();
+        _indexed = false;
+        _peopleCampaign = campaign;
+        _peopleDay = campaign.ElapsedDays;
+        _peopleMapRevision = campaign.MapRevision;
+        _peopleStates = campaign.States.Count;
     }
 
     /// <summary>Every region with any of a movement's peoples or believers in it, and how many.</summary>
@@ -364,7 +395,7 @@ public static class MovementRules
             if (ByReligion.TryGetValue(faith, out var groups))
                 foreach (var (region, group) in groups)
                 {
-                    if (MovementDefinition.Listed(definition.Peoples, group.Culture)) continue;
+                    if (definition.HasPeople(group.Culture)) continue;
                     var known = counted.GetValueOrDefault(region);
                     counted[region] = (known.Own, known.Faithful + group.Size);
                 }
@@ -378,8 +409,8 @@ public static class MovementRules
         foreach (var group in region.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            if (MovementDefinition.Listed(definition.Peoples, group.Culture)) own += group.Size;
-            else if (MovementDefinition.Listed(definition.Faiths, group.Religion)) faithful += group.Size;
+            if (definition.HasPeople(group.Culture)) own += group.Size;
+            else if (definition.HasFaith(group.Religion)) faithful += group.Size;
         }
         return own;
     }
@@ -597,6 +628,12 @@ public static class MovementRules
         var definition = Movements.DefinitionOf(nation);
         if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition)) return false;
         var defines = campaign.Defines;
+        var occupyingOwner = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
+        if (RevoltTerritory.HasForeignOccupation(campaign, occupyingOwner, nation, region))
+        {
+            state.LastReport = Loc.Get("An uprising cannot displace foreign occupation without fighting.");
+            return false;
+        }
         var chance = UprisingChance(campaign, nation, region);
         if (!float.IsFinite(chance) || chance <= 0f || !float.IsFinite(nation.Treasury) ||
             nation.Treasury < defines.MovementUprisingCost) return false;
@@ -628,6 +665,9 @@ public static class MovementRules
     {
         // A restoration is its own kind of return: the country is already the country it was, so
         // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
+        // Whole-region movement settlements must not overwrite a third party's occupation,
+        // including restorations and peaceful referendums. They need an actual military settlement.
+        if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) return false;
         if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
         if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
         if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||

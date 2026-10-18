@@ -201,7 +201,12 @@ public static class CampaignDiplomacy
                 return false;
             }
         }
-        if (!SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
+        // An armed rising is already a domestic war, even if an existing foreign
+        // occupation separates the two administrations. This does NOT grant transit
+        // through that occupier or let ordinary declarations bypass military reach.
+        var newbornUprising = !onOwnInitiative && defender.SecededFromId == attacker.Id &&
+            defender.LastSecessionDay == campaign.ElapsedDays;
+        if (!newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
             // Force can be projected across water by a country that has ships to project it
             // with. This used to be a flat refusal, which made every island in the world
@@ -219,15 +224,16 @@ public static class CampaignDiplomacy
     }
 
     /// <summary>
-    /// Declare a war, and pay for it with everybody who is not in it.
-    ///
-    /// The justification is what the attacker tells the world. Passing null means "work it
-    /// out", which is what any caller that is not deliberately staging something wants:
-    /// <see cref="Statecraft.CasusBelli"/> answers it out of state the game already keeps -
-    /// land taken from us and not forgotten, our own people living on the other side of the
-    /// border, a friend already being attacked. An empty answer is a war nobody accepts a
-    /// reason for, and that is where notoriety comes from.
+    /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
+    /// one that answers to it. Everybody else backs a side instead (ProxyWars).
     /// </summary>
+    public static bool MayJoinCivilWar(Campaign campaign, StrategicWar war, Nation joiner, bool defending)
+    {
+        var leader = campaign.NationById(defending ? war.DefenderId : war.AttackerId);
+        if (leader is null || joiner is null) return false;
+        return leader.AnswersTo(joiner.Id) || joiner.AnswersTo(leader.Id);
+    }
+
     /// <summary>
     /// Bring a country into a war that is already being fought.
     ///
@@ -240,17 +246,6 @@ public static class CampaignDiplomacy
     /// Everybody it is now fighting learns about it, because a stance is a fact between two
     /// countries and the war is only where the fighting is organised.
     /// </summary>
-    /// <summary>
-    /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
-    /// one that answers to it. Everybody else backs a side instead (ProxyWars).
-    /// </summary>
-    public static bool MayJoinCivilWar(Campaign campaign, StrategicWar war, Nation joiner, bool defending)
-    {
-        var leader = campaign.NationById(defending ? war.DefenderId : war.AttackerId);
-        if (leader is null || joiner is null) return false;
-        return leader.AnswersTo(joiner.Id) || joiner.AnswersTo(leader.Id);
-    }
-
     public static bool JoinWar(Campaign campaign, StrategicWar war, int nationId, bool defending,
         string opinionNote = null)
     {
@@ -277,6 +272,16 @@ public static class CampaignDiplomacy
         return true;
     }
 
+    /// <summary>
+    /// Declare a war, and pay for it with everybody who is not in it.
+    ///
+    /// The justification is what the attacker tells the world. Passing null means "work it
+    /// out", which is what any caller that is not deliberately staging something wants:
+    /// <see cref="Statecraft.CasusBelli"/> answers it out of state the game already keeps -
+    /// land taken from us and not forgotten, our own people living on the other side of the
+    /// border, a friend already being attacked. An empty answer is a war nobody accepts a
+    /// reason for, and that is where notoriety comes from.
+    /// </summary>
     public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
         int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true,
         bool limited = false)

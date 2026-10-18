@@ -491,6 +491,12 @@ public sealed partial class Defines
 	/// <summary>Radicalism a fully foreign-populated region gains each week.</summary>
 	public float MinorityRadicalismPerWeek { get; set; } = 0.0012f;
 
+	/// <summary>Number of non-homeland foreign regions a state can hold before imperial overstretch sets in.</summary>
+	public int BaseImperialCapacity { get; set; } = 4;
+
+	/// <summary>Weekly radicalism growth in peripheral foreign provinces of an overstretched empire.</summary>
+	public float ImperialOverstretchRadicalismWeekly { get; set; } = 0.0025f;
+
 	/// <summary>Share of a minority that assimilates each week under ideal conditions.</summary>
 	public float AssimilationPerWeek { get; set; } = 0.0009f;
 
@@ -1169,6 +1175,9 @@ public sealed partial class Defines
 	public float AiTargetExhaustionWarSupport { get; set; } = 0.45f;
 	public float AiTargetExhaustionStability { get; set; } = 0.50f;
 	public float AiTargetExhaustionMultiplier { get; set; } = 0.85f;
+
+	/// <summary>How much a target's financial distress (debt default, insolvency, restructuring) or acute domestic crisis invites opportunists.</summary>
+	public float AiTargetDistressMultiplier { get; set; } = 0.75f;
 	public float AiWarDesireThreshold { get; set; } = 0.55f;
 
 	// --- what a war is worth, and what it costs before a shot is fired ---
@@ -1209,6 +1218,12 @@ public sealed partial class Defines
 
 	/// <summary>The restraint of an empty treasury.</summary>
 	public float AiPovertyCaution { get; set; } = 0.55f;
+
+	/// <summary>How much sovereign default or acute debt distress restrains a government from attacking.</summary>
+	public float AiInsolvencyCaution { get; set; } = 1.20f;
+
+	/// <summary>How much imminent coup danger or domestic rebellion restrains an attacker.</summary>
+	public float AiDomesticCrisisCaution { get; set; } = 1.10f;
 
 	/// <summary>Subtracted from the case for a war that has to be carried across water.</summary>
 	public float AiOverseasCaution { get; set; } = 1.35f;

@@ -2,6 +2,10 @@
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework><Nullable>disable</Nullable></PropertyGroup>
   <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/Modding/ModCodePaths.cs"/><Compile Include="../../Scripts/Modding/WorkerModBackend.cs"/><Compile Include="../../Scripts/Modding/ModOperations.cs"/><Compile Include="../../Scripts/Modding/ModContracts.cs"/></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
+  <ItemGroup><Compile Include="../../Scripts/Boot/AssaultRulesFSharpBoot.cs"/></ItemGroup>
+  <!-- The managed F# pure rule is part of the game now; the test stand references the same
+       net8.0 target the simulation sources compile against. -->
+  <ItemGroup><ProjectReference Include="../../Scripts/Rules/DealOrForce.Rules.fsproj" /></ItemGroup>
   <!-- Differential/failure tests of tools-only kernels; no native dependency in the game. -->
   <ItemGroup><Compile Include="../GodotLanguages/kernels/ownership/managed/*.cs" /></ItemGroup>
 </Project>

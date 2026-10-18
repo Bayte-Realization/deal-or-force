@@ -518,7 +518,8 @@ public static class SecessionEvents
     /// scripted event - a secession somebody wants to happen rather than one that has built
     /// up. The people who found it are the region's own largest, unless a mod names others.
     /// </summary>
-    public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null)
+    public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null,
+        SecessionCause cause = SecessionCause.Nationality)
     {
         if (campaign?.ProvinceMap is null || state is null || LakeRegions.IsWaterState(state)) return null;
         var parent = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
@@ -533,7 +534,7 @@ public static class SecessionEvents
         var piece = new SecessionPiece
         {
             MapIndex = state.MapIndex, Name = state.Name,
-            Cause = SecessionCause.Nationality, Population = state.Population
+            Cause = cause, Population = state.Population
         };
         return Secede(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population);
     }
@@ -562,6 +563,13 @@ public static class SecessionEvents
         List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false)
     {
         if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
+        // Political succession cannot repaint a third party's military occupation.
+        // Do this before creating a tag, transferring accounts, or drawing a response.
+        var provinces = RevoltTerritory.Select(campaign, parent, ref leaving);
+        if (provinces.Count == 0 || leaving.Count == 0) return null;
+        people = leaving.Sum(piece => piece.Population);
+        if (people <= 0) return null;
+        var residentTotal = campaign.StatesOf(parent).Sum(state => (double)state.Population);
         var was = parent.Population;
         var revolt = RevoltKind(parent, leaving, culture, people);
         var born = Found(campaign, parent, leaving, culture, people);
@@ -570,21 +578,25 @@ public static class SecessionEvents
         born.SecededFromId = parent.Id;
         shape?.Invoke(born);
 
-        var going = new HashSet<int>();
-        foreach (var piece in leaving) going.Add(piece.MapIndex);
-        var departedStates = campaign.States.Where(state => going.Contains(state.MapIndex)).ToArray();
-        var share = Dismantlement.Share(campaign, parent, going.ToArray());
-        RegionalResourcePartition.Transfer(parent, born, share);
-
-        var topology = campaign.ProvinceMap;
-        var provinces = new List<int>();
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-            if (going.Contains(topology.ProvinceToState[province])) provinces.Add(province);
-
+        // Partition productive capacity BEFORE changing the parent's resident count:
+        // ProductionCapacity already scales its reference by the population still present.
+        RegionalResourcePartition.Transfer(parent, born,
+            (float)Math.Clamp(people / Math.Max(1d, residentTotal), 0d, 1d));
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
         RegionalResourcePartition.RecountResidents(campaign, parent, born);
+        var departedStates = campaign.StatesOf(born);
+        // For a region cut by an occupation, inherit only the residents actually leaving,
+        // not the entire region's money, debt, research or production capacity.
+        var causes = leaving.ToDictionary(piece => piece.MapIndex, piece => piece.Cause);
+        leaving = departedStates.Select(state => new SecessionPiece
+        {
+            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
+            Cause = causes.GetValueOrDefault(state.MapIndex,
+                causes.GetValueOrDefault(state.ParentMapIndex, SecessionCause.Discontent))
+        }).ToList();
+        people = born.Population;
         CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 

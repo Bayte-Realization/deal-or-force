@@ -45,6 +45,9 @@
     "surface.inset": "#172635",
     "surface.line": "#50677d",
     "surface.line_faint": "#33455688",
+    "surface.base": "#131f2c",
+    "surface.raised": "#1b2b3a",
+    "surface.panel": "#131f2c",
     // The paper the brand banner is printed on.
     //
     // The banner's own lettering is a dark blue and a dark red that cannot be read against a

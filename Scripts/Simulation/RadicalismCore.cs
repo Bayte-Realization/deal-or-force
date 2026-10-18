@@ -29,13 +29,18 @@ public static class RadicalismCore
         var minority = EconomySystem.ForeignShare(state, nation.Tag) * d.MinorityRadicalismPerWeek;
         var occupation = StabilityCore.OccupiedShare(c, state, nation) * MathF.Max(0, d.RegionalRadicalismOccupation);
         var inflation = InflationPressure(nation);
+        var overstretch = (nation is not null && nation.ImperialOverstretch > 0.001f &&
+                           TerritorialClaims.TitleOf(c, nation, state) != TerritorialTitle.Homeland &&
+                           EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
+            ? nation.ImperialOverstretch * d.ImperialOverstretchRadicalismWeekly
+            : 0f;
         // Recovery scales with the existing angry population, not a free stability bonus.
         // Good living conditions make it faster; war slows it, but never turns recovery into growth.
         var rate = MathF.Max(0, d.RegionalRadicalismRecoveryPerWeek) +
                    M.Clamp01(state.StandardOfLiving) * MathF.Max(0, d.RegionalRadicalismLivingRecovery);
         if (atWar) rate *= M.Clamp01(d.RegionalRadicalismWarRecovery);
         var recovery = -M.Clamp01(state.Radicalism) * M.Clamp01(rate);
-        var raw = living + minority + occupation + inflation + budgetPressure + policyPressure + recovery;
+        var raw = living + minority + occupation + inflation + overstretch + budgetPressure + policyPressure + recovery;
         var actual = M.Clamp01(state.Radicalism + raw) - state.Radicalism;
         if (drivers is not null)
         {
@@ -46,6 +51,7 @@ public static class RadicalismCore
             drivers.Add("Minority grievances", minority);
             drivers.Add("Occupation", occupation);
             drivers.Add("Inflation", inflation);
+            if (overstretch > 0f) drivers.Add(Loc.Get("Imperial overstretch"), overstretch);
             drivers.Add("Gradual recovery", recovery);
             drivers.Settle(actual);
         }

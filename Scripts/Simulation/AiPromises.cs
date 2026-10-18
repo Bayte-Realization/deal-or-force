@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -8,23 +9,11 @@ namespace DealOrForce.Simulation;
 /// player has handed to the AI (Delegation), which already takes decisions through the same
 /// portfolio.
 ///
-/// The mechanic was complete and one-sided: <see cref="MakePromiseCommand"/>, the deadline,
-/// the continuous check and the kept/broken effects all worked - and the only government
-/// that ever placed a bet was the player's. Two hundred and sixty of them sat through their
-/// own crises without saying anything in public, so "kept its promise" and "missed its
-/// promise" were news about one country. This is the other half.
-///
-/// A promise is a gamble on your own performance, and the appetite is read the way the war
-/// decisions read character: an opportunistic, volatile government is likelier to buy calm
-/// with a public pledge, and a far-sighted one waits. What it promises when it does gamble
-/// is the shortest commitment on offer - the least exposure it can choose from what its own
-/// crisis has made available, availability being the mechanic's own question
-/// (<see cref="GovernmentPromises.BlockReason"/>), so an AI is refused for exactly the
-/// reasons the player is and a mod's promise joins the list the day it is written.
-///
-/// Not claimed here: that the AI measures how far the promised outcome is from being true.
-/// Judging a bet would need that reading, and the trait that would use it - cunning - has
-/// nothing to bite on yet.
+/// A promise is a gamble on your own performance, and both the choice of pledge and the
+/// appetite for making it read how far the promised outcome is from being true
+/// (<see cref="ScriptedTrigger.Shortfall"/>) alongside the government's character
+/// (<see cref="AiTemperament"/>): a cunning cabinet pledges only what is within reach of its
+/// deadline and steers its own policy toward keeping what it promised.
 /// </summary>
 public static class AiPromises
 {
@@ -43,10 +32,12 @@ public static class AiPromises
             if (!Delegation.RunByAi(nation) || nation.Movement is not null || nation.Population <= 0)
                 continue;
             if ((day + nation.Id) % 7 != 0) continue;
+            WorkTowardOpenPromises(campaign, nation);
             if (nation.Promises.Count >= Math.Max(1, campaign.Defines.MaxConcurrentPromises)) continue;
-            var promise = Shortest(campaign, nation);
+            var (promise, shortfall) = Shortest(campaign, nation);
             if (promise is null) continue;
-            if (!campaign.Random.Chance(Appetite(campaign, nation))) continue;
+            var appetite = Appetite(campaign, nation, promise.Value, shortfall);
+            if (appetite <= 0f || !campaign.Random.Chance(appetite)) continue;
             new MakePromiseCommand { IssuerId = nation.Id, PromiseId = promise.Value.Id }.Apply(campaign);
             Count("promise_made");
         }
@@ -56,34 +47,92 @@ public static class AiPromises
         AiStatecraft.Tally[what] = AiStatecraft.Tally.GetValueOrDefault(what) + 1;
 
     /// <summary>
-    /// The available promise with the shortest term; ties go to the catalogue's own order, so
-    /// two machines of one seed choose identically. Availability is the mechanic's question,
-    /// not a second copy of it: whatever refuses the player refuses the AI.
+    /// The available promise closest to fulfilment (<see cref="ScriptedTrigger.Shortfall"/>),
+    /// with ties broken by shortest deadline and then catalogue order so two machines of one
+    /// seed choose identically. Availability is the mechanic's own question
+    /// (<see cref="GovernmentPromises.BlockReason"/>): whatever refuses the player refuses the AI.
     /// </summary>
-    private static PromiseDefinition? Shortest(Campaign campaign, Nation nation)
+    public static (PromiseDefinition? Promise, float Shortfall) Shortest(Campaign campaign, Nation nation)
     {
         PromiseDefinition? best = null;
+        var bestShortfall = float.PositiveInfinity;
         foreach (var definition in PromiseCatalog.All)
         {
             if (GovernmentPromises.BlockReason(campaign, nation, definition).Length > 0) continue;
-            if (best is null || definition.DurationDays < best.Value.DurationDays) best = definition;
+            var shortfall = definition.Check?.Shortfall(campaign, nation) ?? float.PositiveInfinity;
+            if (!float.IsFinite(shortfall)) continue;
+            if (best is null ||
+                shortfall + 0.0001f < bestShortfall ||
+                (MathF.Abs(shortfall - bestShortfall) <= 0.0001f && definition.DurationDays < best.Value.DurationDays))
+            {
+                best = definition;
+                bestShortfall = shortfall;
+            }
         }
-        return best;
+        return (best, bestShortfall);
     }
 
     /// <summary>
-    /// How likely this government is to promise, per its own week, at the plain character.
+    /// How likely this government is to promise, scaled by how close the outcome already is.
     ///
-    /// Centred on the appetite the data sets - common/defines/75_government_promises carries
-    /// the same figure - and bent by the same 1-centred multipliers every other decision
-    /// reads. Capped at one half rather than left open, because a modded trait should change
-    /// how often a government gambles, not turn the world into a chorus of pledges.
+    /// An outcome that is already met (<paramref name="shortfall"/> = 0) gets full appetite;
+    /// a small gap within the deadline's realistic horizon is scaled by closeness; a gap beyond
+    /// what the deadline can close (narrowed further by <see cref="AiTemperament.CunningOf"/>)
+    /// returns zero so governments do not make impossible pledges.
     /// </summary>
-    private static float Appetite(Campaign campaign, Nation nation) =>
-        M.Clamp(
+    public static float Appetite(Campaign campaign, Nation nation, PromiseDefinition definition, float shortfall)
+    {
+        if (!float.IsFinite(shortfall) || shortfall < 0f) return 0f;
+        var baseAppetite = M.Clamp(
             M.Max(0f, campaign.Defines.AiPromiseAppetite) *
             AiTemperament.OpportunismOf(campaign, nation) *
             AiTemperament.VolatilityOf(campaign, nation) /
             M.Max(0.05f, AiTemperament.ForesightOf(campaign, nation)),
             0f, .5f);
+        if (shortfall <= 0.0001f) return baseAppetite;
+
+        var years = MathF.Max(0.25f, definition.DurationDays / 365f);
+        var cunning = MathF.Max(0.25f, AiTemperament.CunningOf(campaign, nation));
+        var ceiling = 0.075f * years / MathF.Sqrt(cunning);
+        if (shortfall > ceiling) return 0f;
+        var closeness = 1f - 0.75f * (shortfall / MathF.Max(0.0001f, ceiling));
+        return M.Clamp(baseAppetite * closeness, 0f, .5f);
+    }
+
+    /// <summary>
+    /// A cabinet that has made a public pledge uses its own ordinary levers to help deliver it.
+    /// </summary>
+    private static void WorkTowardOpenPromises(Campaign campaign, Nation nation)
+    {
+        if (nation.Promises.Count == 0) return;
+        foreach (var active in nation.Promises)
+        {
+            switch (active.Id)
+            {
+                case "mend_the_war_scars":
+                    foreach (var state in campaign.StatesOf(nation).OrderByDescending(s => s.WarDamage))
+                    {
+                        if (state.WarDamage <= 0.05f) break;
+                        if (WarDamage.RebuildRefusal(campaign, nation, state).Length == 0)
+                        {
+                            new RebuildRegionCommand { IssuerId = nation.Id, StateMapIndex = state.MapIndex }.Apply(campaign);
+                            break;
+                        }
+                    }
+                    break;
+                case "settle_the_schools":
+                    if (nation.Treasury > nation.Gdp * 0.02f)
+                        nation.EducationSpending = M.Clamp(nation.EducationSpending + 0.004f, 0f, 0.22f);
+                    break;
+                case "raise_the_floor":
+                case "restore_order":
+                    if (nation.Treasury > nation.Gdp * 0.02f)
+                        nation.WelfareSpending = M.Clamp(nation.WelfareSpending + 0.004f, 0f, 0.24f);
+                    break;
+                case "refill_the_treasury":
+                    nation.TaxRate = M.Clamp(nation.TaxRate + 0.003f, 0.08f, 0.40f);
+                    break;
+            }
+        }
+    }
 }

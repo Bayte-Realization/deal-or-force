@@ -75,10 +75,15 @@ public partial class DealOrForceGame
 
     private static VBoxContainer PolicyColumn(Control parent, string name, bool expand)
     {
+        var frame = new PanelContainer { Name = name + "Frame", SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = expand ? SizeFlags.ExpandFill : SizeFlags.Fill };
+        frame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(frame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        parent.AddChild(frame);
         var scroll = new ScrollContainer { Name = name + "Scroll", SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsHorizontal = expand ? SizeFlags.ExpandFill : SizeFlags.Fill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
-        parent.AddChild(scroll);
+        frame.AddChild(scroll);
         var rows = new VBoxContainer { Name = name, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         rows.AddThemeConstantOverride("separation", 8); scroll.AddChild(rows); return rows;
     }
@@ -100,10 +105,8 @@ public partial class DealOrForceGame
     {
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
-        foreach (var other in new[] { _diplomacyLayer, _ledgerLayer, _warLedgerLayer, _productionLayer, _tradeScreenLayer })
-            if (other is not null) other.Visible = false;
         _openScreen = "Laws";
-        _policyLayer.Visible = true; _policyLayer.MoveToFront();
+        RaiseWorkspaceLayer(_policyLayer);
         _policyWorkspaceFeedback.Text = "";
         SelectPolicyTab(_policyTab);
         _policySearch.GrabFocus(); UpdateScreenButtons();
@@ -196,8 +199,14 @@ public partial class DealOrForceGame
     {
         if (_policyLayer is not { Visible: true } || _campaign?.Player is null) return;
         var n = _campaign.Player;
+        // Political credit belongs where political action is taken, and the Laws workspace is
+        // where it is taken: a law, an agenda, a course in war all come out of this number.
+        var credit = _campaign.Defines.PoliticalPointsPerWeek +
+            _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
         _policySummary.Text = n.DisplayName + " · " + Tr("Stability") + " " + Fmt.Percent(n.Stability) +
-            " · " + Tr("Treasury") + " " + Fmt.Money(n.Treasury) + " · " + Tr("Enacted laws") + " " + n.Laws.Count;
+            " · " + Tr("Treasury") + " " + Fmt.Money(n.Treasury) + " · " + Tr("Enacted laws") + " " + n.Laws.Count +
+            " · " + Tr("Political credit") + " " + Fmt.Number(n.PoliticalPoints) +
+            " (" + Loc.Format("{0}/week", Fmt.Number(credit)) + ")";
         // Do not tear down focused controls on every simulation frame.
         if (_policyBuiltDay == _campaign.ElapsedDays) return;
         _policyBuiltDay = _campaign.ElapsedDays;

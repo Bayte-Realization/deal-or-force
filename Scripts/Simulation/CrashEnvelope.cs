@@ -175,9 +175,19 @@ public static class CrashEnvelope
                 var dir = ResolveDirectory(targetDirectory);
                 if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
 
-                var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                // Milliseconds and the faulting type in the name: two dumps in one second used
+                // to share a stamp, and the second write silently replaced the first - which
+                // is exactly how the dump that carried the real stack is lost.
+                var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmssfff") + "_" +
+                            (exception?.GetType().Name ?? "fault");
                 var filename = $"crash_envelope_{stamp}.json";
                 var fullPath = Path.Combine(dir, filename);
+                var unique = 0;
+                while (File.Exists(fullPath))
+                {
+                    unique++;
+                    fullPath = Path.Combine(dir, $"crash_envelope_{stamp}_{unique}.json");
+                }
                 File.WriteAllText(fullPath, json);
 
                 var latestPath = Path.Combine(dir, "crash_envelope_latest.json");

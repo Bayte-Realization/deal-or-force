@@ -25,9 +25,9 @@ public partial class DealOrForceGame
     private const string KeepOnRefresh = "keep_on_policy_refresh";
 
     private const float DoctrineCardWidth = 336;
-    private const float DoctrineCardHeight = 200;
-    private const float DoctrineColumnGap = 92;
-    private const float DoctrineRowGap = 26;
+    private const float DoctrineCardHeight = 168;
+    private const float DoctrineColumnGap = 84;
+    private const float DoctrineRowGap = 24;
 
     private ScrollContainer _doctrineScroll;
     private TechnologyTreeCanvas _doctrineTree;
@@ -51,20 +51,37 @@ public partial class DealOrForceGame
     /// </summary>
     private bool HandleTreeViewportInput(InputEvent inputEvent)
     {
-        if (_researchLayer is { Visible: true } && _researchGraph && _researchScroll is not null &&
-            _researchViewport is not null && _researchTree is not null &&
-            TreeViewport.Wheel(_researchScroll, _researchScroll, _researchViewport, _researchTree,
-                _researchExtent, ref _researchZoom, inputEvent))
+        // The middle button drags a tree, the way every map in the genre does. Checked first because
+        // it only ever claims a middle-button event or a motion while one is held.
+        if (_researchLayer is { Visible: true } && _researchScroll is not null &&
+            TreeViewport.Drag("research", _researchScroll, _researchScroll, inputEvent))
         {
             GetViewport().SetInputAsHandled();
+            return true;
+        }
+        if (_doctrineScroll is not null &&
+            TreeViewport.Drag("doctrine", _doctrineScroll, _doctrineScroll, inputEvent))
+        {
+            GetViewport().SetInputAsHandled();
+            return true;
+        }
+        if (_researchLayer is { Visible: true } && _researchGraph && _researchScroll is not null &&
+            _researchViewport is not null && _researchTree is not null &&
+            (TreeViewport.Wheel(_researchScroll, _researchScroll, _researchViewport, _researchTree,
+                _researchExtent, ref _researchZoom, inputEvent) ||
+             TreeViewport.Drag(_researchScroll, _researchScroll, inputEvent)))
+        {
+            GetViewport().SetInputAsHandled();
+            UpdateResearchZoomLabel();
             return true;
         }
         // The book of war is on the wide screen and in the Army panel: what says "this wheel is
         // mine" is the plate itself being on screen, not the host it happens to be mounted in.
         if (_doctrineScroll is { Visible: true } && _doctrineScroll.IsVisibleInTree() && _doctrineViewport is not null &&
             _doctrineTree is not null &&
-            TreeViewport.Wheel(_doctrineScroll, _doctrineScroll, _doctrineViewport, _doctrineTree,
-                _doctrineExtent, ref _doctrineZoom, inputEvent))
+            (TreeViewport.Wheel(_doctrineScroll, _doctrineScroll, _doctrineViewport, _doctrineTree,
+                _doctrineExtent, ref _doctrineZoom, inputEvent) ||
+             TreeViewport.Drag(_doctrineScroll, _doctrineScroll, inputEvent)))
         {
             GetViewport().SetInputAsHandled();
             UpdateDoctrineZoomLabel();
@@ -160,9 +177,15 @@ public partial class DealOrForceGame
                 Name = "DoctrineTreeWindow",
                 CustomMinimumSize = new Vector2(0, 470),
                 SizeFlagsHorizontal = SizeFlags.ExpandFill,
-                SizeFlagsVertical = SizeFlags.ExpandFill
+                SizeFlagsVertical = SizeFlags.ExpandFill,
+                // The cards are children of a Control, and a Control's children are drawn AND hit
+                // tested outside its rectangle: without this the plate's cards quietly covered the
+                // toolbar and the header, so every button above the tree ate the click meant for
+                // it - measured, not guessed (the probe found a card's Body under the close button).
+                ClipContents = true
             };
             _doctrineWindow.AddThemeStyleboxOverride("panel", WarInsetStyle(10, 8));
+            AtlasSurfaceSkin.Attach(_doctrineWindow, AtlasSurfaceSkin.Level.Inset, "surface.inset");
             _doctrineWindow.SetMeta(KeepOnRefresh, true);
         }
         if (_doctrineWindow.GetParent() is { } plate) plate.RemoveChild(_doctrineWindow);
@@ -226,9 +249,11 @@ public partial class DealOrForceGame
             var (column, row) = layout[node.Id];
             var position = new Vector2(20 + column * (DoctrineCardWidth + DoctrineColumnGap),
                 20 + row * (DoctrineCardHeight + DoctrineRowGap));
+            var cardSize = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
             card.Position = position;
-            card.Size = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
-            card.CustomMinimumSize = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
+            card.CustomMinimumSize = cardSize;
+            card.Size = cardSize;
+            card.SetDeferred(Control.PropertyName.Size, cardSize);
             extent.X = Math.Max(extent.X, position.X + DoctrineCardWidth + 24);
             extent.Y = Math.Max(extent.Y, position.Y + DoctrineCardHeight + 24);
         }
@@ -343,6 +368,9 @@ public partial class DealOrForceGame
             if (rush is not null)
                 DoctrineButton(rush, n, branch, node, true, known, learning,
                     Loc.Format("At once · {0}", Fmt.Number(node.RushCost)));
+            var cardSize = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
+            card.CustomMinimumSize = cardSize;
+            card.Size = cardSize;
         }
     }
 
@@ -373,11 +401,13 @@ public partial class DealOrForceGame
     {
         var card = new PanelContainer { Name = "DoctrineNode_" + node.Id };
         card.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10));
+        AtlasSurfaceSkin.Attach(card, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         var body = new VBoxContainer { Name = "Body" };
         body.AddThemeConstantOverride("separation", 4);
         card.AddChild(body);
 
-        var state = Title("", 12, Ui.Colour("text.caption"));
+        var state = Fixed(Title("", 12, Ui.Colour("text.caption")));
+        state.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         state.Name = "State_" + node.Id;
         body.AddChild(state);
 
@@ -402,15 +432,22 @@ public partial class DealOrForceGame
         effects.AddThemeConstantOverride("separation", 1);
         body.AddChild(effects);
         if (node.Modifiers.Count == 0)
-            effects.AddChild(Title(Loc.Get("No effects are written for this article."), 12,
+        {
+            var none = Fixed(Title(Loc.Get("No effects are written for this article."), 12,
                 Ui.Colour("text.muted")));
+            none.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            effects.AddChild(none);
+        }
         foreach (var (key, value) in node.Modifiers)
         {
-            effects.AddChild(Title(DoctrineEffectText(key, value), 12,
+            var effectLabel = Fixed(Title(DoctrineEffectText(key, value), 12,
                 Ui.Colour(NationalModifiers.IsGood(key, value) ? "state.positive" : "state.warning")));
+            effectLabel.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            effects.AddChild(effectLabel);
         }
 
-        var price = Title("", 12, Ui.Colour("text.body"));
+        var price = Fixed(Title("", 12, Ui.Colour("text.body")));
+        price.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         price.Name = "Price_" + node.Id;
         body.AddChild(price);
 

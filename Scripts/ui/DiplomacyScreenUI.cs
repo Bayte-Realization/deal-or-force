@@ -69,6 +69,7 @@ public partial class DealOrForceGame
         public Button Select;
         public Control Flag;
         public Label Name;
+        public Label Identity;
         public Label Opinion;
         public Label Stance;
         public Nation Nation;
@@ -344,16 +345,10 @@ public partial class DealOrForceGame
     {
         _openScreen = "Diplomacy";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
         if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
             _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
         _diplomacySelectedId = _selectedNation?.Id ?? -1;
-        _diplomacyLayer.Visible = true;
-        _diplomacyLayer.MoveToFront();
+        RaiseWorkspaceLayer(_diplomacyLayer);
         RebuildDiplomacyList(force: true);
         ForceDiplomacyRefresh();
         UpdateScreenButtons();
@@ -428,7 +423,11 @@ public partial class DealOrForceGame
             .Where(nation => query.Length == 0 ||
                              nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                              nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+                             nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                             Simulation.StateIdentity.Caption(_campaign, nation, true)
+                                 .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                             Simulation.StateIdentity.Caption(_campaign, nation, false)
+                                 .Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(nation => nation.Gdp)
             .ToArray();
 
@@ -459,7 +458,7 @@ public partial class DealOrForceGame
         // minimum size, so the row reads as a one-pixel smear. Anchor the inner box to the
         // full rectangle, inset by the row style's own padding, and give the button the
         // height the row needs, which a plain Button does not take from its children.
-        row.Select = new Button { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 28) };
+        row.Select = new Button { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 44) };
         row.Select.AddThemeStyleboxOverride("normal", ShellRowStyle(false));
         row.Select.AddThemeStyleboxOverride("hover", ShellRowStyle(true));
         row.Select.AddThemeStyleboxOverride("pressed", ShellRowStyle(true));
@@ -476,13 +475,26 @@ public partial class DealOrForceGame
 
         row.Flag = FlagBadge("", 18);
         inner.AddChild(row.Flag);
+        // The name and, under it, what the state says it is: the two facts a player scans a
+        // country list for before opening anything.
+        var text = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        text.AddThemeConstantOverride("separation", 0);
+        inner.AddChild(text);
         row.Name = Title("", 13, Ui.Colour("text.body"));
+        row.Name.Name = "DiplomacyCountryName";
         Fixed(row.Name, 0);
         row.Name.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.Name.MaxLinesVisible = 3;
         row.Name.VerticalAlignment = VerticalAlignment.Center;
         row.Name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        inner.AddChild(row.Name);
+        text.AddChild(row.Name);
+        row.Identity = Title("", 10, Ui.Colour("text.muted"));
+        row.Identity.Name = "DiplomacyCountryIdentity";
+        row.Identity.ClipText = true;
+        row.Identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        row.Identity.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.Identity.MaxLinesVisible = 1;
+        text.AddChild(row.Identity);
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
         Fixed(row.Stance, 64);
         row.Stance.VerticalAlignment = VerticalAlignment.Center;
@@ -506,11 +518,28 @@ public partial class DealOrForceGame
         return row;
     }
 
+    /// <summary>The declared name with the exact share of the country it stands on.</summary>
+    private string StateIdentityWithShare(Nation nation, bool religion)
+    {
+        var caption = Simulation.StateIdentity.Caption(_campaign, nation, religion);
+        if (caption == Tr("none declared")) return caption;
+        var share = religion
+            ? Simulation.StateIdentity.ReligionShare(_campaign, nation, nation.DeclaredReligion)
+            : Simulation.StateIdentity.CultureShare(_campaign, nation, nation.DeclaredCulture);
+        return Simulation.Loc.Format("{0} · {1:0.0%} of the country", caption, share);
+    }
+
     private void RepaintDiplomacyRow(DiplomacyRow row, Nation nation)
     {
         row.Nation = nation;
         SetFlag(row.Flag, nation.Tag, 18);
-        row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag);
+        // Who the state says it is, on every row: the two names a diplomat scans for, with
+        // the exact share each stands on. The same line answers the map tooltip and the
+        // country dossier, so the number cannot disagree between screens.
+        var identity = Simulation.StateIdentity.Brief(_campaign, nation);
+        row.Identity.Text = identity;
+        row.Identity.TooltipText = Ui.Tip(identity);
+        row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag + "\n" + identity);
         row.Name.Text = nation.DisplayName;
         FitDiplomacyName(row);
         var relation = CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
@@ -538,9 +567,11 @@ public partial class DealOrForceGame
 
     private static void FitDiplomacyName(DiplomacyRow row)
     {
-        var height = ReserveWrappedLabelLines(row.Name);
-        // A Button is not a container and ignores its child's minimum height.
-        row.Select.CustomMinimumSize = new Vector2(0, Math.Max(28f, height + 6f));
+        ReserveWrappedLabelLines(row.Name);
+        // Both the wrapped name AND identity line (plus flag/opinion) must fit.
+        // Reserving only the first label shrank a two-line row to 28 pixels.
+        var content = row.Name.GetParent().GetParent() as Control;
+        row.Select.CustomMinimumSize = new Vector2(0, Math.Max(44f, (content?.GetCombinedMinimumSize().Y ?? 38f) + 6f));
     }
 
     // ------------------------------------------------------------------ the page
@@ -741,7 +772,7 @@ public partial class DealOrForceGame
         var canSee = own || CanInspectNation(nation.Id);
 
         // ---- who they are, and what they think of us.
-        var banner = new PanelContainer();
+        var banner = new PanelContainer { Name = "DiplomacyCountryBanner" };
         banner.AddThemeStyleboxOverride("panel", WarInsetStyle(18, 14));
         AtlasSurfaceSkin.Attach(banner, AtlasSurfaceSkin.Level.Raised, "war.card");
         _diplomacyDetailBody.AddChild(banner);
@@ -758,10 +789,11 @@ public partial class DealOrForceGame
         who.AddChild(Giving(Text(Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name)), 12, Ui.Colour("text.caption"))));
         // What the state says it is, over what its people are - the line a diplomat reads
-        // before deciding whom they are actually talking to.
+        // before deciding whom they are actually talking to, with the exact share the
+        // declaration stands on.
         who.AddChild(Giving(Text(Simulation.Loc.Format("{0}: {1} · {2}: {3}",
-            Tr("State religion"), Simulation.StateIdentity.Caption(_campaign, nation, true),
-            Tr("State culture"), Simulation.StateIdentity.Caption(_campaign, nation, false)), 12, Ui.Colour("text.body_soft"))));
+            Tr("State religion"), StateIdentityWithShare(nation, true),
+            Tr("State culture"), StateIdentityWithShare(nation, false)), 12, Ui.Colour("text.body_soft"))));
         who.AddChild(Giving(Text(canSee
             ? Simulation.Loc.Format("{0} people · GDP {1} · stability {2}",
                 Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Percent(nation.Stability))

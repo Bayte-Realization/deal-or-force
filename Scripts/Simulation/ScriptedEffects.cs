@@ -149,6 +149,12 @@ public static class ScriptedEffects
             "Share of output spent on education and science.");
         NationField("market_access", n => n.MarketAccess, (n, v) => n.MarketAccess = v, 0f, 1f,
             "Access to the world market, 0-1.");
+        NationField("imperial_overstretch", n => n.ImperialOverstretch, (n, v) => n.ImperialOverstretch = v, 0f, 1f,
+            "Imperial overstretch of a state governing distant or divergent territories, 0-1.");
+        NationField("notoriety", n => n.Notoriety, (n, v) => n.Notoriety = v, 0f, 100f,
+            "International notoriety from conquests and broken treaties, 0-100.");
+        NationField("union_cohesion", n => n.UnionCohesion, (n, v) => n.UnionCohesion = v, 0f, 1f,
+            "Cohesion of a proclaimed union or restored state, 0-1.");
         NationField("population", n => n.Population, (n, v) => n.Population = (long)MathF.Max(0f, v),
             0f, float.PositiveInfinity, "National population headcount.");
 
@@ -864,6 +870,42 @@ public sealed class ScriptedTrigger
             if (!isMinimum && current > value) return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Dimensionless distance from <paramref name="nation"/>'s current state to satisfying this
+    /// trigger: 0 when <see cref="Matches"/> is already true, positive when numeric bounds are
+    /// not yet met, and <see cref="float.PositiveInfinity"/> when a discrete condition (such as
+    /// <c>at_war</c> or <c>tags</c>) fails or a value cannot be read.
+    /// </summary>
+    public float Shortfall(Campaign campaign, Nation nation)
+    {
+        if (nation is null) return float.PositiveInfinity;
+        if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
+            return float.PositiveInfinity;
+        if (_atWar.HasValue && campaign is not null &&
+            campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
+            return float.PositiveInfinity;
+
+        var total = 0f;
+        foreach (var (key, target, isMinimum) in _bounds)
+        {
+            if (!ScriptedValues.TryRead(campaign, nation, key, out var current)) return float.PositiveInfinity;
+            var raw = isMinimum ? target - current : current - target;
+            if (raw <= 0f) continue;
+            var normalized = key.Trim().Replace('-', '_').ToLowerInvariant() switch
+            {
+                "treasury" or "public_debt" or "debt_arrears" or "payment_arrears" or "gdp" =>
+                    raw / MathF.Max(0.1f, nation.Gdp),
+                "manpower" or "population" or "state.population" =>
+                    raw / MathF.Max(1f, nation.Population * 0.02f),
+                "army_experience" or "air_experience" or "naval_experience" or "political_points" =>
+                    raw / 100f,
+                _ => raw
+            };
+            total += normalized;
+        }
+        return total;
     }
 }
 

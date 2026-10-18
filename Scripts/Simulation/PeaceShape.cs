@@ -47,6 +47,9 @@ public static class PeaceShape
     public enum Aim { People, Sea, Buffer, Wealth }
 
     public static Aim AimOf(Campaign campaign, StrategicWar war, Nation winner) =>
+        (war.IsAttacking(winner.Id) && war.Justification == "irredentism") ||
+        (!war.Limited && campaign.States.Any(s=>war.EnemiesOf(winner.Id).Any(id=>campaign.NationById(id)?.MapIndex==s.NationMapIndex) &&
+            AiStatecraft.ConsolidationAim(campaign,winner,s))) ? Aim.People :
         (Aim)(int)(MovementRules.Roll(campaign.Seed, winner.Id, war.Id, 4242) * 4f % 4f);
 
     // ------------------------------------------------------------------ the map of regions --
@@ -285,6 +288,8 @@ public static class PeaceShape
                 value *= 0.6f + MathF.Min(2f, built / MathF.Max(1f, state.Population / 1_000_000f) * 0.1f);
             }
             if (goal) value *= 5f;
+            if (aim == Aim.People && ours > .5f &&
+                losers.Any(loser => loser.CapitalStateMapIndex == state.MapIndex)) value *= 3f;
             // And the part of any decision nobody can quite explain afterwards.
             value *= 0.8f + 0.45f * MovementRules.Roll(campaign.Seed, war.Id, state.MapIndex, 77);
             candidates[state.MapIndex] = value;

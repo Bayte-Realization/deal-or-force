@@ -40,13 +40,13 @@ public static class AiStrategyCatalog
     private static readonly Dictionary<string, AiStrategyDefinition> Defaults = new(StringComparer.OrdinalIgnoreCase)
     {
         ["default"] = new("default", 0.12f, 0.58f, 0.34f, 0.26f,
-            ArmyStance.Balanced, ArmyStance.Cautious, 0.18f),
+            ArmyStance.Balanced, ArmyStance.Cautious, 0.16f),
         ["major_offensive"] = new("major_offensive", 0.20f, 0.72f, 0.46f, 0.18f,
-            ArmyStance.Aggressive, ArmyStance.Balanced, 0.28f),
-        ["defensive"] = new("defensive", 0.06f, 0.38f, 0.18f, 0.44f,
-            ArmyStance.Balanced, ArmyStance.Cautious, 0.42f),
+            ArmyStance.Aggressive, ArmyStance.Balanced, 0.22f),
+        ["defensive"] = new("defensive", 0.06f, 0.38f, 0.22f, 0.44f,
+            ArmyStance.Balanced, ArmyStance.Cautious, 0.20f),
         ["minor_power"] = new("minor_power", 0.10f, 0.52f, 0.28f, 0.30f,
-            ArmyStance.Balanced, ArmyStance.Cautious, 0.24f)
+            ArmyStance.Balanced, ArmyStance.Cautious, 0.18f)
     };
 
     private static readonly Dictionary<string, AiStrategyDefinition> Definitions = new(StringComparer.OrdinalIgnoreCase);

@@ -13,6 +13,18 @@ static class WarDiagnosisReport
         var focus = c.NationByTag(tag);
         if (focus is null || c.ProvinceMap is null) { Console.WriteLine("No mapped country: " + tag); return 2; }
         var wars = c.Wars.Where(w => !w.Ended && w.Involves(focus.Id)).ToArray();
+        Console.WriteLine($"WAR_DIAG authority observer={c.ObserverMode} seats={string.Join(",",c.HumanSeats)} focusHuman={focus.IsHuman}");
+        foreach (var ended in c.Wars.Where(w => w.Involves(focus.Id)).OrderByDescending(w => w.StartedDay).Take(8))
+        {
+            var enemy = c.NationById(ended.EnemyLeaderOf(focus.Id));
+            var relation = CampaignDiplomacy.Peek(c,focus.Id,enemy?.Id ?? -1);
+            Console.WriteLine($"WAR_HISTORY {ended.Id} {focus.Tag}-{enemy?.Tag} ended={ended.Ended} start={ended.StartedDay} day={ended.EndedDay} winner={c.NationById(ended.WinnerId)?.Tag} " +
+                $"score={ended.WarScore:0.0} goal={ended.ClaimedStateMapIndex} reason={ended.Justification} " +
+                $"annexed={ended.AnnexedProvinces} summary={ended.PeaceSummary}");
+            Console.WriteLine($"WAR_RELATION stance={relation?.Stance} nap={relation?.NonAggressionPact} truceUntil={relation?.TruceUntil}");
+            Console.WriteLine("WAR_SIDES " + string.Join(",",ended.Side(true).Select(id=>c.NationById(id)?.Tag)) +
+                " vs " + string.Join(",",ended.Side(false).Select(id=>c.NationById(id)?.Tag)));
+        }
         var ids = new HashSet<int> { focus.Id };
         foreach (var w in wars) { ids.UnionWith(w.Side(true)); ids.UnionWith(w.Side(false)); }
         var positions = c.Armies.Where(a => ids.Contains(a.NationId)).ToDictionary(a => a.Id, a => a.ProvinceId);

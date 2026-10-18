@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -28,12 +29,55 @@ public static class TreeViewport
     /// <summary>How far one wheel notch of Ctrl-panning moves the view, in pixels at scale 1.</summary>
     private const int PanStep = 90;
 
+    private static ScrollContainer _dragging;
+    private static Vector2 _dragOrigin;
+    private static Vector2I _dragScroll;
+
     /// <summary>
     /// One sentence naming the controls, for the captions of both screens: a player who has read
     /// it once on the technology tree does not have to be told again on the doctrine tree.
     /// </summary>
     public static string Hint => Loc.Get(
-        "Alt with the wheel zooms; Ctrl with the wheel moves the view, and Shift makes it up and down.");
+        "Alt with the wheel zooms; Ctrl with the wheel moves the view, the middle button drags it, and Shift makes Ctrl up and down.");
+
+    /// <summary>
+    /// Middle-mouse-button drag panning for both trees, matching map-style canvas dragging.
+    /// </summary>
+    public static bool Drag(Control window, ScrollContainer scroll, InputEvent @event)
+    {
+        if (window is null || scroll is null || !window.IsVisibleInTree())
+        {
+            if (_dragging == scroll) _dragging = null;
+            return false;
+        }
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Middle } button)
+        {
+            if (button.Pressed)
+            {
+                if (!window.GetGlobalRect().HasPoint(button.Position)) return false;
+                _dragging = scroll;
+                _dragOrigin = button.Position;
+                _dragScroll = new Vector2I(scroll.ScrollHorizontal, scroll.ScrollVertical);
+                return true;
+            }
+            if (_dragging != scroll) return false;
+            _dragging = null;
+            return true;
+        }
+        if (@event is InputEventMouseMotion motion && _dragging == scroll)
+        {
+            if ((motion.ButtonMask & MouseButtonMask.Middle) == 0)
+            {
+                _dragging = null;
+                return false;
+            }
+            var delta = motion.Position - _dragOrigin;
+            scroll.ScrollHorizontal = Math.Max(0, _dragScroll.X - (int)MathF.Round(delta.X));
+            scroll.ScrollVertical = Math.Max(0, _dragScroll.Y - (int)MathF.Round(delta.Y));
+            return true;
+        }
+        return false;
+    }
 
     /// <summary>
     /// Reads one wheel event for one tree. True means the event belonged to the tree - which is
@@ -86,6 +130,55 @@ public static class TreeViewport
         if (scroll is null || viewport is null || canvas is null) return;
         Zoom(scroll, viewport, canvas, extent, ref zoom, scroll.GetGlobalRect().GetCenter(), closer);
     }
+
+    /// <summary>
+    /// Where a middle-button drag started, per tree, in scroll coordinates. Static because the trees
+    /// are, and keyed so the two never read each other's drag.
+    /// </summary>
+    private static readonly Dictionary<string, Vector2> DragAnchor = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The third hand: the middle button drags the view, the way every map in the genre does, for
+    /// the players who reach for the mouse before the keyboard. Returns true when the event belonged
+    /// to the tree - the press, the moves while it is held, and the release that ends it.
+    /// </summary>
+    public static bool Drag(string tree, Control window, ScrollContainer scroll, InputEvent @event)
+    {
+        if (window is null || scroll is null || !window.IsVisibleInTree()) return false;
+        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Middle } middle)
+        {
+            if (!middle.Pressed)
+            {
+                var wasDragging = DragAnchor.Remove(tree);
+                return wasDragging;
+            }
+            if (!window.GetGlobalRect().HasPoint(middle.Position)) return false;
+            DragAnchor[tree] = middle.Position + new Vector2(scroll.ScrollHorizontal, scroll.ScrollVertical);
+            return true;
+        }
+        if (@event is not InputEventMouseMotion motion) return false;
+        if (!DragAnchor.TryGetValue(tree, out var origin)) return false;
+        var wanted = origin - motion.Position;
+        scroll.ScrollHorizontal = (int)Math.Max(0f, wanted.X);
+        scroll.ScrollVertical = (int)Math.Max(0f, wanted.Y);
+        return true;
+    }
+
+    /// <summary>Back to the authored size, whatever the pointer did before.</summary>
+    public static void Reset(Control viewport, Control canvas, Vector2 extent, ref float zoom)
+    {
+        zoom = 1f;
+        if (canvas is not null)
+        {
+            canvas.Scale = Vector2.One;
+            canvas.PivotOffset = Vector2.Zero;
+            canvas.CustomMinimumSize = Vector2.Zero;
+        }
+        if (viewport is not null) viewport.CustomMinimumSize = extent;
+    }
+
+    /// <summary>The one place the number beside a tree's zoom buttons is written.</summary>
+    public static string PercentLabel(float zoom) => Loc.Format("{0}%", Math.Round(zoom * 100));
 
     /// <summary>One notch closer or further, holding whatever the pointer is over under the pointer.</summary>
     private static void Zoom(ScrollContainer scroll, Control viewport, Control canvas, Vector2 extent,

@@ -28,17 +28,14 @@ public sealed partial class ScenarioState
     public float Stability = 0.62f;
 
     /// <summary>
-    /// The region's name as a player reads it, the same way a country has one.
+    /// The region's name as a player reads it, the same way a country has one. Asked for by
+    /// id first - six regions are called "Southern" and four "Amazonas", and a flat table
+    /// keyed by name gives all of them the same translation. See <see cref="RegionNames"/>.
     ///
-    /// No table answers for these yet: there are 1,730 of them and they are proper nouns,
-    /// which is a translator's job rather than an afternoon's. The lookup is here so that
-    /// the day somebody writes those rows they work, and so a mod that renames a region can
-    /// ship its own translation the same day it ships the rename.
-    /// </summary>
-    /// <summary>
-    /// What a player should call this region. Asked for by id first - six regions are called
-    /// "Southern" and four "Amazonas", and a flat table keyed by name gives all of them the
-    /// same translation. See <see cref="RegionNames"/>.
+    /// The table does not answer for every region yet: there are 1,730 of them and they are
+    /// proper nouns, which is a translator's job rather than an afternoon's. The lookup is
+    /// here so that the day somebody writes those rows they work, and so a mod that renames
+    /// a region can ship its own translation the same day it ships the rename.
     /// </summary>
     public string DisplayName => RegionNames.Resolve(this);
 

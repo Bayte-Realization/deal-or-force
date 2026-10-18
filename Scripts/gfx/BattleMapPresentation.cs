@@ -59,7 +59,7 @@ public sealed partial class GlobePresentation
         var visible = marker.Plate.Visible && !(_flatMap && _flatStrategicCounters) &&
             CampaignIntel.PlayerCanInspect(_campaign, marker.NationId);
         marker.ConditionBars.Visible = visible;
-        if (!visible) return;
+        if (!visible) { marker.ConditionKey = -1; return; }
         var palette = HashCode.Combine(InterfaceSkin.Colour("combat.organisation"),
             InterfaceSkin.Colour("combat.equipment"), InterfaceSkin.Colour("combat.bar_background"));
         if (palette != _conditionPalette)
@@ -69,6 +69,7 @@ public sealed partial class GlobePresentation
         }
         var condition = BattleReadout.Summarise(marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack);
         var key = ((int)Math.Round(condition.Organisation * 20), (int)Math.Round(condition.Equipment * 20));
+        marker.ConditionKey = key.Item1 * 100 + key.Item2;
         if (!_conditionTextures.TryGetValue(key, out var texture))
         {
             // Same canvas and origin as the plate. Offsetting a second billboard in

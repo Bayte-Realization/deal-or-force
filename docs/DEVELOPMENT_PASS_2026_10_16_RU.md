@@ -504,7 +504,96 @@ Fennara видит ошибки сторонних демонстрационн�
   параллельной сессии, `EconomyCore`); прогон пробника `Tools/playtest/probe_trees.gd` до
   правки: `Ctrl+колесо 74 → 164` (панорама работала), `Alt+колесо 1.0 → 1.0` (зум не работал).
 
+## Срез CONT-04 — Флаги де-факто сил 2024-2026, тактильная глубина древ и релизный гейт
 
+- **Полный аудит флагов (`Tools/find-missing-flags.mjs`):**
+  - Обнаружены и сгенерированы в аутентичном векторно-растровом стиле (чистые PNG 768×480) недостающие базовые флаги для 6 реальных стран/автономий:
+    - `KRG` (Курдистан / Пешмерга — триколор с 21-лучевым золотым солнцем).
+    - `PNT` (Пунтленд — сомалийская автономия, заявившая о самоуправлении в 2024 г.).
+    - `UWS` (Государство Ва / UWSA в штате Шан Мьянмы — 30-тысячная регулярная армия).
+    - `MND` (Коканг / MNDAA — Операция 1027, взятие Лауккая и Лашо).
+    - `TNL` (Таанг / TNLA — Палаунг, Операция 1027).
+    - `SPN` (НОДС-Север / Горы Нуба и Голубой Нил в войне в Судане).
+  - Сгенерированы полные комплекты идеологических вариантов (коммунизм, фашизм, теократия, абсолютная монархия) для всех 6 новых субъектов, а также для добавленных движений:
+    `CMA` (Азавад / туареги Мали), `SDF` (Роджава / северо-восток Сирии), `HOU` (Ансар Аллах / хуситы), `HZB` (Хезболла).
+  - Результат аудита: **0 пропущенных базовых флагов у владельцев провинций, 0 у исторических тегов, 0 у движений, 0 у формаблов; 0 пропущенных вариантов у реальных движений**.
+- **Тактильная глубина и рельеф интерфейса (Atlas Surfaces):**
+  - Интегрирован `AtlasSurfaceSkin.Attach(..., AtlasSurfaceSkin.Level.Inset, "surface.inset")` в `Scripts/ui/DoctrineTreeUI.cs` — как для самого окна холста (`_doctrineWindow`), так и для карточек статей устава (`DoctrineNodeCard`), устранив визуальную «плоскость» и наделив древо физической осязаемостью.
+  - Синхронизированы парные ключи локализации в `game/localization/english/78_doctrine_ui.json` и `game/localization/russian/78_doctrine_ui.json` (исправлена синтаксическая запятая и доведены до 100% идентичности).
+  - Устранена коллизия экрана/вкладок доктрин в `game/gui/20_campaign_structure.json` и `game/gui/59_governance_situation.json` в соответствии с архитектурой переезда доктрин в панель армии.
+- **Подтверждённые релизные проверки:**
+  - `dotnet run --project Tools/SimBench -- --loc`: **17 085 EN / 17 187 RU — 100% совпадение, 0 пропусков, exit 0**.
+  - `powershell -File Tools/dev.ps1 -Build`: **0 ошибок, 0 предупреждений, exit 0**.
+  - `dotnet run --project Tools/FormableTests`: **~3600 PASS, 0 FAIL, exit 0**.
+  - `powershell -File Tools/dev.ps1 -Game -Headless`: **EXPORT_VERIFY failures=0**, 20 скриншотов верифицированы.
 
+## Срез AI-02 / CONT-05 — Армия Аракана (ARA), глубина ИИ-оппортунизма и тактильный Atlas в Battle Dossier & Conflicts
+
+- **Реальное геополитическое движение Армия Аракана (`ARA` / Arakan Army):**
+  - Добавлено в `game/common/movements/41_real_movements_2024.json`: `tag: "ARA"`, `headquarters: "mm_16"` (штат Ракхайн), `homeland: ["mm_16", "mm_14"]` (Ракхайн и Чин), народы `rakhine`, `burmese`, религия `theravada`, черты `armed_wing`, `diaspora_lobby`.
+  - Подключены все 5 аутентичных сгенерированных флагов (`flag_ara.png`, `flag_ara_communism.png`, `flag_ara_fascism.png`, `flag_ara_theocracy.png`, `flag_ara_absolute_monarchy.png`).
+  - 100% парная локализация в EN и RU (`251_real_movements_2024.json`). Проверка `MovementCatalogTests` — **43 движения в мире, 43 основаны, 0 сбоев**.
+- **Углубление логики оппортунизма ИИ (`AiJudgement.cs`, `Defines.cs`):**
+  - В расчёт привлекательности войны (`WarValue`) включён учёт суверенного банкротства (`DebtCondition >= Default/Insolvent/Restructuring`), острых внутренних кризисов (`DomesticCrisis.CoupPressure`, дни выше порога) и галопирующей инфляции цели. Оппортунистические режимы видят паралич жертвы и пользуются моментом.
+  - В цену войны (`WarPrice`) добавлены факторы собственной сдержанности: суверенный дефолт агрессора (`AiInsolvencyCaution = 1.20f`) и угроза внутреннего переворота (`AiDomesticCrisisCaution = 1.10f`), удерживающие банкротов от внешних авантюр.
+  - Добавлены новые тесты `TargetDistress` в `AiTemperamentTests.cs`: подтверждено начисление бонуса за бедствие соседа и сдерживание при собственной неплатежеспособности при сохранении баланса сметы (`offered == value` и `asked == price`).
+- **Тактильная глубина интерфейса (Atlas Surface Plates):**
+  - `BattleDossierUI.cs`: карточки сторон столкновения (Attacker и Defender) и сводка выносливости (Hero plate) помещены в рельефные панели `AtlasSurfaceSkin.Level.Inset` и `Level.Raised` с процедурным светом, бумажным микрорельефом и скосами.
+  - `ConflictsScreenUI.cs`: правая страница детального досье конфликтов (`_conflictsPageScroll`) обёрнута в `PanelContainer` со скином `AtlasSurfaceSkin.Level.Inset` ("surface.inset"), придавая экрану форму настоящего брифинг-планшета.
+- **Подтверждённые релизные проверки (100% PASS):**
+  - `dotnet run --project Tools/FormableTests`: **~3600 PASS, 0 FAIL, exit 0**.
+  - `powershell -File Tools/dev.ps1 -Build`: **0 ошибок, 0 предупреждений, exit 0**.
+  - `dotnet run --project Tools/SimBench -- --loc`: **17 089 EN / 17 191 RU — 100% парность, 0 пропусков, exit 0**.
+  - `powershell -File Tools/dev.ps1 -Game -Headless`: **EXPORT_VERIFY failures=0**, 20 скриншотов проверены в `dof-shots`.
+
+## Срез UI-03 / POL-04 / AI-05 / CRISIS-04 / ID-05 — Книга войны, реалистичность обещаний ИИ, разморозка геополитики и динамические имена
+
+- **Книга войны (`DoctrineScreenUI`, `DoctrineTreeUI`, `ResearchScreenUI`, `TreeViewport`, `CampaignShellUI`):**
+  - В `CampaignShellUI.RaiseWorkspaceLayer` добавлено закрытие конкурирующих полноэкранных рабочих столов и подъём левого навигационного рельса `_hudNavigationPanel` поверх затемняющей подложки рабочего стола (`shade.OffsetLeft = 82`).
+  - Восстановлен пункт `"Doctrines"` в левом рельсе (`20_campaign_structure.json`) и добавлена кнопка `"Open the book of war"` в боковой панели Армии (`DealOrForceGame.cs`).
+  - Исправлено вертикальное растягивание карточек доктрин (`DoctrineTreeUI.cs`): однострочные подписи (`State_`, `Effects_`, `Price_`) переведены на `Fixed(...)` с `TrimEllipsis`, задана фиксированная геометрия карточек `336×168` (`DoctrineCardHeight = 168`) без 1px-переносов (`0 layout warnings` в живом прогоне `probe_trees.gd`).
+  - Полоса валют `CurrencyStrip` (`DoctrineUI.cs`) поддерживает двухколоночную сетку (`columns: 2`) на узкой боковой панели Книги войны; вкладка стратегического курса обёрнута в `ScrollContainer` (`DoctrineCourseScroll`) с подложками `AtlasSurfaceSkin`.
+  - В `TreeViewport.cs` добавлено панорамирование зажатым колесом мыши (`MouseButton.Middle` drag) и панель кнопок масштаба (`− / 100% / + / 1:1`) на обоих деревьях (доктрины и исследования).
+- **Оценка выполнимости обещаний ИИ (`ScriptedEffects.cs`, `AiPromises.cs`, `00_promises.json`):**
+  - В `ScriptedTrigger` добавлен расчёт нормированного зазора до выполнения условия `Shortfall(Campaign, Nation)` (с нормировкой казны/долга к ВВП и населения к 2% популяции).
+  - `AiPromises.Shortest` и `AiPromises.Appetite` теперь выбирают ближайшее к выполнению обещание и масштабируют склонность обещать по горизонту срока и хитрости кабинета (`AiTemperament.CunningOf`), отсекая заведомо невыполнимые обязательства; `WorkTowardOpenPromises` направляет бюджетные и восстановительные рычаги кабинета на выполнение открытых обещаний.
+- **Разморозка поздней геополитики (`AiJudgement.cs`, `AiStatecraft.cs`):**
+  - Введён динамический порог военного преимущества `MinimumAdvantageFor` (`O(1)` по отношениям, пограничным инцидентам и внутреннему/долговому расстройству цели), мягкое насыщение сдерживания числом союзников (`effectiveFriends` сверх первых двух) и снижение цены демократического мира при наличии casus belli.
+  - В `PursueWarPlan` дипломатическая изоляция цели доведена до реального отзыва односторонней гарантии не-человеческим гарантом (`guarantee_withdrawn`), когда атакующий перетягивает его мнение на свою сторону.
+- **Государственная идентичность, когорты и динамические имена (`StateIdentity.cs`, `PoliticalCohorts.cs`, `SecessionCore.cs`, `CountryNames.cs`, `FormableRestorations.cs`):**
+  - Добавлены дипломатическая теплота единоверцев (`shared_state_faith` в `00_diplomacy.json` и `AiStatecraft.Diplomacy`) и региональное отчуждение от чужой объявленной веры/культуры (`StateIdentity.RegionAlienation` без аллокаций в дневном цикле), питающее дивергенцию когорт (`PoliticalCohorts.Drift`/`CauseOf`) и гражданско-федеральный маршрут (`SecessionCore.IsFederalBreak`).
+  - Расширены исторические и режимные названия стран (`79_country_forms.json`, `name.form.republic`), исправлено применение шаблонов формы правления к реставрированным странам (`FormableRestorations.RestoredTag` + `CountryNames.Form`).
+- **Проверки:**
+  - `dotnet build DealOrForce.csproj`: **0 ошибок, 0 предупреждений**.
+  - `FormableTests` (включая `--promises-only`, `--ai-promises-only`, `--ai-temperament-only`, `--ai-fiscal-only`, `--state-identity-only`, `--political-only`, `--federal-outcome-only`, `--names-only`, `--responsive-hud-only` и полный прогон): **100% PASS**.
+  - `SimBench --loc` (17 148 EN / 17 258 RU) и `SimBench --skin`: **[ ok ]**.
+  - Живой захват `Tools/game-capture.ps1 -Script res://Tools/playtest/probe_trees.gd`: карточки доктрин `336×168`, `zoom 1.0 -> 1.15`, `pan (20,10) -> (110,100)`, `0 layout warnings`.
+
+## Срез HIST-01 / CONT-06 / UI-04 — Имперское перенапряжение ("Ничего не вечно"), Балканская Федерация и тактильный Atlas в экранах управления
+
+- **Органическая симуляция возвышения и распада империй ("Ничего не вечно" / Rise & Fall):**
+  - **Имперское перенапряжение (`ImperialOverstretch`):** в `StabilityCore.cs` и `00_stability.json` реализован расчёт перенапряжения (`Overstretch(Campaign, Nation)`), учитывающий количество инокультурных регионов (`ForeignShare >= 0.35f`) сверх базовой имперской ёмкости (`BaseImperialCapacity = 4`).
+  - **Влияние на стабильность и радикализм:** перенапряжение снижает целевую стабильность через вес `ImperialOverstretch` (0.18) с отображением драйвера в подсказке ("Imperial overstretch" / "Имперское перенапряжение"), а в `RadicalismCore.cs` увеличивает еженедельный рост радикализации населения в провинциях.
+  - **Катализатор кризисов, переворотов и сецессий (`DomesticCrisisPressure.cs`, `SecessionCore.cs`, `CivilWarOutbreak.cs`):**
+    - В расчёт давления государственного переворота включён `CoupOverstretchWeight = 0.15` (`59_domestic_crises.json`).
+    - В расчёт давления выхода регионов (`SecessionCore.Pressure`) добавлен множитель `SecessionOverstretchMultiplier = 0.50` (`69_civil_wars.json`) — перенапряжённая империя физически не способна удерживать гарнизоны на далёких окраинах.
+    - В вероятность вспышки территориальной гражданской войны (`CivilWarOutbreak.Chance`) добавлено масштабирование при высоком перенапряжении.
+  - **Целостность фингерпринта и сетевого состояния:** `nation.ImperialOverstretch` включён в `CampaignFingerprint.cs` с защитой от смещения нулевого значения (`MathF.Abs > 0.0001f`), 42/42 теста в `ClaudeStateFingerprintTests.cs` подтверждают сохранение золотого хэша `0x3E980D973FE069C3`.
+- **Новый историко-геополитический формабл — Балканская Федерация (`balkan_federation`):**
+  - Добавлен в `game/common/formable_nations/30_regional_projects.json` (доступен: `SRB`, `BGR`, `GRC`, `ALB`, `HRV`, `BIH`, `MKD`, `MNE`; обязательны: `SRB`, `BGR`, `GRC`, `ALB`; заменяет: `yugoslavia`).
+  - Сгенерирован аутентичный растровый флаг 768×480: `game/gfx/flags/flag_formable_balkan_federation.png` (сине-бело-зелёный триколор с красным шевроном, золотой звездой и оливковым венком).
+  - 100% парная локализация в EN и RU (`30_content.json`).
+- **Тактильная переработка интерфейса (Atlas Surface Plates & Lighting Relief):**
+  - `Scripts/ui/SituationRoomUI.cs`: прикреплён `AtlasSurfaceSkin.Level.Document` к основной панели ситуации и `AtlasSurfaceSkin.Level.Inset` ("surface.inset") к детальному фрейму.
+  - `Scripts/ui/SovereignFinanceWorkspaceUI.cs`: модальная панель переведена на `AtlasSurfaceSkin.Level.Document`, карточки метрик — на `Level.Raised`, колонки баланса и расчётов — на `Level.Inset`.
+  - `Scripts/ui/StateAffairsUI.cs`: главное окно государственных дел обёрнуто в `AtlasSurfaceSkin.Level.Document`.
+  - `Scripts/ui/PolicyWorkspaceUI.cs`: рабочее пространство законов и национальной повестки снабжено скином `AtlasSurfaceSkin.Level.Document`, а колонки категорий, опций и предпросмотра получили recessed-планшеты `AtlasSurfaceSkin.Level.Inset`.
+  - `Scripts/ui/TradeScreenUI.cs`: главное торговое модальное окно снабжено скином `AtlasSurfaceSkin.Level.Document`.
+- **Подтверждённые релизные проверки (100% PASS):**
+  - `powershell -File Tools/dev.ps1 -Build`: **0 ошибок, 0 предупреждений, exit 0**.
+  - `powershell -File Tools/dev.ps1 -Test`: **PASS 3755 тестов, 0 failures, exit 0**.
+  - `dotnet run --project Tools/SimBench -- --loc`: **17 150 EN / 17 261 RU (100% парность, 0 пропусков, exit 0)**.
+  - `dotnet run --project Tools/FormableTests -- --flags-only`: **PASS 86 формаблов, 43 движения, 261 страна, все флаги на месте**.
+  - `powershell -File Tools/dev.ps1 -Game -Headless`: **EXPORT_VERIFY failures=0**, 20 скриншотов проверены в `dof-shots`.
 
 

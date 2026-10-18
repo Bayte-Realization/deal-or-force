@@ -409,6 +409,13 @@ public static class FlagCatalog
     /// The caller asks the art whether each one exists and takes the first that does, so
     /// this never needs to know what has actually been drawn - which is what lets a mod add
     /// a flag by adding a file.
+    ///
+    /// "Best" is the total number of steps taken away from what the country actually is,
+    /// across every mixture of the chosen qualifiers' chains, so
+    /// `flag_rus_communism_one_party_state` is asked for before
+    /// `flag_rus_socialism_one_party_state`, and both before anything two steps out.
+    /// Ordering by distance rather than by enumeration order is what stops an alias beating
+    /// the real thing.
     /// </summary>
     public static List<string> Candidates(Campaign campaign, Nation nation)
     {
@@ -583,15 +590,6 @@ public static class FlagCatalog
             if (!chain.Contains(alias, StringComparer.OrdinalIgnoreCase)) chain.Add(alias);
         return chain;
     }
-
-    /// <summary>
-    /// Every mixture of the chosen qualifiers' chains, nearest first.
-    ///
-    /// "Nearest" is the total number of steps taken away from what the country actually is,
-    /// so `flag_rus_communism_one_party_state` is asked for before `flag_rus_socialism_one_party_state`,
-    /// and both before anything two steps out. Ordering by distance rather than by
-    /// enumeration order is what stops an alias beating the real thing.
-    /// </summary>
 
     /// <summary>
     /// The names one family answers to: `flag_&lt;source&gt;_&lt;value&gt;`, and that stem

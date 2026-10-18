@@ -205,7 +205,7 @@ public partial class DealOrForceGame : Control
             {
                 _applyingNetworkCommand = false;
                 _dayAccumulator = 0;
-                _campaign.BlockSimulation(exception.Message);
+                _campaign.BlockSimulation(exception.Message, exception);
                 DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
                 var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, _campaign, exception.Message);
                 ShowCampaignFault(Simulation.Loc.Format(
@@ -246,7 +246,7 @@ public partial class DealOrForceGame : Control
         catch (System.Exception exception) when (exception is not System.OutOfMemoryException && exception is not System.AccessViolationException)
         {
             _dayAccumulator = 0;
-            campaign.BlockSimulation(exception.Message);
+            campaign.BlockSimulation(exception.Message, exception);
             DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
             var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, campaign, exception.Message);
             ShowCampaignFault(Simulation.Loc.Format(
@@ -730,6 +730,7 @@ public partial class DealOrForceGame : Control
 
     private void BeginSession()
     {
+        _observerMode = _campaign.HumanSeats.Count == 0 && !_campaign.Nations.Any(n => n.IsHuman);
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
         _menuLayer.Visible = false;
@@ -876,6 +877,33 @@ public partial class DealOrForceGame : Control
                 DetailRow("Capital", CountryNames.Capital(nation));
                 DetailRow("States held", _campaign.StatesOf(nation).Length.ToString("N0"));
                 DetailRow("Population", Fmt.People(nation.Population), Fmt.PeopleExact(nation.Population));
+                // Who the country says it is, where a player looks first. The exact share is
+                // on the line rather than behind a tooltip: the number a declaration is
+                // judged by is the number the player needs.
+                if (_campaign.FeatureEnabled("state_identity"))
+                {
+                    // A declaration against half the country is the one state of these lines
+                    // that is a problem rather than a fact: colour it so, because the strain
+                    // is already being paid every week.
+                    var declaredFaithShare = StateIdentity.IsSecular(nation.DeclaredReligion)
+                        ? 1f
+                        : StateIdentity.ReligionShare(_campaign, nation, nation.DeclaredReligion);
+                    DetailRow("State religion", StateIdentityShareLine(nation, true),
+                        Tr("The faith the state declares. Declaring one needs the faithful to be a share of the country; a secular declaration needs nobody's permission."),
+                        declaredFaithShare < 0.5f ? "state.warning" : "text.bright");
+                    DetailRow("State culture", StateIdentityShareLine(nation, false),
+                        Tr("The people the state declares itself of, by the share of the country that lives it."));
+                    var faith = StateIdentity.Headline(_campaign, nation, true);
+                    var people = StateIdentity.Headline(_campaign, nation, false);
+                    if (faith.Id is not null && !faith.Id.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase))
+                        DetailRow("Largest faith", Simulation.Loc.Format("{0} · {1:0.0%} of the country",
+                            StateIdentity.Name(faith.Id, true), faith.Share),
+                            Tr("The faith most people of the country hold, whether or not the state declares it."));
+                    if (people.Id is not null && !people.Id.Equals(nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase))
+                        DetailRow("Largest people", Simulation.Loc.Format("{0} · {1:0.0%} of the country",
+                            StateIdentity.Name(people.Id, false), people.Share),
+                            Tr("The people most of the country belongs to, whether or not the state declares it."));
+                }
                 DetailHeading("ECONOMY");
                 DetailRow("GDP", Fmt.Money(nation.Gdp), Fmt.MoneyExact(nation.Gdp));
                 DetailRow("GDP per head", Fmt.Money(nation.Gdp / Mathf.Max(1f, nation.Population)),
@@ -907,14 +935,6 @@ public partial class DealOrForceGame : Control
                     Tr(PoliticsCore.GovernmentOf(nation).Description));
                 DetailRow("Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
                     Tr(PoliticsCore.IdeologyOf(nation).Description));
-                // What the state says it is, over what its people are.
-                if (_campaign.FeatureEnabled("state_identity"))
-                {
-                    DetailRow("State religion", Simulation.StateIdentity.Caption(_campaign, nation, true),
-                        Tr("The faith the state declares. Declaring one needs the faithful to be a share of the country; a secular declaration needs nobody's permission."));
-                    DetailRow("State culture", Simulation.StateIdentity.Caption(_campaign, nation, false),
-                        Tr("The people the state declares itself of, by the share of the country that lives it."));
-                }
                 var coup = Coups.Outlook(_campaign, nation);
                 DetailRow("Coup risk",
                     Tr(coup switch { "plot" => "a plot is under way", "high" => "high", "low" => "low", _ => "none" }),
@@ -970,6 +990,23 @@ public partial class DealOrForceGame : Control
                     DetailRow("Headquarters here", worn.DisplayName,
                         Simulation.MovementRules.Patience(_campaign, worn),
                         worn.Movement.Heat >= _campaign.Defines.MovementExpelHeat * 0.75f ? "state.negative" : "state.warning");
+                var (birthRate, deathRate, _, vitalStatus) = Simulation.HouseholdEconomy.NationalVitalSummary(_campaign, nation);
+                DetailRow("Demographic balance",
+                    Simulation.Loc.Format("{0} ({1:+0.00%;-0.00%;0.00%}/yr)", Tr(vitalStatus), birthRate - deathRate),
+                    Simulation.DemographicCycle.Explain(_campaign, nation),
+                    deathRate > birthRate ? "state.warning" : birthRate - deathRate >= 0.012f ? "state.positive" : "text.bright",
+                    () =>
+                    {
+                        var b = new Simulation.Breakdown();
+                        Simulation.HouseholdEconomy.NationalVitalSummary(_campaign, nation, b);
+                        return b;
+                    });
+                DetailRow("Age structure",
+                    Simulation.Loc.Format("{0} young · {1} work · {2} old",
+                        Fmt.Percent(nation.YoungShare), Fmt.Percent(nation.WorkingShare), Fmt.Percent(nation.OldShare)),
+                    Simulation.DemographicCycle.Explain(_campaign, nation),
+                    nation.OldShare >= _campaign.Defines.DemographyReferenceOldShare + 0.04f ? "state.warning" : "text.bright",
+                    () => Simulation.HouseholdEconomy.ExplainNationPopulation(_campaign, nation));
                 if (nation.WeeklyNetMigration != 0 || nation.CumulativeNetMigration != 0 || MathF.Abs(nation.BrainDrainRate) >= 0.01f)
                 {
                     var destNation = _campaign.NationById(nation.BrainDrainDestinationId);
@@ -991,7 +1028,15 @@ public partial class DealOrForceGame : Control
                                 ? Simulation.Loc.Format("+{0}", Fmt.Percent(nation.BrainDrainRate))
                                 : Tr("balanced"),
                         Tr("Human-capital flow: war, low stability and weak living standards push educated specialists abroad; universities, research laboratories and high living standards retain and attract them."),
-                        nation.BrainDrainRate < -0.15f ? "state.negative" : nation.BrainDrainRate < -0.04f ? "state.warning" : nation.BrainDrainRate > 0.04f ? "state.positive" : "text.bright");
+                        nation.BrainDrainRate < -0.15f ? "state.negative" : nation.BrainDrainRate < -0.04f ? "state.warning" : nation.BrainDrainRate > 0.04f ? "state.positive" : "text.bright",
+                        () =>
+                        {
+                            var b = new Simulation.Breakdown();
+                            var rep = _campaign.StatesOf(nation).OrderByDescending(s => s.BrainDrainPressure).FirstOrDefault();
+                            if (rep is not null)
+                                Simulation.BrainDrain.CalculatePressure(_campaign, nation, rep, Simulation.AiFiscalPolicy.AtWar(_campaign, nation), b);
+                            return b;
+                        });
                 }
                 break;
 
@@ -1011,8 +1056,14 @@ public partial class DealOrForceGame : Control
 
                 DetailHeading("FORCES");
                 _sideDetail.AddChild(ActionButton("Recruit & deploy", () => OpenRecruitment(), 180, 38, true));
-                _sideDetail.AddChild(ActionButton("Doctrines tab", OpenArmyDoctrinePage, 180, 38,
-                    iconPath: "res://game/gfx/interface/icons/icon_military.png"));
+                var doctrineTabBtn = ActionButton("Doctrines tab", OpenArmyDoctrinePage, 180, 38,
+                    iconPath: "res://game/gfx/interface/icons/icon_military.png");
+                doctrineTabBtn.Name = "MilitaryOpenDoctrineTab";
+                _sideDetail.AddChild(doctrineTabBtn);
+                var warBookBtn = ActionButton(Loc.Get("Open the book of war"), OpenDoctrineScreen, 180, 38,
+                    iconPath: "res://game/gfx/interface/icons/icon_laws.png");
+                warBookBtn.Name = "MilitaryOpenDoctrineScreen";
+                _sideDetail.AddChild(warBookBtn);
                 DetailRow("Divisions", divisions.ToString("0.#"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");
@@ -1340,12 +1391,15 @@ public partial class DealOrForceGame : Control
                 break;
 
             case PanelSurface.Command:
-                // An instrument: tight, cool, and quiet enough to sit beside the map for an
-                // entire campaign without asking for attention.
-                style.BorderWidthTop = 1;
-                style.ShadowColor = new Color(0, 0, 0, 0.18f);
-                style.ShadowSize = 3;
-                style.ShadowOffset = new Vector2(0, 2);
+                // An instrument: tight, cool, and framed with enough shadow to lift cleanly off the map.
+                style.BorderColor = brass;
+                style.BorderWidthTop = 2;
+                style.BorderWidthLeft = 1;
+                style.BorderWidthRight = 1;
+                style.BorderWidthBottom = 1;
+                style.ShadowColor = new Color(0, 0, 0, 0.45f);
+                style.ShadowSize = 10;
+                style.ShadowOffset = new Vector2(0, 4);
                 break;
 
             default:
@@ -1353,9 +1407,12 @@ public partial class DealOrForceGame : Control
                 // gets, and it is what makes a reading window look like a page.
                 style.BorderColor = brass;
                 style.BorderWidthTop = 3;
-                style.ShadowColor = new Color(0, 0, 0, 0.34f);
-                style.ShadowSize = 8;
-                style.ShadowOffset = new Vector2(0, 4);
+                style.BorderWidthLeft = 1;
+                style.BorderWidthRight = 1;
+                style.BorderWidthBottom = 1;
+                style.ShadowColor = new Color(0, 0, 0, 0.50f);
+                style.ShadowSize = 12;
+                style.ShadowOffset = new Vector2(0, 5);
                 break;
         }
         return style;
@@ -1380,6 +1437,23 @@ public partial class DealOrForceGame : Control
         if (inCampaign)
             AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
                 ? AtlasSurfaceSkin.Level.Instrument : AtlasSurfaceSkin.Level.Document);
+        else
+        {
+            // Outside the campaign a window is painted by the old panel artwork, and that artwork's
+            // own frame is faint enough that the picker, the workshop and the settings read as flat
+            // dark rectangles with no edge at all. The shell's line is drawn over it and behind the
+            // content: the same edge the game's panels carry, around the art the menus were painted
+            // with (CampaignShellUI.ShellEdgeStyle).
+            var edge = new Panel
+            {
+                Name = "ShellEdge",
+                MouseFilter = MouseFilterEnum.Ignore,
+                FocusMode = FocusModeEnum.None
+            };
+            edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
+            panel.AddChild(edge);
+            panel.MoveChild(edge, 0);
+        }
         return panel;
     }
 
@@ -1501,6 +1575,20 @@ public partial class DealOrForceGame : Control
     private void ApplyDeclaredFont()
     {
         AddThemeFontOverride("font", PresentationFonts.For("ui.default"));
+    }
+
+    /// <summary>
+    /// The declared identity as a dossier line: the name, and the exact share of the country
+    /// that stands behind it - the number the declaration is judged by.
+    /// </summary>
+    private string StateIdentityShareLine(Nation nation, bool religion)
+    {
+        var caption = Simulation.StateIdentity.Caption(_campaign, nation, religion);
+        if (caption == Tr("none declared")) return caption;
+        var share = religion
+            ? Simulation.StateIdentity.ReligionShare(_campaign, nation, nation.DeclaredReligion)
+            : Simulation.StateIdentity.CultureShare(_campaign, nation, nation.DeclaredCulture);
+        return Simulation.Loc.Format("{0} · {1:0.0%} of the country", caption, share);
     }
 
     /// <summary>

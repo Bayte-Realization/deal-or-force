@@ -105,6 +105,28 @@ public partial class DealOrForceGame
 
         DetailHeading("PEOPLE");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        if (owner is not null)
+        {
+            var (regBirth, regDeath, _) = HouseholdEconomy.VitalRates(_campaign, owner, _selectedState);
+            DetailRow("Natural growth",
+                Simulation.Loc.Format("{0:+0.00%;-0.00%;0.00%}/yr (+{1} / −{2})",
+                    regBirth - regDeath, Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
+                "Annual natural population change from births and mortality. Hover for the factor-by-factor breakdown.",
+                regDeath > regBirth ? "state.warning" : regBirth - regDeath >= 0.012f ? "state.positive" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    HouseholdEconomy.VitalRates(_campaign, owner, _selectedState, b);
+                    return b;
+                });
+            DetailRow("Age structure",
+                Simulation.Loc.Format("{0} young · {1} work · {2} old",
+                    Fmt.Percent(_selectedState.YoungShare),
+                    Fmt.Percent(DemographicCycle.WorkingShare(_selectedState)),
+                    Fmt.Percent(_selectedState.OldShare)),
+                "Share of residents below working age, of working age, and past retirement. High old-age share depresses births and raises mortality.",
+                _selectedState.OldShare >= _campaign.Defines.DemographyReferenceOldShare + 0.04f ? "state.warning" : "text.bright");
+        }
         if (_selectedState.ReviewNetMigration != 0 || _selectedState.BrainDrainPressure >= 0.04f)
         {
             DetailRow("Net migration", Fmt.PeopleDelta(_selectedState.ReviewNetMigration),
@@ -112,7 +134,14 @@ public partial class DealOrForceGame
             DetailRow("Brain drain", Fmt.Percent(_selectedState.BrainDrainPressure),
                 "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.",
                 _selectedState.BrainDrainPressure > 0.25f ? "state.negative" :
-                _selectedState.BrainDrainPressure > 0.10f ? "state.warning" : "text.bright");
+                _selectedState.BrainDrainPressure > 0.10f ? "state.warning" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    if (owner is not null)
+                        BrainDrain.CalculatePressure(_campaign, owner, _selectedState, AiFiscalPolicy.AtWar(_campaign, owner), b);
+                    return b;
+                });
         }
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
             "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");
@@ -253,7 +282,38 @@ public partial class DealOrForceGame
             DetailRow("Livelihood stress", Fmt.Percent(_selectedState.LivelihoodStress),
                 "Shortages, lack of jobs and local destruction put pressure on living standards and radicalism.");
             DetailRow("Births / deaths, last review", Loc.Format("{0} / {1}", Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
-                "Literacy changes the birth rate; living conditions, medicine and war damage change the death rate.");
+                "Literacy, urbanisation, welfare and age structure shape the birth rate; living conditions, medicine, war damage and old-age share shape the death rate.",
+                _selectedState.ReviewDeaths > _selectedState.ReviewBirths ? "state.warning" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    if (owner is not null) HouseholdEconomy.VitalRates(_campaign, owner, _selectedState, b);
+                    return b;
+                });
+            DetailRow("Age structure",
+                Simulation.Loc.Format("{0} young · {1} work · {2} old",
+                    Fmt.Percent(_selectedState.YoungShare),
+                    Fmt.Percent(DemographicCycle.WorkingShare(_selectedState)),
+                    Fmt.Percent(_selectedState.OldShare)),
+                "Share of residents below working age, of working age, and past retirement.");
+            var mig = _selectedState.ReviewNetMigration;
+            if (mig != 0)
+            {
+                DetailRow("Net migration, last review",
+                    (mig >= 0 ? "+" : "−") + Fmt.People(Math.Abs(mig)),
+                    mig > 0
+                        ? "Inflow of migrants drawn by stability, standard of living, and peace. Large inflows reshape regional culture over time."
+                        : "Outflow of emigrants escaping poverty, devastation, shortages, or political instability.",
+                    mig < 0 ? "state.warning" : "text.bright");
+                var migShare = Math.Abs(mig) / (float)Math.Max(1L, _selectedState.Population);
+                if (mig > 0 && migShare >= _campaign.Defines.DemographyFloodShare)
+                {
+                    DetailRow("Cultural shift & replacement alert",
+                        Fmt.Percent(migShare),
+                        "Foreign cultural influx exceeds assimilation rate: regional culture is shifting rapidly.",
+                        "state.warning");
+                }
+            }
         }
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),

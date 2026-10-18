@@ -26,6 +26,10 @@ const apply = process.argv.includes('--apply');
 const project = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const sources = { skills: join(project, '.agents', 'skills'), rules: join(project, '.agents', 'rules') };
+if (!Object.values(sources).some(existsSync)) {
+  console.log('harness-sync: optional local .agents instructions are not installed; nothing to synchronise. Building and playing do not require them.');
+  process.exit(0);
+}
 const targets = {
   skills: [join(project, '.cursor', 'skills'), join(project, '.devin', 'skills')],
   rules: [{ dir: join(project, '.cursor', 'rules'), rename: (n) => n.replace(/\.md$/, '.mdc') }],

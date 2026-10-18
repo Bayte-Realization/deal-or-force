@@ -224,6 +224,7 @@ public static class SecessionCore
 
         var identity = federal ? M.Clamp01(state.PoliticalDivergence) : M.Clamp01(foreign);
         var scale = federal ? MathF.Max(0f, campaign.Defines.FederalPressureScale) : 1f;
+        var overstretchScale = 1f + MathF.Max(0f, owner.ImperialOverstretch) * campaign.Defines.SecessionOverstretchMultiplier;
         return weights.Base
                * MathF.Pow(identity, MathF.Max(0.01f, weights.Nationality))
                * (weights.RadicalismFloor + weights.Radicalism * M.Clamp01(state.Radicalism))
@@ -232,7 +233,8 @@ public static class SecessionCore
                * (losing ? weights.WarMultiplier : 1f)
                * (torn ? campaign.Defines.SecessionCivilWarMultiplier : 1f)
                * (1f - SocialMemory.BorderRelief(campaign, state))
-               * scale;
+               * scale
+               * overstretchScale;
     }
 
     /// <summary>
@@ -265,6 +267,7 @@ public static class SecessionCore
             if (debt == DebtCondition.Stressed || debt == DebtCondition.Default
                 || debt == DebtCondition.Insolvent || debt == DebtCondition.Restructuring) return true;
         }
+        if (StateIdentity.RegionAlienation(campaign, owner, state) >= 0.50f) return true;
         return state.StandardOfLiving + defines.FederalLivingGap < owner.StandardOfLiving;
     }
 

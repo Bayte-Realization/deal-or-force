@@ -179,7 +179,10 @@ public partial class DealOrForceGame
     private Label FinanceMetric(HBoxContainer parent, string caption, string name, string description)
     {
         var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        panel.AddThemeStyleboxOverride("panel", ShellRowStyle(false)); parent.AddChild(panel);
+        panel.SetMeta("atlas_section_ground", "surface.raised");
+        panel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.raised"));
+        AtlasSurfaceSkin.Attach(panel, AtlasSurfaceSkin.Level.Raised, "surface.raised");
+        parent.AddChild(panel);
         var rows = PanelRows(panel, 9, 7, 3);
         rows.AddChild(Title(caption, 12, Ui.Colour("text.caption")));
         var value = Title("—", 23, Ui.Colour("text.bright"));
@@ -191,7 +194,10 @@ public partial class DealOrForceGame
 
     private VBoxContainer FinanceColumn(Control parent, string name, float ratio)
     {
-        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = ratio };
+        var column = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = ratio };
+        column.SetMeta("atlas_section_ground", "surface.inset");
+        column.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(column, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         parent.AddChild(column); return PolicyColumn(column, name, true);
     }
 

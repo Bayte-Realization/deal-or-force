@@ -135,11 +135,13 @@ public sealed partial class Campaign
     [JsonIgnore] public string SimulationFault { get; private set; } = "";
 
     /// <summary>A failed, partially executed step must not be resumed as if it succeeded.</summary>
-    public void BlockSimulation(string reason)
+    public void BlockSimulation(string reason, Exception exception = null)
     {
         SimulationFault = reason ?? "simulation error";
         IsPaused = true;
-        CrashEnvelope.Dump(this, null, reason);
+        // The exception goes into the envelope when it exists: the diagnostic snapshot quotes
+        // only the message, and a message without a stack is a bug report nobody can act on.
+        CrashEnvelope.Dump(this, exception, reason);
         MarkStrategicChange();
     }
 }

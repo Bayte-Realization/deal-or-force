@@ -20,5 +20,8 @@
   "{0} of the country holds this faith.": "Эту веру держат {0} страны.",
   "{0} of the country are this people.": "Этот народ составляют {0} страны.",
   "A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.": "Объявление против большинства стоит около {0} стабильности, с большинством — меньше; снова объявлять можно через {1} дн.",
-  "chronicle.state_identity_declared": "Государство объявляет свою идентичность: {2}."
+  "chronicle.state_identity_declared": "Государство объявляет свою идентичность: {2}.",
+  "{0} · {1} of the country": "{0} · {1} страны",
+  "The same church, the same people": "Одна церковь, один народ",
+  "A faith declared against half the country drains stability every week it stands.": "Вера, объявленная против половины страны, каждую неделю истощает стабильность, пока стоит."
 }

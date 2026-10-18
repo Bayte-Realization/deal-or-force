@@ -105,7 +105,8 @@ public partial class DealOrForceGame
         // the border being proposed reads as a proposal rather than as the front line.
         _peaceLegend = Title(
             "Striped ground is theirs and you are only standing on it · " +
-            "solid in your colour is what this treaty signs over",
+            "solid in your colour is what this treaty would sign over · " +
+            "nothing changes ownership until they accept",
             12, Ui.Colour("text.faint"));
         _peaceLegend.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceLegend);

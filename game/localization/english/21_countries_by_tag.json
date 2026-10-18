@@ -320,6 +320,7 @@
   "name.form.communism": "People's Republic of {0}",
   "name.form.fascism": "National State of {0}",
   "name.form.kingdom": "Kingdom of {0}",
+  "name.form.republic": "Republic of {0}",
   "name.form.islamic_republic": "Islamic Republic of {0}",
   "name.form.holy_state": "Holy State of {0}",
   "name.form.federation": "Federation of {0}",

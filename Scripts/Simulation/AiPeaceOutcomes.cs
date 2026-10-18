@@ -24,7 +24,7 @@ public static partial class AiStatecraft
             .Select(n => n.MapIndex).ToHashSet();
         var subject = demand.Subjugate.Length > 0 ? campaign.NationById(war.EnemyLeaderOf(nation.Id))?.MapIndex ?? 0 : 0;
         var unresolved = campaign.States.Where(s => enemies.Contains(s.NationMapIndex) && s.NationMapIndex != subject &&
-            (s.MapIndex == war.ClaimedStateMapIndex || TerritorialClaims.TitleOf(campaign, nation, s) == TerritorialTitle.Homeland))
+            StrategicWarAim(campaign, nation, war, s))
             .Select(s => s.MapIndex).ToHashSet();
         if (unresolved.Count == 0) return true;
         for (var p = 1; p <= map.ProvinceCount; p++)

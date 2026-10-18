@@ -99,8 +99,23 @@ internal static class AtlasSurfaceSkin
 
     internal static AtlasPanelFinish Attach(PanelContainer panel, Level level, string ground = "shell.background")
     {
-        var finish = new AtlasPanelFinish { Name = "AtlasMaterial", SurfaceLevel = level, Ground = ground,
-            MouseFilter = Control.MouseFilterEnum.Ignore, FocusMode = Control.FocusModeEnum.None };
+        // A ground that is not in the palette would come back magenta, and a panel ground is the
+        // whole screen: a misspelt surface takes the budget and the state-affairs rooms with it.
+        // Say so once and keep a surface the screen can be read on.
+        if (!InterfaceSkin.Has(ground))
+        {
+            var fallback = level == Level.Inset ? "surface.inset" : "shell.background";
+            GD.PushWarning($"Unknown surface token '{ground}' on a panel ground; using '{fallback}'.");
+            ground = fallback;
+        }
+        if (panel.GetNodeOrNull<AtlasPanelFinish>("AtlasMaterial") is { } existing)
+        {
+            existing.SurfaceLevel = level;
+            existing.Ground = ground;
+            existing.QueueRedraw();
+            return existing;
+        }
+        var finish = new AtlasPanelFinish { Name = "AtlasMaterial", SurfaceLevel = level, Ground = ground };
         panel.AddChild(finish);
         panel.MoveChild(finish, 0);
         return finish;
@@ -148,6 +163,7 @@ internal static class AtlasSurfaceSkin
 
     internal static StyleBoxFlat Section(string ground = "surface.inset")
     {
+        if (!InterfaceSkin.Has(ground)) ground = "surface.inset";
         var style = new StyleBoxFlat { BgColor = Ui.Colour(ground), BorderColor = Ui.Colour("surface.line_faint"),
             ShadowColor = Ui.Colour("surface.background", .35f), ShadowSize = 4, ShadowOffset = new(0, 2) };
         style.SetBorderWidthAll(1); style.SetContentMarginAll(10); style.SetCornerRadiusAll(2);
@@ -156,12 +172,25 @@ internal static class AtlasSurfaceSkin
 }
 
 /// <summary>Non-interactive material underneath content. No process loop, blur, shader or world state.</summary>
-public partial class AtlasPanelFinish : Control
+public partial class AtlasPanelFinish : Node2D
 {
     internal AtlasSurfaceSkin.Level SurfaceLevel;
     internal string Ground = "shell.background";
-    public override void _EnterTree() { InterfaceSkin.Changed += RedrawMaterial; Resized += QueueRedraw; }
-    public override void _ExitTree() { InterfaceSkin.Changed -= RedrawMaterial; Resized -= QueueRedraw; }
+    private PanelContainer _panel;
+    // A Control child is laid out INSIDE a PanelContainer's content margins. The
+    // decorative rim then runs straight through its labels. Node2D paints the full
+    // panel without participating in content layout or intercepting GUI input.
+    public override void _EnterTree()
+    {
+        _panel = GetParent() as PanelContainer;
+        InterfaceSkin.Changed += RedrawMaterial;
+        if (_panel is not null) _panel.Resized += QueueRedraw;
+    }
+    public override void _ExitTree()
+    {
+        InterfaceSkin.Changed -= RedrawMaterial;
+        if (GodotObject.IsInstanceValid(_panel)) _panel.Resized -= QueueRedraw;
+    }
     private void RedrawMaterial()
     {
         if (GetParent() is PanelContainer panel && panel.HasMeta("atlas_section_ground"))
@@ -170,14 +199,64 @@ public partial class AtlasPanelFinish : Control
     }
     public override void _Draw()
     {
-        if (Size.X <= 0 || Size.Y <= 0) return;
-        var rect = new Rect2(Vector2.Zero, Size);
+        var size = _panel?.Size ?? Vector2.Zero;
+        if (size.X <= 0 || size.Y <= 0) return;
+        var w = size.X;
+        var h = size.Y;
+        var rect = new Rect2(Vector2.Zero, size);
         DrawTextureRect(AtlasSurfaceSkin.PanelTexture(SurfaceLevel, Ground), rect, false);
         DrawTextureRect(AtlasSurfaceSkin.GrainTexture(), rect, true);
-        var light = Ui.Colour("text.body", .09f * AtlasSurfaceSkin.Relief);
-        var shadow = Ui.Colour("surface.background", .75f * AtlasSurfaceSkin.Relief);
-        DrawLine(new(0, .5f), new(Size.X, .5f), SurfaceLevel == AtlasSurfaceSkin.Level.Inset ? shadow : light);
-        DrawLine(new(.5f, 0), new(.5f, Size.Y), SurfaceLevel == AtlasSurfaceSkin.Level.Inset ? shadow : light);
-        DrawLine(new(0, Size.Y - .5f), new(Size.X, Size.Y - .5f), SurfaceLevel == AtlasSurfaceSkin.Level.Inset ? light : shadow);
+
+        var relief = AtlasSurfaceSkin.Relief;
+        var light = Ui.Colour("text.body", .11f * relief);
+        var shadow = Ui.Colour("surface.background", .82f * relief);
+        var isInset = SurfaceLevel == AtlasSurfaceSkin.Level.Inset;
+
+        // Four-sided directional bevel (top/left catch light, bottom/right sit in shadow).
+        DrawLine(new(1f, 1.5f), new(w - 1f, 1.5f), isInset ? shadow : light, 1f);
+        DrawLine(new(1.5f, 1f), new(1.5f, h - 1f), isInset ? shadow : light, 1f);
+        DrawLine(new(1f, h - 1.5f), new(w - 1f, h - 1.5f), isInset ? light : shadow, 1f);
+        DrawLine(new(w - 1.5f, 1f), new(w - 1.5f, h - 1f), isInset ? light : shadow, 1f);
+
+        if (isInset)
+        {
+            var insetBorder = Ui.Colour("surface.line", .55f);
+            DrawRect(new Rect2(.5f, .5f, w - 1f, h - 1f), insetBorder, false, 1f);
+            return;
+        }
+
+        // Architectural rim & brass crown for floating cards, dossiers, and workspaces.
+        var parentSurface = GetParent() is Node parent && parent.HasMeta("skin_panel_surface")
+            ? parent.GetMeta("skin_panel_surface").AsInt32()
+            : -1;
+        var isStrip = parentSurface == 2; // PanelSurface.CommandStrip
+        var outerBorder = Ui.Colour("shell.border", .92f);
+        var brass = Ui.Colour("button.primary_border", SurfaceLevel == AtlasSurfaceSkin.Level.Document ? .88f : .68f);
+        var innerFrame = Ui.Colour("button.primary_border", SurfaceLevel == AtlasSurfaceSkin.Level.Document ? .26f : .20f);
+
+        // 1. Crisp outer structural border around all four edges.
+        DrawRect(new Rect2(.5f, .5f, w - 1f, h - 1f), outerBorder, false, 1.5f);
+
+        // 2. Top brass crown rule.
+        var crownHeight = SurfaceLevel == AtlasSurfaceSkin.Level.Document ? 2.5f : 2f;
+        DrawRect(new Rect2(1f, 1f, w - 2f, crownHeight), brass, true);
+
+        // 3. Inner recessed mat line & corner brackets on floating cards and workspaces.
+        if (!isStrip && w >= 120f && h >= 64f)
+        {
+            DrawRect(new Rect2(3.5f, 3.5f, w - 7f, h - 7f), innerFrame, false, 1f);
+            var corner = MathF.Min(11f, MathF.Min(w, h) * 0.12f);
+            var cornerColor = Ui.Colour("button.primary_border", .65f);
+            // Top-left & top-right corner ticks
+            DrawLine(new(3.5f, 3.5f), new(3.5f + corner, 3.5f), cornerColor, 1.5f);
+            DrawLine(new(3.5f, 3.5f), new(3.5f, 3.5f + corner), cornerColor, 1.5f);
+            DrawLine(new(w - 3.5f - corner, 3.5f), new(w - 3.5f, 3.5f), cornerColor, 1.5f);
+            DrawLine(new(w - 3.5f, 3.5f), new(w - 3.5f, 3.5f + corner), cornerColor, 1.5f);
+            // Bottom-left & bottom-right corner ticks
+            DrawLine(new(3.5f, h - 3.5f), new(3.5f + corner, h - 3.5f), cornerColor, 1.5f);
+            DrawLine(new(3.5f, h - 3.5f - corner), new(3.5f, h - 3.5f), cornerColor, 1.5f);
+            DrawLine(new(w - 3.5f - corner, h - 3.5f), new(w - 3.5f, h - 3.5f), cornerColor, 1.5f);
+            DrawLine(new(w - 3.5f, h - 3.5f - corner), new(w - 3.5f, h - 3.5f), cornerColor, 1.5f);
+        }
     }
 }

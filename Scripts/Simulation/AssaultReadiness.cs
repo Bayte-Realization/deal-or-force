@@ -41,6 +41,27 @@ public static class AssaultReadiness
     {
         if (campaign is null || army is null)
             return new(false, Reason.Unavailable, 0, .16f, 0, .20f, 0);
+        // The authoritative rule lives in Rules/AssaultRules.fs. It is a pure predicate over
+        // primitives, so the C# side keeps the campaign, the clock and the fallback; if the
+        // managed rule ever cannot be loaded or throws, the identical managed path below
+        // answers instead. The experiment in Tools/GodotLanguages validated the two against
+        // each other in 624,502 cases; this bridge is the deployment of that result.
+        if (AssaultRulesHook.TryAssess(true, true,
+                army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead,
+                army.PlanActive, army.DirectOrder, army.ReadyDay, campaign.ElapsedDays,
+                army.Organisation, army.SupplyLevel,
+                campaign.Defines.AutonomousAssaultMinimumOrganisation,
+                campaign.Defines.AutonomousAssaultMinimumSupply,
+                out var assessment))
+            return assessment;
+        return AssessManaged(campaign, army);
+    }
+
+    /// <summary>The managed reference implementation, kept as the fallback and the oracle.</summary>
+    internal static AssaultAssessment AssessManaged(Campaign campaign, Army army)
+    {
+        if (campaign is null || army is null)
+            return new(false, Reason.Unavailable, 0, .16f, 0, .20f, 0);
         // C# owns the live world; the value-only F# rule owns eligibility and priority.
         var result = Rules.AssaultRules.Assess(true, true,
             army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead,

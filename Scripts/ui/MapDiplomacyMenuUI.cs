@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -69,8 +70,45 @@ public partial class DealOrForceGame
         title.ClipText = true;
         rows.AddChild(title);
 
+        // What the state is, before what can be done to it. A player opening this menu on a
+        // country they do not know should not have to open the diplomacy screen to learn it.
+        var identity = Title(Simulation.StateIdentity.Brief(_campaign, target), 10, Ui.Colour("text.muted"));
+        identity.CustomMinimumSize = new Vector2(200, 0);
+        identity.ClipText = true;
+        identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        identity.TooltipText = Ui.Tip(Simulation.StateIdentity.Brief(_campaign, target));
+        rows.AddChild(identity);
+
+        // A country the weekly reviews have counted as dying says so here, before the point
+        // of no return: the levers that could still turn it around are one screen away.
+        if (Simulation.DemographicExtinction.IsCollapsing(target))
+        {
+            var dying = Title(Simulation.Loc.Format("Dying out: {0} weeks under the survival floor.",
+                target.CollapseReviews), 10, Ui.Colour("state.negative"));
+            dying.CustomMinimumSize = new Vector2(200, 0);
+            dying.ClipText = true;
+            rows.AddChild(dying);
+        }
+
         var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
         var atWar = relation is { Stance: DiplomaticStance.AtWar };
+        if (relation is not null)
+        {
+            var opinion = relation.Opinion;
+            var relationLine = Title(Simulation.Loc.Format("{0} · {1} {2:+0;-0;0}",
+                Tr(DiplomaticVocabulary.StanceName(relation.Stance)), Tr("Opinion"), opinion),
+                10, Ui.Colour(opinion > 20 ? "state.positive" : opinion < -20 ? "state.negative" : "text.caption"));
+            relationLine.CustomMinimumSize = new Vector2(200, 0);
+            relationLine.ClipText = true;
+            rows.AddChild(relationLine);
+        }
+        if (atWar)
+        {
+            var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Opposes(player.Id, target.Id));
+            if (war is not null)
+                rows.AddChild(Title(Simulation.Loc.Format("{0} · {1} {2:0.0}",
+                    WarNames.Of(_campaign, war), Tr("War score"), war.WarScore), 10, Ui.Colour("text.body_soft")));
+        }
 
         // --- Influence ---
         AddMapDiplomacyAction(rows, Tr("Improve relations"), "INFLUENCE", ImproveDiplomacyRelations,

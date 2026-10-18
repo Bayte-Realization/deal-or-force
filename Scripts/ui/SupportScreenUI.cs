@@ -261,14 +261,7 @@ public partial class DealOrForceGame
         _openScreen = "Support";
         _sidePanel.Visible = false;
         HideMapSelection(true);
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
-        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
-        _supportLayer.Visible = true;
-        _supportLayer.MoveToFront();
+        RaiseWorkspaceLayer(_supportLayer);
         _globe.SupportOverlay = true;
         _globe.SupportCommandMode = true;
         _globe.SelectSupportFormations(_supportSelected);

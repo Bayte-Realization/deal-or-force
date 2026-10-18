@@ -83,7 +83,7 @@ static class ResponsiveHudLayoutTests
     private static readonly string[] Workspaces =
     {
         "modal.ledger", "modal.war_ledger", "modal.diplomacy", "modal.trade", "modal.production",
-        "modal.policies", "modal.deal", "modal.conflicts", "modal.research", "modal.support"
+        "modal.policies", "modal.deal", "modal.conflicts", "modal.research", "modal.doctrines", "modal.support"
     };
 
     private static void WorkspacesClearTheRail()

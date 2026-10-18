@@ -16,6 +16,8 @@ public sealed partial class Defines
     public float DealKinRegionWeight { get; set; } = 1.8f;
     public float DealHomelandRegionWeight { get; set; } = 1.5f;
     public float DealClaimRegionWeight { get; set; } = 1.2f;
+    public bool DealProtectHomelandSales { get; set; } = true;
+    public float DealHomelandSaleCultureShare { get; set; } = .5f;
 }
 
 /// <summary>
@@ -63,6 +65,7 @@ public static partial class Ultimatum
     {
         public float FromValue => FromValuation.Total;
         public float ToValue => ToValuation.Total - GrudgePenalty;
+        public bool TerritoryProtected { get; init; }
     }
 
     /// <summary>Peaceful negotiation has no border, fleet, alliance or truce prerequisite.</summary>
@@ -182,6 +185,7 @@ public static partial class Ultimatum
     {
         var assessment = AssessDeal(c, from, to, deal);
         if (!assessment.Valid || assessment.Acceptable) return 0f;
+        if (assessment.TerritoryProtected) return -1f;
         var shortfall = assessment.GrudgePenalty - assessment.ToValuation.Total;
         var needed = shortfall / CashWeight(to) + 0.01f;
         // A cheque from them back to us is cancelled first: asking less is paying more.
@@ -332,13 +336,35 @@ public static partial class Ultimatum
         var grudgeThreshold = float.IsFinite(c.Defines.DealGrudgeOpinion) ? c.Defines.DealGrudgeOpinion : -25f;
         var penalty = relation is not null && relation.Opinion <= grudgeThreshold
             ? float.IsFinite(c.Defines.DealGrudgePenalty) ? MathF.Max(0, c.Defines.DealGrudgePenalty) : 15f : 0;
-        var acceptable = theirs.Total - penalty >= 0;
+        // A bigger cheque cannot substitute for consent to sell a national heartland.
+        // Genuine territorial swaps retain the existing valuation; human recipients
+        // still choose explicitly. Culture shared by BOTH Koreas is not spare land.
+        var protectedLand = !to.IsHuman && (deal.From.Regions?.Length ?? 0) == 0 &&
+            (deal.To.Regions ?? Array.Empty<int>()).Any(id => ProtectsHomelandSale(c, to, c.States.FirstOrDefault(s => s.MapIndex == id)));
+        var acceptable = !protectedLand && theirs.Total - penalty >= 0;
         var fromCash = (float)((double)from.Treasury - deal.From.Cash + deal.To.Cash);
         var toCash = (float)((double)to.Treasury - deal.To.Cash + deal.From.Cash);
         if (deal.From.ReleaseRegions) fromCash -= Math.Max(0, fromCash) * Dismantlement.Share(c, from, deal.From.Regions);
         if (deal.To.ReleaseRegions) toCash -= Math.Max(0, toCash) * Dismantlement.Share(c, to, deal.To.Regions);
-        return new(true, acceptable ? "" : DealRefusalNote(penalty - theirs.Total, penalty > 0), acceptable,
-            ours, theirs, penalty, fromCash, toCash);
+        return new(true, protectedLand ? Loc.Get("They will not sell their national heartland for money or treaty promises.") :
+            acceptable ? "" : DealRefusalNote(penalty - theirs.Total, penalty > 0), acceptable,
+            ours, theirs, penalty, fromCash, toCash) { TerritoryProtected = protectedLand };
+    }
+
+    internal static bool ProtectsHomelandSale(Campaign c, Nation owner, ScenarioState state)
+    {
+        if (c is null || owner is null || state is null || !c.Defines.DealProtectHomelandSales ||
+            state.NationMapIndex != owner.MapIndex || TerritorialClaims.TitleOf(c, owner, state) != TerritorialTitle.Homeland)
+            return false;
+        long total = 0, primary = 0;
+        foreach (var group in state.PopulationGroups)
+        {
+            var people = Math.Max(0, group.Size); total += people;
+            if (DemographyCatalog.IsPrimary(owner.Tag, group.Culture)) primary += people;
+        }
+        var threshold = float.IsFinite(c.Defines.DealHomelandSaleCultureShare)
+            ? Math.Clamp(c.Defines.DealHomelandSaleCultureShare, .01f, 1f) : .5f;
+        return total > 0 && primary / (double)total >= threshold;
     }
 
     /// <summary>

@@ -46,5 +46,40 @@
     "trigger": { "min_political_points": 8 },
     "ai_will_do": "ai_push_the_reform",
     "effects": { "political_points": -8, "army_experience": 6 }
+  },
+
+  // Опыт тратится не только на статьи устава: его можно положить в курс, который делает армию
+  // сильнее здесь и сейчас, ценой того, что на устав его потом не хватит. Это и есть выбор.
+  "intensive_field_course": {
+    "name": "Intensive field course",
+    "description": "Put the army's experience back into the army: a course under canvas that drills what it learned into the men who will use it.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0009,
+    "unavailable": "The army has not earned the experience this course spends",
+    "trigger": { "min_army_experience": 25 },
+    "ai_will_do": "ai_intensive_field_course",
+    "effects": { "army_experience": -25, "add_modifier": { "intensive_field_course": 240 } }
+  },
+
+  "airmanship_week": {
+    "name": "Airmanship week",
+    "description": "Spend what the wings have learned in the air on a week that teaches it on purpose: instruments, cloud, and the long way home.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The air service has not earned the hours this week spends",
+    "trigger": { "min_air_experience": 18 },
+    "ai_will_do": "ai_airmanship_week",
+    "effects": { "air_experience": -18, "add_modifier": { "airmanship_week": 180 } }
+  },
+
+  "the_long_cruise": {
+    "name": "The long cruise",
+    "description": "Send the fleet out for a season at sea rather than an afternoon at anchor, paid for in the experience the sea has already given it.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The fleet has not earned the hours this cruise spends",
+    "trigger": { "min_naval_experience": 18 },
+    "ai_will_do": "ai_the_long_cruise",
+    "effects": { "naval_experience": -18, "add_modifier": { "long_cruise": 180 } }
   }
 }

@@ -239,6 +239,16 @@ public static class OpinionSystem
                 Loc.Get(affinity >= 0f ? "Politics we recognise" : "Politics we do not share"), affinity);
         }
 
+        // What the two states say they are, over what their peoples are: one declared faith
+        // or one declared people, read from both countries as they stand. Continuous, like
+        // the politics above - a declaration made yesterday is already in today's number.
+        var identity = StateIdentity.Affinity(campaign, relation.A, relation.B);
+        if (identity >= 0.05f)
+        {
+            total += identity;
+            relation.OpinionDrivers.Add(Loc.Get("The same church, the same people"), identity);
+        }
+
         var memory = SocialMemory.OpinionEffect(campaign, relation);
         if (MathF.Abs(memory) >= 0.05f)
         {

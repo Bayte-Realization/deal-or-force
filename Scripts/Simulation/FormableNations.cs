@@ -26,6 +26,8 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     public float MinimumReligionShare { get; init; } = .5f;
     /// <summary>For a restoration (FormableRestorations), the vanished country it brings back.</summary>
     public string Restores { get; init; } = "";
+    /// <summary>Legacy duplicate identity: retained for saves, omitted from new catalogues.</summary>
+    public string AliasOf { get; init; } = "";
     /// <summary>Regions by id, for a state whose ground the scenario writes under other
     /// countries' tags - a Kurdistan of Erbil, Duhok and Sulaymaniyah.</summary>
     public string[] RequiredRegions { get; init; } = Array.Empty<string>();
@@ -41,11 +43,14 @@ public sealed record FormationStatus(FormationRequirement[] Requirements, int Ow
 public static class FormableNations
 {
     private static readonly Dictionary<string, FormableNation> Definitions = new(StringComparer.Ordinal);
-    public static IEnumerable<FormableNation> All => Definitions.Values.OrderBy(d => d.Id, StringComparer.Ordinal);
+    private static IReadOnlyList<FormableNation> _visible;
+    public static IEnumerable<FormableNation> All => _visible ??= Array.AsReadOnly(Definitions.Values
+        .Where(d => d.AliasOf.Length == 0).OrderBy(d => d.Id, StringComparer.Ordinal).ToArray());
     static FormableNations() => ResetCatalog();
     public static void ResetCatalog()
     {
         Definitions.Clear();
+        _visible = null;
         foreach (var doc in GameDataLoader.DataDocuments("common", "formable_nations"))
             using (doc) Merge(doc.RootElement, null);
     }
@@ -60,7 +65,8 @@ public static class FormableNations
     public static IEnumerable<FormableNation> AvailableIn(Campaign campaign) =>
         All.Concat(FormableRestorations.In(campaign));
     public static bool CompatibleProclamation(Nation nation, FormableNation definition) =>
-        nation is not null && definition is not null && !nation.FormedNationHistory.Contains(definition.Id) &&
+        nation is not null && definition is not null && definition.AliasOf.Length == 0 &&
+        !nation.FormedNationHistory.Contains(definition.Id) &&
         (string.IsNullOrEmpty(nation.FormedNationId) || definition.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase));
     public static bool Eligible(Nation nation, FormableNation definition) => Eligible(null, nation, definition);
 
@@ -94,7 +100,11 @@ public static class FormableNations
         }
         return false;
     }
-    public static void Merge(JsonElement root, List<string> errors) => MergeInto(root, errors, Definitions);
+    public static void Merge(JsonElement root, List<string> errors)
+    {
+        _visible = null;
+        MergeInto(root, errors, Definitions);
+    }
 
     /// <summary>The declared faiths/groups form one union: no resident is counted twice.
     /// Only current, owned-state population groups count. Missing religion data fails closed;
@@ -168,6 +178,7 @@ public static class FormableNations
                     MinimumReligionShare = Number("minimum_religion_share", old?.MinimumReligionShare ?? .5f),
                     RequiredRegions = Ids("required_regions", old?.RequiredRegions),
                     Supersedes = Ids("supersedes", old?.Supersedes),
+                    AliasOf = Text("alias_of", old?.AliasOf ?? ""),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
                         ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
                     SubjectIntegration = e.TryGetProperty("subject_integration", out var integration)
@@ -182,6 +193,7 @@ public static class FormableNations
                     throw new FormatException("names an ideology nothing declares");
                 if (d.Supersedes.Contains(d.Id, StringComparer.OrdinalIgnoreCase))
                     throw new FormatException("a state cannot supersede itself");
+                if (d.AliasOf == d.Id) throw new FormatException("a state cannot alias itself");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
                 if (d.RequiredReligions.Any(id => DemographyCatalog.Religion(id) is null))
@@ -204,8 +216,9 @@ public static class FormableNations
         {
             new(Loc.Get("Eligible founding country"), Eligible(campaign, nation, d)),
             new(Loc.Get("This proclamation has not already been made"), !nation.FormedNationHistory.Contains(d.Id)),
-            new(Loc.Get("Compatible previous proclamation"), string.IsNullOrEmpty(nation.FormedNationId) ||
-                d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase)),
+            new(Loc.Get("Compatible previous proclamation"), d.AliasOf.Length == 0 &&
+                (string.IsNullOrEmpty(nation.FormedNationId) ||
+                d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase))),
             new(Loc.Get("At peace"), !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))),
             new(Loc.Format("Stability: {0:P0} / {1:P0}", nation.Stability, d.MinimumStability), nation.Stability >= d.MinimumStability),
             new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null)
@@ -278,6 +291,9 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationHistory.Add(d.Id);
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
+        // How well the proclaimed state holds together starts here: one people is one country, and
+        // every people after that is a promise to be kept (UnionCohesion).
+        nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);
         nation.Name = d.Name;
         // A restored country is that country again: its people are the state's people, so the
         // land it took back is home rather than a province of strangers.

@@ -251,13 +251,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Trade";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
-        _tradeScreenLayer.Visible = true;
-        _tradeScreenLayer.MoveToFront();
+        RaiseWorkspaceLayer(_tradeScreenLayer);
         RefreshTradeScreen();
         UpdateScreenButtons();
     }

@@ -48,7 +48,7 @@ public sealed partial class Nation
 /// </summary>
 public static class BrainDrain
 {
-    public static float CalculatePressure(Campaign c, Nation n, ScenarioState s, bool atWar)
+    public static float CalculatePressure(Campaign c, Nation n, ScenarioState s, bool atWar, Breakdown explain = null)
     {
         if (c is null || n is null || s is null || s.Unclaimed || s.Population <= 0) return 0f;
         var d = c.Defines;
@@ -57,29 +57,61 @@ public static class BrainDrain
         var lowStability = MathF.Max(0f, d.BrainDrainStabilityThreshold - s.Stability);
         var radicalism = MathF.Max(0f, s.Radicalism - 0.30f);
         var unemployment = MathF.Max(0f, 0.88f - s.EmploymentTarget);
+        var politicalAlienation = s.PoliticalDivergence >= 0.45f && s.GovernmentApproval >= 0f && s.GovernmentApproval < 0.40f
+            ? (s.PoliticalDivergence - 0.40f) * 0.22f
+            : 0f;
+        var identityAlienation = StateIdentity.RegionAlienation(c, n, s) * 0.18f;
+        var inflationPush = n.Inflation > 0.12f ? M.Clamp(n.Inflation - 0.12f, 0f, 0.40f) * 0.25f : 0f;
+        var youthBulgePush = s.StandardOfLiving < 0.42f && s.Literacy < 0.72f && stress > 0.15f ? 0.12f : 0f;
 
-        var push = (atWar ? 0.18f : 0f)
-                   + damage * 0.45f
-                   + stress * 0.30f
-                   + lowStability * 0.65f
-                   + radicalism * 0.32f
-                   + unemployment * 0.35f;
+        var warPush = atWar ? 0.18f : 0f;
+        var damagePush = damage * 0.45f;
+        var stressPush = stress * 0.30f;
+        var stabilityPush = lowStability * 0.65f;
+        var radicalismPush = radicalism * 0.32f;
+        var jobPush = unemployment * 0.35f;
+
+        var push = warPush + damagePush + stressPush + stabilityPush + radicalismPush + jobPush +
+                   politicalAlienation + identityAlienation + inflationPush + youthBulgePush;
 
         var universities = s.Buildings.GetValueOrDefault(BuildingKind.University);
         var labs = s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab);
         var highLiving = MathF.Max(0f, s.StandardOfLiving - d.BrainDrainLivingThreshold);
         var retentionSpirit = ModifierSystem.Has(n, "talent_retention") ? 0.22f : 0f;
+        var borderControls = ModifierSystem.Has(n, "strict_border_controls") ? 0.18f : 0f;
         var educationFocus = n.GovernmentFocus == GovernmentFocus.SocialCohesion ? 0.05f : 0f;
 
-        var anchor = highLiving * 0.55f
-                     + MathF.Min(0.24f, universities * 0.04f + labs * 0.06f)
-                     + retentionSpirit
-                     + educationFocus;
+        var livingAnchor = highLiving * 0.55f;
+        var campusAnchor = MathF.Min(0.24f, universities * 0.04f + labs * 0.06f);
+        var anchor = livingAnchor + campusAnchor + retentionSpirit + borderControls + educationFocus;
 
         var net = MathF.Max(0f, push - anchor);
         // Educated specialists have the means and qualifications to relocate fastest.
-        var mobility = 0.40f + 0.60f * M.Clamp01(s.Literacy);
-        return M.Clamp01(net * mobility);
+        var mobility = (0.40f + 0.60f * M.Clamp01(s.Literacy)) * (ModifierSystem.Has(n, "strict_border_controls") ? 0.55f : 1f);
+        var result = M.Clamp01(net * mobility);
+
+        if (explain is not null)
+        {
+            explain.Begin(Loc.Get("Emigration & brain-drain pressure"), "share");
+            if (warPush > 0f) explain.Add(Loc.Get("Active war"), warPush * mobility);
+            if (damagePush > 0.0005f) explain.Add(Loc.Get("Local war damage"), damagePush * mobility);
+            if (stressPush > 0.0005f) explain.Add(Loc.Get("Household livelihood stress"), stressPush * mobility);
+            if (stabilityPush > 0.0005f) explain.Add(Loc.Get("Low regional stability"), stabilityPush * mobility);
+            if (radicalismPush > 0.0005f) explain.Add(Loc.Get("Social radicalism"), radicalismPush * mobility);
+            if (jobPush > 0.0005f) explain.Add(Loc.Get("Unemployment"), jobPush * mobility);
+            if (politicalAlienation > 0.0005f) explain.Add(Loc.Get("Political cohort rejection"), politicalAlienation * mobility);
+            if (identityAlienation > 0.0005f) explain.Add(Loc.Get("State identity alienation"), identityAlienation * mobility);
+            if (inflationPush > 0.0005f) explain.Add(Loc.Get("Runaway inflation"), inflationPush * mobility);
+            if (youthBulgePush > 0.0005f) explain.Add(Loc.Get("Demographic overcrowding pressure"), youthBulgePush * mobility);
+            if (livingAnchor > 0.0005f) explain.Add(Loc.Get("High standard of living (retention)"), -livingAnchor * mobility);
+            if (campusAnchor > 0.0005f) explain.Add(Loc.Get("Universities & research laboratories"), -campusAnchor * mobility);
+            if (retentionSpirit > 0.0005f) explain.Add(Loc.Get("Talent retention programme"), -retentionSpirit * mobility);
+            if (borderControls > 0.0005f) explain.Add(Loc.Get("Strict border controls"), -borderControls * mobility);
+            if (educationFocus > 0.0005f) explain.Add(Loc.Get("Social cohesion focus"), -educationFocus * mobility);
+            explain.Settle(result, Loc.Get("Mobility & bounds"));
+        }
+
+        return result;
     }
 
     public static Nation BestDestination(Campaign c, Nation source, HashSet<int> atWarNations)
@@ -87,12 +119,14 @@ public static class BrainDrain
         if (c is null || source is null) return null;
         Nation best = null;
         var bestScore = 0.12f; // Minimum pull threshold required to attract cross-border migrants.
+        var sourcePrimary = DemographyCatalog.PrimaryCulture(source.Tag);
 
         for (var i = 0; i < c.Nations.Count; i++)
         {
             var candidate = c.Nations[i];
             if (candidate.Id == source.Id || candidate.Movement is not null || candidate.Population <= 0) continue;
             if (atWarNations.Contains(candidate.Id)) continue;
+            if (ModifierSystem.Has(candidate, "strict_border_controls")) continue;
             if (candidate.Stability < 0.52f || candidate.StandardOfLiving <= source.StandardOfLiving + 0.05f) continue;
 
             var states = c.StatesOf(candidate);
@@ -107,8 +141,12 @@ public static class BrainDrain
             var sameContinent = string.Equals(candidate.Continent, source.Continent, StringComparison.OrdinalIgnoreCase) ? 0.18f : 0f;
             var friendly = rel is not null && rel.Opinion > 15f ? 0.12f : 0f;
             var productivityBonus = M.Clamp(candidate.Productivity - 1f, -0.2f, 0.5f) * 0.25f;
+            var kinship = StateIdentity.ShareDeclaredFaith(source, candidate) ||
+                          (!string.IsNullOrEmpty(sourcePrimary) && DemographyCatalog.IsPrimary(candidate.Tag, sourcePrimary))
+                ? 0.16f : 0f;
+            var openDoors = ModifierSystem.Has(candidate, "open_migration_doors") ? 0.35f : 0f;
 
-            var score = livingGap * 1.35f + stabilityBonus + tradeLink + sameContinent + friendly + productivityBonus;
+            var score = livingGap * 1.35f + stabilityBonus + tradeLink + sameContinent + friendly + productivityBonus + kinship + openDoors;
             if (score > bestScore)
             {
                 bestScore = score;
@@ -207,7 +245,8 @@ public static class BrainDrain
                 weightedPressure += st.BrainDrainPressure * st.Population;
                 if (st.BrainDrainPressure < 0.08f || st.Population <= 5_000) continue;
 
-                var moved = (long)Math.Round(st.Population * (double)st.BrainDrainPressure * maxWeeklyShare);
+                var doorMultiplier = ModifierSystem.Has(destNation, "open_migration_doors") ? 1.65d : 1.0d;
+                var moved = (long)Math.Round(st.Population * (double)st.BrainDrainPressure * maxWeeklyShare * doorMultiplier);
                 moved = Math.Clamp(moved, 0L, st.Population / 50L);
                 if (moved <= 0) continue;
 

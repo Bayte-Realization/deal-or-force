@@ -87,8 +87,18 @@ public partial class DealOrForceGame
         var share = assessment.ShareFor(playerAttacks);
         var tone = !assessment.Known ? "text.muted" : share > .55f ? "state.positive" :
             share < .45f ? "state.negative" : "state.warning";
+        var heroPanel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        heroPanel.SetMeta("atlas_section_ground", "surface.inset");
+        heroPanel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(heroPanel, AtlasSurfaceSkin.Level.Raised, "surface.inset");
+        _battleDetailControls.AddChild(heroPanel);
+
+        var heroBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        heroBox.AddThemeConstantOverride("separation", 4);
+        heroPanel.AddChild(heroBox);
+
         var hero = new HBoxContainer();
-        _battleDetailControls.AddChild(hero);
+        heroBox.AddChild(hero);
         var icon = Symbol("battle", 26, tone);
         if (icon is not null) hero.AddChild(icon);
         var headline = BattleText(battle.Ended ? Loc.Format("Winner: {0}",
@@ -105,10 +115,10 @@ public partial class DealOrForceGame
             caption.Name = "BattleAssessment";
             caption.TooltipText = Ui.Tip(Tr(BattleBalanceExplanation));
             caption.MouseFilter = MouseFilterEnum.Stop;
-            _battleDetailControls.AddChild(caption);
+            heroBox.AddChild(caption);
             var balance = BattleGauge(assessment.Known ? share : .5f, tone, "BattleEndurance");
             balance.TooltipText = caption.TooltipText;
-            _battleDetailControls.AddChild(balance);
+            heroBox.AddChild(balance);
         }
         var sideRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         sideRow.AddThemeConstantOverride("separation", 12);
@@ -164,10 +174,20 @@ public partial class DealOrForceGame
 
     private void AddBattleSide(HBoxContainer parent, LandBattle battle, bool attacking, Nation nation, List<Army> armies)
     {
-        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1,
-            CustomMinimumSize = Vector2.Zero };
+        var sidePanel = new PanelContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1,
+            CustomMinimumSize = Vector2.Zero
+        };
+        sidePanel.SetMeta("atlas_section_ground", "surface.inset");
+        sidePanel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(sidePanel, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        parent.AddChild(sidePanel);
+
+        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         column.AddThemeConstantOverride("separation", 5);
-        parent.AddChild(column);
+        sidePanel.AddChild(column);
         column.AddChild(BattleText(Tr(attacking ? "ATTACKER" : "DEFENDER"), 11, "text.caption"));
         var name = BattleText(nation?.DisplayName ?? "?", 15, "text.accent");
         column.AddChild(name);

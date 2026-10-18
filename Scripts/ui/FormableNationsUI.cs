@@ -48,6 +48,32 @@ public partial class DealOrForceGame
             cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
                 nation.FormedNationDay), 18, Ui.Colour("text.accent")));
             cards.AddChild(Title("Your state can later grow into a larger one.", 13, Ui.Colour("text.body_soft")));
+            // How well it holds together. A proclaimed state is not a fact of nature - it is a thing
+            // a government does every week - and this is the number to watch to keep it
+            // (UnionCohesion). Shown only for a country that has proclaimed something, which is the
+            // only country the number means anything for.
+            var cohesion = nation.UnionCohesion;
+            var floor = _campaign.Defines.UnionCohesionFloor;
+            var mood = cohesion >= 0.6f ? "The union is holding"
+                : cohesion >= floor ? "The union is cracking"
+                : "The union is coming apart";
+            var caption = Title(Simulation.Loc.Format("{0} · {1}", Simulation.Loc.Get(mood), Fmt.Percent(cohesion)),
+                13, Ui.Colour(cohesion >= 0.6f ? "state.positive" : "state.warning"));
+            caption.Name = "UnionCohesionCaption";
+            caption.TooltipText = Ui.Tip(Simulation.Loc.Get(
+                "War, instability and radicalism wear a union down; a quiet, stable year puts it back together. Below the floor a region leaves, and the rest of the claim stays yours to pick up again."));
+            cards.AddChild(caption);
+            var bar = new ProgressBar
+            {
+                Name = "UnionCohesionBar", MinValue = 0, MaxValue = 100, Value = cohesion * 100,
+                ShowPercentage = false, CustomMinimumSize = new Vector2(0, 6)
+            };
+            bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.overlay") });
+            bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(cohesion >= 0.6f ? "state.positive" : "state.warning")
+            });
+            cards.AddChild(bar);
         }
         var term = _formationSearch.Trim();
         var definitions = FormableNations.AvailableIn(_campaign).Where(d => (_showAllFormables || FormableNations.Eligible(_campaign, nation, d)) &&

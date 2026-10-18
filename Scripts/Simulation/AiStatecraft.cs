@@ -381,6 +381,9 @@ public static partial class AiStatecraft
             if (relation.Stance == DiplomaticStance.Allied)
                 OpinionSystem.Remember(campaign, relation, "alliance");
             else OpinionSystem.Forget(campaign, relation, "alliance");
+            if (campaign.FeatureEnabled("state_identity") && StateIdentity.ShareDeclaredFaith(nation, other))
+                OpinionSystem.Remember(campaign, relation, "shared_state_faith");
+            else OpinionSystem.Forget(campaign, relation, "shared_state_faith");
 
             var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / M.Max(0.01f, Strength(campaign, nation));
             var fear = M.Clamp(strength - 1f, 0f, 2f);
@@ -531,8 +534,10 @@ public static partial class AiStatecraft
     ///
     /// A decision with no score declared is never taken. That is deliberate: an AI that
     /// takes anything a modder forgot to weigh is worse than one that waits to be told.
+    ///
+    /// This is the cabinet's monthly sitting, including for a player who handed it over
+    /// (Delegation).
     /// </summary>
-    /// <summary>The cabinet's monthly sitting, for a player who handed it over (Delegation).</summary>
     public static void RunTheCabinet(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return;
@@ -578,7 +583,7 @@ public static partial class AiStatecraft
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
         if (!fiscal.CanSpend)
         {
-            if (fiscal.Reason != AiFiscalReason.ShortRunway || nation.Treasury < nation.Gdp * defines.AiTreasuryFloor)
+            if (fiscal.Reason != AiFiscalReason.ShortRunway || nation.Treasury < nation.Gdp * defines.AiTreasuryFloor * 0.5f)
             {
                 Count("war_fiscal_" + fiscal.Reason);
                 return;
@@ -629,6 +634,12 @@ public static partial class AiStatecraft
         }
         if (target is null || bestJudgement <= 0f)
         {
+            // Counted, because this is where the pair-level `wanted` becomes a nation-level
+            // nothing: a country can judge several neighbours worth fighting and still leave the
+            // loop with no target it would rather have than its current one. Without this line
+            // the per-pair and per-nation counts cannot be reconciled at all, and "the AI wants
+            // 104 wars and declares 2" reads as cowardice when part of it is arithmetic.
+            Count("no_target");
             ClearWarPlan(nation);
             return;
         }
@@ -636,7 +647,14 @@ public static partial class AiStatecraft
         // Deal or force: before a war it has no reason it could give for, a government asks
         // for what it wants. A neighbour that cannot face it hands the region over; one that
         // refuses has handed it the reason (Statecraft.CasusBelli, "ultimatum_refusal").
-        if (TryUltimatumFirst(campaign, nation, target)) return;
+        if (TryUltimatumFirst(campaign, nation, target))
+        {
+            // Not a death - a different act on the same day. Counted so the funnel closes: a
+            // nation that asked is a nation that has not yet been refused, and its war is still
+            // coming, with a reason attached.
+            Count("asked_before_war");
+            return;
+        }
 
         // And no war without a reason a government could give. China looked at Mongolia, an
         // army a two-hundredth of its own and nobody behind it, and went in in the first year:
@@ -691,7 +709,13 @@ public static partial class AiStatecraft
         // doctrine's aggression multiplies the chance, so a cautious state waits for a better
         // hand and a reckless one acts on a worse one. Everything else - the cause, the
         // readiness, the reach and the ultimatum - still has to be in place before this line.
-        if (roll > defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression) return;
+        //
+        // Counted, because it was the one gate in the funnel with no tally, and the gap it
+        // leaves is not small: a year reports wanted=104 against declared=2, and without this
+        // line the difference cannot be attributed between the die, PreparationComplete and
+        // the plan book - which is precisely the question AI-05 asks first.
+        if (roll > defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression)
+        { Count("rolled_down"); return; }
 
         // A country that has been preparing for this one goes sooner; the preparation is the
         // point of having made the plan.
@@ -890,8 +914,10 @@ public static partial class AiStatecraft
         if (!decisive && Reintegration.Reclaiming(campaign, war, nation.Id)) return;
         if (!decisive)
         {
-            WriteDemand(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
-            ConsiderSubjugation(campaign, nation, war, ledger, demand, ledger.Budget * defines.AiPeaceBudgetShare);
+            var treatyBudget = war.Justification is "irredentism" or "reconquest"
+                ? ledger.Budget : ledger.Budget * defines.AiPeaceBudgetShare;
+            WriteDemand(campaign, nation, war, ledger, demand, treatyBudget);
+            ConsiderSubjugation(campaign, nation, war, ledger, demand, treatyBudget);
         }
 
         if (demand.Provinces.Count == 0 && demand.Subjugate.Length == 0)
@@ -909,6 +935,7 @@ public static partial class AiStatecraft
             return;
         }
 
+        if (!decisive && ShouldPressWarAim(campaign, nation, war, demand)) return;
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
     }
 
@@ -1088,10 +1115,10 @@ public static partial class AiStatecraft
     /// <summary>
     /// What a country is worth in a fight: the divisions it has, weighted by what state
     /// they are in, plus what its economy could raise if the war lasted.
-    /// </summary>
-    /// <summary>
-    /// The same figure, for the parts of statecraft that are not the AI's own decisions -
-    /// whether an ally can afford to honour a promise, most of all.
+    ///
+    /// Not only the AI's own decisions read it - whether an ally can afford to honour a
+    /// promise is the same figure, and answering that with a different yardstick is how a
+    /// guarantee starts meaning two things at once.
     /// </summary>
     public static float StrengthOf(Campaign campaign, Nation nation)
     {

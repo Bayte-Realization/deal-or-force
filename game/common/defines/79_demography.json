@@ -1,0 +1,22 @@
+{
+  "Features": {
+    "demographic_cycle": true
+  },
+  // Возрастная структура: с чего начинается регион и как быстро люди взрослеют и стареют.
+  "DemographyYoungShareDefault": 0.30,
+  "DemographyOldShareDefault": 0.09,
+  "DemographyMaturationAnnual": 0.055,
+  "DemographyAgeingAnnual": 0.018,
+  // Обратные связи: рождаемость относительно молодой доли, смертность относительно старой.
+  "DemographyReferenceYoungShare": 0.28,
+  "DemographyFertilityYoungWeight": 1.0,
+  "DemographyReferenceOldShare": 0.10,
+  "DemographyMortalityOldWeight": 1.4,
+  // Старение как цена: сколько теряет страна из-за преклонного населения.
+  "DemographySenescenceDeathAnnual": 0.22,
+  "DemographySenescenceOutputAnnual": 0.10,
+  // Миграция: доля притока, считающаяся наводнением, и скорость ассимиляции меньшинств.
+  "DemographyFloodShare": 0.012,
+  "DemographyAssimilationAnnual": 0.006,
+  "DemographyAgeStructureEnabled": true
+}

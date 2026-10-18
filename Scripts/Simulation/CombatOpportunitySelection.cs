@@ -141,10 +141,12 @@ public static partial class Warfare
         foreach (var province in topology.Neighbors[target])
             foreach (var other in InProvince(province))
             {
-                if (!WarCoalition.SameSide(war, other.NationId, army.NationId) || other.InBattle || other.IsMoving || !other.PlanActive) continue;
-                if (other.OrderKind is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)) continue;
+                if (!WarCoalition.SameSide(war, other.NationId, army.NationId) || other.InBattle || other.IsMoving) continue;
                 if (other.ReadyDay > campaign.ElapsedDays) continue;
-                power += other.Power;
+                if (other.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead && other.PlanActive)
+                    power += other.Power;
+                else if (other.OrderKind is ArmyOrder.DefendFront)
+                    power += other.Power * 0.5f;
             }
         return MathF.Max(power, army.Power);
     }

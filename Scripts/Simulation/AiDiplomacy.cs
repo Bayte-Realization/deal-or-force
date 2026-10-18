@@ -25,6 +25,7 @@ public sealed partial class Defines
 public static partial class AiStatecraft
 {
     private static readonly List<Nation> FriendlyCandidates = new();
+    private static readonly HashSet<int> TouchingRegions = new();
 
     /// <summary>
     /// Which land provinces each country owns, and which region a map index names - built once
@@ -46,19 +47,22 @@ public static partial class AiStatecraft
     private static Dictionary<int, int[]> _ownedProvinces;
     private static Dictionary<int, ScenarioState> _stateByMapIndex;
     private static Campaign _geographyCampaign;
-    private static int _geographyDay = int.MinValue;
+    private static int _geographyWeek = int.MinValue;
     private static int _geographyStates = -1;
 
     private static void EnsureGeography(Campaign campaign)
     {
-        // Keyed on the campaign, the day and how many regions the world has. The day is in the
-        // key because a border can move without the region list changing - a region sold from
-        // one country to another leaves the count alone - and ownership is what this table is.
-        // One rebuild a day costs about half a millisecond and keeps it honest.
-        if (ReferenceEquals(_geographyCampaign, campaign) && _geographyDay == campaign.ElapsedDays &&
+        // Keyed on the campaign, the week and how many regions the world has. Ownership can
+        // move without the region count changing - a region sold from one country to another
+        // leaves the count alone - and a week's staleness only ever costs this optional
+        // purchase one week's delay. The old day key rebuilt a 35,000 province dictionary
+        // and its owner arrays every morning even when nothing had moved; the same table
+        // answers all week, and every later gate asks fresh who owns the region.
+        var week = campaign.ElapsedDays / 7;
+        if (ReferenceEquals(_geographyCampaign, campaign) && _geographyWeek == week &&
             _geographyStates == campaign.States.Count) return;
         _geographyCampaign = campaign;
-        _geographyDay = campaign.ElapsedDays;
+        _geographyWeek = week;
         _geographyStates = campaign.States.Count;
         _stateByMapIndex = new Dictionary<int, ScenarioState>(campaign.States.Count);
         foreach (var state in campaign.States) _stateByMapIndex[state.MapIndex] = state;
@@ -191,7 +195,9 @@ public static partial class AiStatecraft
         if (DemographyCatalog.PrimarySet(buyer.Tag) is not { Count: > 0 }) return false;
         EnsureGeography(campaign);
         var map = campaign.ProvinceMap;
-        var touching = new HashSet<int>();
+        // Instance state, reused: this runs for every country with a kindred border, and a
+        // fresh HashSet per call was pure garbage for an answer that is consumed immediately.
+        TouchingRegions.Clear();
         // Only our own ground, and only its edges. The old walk of every province in the world
         // is gone; what is left is the same question asked of the same provinces.
         if (!_ownedProvinces.TryGetValue(buyer.MapIndex, out var ours)) return false;
@@ -201,15 +207,15 @@ public static partial class AiStatecraft
             {
                 if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
                 if (map.ProvinceToNation[next] == (ushort)buyer.MapIndex) continue;
-                touching.Add(map.ProvinceToState[next]);
+                TouchingRegions.Add(map.ProvinceToState[next]);
             }
         }
-        if (touching.Count == 0) return false;
+        if (TouchingRegions.Count == 0) return false;
 
         ScenarioState best = null;
         Nation seller = null;
         var bestShare = campaign.Defines.AiKindredShare;
-        foreach (var region in touching)
+        foreach (var region in TouchingRegions)
         {
             if (!_stateByMapIndex.TryGetValue(region, out var state)) continue;
             if (state is null || state.Population <= 0 || state.NationMapIndex == buyer.MapIndex) continue;
@@ -219,6 +225,7 @@ public static partial class AiStatecraft
             if (owner is null || owner.Id == buyer.Id || owner.Movement is not null) continue;
             if (state.MapIndex == owner.CapitalStateMapIndex) continue;
             if (CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;
+            if (!owner.IsHuman && Ultimatum.ProtectsHomelandSale(campaign, owner, state)) continue;
             var key = "kindred/" + owner.Id;
             if (buyer.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) continue;
             long ourPeople = 0;

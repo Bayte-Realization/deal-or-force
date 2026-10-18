@@ -101,6 +101,16 @@ public static class InterfaceSkin
         ("surface.inset",       "#172635"),
         ("surface.line",        "#50677d"),
         ("surface.line_faint",  "#33455688"),
+        // Named by screens written after this list, and missing from it. An unknown token comes
+        // back magenta on purpose, but on a panel *ground* that is not a wrong pixel: the whole
+        // full-screen workspace is filled with it, which is how the budget and the state-affairs
+        // rooms came back with a pink edge nobody asked for. `surface.base` is the ground of those
+        // workspaces, `surface.raised` a card lifted off it, and `surface.panel` the neutral fill
+        // the territory preview asks for. A ground that is still misspelt is now caught by
+        // AtlasSurfaceSkin.Attach rather than shown.
+        ("surface.base",        "#131f2c"),
+        ("surface.raised",      "#1b2b3a"),
+        ("surface.panel",       "#131f2c"),
         ("brand.paper",         "#e9e4d9"),
 
         // Buttons
@@ -346,6 +356,7 @@ public static class InterfaceSkin
         // orders are given looking at the bases and their reach, so the map stays in view.
         ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 712f, -60f)),
         ("modal.research",     new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
+        ("modal.doctrines",    new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in
         // 22_multiplayer.json and 24_workshop.json and never given a compiled default - so

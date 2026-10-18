@@ -388,9 +388,76 @@ public sealed partial class GlobePresentation
         pixels[write + 3] = (byte)Mathf.RoundToInt(color.A * 255f);
     }
 
+    private int _militaryPresentationFingerprint = int.MinValue;
+
+    /// <summary>
+    /// What the counters look like this pass, not what they are.
+    ///
+    /// The expensive half of the pass writes Sprite3D textures, Label3D colours and node
+    /// metadata for every counter. Those only change when a formation changes side of a
+    /// threshold, joins a battle, starts marching, or the selection/intel changes. Hashing
+    /// the same facts first lets an idle map skip the writes entirely; the battle markers
+    /// still move with the camera, because their placement is a separate question.
+    /// </summary>
+    private int MilitaryPresentationFingerprint()
+    {
+        var hash = new HashCode();
+        hash.Add(_flatMap);
+        hash.Add(_flatStrategicCounters);
+        hash.Add(_militaryMarkersEnabled);
+        hash.Add(_campaign.MapRevision);
+        foreach (var id in _selectedArmyIds) hash.Add(id);
+        foreach (var cachedMarker in _armyStacks.Values)
+        {
+            var stack = cachedMarker.DisplayStack.Count > 0 ? cachedMarker.DisplayStack : cachedMarker.Stack;
+            hash.Add(cachedMarker.NationId);
+            hash.Add(cachedMarker.ConditionKey);
+            hash.Add(stack.Count);
+            var anySelected = false;
+            var anyBattle = false;
+            var anyMoving = false;
+            var cutOff = false;
+            var organisationSum = 0f;
+            var planningSum = 0f;
+            var supplySum = 0f;
+            foreach (var division in stack)
+            {
+                if (_selectedArmyIds.Contains(division.Id)) anySelected = true;
+                if (division.InBattle) anyBattle = true;
+                if (division.IsMoving) anyMoving = true;
+                if (division.CutOff) cutOff = true;
+                organisationSum += division.Organisation;
+                planningSum += division.Planning;
+                supplySum += division.SupplyLevel;
+            }
+            hash.Add(anySelected);
+            hash.Add(anyBattle);
+            hash.Add(anyMoving);
+            hash.Add(cutOff);
+            if (stack.Count > 0)
+            {
+                hash.Add((int)MathF.Round(organisationSum / stack.Count * 20f));
+                hash.Add((int)MathF.Round(planningSum / stack.Count * 20f));
+                hash.Add((int)MathF.Round(supplySum / stack.Count * 20f));
+            }
+        }
+        return hash.ToHashCode();
+    }
+
     private void UpdateMilitaryPresentation()
     {
         if (_campaign is null) return;
+        var fingerprint = MilitaryPresentationFingerprint();
+        if (fingerprint != _militaryPresentationFingerprint)
+        {
+            _militaryPresentationFingerprint = fingerprint;
+            UpdateMilitaryMarkerPresentation();
+        }
+        UpdateBattleMarkers();
+    }
+
+    private void UpdateMilitaryMarkerPresentation()
+    {
         foreach (var cachedMarker in _armyStacks.Values)
         {
             var marker = cachedMarker.Node;
@@ -453,7 +520,6 @@ public sealed partial class GlobePresentation
                 if (count.Modulate != tint) count.Modulate = tint;
             }
         }
-        UpdateBattleMarkers();
     }
 
     private long _battleMarkerDay = -1;

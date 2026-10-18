@@ -127,6 +127,16 @@ static class FlagArtworkTests
             ? Directory.GetFiles(Path.Combine(GameDataLoader.DataFolder(), "gfx", "flags"), "flag_formable_*.png").Length
             : 0;
         Check(generic >= total, $"a file exists for every formable: {generic} files for {total} formables");
+
+        // And the newest additions are really in the catalogue: a suite that iterates what exists
+        // passes just as happily when the content it is meant to guard was never loaded.
+        foreach (var id in new[] { "congo_reunited", "mali_federation", "panama_reunited",
+                     "polish_lithuanian", "samoa_reunited" })
+        {
+            var definition = FormableNations.Find(id);
+            Check(definition is not null, $"the catalogue holds '{id}'");
+            Check(Artwork("flag_formable_" + id), $"'{id}' flies its own flag");
+        }
     }
 
     private static void MovementBannersKeepTheirIdentity(Campaign campaign)

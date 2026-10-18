@@ -46,6 +46,18 @@ public partial class ExportVerification : Node
                 Loc.Language = args[languageAt + 1];
             Check(tree.CurrentScene is MainMenuScene && tree.CurrentScene.FindChildren("*", "Button", true, false).Count > 3,
                 "managed main menu and its controls load");
+            // The F# pure-rule library is an optional dependency, and the hook that reaches it
+            // is deliberately forgiving: on its first exception it answers with the managed
+            // implementation from then on and writes one line to the log, so a pack that cannot
+            // load the assembly still plays perfectly - on different code than the one that was
+            // verified. The editor and the test stand prove the fallback does not happen there
+            // (AssaultRulesBackendTests checks the installed hook); nothing proved it about the
+            // shipped pack, which is exactly where FSharp.Core is the kind of dependency that
+            // goes missing. Checked here, before the campaign, because loadability is a property
+            // of the pack and not of a world. The call is what makes the check mean anything:
+            // UsingFSharp reads true before the first call ever happens.
+            AssaultRulesHook.TryAssess(true, true, true, false, false, 0, 0, 1f, 1f, 0.5f, 0.2f, out _);
+            Check(AssaultRulesHook.UsingFSharp, "assault readiness resolves through the shipped F# rules library");
             // Source-only UI probes may explicitly permit locally installed tooling.
             // Shipped-executable verification never supplies this flag.
             var developmentProbe = OS.GetCmdlineUserArgs().Contains("--verify-development");
@@ -80,6 +92,13 @@ public partial class ExportVerification : Node
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
+                if (args.Contains("--verify-diplomacy-only"))
+                {
+                    await VerifyDiplomacyLayout(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 await VerifyAgendaWorkspace(game);
                 if (args.Contains("--verify-agenda-only"))
                 {
@@ -87,8 +106,11 @@ public partial class ExportVerification : Node
                     GetTree().Quit(_failures == 0 ? 0 : 1);
                     return;
                 }
+                await VerifyDiplomacyLayout(game);
                 await VerifySovereignFinance(game);
                 await VerifyReligionAndOccupation(game);
+                await VerifyGarrison(game);
+                await VerifyDevelop(game);
                 game.Call("OpenScreen", "Laws");
                 await Wait(.25);
                 Check(game.FindChild("PolicySearch", true, false) is not null, "laws workspace is available");
@@ -172,7 +194,15 @@ public partial class ExportVerification : Node
                 Check(pick.ProvinceId == province && pick.Nation?.Id == owner.Id,
                     language + " actual map hit keeps Ukrainian ownership under Russian occupation");
                 var tooltip = game.VerificationCentreTooltip();
-                Check(tooltip.Contains(Loc.Format("Controlled by {0} · occupation {1:P0}", occupier.DisplayName, 0f)),
+                // This check is named for a distinction, so it asserts the distinction rather
+                // than a sentence. The occupation line was rewritten by the state-identity
+                // readability pass into something that names the occupier, names the owner and
+                // says an occupation is not an annexation - strictly better for the player - and
+                // a check pinned to the old wording started failing on a tooltip that had
+                // improved. Requiring both countries to appear, and to be different countries,
+                // keeps the check answering the question it was written for.
+                Check(occupier.DisplayName != owner.DisplayName &&
+                      tooltip.Contains(occupier.DisplayName) && tooltip.Contains(owner.DisplayName),
                     language + " actual map tooltip distinguishes occupier from owner");
                 game.VerificationInspectPick(pick); await Wait(.15);
                 await Capture("occupation-not-title-" + language + "-" + size.X);
@@ -184,6 +214,20 @@ public partial class ExportVerification : Node
         Loc.Language = originalLanguage; game.Call("RefreshLocalisedText");
         GetTree().Root.Size = new(1920, 1080);
         game.Call("OpenScreen", "Nation");
+    }
+
+    private async Task VerifyGarrison(DealOrForceGame game)
+    {
+        var ordered = game.VerificationGarrison(out var report);
+        Check(ordered, "province card garrison order reaches a real division: " + report);
+        await Wait(.1);
+    }
+
+    private async Task VerifyDevelop(DealOrForceGame game)
+    {
+        var opened = game.VerificationDevelop(out var report);
+        Check(opened, "province card development opens construction on that region: " + report);
+        await Wait(.1);
     }
 
     private async Task VerifyDomesticWorkspace(DealOrForceGame game)

@@ -35,6 +35,7 @@ param(
     [string]$Scene = 'res://Scenes/MainMenu.tscn',
     [string]$Out,
     [string]$Script,
+    [string]$Resolution,
     [int]$ReadyTimeoutSeconds = 240,
     [int]$ScriptTimeoutSeconds = 180
 )
@@ -55,7 +56,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
 }
 
 $engine = Find-Godot
@@ -96,6 +97,9 @@ Write-Host "  log       $log"
 # -ArgumentList joins an array with spaces and does not quote it, so a project path with a
 # space in it arrives as two arguments and Godot aborts with "Invalid project path".
 $arguments = @('--path', ('"' + $Project + '"'), $Scene)
+# A layout is only proved at the size it is meant to run at: `-Resolution 1280x720` answers the
+# question "does this fit on the small screen" without changing the project for everybody.
+if ($Resolution) { $arguments += @('--windowed', '--resolution', $Resolution) }
 $previous = $env:FENNARA_RT_SPEC
 $env:FENNARA_RT_SPEC = $specPath
 try {

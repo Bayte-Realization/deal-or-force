@@ -699,9 +699,8 @@ public partial class DealOrForceGame
                     state is null ? Simulation.Loc.Get("Unmapped ground") : state.DisplayName,
                     army.ProvinceId) + "\n" +
                 Simulation.Loc.Format("Order: {0} · posture: {1}",
-                    OrderName(army.OrderKind), StanceName(army.Stance));
-        if (army.InBattle)
-            text += "\n" + Simulation.Loc.Format("Engaged in battle #{0}", army.BattleId);
+                    OrderName(army.OrderKind), StanceName(army.Stance)) + "\n" +
+                Simulation.ArmyVocabulary.Situation(_campaign, army);
         if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
             text += "\n" + Simulation.Loc.Get(
                 "The route is cut. Choose a new destination.");

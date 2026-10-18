@@ -208,10 +208,21 @@ public static class FrontManager
         Arrange(campaign, nation, war, line);
     }
 
-    private static bool Holds(Army army, Nation nation, StrategicWar war, DrawnFrontLine line, bool advances)
+    private static bool Holds(Campaign campaign, Army army, Nation nation, StrategicWar war, DrawnFrontLine line, bool advances)
     {
-        if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) return false;
+        if (army.NationId != nation.Id) return false;
         if (army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.DirectOrder) return false;
+        if (army.TemplateId == MilitiaCore.TemplateId && army.OrderKind == ArmyOrder.Manual && army.AssignedWarId < 0)
+        {
+            // Local guards may plug gaps inside their own region without being marked as
+            // detached expeditionary militia (EmergencyFieldArmy). No player commandeering.
+            if (line is not null || war is null || army.FrontLineId >= 0 ||
+                nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return false;
+            var region = campaign.ProvinceMap.ProvinceToState[army.ProvinceId];
+            foreach (var post in Posts)
+                if (campaign.ProvinceMap.ProvinceToState[post] == region) return true;
+            return false;
+        }
         var duty = army.OrderKind == ArmyOrder.DefendFront || (advances && army.OrderKind == ArmyOrder.AdvanceFront);
         if (!duty) return false;
         if (line is not null) return army.FrontLineId == line.Id;
@@ -241,7 +252,7 @@ public static class FrontManager
         var power = 0f;
         foreach (var army in campaign.Armies)
         {
-            if (!Holds(army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
+            if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
             holders++;
             power += army.Power;
             var post = PostSet.Contains(army.OrderProvinceId) ? army.OrderProvinceId
@@ -536,6 +547,8 @@ public static class FrontManager
     /// </summary>
     private static bool MayRepost(Campaign campaign, Army army, int post)
     {
+        if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0 &&
+            campaign.ProvinceMap.ProvinceToState[army.ProvinceId] != campaign.ProvinceMap.ProvinceToState[post]) return false;
         if (army.Route.Count == 0 || army.OrderProvinceId <= 0 || army.ProvinceId == army.OrderProvinceId) return true;
         var map = campaign.ProvinceMap;
         var going = map.CenterOf(army.OrderProvinceId);
@@ -559,6 +572,9 @@ public static class FrontManager
             // Ground no road of ours reaches - an exclave, an island - is not a post this
             // division can take.
             if (route.Length == 0) return false;
+            if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0)
+                foreach (var step in route)
+                    if (topology.ProvinceToState[step] != topology.ProvinceToState[army.ProvinceId]) return false;
         }
 
         var sameWay = army.Route.Count > 0 && route.Length > 0 && army.Route[0] == route[0];

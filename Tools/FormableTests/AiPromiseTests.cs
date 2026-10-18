@@ -138,6 +138,26 @@ static class AiPromiseTests
                 nation.Id + ":" + string.Join(",", nation.Promises
                     .Select(promise => promise.Id + "@" + promise.DueDay))));
             Check(Shape(first) == Shape(second), "two campaigns of one seed promise identically");
+
+            // Shortfall and cunning: a promise that is nearly true beats an impossible one of
+            // shorter duration, and an impossible gap is refused before the dice are rolled.
+            PromiseCatalog.ResetCatalog();
+            using (var shortfallDoc = JsonDocument.Parse(
+                "{\"ai_near\":{\"name\":\"Near\",\"description\":\"d\",\"duration_days\":365,\"check\":{\"min_stability\":0.72},\"effects\":{}}," +
+                "\"ai_impossible\":{\"name\":\"Impossible\",\"description\":\"d\",\"duration_days\":30,\"check\":{\"min_stability\":0.99},\"effects\":{}}}"))
+                PromiseCatalog.Merge(shortfallDoc.RootElement, errors);
+            var probe = Campaign.CreateBootstrap(1604);
+            var sample = probe.Nations.First(n => !n.IsHuman && n.Movement is null && n.Population > 0);
+            sample.Stability = 0.70f;
+            sample.Promises.Clear();
+            var (chosen, gap) = AiPromises.Shortest(probe, sample);
+            Check(chosen is { Id: "ai_near" } && MathF.Abs(gap - 0.02f) < 0.001f,
+                "Shortest picks the smaller shortfall even when an impossible promise has a shorter deadline");
+            var impossibleDef = PromiseCatalog.Find("ai_impossible")!.Value;
+            Check(AiPromises.Appetite(probe, sample, impossibleDef, impossibleDef.Check.Shortfall(probe, sample)) == 0f,
+                "an unreachable shortfall has zero appetite");
+            Check(AiPromises.Appetite(probe, sample, chosen.Value, gap) > 0f,
+                "a close, reachable shortfall retains positive appetite");
         }
         finally
         {

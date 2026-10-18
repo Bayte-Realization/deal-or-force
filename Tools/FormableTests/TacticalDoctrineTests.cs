@@ -280,9 +280,13 @@ static class TacticalDoctrineTests
         // Ask the real GUI loader instead of relying on another suite's static initialization.
         InterfaceSkin.ResetCatalog();
         // Where the player finds the doctrines: the Army panel's own tab (ArmyPanelUI), where the
-        // experience that pays for them is earned. It used to be a Laws tab, and a future of the
-        // whole army's way of fighting sat oddly among tax rates, so the screen changed and this
-        // check changed with it: what a data test can prove now is the negative.
+        // experience that pays for them is earned - and a screen of its own on the wide layout.
+        // A tab that is declared but not allowed, or a screen that is navigated to but never
+        // declared, is a screen nobody can open: this is the pair the interface actually needs.
+        Check(CampaignUiCatalog.NavigationItems.Any(row => row.Screen == "Doctrines"),
+            "the navigation offers the book of war");
+        Check(CampaignUiCatalog.Destinations.Contains("Doctrines"),
+            "the book of war is an allowed destination");
         Check(!CampaignUiCatalog.For("Laws").Tabs.Any(tab => tab.Id == "Doctrines"),
             "the Laws workspace no longer offers a Doctrines tab");
         // And the four currencies are reserved on the top bar, where a player watches them.

@@ -22,6 +22,28 @@ public sealed class MovementDefinition
     public readonly List<string> Peoples = new();
     /// <summary>Faiths whose believers lend it a little support even when they are not its peoples.</summary>
     public readonly List<string> Faiths = new();
+    private HashSet<string> _peopleLookup;
+    private HashSet<string> _faithLookup;
+
+    /// <summary>
+    /// O(1) membership for the walk over every population group in the world.
+    ///
+    /// The lists are short, so a linear scan is not a problem once; it is a problem when it
+    /// is asked for every group of eighteen hundred regions, which is how a movement's
+    /// weekly support drift used to spend its time. The sets are built lazily and dropped
+    /// whenever the lists change.
+    /// </summary>
+    internal bool HasPeople(string name) =>
+        name is not null && (_peopleLookup ??= new HashSet<string>(Peoples, StringComparer.OrdinalIgnoreCase)).Contains(name);
+
+    internal bool HasFaith(string name) =>
+        name is not null && (_faithLookup ??= new HashSet<string>(Faiths, StringComparer.OrdinalIgnoreCase)).Contains(name);
+
+    internal void ForgetLookups()
+    {
+        _peopleLookup = null;
+        _faithLookup = null;
+    }
     /// <summary>The region its headquarters stands in on the first day.</summary>
     public string Headquarters = "";
     /// <summary>Territorial homeland. Offices, sponsorship and diaspora presence do not extend it.</summary>
@@ -153,6 +175,7 @@ public static class MovementCatalog
             definition.DiasporaReachKm = M.Clamp(Number("diaspora_reach_km", definition.DiasporaReachKm), 50f, 20000f);
             Strings("peoples", definition.Peoples);
             Strings("faiths", definition.Faiths);
+            definition.ForgetLookups();
             Strings("homeland", definition.Homeland);
             Strings("traits", definition.Traits);
             Strings("recognised_by", definition.RecognisedBy);
@@ -468,6 +491,7 @@ public static partial class Movements
         definition.Homeland.AddRange(state.Homeland);
         definition.Traits.AddRange(template is null ? new[] { "government_in_exile" } : template.Traits);
         if (template is not null) definition.Faiths.AddRange(template.Faiths);
+        definition.ForgetLookups();
         Exiles.AddOrUpdate(state, Tuple.Create(MovementCatalog.Version, definition));
         return definition;
     }

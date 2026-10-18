@@ -80,8 +80,40 @@ static class AiTemperamentTests
 
         Earned(seed, nations);
         Openings(c, all);
+        TargetDistress(c, all);
         Betrayal(c, all);
         Balance(c, all);
+    }
+
+    /// <summary>
+    /// Target financial and institutional distress: sovereign debt default, coup pressure, and runaway
+    /// inflation invite opportunistic aggression, while an attacker's own insolvency acts as a brake.
+    /// </summary>
+    private static void TargetDistress(Campaign c, Nation[] sample)
+    {
+        var (watcher, target, _, plain) = Pair(c, sample);
+        var oldDebt = target.DebtCondition;
+        var oldWatcherDebt = watcher.DebtCondition;
+        try
+        {
+            target.DebtCondition = DebtCondition.Default;
+            var (valueWithDefault, _, valueParts, _) = AiStatecraft.JudgeWarParts(c, watcher, target);
+            var opportunistBonus = valueParts.FirstOrDefault(p => p.Part == "target distress").Amount;
+            Check(opportunistBonus > 0f,
+                $"a defaulting neighbour is recognized as in distress (bonus {opportunistBonus:0.00})");
+
+            // Attacker insolvency check
+            watcher.DebtCondition = DebtCondition.Default;
+            var (_, priceWithInsolvency, _, priceParts) = AiStatecraft.JudgeWarParts(c, watcher, target);
+            var insolvencyCaution = priceParts.FirstOrDefault(p => p.Part == "insolvency").Amount;
+            Check(insolvencyCaution >= c.Defines.AiInsolvencyCaution - 0.01f,
+                $"an insolvent attacker faces cautious restraint (caution {insolvencyCaution:0.00})");
+        }
+        finally
+        {
+            target.DebtCondition = oldDebt;
+            watcher.DebtCondition = oldWatcherDebt;
+        }
     }
 
     /// <summary>

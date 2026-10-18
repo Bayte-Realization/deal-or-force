@@ -77,7 +77,9 @@ public static class PoliticalCohorts
             var fresh = state.PoliticalDivergence < 0f || state.LawApproval < 0f || state.GovernmentApproval < 0f;
             if (fresh) Seed(n, state);
             if (span == 0 || fresh) continue;
-            Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving, state.MapIndex == n.CapitalStateMapIndex);
+            var alienation = StateIdentity.RegionAlienation(c, n, state);
+            Drift(state, step, debt, losing, recentPolitics, shortage, stability, nationalLiving,
+                state.MapIndex == n.CapitalStateMapIndex, alienation);
         }
         if (span > 0) Notice(c, n);
     }
@@ -164,6 +166,8 @@ public static class PoliticalCohorts
             return ("The shelves are short, and the blame is sitting on the government.", "short shelves");
         if (state.StandardOfLiving + c.Defines.FederalLivingGap < n.StandardOfLiving)
             return ("This region lives worse than the country that taxes it.", "poorer than the country");
+        if (StateIdentity.RegionAlienation(c, n, state) >= 0.35f)
+            return ("The state's declared identity is not this region's own.", "declared identity");
         if (state.MapIndex == n.CapitalStateMapIndex)
             return ("The capital still belongs. The grievance is quieter here.", "");
         if (state.PoliticalDivergence >= 0.35f)
@@ -215,12 +219,12 @@ public static class PoliticalCohorts
     }
 
     private static void Drift(ScenarioState s, float step, bool debt, bool losing, bool recentPolitics,
-        float shortage, float stability, float nationalLiving, bool capital)
+        float shortage, float stability, float nationalLiving, bool capital, float alienation)
     {
         var debtPenalty = debt ? 0.12f : 0f;
         var radical = M.Clamp01(s.Radicalism);
         var law = M.Clamp01(0.40f + s.StandardOfLiving * 0.40f + stability * 0.15f - shortage * 0.40f - debtPenalty * 0.5f - radical * 0.25f);
-        var government = 0.42f + stability * 0.35f + s.StandardOfLiving * 0.18f - shortage * 0.35f - debtPenalty - radical * 0.22f;
+        var government = 0.42f + stability * 0.35f + s.StandardOfLiving * 0.18f - shortage * 0.35f - debtPenalty - radical * 0.22f - alienation * 0.14f;
         if (losing) government -= 0.10f;
         if (recentPolitics) government -= 0.08f;
         government = M.Clamp01(government);
@@ -229,7 +233,7 @@ public static class PoliticalCohorts
         var rejection = M.Clamp01((1f - government) * 0.55f + (1f - law) * 0.35f + radical * 0.25f);
         var poorer = nationalLiving > s.StandardOfLiving ? nationalLiving - s.StandardOfLiving : 0f;
         if (poorer > 1f) poorer = 1f;
-        var divergence = M.Clamp01(rejection + poorer * 0.20f);
+        var divergence = M.Clamp01(rejection + poorer * 0.20f + alienation * 0.16f);
         if (capital) divergence *= 0.45f;
         s.PoliticalDivergence = Move(M.Clamp01(s.PoliticalDivergence), divergence, step * 0.65f);
     }

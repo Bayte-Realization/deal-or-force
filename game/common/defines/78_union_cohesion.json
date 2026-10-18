@@ -1,0 +1,19 @@
+{
+  "Features": {
+    "union_cohesion": true
+  },
+  // Сколько союз набирает за спокойную неделю и сколько теряет за неделю войны.
+  "UnionCohesionRecoveryWeekly": 0.014,
+  "UnionCohesionWarWeekly": 0.022,
+  // Вес устойчивости ниже спокойной черты и вес радикализма в регионах.
+  "UnionCohesionStabilityWeight": 0.07,
+  "UnionCalmStability": 0.6,
+  "UnionCohesionRadicalismWeekly": 0.05,
+  // Сколько стоит союзу каждый народ сверх первого в день провозглашения.
+  "UnionCohesionPerPeople": 0.12,
+  // Ниже этого порога союз начинает терять регионы; кулдаун — чтобы он не рассыпался в один день.
+  "UnionCohesionFloor": 0.3,
+  "UnionSecessionCooldownDays": 210,
+  // Сколько дней провозглашённое государство не судят: чернила ещё свежие.
+  "UnionGraceDays": 90
+}

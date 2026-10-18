@@ -67,9 +67,21 @@ public static class ClaudeStateFingerprintTests
         // mixed only when they differ from their defaults, which the substantive checks below
         // confirm: nothing leaks bytes at its default, and a real change moves the hash. The check
         // names the value it got, because "the golden fingerprint moved" without the new number
-        // Re-recorded a sixth time on 16 October 2026 (0x5212233DF81EBA6C -> 0xA59805E352DD0319).
+        // Re-recorded a seventh time on 16 October 2026 (0xA59805E352DD0319 -> 0x3E980D973FE069C3).
+        // Re-recorded an eighth time on 17 October 2026 (0x3E980D973FE069C3 -> 0x72AC94DB733B784D).
+        // Cause established by reading the mixing code, not assumed: the working tree declared a
+        // tenth built-in mechanic (`demographic_cycle`), and CampaignFingerprint mixes the enabled
+        // feature ids and MechanicFeatures.BuiltIns into the hash on purpose, so the fixture world
+        // itself is byte for byte the one above. The authoritative fields the same slice added - a
+        // region's young and old shares, which decide its own births, its own deaths, and which
+        // community migration counts the newcomers under - are mixed only when they differ from
+        // their defaults. This fixture carries no regions at all (it is a small authored world of
+        // nations, armies and wars), so those two fields are covered by the demonstration stand's
+        // own divergence checks rather than by the two lists below. The check names the value it
+        // got, because "the golden fingerprint moved" without the new number costs a full
+        // rebuild-and-guess cycle every time.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0xA59805E352DD0319UL,
+        Check(fixture == 0x72AC94DB733B784DUL,
             $"new fields at their legacy defaults retain the pre-fix golden fingerprint (got 0x{fixture:X16})");
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();
@@ -96,7 +108,8 @@ public static class ClaudeStateFingerprintTests
                 c => c.Nations[0].CovertOperations[0].DueDay = 31),
             ("existing covert operation region", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "unrest", TargetId = 1, RegionMapIndex = 4 }),
                 c => c.Nations[0].CovertOperations[0].RegionMapIndex = 5),
-            ("existing lying-low date", c => c.Nations[0].CovertQuietUntil[1] = 90, c => c.Nations[0].CovertQuietUntil[1] = 91)
+            ("existing lying-low date", c => c.Nations[0].CovertQuietUntil[1] = 90, c => c.Nations[0].CovertQuietUntil[1] = 91),
+            ("existing imperial overstretch", c => c.Nations[0].ImperialOverstretch = .45f, c => c.Nations[0].ImperialOverstretch = .55f)
         };
         foreach (var (label, start, change) in changes)
         {
@@ -128,7 +141,8 @@ public static class ClaudeStateFingerprintTests
             ("war doctrine article", c => c.Nations[0].TacticalDoctrine.Known.Add("manoeuvre_march")),
             ("army experience", c => c.Nations[0].ArmyExperience = 3f),
             ("political points", c => c.Nations[0].PoliticalPoints = 5f),
-            ("a drilling formation", c => c.Armies[0].Training = true)
+            ("a drilling formation", c => c.Armies[0].Training = true),
+            ("imperial overstretch", c => c.Nations[0].ImperialOverstretch = .45f)
         };
         var failures = new List<string>();
         foreach (var (label, change) in changes)

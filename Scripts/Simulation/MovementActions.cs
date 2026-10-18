@@ -135,7 +135,7 @@ public static class MovementActions
     };
 
     /// <summary>Why this cannot be done now; empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId)
+    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum = null)
     {
         var state = nation?.Movement;
         var definition = Movements.DefinitionOf(nation);
@@ -147,8 +147,11 @@ public static class MovementActions
                 "The movement has not taken up arms.");
         if (kind.Trait is not null && !definition.Has(kind.Trait)) return Loc.Get("This movement does not do that.");
         var defines = campaign.Defines;
-        var region = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
-        var target = campaign.NationById(targetNationId);
+        // Most actions here are country-wide. Looking up a region and a country before
+        // checking whether the action needs either made every march/strike scan all 1,842
+        // regions for MapIndex -1 and then discard the answer. Ask only when needed.
+        var region = kind.NeedsRegion ? campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex) : null;
+        var target = kind.NeedsNation ? campaign.NationById(targetNationId) : null;
         if (kind.NeedsRegion && region is null) return Loc.Get("Choose a region first.");
         if (kind.NeedsNation && target is null) return Loc.Get("Choose a country first.");
 
@@ -163,7 +166,7 @@ public static class MovementActions
         {
             case "strike":
             case "march":
-                return MovementPower.Refusal(campaign, nation, action);
+                return MovementPower.Refusal(campaign, nation, action, knownMomentum);
             case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
             case "restore": return Restoration.Refusal(campaign, nation, region);
             case "move":

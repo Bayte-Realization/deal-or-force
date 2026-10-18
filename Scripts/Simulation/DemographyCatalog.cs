@@ -177,8 +177,10 @@ public static class DemographyCatalog
     public static string CultureKey(string id) => Culture(id)?.Name ?? Titled(id);
     public static string ReligionName(string id) => Loc.Get(Religion(id)?.Name ?? Titled(id));
 
+    private static readonly Dictionary<string, ProfessionDefinition> ProfessionById = new(StringComparer.OrdinalIgnoreCase);
+
     public static ProfessionDefinition Profession(string id) =>
-        ProfessionList.FirstOrDefault(entry => string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase));
+        id is not null && ProfessionById.TryGetValue(id, out var profession) ? profession : null;
 
     public static string ProfessionName(string id) => Loc.Get(Profession(id)?.Name ?? Titled(id));
 
@@ -251,6 +253,7 @@ public static class DemographyCatalog
         CultureById.Clear();
         ReligionById.Clear();
         ProfessionList.Clear();
+        ProfessionById.Clear();
         ByCountry.Clear();
         ByRegion.Clear();
         PrimaryByCountry.Clear();
@@ -358,12 +361,11 @@ public static class DemographyCatalog
         {
             if (entry.Name.StartsWith("//", StringComparison.Ordinal) ||
                 entry.Value.ValueKind != JsonValueKind.Object) continue;
-            var profession = ProfessionList.FirstOrDefault(candidate =>
-                string.Equals(candidate.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
-            if (profession is null)
+            if (!ProfessionById.TryGetValue(entry.Name, out var profession))
             {
                 profession = new ProfessionDefinition { Id = entry.Name, Name = Titled(entry.Name) };
                 ProfessionList.Add(profession);
+                ProfessionById[entry.Name] = profession;
             }
             var value = entry.Value;
             if (value.TryGetProperty("name", out var name)) profession.Name = name.GetString() ?? profession.Name;

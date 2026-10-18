@@ -47,6 +47,7 @@ static class WarStalemateTests
     {
         EmergencyReserves();
         PeriodicReview();
+        DelegatedCommand();
         Occupation("RUS", "UKR");
         Occupation("PRK", "KOR");
     }
@@ -96,6 +97,31 @@ static class WarStalemateTests
         Warfare.Tick(direct);
         Check(d.DirectOrder && d.OrderProvinceId == 2 && d.Route.SequenceEqual(new[] { 2 }),
             "the periodic review preserves an explicit player march");
+    }
+
+    static void DelegatedCommand()
+    {
+        var c = Fixture();
+        c.Nations[0].IsHuman = true;
+        var a = Unit(c, 0, 1);
+        var b = Unit(c, 1, 2);
+        FrontPlanner.ReassignAi(c, c.Wars[0]);
+        Check(a.OrderKind == ArmyOrder.Manual && b.OrderKind == ArmyOrder.Manual,
+            "a player's formations keep their own orders while command is not delegated");
+
+        Delegation.Set(c.Nations[0], Delegation.Command, true);
+        FrontPlanner.ReassignAi(c, c.Wars[0]);
+        Check(a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead && a.AssignedWarId == c.Wars[0].Id,
+            "delegating the field command gives the player's army a role in the war");
+        Check(b.OrderKind != ArmyOrder.Manual && b.AssignedWarId == c.Wars[0].Id,
+            $"the whole delegated field army is assigned, not one formation (a={a.OrderKind}/{a.AssignedWarId}, b={b.OrderKind}/{b.AssignedWarId})");
+
+        a.PlanActive = false;
+        a.Planning = 1f;
+        a.OrderKind = ArmyOrder.AdvanceFront;
+        a.AssignedWarId = c.Wars[0].Id;
+        FrontPlanner.UpdateAiExecution(c, c.Wars[0], new System.Collections.Generic.List<Army> { a });
+        Check(a.PlanActive, "delegated command also activates the offensive plan");
     }
 
     static void Occupation(string attacker, string defender)

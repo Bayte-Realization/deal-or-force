@@ -196,6 +196,11 @@ public static class Program
         var mapped = AttachMap(campaign);
         DebugRegion("after map");
         var diagnoseWarAt = Array.IndexOf(args, "--diagnose-war");
+        var isolationAt = Array.IndexOf(args, "--isolation-only");
+        if (isolationAt >= 0)
+            return Check("two worlds in one process do not read each other's notes",
+                TwoWorldsDoNotShareNotes(isolationAt + 1 < args.Length && int.TryParse(args[isolationAt + 1], out var isolationDays)
+                    ? Math.Clamp(isolationDays,1,45) : 45));
         if (diagnoseWarAt >= 0 && diagnoseWarAt + 1 < args.Length)
             return mapped ? WarDiagnosisReport.Run(campaign, args[diagnoseWarAt + 1],
                 diagnoseWarAt + 2 < args.Length && int.TryParse(args[diagnoseWarAt + 2], out var replayDays) ? replayDays : 0) : 2;
@@ -296,6 +301,20 @@ public static class Program
         var allocAt = Array.IndexOf(args, "--alloc");
         if (allocAt >= 0) return Allocations(campaign,
             allocAt + 1 < args.Length && int.TryParse(args[allocAt + 1], out var allocDays) ? allocDays : 60);
+
+        // `--replay <save-root> <slot> [days]` loads a player's save and plays on from it,
+        // stopping at the first fault with the full stack - the deterministic half of a crash
+        // investigation, and the piece SAFE-01 was always missing. A campaign that crashed in
+        // play is asked to crash the same way here, where the exception can be read.
+        var replayAt = Array.IndexOf(args, "--replay");
+        if (replayAt >= 0)
+        {
+            var root = replayAt + 1 < args.Length ? args[replayAt + 1]
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Deal or Force", "save games");
+            var slot = replayAt + 2 < args.Length ? args[replayAt + 2] : "autosave";
+            var length = replayAt + 3 < args.Length && int.TryParse(args[replayAt + 3], out var replayDays) ? replayDays : 30;
+            return ReplaySave(root, slot, length);
+        }
 
         // `--front` plays the main run alone and asks only about the war in it: whether the
         // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
@@ -664,6 +683,15 @@ public static class Program
         if (opportunityAt >= 0) return OpportunityReport(campaign,
             opportunityAt + 1 < args.Length && int.TryParse(args[opportunityAt + 1], out var opportunityDays) ? opportunityDays : 730,
             opportunityAt + 2 < args.Length && int.TryParse(args[opportunityAt + 2], out var opportunityWindow) ? opportunityWindow : 365);
+
+        // `--war-judgement [days]`: why does the AI almost never want a war? The five-seed funnel
+        // said the answer is not the die and not the target choice - it is that WarJudgement
+        // returns zero or less for nearly every neighbour pair. This says which of the two ways
+        // that happens, over pairs that actually touch. Read-only, and it needs no change to the
+        // game: JudgeWarFor is already public, and -10 is distinguishable from an ordinary loss.
+        var judgementAt = Array.IndexOf(args, "--war-judgement");
+        if (judgementAt >= 0) return WarJudgementReport(campaign,
+            judgementAt + 1 < args.Length && int.TryParse(args[judgementAt + 1], out var judgementDays) ? judgementDays : 365);
 
         var frontBefore = new FrontSnapshot(campaign);
 
@@ -1068,6 +1096,13 @@ public static class Program
         // "nobody chose a war": the two read the same and mean opposite things, and the second
         // is a fact about the AI while the first is a fact about the measurement.
         var unmeasurable = 0;
+        // The honest half of the question. Everything measured against the days after the strike
+        // is measured through the war's own effects, which is why that percentile swung from 0.30
+        // to 0.91 on the same seeds when the window changed. This compares the target's strength
+        // on the day it was struck against its own peaceful days before that - a window that
+        // existed no matter what the attacker chose, so it cannot be flattered or condemned by
+        // the war it is measuring.
+        var baselined = new List<(string Attacker, string Defender, int Day, double Baseline)>();
         foreach (var war in declared)
         {
             // The scenario opens with its own wars already lit. Timing them measures the
@@ -1077,6 +1112,23 @@ public static class Program
             if (war.Day <= 1) { authored++; continue; }
             if (!byNation.TryGetValue(war.Defender, out var byDay)) continue;
             if (!byDay.TryGetValue(war.Day, out var at)) continue;
+            var attacker = campaign.NationById(war.Attacker);
+            var defender = campaign.NationById(war.Defender);
+            // Computed before the drop below: the clean window stands on its own, and filtering it
+            // by the contaminated one's sufficiency would quietly bias the honest number toward
+            // wars whose target happened to have quiet years afterwards.
+            var behind = new List<float>();
+            for (var day = Math.Max(0, war.Day - Math.Max(1, window)); day < war.Day; day++)
+            {
+                if (atWar.Contains((war.Defender, day))) continue;
+                if (byDay.TryGetValue(day, out var value)) behind.Add(value);
+            }
+            if (behind.Count >= 8)
+            {
+                var strongerBefore = behind.Count(value => value < at);
+                baselined.Add((attacker?.Tag ?? "?", defender?.Tag ?? "?", war.Day,
+                    strongerBefore / (double)(behind.Count - 1)));
+            }
             var ahead = new List<float>();
             for (var day = war.Day; day <= Math.Min(last, war.Day + Math.Max(1, window)); day++)
             {
@@ -1089,14 +1141,28 @@ public static class Program
             // peaceful trajectory to compare against. Either way the war is dropped rather than
             // scored on days the attacker itself made unusable.
             if (ahead.Count < 8) { unmeasurable++; continue; }
-            var attacker = campaign.NationById(war.Attacker);
-            var defender = campaign.NationById(war.Defender);
             var lower = ahead.Count(value => value < at);
             timed.Add((attacker?.Tag ?? "?", defender?.Tag ?? "?", war.Day, at, ahead.Min(),
                 lower / (double)(ahead.Count - 1), war.Engaged));
         }
 
         var chosen = declared.Count(war => war.Day > 1);
+        // Printed before the early return below. The clean window stands on its own evidence: if
+        // it were reported only when the after-strike window happened to have enough peace days,
+        // the honest number would vanish from exactly the runs where the dishonest one was
+        // unusable - which is the opposite of a fallback.
+        if (baselined.Count > 0)
+        {
+            var ordered = baselined.Select(entry => entry.Baseline).OrderBy(value => value).ToList();
+            Console.WriteLine($"  opportunity (clean): {baselined.Count} of {chosen} chosen war(s) have >= {Math.Max(1, window)} peaceful " +
+                              $"days of their target's own history before the strike; on that record the target stood at percentile " +
+                              $"{baselined.Average(entry => entry.Baseline):0.00} (median {ordered[ordered.Count / 2]:0.00}) where 0.5 is an " +
+                              "ordinary day for it - above 0.5 means the AI waited until the target was stronger than usual, below means " +
+                              "it struck one already weaker than its own norm");
+            foreach (var entry in baselined.OrderByDescending(entry => entry.Baseline).Take(5))
+                Console.WriteLine($"    {entry.Attacker} strikes {entry.Defender} on day {entry.Day}: target at percentile " +
+                                  $"{entry.Baseline:0.00} of its own peaceful past {Math.Max(1, window)} days");
+        }
         if (timed.Count == 0)
         {
             // Two different nulls, said apart: nobody deciding, and a decision that cannot be
@@ -1122,6 +1188,111 @@ public static class Program
         foreach (var war in timed.OrderByDescending(war => war.Percentile).Take(5))
             Console.WriteLine($"    {war.Attacker} strikes {war.Defender} on day {war.Day}: target {war.At:N0} against a window low of " +
                               $"{war.Low:N0} - percentile {war.Percentile:0.00}" + (war.Engaged ? ", target already at war" : ""));
+        return 0;
+    }
+
+    /// <summary>
+    /// Which of the two ways a war stops being worth it is the one that actually stops it.
+    ///
+    /// The five-seed funnel showed the AI choosing war one to three times a year across 261
+    /// countries, and showed the cause is not the die nor the choice of target but that
+    /// <c>WarJudgement</c> hands back zero or less for almost every neighbour. That sum has two
+    /// separate ways to fail and they want opposite fixes: nothing is wanted at all, or
+    /// something is wanted and the price of taking it is higher. WarJudgement returns exactly
+    /// -10 for the first (and for an ally below the betrayal nerve), and an ordinary negative
+    /// number for the second, so the two can be counted apart without touching the game.
+    /// </summary>
+    private static int WarJudgementReport(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        var until = campaign.ElapsedDays + Math.Max(1, days);
+        while (campaign.ElapsedDays < until) campaign.TickDay();
+
+        var threshold = campaign.Defines.AiWarDesireThreshold;
+        var noValue = 0; var pricedOut = 0; var wantsButSmall = 0; var wantsEnough = 0; var noValueAllies = 0;
+        // WarValue's first early return is `if (mine <= 0.01f) return 0f` - the attacker has no
+        // estimated army at all. That one is reproducible from outside the game, because
+        // StrengthOf is public and is exactly what WarValue calls, so the "no hand" case can be
+        // separated from the rest of the -10 bucket without a diagnostic hook in AiJudgement.
+        // The advantage gate below it cannot be reproduced here: it needs HelpFor, which is
+        // private, and reconstructing it by hand would be a second implementation to keep in
+        // step rather than a measurement.
+        var noValueNoArmy = 0;
+        var noGateAdvantage = 0; var noMotiveAtAll = 0;
+        var pairs = 0;
+        var nations = campaign.Nations.Where(nation => nation.Population > 0 && nation.MapIndex > 0)
+            .OrderBy(nation => nation.Id).ToArray();
+        var hand = nations.ToDictionary(nation => nation.Id, nation => AiStatecraft.StrengthOf(campaign, nation));
+        foreach (var attacker in nations)
+            foreach (var target in nations)
+            {
+                if (target.Id == attacker.Id) continue;
+                if (!CampaignDiplomacy.SharesLandBorder(campaign, attacker.MapIndex, target.MapIndex)) continue;
+                pairs++;
+                var judgement = AiStatecraft.JudgeWarFor(campaign, attacker, target);
+                if (judgement == -10f)
+                {
+                    noValue++;
+                    // WarJudgement returns -10 for an ally only after the value check passed,
+                    // so allied pairs are the ambiguous case and non-allied -10 is unambiguous.
+                    // The sub-counts are kept disjoint on purpose: an ally with no army would
+                    // land in two of them, and the verdict below subtracts them from the total.
+                    var allied = CampaignDiplomacy.Peek(campaign, attacker.Id, target.Id) is
+                        { Stance: DiplomaticStance.Allied };
+                    if (allied) { noValueAllies++; }
+                    else if (hand[attacker.Id] <= 0.01f) { noValueNoArmy++; }
+                    else
+                    {
+                        // JudgeWarParts already exists for exactly this question, and WarValue
+                        // fills its parts list only after both early returns - so an empty list
+                        // here means the pair never reached a motive, and a filled one means it
+                        // did and the motives summed to nothing.
+                        var parts = AiStatecraft.JudgeWarParts(campaign, attacker, target).ValueParts;
+                        if (parts.Count == 0) noGateAdvantage++; else noMotiveAtAll++;
+                    }
+                }
+                else if (judgement < 0f) pricedOut++;
+                else if (judgement < threshold) wantsButSmall++;
+                else wantsEnough++;
+            }
+
+        double Share(int count) => pairs == 0 ? 0 : count * 100.0 / pairs;
+        // The -10 bucket is two different things: a pair with nothing to fight over, and an
+        // ally whose betrayal nerve has not been reached. Only the first is the diagnosis, so
+        // split it - and the split needs no new game API, because WarJudgement returns -10 for
+        // an ally only after the value check passed, which leaves non-allied -10 unambiguous.
+        var alliedAmongNoValue = noValueAllies;
+        Console.WriteLine($"  war judgement: {pairs} touching country pairs after {days} day(s), against a desire threshold of {threshold:0.00}");
+        Console.WriteLine($"    nothing wanted at all (or an ally below the nerve): {noValue} ({Share(noValue):0.0} %)");
+        Console.WriteLine($"      of those, pairs that are allied - the ambiguous case:      {alliedAmongNoValue}");
+        Console.WriteLine($"      of those, not allied (so not the ally-below-nerve case):   {noValue - alliedAmongNoValue} " +
+                          $"({(pairs == 0 ? 0 : (noValue - alliedAmongNoValue) * 100.0 / pairs):0.0} % of all pairs)");
+        // Printed at the level of the whole -10 bucket, not nested under the non-allied line:
+        // it is counted over every -10 pair, so showing it as a subset of a number it is not a
+        // subset of would be the same conflation this report exists to avoid.
+        Console.WriteLine($"    attacker has no estimated army at all (WarValue's first exit): {noValueNoArmy} ({Share(noValueNoArmy):0.0} %)");
+        // Split by whether WarValue reached the motives at all: JudgeWarParts fills its list
+        // only after both early returns, so an empty list is the advantage gate and a filled one
+        // is a country that looked for a reason, weighed every one, and found none.
+        Console.WriteLine($"    stopped at the advantage gate (no motive ever weighed): {noGateAdvantage} ({Share(noGateAdvantage):0.0} %)");
+        Console.WriteLine($"    weighed every motive and still valued it at nothing:   {noMotiveAtAll} ({Share(noMotiveAtAll):0.0} %)");
+        Console.WriteLine($"    wanted, but the price of the war is higher:         {pricedOut} ({Share(pricedOut):0.0} %)");
+        Console.WriteLine($"    worth it, under the threshold:                      {wantsButSmall} ({Share(wantsButSmall):0.0} %)");
+        Console.WriteLine($"    worth it and over the threshold:                    {wantsEnough} ({Share(wantsEnough):0.0} %)");
+        // The verdict says what is known and names what is not. It used to claim "there is no
+        // title worth fighting for", which conflated an absent motive with an insufficient
+        // advantage and an unestimated army - three different fixes hiding in one bucket.
+        Console.WriteLine(pairs == 0
+            ? "  war judgement: no touching pairs to measure."
+            : "  war judgement: " + (noValue >= pricedOut + wantsButSmall + wantsEnough
+                ? $"what binds is WarValue returning zero or less ({noValue} of {pairs} pairs): " +
+                  $"{noValueNoArmy} have no army to fight with, {noGateAdvantage} stop at the advantage " +
+                  $"gate, {noMotiveAtAll} weigh every motive and find nothing, and {alliedAmongNoValue} " +
+                  "are allies below the betrayal nerve. The advantage gate is not a threshold to " +
+                  "lower: the estimate of a target carries what its allies would add, so most " +
+                  "neighbours genuinely are not weaker than us."
+                : pricedOut >= wantsButSmall + wantsEnough ? "what binds is the price of the war, not the desire."
+                : "what binds is the desire threshold, not the price and not an absent title."));
         return 0;
     }
 
@@ -11259,6 +11430,42 @@ public static class Program
         return false;
     }
 
+    /// <summary>
+    /// Load a player's save and play on from it, headless, until the day count runs out or
+    /// the simulation faults - whichever comes first. The point is the stack: a crash a
+    /// player walked into is asked to happen here, where the exception can be read in full,
+    /// instead of in a dialog that only quotes its message.
+    /// </summary>
+    private static int ReplaySave(string root, string slot, int days)
+    {
+        if (!Directory.Exists(root)) { Console.WriteLine($"  no such save root: {root}"); return 1; }
+        SaveLoadResult loaded;
+        try { loaded = SaveSystem.Load(root, slot, ""); }
+        catch (Exception ex) { Console.WriteLine("  load failed: " + ex.Message); return 1; }
+        var campaign = loaded.Campaign;
+        if (campaign is null) { Console.WriteLine("  the save carried no campaign"); return 1; }
+        campaign.IsPaused = false;
+        Console.WriteLine($"  replay: {slot} from {campaign.Date} ({campaign.ElapsedDays} days), {days} day(s) on");
+        for (var day = 0; day < days; day++)
+        {
+            try { campaign.TickDay(); }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  [CRASH] day {campaign.ElapsedDays} ({campaign.Date}): {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine(ex.StackTrace ?? "");
+                return 1;
+            }
+            if (campaign.SimulationFault.Length > 0)
+            {
+                Console.WriteLine($"  [FAULT] day {campaign.ElapsedDays} ({campaign.Date}): {campaign.SimulationFault}");
+                return 1;
+            }
+            if (day % 10 == 9) Console.WriteLine($"  replayed to day {campaign.ElapsedDays} ({campaign.Date})");
+        }
+        Console.WriteLine($"  [ ok ] {days} day(s) replayed from {slot} without a fault");
+        return 0;
+    }
+
     private static string EveryFolderOfDataIsRead()
     {
         var scripts = FindScripts();
@@ -12699,11 +12906,15 @@ public static class Program
         var leaderMatches = CampaignFingerprint.Of(same) == expectedFirst;
         var followerMatches = CampaignFingerprint.Of(other) == expectedSecond;
         if (!leaderMatches || !followerMatches)
+        {
+            Console.WriteLine("ISOLATION_DIFF " + SnapshotDifferences(leaderMatches ? secondAlone : firstAlone,
+                leaderMatches ? other : same));
             return $"the campaign that ticked {(leaderMatches ? "second" : "first")} came out " +
                    $"different when run beside another one for {days} day(s) - something cached is " +
                    "stamped with the day, the map revision or the country count rather than the " +
                    "campaign, and a multiplayer client rebuilding from a snapshot will " +
                    "desynchronise on it";
+        }
 
         Console.WriteLine($"  isolation: a campaign ticked beside a different one for {days} day(s) " +
                           "and came out identical to the bit.");

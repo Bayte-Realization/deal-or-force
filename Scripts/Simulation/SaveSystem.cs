@@ -613,11 +613,30 @@ public static class SaveSystem
         catch { return null; }
     }
 
+    /// <summary>
+    /// Commit save data so a crash cannot leave a slot holding half a campaign.
+    ///
+    /// Two separate hazards, and the old code covered only the first. Writing a temporary file
+    /// and renaming it means the visible file is always a complete one - but a rename can reach
+    /// the disk before the bytes it points at do, so a power loss could still leave a slot whose
+    /// "complete" file is empty or stale; hence the flush to hardware before the swap. And with
+    /// no previous copy kept, a slot that goes bad - or that the player overwrites by hand - is
+    /// simply gone; File.Replace keeps the outgoing version as .bak in the same atomic step, the
+    /// way ContentWorkbench already saves authored scenario files.
+    ///
+    /// The backup is one generation deep, so a slot costs twice its size on disk and no more.
+    /// List() filters on the .bdfsave suffix, so the .bak never appears as a save.
+    /// </summary>
     private static void AtomicWrite(string target, byte[] data)
     {
         var temporary = target + ".tmp";
-        File.WriteAllBytes(temporary, data);
-        File.Move(temporary, target, true);
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write))
+        {
+            file.Write(data);
+            file.Flush(true);
+        }
+        if (File.Exists(target)) File.Replace(temporary, target, target + ".bak");
+        else File.Move(temporary, target);
     }
 
     private static string SafeSlot(string slot)
@@ -673,6 +692,10 @@ public static class SaveSystem
 
         /// <summary>Whether the campaign was being watched rather than played.</summary>
         public bool ObserverMode;
+        // Derived authority, separate from the cinematic/no-popups ObserverMode.
+        // Console observation has no human seats; that must not become a human country
+        // on reload. Absent in legacy saves, where the historical fallback is retained.
+        public bool NoHumanAuthority;
 
         /// <summary>The campaign's own options: its step, how often it saves. Absent in older saves.</summary>
         public Dictionary<string, string> Settings = new();
@@ -787,6 +810,7 @@ public static class SaveSystem
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
             ObserverMode = campaign.ObserverMode,
+            NoHumanAuthority = campaign.HumanSeats.Count == 0 && campaign.Nations.All(n => !n.IsHuman),
             Settings = new Dictionary<string, string>(campaign.Settings),
             FeatureDefaults = new Dictionary<string, bool>(campaign.Defines.Features),
             FeatureUnlocks = new Dictionary<string, string>(campaign.Defines.FeatureUnlocks),
@@ -910,7 +934,7 @@ public static class SaveSystem
             campaign.CrossoverImpacts.AddRange(CrossoverImpacts ?? new());
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
-                ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);
+                ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState, NoHumanAuthority);
             ForeignAssistance.Restore(campaign, AssistanceRequests, AssistanceCooldowns,
                 NextAssistanceRequestId, AssistanceLastTickDay);
             campaign.CivilWarBudget = CivilWarBudget?.Copy(campaign.ElapsedDays) ??

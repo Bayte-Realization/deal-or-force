@@ -1,5 +1,5 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
@@ -18,6 +18,8 @@ public sealed partial class Defines
 /// <summary>Review existing promises, not willingness to sign a new one. No bloc-size penalty.</summary>
 public static class AllianceMaintenance
 {
+    private static readonly List<(long Key, DiplomaticRelation Relation)> DueAlliances = new();
+
     public static float Target(Campaign c, DiplomaticRelation r, Breakdown why = null)
     {
         why?.Begin("Alliance cohesion", "share");
@@ -29,13 +31,23 @@ public static class AllianceMaintenance
         var declaredPolicy = PoliticalPolicies.ForeignTrust(c, a, b) + PoliticalPolicies.ForeignTrust(c, b, a);
         if (declaredPolicy != 0) Term("Declared foreign policy", declaredPolicy);
         Term("Mutual opinion", M.Clamp(r.Opinion, -100f, 100f) * 0.004f);
-        Term("Political differences", -PoliticsCore.IdeologicalDistance(a, b) * 0.22f);
+        var ideologicalGap = PoliticsCore.IdeologicalDistance(a, b);
+        Term("Political differences", -ideologicalGap * 0.26f - (ideologicalGap >= 0.55f ? 0.12f : 0f));
         Term("Reputation risk", -M.Clamp(MathF.Max(a.Notoriety, b.Notoriety) / 100f, 0f, 1f) * 0.25f);
+        var overstretch = MathF.Max(a.ImperialOverstretch, b.ImperialOverstretch);
+        if (overstretch > 0.15f) Term("Imperial overstretch", -overstretch * 0.18f);
+        if (OpinionSystem.Has(r, "refused_a_call")) Term("Refused call to arms", -0.22f);
         if (r.TradeAgreement) Term("Shared trade", 0.08f);
         if (r.NonAggressionPact) Term("Mutual assurances", 0.05f);
         if (r.EmbargoByA || r.EmbargoByB) Term("Sanctions against an ally", -0.35f);
-        if (c.Wars.Any(w => !w.Ended && w.Involves(a.Id) && w.Involves(b.Id) && !w.Opposes(a.Id, b.Id)))
-            Term("Fighting together", 0.2f);
+        var fightingTogether = false;
+        foreach (var w in c.Wars)
+            if (!w.Ended && w.Involves(a.Id) && w.Involves(b.Id) && !w.Opposes(a.Id, b.Id))
+            {
+                fightingTogether = true;
+                break;
+            }
+        if (fightingTogether) Term("Fighting together", 0.2f);
         foreach (var third in c.Nations)
         {
             if (third.Id == a.Id || third.Id == b.Id) continue;
@@ -56,12 +68,22 @@ public static class AllianceMaintenance
         { AlliancePrograms.Pause(c); return; }
         AlliancePrograms.Tick(c);
         var interval = Math.Max(1, c.Defines.AllianceReviewDays);
-        foreach (var r in c.Relations.Where(p => p.Value.Stance == DiplomaticStance.Allied)
-                     .OrderBy(p => p.Key).Select(p => p.Value).ToArray())
+        DueAlliances.Clear();
+        foreach (var pair in c.Relations)
         {
+            var rel = pair.Value;
+            if (rel.Stance != DiplomaticStance.Allied) continue;
+            if (rel.AllianceAssessmentDay >= 0 && c.ElapsedDays - rel.AllianceAssessmentDay < interval) continue;
+            DueAlliances.Add((pair.Key, rel));
+        }
+        if (DueAlliances.Count == 0) return;
+        if (DueAlliances.Count > 1) DueAlliances.Sort((x, y) => x.Key.CompareTo(y.Key));
+
+        for (var i = 0; i < DueAlliances.Count; i++)
+        {
+            var r = DueAlliances[i].Relation;
             if (r.Stance != DiplomaticStance.Allied) continue;
             if (r.AllianceAssessmentDay < 0) { r.AllianceAssessmentDay = c.ElapsedDays; continue; }
-            if (c.ElapsedDays - r.AllianceAssessmentDay < interval) continue;
             r.AllianceAssessmentDay = c.ElapsedDays;
             r.AllianceCohesion = M.Clamp(r.AllianceCohesion + (Target(c, r) - r.AllianceCohesion) *
                 M.Clamp(c.Defines.AllianceCohesionResponse, 0f, 1f), 0f, 1f);
@@ -69,7 +91,7 @@ public static class AllianceMaintenance
             var strained = r.AllianceCohesion < c.Defines.AllianceRuptureCohesion;
             r.AllianceStrainedDays = strained ? r.AllianceStrainedDays + interval : 0;
             if (strained && !wasStrained) c.Chronicle.Record(c, "alliance_strained", r.A, r.B);
-            c.MarkStrategicChange();
+            if (strained != wasStrained) c.MarkStrategicChange();
             if (!strained || r.AllianceStrainedDays < Math.Max(interval, c.Defines.AllianceRuptureDays) ||
                 c.ElapsedDays - r.AllianceSinceDay < c.Defines.AllianceGraceDays) continue;
             var a = c.NationById(r.A); var b = c.NationById(r.B);

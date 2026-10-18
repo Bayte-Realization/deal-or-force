@@ -56,7 +56,7 @@ public partial class DealOrForceGame
                     break;
                 case "BALANCE": _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget); break;
                 case "GDP": _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces."); break;
-                case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week."); break;
+                case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week.", () => _campaign?.Player is { } p ? HouseholdEconomy.ExplainNationPopulation(_campaign, p) : null); break;
                 case "STABILITY": _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers); break;
                 case "MANPOWER": _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends."); break;
                 // What the army has learned, and what the government can push through: the
@@ -148,8 +148,16 @@ public partial class DealOrForceGame
         RefreshDebtHeadline(player);
         WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
             Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
-        WriteStat(_population, Fmt.People(player.Population), Fmt.PeopleExact(player.Population),
+        WriteStat(_population, Fmt.People(player.Population),
+            DemographicCycle.Explain(_campaign, player),
             Fmt.PeopleDelta(_populationTrend.Delta), Fmt.Direction(_populationTrend.Delta, 1d));
+        // A number that moves without saying why is a number a player cannot act on: the births,
+        // deaths, migration and age structure behind it are read out where the number is
+        // (DemographicCycle.Explain).
+        if (_population?.Box is not null && _campaign?.Defines is not null)
+            _population.Box.TooltipText = Ui.Tip(
+                Tr("Everyone living in your states, and how that has moved over the last week.") +
+                "\n\n" + DemographicCycle.Explain(_campaign, player));
 
         // A stock without its flow is half a number: a treasury that reads the same two
         // weeks running is a very different country depending on which way it is heading.

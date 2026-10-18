@@ -12,7 +12,6 @@
   "Click to select every independent division in this province.": "Щёлкните, чтобы выбрать все отдельные дивизии в этой провинции.",
   "Unmapped administrative area": "Неразмеченная административная единица",
   "Unmapped region": "Неразмеченный регион",
-  "Controlled by {0} · occupation {1:P0}": "Под контролем: {0} · оккупация {1:P0}",
   "River terrain · crossings affect march and attack": "Речная местность · переправы влияют на марш и атаку",
   "Lake shore · local supply access": "Озёрный берег · местное снабжение",
   "{0} · march ×{1:0.##} · attack ×{2:0.##}": "{0} · марш ×{1:0.##} · атака ×{2:0.##}",

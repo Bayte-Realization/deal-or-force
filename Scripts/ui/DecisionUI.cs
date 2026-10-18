@@ -165,10 +165,17 @@ public partial class DealOrForceGame
                 else if (goal.CompletedDay < 0) _goalsSeenComplete.Remove(goal.Id);
     }
 
-    // canvas_items stretching can keep a 1080-unit viewport in a 720-pixel window.
-    // Use the smaller height so the compact catalogue also works in that window.
-    private int AgendaPageCapacity() => Math.Min(GetViewportRect().Size.Y, GetWindow().Size.Y) < Ui.Metric("agenda.compact_height", 800)
-        ? Math.Clamp((int)Ui.Metric("agenda.compact_page_size", 2), 1, _agendaButtons.Count) : _agendaButtons.Count;
+    private int AgendaPageCapacity()
+    {
+        // The window's height, not the dossier's own rect: a panel that overflows a short
+        // screen must not convince the page that it has room for the tall layout. The
+        // 1280x720 verification caught exactly that - four rows were rendered on a screen
+        // whose own height asked for two.
+        var height = GetTree()?.Root?.Size.Y ?? (int)GetViewportRect().Size.Y;
+        return height < Ui.Metric("agenda.compact_height", 800)
+            ? Math.Clamp((int)Ui.Metric("agenda.compact_page_size", 2), 1, _agendaButtons.Count)
+            : _agendaButtons.Count;
+    }
 
     private void RefreshAgendaViewport()
     {

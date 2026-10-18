@@ -360,7 +360,13 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
             CardRow(_countryCardRows, "Treasury", Fmt.Money(nation.Treasury), null,
                 nation.Treasury < 0f ? "state.negative" : "text.bright");
-            CardRow(_countryCardRows, "Population", Fmt.People(nation.Population));
+            CardRow(_countryCardRows, "Population", Fmt.People(nation.Population),
+                DemographicCycle.Explain(_campaign, nation));
+            var (ownBirth, ownDeath, _, ownVitalStatus) = HouseholdEconomy.NationalVitalSummary(_campaign, nation);
+            CardRow(_countryCardRows, "Demography",
+                Simulation.Loc.Format("{0} · {1} old", Tr(ownVitalStatus), Fmt.Percent(nation.OldShare)),
+                DemographicCycle.Explain(_campaign, nation),
+                ownDeath > ownBirth ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability), null,
                 nation.Stability < 0.35f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "War support", Fmt.Percent(nation.WarSupport));
@@ -398,7 +404,13 @@ public partial class DealOrForceGame
         if (CanInspectNation(nation.Id))
         {
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
-            CardRow(_countryCardRows, "Population", Fmt.People(nation.Population));
+            CardRow(_countryCardRows, "Population", Fmt.People(nation.Population),
+                DemographicCycle.Explain(_campaign, nation));
+            var (forBirth, forDeath, _, forVitalStatus) = HouseholdEconomy.NationalVitalSummary(_campaign, nation);
+            CardRow(_countryCardRows, "Demography",
+                Simulation.Loc.Format("{0} · {1} old", Tr(forVitalStatus), Fmt.Percent(nation.OldShare)),
+                DemographicCycle.Explain(_campaign, nation),
+                forDeath > forBirth ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability));
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (TechnologyCatalog.All.Count > 0)

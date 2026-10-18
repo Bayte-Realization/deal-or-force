@@ -12,7 +12,7 @@ public sealed partial class Defines
     public float ArmyWarDivisionsPerPost { get; set; } = 1.5f;
 
     /// <summary>How far past its peacetime establishment a country at war will go - and one being overrun.</summary>
-    public float ArmyWarCeiling { get; set; } = 2.0f;
+    public float ArmyWarCeiling { get; set; } = 2.5f;
     public float ArmyWarCeilingOverrun { get; set; } = 3.5f;
 
     /// <summary>The most formations a country being overrun raises at once.</summary>

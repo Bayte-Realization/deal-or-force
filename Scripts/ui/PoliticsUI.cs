@@ -126,13 +126,13 @@ public partial class DealOrForceGame
         foreach (var (id, share) in Simulation.StateIdentity.ReligionChoices(_campaign, nation))
         {
             var captured = id;
-            var button = ActionButton(Simulation.DemographyCatalog.ReligionName(id),
+            var button = ActionButton(Simulation.StateIdentity.Name(id, true),
                 () => DeclareIdentity(captured, ""), 212, 38);
             button.Name = "StateReligion_" + id;
             button.TooltipText = Ui.Tip(Simulation.StateIdentity.IsSecular(id)
                 ? Tr("A secular answer needs no congregation: the state may always decline to have a church.")
                 : Simulation.Loc.Format("{0} of the country holds this faith.", Fmt.Percent(share)));
-            _religionButtons.AddChild(button);
+            AddIdentityOption(_religionButtons, button, id, share, true);
             _identityButtons.Add((id, button, true));
         }
 
@@ -141,16 +141,16 @@ public partial class DealOrForceGame
             var captured = id;
             var button = ActionButton(Simulation.DemographyCatalog.CultureName(id),
                 () => DeclareIdentity("", captured), 212, 38);
-            button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0} of the country are this people.",
-                Fmt.Percent(share)));
-            _cultureButtons.AddChild(button);
+            AddIdentityOption(_cultureButtons, button, id, share, false);
             _identityButtons.Add((id, button, false));
         }
 
         foreach (var (id, button, religion) in _identityButtons)
         {
             var current = religion
-                ? id.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase)
+                ? id.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase) ||
+                  (id == Simulation.StateIdentity.SecularChoice &&
+                   Simulation.StateIdentity.IsSecular(nation.DeclaredReligion))
                 : id.Equals(nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase);
             ApplyLedgerButtonState(button, current);
             if (current)
@@ -172,6 +172,24 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("The last declaration is still fresh. {0} day(s) to go.", settling)
             : Simulation.Loc.Format("A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.",
                 _campaign.Defines.StateIdentityStabilityCost.ToString("0%"), _campaign.Defines.StateIdentityCooldownDays);
+    }
+
+    /// <summary>A choice with its exact share printed under it: the number a declaration
+    /// is judged by is the number the player sees, not one they hover for.</summary>
+    private void AddIdentityOption(HFlowContainer flow, Button button, string id, float share, bool religion)
+    {
+        var card = new VBoxContainer { CustomMinimumSize = new Vector2(212, 0) };
+        card.AddThemeConstantOverride("separation", 2);
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        card.AddChild(button);
+        var secular = religion && Simulation.StateIdentity.IsSecular(id);
+        var caption = secular
+            ? Tr("No minimum · a state may always decline a church")
+            : Simulation.Loc.Format("{0:0.0%} of the country · needs {1:0%}",
+                share, _campaign.Defines.StateIdentityShare);
+        card.AddChild(RowLabel(caption, 10,
+            Ui.Colour(secular || share >= _campaign.Defines.StateIdentityShare ? "text.caption" : "text.muted")));
+        flow.AddChild(card);
     }
 
     private void DeclareIdentity(string religion, string culture)

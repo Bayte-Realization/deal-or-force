@@ -1630,8 +1630,13 @@ public partial class DealOrForceGame
         if (node is PanelContainer panel && node.HasMeta("skin_panel_surface"))
         {
             var surface = (PanelSurface)node.GetMeta("skin_panel_surface").AsInt32();
-            panel.AddThemeStyleboxOverride("panel", node.GetMeta("skin_campaign_surface").AsBool()
-                ? CampaignPanelStyle(surface) : PanelStyle(surface));
+            var inCampaign = node.GetMeta("skin_campaign_surface").AsBool();
+            panel.AddThemeStyleboxOverride("panel", inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
+            // A menu window's edge is a child of its own, drawn over the artwork, so a skin change
+            // has to repaint that child as well or the line keeps the old tint
+            // (DealOrForceGame.TexturedPanel).
+            if (!inCampaign && panel.GetNodeOrNull<Panel>("ShellEdge") is { } edge)
+                edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
         }
         if (node is Button button && node.HasMeta("skin_button_primary"))
         {

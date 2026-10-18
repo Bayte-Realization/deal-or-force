@@ -57,11 +57,15 @@ static class MovementPowerFingerprintTests
         // mixed into the hash on purpose. The fixture reads no shipped data, so a moving number
         // here can only be the feature set or the fingerprint function itself - not a change to
         // the fixture world.
+        // Re-recorded a sixth time on 18 October 2026: the compiled feature table gained the
+        // two mechanics the shipped data already declared (`union_cohesion` and
+        // `demographic_cycle`). The fixture reads no shipped data, so only the feature set
+        // moved. The substantive checks below still pass at the recorded values.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
-        Check(withoutMovement == 0x2E49F72A25EDE55DUL,
+        Check(withoutMovement == 0xCF9B1CC91D17D781UL,
             $"a world without movement state retains its pre-fix golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x768A405178F16701UL,
+        Check(withMovement == 0x42383519820E685DUL,
             $"an empty legacy movement retains its pre-fix presence and militancy fingerprint (got 0x{withMovement:X16})");
         var legacy = JsonSerializer.Deserialize<Defines>("{}");
         Check(CampaignFingerprint.Of(Fixture(false, legacy)) == CampaignFingerprint.Of(Fixture(false)),

@@ -1,0 +1,79 @@
+{
+  "railway_timetable_recovery": {
+    "title": "The timetable after the war",
+    "description": "The tracks are usable again, but freight trains and returning families are competing for the same damaged junctions. Reopening a line is not the same as making it work.",
+    "weight": 0.55,
+    "trigger": {
+      "at_war": false,
+      "min_worst_war_damage": 0.12
+    },
+    "options": [
+      {
+        "title": "Repair the junctions before expanding service",
+        "consequence": "A costly repair programme clears a little of the physical damage and restores confidence.",
+        "effects": {
+          "treasury_percent": -0.025,
+          "construction_capacity": 0.08,
+          "state.war_damage": -0.025,
+          "stability": 0.003
+        }
+      },
+      {
+        "title": "Let local operators restore a limited service",
+        "consequence": "Less public money buys a slower recovery; neglected settlements grow impatient.",
+        "effects": {
+          "treasury_percent": -0.009,
+          "state.war_damage": -0.008,
+          "state.radicalism": 0.003
+        }
+      },
+      {
+        "title": "Give freight the first available paths",
+        "consequence": "Factories receive their inputs sooner, while passengers bear the inconvenience.",
+        "effects": {
+          "gdp_percent": 0.0015,
+          "state.standard_of_living": -0.003,
+          "stability": -0.003
+        }
+      }
+    ]
+  },
+  "emergency_maintenance_reserve": {
+    "title": "An emergency maintenance reserve",
+    "description": "Rising prices have consumed the money set aside for routine repairs. Engineers want a protected reserve before deferred maintenance becomes a chain of failures.",
+    "weight": 0.45,
+    "trigger": {
+      "at_war": false,
+      "min_inflation": 0.04
+    },
+    "options": [
+      {
+        "title": "Protect the maintenance budget",
+        "consequence": "The treasury takes the hit now rather than leaving residents to pay later.",
+        "effects": {
+          "treasury_percent": -0.02,
+          "construction_capacity": 0.05,
+          "stability": 0.004
+        }
+      },
+      {
+        "title": "Pass the cost into service charges",
+        "consequence": "The accounts recover, but households have less to live on.",
+        "effects": {
+          "treasury_percent": 0.008,
+          "state.standard_of_living": -0.004,
+          "state.radicalism": 0.004
+        }
+      },
+      {
+        "title": "Schedule only the most urgent repairs",
+        "consequence": "Limited work buys time without restoring the reserve or cancelling its future bill.",
+        "effects": {
+          "treasury_percent": -0.006,
+          "construction_capacity": -0.02,
+          "stability": -0.002
+        }
+      }
+    ]
+  }
+}

@@ -418,6 +418,8 @@ public static class SubjectSystem
         if (civilWar) want += weights.OverlordAtWarPull * 1.25f;
         if (campaign.FeatureEnabled("public_debt") && overlord.DebtCondition >= DebtCondition.Default)
             want += weights.OverlordInstabilityPull * 0.65f;
+        if (overlord.ImperialOverstretch > 0.05f)
+            want += overlord.ImperialOverstretch * 0.35f;
 
         // Against all of which: being small and held by something enormous is an argument.
         var ratio = subject.Population <= 0 ? 1f : M.Clamp01(subject.Population / (float)theirs);

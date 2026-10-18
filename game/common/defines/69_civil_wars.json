@@ -64,7 +64,11 @@
   // How much faster a state's minorities leave while it fights a civil war. Three times is
   // the partial collapse a weak centre invites - Yugoslavia and Somalia - and it is the
   // reason a civil war is worse than the stability it costs.
-  "SecessionCivilWarMultiplier": 3.0
+  "SecessionCivilWarMultiplier": 3.0,
+
+  // How much imperial overstretch amplifies secession pressure across foreign regions.
+  // Overstretched empires cannot effectively garrison distant provinces.
+  "SecessionOverstretchMultiplier": 0.50
 
   // `CivilWarStrikesPlayers` is deliberately NOT here. It belongs to the campaign option
   // `civil_wars_players`, which the player sets in the menu and which SettingsApply writes

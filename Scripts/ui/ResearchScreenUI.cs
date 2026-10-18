@@ -9,8 +9,9 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private Control _researchLayer;
-    private Label _researchSummary, _researchResults, _researchPageLabel;
+    private Label _researchSummary, _researchResults, _researchPageLabel, _researchZoomLabel;
     private Button _researchFocus, _researchCatalogView, _researchGraphView, _researchPrevious, _researchNext;
+    private Button _researchZoomOut, _researchZoomIn, _researchZoomReset;
     private ProgressBar _researchProgress;
     private LineEdit _researchSearch;
     private OptionButton _researchCategoryPicker, _researchStatusPicker;
@@ -18,6 +19,30 @@ public partial class DealOrForceGame
     private float _researchZoom = 1f;
     private Vector2 _researchExtent = new(320, 160);
     private Control _researchViewport;
+
+    /// <summary>
+    /// The zoom controls move together with the tree: by button for the layouts where Alt with the
+    /// wheel belongs to the window manager, and the number beside them is the only place the
+    /// current scale is written (TreeViewport.PercentLabel).
+    /// </summary>
+    private void NudgeResearchZoom(bool closer)
+    {
+        if (_researchScroll is null || _researchViewport is null || _researchTree is null) return;
+        TreeViewport.Nudge(_researchScroll, _researchViewport, _researchTree, _researchExtent,
+            ref _researchZoom, closer);
+        UpdateResearchZoomLabel();
+    }
+
+    private void ResetResearchZoom()
+    {
+        TreeViewport.Reset(_researchViewport, _researchTree, _researchExtent, ref _researchZoom);
+        UpdateResearchZoomLabel();
+    }
+
+    private void UpdateResearchZoomLabel()
+    {
+        if (_researchZoomLabel is not null) _researchZoomLabel.Text = TreeViewport.PercentLabel(_researchZoom);
+    }
     private TechnologyTreeCanvas _researchTree;
     private VBoxContainer _researchList, _researchDetails;
     private Label _researchDetailStatus, _researchDetailCost, _researchDetailTime, _researchDetailSpread, _researchDetailReason;
@@ -71,6 +96,24 @@ public partial class DealOrForceGame
         _researchGraphView = ActionButton("Dependencies", () => SetResearchView(true), 112, 32);
         _researchGraphView.Name = "ResearchDependencyView";
         toolbar.AddChild(_researchGraphView);
+        // Zoom by button as well as by gesture: Alt with the wheel is the window manager's on some
+        // layouts, and a tree with no hands on it is a tree nobody reads (TreeViewport).
+        _researchZoomOut = ActionButton("−", () => NudgeResearchZoom(false), 40, 32);
+        _researchZoomOut.Name = "ResearchZoomOut";
+        _researchZoomOut.TooltipText = Ui.Tip(Tr("Further away"));
+        toolbar.AddChild(_researchZoomOut);
+        _researchZoomLabel = Title("100%", 12, Ui.Colour("text.body"));
+        _researchZoomLabel.Name = "ResearchZoomLabel";
+        _researchZoomLabel.CustomMinimumSize = new Vector2(56, 0);
+        _researchZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        toolbar.AddChild(_researchZoomLabel);
+        _researchZoomIn = ActionButton("+", () => NudgeResearchZoom(true), 40, 32);
+        _researchZoomIn.Name = "ResearchZoomIn";
+        _researchZoomIn.TooltipText = Ui.Tip(Tr("Closer"));
+        toolbar.AddChild(_researchZoomIn);
+        _researchZoomReset = ActionButton("100%", ResetResearchZoom, 72, 32);
+        _researchZoomReset.Name = "ResearchZoomReset";
+        toolbar.AddChild(_researchZoomReset);
 
         var filters = new HBoxContainer();
         rows.AddChild(filters);
@@ -111,18 +154,46 @@ public partial class DealOrForceGame
         // The canvas lives inside a plain Control: a ScrollContainer writes its own child's
         // transform on every layout pass (that is what made zooming do nothing at all), so the
         // node that gets scaled has to be a step further down than the scroll.
-        _researchViewport = new Control { Name = "ResearchTreeViewport", MouseFilter = MouseFilterEnum.Pass };
+        // Clipped for the same reason the doctrine plate is: a Control's children are drawn and
+        // hit tested outside its rectangle, and a card that drifts past this one would sit on the
+        // toolbar above it and eat its clicks.
+        _researchViewport = new Control
+        {
+            Name = "ResearchTreeViewport",
+            MouseFilter = MouseFilterEnum.Pass,
+            ClipContents = true
+        };
         _researchScroll.AddChild(_researchViewport);
         _researchTree = new TechnologyTreeCanvas { Name = "TechnologyGraph", MouseFilter = MouseFilterEnum.Pass };
         _researchViewport.AddChild(_researchTree);
         var paging = new HBoxContainer();
+        paging.AddThemeConstantOverride("separation", 6);
         browser.AddChild(paging);
+        _researchZoomOut = ActionButton("−", () => NudgeResearchZoom(false), 40, 28);
+        _researchZoomOut.Name = "ResearchZoomOut";
+        _researchZoomOut.TooltipText = Ui.Tip(Tr("Further away"));
+        paging.AddChild(_researchZoomOut);
+        _researchZoomLabel = Title("100%", 12, Ui.Colour("text.body"));
+        _researchZoomLabel.Name = "ResearchZoomLabel";
+        _researchZoomLabel.CustomMinimumSize = new(56, 0);
+        _researchZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        paging.AddChild(_researchZoomLabel);
+        _researchZoomIn = ActionButton("+", () => NudgeResearchZoom(true), 40, 28);
+        _researchZoomIn.Name = "ResearchZoomIn";
+        _researchZoomIn.TooltipText = Ui.Tip(Tr("Closer"));
+        paging.AddChild(_researchZoomIn);
+        _researchZoomReset = ActionButton("100%", ResetResearchZoom, 72, 28);
+        _researchZoomReset.Name = "ResearchZoomReset";
+        paging.AddChild(_researchZoomReset);
         _researchPrevious = ActionButton("Previous", () => { _researchPage--; _researchListScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 28);
         _researchPrevious.Name = "ResearchPrevious";
         paging.AddChild(_researchPrevious);
         _researchPageLabel = Title("", 12, Ui.Colour("text.muted"));
         _researchPageLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _researchPageLabel.HorizontalAlignment = HorizontalAlignment.Center;
+        _researchPageLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+        _researchPageLabel.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _researchPageLabel.ClipText = true;
         paging.AddChild(_researchPageLabel);
         _researchNext = ActionButton("Next", () => { _researchPage++; _researchListScroll.ScrollVertical = 0; RefreshResearchScreen(); }, 0, 28);
         _researchNext.Name = "ResearchNext";
@@ -188,10 +259,7 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         HideMapSelection(true);
         SetArmyPanelVisible(false);
-        foreach (var other in new[] { _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _diplomacyLayer, _tradeScreenLayer, _productionLayer })
-            if (other is not null) other.Visible = false;
-        _researchLayer.Visible = true;
-        _researchLayer.MoveToFront();
+        RaiseWorkspaceLayer(_researchLayer);
         if (TechnologyCatalog.Of(_researchSelected) is null)
             _researchSelected = (TechnologyCatalog.Of(_campaign.Player.CurrentResearch) ?? TechnologyCatalog.All.FirstOrDefault())?.Id ?? "";
         RefreshResearchScreen();
@@ -291,7 +359,13 @@ public partial class DealOrForceGame
         _researchPageLabel.Text = _researchGraph
             ? Loc.Get("Lines connect prerequisites to discoveries") + " · " + TreeViewport.Hint
             : Loc.Format("Page {0} / {1}", _researchPage + 1, pages);
+        _researchPageLabel.TooltipText = Ui.Tip(_researchPageLabel.Text);
         _researchPrevious.Visible = _researchNext.Visible = !_researchGraph;
+        foreach (var control in new Control[] { _researchZoomOut, _researchZoomIn, _researchZoomReset, _researchZoomLabel })
+            if (control is not null) control.Visible = _researchGraph;
+        UpdateResearchZoomLabel();
+        _researchZoomOut.Visible = _researchZoomLabel.Visible = _researchZoomIn.Visible = _researchZoomReset.Visible = _researchGraph;
+        UpdateResearchZoomLabel();
         _researchPrevious.Disabled = _researchPage == 0;
         _researchNext.Disabled = _researchPage + 1 == pages;
         _researchListScroll.Visible = !_researchGraph;

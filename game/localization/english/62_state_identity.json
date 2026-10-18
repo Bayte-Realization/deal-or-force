@@ -20,5 +20,8 @@
   "{0} of the country holds this faith.": "{0} of the country holds this faith.",
   "{0} of the country are this people.": "{0} of the country are this people.",
   "A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.": "A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.",
-  "chronicle.state_identity_declared": "The state declares its identity: {2}."
+  "chronicle.state_identity_declared": "The state declares its identity: {2}.",
+  "{0} · {1} of the country": "{0} · {1} of the country",
+  "The same church, the same people": "The same church, the same people",
+  "A faith declared against half the country drains stability every week it stands.": "A faith declared against half the country drains stability every week it stands."
 }

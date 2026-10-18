@@ -180,11 +180,11 @@ public partial class DealOrForceGame
         _openScreen = "Ledger";
         _sidePanel.Visible = false;
         _ledgerViewedNationId = _ledgerViewedNationId < 0 ? _campaign.Player.Id : _ledgerViewedNationId;
-        _ledgerLayer.Visible = true;
         // The ledger is a modal analysis workspace. It is authored before the
         // strategic outliner, so explicitly bring it above later HUD siblings.
-        _ledgerLayer.MoveToFront();
+        RaiseWorkspaceLayer(_ledgerLayer);
         RefreshLedger();
+        UpdateScreenButtons();
     }
 
     private void CloseLedger()

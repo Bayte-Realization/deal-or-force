@@ -28,7 +28,7 @@ public partial class DealOrForceGame
             PolicyText(rows, Loc.Get("This mechanic is disabled in this scenario."));
             return;
         }
-        CurrencyStrip(rows, n);
+        CurrencyStrip(rows, n, false);
         if (_campaign.FeatureEnabled("tactical_doctrines")) TacticalDoctrinePage(n, rows);
         if (_campaign.FeatureEnabled("strategic_doctrines")) StrategicDoctrinePage(n, rows);
     }
@@ -38,13 +38,25 @@ public partial class DealOrForceGame
     /// article costs, how many of his own are earning for the other two, and what a week of
     /// government adds. The same helpers the top bar uses, so the two cannot drift apart.
     /// </summary>
-    private void CurrencyStrip(VBoxContainer rows, Nation n)
+    private void CurrencyStrip(VBoxContainer rows, Nation n, bool withPolitical = true, int columns = 0)
     {
         var strip = new PanelContainer { Name = "DoctrineCurrencies" };
         strip.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 8));
         rows.AddChild(strip);
-        var line = new HBoxContainer();
-        line.AddThemeConstantOverride("separation", 14);
+        Container line;
+        if (columns > 0)
+        {
+            var grid = new GridContainer { Columns = columns };
+            grid.AddThemeConstantOverride("h_separation", 12);
+            grid.AddThemeConstantOverride("v_separation", 8);
+            line = grid;
+        }
+        else
+        {
+            var hbox = new HBoxContainer();
+            hbox.AddThemeConstantOverride("separation", 10);
+            line = hbox;
+        }
         strip.AddChild(line);
         void Currency(string icon, string caption, float value, string note)
         {
@@ -59,10 +71,17 @@ public partial class DealOrForceGame
                 StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
                 Modulate = ArtColour("icon_" + icon, "text.accent")
             });
-            head.AddChild(Title(Tr(caption), 11, Ui.Colour("text.caption")));
+            var headLabel = Title(Tr(caption), 11, Ui.Colour("text.caption"));
+            headLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+            head.AddChild(headLabel);
             box.AddChild(head);
-            box.AddChild(Title(Fmt.Number(value), 16, Ui.Colour("text.bright")));
-            box.AddChild(Title(note, 11, Ui.Colour("text.body_soft")));
+            var valueLabel = Title(Fmt.Number(value), 16, Ui.Colour("text.bright"));
+            valueLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+            valueLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
+            box.AddChild(valueLabel);
+            var noteLabel = Title(note, 11, Ui.Colour("text.body_soft"));
+            noteLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+            box.AddChild(noteLabel);
             line.AddChild(box);
         }
 
@@ -71,6 +90,7 @@ public partial class DealOrForceGame
             next > 0f ? Loc.Format("next article {0}", Fmt.Number(next)) : Loc.Get("no article open"));
         Currency("air", "AIR XP", n.AirExperience, Loc.Format("{0} flying", WingsFlying(n.Id)));
         Currency("navy", "NAVY XP", n.NavalExperience, Loc.Format("{0} at sea", ShipsAtSea(n.Id)));
+        if (!withPolitical) return;
         var weekly = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
         Currency("agenda", "POLITICAL CAPITAL", n.PoliticalPoints,
@@ -98,6 +118,7 @@ public partial class DealOrForceGame
         {
             var card = new PanelContainer { Name = "Strategy_" + course.Id };
             card.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10));
+            AtlasSurfaceSkin.Attach(card, AtlasSurfaceSkin.Level.Inset, "surface.inset");
             rows.AddChild(card);
             var body = new VBoxContainer();
             body.AddThemeConstantOverride("separation", 5);

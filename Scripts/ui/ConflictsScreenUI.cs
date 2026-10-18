@@ -100,13 +100,24 @@ public partial class DealOrForceGame
         _conflictsListScroll.AddChild(_conflictsList);
         BuildConflictPager(listDeck);
 
+        var pagePanel = new PanelContainer
+        {
+            Name = "ConflictDetailPanel",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        pagePanel.SetMeta("atlas_section_ground", "surface.inset");
+        pagePanel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(pagePanel, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        body.AddChild(pagePanel);
+
         _conflictsPageScroll = new ScrollContainer
         {
             Name = "ConflictDetailScroll",
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        body.AddChild(_conflictsPageScroll);
+        pagePanel.AddChild(_conflictsPageScroll);
         _conflictsPage = new VBoxContainer { Name = "ConflictsPage", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _conflictsPage.AddThemeConstantOverride("separation", 10);
         _conflictsPageScroll.AddChild(_conflictsPage);
@@ -119,10 +130,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Conflicts";
         _sidePanel.Visible = false;
-        foreach (var layer in new[] { _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _productionLayer, _tradeScreenLayer, _diplomacyLayer })
-            if (layer is not null) layer.Visible = false;
-        _conflictsLayer.Visible = true;
-        _conflictsLayer.MoveToFront();
+        RaiseWorkspaceLayer(_conflictsLayer);
         _conflictsFeedback.Text = "";
         _conflictsSummary.Text = Tr("Reading the world's conflicts.");
         UpdateScreenButtons();

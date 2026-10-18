@@ -422,6 +422,21 @@ public static class CampaignFingerprint
                 MixFloat(nation.ArmyExperience); MixFloat(nation.AirExperience);
                 MixFloat(nation.NavalExperience); MixFloat(nation.PoliticalPoints);
             }
+            if (MathF.Abs(nation.ImperialOverstretch) > 0.0001f)
+            {
+                MixText("imperial_overstretch");
+                MixFloat(nation.ImperialOverstretch);
+            }
+            // How many weeks in a row this country has been counted as dying, and whether
+            // the world has already said so out loud. Two peers that disagree about either
+            // will announce the same death on different weeks, and relinquish its ground a
+            // week apart. A country that is not dying emits no bytes, so untouched worlds
+            // keep the fingerprint they have always had.
+            if (nation.CollapseReviews != 0 || nation.CollapseAnnounced)
+            {
+                MixText("demographic_collapse");
+                Mix(nation.CollapseReviews); Mix(nation.CollapseAnnounced ? 1 : 0);
+            }
         }
 
         // How far each region has gone towards leaving. Two peers that disagree about this
@@ -453,6 +468,16 @@ public static class CampaignFingerprint
             }
             Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
             MixFloat(state.BorderHabit);
+            // The age structure is authoritative, not decoration: the young share sets how many of
+            // the country's own children are born, the old share how many of them die, and both
+            // decide who arrives and which culture a region ends up counted under (DemographicCycle).
+            // Mixed only when it differs from the default, so a save written before the structure
+            // existed hashes byte for byte as it did.
+            if (state.YoungShare != 0.30f || state.OldShare != 0.09f)
+            {
+                MixText("demographic_cycle");
+                MixFloat(state.YoungShare); MixFloat(state.OldShare);
+            }
             foreach (var tag in state.CoreTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
             Mix(-18);
             foreach (var tag in state.Claims.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);

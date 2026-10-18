@@ -326,7 +326,10 @@ public partial class DealOrForceGame
                 MovementRules.RegionName(_campaign, nation.Movement.HeadquartersStateMapIndex),
                 Movements.HostOf(_campaign, nation)?.DisplayName ?? "", Fmt.People(nation.Movement.Cadres),
                 Fmt.Percent(nation.Movement.Legitimacy), Fmt.Money(nation.Treasury))
-            : Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+            : Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}",
+                CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+        if (!nation.Landless && _campaign.FeatureEnabled("state_identity"))
+            _pickerStats.Text += "\n" + Simulation.StateIdentity.Brief(_campaign, nation);
         _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
@@ -356,7 +359,11 @@ public partial class DealOrForceGame
             .Where(nation => query.Length == 0 ||
                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+                nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                Simulation.StateIdentity.Caption(_campaign, nation, true)
+                    .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                Simulation.StateIdentity.Caption(_campaign, nation, false)
+                    .Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(nation => nation.Gdp)
             .Take(4)
             .ToArray();

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -22,6 +22,10 @@ public sealed partial class Defines
         ["escalation"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true, ["coups"] = true,
         ["foreign_assistance"] = true, ["government_promises"] = true, ["strategic_goals"] = true, ["state_identity"] = true,
         ["tactical_doctrines"] = true, ["strategic_doctrines"] = true,
+        // The union and demographic cycles ship enabled; the data files 78 and 79 declare
+        // the same. They were missing from this compiled table, so a mod that shipped no
+        // override saw a different world from the one the package describes.
+        ["union_cohesion"] = true, ["demographic_cycle"] = true,
         // Intelligence networks and the world-order emergency on top: dormant content the
         // console `feature` command can turn on, and a save that predates them agrees with
         // what the shipped data declares because the data declares the same thing.
@@ -125,7 +129,7 @@ public static class MechanicFeatures
         "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
         "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
         "government_promises", "strategic_goals", "state_identity", "intelligence", "world_order_emergency", "tactical_doctrines",
-        "strategic_doctrines"
+        "strategic_doctrines", "union_cohesion", "demographic_cycle"
     };
 
     public static Dictionary<string, string> CommandDefaults()

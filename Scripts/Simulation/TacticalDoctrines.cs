@@ -398,7 +398,10 @@ public static class TacticalDoctrines
         var memory = nation?.TacticalDoctrine;
         var branch = memory is null ? null : TacticalDoctrineCatalog.Find(memory.Branch);
         if (branch is null || memory.Known.Count == 0) yield break;
-        var totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        // The dictionary is the country's own, kept and refilled: asked once a day for every
+        // country with a doctrine, and a fresh dictionary a day was the collector's budget.
+        var totals = nation.TacticalDoctrineModifiers ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
         foreach (var node in branch.Nodes)
         {
             if (!memory.Known.Contains(node.Id)) continue;
@@ -407,6 +410,12 @@ public static class TacticalDoctrines
         }
         if (totals.Count > 0) yield return (branch.Name, totals);
     }
+}
+
+public sealed partial class Nation
+{
+    /// <summary>What the army's book of war adds, kept between asks. Not saved; refilled from scratch.</summary>
+    internal Dictionary<string, float> TacticalDoctrineModifiers;
 }
 
 public sealed class StudyDoctrineCommand : ICampaignCommand

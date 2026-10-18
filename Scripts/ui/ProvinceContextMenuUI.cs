@@ -152,6 +152,10 @@ public partial class DealOrForceGame
         void Action(string icon, string text, System.Action act, string refusal = "", string help = "")
         {
             var button = ActionButton(Tr(text), () => { act(); }, 0, 24);
+            // A stable hook for native acceptance. Only this action needs one; naming every
+            // button after translated text would put unsupported characters into node names.
+            if (text == "Garrison here") button.Name = "ProvinceAction_Garrison_here";
+            if (text == "Develop here") button.Name = "ProvinceAction_Develop_here";
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.Alignment = HorizontalAlignment.Left;
             var path = SpriteCatalog.TextureOf("icon_" + icon, $"res://game/gfx/interface/icons/icon_{icon}.png");
@@ -177,7 +181,27 @@ public partial class DealOrForceGame
                 help: Tr("Its people, buildings, garrison and what can be built there."));
             if (ours)
             {
+                Action("construction", "Develop here", () =>
+                {
+                    CloseProvinceCard();
+                    _selectedState = region;
+                    OpenEconomyTab("Construction");
+                }, help: Tr("Choose what to build in this region. The queue, the price and the effect are on one screen."));
                 Action("military", "Recruit here", () => { CloseProvinceCard(); OpenRecruitment(region.MapIndex); });
+                var garrison = GarrisonPlanner.NearestFree(_campaign, player, pick.ProvinceId);
+                if (garrison is null)
+                    Action("military", "Garrison here", () => { },
+                        refusal: Tr("No free division: every formation is fighting, marching or at sea."),
+                        help: Tr("Station a division here to hold the province. It remains a normal formation with normal upkeep."));
+                else
+                {
+                    var garrisonId = garrison.Id;
+                    Action("military", "Garrison here", () =>
+                    {
+                        OrderGarrison(garrisonId, pick.ProvinceId);
+                        CloseProvinceCard();
+                    }, help: Tr("Orders the nearest free division to march here and hold the province. It remains a normal formation with normal upkeep and can be ordered away again."));
+                }
                 if (region.WarDamage >= 0.02f)
                     Action("relief", "Rebuild what the war broke", () =>
                     {
@@ -355,5 +379,92 @@ public partial class DealOrForceGame
         var type = SupportTypeCatalog.Get(formation.TypeId);
         SetArmyFeedback(Simulation.Loc.Format("{0} flies reconnaissance from its base: the fog lifts over enemy ground within {1:0} km.",
             Tr(type?.Name ?? formation.TypeId), type is null ? 0f : AirReconnaissance.SightKm(_campaign, formation, type)));
+    }
+
+    private ArmyMoveResult _lastGarrisonResult;
+
+    private ArmyMoveResult OrderGarrison(int armyId, int provinceId)
+    {
+        var move = new MoveArmyCommand { IssuerId = _campaign.Player.Id, ArmyId = armyId, TargetProvinceId = provinceId };
+        move.Apply(_campaign);
+        _lastGarrisonResult = move.Result;
+        SetArmyFeedback(GarrisonPlanner.ResultText(move.Result));
+        return move.Result;
+    }
+
+    /// <summary>
+    /// Native acceptance for the province card's development action: the button a player
+    /// presses must open Economy → Construction with this exact region selected, not merely
+    /// navigate somewhere called "Economy".
+    /// </summary>
+    internal bool VerificationDevelop(out string report)
+    {
+        report = "";
+        var map = _campaign?.ProvinceMap;
+        var player = _campaign?.Player;
+        if (map is null || player is null) { report = "no campaign"; return false; }
+        var province = 0;
+        for (var candidate = 1; candidate <= map.ProvinceCount; candidate++)
+        {
+            if (map.ProvinceToNation[candidate] != player.MapIndex || map.IsWater(candidate)) continue;
+            province = candidate;
+            break;
+        }
+        if (province == 0) { report = "no owned land province"; return false; }
+        var state = _campaign.States.FirstOrDefault(entry => entry.MapIndex == map.ProvinceToState[province]);
+        if (state is null) { report = "province has no region"; return false; }
+        var centre = map.CenterOf(province);
+        ShowProvinceContextMenu(new GlobePick(player, state, province, centre.Latitude, centre.Longitude));
+        var button = _provinceCard?.FindChild("ProvinceAction_Develop_here", true, false) as Button;
+        if (button is null) { report = "development button missing"; CloseProvinceCard(); return false; }
+        if (button.Disabled) { report = "development button disabled: " + button.TooltipText; CloseProvinceCard(); return false; }
+        button.EmitSignal(BaseButton.SignalName.Pressed);
+        var reached = _dossierScreen == "Economy" && _dossierTab == "Construction" &&
+                      _selectedState?.MapIndex == state.MapIndex;
+        report = reached
+            ? "Economy/Construction opened on region " + state.MapIndex
+            : $"wrong destination: screen={_dossierScreen} tab={_dossierTab} region={_selectedState?.MapIndex}";
+        CloseProvinceCard();
+        return reached;
+    }
+
+    /// <summary>
+    /// Native acceptance for the province card's garrison action: open the card for a real
+    /// province of the player, press the button a player would press, and read the real
+    /// campaign for a division that now has that province as its destination. UI text is not
+    /// enough; the order has to reach the simulation.
+    /// </summary>
+    internal bool VerificationGarrison(out string report)
+    {
+        report = "";
+        var player = _campaign?.Player;
+        var map = _campaign?.ProvinceMap;
+        if (player is null || map is null) { report = "no campaign"; return false; }
+        var province = 0;
+        for (var candidate = 1; candidate <= map.ProvinceCount; candidate++)
+        {
+            if (map.ProvinceToNation[candidate] != player.MapIndex || map.IsWater(candidate)) continue;
+            if (_campaign.ProvinceController[candidate] != player.MapIndex) continue;
+            if (_campaign.Armies.Any(army => army.ProvinceId == candidate)) continue;
+            if (GarrisonPlanner.NearestFree(_campaign, player, candidate) is not { } nearest) continue;
+            var route = map.FindRoute(nearest.ProvinceId, candidate, (ushort)player.MapIndex,
+                _campaign.ProvinceController, allowUncontrolledStart: true);
+            if (route.Length == 0) continue;
+            province = candidate;
+            break;
+        }
+        if (province == 0) { report = "no free province or no free division"; return false; }
+        var state = _campaign.States.FirstOrDefault(entry => entry.MapIndex == map.ProvinceToState[province]);
+        if (state is null) { report = "province has no region"; return false; }
+        var centre = map.CenterOf(province);
+        ShowProvinceContextMenu(new GlobePick(player, state, province, centre.Latitude, centre.Longitude));
+        var button = _provinceCard?.FindChild("ProvinceAction_Garrison_here", true, false) as Button;
+        if (button is null) { report = "garrison button missing"; CloseProvinceCard(); return false; }
+        if (button.Disabled) { report = "garrison button disabled: " + button.TooltipText; CloseProvinceCard(); return false; }
+        button.EmitSignal(BaseButton.SignalName.Pressed);
+        var ordered = _lastGarrisonResult is ArmyMoveResult.Issued or ArmyMoveResult.AttackIssued or ArmyMoveResult.QueuedAfterBattle;
+        report = ordered ? "division ordered to province " + province : "order refused: " + _lastGarrisonResult;
+        CloseProvinceCard();
+        return ordered;
     }
 }

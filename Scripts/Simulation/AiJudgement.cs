@@ -134,7 +134,9 @@ public static partial class AiStatecraft
                      HelpFor(campaign, nation, other) * defines.AiAllyCommitment;
         if (mine <= 0.01f) return 0f;
         var advantage = mine / M.Max(0.01f, theirs);
-        if (advantage < defines.AiWarMinimumAdvantage) return 0f;
+        var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+        var minimumAdvantage = MinimumAdvantageFor(campaign, nation, other, relation);
+        if (advantage < minimumAdvantage) return 0f;
         var worth = M.Clamp(RegionCount.GetValueOrDefault(other.MapIndex) / M.Max(1f, defines.AiWorthRegions),
             defines.AiWorthFloor, 1f);
         parts?.Add(($"advantage {advantage:0.00} (ours {mine:0} vs theirs {theirs:0})", 0f));
@@ -144,7 +146,7 @@ public static partial class AiStatecraft
         // Turkey looked at Georgia, saw an army a fifteenth of its own and nothing else, and
         // that alone was enough for an invasion in most runs.
         var cause = !string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, other));
-        var value = Part(parts, "weakness", M.Clamp(advantage - defines.AiWarMinimumAdvantage, 0f, 4f) * worth *
+        var value = Part(parts, "weakness", M.Clamp(advantage - minimumAdvantage, 0f, 4f) * worth *
                                             (cause ? 1f : defines.AiWeaknessWithoutCause));
 
         // What is actually over there. A neighbour with forty million people is worth more
@@ -174,7 +176,6 @@ public static partial class AiStatecraft
         value += Part(parts, "resources", Covets(campaign, nation, other) * defines.AiResourceAppetite);
 
         // And the old motives, which were the only motives.
-        var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
         if (relation is not null)
         {
             value += Part(parts, "hostility", M.Clamp(-relation.Opinion / 100f, 0f, 1f) * defines.AiHostilityAppetite);
@@ -193,6 +194,39 @@ public static partial class AiStatecraft
         if (targetExhaustion > 0.05f)
         {
             value += Part(parts, "target exhaustion", targetExhaustion * defines.AiTargetExhaustionMultiplier * AiTemperament.OpportunismOf(campaign, nation));
+        }
+
+        // Target distress: a neighbour defaulting on sovereign obligations, gripped by domestic
+        // coup danger, or crippled by runaway inflation invites opportunists to press claims.
+        var targetDistress = 0f;
+        if (campaign.FeatureEnabled("public_debt"))
+        {
+            if (other.DebtCondition >= DebtCondition.Insolvent)
+                targetDistress += 1.0f;
+            else if (other.DebtCondition == DebtCondition.Default)
+                targetDistress += 0.75f;
+            else if (other.DebtCondition == DebtCondition.Restructuring)
+                targetDistress += 0.40f;
+            else if (other.DebtCondition == DebtCondition.Stressed)
+                targetDistress += 0.15f;
+        }
+
+        if (campaign.FeatureEnabled("domestic_crises") && other.DomesticCrisis is { } crisis)
+        {
+            if (crisis.CoupPressure > 0.35f)
+                targetDistress += (crisis.CoupPressure - 0.35f) * 1.2f;
+            if (crisis.DaysAboveThreshold > 0)
+                targetDistress += M.Clamp(crisis.DaysAboveThreshold / 30f, 0f, 0.5f);
+        }
+
+        if (other.Inflation > 0.15f)
+        {
+            targetDistress += M.Clamp((other.Inflation - 0.15f) / 0.30f, 0f, 0.6f);
+        }
+
+        if (targetDistress > 0.05f)
+        {
+            value += Part(parts, "target distress", targetDistress * defines.AiTargetDistressMultiplier * AiTemperament.OpportunismOf(campaign, nation));
         }
         // A country already at war is an opening - unless the only war it is in is with its own
         // rebels. Neighbours of a civil war arm a side; they do not invade: China armed both the
@@ -220,6 +254,31 @@ public static partial class AiStatecraft
         }
 
         return value;
+    }
+
+    /// <summary>
+    /// The strength ratio a government asks for before weighing a war at all.
+    ///
+    /// An unprovoked war of choice demands the full <see cref="Defines.AiWarMinimumAdvantage"/>.
+    /// A country facing a rival, a hot border crisis, or a neighbour in severe domestic/fiscal
+    /// distress will weigh a closer contest near parity, using only O(1) relation and target fields.
+    /// </summary>
+    private static float MinimumAdvantageFor(Campaign campaign, Nation nation, Nation other, DiplomaticRelation relation)
+    {
+        var floor = campaign.Defines.AiWarMinimumAdvantage;
+        var discount = 0f;
+        if (relation is not null)
+        {
+            if (relation.Stance == DiplomaticStance.Rival || relation.Opinion <= -25f)
+                discount += 0.30f;
+            if (Escalation.StageOf(relation) >= TensionStage.Friction)
+                discount += 0.15f;
+        }
+        if (other.Stability < campaign.Defines.AiTargetExhaustionStability ||
+            other.WarSupport < campaign.Defines.AiTargetExhaustionWarSupport ||
+            other.DebtCondition >= DebtCondition.Default)
+            discount += 0.15f;
+        return discount <= 0f ? floor : M.Clamp(floor - discount, 1.00f, floor);
     }
 
     /// <summary>
@@ -267,10 +326,12 @@ public static partial class AiStatecraft
         price += Part(parts, "trade", nation.TradeDependenceOn(other.Id) * defines.AiTradeLossWeight);
 
         // Everybody who arrives with them. Each is a separate war on a separate front, and
-        // since the call to arms became real this is no longer a hypothetical.
+        // since the call to arms became real this is no longer a hypothetical. Soft-saturated
+        // past the first two defenders because their actual military strength is already in HelpFor.
         var foresight = AiTemperament.ForesightOf(campaign, nation);
         var friends = Statecraft.DefendersOf(campaign, other);
-        price += Part(parts, "their friends", friends * defines.AiAllyDeterrence * foresight);
+        var effectiveFriends = friends <= 2 ? friends : 2f + MathF.Sqrt(friends - 2) * 0.75f;
+        price += Part(parts, "their friends", effectiveFriends * defines.AiAllyDeterrence * foresight);
 
         // What we are already carrying. A country the world is organising against does not
         // help itself by taking something else.
@@ -301,7 +362,7 @@ public static partial class AiStatecraft
         price += Part(parts, "restraint", restraint * defines.AiRestraintWeight * (cause ? defines.AiRestraintWithCause : 1f));
         if (restraint >= defines.AiDemocraticPeaceRestraint &&
             Restraint(campaign, other) >= defines.AiDemocraticPeaceRestraint)
-            price += Part(parts, "democratic peace", defines.AiDemocraticPeacePrice);
+            price += Part(parts, "democratic peace", defines.AiDemocraticPeacePrice * (cause ? 0.6f : 1f));
 
         // The state of the country itself. A tired, poor, unstable government has other
         // problems, and the old rule folded this into a multiplier where it could never
@@ -310,6 +371,10 @@ public static partial class AiStatecraft
         price += Part(parts, "instability", M.Clamp(0.70f - nation.Stability, 0f, 0.70f) * defines.AiInstabilityCaution);
         if (nation.Gdp > 0.01f && nation.Treasury / nation.Gdp < defines.AiTreasuryFloor)
             price += Part(parts, "poverty", defines.AiPovertyCaution);
+        if (campaign.FeatureEnabled("public_debt") && nation.DebtCondition >= DebtCondition.Default)
+            price += Part(parts, "insolvency", defines.AiInsolvencyCaution);
+        if (campaign.FeatureEnabled("domestic_crises") && nation.DomesticCrisis?.CoupPressure > 0.40f)
+            price += Part(parts, "domestic coup risk", (nation.DomesticCrisis.CoupPressure - 0.40f) * defines.AiDomesticCrisisCaution);
 
         return price;
     }
@@ -453,13 +518,13 @@ public static partial class AiStatecraft
     private static Campaign _friendsFor;
 
     /// <summary>
-    /// The strength of everybody who would answer an attack on this country - its allies and
-    /// guarantors - as the attacker can see it. Not the attacker itself, and not a friend it
-    /// shares with the target: a country allied to both stays out. Who is whose friend is
-    /// worked out once a day, not once a question: the question is asked of every neighbour
-    /// of every country every eleven days.
+    /// What attacking this country would mean facing, as the attacker reckons it: its forces
+    /// and its friends'. The friends are everybody who would answer an attack - its allies
+    /// and guarantors - not the attacker itself, and not a friend it shares with the target:
+    /// a country allied to both stays out. Who is whose friend is worked out once a day, not
+    /// once a question: the question is asked of every neighbour of every country every
+    /// eleven days.
     /// </summary>
-    /// <summary>What attacking this country would mean facing, as the attacker reckons it: its forces and its friends'.</summary>
     internal static float Deterrence(Campaign campaign, Nation attacker, Nation target, bool refreshAssessment = true) =>
         CampaignIntel.EstimatedStrength(campaign, attacker.Id, target, refreshAssessment) +
         HelpFor(campaign, attacker, target, refreshAssessment) * campaign.Defines.AiAllyCommitment;
@@ -514,7 +579,8 @@ public static partial class AiStatecraft
             if (friend is null || friend.Population <= 0) continue;
             var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);
             if (theirs is { Stance: DiplomaticStance.Allied }) continue;
-            help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend, refreshAssessment);
+            var commitment = theirs is { NonAggressionPact: true } ? 0.35f : 1f;
+            help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend, refreshAssessment) * commitment;
         }
         return help;
 
@@ -566,7 +632,9 @@ public static partial class AiStatecraft
         // off it and finds something else to want next month.
         var judgement = WarJudgement(campaign, nation, target);
         var patience = campaign.Defines.AiWarPlanPatienceDays * AiTemperament.ForesightOf(campaign, nation);
-        if (judgement <= 0f || campaign.ElapsedDays - nation.WarPlanSinceDay > patience)
+        var hasCause = !string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target));
+        var planFloor = hasCause ? -1.5f : 0f;
+        if (judgement <= planFloor || campaign.ElapsedDays - nation.WarPlanSinceDay > patience)
         {
             ClearWarPlan(nation);
             return;
@@ -607,6 +675,15 @@ public static partial class AiStatecraft
             nation.Treasury -= 0.1f;
             OpinionSystem.Remember(campaign, ours, "improved_relations");
             ours.LastActionDay = campaign.ElapsedDays;
+            var targetBond = CampaignDiplomacy.Peek(campaign, target.Id, friend.Id);
+            if (!friend.IsHuman && targetBond is not null &&
+                targetBond.Stance != DiplomaticStance.Allied &&
+                targetBond.GuaranteedBy(friend.Id) &&
+                ours.Opinion >= targetBond.Opinion + 15f && ours.Opinion >= 25f)
+            {
+                new GuaranteeCommand { IssuerId = friend.Id, TargetId = target.Id, Guarantee = false }.Apply(campaign);
+                Count("guarantee_withdrawn");
+            }
             worked++;
         }
     }

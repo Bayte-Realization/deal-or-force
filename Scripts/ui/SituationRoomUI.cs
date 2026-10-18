@@ -63,7 +63,10 @@ public partial class DealOrForceGame
         _situationEmpty = SituationText("", 14, "text.body_soft"); _situationList.AddChild(_situationEmpty);
         var right = new PanelContainer { Name = "SituationDetailFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsStretchRatio = 1.3f, SizeFlagsVertical = SizeFlags.ExpandFill };
-        right.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 14)); body.AddChild(right);
+        right.SetMeta("atlas_section_ground", "surface.inset");
+        right.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(right, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        body.AddChild(right);
         var detail = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         detail.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.detail_gap", 10)); right.AddChild(detail);
         _situationDetailScroll = new ScrollContainer { Name = "SituationDetailScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,

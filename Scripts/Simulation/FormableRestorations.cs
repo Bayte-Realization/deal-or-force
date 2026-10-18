@@ -24,10 +24,15 @@ public static class FormableRestorations
     public const string Prefix = "restore_";
 
     /// <summary>The tag a restoration brings back, or null when the id is not one.</summary>
-    public static string RestoredTag(string formableId) =>
-        formableId is not null && formableId.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && formableId.Length > Prefix.Length
+    public static string RestoredTag(string formableId)
+    {
+        if (string.IsNullOrEmpty(formableId)) return null;
+        if (FormableNations.Find(formableId) is { Restores.Length: > 0 } authored)
+            return authored.Restores.ToUpperInvariant();
+        return formableId.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && formableId.Length > Prefix.Length
             ? formableId[Prefix.Length..].ToUpperInvariant()
             : null;
+    }
 
     private static Campaign _cachedFor;
     private static int _cachedDay = int.MinValue;

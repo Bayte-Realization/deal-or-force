@@ -66,9 +66,14 @@ lives in `Tools/ExportVerification/`, compiled into the assembly on purpose — 
 
 # Agent skills
 
-Shared skills live in `.agents/skills/` (Antigravity), `.cursor/skills/` (Cursor/Devin) and
+Local shared skills live in `.agents/skills/` (Antigravity), `.cursor/skills/` (Cursor/Devin) and
 `.devin/skills/` (Devin): `deal-or-force-dev`, `deal-or-force-modding`, `fennara-godot`, plus
 `dof-verify` (which checks prove which change), `dof-balance-ab` (multi-seed SimBench A/B with
 `--define`), `dof-mechanic-block` (acceptance pipeline for a new mechanic) and `dof-plan-sync`
 (read the plan, record a pass). `Tools/harness-sync.mjs` keeps the copies in step.
+
+`.agents/` is deliberately local and ignored by Git. It is not needed to build or
+play the game. Cloning the public repository does not install those optional
+assistant instructions; keep existing local copies when updating. If the local
+source is absent, harness-sync reports that it has nothing to synchronise.
 

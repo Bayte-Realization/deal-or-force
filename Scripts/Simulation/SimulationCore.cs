@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -216,6 +216,7 @@ public sealed partial class Nation
     /// and a bad decade can be recovered from.
     /// </summary>
     public float StabilityGovernance;
+    public float ImperialOverstretch;
 
     public float CapitalLatitude;
     public float CapitalLongitude;
@@ -883,6 +884,21 @@ public sealed partial class Campaign
             // out on; it keeps its own weekly schedule, because it also has to clear its
             // report list on the days it does nothing.
             using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
+        // A proclaimed state is tested once a day, not once: history does not stop at the moment a
+        // country is proclaimed (UnionCohesion).
+        using (SimProfiler.Measure("union")) UnionCohesion.Tick(this);
+        // Age structure and the cultures that migration moves: the demographic cycle reads the births
+        // and deaths the household review has just counted, and aggregates the country's shape so a
+        // tooltip or a modifier source reads one number (DemographicCycle).
+        using (SimProfiler.Measure("demography"))
+        {
+            DemographicCycle.Tick(this);
+            DemographicCycle.Aggregate(this);
+        }
+        // A country that is running out of people is counted here, straight after the cycle that
+        // counts them. What becomes of its empty ground is a later decision about inheritance,
+        // deliberately not this line (DEMOGRAPHIC_EXTINCTION_DESIGN_RU.md).
+        using (SimProfiler.Measure("extinction")) DemographicExtinction.Tick(this);
             yield return 0;
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
@@ -1255,7 +1271,8 @@ public sealed partial class Campaign
 
     internal void RestoreRuntimeState(GameDate date, int elapsedDays, bool paused, uint randomState,
         int playerId, IReadOnlyList<int> humanSeats, int activeSeat, int nextBattleId,
-        int mapRevision, bool initialDeploymentCompleted, ushort[] controllers, float[] occupation, ushort[] owners, ushort[] states)
+        int mapRevision, bool initialDeploymentCompleted, ushort[] controllers, float[] occupation, ushort[] owners, ushort[] states,
+        bool noHumanAuthority = false)
     {
         Date = date;
         ElapsedHours = Math.Max(0, elapsedDays) * 24L + Math.Clamp(date.Hour, 0, 23);
@@ -1268,14 +1285,16 @@ public sealed partial class Campaign
         if (humanSeats is not null)
             foreach (var id in humanSeats.Where(id => id >= 0 && id < Nations.Count).Distinct())
                 HumanSeats.Add(id);
-        if (HumanSeats.Count == 0 && Nations.Count > 0) HumanSeats.Add(Math.Clamp(playerId, 0, Nations.Count - 1));
+        if (noHumanAuthority) HumanSeats.Clear();
+        else if (HumanSeats.Count == 0 && Nations.Count > 0) HumanSeats.Add(Math.Clamp(playerId, 0, Nations.Count - 1));
         ActiveSeat = Math.Clamp(activeSeat, 0, Math.Max(0, HumanSeats.Count - 1));
         foreach (var nation in Nations)
         {
             nation.IsHuman = HumanSeats.Contains(nation.Id);
             nation.IsPlayer = nation.Id == playerId;
         }
-        Player = NationById(playerId) ?? NationById(HumanSeats[ActiveSeat]) ?? Nations.FirstOrDefault();
+        Player = NationById(playerId) ??
+            (HumanSeats.Count > 0 ? NationById(HumanSeats[ActiveSeat]) : null) ?? Nations.FirstOrDefault();
         if (Player is not null) Player.IsPlayer = true;
         _pendingProvinceController = controllers;
         _pendingProvinceOccupation = occupation;

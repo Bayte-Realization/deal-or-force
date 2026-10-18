@@ -15,7 +15,7 @@
     "name": "Mend the war scars",
     "description": "Promise in public that the ruined regions will be rebuilt within two years. The promise is kept the day no region is badly damaged any more.",
     "duration_days": 730,
-    "trigger": { "use": ["war_torn"] },
+    "trigger": { "use": ["at_peace", "war_torn"] },
     "unavailable": "Nothing is ruined badly enough to promise its repair",
     "check": { "max_worst_war_damage": 0.05 },
     "effects": { "add_modifier": { "public_trust": 0 } },
@@ -28,7 +28,7 @@
     "duration_days": 1095,
     "trigger": { "use": ["poorly_schooled"] },
     "unavailable": "Literacy is not low enough for this promise to mean anything",
-    "check": { "min_literacy": 0.78 },
+    "check": { "min_literacy": 0.755 },
     "effects": { "add_modifier": { "public_trust": 0 } },
     "failure_effects": { "add_modifier": { "broken_promise": 0 } }
   },
@@ -39,7 +39,7 @@
     "duration_days": 730,
     "trigger": { "use": ["hungry_for_work"] },
     "unavailable": "Living standards are not low enough for this promise to mean anything",
-    "check": { "min_standard_of_living": 0.52 },
+    "check": { "min_standard_of_living": 0.465 },
     "effects": { "add_modifier": { "public_trust": 0 } },
     "failure_effects": { "add_modifier": { "broken_promise": 0 } }
   },
@@ -83,7 +83,7 @@
     "duration_days": 540,
     "trigger": { "use": ["restive"] },
     "unavailable": "Domestic order is not fractured enough for this to be a public pledge",
-    "check": { "min_stability": 0.65 },
+    "check": { "min_stability": 0.55 },
     "effects": { "add_modifier": { "public_trust": 0 } },
     "failure_effects": { "add_modifier": { "broken_promise": 0 } }
   }

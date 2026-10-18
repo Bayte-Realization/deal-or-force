@@ -32,6 +32,8 @@ public sealed partial class Defines
     public bool CivilWarStrikesPlayers { get; set; } = false;
     /// <summary>How much faster a state's minorities leave while it fights a civil war.</summary>
     public float SecessionCivilWarMultiplier { get; set; } = 3f;
+    /// <summary>How much imperial overstretch amplifies secession pressure across foreign regions.</summary>
+    public float SecessionOverstretchMultiplier { get; set; } = 0.50f;
 }
 
 /// <summary>
@@ -131,6 +133,7 @@ public static class CivilWarOutbreak
         // A country at war abroad and losing has its army away from home.
         if (c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.Involves(nation.Id) &&
                             (w.IsAttacking(nation.Id) ? w.WarScore : -w.WarScore) < -10f)) chance *= 1.5f;
+        if (nation.ImperialOverstretch > 0.05f) chance *= (1f + nation.ImperialOverstretch * 0.75f);
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
     }
 

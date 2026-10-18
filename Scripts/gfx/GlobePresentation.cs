@@ -111,6 +111,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public int NationId = -1;
         public string TemplateId = "";
         public string CountText = "";
+        public int ConditionKey = -1;
         public bool Seen;
         public bool Compact;
         public bool FlatLayout;
@@ -941,7 +942,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// </summary>
     private float _counterFlatFar = 1f;
 
-    public bool MilitaryMarkersEnabled { get; set; } = true;
+    public bool MilitaryMarkersEnabled
+    {
+        get => _militaryMarkersEnabled;
+        set
+        {
+            if (_militaryMarkersEnabled == value) return;
+            _militaryMarkersEnabled = value;
+            // Turning the layer back on must rebuild the counters even if no army moved
+            // while it was hidden; the structure fingerprint alone would otherwise say
+            // "nothing changed" and leave the map empty.
+            _armyStructureFingerprint = int.MinValue;
+        }
+    }
+    private bool _militaryMarkersEnabled = true;
     private bool _showcasePan;
     public bool ShowcasePan => _showcasePan;
 
@@ -1698,7 +1712,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                        ? Simulation.Loc.Format("{0} · {1} posture · planning {2:P0}",
                            Simulation.ArmyVocabulary.OrderName(lead.OrderKind),
                            Simulation.ArmyVocabulary.StanceName(lead.Stance), lead.Planning)
-                       : Simulation.Loc.Get("Click to select every division represented by this counter. A + marks nearby provinces grouped at this zoom."));
+                       : Simulation.Loc.Get("Click to select every division represented by this counter. A + marks nearby provinces grouped at this zoom.")) +
+                   "\n" + Simulation.ArmyVocabulary.Situation(_campaign, lead);
         }
         if (!TryPick(atPosition, out var pick, updateSelection: false)) return UnclaimedTooltip(atPosition);
         var state = pick.State is null
@@ -1722,9 +1737,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 ? "\n" + Simulation.Loc.Format("Winter roads carry {0:P0} of fair-weather traffic.", roads) : "")
             : "";
         return pick.Nation.DisplayName + " (" + pick.Nation.Tag + ")\n" + state + "\n" +
+               Simulation.StateIdentity.Brief(_campaign, pick.Nation) + "\n" +
                Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId) +
                (controller is null || controller == pick.Nation ? "" : "\n" + Simulation.Loc.Format(
-                   "Controlled by {0} · occupation {1:P0}", controller.DisplayName, occupation)) +
+                   "Occupied by {0} · {1:P0} secured\nStill owned by {2}: an occupation is not an annexation. Only a signed peace moves the border.",
+                   controller.DisplayName, occupation, pick.Nation.DisplayName)) +
                (_mapMode == StrategicMapMode.Resources && pick.State is not null ? "\n" + Simulation.Loc.Format(
                    "{0} · resource potential {1:0.##}", Simulation.Loc.Get(Simulation.CommodityCatalog.Get(_resourceGood).Name),
                    Simulation.ResourceAtlas.Potential(pick.State, _resourceGood)) : "") +
@@ -2470,15 +2487,21 @@ void fragment() {
     float hatch_width = clamp(fwidth(hatch), 0.0005, 0.45);
     float stripe = smoothstep(0.5 - hatch_width, 0.5 + hatch_width, fract(hatch));
     // Zoomed far enough out that one stripe is thinner than one pixel, stripes are moire and
-    // nothing else. There they collapse into a flat half-blend, which still reads at a glance
-    // as ground somebody else is holding.
+    // nothing else. A flat blend is worse than moire: it paints the occupier's colour across
+    // the whole province, which is exactly what an annexation looks like. A coarse band that
+    // survives minification keeps the two colours apart, so occupied ground never reads as
+    // somebody's new border.
+    float coarse_hatch = (UV.x * 2.0 + UV.y) * 26.0;
+    float coarse_width = clamp(fwidth(coarse_hatch) * 1.2, 0.02, 0.45);
+    float coarse_stripe = smoothstep(0.5 - coarse_width, 0.5 + coarse_width, fract(coarse_hatch));
+    float far_occupation = mix(0.10, 0.72, coarse_stripe);
     float hatch_visible = clamp(1.0 - hatch_width * 2.5, 0.0, 1.0);
     float treaty = step(0.75, live_control.a);
     float occupied = step(0.10, live_control.a) * (1.0 - treaty);
     vec3 other_flag = live_control.rgb * political_light;
     political.rgb = mix(political.rgb, other_flag, treaty);
     political.rgb = mix(political.rgb, other_flag,
-        occupied * mix(0.46, mix(0.08, 0.88, stripe), hatch_visible));
+        occupied * mix(far_occupation, mix(0.08, 0.88, stripe), hatch_visible));
     vec4 strategic = map_mode_color(nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
@@ -3444,6 +3467,7 @@ void fragment() {
             _armyMarkers.Add((marker.Node, marker.Normal));
             _armyByMarker[marker.Node] = marker.Stack;
         }
+        _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
     }
 
     private void CreateArmyStackMarker(ArmyStackMarker marker, Simulation.Nation nation,
@@ -3558,6 +3582,12 @@ void fragment() {
                 if (Simulation.ArmyInteraction.CanSelect(_campaign, army)) _liveArmyIds.Add(army.Id);
             _selectedArmyIds.RemoveWhere(id => !_liveArmyIds.Contains(id));
         }
+        // Rebuilding the counters is a full pass over every army: dictionaries, template
+        // votes, strings, node transforms. At eight passes a second it was measurable even
+        // with the world paused and nothing moving. The fingerprint answers the only
+        // question that matters here - did any counter's identity, place or size change -
+        // and the expensive pass is skipped when it did not.
+        if (ArmyStructureFingerprint(_campaign) == _armyStructureFingerprint) return;
         ReconcileArmyMarkers(_campaign);
     }
 
@@ -3576,6 +3606,15 @@ void fragment() {
             hash.Add(bucket.LocationId);
             hash.Add(bucket.FallbackLatitude);
             hash.Add(bucket.FallbackLongitude);
+            // A division marching inside one province keeps its bucket but must still move
+            // its counter. Quantized geography catches that without making the fingerprint
+            // depend on every frame's sub-degree jitter.
+            hash.Add(Mathf.RoundToInt(army.Latitude * 40f));
+            hash.Add(Mathf.RoundToInt(army.Longitude * 40f));
+            // The counter's text is divisions over men; reinforcement changes it without a
+            // march, and a fingerprint that ignored it would freeze the label.
+            hash.Add(army.Divisions);
+            hash.Add(DivisionPersonnel(army));
         }
         return hash.ToHashCode();
     }

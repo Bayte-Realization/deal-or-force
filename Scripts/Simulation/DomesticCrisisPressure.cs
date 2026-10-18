@@ -12,6 +12,7 @@ public sealed partial class Defines
     public float CoupDefeatWeight { get; set; } = .25f;
     public float CoupDefaultWeight { get; set; } = .10f;
     public float CoupPoliticalMismatchWeight { get; set; } = .05f;
+    public float CoupOverstretchWeight { get; set; } = .15f;
     public float CrisisDialoguePressureRelief { get; set; } = .12f;
     public float CrisisReviewPressureRelief { get; set; } = .18f;
 }
@@ -32,6 +33,8 @@ public static partial class DomesticCrises
         { target += d.CoupDefaultWeight; drivers?.Add("Debt payment crisis"); }
         if (PoliticsCore.IsMismatched(n))
         { target += d.CoupPoliticalMismatchWeight; drivers?.Add("Political mismatch"); }
+        if (n.ImperialOverstretch > 0.05f)
+        { target += n.ImperialOverstretch * d.CoupOverstretchWeight; drivers?.Add("Imperial overstretch"); }
         var mood = PoliticalCohorts.Mood(c, n);
         if (mood.Reviewed && mood.Government < d.ScandalApproval)
         {

@@ -249,7 +249,7 @@ static class AssaultReadinessTests
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
         var actual = CampaignFingerprint.Of(c);
-        Check(actual == 0xA59805E352DD0319UL,
+        Check(actual == 0x72AC94DB733B784DUL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
     }
 

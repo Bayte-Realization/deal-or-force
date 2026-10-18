@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -307,9 +308,12 @@ public static class AllianceSystem
         return willingness;
     }
 
-    private static readonly HashSet<int> Powers = new();
-    private static int _powersDay = int.MinValue;
-    private static Campaign _powersFor;
+    private sealed class PowerFrame
+    {
+        internal int Day = int.MinValue;
+        internal readonly HashSet<int> Powers = new();
+    }
+    private static readonly ConditionalWeakTable<Campaign, PowerFrame> PowerFrames = new();
 
     /// <summary>
     /// The countries large enough that a quarrel with them is everybody's quarrel - the same
@@ -317,9 +321,13 @@ public static class AllianceSystem
     /// </summary>
     internal static HashSet<int> GreatPowers(Campaign campaign)
     {
-        if (_powersFor == campaign && _powersDay == campaign.ElapsedDays) return Powers;
-        _powersFor = campaign;
-        _powersDay = campaign.ElapsedDays;
+        // Preserve EACH world's first reading of the day. A single campaign-stamped
+        // cache recalculated mid-day after another world evicted it, changing who felt
+        // threatened and thus organisation cohesion in an interleaved multiplayer replay.
+        var frame = PowerFrames.GetOrCreateValue(campaign);
+        var Powers = frame.Powers;
+        if (frame.Day == campaign.ElapsedDays) return Powers;
+        frame.Day = campaign.ElapsedDays;
         Powers.Clear();
         var ranked = new List<(float Strength, int Id)>();
         foreach (var nation in campaign.Nations)

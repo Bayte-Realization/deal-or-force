@@ -14,6 +14,9 @@
   "a new government": "новое правительство",
   "short shelves": "пустые полки",
   "poorer than the country": "беднее страны",
+  "The state's declared identity is not this region's own.": "Объявленная государством идентичность этому региону чужая.",
+  "declared identity": "объявленная идентичность",
+  "Same declared state faith": "Одна объявленная государственная вера",
   "The region whose politics have left the government furthest. The unrest map uses the same heat.": "Регион, чья политика дальше всех ушла от правительства. Карта неспокойствия берёт тот же жар.",
   "Regions are ordered by how hot they are on the unrest map: radicalism, the pull to leave, and a government the region has stopped accepting. Select one to inspect the causes and locate it on the map.": "Регионы идут по тому, насколько они горячие на карте неспокойствия: радикализм, тяга уйти и правительство, которое регион перестал принимать. Выберите один, чтобы увидеть причины и найти его на карте."
 }

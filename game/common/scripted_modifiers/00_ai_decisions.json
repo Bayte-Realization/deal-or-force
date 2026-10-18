@@ -298,5 +298,106 @@
         "add": 0.3
       }
     ]
+  },
+
+  // Курсы за опыт: берутся, когда опыт есть с запасом и война не идёт - в войне он нужнее статьям.
+  "ai_intensive_field_course": {
+    "base": 0.35,
+    "modifiers": [
+      {
+        "trigger": { "min_army_experience": 60, "use": [ "at_peace" ] },
+        "add": 1.0
+      },
+      {
+        "trigger": { "use": [ "at_war" ] },
+        "multiply": 0.2
+      }
+    ]
+  },
+
+  "ai_airmanship_week": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": { "min_air_experience": 45, "use": [ "at_peace" ] },
+        "add": 0.9
+      },
+      {
+        "trigger": { "use": [ "at_war" ] },
+        "multiply": 0.2
+      }
+    ]
+  },
+
+  "ai_the_long_cruise": {
+    "base": 0.3,
+    "modifiers": [
+      {
+        "trigger": { "min_naval_experience": 45, "use": [ "at_peace" ] },
+        "add": 0.9
+      },
+      {
+        "trigger": { "use": [ "at_war" ] },
+        "multiply": 0.2
+      }
+    ]
+  },
+
+  "ai_provincial_autonomy": {
+    "base": 0.4,
+    "modifiers": [
+      {
+        "trigger": { "min_imperial_overstretch": 0.20 },
+        "add": 1.2
+      },
+      {
+        "trigger": { "use": [ "restive" ] },
+        "add": 0.7
+      }
+    ]
+  },
+
+  "ai_detente_summit": {
+    "base": 0.35,
+    "modifiers": [
+      {
+        "trigger": { "min_notoriety": 30, "use": [ "at_peace" ] },
+        "add": 1.1
+      }
+    ]
+  },
+
+  "ai_pronatalist_charter": {
+    "base": 0.25,
+    "modifiers": [
+      {
+        "trigger": { "min_literacy": 0.85, "use": [ "at_peace", "deep_reserves" ] },
+        "add": 1.0
+      }
+    ]
+  },
+
+  "ai_open_migration": {
+    "base": 0.15,
+    "modifiers": [
+      {
+        "trigger": { "min_standard_of_living": 0.72, "min_stability": 0.70, "use": [ "at_peace", "deep_reserves" ] },
+        "add": 0.9
+      }
+    ]
+  },
+
+  "ai_strict_borders": {
+    "base": 0.15,
+    "modifiers": [
+      {
+        "trigger": { "max_brain_drain": -0.15 },
+        "add": 1.1
+      },
+      {
+        "trigger": { "use": [ "restive" ] },
+        "add": 0.4
+      }
+    ]
   }
 }

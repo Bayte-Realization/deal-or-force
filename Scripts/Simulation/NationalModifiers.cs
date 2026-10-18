@@ -92,6 +92,8 @@ public static class NationalModifiers
     {
         if (nation is null) yield break;
         foreach (var source in NationalCourses.Sources(nation)) yield return source;
+        foreach (var source in UnionCohesion.Sources(nation)) yield return source;
+        foreach (var source in DemographicCycle.Sources(nation)) yield return source;
         foreach (var source in TacticalDoctrines.Sources(nation)) yield return source;
         foreach (var source in StrategicDoctrines.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
@@ -111,7 +113,12 @@ public static class NationalModifiers
 
     private static Dictionary<string, float> Build(Nation nation)
     {
-        var totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        // The dictionary is the country's own, kept and refilled: it is rebuilt every day
+        // for every country, and a fresh dictionary a day for two hundred and sixty
+        // countries is the collector's whole budget. Values are refilled from scratch, so
+        // the sum is exactly what a new dictionary would have held.
+        var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
         foreach (var (_, modifiers) in Sources(nation))
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
@@ -128,7 +135,9 @@ public static class NationalModifiers
         PoliticalPolicies.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
-            nation.ModifierTotals = null;
+            // Rebuild into the country's own dictionary rather than dropping it: same sums,
+            // none of the allocation. Invalidate still drops it outright on a source change.
+            Build(nation);
             var stability = Of(nation, "stability_weekly");
             var support = Of(nation, "war_support_weekly");
             var radicalism = Of(nation, "radicalism_weekly");
