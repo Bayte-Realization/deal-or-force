@@ -121,7 +121,14 @@ public static class AlliancePrograms
     }
     public static void Tick(Campaign c)
     {
-        foreach (var pair in c.Relations.OrderBy(p => p.Key))
+        // Sort only funded programmes, never the entire remembered-pair archive.
+        // Preserve key order: several contributions may draw on one treasury.
+        List<KeyValuePair<long, DiplomaticRelation>> active = null;
+        foreach (var pair in c.Relations)
+            if (Active(pair.Value)) (active ??= new()).Add(pair);
+        if (active is null) return;
+        active.Sort((left, right) => left.Key.CompareTo(right.Key));
+        foreach (var pair in active)
         {
             var r = pair.Value;
             if (!Active(r)) continue;

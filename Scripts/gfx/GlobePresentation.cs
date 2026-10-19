@@ -2248,6 +2248,7 @@ vec4 control_color(float province) {
     float high = floor(province / 256.0);
     return texture(province_control_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
 }
+" + OccupationShaderFunctions + @"
 vec4 map_mode_color(float nation) {
     float low = mod(nation, 256.0);
     float high = floor(nation / 256.0);
@@ -2469,39 +2470,13 @@ void fragment() {
     float owner_shade = painted_flat > 0.001 ? clamp(painted_here / painted_flat, 0.30, 1.0) : 1.0;
     political.rgb = mix(political.rgb, owner_paint.rgb * owner_shade, owner_paint.a);
     political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
-    // Who owns ground and who is standing on it are two different questions, and a map that
-    // answers only the second is why a peace conference is unreadable: every province the
-    // enemy overran wore the enemy's colour, so a player could not tell what a treaty would
-    // annex from what it would merely hand back. Paradox answers both at once - the owner
-    // keeps the colour, the occupier wears stripes over it - and so does this now. Alpha
-    // says which of the two a colour is: a full byte replaces the province outright, which
-    // is the treaty being drafted, and anything less is an occupation drawn over an owner
-    // who has not signed anything away yet.
-    // A stripe every fifteen texels or so from orbit, where fronts are hundreds of kilometres
-    // long - and tighter as the camera closes in, to a stripe and a half, because an
-    // occupation of ground a texel or two wide (the Gaza Strip, a border town) otherwise sits
-    // inside one pale band and reads as nobody's. Driven by the zoom rather than by the pixel's
-    // own footprint: that changes at every triangle edge of the globe and would break the
-    // stripes along them.
-    float hatch = (UV.x * 2.0 + UV.y) * 190.0 * mix(1.0, 10.0, province_detail);
-    float hatch_width = clamp(fwidth(hatch), 0.0005, 0.45);
-    float stripe = smoothstep(0.5 - hatch_width, 0.5 + hatch_width, fract(hatch));
-    // Zoomed far enough out that one stripe is thinner than one pixel, stripes are moire and
-    // nothing else. A flat blend is worse than moire: it paints the occupier's colour across
-    // the whole province, which is exactly what an annexation looks like. A coarse band that
-    // survives minification keeps the two colours apart, so occupied ground never reads as
-    // somebody's new border.
-    float coarse_hatch = (UV.x * 2.0 + UV.y) * 26.0;
-    float coarse_width = clamp(fwidth(coarse_hatch) * 1.2, 0.02, 0.45);
-    float coarse_stripe = smoothstep(0.5 - coarse_width, 0.5 + coarse_width, fract(coarse_hatch));
-    float far_occupation = mix(0.10, 0.72, coarse_stripe);
-    float hatch_visible = clamp(1.0 - hatch_width * 2.5, 0.0, 1.0);
+    // Owner remains the ground; keylined controller ribbons mean occupation,
+    // never annexation. One shared style for flat map and globe.
     float treaty = step(0.75, live_control.a);
-    float occupied = step(0.10, live_control.a) * (1.0 - treaty);
-    vec3 other_flag = live_control.rgb * political_light;
-    political.rgb = mix(political.rgb, other_flag, treaty);
-    political.rgb = mix(political.rgb, other_flag,
-        occupied * mix(far_occupation, mix(0.08, 0.88, stripe), hatch_visible));
+    float occupied = occupation_mask(live_control);
+    political.rgb = mix(political.rgb, live_control.rgb * political_light, treaty);
+    political.rgb = occupation_ribbons(political.rgb, live_control.rgb, UV,
+        province_detail, occupied);
     vec4 strategic = map_mode_color(nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
@@ -2715,6 +2690,21 @@ void fragment() {
     base = mix(base, plan_color, plan_on * 0.40);
     base = mix(base, vec3(0.45, 0.12, 0.07), front_outer * 0.30);
     base = mix(base, vec3(0.96, 0.40, 0.20), front_edge * 0.90);
+    // Reuse the reconstructed province boundary; no neighbour raster pass.
+    vec4 near_control = control_color(near_province);
+    vec4 other_control = control_color(other_province_id);
+    float near_occupied = occupation_mask(near_control);
+    float other_occupied = occupation_mask(other_control);
+    float control_change = 0.0;
+    if (near_occupied * other_occupied > 0.5)
+        control_change = step(0.5, abs(occupation_controller(near_province) - occupation_controller(other_province_id)));
+    float occupation_pair = max(abs(near_occupied - other_occupied), control_change * max(near_occupied, other_occupied));
+    float occupation_edge = occupation_pair * step(0.5, abs(near_province - other_province_id)) * political.a *
+        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode);
+    float occupation_key = 1.0 - smoothstep(1.1, 2.5, province_distance);
+    float occupation_stroke = 1.0 - smoothstep(0.35, 1.1, province_distance);
+    base = mix(base, vec3(0.045, 0.065, 0.08), occupation_edge * occupation_key * 0.90);
+    base = mix(base, vec3(0.92, 0.88, 0.71), occupation_edge * occupation_stroke * 0.94);
     // One narrow cartographic stroke on the shared boundary, never a filled province.
     base = mix(base, vec3(0.30, 0.72, 0.96), border_plan * 0.95);
     base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);

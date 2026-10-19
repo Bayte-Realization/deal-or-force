@@ -92,6 +92,13 @@ public partial class ExportVerification : Node
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
+                if (args.Contains("--verify-occupation-map-only"))
+                {
+                    await VerifyOccupationMap(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-audio-focus-only"))
                 {
                     await VerifyAudioFocus(game);

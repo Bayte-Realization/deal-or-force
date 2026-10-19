@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -18,9 +19,14 @@ public sealed partial class Defines
 /// <summary>Review existing promises, not willingness to sign a new one. No bloc-size penalty.</summary>
 public static class AllianceMaintenance
 {
-    private static readonly List<(long Key, DiplomaticRelation Relation)> DueAlliances = new();
+    private static readonly ConditionalWeakTable<Campaign, AllianceReviewGraph> ReviewGraphs = new();
 
-    public static float Target(Campaign c, DiplomaticRelation r, Breakdown why = null)
+    public static float Target(Campaign c, DiplomaticRelation r, Breakdown why = null) =>
+        Target(c, r, why, null);
+
+    // Scratch belongs to one atomic review, not a day-stamped political cache.
+    // Public/UI queries still read the full current world.
+    internal static float Target(Campaign c, DiplomaticRelation r, Breakdown why, AllianceReviewGraph graph)
     {
         why?.Begin("Alliance cohesion", "share");
         var a = c.NationById(r.A); var b = c.NationById(r.B);
@@ -41,14 +47,15 @@ public static class AllianceMaintenance
         if (r.NonAggressionPact) Term("Mutual assurances", 0.05f);
         if (r.EmbargoByA || r.EmbargoByB) Term("Sanctions against an ally", -0.35f);
         var fightingTogether = false;
-        foreach (var w in c.Wars)
+        foreach (var w in graph?.Wars ?? c.Wars)
             if (!w.Ended && w.Involves(a.Id) && w.Involves(b.Id) && !w.Opposes(a.Id, b.Id))
             {
                 fightingTogether = true;
                 break;
             }
         if (fightingTogether) Term("Fighting together", 0.2f);
-        foreach (var third in c.Nations)
+        if (graph is not null && graph.Conflicts(c, a.Id, b.Id)) Term("Conflicting commitments", -0.25f);
+        if (graph is null) foreach (var third in c.Nations)
         {
             if (third.Id == a.Id || third.Id == b.Id) continue;
             var ar = CampaignDiplomacy.Peek(c, a.Id, third.Id);
@@ -68,7 +75,9 @@ public static class AllianceMaintenance
         { AlliancePrograms.Pause(c); return; }
         AlliancePrograms.Tick(c);
         var interval = Math.Max(1, c.Defines.AllianceReviewDays);
-        DueAlliances.Clear();
+        var graph = ReviewGraphs.GetOrCreateValue(c);
+        graph.Rebuild(c);
+        var DueAlliances = graph.Due;
         foreach (var pair in c.Relations)
         {
             var rel = pair.Value;
@@ -85,7 +94,7 @@ public static class AllianceMaintenance
             if (r.Stance != DiplomaticStance.Allied) continue;
             if (r.AllianceAssessmentDay < 0) { r.AllianceAssessmentDay = c.ElapsedDays; continue; }
             r.AllianceAssessmentDay = c.ElapsedDays;
-            r.AllianceCohesion = M.Clamp(r.AllianceCohesion + (Target(c, r) - r.AllianceCohesion) *
+            r.AllianceCohesion = M.Clamp(r.AllianceCohesion + (Target(c, r, null, graph) - r.AllianceCohesion) *
                 M.Clamp(c.Defines.AllianceCohesionResponse, 0f, 1f), 0f, 1f);
             var wasStrained = r.AllianceStrainedDays > 0;
             var strained = r.AllianceCohesion < c.Defines.AllianceRuptureCohesion;
@@ -100,7 +109,10 @@ public static class AllianceMaintenance
             var leaving = a.IsHuman ? b : a;
             var other = leaving.Id == a.Id ? b : a;
             if (AllianceSystem.Break(c, leaving, other, out _))
+            {
+                graph.Remove(leaving.Id, other.Id);
                 c.Chronicle.Record(c, "alliance_ended", leaving.Id, other.Id);
+            }
         }
     }
 

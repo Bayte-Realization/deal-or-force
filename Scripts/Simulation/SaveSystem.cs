@@ -449,14 +449,20 @@ public static class SaveSystem
         slot = SafeSlot(slot);
         var dataPath = ExistingDataPath(root, slot);
         if (!File.Exists(dataPath)) return new SaveLoadResult(null, null, "Save slot is empty.");
-        var stored = File.ReadAllBytes(dataPath);
+        using var file = new FileStream(dataPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete,
+            64 * 1024, FileOptions.SequentialScan);
+        var storedLength = file.Length;
+        var first = file.ReadByte();
+        var second = file.ReadByte();
+        file.Position = 0;
         var metadata = ReadMetadata(root, slot);
         // Text saves carry no checksum on purpose: they are meant to be edited, and a guard
         // that fires on every edit is a guard against the feature itself. Compressed saves
         // keep theirs - they cannot be repaired by hand, so a mismatch is worth refusing.
-        if (IsGzip(stored) && metadata is not null && metadata.Checksum.Length > 0)
+        if (first == 0x1f && second == 0x8b && metadata is not null && metadata.Checksum.Length > 0)
         {
-            var checksum = Convert.ToHexString(SHA256.HashData(stored));
+            var checksum = Convert.ToHexString(SHA256.HashData(file));
+            file.Position = 0;
             if (!string.Equals(metadata.Checksum, checksum, StringComparison.OrdinalIgnoreCase) &&
                 ReadEmbeddedMetadata(dataPath) is null)
                 return new SaveLoadResult(null, metadata, "Save checksum mismatch; the file may be incomplete or corrupted.");
@@ -465,11 +471,10 @@ public static class SaveSystem
         CampaignSave payload;
         try
         {
-            // Gzip files open with 1f 8b; JSON opens with a brace or a space of it. Anything
-            // written by this game declares itself in its first two bytes.
-            payload = !IsGzip(stored)
-                ? JsonSerializer.Deserialize<CampaignSave>(stored, JsonOptions)
-                : ReadCompressed(stored);
+            // Deserialize directly: do not retain the whole compressed input or
+            // a second expanded JSON buffer alongside the restored world.
+            using var source = OpenPayloadStream(file);
+            payload = JsonSerializer.Deserialize<CampaignSave>(source, JsonOptions);
         }
         catch (Exception exception)
         {
@@ -490,7 +495,7 @@ public static class SaveSystem
                 "The save contains an incomplete province-control snapshot.");
 
         metadata = payload.EmbeddedMetadata ?? metadata;
-        if (metadata is not null) metadata.CompressedBytes = stored.LongLength;
+        if (metadata is not null) metadata.CompressedBytes = storedLength;
 
         try
         {
@@ -594,9 +599,19 @@ public static class SaveSystem
     /// Legacy .bdfsave.json files also work; sniff contents instead of trusting the name.</summary>
     private static Stream OpenPayloadStream(FileStream file)
     {
-        var gzip = file.ReadByte() == 0x1f && file.ReadByte() == 0x8b;
+        var first = file.ReadByte();
+        var second = file.ReadByte();
+        var third = file.ReadByte();
+        var fourth = file.ReadByte();
         file.Position = 0;
-        return gzip ? new GZipStream(file, CompressionMode.Decompress) : file;
+        if (first == 0x1f && second == 0x8b)
+            return new GZipStream(file, CompressionMode.Decompress);
+        if (first == (byte)'B' && second == (byte)'D' && third == (byte)'F' && fourth == (byte)'2')
+        {
+            file.Position = 4;
+            return new BrotliStream(file, CompressionMode.Decompress);
+        }
+        return file;
     }
 
     public static bool Delete(string root, string slot)
