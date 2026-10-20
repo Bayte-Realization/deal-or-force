@@ -11,7 +11,7 @@
       is the honest fix; a `Compile Remove` would leave Content and None still pointing at
       several hundred megabytes of output.
     -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;LanguageKit\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <!--

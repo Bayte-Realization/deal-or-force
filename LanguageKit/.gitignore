@@ -1,0 +1,10 @@
+.cache/
+artifacts/
+projects/
+*.local.json
+**/bin/
+**/obj/
+**/.gradle/
+**/build/
+**/target/
+**/.godot/
