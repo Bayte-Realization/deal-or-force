@@ -293,6 +293,9 @@ public static partial class Corridors
 
     static Campaign _poreCampaign;
     static int _poreRevision = -1;
+    static ProvinceTopology _poreMap;
+    static int _poreLimit = -1;
+    static ushort[] _poreOwners = Array.Empty<ushort>(), _poreStates = Array.Empty<ushort>();
     static readonly Dictionary<int, HashSet<int>> _pores = new();
     static readonly Dictionary<int, List<HashSet<int>>> _components = new();
     static readonly Dictionary<int, int> _firstProvince = new();
@@ -308,12 +311,28 @@ public static partial class Corridors
         var map = c?.ProvinceMap;
         if (map is null) return;
         if (ReferenceEquals(_poreCampaign, c) && _poreRevision == c.MapRevision) return;
+        var limit = Math.Max(1, c.Defines.PeaceCompactHoleProvinces);
+        // A new revision is usually a capture - who controls a province, which this index never
+        // reads. It is rebuilt only when what it does read moved: who owns the land, which
+        // region it lies in, the map itself, the hole size. Otherwise the rebuild would make the
+        // same sets in the same order, and the world's clusters in fresh sets every hour of a war
+        // were the most garbage any daily system made.
+        if (ReferenceEquals(_poreCampaign, c) && ReferenceEquals(_poreMap, map) && _poreLimit == limit &&
+            map.ProvinceToNation.AsSpan().SequenceEqual(_poreOwners) &&
+            map.ProvinceToState.AsSpan().SequenceEqual(_poreStates))
+        {
+            _poreRevision = c.MapRevision;
+            return;
+        }
         _poreCampaign = c;
         _poreRevision = c.MapRevision;
+        _poreMap = map;
+        _poreLimit = limit;
+        _poreOwners = (ushort[])map.ProvinceToNation.Clone();
+        _poreStates = (ushort[])map.ProvinceToState.Clone();
         _pores.Clear();
         _components.Clear();
         _firstProvince.Clear();
-        var limit = Math.Max(1, c.Defines.PeaceCompactHoleProvinces);
         var seen = new bool[map.ProvinceCount + 1];
         var queue = new Queue<int>();
         for (var start = 1; start <= map.ProvinceCount; start++)

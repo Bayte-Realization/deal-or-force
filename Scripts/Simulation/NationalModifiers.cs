@@ -124,6 +124,14 @@ public static class NationalModifiers
         static void Add(Dictionary<string, float> totals, IReadOnlyDictionary<string, float> modifiers)
         {
             if (modifiers is null || modifiers.Count == 0) return;
+            // Walked as the dictionary it nearly always is: through the interface every walk
+            // boxed an enumerator, thirty sources a country a day. Same entries, same order.
+            if (modifiers is Dictionary<string, float> concrete)
+            {
+                foreach (var (key, value) in concrete)
+                    totals[key] = totals.GetValueOrDefault(key) + value;
+                return;
+            }
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
         }
