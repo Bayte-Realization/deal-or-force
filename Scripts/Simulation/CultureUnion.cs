@@ -14,6 +14,12 @@ public sealed partial class Defines
     public int CultureUnionEarliestDay { get; set; } = 365;
     /// <summary>Relations a partner wants before it signs itself away, on top of the minimum.</summary>
     public float CultureUnionAcceptanceOpinion { get; set; } = 20f;
+
+    /// <summary>
+    /// The most regions a country can have and still join a kindred neighbour by consent, unless it
+    /// was born in play. A union is for the scattered pieces of one people, not for nations.
+    /// </summary>
+    public int CultureUnionMaxJoinerRegions { get; set; } = 3;
 }
 
 /// <summary>
@@ -36,11 +42,22 @@ public static class CultureUnion
 {
     public static string CooldownKey(int initiator) => "culture_union:" + initiator;
 
-    /// <summary>The same people is the whole premise: primary cultures must overlap exactly.</summary>
-    public static bool SamePeople(Nation a, Nation b) =>
-        a is not null && b is not null &&
-        DemographyCatalog.PrimaryCultures(a.Tag).Any(x =>
-            DemographyCatalog.PrimaryCultures(b.Tag).Contains(x, StringComparer.OrdinalIgnoreCase));
+    /// <summary>
+    /// The same people is the whole premise: the main people of both. Sharing any one of their
+    /// peoples made every country of several a bridge - Switzerland, German, French and Italian,
+    /// joined France, and the union then took Germany and Italy as kin of its own.
+    /// </summary>
+    public static bool SamePeople(Nation a, Nation b)
+    {
+        if (a is null || b is null) return false;
+        var mine = DemographyCatalog.PrimaryCulture(a.Tag);
+        var theirs = DemographyCatalog.PrimaryCulture(b.Tag);
+        return !string.IsNullOrWhiteSpace(mine) && string.Equals(mine, theirs, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A country the game made: a secession, a release, a founding - not one of 2024's.</summary>
+    public static bool BornInPlay(Nation nation) =>
+        nation is not null && (!string.IsNullOrEmpty(nation.FoundNameKind) || nation.SecededFromId >= 0 || nation.ReleasedFromId >= 0);
 
     /// <summary>A union of neighbours: any of the partner's regions touching the initiator's ground.</summary>
     public static bool SharesBorder(Campaign c, Nation initiator, Nation partner)
@@ -71,6 +88,9 @@ public static class CultureUnion
             return Loc.Get("Both governments need enough standing to carry a union.");
         if (!SharesBorder(c, initiator, partner))
             return Loc.Get("The countries must share a border to become one.");
+        var joiner = partner.Population > initiator.Population ? initiator : partner;
+        if (!BornInPlay(joiner) && c.StatesOf(joiner).Length > c.Defines.CultureUnionMaxJoinerRegions)
+            return Loc.Get("A nation of this size does not sign itself away; a union is for the scattered pieces of one people.");
         if (partner.DecisionAvailableDay.TryGetValue(CooldownKey(initiator.Id), out var until) && until > c.ElapsedDays)
             return Loc.Get("This country declined recently; give it time.");
         return "";
@@ -122,6 +142,9 @@ public static class CultureUnion
             {
                 if (partner.Id == initiator.Id || c.Fallen.Contains(partner.Id)) continue;
                 if (partner.Population > initiator.Population) continue;
+                // A state of 2024 does not dissolve itself into a kindred neighbour on its own
+                // initiative; the pieces a people was scattered into by the game's own risings do.
+                if (!BornInPlay(partner)) continue;
                 var opinion = CampaignDiplomacy.Peek(c, initiator.Id, partner.Id)?.Opinion ?? 0f;
                 if (opinion < c.Defines.CultureUnionMinimumOpinion) continue;
                 var wantsIt = opinion >= c.Defines.CultureUnionAcceptanceOpinion ||

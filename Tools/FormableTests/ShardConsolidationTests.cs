@@ -26,7 +26,11 @@ public static class ShardConsolidationTests
         campaign.Nations.AddRange(new[] { rebel, large, small });
 
         Check(Consolidation.IsSplinterOrShard(campaign, rebel), "rebel tag is recognized as a splinter shard");
-        Check(Consolidation.IsSplinterOrShard(campaign, small), "small sovereign state is recognized as a shard");
+        // A small country of 2024 is a nation, not a shard (2026-10-22): counted as one, Switzerland
+        // "consolidated" Austria on day 143. The same size born in play - a secession - is one.
+        Check(!Consolidation.IsSplinterOrShard(campaign, small), "a small sovereign state of 2024 is a nation, not a shard");
+        small.SecededFromId = large.Id;
+        Check(Consolidation.IsSplinterOrShard(campaign, small), "a small state born in play is recognized as a shard");
         Check(!Consolidation.IsSplinterOrShard(campaign, large), "great power population exceeds shard limit");
 
         campaign.Fallen.Add(small.Id);

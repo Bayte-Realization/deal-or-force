@@ -152,12 +152,21 @@ public static class FormableRestorations
         // Founded on its ground: a revolt or successor state whose regions stand inside the old borders.
         if (!string.IsNullOrEmpty(founder.FoundedInRevolt) || founder.Movement is { Landless: false } || founder.SecededFromId >= 0)
         {
+            // And the old ground has to be a real part of it: a breakaway of a hundred and sixty
+            // million Indians holding one valley of Bhutan proclaimed itself Bhutan. A share of its
+            // people (RestorationGroundShare) must live on the ground the country held.
             var toState = campaign.ProvinceMap.ProvinceToState;
-            var heldStates = campaign.StatesOf(founder).Select(s => s.MapIndex).ToHashSet();
+            var held = campaign.StatesOf(founder);
+            var oldGround = new HashSet<int>();
             foreach (var province in Authored(campaign, tag))
-                if (province > 0 && province < toState.Length &&
-                    (toState[province] == founder.CapitalStateMapIndex || heldStates.Contains(toState[province])))
-                    return true;
+                if (province > 0 && province < toState.Length) oldGround.Add(toState[province]);
+            long onIt = 0, all = 0;
+            foreach (var state in held)
+            {
+                all += Math.Max(0L, state.Population);
+                if (oldGround.Contains(state.MapIndex) || oldGround.Contains(state.ParentMapIndex)) onIt += Math.Max(0L, state.Population);
+            }
+            if (onIt > 0 && onIt >= all * (double)campaign.Defines.RestorationGroundShare) return true;
         }
         return false;
     }
@@ -169,6 +178,8 @@ public sealed partial class Defines
     public float RestorationMinimumStability { get; set; } = 0.40f;
     /// <summary>What it costs, as a share of the founder's output.</summary>
     public float RestorationCostShare { get; set; } = 0.015f;
+    /// <summary>The least share of a breakaway's people living on a vanished country's old ground for it to restore that country.</summary>
+    public float RestorationGroundShare { get; set; } = 0.40f;
     /// <summary>The administrative dividend of being a recognised state again.</summary>
     public float RestorationGovernanceGain { get; set; } = 0.04f;
     public float RestorationProductivityGain { get; set; } = 0.01f;

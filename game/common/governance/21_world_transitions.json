@@ -119,7 +119,10 @@
       "name": "The strongman crowns himself",
       "government": "absolute_monarchy",
       "ideology": "nationalism",
-      "from_government": ["military_junta", "presidential_republic"],
+      // Only from a junta. A settled presidential republic does not crown anybody: open to it,
+      // this made the United States an absolute monarchy for eleven years of one 25-year run at
+      // 0.92 stability. A republic reaches a strongman through a coup or a reaction first.
+      "from_government": ["military_junta"],
       "stability_above": 0.45,
       "at_war": false,
       "weight": 0.7

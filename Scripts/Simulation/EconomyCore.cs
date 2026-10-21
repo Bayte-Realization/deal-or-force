@@ -904,6 +904,10 @@ public static class EconomySystem
             // to the scale the scenario was authored in by a factor calibrated once at
             // seed. Smoothed, because an economy that reprices its entire output every
             // week reads as noise rather than as a trend the player can act on.
+            // And the slow drift of what the country's work is worth: catch-up, the long wave,
+            // the drags of war and empire (SecularCycle) - the only thing that lets the order of
+            // 2024 change.
+            SecularCycle.Week(campaign, nation, atWar);
             if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
             {
                 // Multiply in double: finite operands can overflow an intermediate float

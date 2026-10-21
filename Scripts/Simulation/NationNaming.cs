@@ -1162,7 +1162,34 @@ public static class NationNaming
         born.FoundNameForm = FormFor(born.Government, born.Ideology, born.DeclaredReligion, culture);
         born.FoundNameBase = BaseName(campaign, born);
         born.NameSettledDay = -1;
+        AvoidClash(campaign, born, regions);
         campaign.MarkStrategicChange();
+    }
+
+    /// <summary>
+    /// A name another living state already wears is not worn twice. Three Eritreas and four
+    /// Ukraines at once were what happens when every piece of the same people's ground leaves on
+    /// its own: the second piece is called for its largest region instead.
+    /// </summary>
+    private static void AvoidClash(Campaign campaign, Nation nation, int[] regions)
+    {
+        if (campaign is null || nation is null || !string.IsNullOrWhiteSpace(nation.CustomName)) return;
+        var name = Render(campaign, nation, false);
+        if (name.Length == 0) return;
+        var clash = false;
+        foreach (var other in campaign.Nations)
+        {
+            if (ReferenceEquals(other, nation) || other.Population <= 0) continue;
+            if (!string.Equals(CountryNames.Resolve(other, false), name, StringComparison.OrdinalIgnoreCase)) continue;
+            clash = true;
+            break;
+        }
+        if (!clash) return;
+        var region = LargestRegion(campaign, regions);
+        if (region is null || (nation.FoundNameKind == "region" && nation.FoundNameId == region.Id)) return;
+        nation.FoundNameKind = "region";
+        nation.FoundNameId = region.Id;
+        nation.FoundNameBase = BaseName(campaign, nation);
     }
 
     /// <summary>
@@ -1257,6 +1284,12 @@ public static class NationNaming
                 foreach (var state in states)
                     if (state.CoreTags.Contains(id, StringComparer.OrdinalIgnoreCase)) held += state.Population;
                 break;
+            case "literal" when MovementCatalog.Of(nation.Movement?.Id) is { Peoples.Count: > 0 } movement:
+                // The state name a movement fought for ("Belarus") is its peoples' name.
+                foreach (var state in states)
+                    foreach (var (people, size) in EconomySystem.Cultures(state))
+                        if (movement.Peoples.Contains(people, StringComparer.OrdinalIgnoreCase)) held += size;
+                break;
             default:
                 return 1f;
         }
@@ -1286,6 +1319,7 @@ public static class NationNaming
         nation.FoundNameForm = FormFor(nation.Government, nation.Ideology, nation.DeclaredReligion, culture);
         nation.FoundNameBase = BaseName(campaign, nation);
         nation.NameSettledDay = campaign.ElapsedDays;
+        AvoidClash(campaign, nation, regions);
         var after = Render(campaign, nation, false);
         if (string.Equals(before, after, StringComparison.Ordinal)) return false;
         campaign.Chronicle.Record(campaign, "state_named", nation.Id, place: after);

@@ -241,6 +241,11 @@ public static class SecessionEvents
         }
 
         foreach (var (people, states) in byCulture)
+        {
+            // A people that already has a living state of its own does not found a second one:
+            // Ukrainians on ground Russia took are Ukraine's lost land (LostLands), not a "Republic
+            // of Ukraine" that seceded five times and was taken back five times.
+            if (KinState(campaign, owner, people) is not null) continue;
             foreach (var bloc in Contiguous(states))
             {
                 long here = 0;
@@ -250,6 +255,7 @@ public static class SecessionEvents
                 bestPeople = here;
                 culture = people;
             }
+        }
         // Federal regions share their political rejection, not necessarily one language.
         // Keep them separate from an ethnic bloc and apply the same connectivity and
         // subsequent population cap as every other secession.
@@ -426,6 +432,19 @@ public static class SecessionEvents
         foreach (var (people, size) in EconomySystem.Cultures(state))
             if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) theirs += size;
         return theirs >= state.Population * (double)share;
+    }
+
+    /// <summary>The living state, other than the owner, whose own people this is; null when there is none.</summary>
+    private static Nation KinState(Campaign campaign, Nation owner, string culture)
+    {
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == owner.Id || nation.Population <= 0 || nation.Movement is not null ||
+                campaign.Fallen.Contains(nation.Id) || !campaign.HasOwnedLand(nation)) continue;
+            if (string.Equals(DemographyCatalog.PrimaryCulture(nation.Tag), culture, StringComparison.OrdinalIgnoreCase))
+                return nation;
+        }
+        return null;
     }
 
     private static bool Touches(HashSet<int> taken, int region) =>

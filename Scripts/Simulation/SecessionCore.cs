@@ -68,6 +68,14 @@ public sealed class SecessionWeights
     public float JoinPeopleShare = 0.20f;
 
     /// <summary>
+    /// Where a region's secession pressure stands after its breakaway is crushed and the region
+    /// taken back. Below zero: the years of exhaustion and repression before the next rising.
+    /// At zero a reconquered region rose again in seven months - Kuban four times, Russia's
+    /// Ukrainian ground five - and the parent was at war for twenty-five years.
+    /// </summary>
+    public float CrushedPressure = -6f;
+
+    /// <summary>
     /// And the whole thing is capped, because a country does not cease to exist in one
     /// afternoon. Past this share of the country's people the joiners are dropped, largest
     /// first, until what leaves is a secession rather than a dissolution.
@@ -189,6 +197,7 @@ public static class SecessionCore
                 case "join_discontent": Weights.JoinDiscontent = value; break;
                 case "join_limit": Weights.JoinLimit = (int)MathF.Round(value); break;
                 case "join_people_share": Weights.JoinPeopleShare = value; break;
+                case "crushed_pressure": Weights.CrushedPressure = value; break;
                 case "maximum_share": Weights.MaximumShare = value; break;
                 case "militia_formations": Weights.MilitiaFormations = (int)MathF.Round(value); break;
                 case "stability": Weights.Stability = value; break;

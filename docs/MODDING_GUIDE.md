@@ -1940,6 +1940,25 @@ movement with a key of its own and changes one by naming it again with only the 
 - The numbers are defines named `Movement*` (see `Scripts/Simulation/MovementRules.cs`), set from
   any `common/defines` file.
 
+### Breakaways: their shape, their name and their capital
+
+A secession starts from a core - a contiguous block of regions of one people, or a bloc breaking
+for the same federal reasons - and may take some neighbours with it (`common/secession`):
+
+- `join_limit` neighbours at most, and only the core's own neighbours, so a new country has a
+  shape rather than a line through the angriest regions next door.
+- `join_people_share` (0.20): the least share of a neighbour's people that must be the seceding
+  people for it to come along; a federal break is exempt. A neighbour that is another country's
+  core - land the parent conquered - never comes along.
+- The core alone is the new country's homeland. A movement's rising takes the part of its homeland
+  that connects to the flashpoint, and a landless movement is revived by a secession only when
+  half the people leaving live in its homeland.
+- The capital is the most populous region of the core.
+- A founded state's name is checked monthly. When less than `Defines.NameHoldMinimum` (0.30) of
+  its people live on what the name is for - its people, its land, its region - it is renamed from
+  the ground it holds (the lands in `common/naming`). The form of state follows a government that
+  has held for `Defines.NameFormFollowsDays` (180). A name the player typed is never changed.
+
 ### Peace, the status quo and war weariness
 
 The AI writes the land of a treaty region by region from its own border outwards
@@ -2095,6 +2114,46 @@ says whether foreign money can raise an independence movement in it (`agitable`,
 and whether it leaves by war (`armed_rebellion`, default true). The base game's leases are
 neither, and its overseas territories and associated states leave peacefully.
 `Defines.SubjectAgitationMinPopulation` (100 000) is the fewest people agitation can work on.
+
+### The rise and fall of economies
+
+What a country's work is worth (`Nation.OutputScale`, calibrated from 2024) is a stock that drifts
+every week (`Scripts/Simulation/SecularCycle.cs`), so the order of 2024 can change. A year's drift:
+
+- **catch-up**: `SecularConvergence` (0.012) times the log distance below the frontier (the 90th
+  percentile of output per head among countries over ten million people), times readiness -
+  human capital, stability above 0.30, and peace;
+- **the cost of leading**: `SecularLeaderDrag` (0.010) times the log distance above it;
+- **a long wave** of the country's own, `SecularWaveAmplitude` (0.008) high and
+  `SecularWaveShortestYears`-`SecularWaveLongestYears` (35-60) long, period and phase from the seed;
+- **a year's fortune**: `SecularFortune` (0.006), from the seed;
+- **drags**: `SecularWarDrag` (0.006) at war, `SecularOverstretchDrag` (0.012) at full overstretch;
+- held within `SecularFloor`-`SecularCeiling` (-4 % to +6 %). `SecularCycleEnabled: false` turns it off.
+
+The economy screen shows it as "Rise and decline", with its parts under the cursor. Conquered ground
+keeps what its work was worth: a conqueror's multiplier is blended with the loser's by people.
+
+### Unions, shards and restorations
+
+- A **culture union** needs the same main people in both countries, and a joiner that is a piece the
+  game made or no bigger than `CultureUnionMaxJoinerRegions` (3) regions. The AI only takes in
+  pieces born in play; a country of 2024 does not sign itself away.
+- A **shard** (`common/defines` `Shard*`) is a small state born in play, never a country of 2024.
+- A vanished country can be **restored** by a breakaway only when `RestorationGroundShare` (0.40)
+  of its people live on that country's old ground.
+- A people with a living state of its own does not found a second one by seceding; its ground in
+  another country is lost land. A region taken back from a crushed breakaway starts again from
+  `crushed_pressure` (-6) in `common/secession`.
+- "The strongman crowns himself" (`common/governance/21_world_transitions.json`) is a road out of a
+  military junta only.
+
+**The console curses.** `snowgrave` and `weirdroute` (Deltarune) are saved with the world and
+cannot be taken back. Under the ice the clock runs and nothing else does; on the weird route every
+formation walks over any border to the nearest water, one province each
+`Defines.WeirdRouteHoursPerProvince` (10). A map with no water at all gets static instead. Their
+sounds are `sound/07_world_curses.json`; `map_ambience.frozen` names the one bed a frozen world
+still hears. The setting `loading_without_ai_art` takes the generated pictures off the loading
+screen.
 
 ### The console and mod diagnostics
 

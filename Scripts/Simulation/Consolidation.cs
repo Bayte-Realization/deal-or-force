@@ -289,6 +289,9 @@ public static class Consolidation
         if (n is null || n.Population <= 0 || n.Movement is not null || n.IsSubject || c.Fallen.Contains(n.Id)) return false;
         if (!c.HasOwnedLand(n)) return false;
         if (n.Tag.StartsWith("R_") || n.Tag.StartsWith("M_")) return true;
+        // A shard is a piece the game's own risings and releases made. A small country of 2024 is
+        // a nation, not a shard: counted as one, Switzerland "consolidated" Austria on day 143.
+        if (!CultureUnion.BornInPlay(n)) return false;
         var states = c.StatesOf(n);
         return states.Length <= c.Defines.ShardMaxStates && n.Population <= c.Defines.ShardMaxPopulation;
     }
