@@ -251,7 +251,7 @@ public static class Factions
         }
         if (founded.Count == 0) return 0;
 
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         // The tensions and the backers that name a faction, which could not be read before it existed.
         foreach (var json in _documents)
         {
@@ -356,6 +356,7 @@ public static class Factions
         faction.CapitalName = parent.CapitalName;
         faction.CapitalLatitude = parent.CapitalLatitude;
         faction.CapitalLongitude = parent.CapitalLongitude;
+        faction.CapitalProvinceId = faction.CapitalStateMapIndex = faction.GovernmentSeatProvinceId = 0;
         faction.SecededFromId = -1;
         faction.FactionId = "";
         faction.PoliticsChangedDay = campaign.ElapsedDays;
@@ -372,7 +373,7 @@ public static class Factions
             parent.WeeklyTaxIncome = parent.WeeklyExpenses = parent.WeeklyBalance = 0f;
         }
 
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         Warfare.RebuildFronts(campaign);
         campaign.Chronicle.Record(campaign, "regime_change", faction.Id, parent.Id, place: formerName);
         campaign.MarkStrategicChange();
@@ -421,12 +422,13 @@ public static class Factions
                     participant.CapitalName = parent.CapitalName;
                     participant.CapitalLatitude = parent.CapitalLatitude;
                     participant.CapitalLongitude = parent.CapitalLongitude;
+                    participant.CapitalProvinceId = participant.CapitalStateMapIndex = participant.GovernmentSeatProvinceId = 0;
                     participant.SecededFromId = -1;
                     participant.FactionId = "";
                     participant.PoliticsChangedDay = campaign.ElapsedDays;
                     if (string.IsNullOrEmpty(participant.FormedNationId))
                         participant.FormedNationId = FormableRestorations.Prefix + parent.Tag.ToLowerInvariant();
-                    campaign.LocateCapitals();
+                    campaign.LocateCapitals(preserveExisting: true);
                     campaign.Chronicle.Record(campaign, "regime_change", participant.Id, parent.Id, place: formerName);
                 }
                 else if (parts.Length >= 4)
@@ -459,6 +461,7 @@ public static class Factions
                 participant.CapitalName = parent.CapitalName;
                 participant.CapitalLatitude = parent.CapitalLatitude;
                 participant.CapitalLongitude = parent.CapitalLongitude;
+                participant.CapitalProvinceId = participant.CapitalStateMapIndex = participant.GovernmentSeatProvinceId = 0;
                 participant.SecededFromId = -1;
                 participant.FactionId = "";
                 participant.PoliticsChangedDay = campaign.ElapsedDays;
@@ -475,7 +478,7 @@ public static class Factions
                         "theocratic_rule" => "theocracy",
                         _ => "parliamentary_republic"
                     };
-                campaign.LocateCapitals();
+                campaign.LocateCapitals(preserveExisting: true);
                 campaign.Chronicle.Record(campaign, "regime_change", participant.Id, parent.Id, place: formerName);
             }
             else if (participant.SecededFromId >= 0 && war.WinnerId != participant.Id &&
@@ -651,6 +654,9 @@ public static class Factions
             parent.CapitalName = definition.ParentCapital;
             parent.CapitalLatitude = definition.ParentCapitalLatitude;
             parent.CapitalLongitude = definition.ParentCapitalLongitude;
+            // This is an authored change of city (Marib / Port Sudan), not a saved
+            // government's lost capital. The final locate pass must place the new city.
+            parent.CapitalProvinceId = parent.CapitalStateMapIndex = parent.GovernmentSeatProvinceId = 0;
         }
         if (!float.IsNaN(definition.CapitalLatitude))
         {

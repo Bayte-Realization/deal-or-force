@@ -61,6 +61,16 @@ public static class CampaignFingerprint
             MixFloat(campaign.Defines.FrontDisengagementMaximumShare); MixFloat(campaign.Defines.FrontDisengagementDefenceRatio);
         }
         var diplomacyRules = campaign.Defines;
+        if (!diplomacyRules.AiFormableProclamations || diplomacyRules.AiFormableReviewDays != 30 ||
+            diplomacyRules.AiFormableEarliestDay != 120 || diplomacyRules.AiFormableMinimumIntervalDays != 1825 ||
+            diplomacyRules.AiFormableCrisisRecoveryDays != 180 || diplomacyRules.AiFormableTreasuryReserveShare != .02f ||
+            diplomacyRules.AiFormableMinimumScore != .58f)
+        {
+            MixText("formable_proclamation_ai_rules"); Mix(diplomacyRules.AiFormableProclamations ? 1 : 0);
+            Mix(diplomacyRules.AiFormableReviewDays); Mix(diplomacyRules.AiFormableEarliestDay);
+            Mix(diplomacyRules.AiFormableMinimumIntervalDays); Mix(diplomacyRules.AiFormableCrisisRecoveryDays);
+            MixFloat(diplomacyRules.AiFormableTreasuryReserveShare); MixFloat(diplomacyRules.AiFormableMinimumScore);
+        }
         if (!diplomacyRules.PeaceAlliedBenefits)
         { MixText("peace_allied_benefits"); Mix(0); }
         if (!diplomacyRules.OrganicOrganizationReachEnabled || diplomacyRules.AiOrganizationExpansionLimit != 64 ||
@@ -277,6 +287,8 @@ public static class CampaignFingerprint
 
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))
         {
+            if (nation.GovernmentSeatProvinceId != 0)
+            { MixText("government_seat"); Mix(nation.GovernmentSeatProvinceId); }
             if (nation.Delegated.Count > 0 || nation.ArmyByHand)
             {
                 MixText("staff_portfolios_v1"); Mix(nation.ArmyByHand ? 1 : 0); Mix(nation.Delegated.Count);

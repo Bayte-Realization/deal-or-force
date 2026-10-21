@@ -449,6 +449,7 @@ public static class PeaceConference
             Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
 
+        CapitalCore.Tick(campaign);
         campaign.MarkMapChanged();
         return true;
     }

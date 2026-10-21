@@ -244,6 +244,8 @@ static class AssaultReadinessTests
         // CommissionNewFleetCommand and ConsolidateSubjectsCommand restores the earlier
         // 0xDA7C6F9772777A1D. The feature and command tables are authoritative; default
         // assault floors still add no bytes. Keep a single strict golden.
+        // Re-recorded 21 October 2026 with ClaudeStateFingerprintTests (0xE51AA42BB91EDE15 ->
+        // 0x0BEDBA3316932DC6): the system table's new FormableProclamationAi entry, nothing here.
         c = new Campaign(112017) { ScenarioId = "living_world_fingerprint_fixture" };
         for (var id = 0; id < 3; id++)
             c.Nations.Add(new Nation { Id = id, MapIndex = 501 + id, Tag = "FP" + id,
@@ -252,7 +254,7 @@ static class AssaultReadinessTests
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
         var actual = CampaignFingerprint.Of(c);
-        Check(actual == 0xE51AA42BB91EDE15UL,
+        Check(actual == 0x0BEDBA3316932DC6UL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
     }
 

@@ -485,7 +485,10 @@ public partial class DealOrForceGame
         row.Select.AddChild(inner);
 
         row.Flag = FlagBadge("", 18);
-        inner.AddChild(row.Flag);
+        // A fixed slot, so the names line up down the list whatever each flag's proportions.
+        var flagSlot = new CenterContainer { CustomMinimumSize = new Vector2(40, 0), MouseFilter = MouseFilterEnum.Ignore };
+        flagSlot.AddChild(row.Flag);
+        inner.AddChild(flagSlot);
         // The name and, under it, what the state says it is: the two facts a player scans a
         // country list for before opening anything.
         var text = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
@@ -518,11 +521,18 @@ public partial class DealOrForceGame
         row.Opinion.VerticalAlignment = VerticalAlignment.Center;
         inner.AddChild(row.Opinion);
 
-        float lastNameWidth = -1;
+        float lastNameWidth = -1, lastIdentityWidth = -1;
         row.Name.Resized += () =>
         {
             if (Math.Abs(row.Name.Size.X - lastNameWidth) < .5f) return;
             lastNameWidth = row.Name.Size.X;
+            FitDiplomacyName(row);
+        };
+        // The identity line wraps too, and its width settles on its own layout pass.
+        row.Identity.Resized += () =>
+        {
+            if (Math.Abs(row.Identity.Size.X - lastIdentityWidth) < .5f) return;
+            lastIdentityWidth = row.Identity.Size.X;
             FitDiplomacyName(row);
         };
 
@@ -571,7 +581,10 @@ public partial class DealOrForceGame
     // theme line spacing and the actual HBox width all affect the final height.
     private static float ReserveWrappedLabelLines(Label label)
     {
-        var lines = Math.Max(1, label.GetLineCount());
+        // Before its first layout a label is a few pixels wide and "wraps" into a line per word.
+        // Reserving that stretched the first row of the list to some 400 pixels, pushing every
+        // other country out of sight, until something happened to resize the name.
+        var lines = label.Size.X < 40f ? 1 : Math.Max(1, label.GetLineCount());
         if (label.MaxLinesVisible > 0) lines = Math.Min(lines, label.MaxLinesVisible);
         var height = Mathf.Ceil(Math.Max(14f, label.GetLineHeight()) * lines +
             label.GetThemeConstant("line_spacing") * (lines - 1) + 2);

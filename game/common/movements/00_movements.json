@@ -7,13 +7,16 @@
 // and a host whose patience it spends. It lives off donations and sponsors. Where its support
 // runs high enough it can rise, and an uprising that succeeds makes it a country like any
 // other - a capital where the headquarters was, militia out of its cadres, and a war with the
-// country it rose against. One that loses all its ground goes back to being landless.
+// country it rose against. It does not win a postcode: the whole homeland that the same
+// country still governs comes over in the same act, and an agreed vote frees every region
+// whose own residents voted for it. One that loses all its ground goes back to being landless.
 //
 //   tag            the three letters its country goes by
 //   peoples        cultures it speaks for: support, donations and cadres come from them
 //   faiths         religions whose believers lend it a little support even when not its peoples
 //   headquarters   the region its headquarters stands in on the first day
-//   homeland       regions it claims (the AI rises there first)
+//   homeland       regions it claims: the zone a rising, a carried vote or a return takes
+//                  (the AI rises there first)
 //   support        support among its peoples, by region, on the first day (0 to 1)
 //   sponsors       countries that fund it, in billions a year, while they think well of it
 //   recognised_by  countries that recognise it on the first day

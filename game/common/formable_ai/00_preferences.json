@@ -1,0 +1,17 @@
+// Soft priorities, not permission to invent territory, consent, institutions or religion.
+// The player keeps all existing proclamation choices. A later file may replace these rows.
+{
+  "soviet_union": {"ai_priority":0.50,"preferred_ideologies":["communism","socialism"],"preferred_governments":["one_party_state","federation"],"preferred_courses":["social_solidarity"]},
+  "eurasian_union": {"ai_priority":0.55,"preferred_ideologies":["nationalism","conservatism","liberalism"],"preferred_governments":["federation","presidential_republic"],"preferred_courses":["strategic_autonomy","commercial_openness"]},
+  "union_state": {"ai_priority":0.48,"preferred_courses":["national_security","strategic_autonomy"]},
+  "yugoslavia": {"ai_priority":0.57,"preferred_governments":["federation"],"preferred_courses":["social_solidarity","civic_pluralism"]},
+  "czechoslovakia": {"ai_priority":0.56,"preferred_governments":["parliamentary_republic","federation"],"preferred_courses":["commercial_openness","civic_pluralism"]},
+  "european_federation": {"ai_priority":0.52,"preferred_governments":["federation","parliamentary_republic"],"preferred_ideologies":["liberalism","social_democracy"],"preferred_courses":["civic_pluralism","commercial_openness"]},
+  "byzantium": {"ai_priority":0.38,"preferred_ideologies":["nationalism","conservatism"],"preferred_governments":["absolute_monarchy","constitutional_monarchy","theocracy"],"preferred_courses":["institutional_continuity","strategic_autonomy"]},
+  "western_roman_empire": {"ai_priority":0.38,"preferred_ideologies":["nationalism","conservatism"],"preferred_governments":["absolute_monarchy","constitutional_monarchy"],"preferred_courses":["institutional_continuity","strategic_autonomy"]},
+  "roman_restoration": {"ai_priority":0.42,"preferred_ideologies":["nationalism","conservatism"],"preferred_governments":["absolute_monarchy","constitutional_monarchy"],"preferred_courses":["institutional_continuity","strategic_autonomy"]},
+  "caliphate": {"ai_priority":0.45,"preferred_ideologies":["theocratic_rule"],"preferred_governments":["theocracy"],"preferred_courses":["institutional_continuity"]},
+  "austria_hungary": {"ai_priority":0.46,"preferred_governments":["constitutional_monarchy","absolute_monarchy"],"preferred_courses":["institutional_continuity"]},
+  "slavic_union": {"ai_priority":0.40,"preferred_ideologies":["nationalism"],"preferred_courses":["national_security","strategic_autonomy"]},
+  "north_american_union": {"ai_priority":0.44,"preferred_governments":["federation"],"preferred_courses":["commercial_openness","civic_pluralism"]}
+}

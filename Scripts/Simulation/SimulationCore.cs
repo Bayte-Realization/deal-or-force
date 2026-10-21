@@ -1210,7 +1210,7 @@ public sealed partial class Campaign
         // Where each capital actually stands, and what that makes of the country. Both need
         // the map: a capital is a place on the globe rather than a region a scenario names,
         // and the regions under it can be redrawn by a war.
-        LocateCapitals();
+        LocateCapitals(preserveExisting: true);
         // Only ever from the authored world. Whether that has happened is read from the
         // world rather than remembered in a field, because a multiplayer client adopts a
         // campaign it did not create: a flag in memory says "not yet" about a world that was
@@ -1280,7 +1280,7 @@ public sealed partial class Campaign
     /// to the capital's coordinates, which is also how the deployment planner finds it -
     /// a capital that has been overrun still points at the region it is in.
     /// </summary>
-    public void LocateCapitals()
+    public void LocateCapitals(bool preserveExisting = false)
     {
         var topology = ProvinceMap;
         if (topology is null) return;
@@ -1296,6 +1296,15 @@ public sealed partial class Campaign
 
         foreach (var nation in Nations)
         {
+            // A loaded capital is a real saved place, even if ceded or occupied. Rebinding
+            // it to the nearest remaining province kept the old city's name forever.
+            // Emergency/permanent relocation belongs to CapitalCore, not map attachment
+            // (a network snapshot must remain identical until its next authoritative tick).
+            if (preserveExisting && nation.CapitalProvinceId > 0 && nation.CapitalProvinceId <= topology.ProvinceCount)
+            {
+                nation.CapitalStateMapIndex = topology.ProvinceToState[nation.CapitalProvinceId];
+                continue;
+            }
             nation.CapitalStateMapIndex = 0;
             nation.CapitalProvinceId = 0;
             if (!byNation.TryGetValue((ushort)nation.MapIndex, out var provinces) || provinces.Count == 0)

@@ -128,7 +128,9 @@ public static class Restoration
         var holder = Holder(campaign, region);
         // A return the exile does not already stand on is one the holder agreed to.
         var negotiated = !Controls(campaign, nation, region);
-        if (!MovementRules.TakeRegion(campaign, nation, region, holder, restoration: true)) return false;
+        // A return is not a doorstep: the whole homeland the same holder still governs comes
+        // home with the first region, through the ordinary accounting, in one act.
+        if (MovementRules.TakeZone(campaign, nation, region, holder, restoration: true) == 0) return false;
         if (holder is not null && nation.Movement is not null) nation.Movement.ReadyOnDay.Remove(ConsentKey(holder.Id));
         campaign.Chronicle.Record(campaign, "restoration", nation.Id, holder?.Id ?? -1, place: region.DisplayName);
         if (negotiated && holder is not null)
@@ -156,7 +158,7 @@ public static class Restoration
         {
             CapitalCore.Establish(campaign, nation, seat);
         }
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
         DiagnosticLogs.Write("simulation", $"NATION_RESTORED nation={nation.Tag} name={nation.Name} regions={held.Length}");

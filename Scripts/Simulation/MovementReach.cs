@@ -96,7 +96,7 @@ public static class MovementReach
         return c.HasOwnedLand(nation) && TerritorialCoherence.TouchesOwnedGround(c, nation, region.MapIndex);
     }
 
-    private static bool IsHomeland(Campaign c, MovementDefinition definition, ScenarioState region)
+    internal static bool IsHomeland(Campaign c, MovementDefinition definition, ScenarioState region)
     {
         if (MovementDefinition.Listed(definition.Homeland, region.Id)) return true;
         var origin = TerritorialClaims.Origin(region);

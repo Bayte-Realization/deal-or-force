@@ -221,7 +221,9 @@ public static class FormableNations
                 d.Supersedes.Contains(nation.FormedNationId, StringComparer.OrdinalIgnoreCase))),
             new(Loc.Get("At peace"), !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id))),
             new(Loc.Format("Stability: {0:P0} / {1:P0}", nation.Stability, d.MinimumStability), nation.Stability >= d.MinimumStability),
-            new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null)
+            new(Loc.Get("Territorial map ready"), map is not null && campaign.ProvinceController is not null),
+            new(Loc.Get("An independent country must lead the proclamation"), nation.Population > 0 &&
+                !nation.IsSubject && !nation.Landless && !campaign.Fallen.Contains(nation.Id))
         };
         var provinces = new HashSet<int>(d.RequiredProvinces);
         provinces.UnionWith(PeacefulFormation.RegionProvinces(campaign, d));

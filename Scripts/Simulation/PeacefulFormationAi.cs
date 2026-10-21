@@ -31,6 +31,7 @@ public static class PeacefulFormationAi
             foreach (var definition in definitions)
             {
                 if (!FormableNations.Eligible(campaign, founder, definition) ||
+                    !FormableNations.CompatibleProclamation(founder, definition) ||
                     !FormableNations.ReligionMandate(campaign, founder, definition) ||
                     founder.Stability < definition.MinimumStability ||
                     (definition.RequiredIdeology.Length > 0 && !definition.RequiredIdeology.Contains(founder.Ideology, StringComparer.OrdinalIgnoreCase)) ||
@@ -63,6 +64,7 @@ public static class PeacefulFormationAi
                 // humans. Two AI founders must not approach the same partner in parallel.
                 var leader = campaign.Nations.Where(n => owners.ContainsKey(n.MapIndex) &&
                     FormableNations.Eligible(campaign, n, definition) && CanLead(campaign, n) &&
+                    FormableNations.CompatibleProclamation(n, definition) &&
                     FormableNations.ReligionMandate(campaign, n, definition) &&
                     n.Stability >= definition.MinimumStability &&
                     n.Treasury >= Math.Max(.05f, n.Gdp * definition.CostShare) +
@@ -75,8 +77,9 @@ public static class PeacefulFormationAi
                 var status = FormableNations.Evaluate(campaign, founder, definition);
                 if (status.CanForm)
                 {
-                    new FormNationCommand { IssuerId = founder.Id, FormableId = definition.Id }.Apply(campaign);
-                    break;
+                    // A ready identity is chosen by the common situational proclamation
+                    // policy, never by this invitation catalogue's alphabetical order.
+                    continue;
                 }
                 var partner = campaign.Nations.Where(n => owners.ContainsKey(n.MapIndex) && n.Id != founder.Id &&
                         !PeacefulFormation.Participates(campaign, founder, n, definition) &&
@@ -95,7 +98,7 @@ public static class PeacefulFormationAi
     }
 
     private static bool CanLead(Campaign campaign, Nation nation) => nation.Population > 0 &&
-        nation.Movement is null && !nation.IsSubject && string.IsNullOrEmpty(nation.FormedNationId) &&
+        FormableProclamationAi.EstablishedCountry(nation) && !nation.Landless && !nation.IsSubject &&
         !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
 
     private static bool PromisedElsewhere(Campaign campaign, Nation founder, Nation partner)

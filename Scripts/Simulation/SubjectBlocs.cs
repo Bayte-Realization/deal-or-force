@@ -176,6 +176,7 @@ public static class SubjectBlocs
         campaign.Fallen.Add(absorb.Id);
         absorb.CapitalStateMapIndex = 0;
         absorb.CapitalProvinceId = 0;
+        absorb.GovernmentSeatProvinceId = 0;
         absorb.Population = 0;
         keep.Population = campaign.StatesOf(keep).Sum(state => state.Population);
         keep.LibertyDesire = MathF.Max(0f, keep.LibertyDesire - .05f);
@@ -185,7 +186,7 @@ public static class SubjectBlocs
         owner.DecisionAvailableDay[MergeKey(keep, absorb)] =
             campaign.ElapsedDays + Math.Max(0, campaign.Defines.SubjectConsolidationCooldownDays);
 
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         CampaignDiplomacy.ForgetBorders();
         NationalModifiers.Invalidate(owner);
         NationalModifiers.Invalidate(keep);

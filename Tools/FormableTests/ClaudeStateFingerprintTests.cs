@@ -91,8 +91,11 @@ public static class ClaudeStateFingerprintTests
         // The 20 October probe assembly reproduces both older values with the same frozen data.
         // Current and HEAD fingerprint code mix identical inputs on this default fixture, and
         // bypassing catalogue loading still produces the new value. Keep one strict golden.
+        // Re-recorded again 21 October 2026 (0xE51AA42BB91EDE15 -> 0x0BEDBA3316932DC6): the system
+        // table maps the new FormableProclamationAi to formable_nations, and the fingerprint mixes
+        // that table on purpose. Removing only that one entry restores 0xE51AA42BB91EDE15 exactly.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0xE51AA42BB91EDE15UL,
+        Check(fixture == 0x0BEDBA3316932DC6UL,
             $"new fields at their legacy defaults retain the pre-fix golden fingerprint (got 0x{fixture:X16})");
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();

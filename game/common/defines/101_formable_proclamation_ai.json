@@ -1,0 +1,9 @@
+{
+  "AiFormableProclamations": true,
+  "AiFormableReviewDays": 30,
+  "AiFormableEarliestDay": 120,
+  "AiFormableMinimumIntervalDays": 1825,
+  "AiFormableCrisisRecoveryDays": 180,
+  "AiFormableTreasuryReserveShare": 0.02,
+  "AiFormableMinimumScore": 0.58
+}

@@ -18,6 +18,8 @@ public sealed partial class Defines
     public float SubjectRebellionThreshold { get; set; } = 0.85f;
     public float SubjectAnnexationRevoltThreshold { get; set; } = 0.60f;
     public float SubjectConspiracyThreshold { get; set; } = 0.40f;
+    /// <summary>The fewest people a subject needs before foreign money can raise a movement in it.</summary>
+    public long SubjectAgitationMinPopulation { get; set; } = 100_000;
     public float AiReleaseOverstretchThreshold { get; set; } = 0.32f;
     public float AiReleaseRegionHeatThreshold { get; set; } = 0.68f;
 }
@@ -187,11 +189,20 @@ public static class SubjectInteractions
     {
         if (campaign is null || overlord is null || subject is null || !subject.AnswersTo(overlord.Id))
             return null;
+        // A kind that does not leave by war leaves by vote (SubjectType.ArmedRebellion).
+        if (SubjectCatalog.Of(subject.SubjectType) is { ArmedRebellion: false })
+        {
+            SubjectSystem.Release(campaign, subject, broke: true);
+            campaign.Chronicle.Record(campaign, "subject_broke_free", subject.Id, overlord.Id);
+            campaign.MarkStrategicChange();
+            return null;
+        }
 
         var coRebels = new List<Nation>();
         foreach (var peer in campaign.Nations)
         {
             if (peer.Id == subject.Id || !peer.AnswersTo(overlord.Id)) continue;
+            if (SubjectCatalog.Of(peer.SubjectType) is { ArmedRebellion: false }) continue;
             if ((subject.SubjectConspiring && peer.SubjectConspiring) ||
                 peer.LibertyDesire >= campaign.Defines.SubjectRebellionThreshold * 0.85f)
             {
@@ -323,6 +334,16 @@ public static class SubjectInteractions
             if (overlord.Id == subject.OverlordId || overlord.Id == subject.Id)
             {
                 refusal = Loc.Get("Select a subject of a foreign power.");
+                return false;
+            }
+            if (SubjectCatalog.Of(subject.SubjectType) is { Agitable: false })
+            {
+                refusal = Loc.Format("{0} is rented land with no people of its own to raise.", subject.DisplayName);
+                return false;
+            }
+            if (subject.Population < campaign.Defines.SubjectAgitationMinPopulation)
+            {
+                refusal = Loc.Format("{0} has too few people for an independence movement.", subject.DisplayName);
                 return false;
             }
             if (overlord.IsSubject)
@@ -1038,7 +1059,7 @@ public static class CountryRelease
         CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, campaign.StatesOf(born), (long)totalParentPop);
         campaign.Homelands[born.Id] = campaign.StatesOf(born).Select(s => s.MapIndex).ToList();
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
 
         born.Stability = 0.58f;
         born.WarSupport = 0.50f;

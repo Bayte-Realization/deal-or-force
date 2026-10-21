@@ -64,7 +64,7 @@ public static class Dismantlement
         var relation = CampaignDiplomacy.Get(c, parent.Id, born.Id);
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + 3650;
-        c.LocateCapitals(); c.MarkStrategicChange();
+        c.LocateCapitals(preserveExisting: true); c.MarkStrategicChange();
         return born;
     }
 }

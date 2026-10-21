@@ -372,6 +372,7 @@ public sealed class ModLoader
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
         ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),
+        ("formable_ai", () => FormableProclamationAi.ResetCatalog(), FormableProclamationAi.Merge),
         ("regional_demography", () => RegionalDemography.ResetCatalog(), RegionalDemography.Merge),
         ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge),
         ("handbook", () => HandbookCatalog.ResetCatalog(), HandbookCatalog.Merge),

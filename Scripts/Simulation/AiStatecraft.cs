@@ -84,7 +84,11 @@ public static partial class AiStatecraft
             // player who ignored one is asked again later instead of never.
             PeaceOffers.Expire(campaign);
 
-            using (SimProfiler.Measure("  ai:foundations")) PeacefulFormationAi.Tick(campaign);
+            using (SimProfiler.Measure("  ai:foundations"))
+            {
+                FormableProclamationAi.Tick(campaign);
+                PeacefulFormationAi.Tick(campaign);
+            }
             EnsureDailyTables(campaign);
         }
         yield return 0;

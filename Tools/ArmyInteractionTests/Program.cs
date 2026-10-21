@@ -15,6 +15,8 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--capital-loss-only")) { CapitalLossTests.Run(); return; }
+        if (args.Length == 0) CapitalLossTests.Run();
         if (args.Contains("--peace-beneficiary-only")) { PeaceBeneficiaryTests.Run(); return; }
         if (args.Length == 0) PeaceBeneficiaryTests.Run();
         if (args.Contains("--peace-battle-assignment-only")) { PeaceBattleAssignmentTests.Run(); return; }

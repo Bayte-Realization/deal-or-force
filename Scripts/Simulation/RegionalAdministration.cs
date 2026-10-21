@@ -310,7 +310,7 @@ public static class RegionalAdministration
         subject.LibertyDesire = MathF.Max(0f, subject.LibertyDesire - gratitude);
         subject.LastSubjectInteractionDay = c.ElapsedDays;
         subject.SubjectIntegrationProgress = MathF.Max(0, subject.SubjectIntegrationProgress * (1f - (float)share));
-        c.LocateCapitals(); CampaignDiplomacy.ForgetBorders();
+        c.LocateCapitals(preserveExisting: true); CampaignDiplomacy.ForgetBorders();
         NationalModifiers.Invalidate(owner); NationalModifiers.Invalidate(subject);
         c.MarkStrategicChange(); c.MarkMapChanged();
         c.Chronicle.Record(c, "subject_land_grant", owner.Id, subject.Id, place: string.Join(",", ids));

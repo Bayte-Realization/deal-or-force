@@ -189,6 +189,9 @@ static class RestorationTests
         var definition = new FormableNation("test_union", "Union", "", new[] { founder.Tag },
             Array.Empty<string>(), ground, 0, 0, 0, 0, Array.Empty<string>(), Array.Empty<string>(), "#123456")
             { PeacefulAccession = true };
+        // A partner led by a player signs the treaty; accession is never a neighbour's decree.
+        partner.DecisionAvailableDay[PeacefulFormation.ConsentKey(founder.Id, definition.Id)] =
+            c.ElapsedDays + 365;
         PeacefulFormation.Integrate(c, founder, definition);
         Check(c.Fallen.Contains(partner.Id) && !c.HasOwnedLand(partner),
             "a fully acceded country retires its government instead of treating union as defeat");

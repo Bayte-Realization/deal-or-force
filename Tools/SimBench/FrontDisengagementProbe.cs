@@ -168,6 +168,10 @@ internal static class FrontDisengagementProbe
             $"repaired_assignments={Warfare.RepairedBattleAssignments - startingRepairs} " +
             $"formations={c.Armies.Count} nations={c.Nations.Count} days={c.ElapsedDays - startedDay} " +
             $"seed={c.Seed} samples={samples} seconds={clock.Elapsed.TotalSeconds:0.0}");
+        foreach (var nation in c.Nations)
+            if (nation.FormedNationDay > startedDay && nation.FormedNationDay <= c.ElapsedDays &&
+                !string.IsNullOrEmpty(nation.FormedNationId))
+                Console.WriteLine($"WORLD_PROCLAMATION nation={nation.Tag} project={nation.FormedNationId} day={nation.FormedNationDay}");
         return failures == 0 ? 0 : 1;
     }
 

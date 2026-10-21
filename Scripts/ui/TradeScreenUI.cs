@@ -323,7 +323,11 @@ public partial class DealOrForceGame
             row.Net.Text = (quote.Net >= 0 ? "+" : "") + quote.Net.ToString("0.0");
             row.Net.AddThemeColorOverride("font_color",
                 quote.Net >= 0 ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
-            row.Price.Text = settled ? Fmt.Money(quote.Price) : "—";
+            // The opening price is a real quote - the instructions beside the table read it -
+            // so before the first week clears it is shown dimmed, not as a dash that made the
+            // table contradict the panel next to it.
+            row.Price.Text = Fmt.Money(quote.Price);
+            row.Price.Modulate = settled ? Colors.White : new Color(1, 1, 1, .55f);
             var supplied = quote.Demand <= 0.001f ? 1f : quote.Satisfaction;
             row.SupplyFill.AnchorRight = supplied;
             row.SupplyFill.Color = Ui.Colour(

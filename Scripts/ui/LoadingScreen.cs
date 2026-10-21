@@ -14,6 +14,7 @@ namespace DealOrForce;
 public partial class LoadingScreen : Control
 {
     private const string SceneFolder = "res://game/gfx/loading/";
+    private const string Motto = "Life is an eternal struggle. History is an eternal war.";
     private static int _sceneTurn = -1;
     private TextureRect _scene;
     private TextureRect _shade;
@@ -130,7 +131,8 @@ public partial class LoadingScreen : Control
         _body.AddChild(_detail);
         _dismiss = new Button { Name = "LoadingDismiss", Visible = false, CustomMinimumSize = new Vector2(0, 44) };
         _body.AddChild(_dismiss);
-        _footer = Text("Every decision leaves its mark on the map.", 14, "7c8b97");
+        _footer = Text(Loc.Get(Motto), 14, "7c8b97");
+        _footer.Name = "LoadingMotto";
         _footer.HorizontalAlignment = HorizontalAlignment.Center;
         AddChild(_footer);
         Resized += Layout;
@@ -182,7 +184,7 @@ public partial class LoadingScreen : Control
     public void SetStage(string heading, string stage, double completed, string detail)
     {
         _caption.Text = Loc.Get("STRATEGIC DOSSIER");
-        _footer.Text = Loc.Get("Every decision leaves its mark on the map.");
+        _footer.Text = Loc.Get(Motto);
         _heading.Text = Loc.Get(heading);
         _stage.Text = Loc.Get(stage);
         _detail.Text = Loc.Get(detail);

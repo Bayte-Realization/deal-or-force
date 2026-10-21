@@ -332,7 +332,7 @@ public partial class DealOrForceGame
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text = Tr(location);
         DetailHeading("COUNTRY");
-        DetailRow("Capital", CountryNames.Capital(nation));
+        DetailRow(CountryNames.CapitalTitle(_campaign, nation), CountryNames.Capital(nation, _campaign));
         DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name));
         if (CanInspectNation(nation.Id))
         {
@@ -453,9 +453,10 @@ public partial class DealOrForceGame
 
     private void FocusSelectedCapital()
     {
-        if (_selectedNation is null || string.IsNullOrWhiteSpace(_selectedNation.CapitalName)) return;
-        _globe.FocusOn(_selectedNation.CapitalLatitude, _selectedNation.CapitalLongitude, 7.1f);
-        _countryActionFeedback.Text = Simulation.Loc.Format("Focused on {0}.", _selectedNation.CapitalName);
+        if (_selectedNation is null || !CapitalCore.HasSeat(_campaign, _selectedNation)) return;
+        _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, _selectedNation),
+            CapitalCore.EffectiveLongitude(_campaign, _selectedNation), 7.1f);
+        _countryActionFeedback.Text = Simulation.Loc.Format("Focused on {0}.", CountryNames.Capital(_selectedNation, _campaign));
     }
 
     private bool ValidForeignSelection() => _campaign?.Player is not null &&

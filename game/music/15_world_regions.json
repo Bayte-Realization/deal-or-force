@@ -70,6 +70,10 @@
       "file": "audio/north_america_tense.ogg", "label": "Briefing room",
       "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["northern_america"], "weight": 3, "volume_db": 0
     },
+    "south_asia_calm": {
+      "file": "audio/south_asia_calm.ogg", "label": "Lamps on the river",
+      "when": "campaign", "moods": ["calm"], "regions": ["southern_asia"], "weight": 3, "volume_db": 0
+    },
     "south_asia_tense": {
       "file": "audio/south_asia_tense.ogg", "label": "City under curfew",
       "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["southern_asia"], "weight": 3, "volume_db": 0

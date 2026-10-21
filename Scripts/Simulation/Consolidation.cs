@@ -76,7 +76,7 @@ public static class Consolidation
             if ((c.ElapsedDays + (long)nation.Id * 7) % every != 0) continue;
             // A player's country pursues a union only when the player has handed diplomacy over.
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
-            if (nation.Movement is not null || nation.IsSubject || nation.Population <= 0 || !c.HasOwnedLand(nation))
+            if (!FormableProclamationAi.EstablishedCountry(nation) || nation.Landless || nation.IsSubject || nation.Population <= 0 || !c.HasOwnedLand(nation))
             {
                 Clear(nation);
                 continue;
@@ -119,16 +119,9 @@ public static class Consolidation
         founder.ConsolidationProject = definition.Id;
         founder.ConsolidationAmbition = Ambition(c, founder);
 
-        // Every treaty signed and every condition met: the union is proclaimed. The general
-        // review (PeacefulFormationAi) also wants a reserve in the treasury past the founding
-        // cost, which a poor founder may never save - Tirana waiting for ever on a signed treaty.
-        // A player's union is the player's to proclaim.
-        if (!founder.IsHuman && FormableNations.Evaluate(c, founder, definition).CanForm)
-        {
-            new FormNationCommand { IssuerId = founder.Id, FormableId = definition.Id }.Apply(c);
-            Clear(founder);
-            return;
-        }
+        // Diplomacy pursues a project; only the shared situational policy proclaims it.
+        // Do not bypass its fiscal reserve, recovery period or identity comparison here.
+        if (FormableNations.Evaluate(c, founder, definition).CanForm) return;
 
         // The members still outside, the most willing first: one step a month, on the one most
         // likely to give. Not one whose foreign policy another capital holds - it cannot sign.
@@ -189,7 +182,7 @@ public static class Consolidation
         var bestShare = 0f;
         foreach (var definition in FormableNations.All)
         {
-            if (!definition.PeacefulAccession || !FormableNations.Eligible(founder, definition) ||
+            if (!definition.AiFoundation || !definition.PeacefulAccession || !FormableNations.Eligible(c, founder, definition) ||
                 !FormableNations.CompatibleProclamation(founder, definition)) continue;
             if (definition.RequiredIdeology.Length > 0 &&
                 !definition.RequiredIdeology.Contains(founder.Ideology, StringComparer.OrdinalIgnoreCase)) continue;
@@ -270,7 +263,10 @@ public static class Consolidation
         if (c is null || nation is null || other is null || string.IsNullOrEmpty(nation.ConsolidationProject)) return 0f;
         if (nation.ConsolidationAmbition < c.Defines.ConsolidationForceAmbition) return 0f;
         var definition = FormableNations.Find(nation.ConsolidationProject);
-        if (definition is null) return 0f;
+        if (definition is null || !definition.AiFoundation || !FormableNations.Eligible(c, nation, definition) ||
+            !FormableNations.CompatibleProclamation(nation, definition) || !FormableNations.ReligionMandate(c, nation, definition) ||
+            (definition.RequiredIdeology.Length > 0 && !definition.RequiredIdeology.Contains(nation.Ideology, StringComparer.OrdinalIgnoreCase)) ||
+            (definition.RequiredGovernment.Length > 0 && !definition.RequiredGovernment.Contains(nation.Government, StringComparer.OrdinalIgnoreCase))) return 0f;
         var (owners, total) = Owners(c, definition);
         if (total == 0) return 0f;
         var theirs = owners.GetValueOrDefault(other.MapIndex) / (float)total;

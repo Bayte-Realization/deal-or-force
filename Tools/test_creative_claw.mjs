@@ -24,7 +24,7 @@ async function callMcp(method, params = {}) {
   const contentType = res.headers.get('content-type') || '';
   const text = await res.text();
   console.log(`HTTP ${res.status}, content-type: ${contentType}`);
-
+  
   if (contentType.includes('text/event-stream')) {
     // Parse SSE lines
     const lines = text.split('\n');

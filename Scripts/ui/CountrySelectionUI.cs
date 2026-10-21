@@ -298,10 +298,7 @@ public partial class DealOrForceGame
     /// file is read later, so the city inherited "Kyiv Oblast". Everywhere the two agree -
     /// which is everywhere else - the plain name answers and nothing extra is needed.
     /// </summary>
-    private static string CapitalName(Simulation.Nation nation) =>
-        nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)
-            ? ""
-            : Simulation.Loc.GetOr("capital." + nation.CapitalName, Simulation.Loc.Get(nation.CapitalName));
+    private string CapitalName(Simulation.Nation nation) => CountryNames.Capital(nation, _campaign);
 
     private void SetPickerNation(Nation nation, bool focus)
     {
@@ -316,8 +313,8 @@ public partial class DealOrForceGame
             : "minor power");
         var states = _campaign.States.Count(state => state.NationMapIndex == nation.MapIndex);
         if (nation.Landless) tier = Tr("movement without land");
-        if (focus && !string.IsNullOrWhiteSpace(nation.CapitalName))
-            _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude,
+        if (focus && CapitalCore.HasSeat(_campaign, nation))
+            _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, nation), CapitalCore.EffectiveLongitude(_campaign, nation),
                 states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
         var armies = _campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
         var divisions = armies.Sum(army => army.Divisions);

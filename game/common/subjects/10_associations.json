@@ -20,7 +20,10 @@
     "annex_after_days": -1,
     "imposable": false,
     "shares_overlord_politics": true,
-    "receives_land_grants": false
+    "receives_land_grants": false,
+    // Nobody lives there to be raised against the tenant, and a lease ends when it ends.
+    "agitable": false,
+    "armed_rebellion": false
   },
 
   // A territory of another state with a government of its own: the British Overseas
@@ -41,7 +44,9 @@
     "demand_cost": 25,
     "annex_after_days": -1,
     "imposable": false,
-    "receives_land_grants": false
+    "receives_land_grants": false,
+    // One that wants out holds a referendum - New Caledonia has held three - not a war.
+    "armed_rebellion": false
   },
 
   // A state in free association, or one living on a patron's money and garrison: the Compact
@@ -61,6 +66,9 @@
     "demand_cost": 30,
     "annex_after_days": -1,
     "imposable": false,
-    "receives_land_grants": false
+    "receives_land_grants": false,
+    // A free association is left by notice, and a patron's breakaway does not rise against
+    // the army keeping it in being.
+    "armed_rebellion": false
   }
 }

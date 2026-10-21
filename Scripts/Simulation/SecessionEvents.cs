@@ -668,7 +668,7 @@ public static class SecessionEvents
             CapitalCore.Establish(campaign, born, seat);
             born.CapitalName = seat.Name;
         }
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
 
         // Its baseline is its own. A country that has never been this country before has no
         // institutions to take credit for, so what the formula explains is all there is -

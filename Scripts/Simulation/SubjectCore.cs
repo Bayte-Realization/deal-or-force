@@ -87,6 +87,20 @@ public sealed class SubjectType
     public bool SharesOverlordPolitics;
 
     /// <summary>
+    /// Whether foreign money can raise an independence movement inside it. Rented land has no
+    /// people of its own to raise: Guantanamo and Baikonur "rose" against the states running
+    /// them in the first year of every campaign until this said they cannot.
+    /// </summary>
+    public bool Agitable = true;
+
+    /// <summary>
+    /// Whether it leaves by war. An overseas territory or a freely associated state that wants
+    /// out holds a referendum; a war of independence by Norfolk Island against Australia read
+    /// as farce. When false, reaching the breaking point releases it peacefully.
+    /// </summary>
+    public bool ArmedRebellion = true;
+
+    /// <summary>
     /// Whether a peace can make a country this. False for the arrangements history writes and no
     /// treaty does - a lease, an overseas territory, a free association: a peace that ended a
     /// war in Kachin State by making Myanmar a "dependent territory" of the United States read
@@ -186,6 +200,8 @@ public static class SubjectCatalog
             Flag(value2, "may_declare_war", v => type.MayDeclareWar = v);
             Flag(value2, "overlord_defends", v => type.OverlordDefends = v);
             Flag(value2, "shares_overlord_politics", v => type.SharesOverlordPolitics = v);
+            Flag(value2, "agitable", v => type.Agitable = v);
+            Flag(value2, "armed_rebellion", v => type.ArmedRebellion = v);
             Flag(value2, "imposable", v => type.Imposable = v);
             Flag(value2, "receives_land_grants", v => type.ReceivesLandGrants = v);
             Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
@@ -545,7 +561,15 @@ public static class SubjectSystem
             // And what it thinks about all that.
             SubjectInteractions.TickSubjectWeek(campaign, overlord, subject);
             if (!subject.IsSubject) continue;
-            if (campaign.ElapsedDays - subject.SubjectSinceDay < type.GraceDays) continue;
+            // In its grace period a subject does not start wanting out - and what agitation
+            // stirred up settles back towards the kind's own level rather than staying for
+            // twenty years, which is what let foreign money build a rebellion out of nothing.
+            if (campaign.ElapsedDays - subject.SubjectSinceDay < type.GraceDays)
+            {
+                if (subject.LibertyDesire > type.LibertyDesire)
+                    subject.LibertyDesire = Math.Max(type.LibertyDesire, subject.LibertyDesire - SubjectCatalog.Weights.DriftPerWeek);
+                continue;
+            }
             var want = LibertyDesireOf(campaign, subject);
             var weights = SubjectCatalog.Weights;
             var drift = weights.DriftPerWeek * (subject.SubjectConspiring || subject.SubjectForeignBackers.Count > 0 ? 1.6f : 1f);

@@ -10,6 +10,8 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--formable-proclamation-ai-only")) { FormableProclamationAiTests.Run(); return; }
+        if (args.Length == 0) FormableProclamationAiTests.Run();
         if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
         if (args.Length == 0) OrganicBlocTests.Run();
         if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }
@@ -49,6 +51,7 @@ static class Program
         if (args.Contains("--dynasty-only")) { DynastyTests.Run(); return; }
         if (args.Contains("--rulers-subjects-only")) { RulersAndSubjectsTests.Run(); return; }
         if (args.Contains("--macao-only")) { MacaoProbe.Run(); return; }
+        if (args.Contains("--dependencies-only")) { DependencyPlausibilityTests.Run(); return; }
         if (args.Contains("--subject-growth-only")) { SubjectGrowthProbe.Run(); return; }
         if (args.Contains("--micro-enclave-only")) { MicroEnclaveGrowthTests.Run(); return; }
         if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
@@ -61,6 +64,7 @@ static class Program
         if (args.Contains("--annexation-only")) { AnnexationTests.Run(); return; }
         if (args.Contains("--mobilisation-only")) { MobilisationAndStockpileTests.RunAll(); return; }
         if (args.Length == 0) { RulersAndSubjectsTests.Run(); MobilisationAndStockpileTests.RunAll(); }
+        if (args.Length == 0) DependencyPlausibilityTests.Run();
         if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
         if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
         if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
@@ -164,6 +168,7 @@ static class Program
         if (args.Contains("--crises-only")) { DomesticCrisesTests.Run(); return; }
         if (args.Contains("--ui-icons-only")) { InterfaceIconTests.Run(); return; }
         if (args.Contains("--worker-only")) { WorkerBackendTests.Run(); return; }
+        if (args.Contains("--movement-zone-only")) { MovementZoneTests.Run(); return; }
         if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
@@ -227,6 +232,7 @@ static class Program
         RegionalContentTests.Run();
         SocialMemoryTests.Run();
         CivicCampaignTests.Run();
+        MovementZoneTests.Run();
         WorkerBackendTests.Run();
         if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }

@@ -623,7 +623,7 @@ public static class MovementRules
         {
             CapitalCore.Establish(campaign, nation, seat);
         }
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
         campaign.MarkMapChanged();
@@ -710,15 +710,89 @@ public static class MovementRules
             return false;
         }
 
-        if (!TakeRegion(campaign, nation, region, owner)) return false;
+        // The flashpoint carried, so the homeland carries: the rest of the people's zone the
+        // same government still holds rises with it instead of leaving confetti on the map.
+        var taken = TakeZone(campaign, nation, region, owner);
+        if (taken == 0) return false;
         if (state is not null && nation.Movement is not null)
-            state.LastReport = Loc.Format("The uprising in {0} succeeded: it is ours.", region.DisplayName);
+            state.LastReport = taken > 1
+                ? Loc.Format("The uprising in {0} succeeded: {1} region(s) are ours.", region.DisplayName, taken)
+                : Loc.Format("The uprising in {0} succeeded: it is ours.", region.DisplayName);
         return true;
     }
 
-    /// <summary>The region is its own: the ground, a capital, militia, and a war with the country it rose against.</summary>
-    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
+    /// <summary>
+    /// Success in one region of the homeland is success for the homeland. A rising that
+    /// wins its flashpoint does not stop at the city limits, a referendum that carries does
+    /// not ask the same question county by county for a decade, and an exile that comes
+    /// home does not stop at the doorstep: the rest of the people's zone that the same
+    /// holder still controls comes with the first region. Three brakes keep it honest —
+    /// only regions the definition itself names as homeland (or a partition of one), only
+    /// ground the same holder controls, and a vote frees a region only where the movement's
+    /// own majority actually carried. A homeland chunk some other country holds stays where
+    /// it is; that is a different war, for another day.
+    /// </summary>
+    /// <returns>The seed first, then the rest of the zone in map order, de-duplicated.</returns>
+    internal static List<ScenarioState> ZoneOf(Campaign campaign, Nation nation, MovementDefinition definition,
+        ScenarioState seed, Nation owner, bool peacefulVote)
+    {
+        var zone = new List<ScenarioState>();
+        if (campaign is null || nation?.Movement is not { Dissolved: false } || definition is null ||
+            seed is null || owner is null) return zone;
+        zone.Add(seed);
+        // Map order, so the same campaign always takes the same borders in the same sequence.
+        foreach (var region in campaign.States.OrderBy(candidate => candidate.MapIndex))
+        {
+            if (region is null || region.MapIndex == seed.MapIndex) continue;
+            if (region.NationMapIndex != owner.MapIndex) continue;
+            if (region.Unclaimed || region.Population <= 0) continue;
+            if (!MovementReach.IsHomeland(campaign, definition, region)) continue;
+            // A chunk some other army stands on is a different war, not a free border.
+            if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) continue;
+            // A ballot frees only ground that actually voted for it.
+            if (peacefulVote &&
+                CivilIndependence.ResidentSupport(nation, region) <= campaign.Defines.CivilReferendumMajority) continue;
+            zone.Add(region);
+        }
+        return zone;
+    }
+
+    /// <summary>
+    /// The whole zone of interest changes hands in one act: the seed region and every other
+    /// homeland region the same holder still has. The regions are annexed one by one - each
+    /// through the ordinary border machinery, so its people and its output are counted once
+    /// under the new flag - and the act is settled once at the end
+    /// (<see cref="SettleTransfer"/>): one militia, one war, one proclamation.
+    /// </summary>
+    /// <returns>How many regions it took; 0 when not even the seed could be taken.</returns>
+    internal static int TakeZone(Campaign campaign, Nation nation, ScenarioState seed, Nation owner,
         bool peacefully = false, bool restoration = false)
+    {
+        var definition = Movements.DefinitionOf(nation);
+        if (definition is null || seed is null) return 0;
+        var zone = ZoneOf(campaign, nation, definition, seed, owner, peacefulVote: peacefully && !restoration);
+        // The flashpoint comes first and must take: a rising that lost in its own city did not
+        // carry the country, whatever the rest of the zone would have done.
+        if (!TakeRegion(campaign, nation, seed, owner, peacefully, restoration, settle: false)) return 0;
+        var gained = new List<ScenarioState>(zone.Count) { seed };
+        foreach (var region in zone)
+            if (region.MapIndex != seed.MapIndex &&
+                TakeRegion(campaign, nation, region, owner, peacefully, restoration, settle: false))
+                gained.Add(region);
+        SettleTransfer(campaign, nation, gained[0], gained, owner, peacefully, restoration);
+        return gained.Count;
+    }
+
+    /// <summary>
+    /// One region changes hands: the ground, the people on it and its output, through the same
+    /// border machinery every other transfer uses. What follows a successful act - militia out
+    /// of the cadres, the war with the country it rose against, the movement becoming a
+    /// country - belongs to the act rather than to one region, so a caller taking a whole zone
+    /// passes <paramref name="settle"/> false for every region and settles once at the end
+    /// (<see cref="TakeZone"/>).
+    /// </summary>
+    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
+        bool peacefully = false, bool restoration = false, bool settle = true)
     {
         // A restoration is its own kind of return: the country is already the country it was, so
         // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
@@ -733,7 +807,6 @@ public static class MovementRules
             owner is not null && !float.IsFinite(owner.Gdp)) return false;
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        var defines = campaign.Defines;
         var topology = campaign.ProvinceMap;
         // Record the region's real economy before ownership changes. A movement's
         // donations GDP and zero population are not the tax base of its new country.
@@ -809,7 +882,7 @@ public static class MovementRules
         }
         var seat = campaign.StatesOf(nation).OrderByDescending(candidate => candidate.Population).FirstOrDefault();
         if (wasLandless && seat is not null) CapitalCore.Establish(campaign, nation, seat);
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
         // A restoration keeps the government the country had when it fell; nothing was founded anew.
         if (!restoration)
         {
@@ -821,13 +894,38 @@ public static class MovementRules
         }
         nation.PoliticsChangedDay = campaign.ElapsedDays;
 
-        // The cadres become the country's militia, and so does the street: every supporter in the
-        // region that rose is somebody who can be handed a rifle, and the fighters sent in ahead
-        // are already there. The tunnels and the camps give them ground to hold.
+        if (settle) SettleTransfer(campaign, nation, region, new[] { region }, owner, peacefully, restoration);
+        return true;
+    }
+
+    /// <summary>
+    /// What a successful act does to a movement the day it wins ground: cadres and the street
+    /// become its militia, the tunnels are dug in, the war with the country it rose against is
+    /// declared once, and ground of its own makes it a country. It runs once per act however
+    /// many regions came with it - a rising that carries a homeland raises one militia, fights
+    /// one war and proclaims one state - so the regions are passed whole and their supporters
+    /// and hidden fighters are counted together.
+    /// </summary>
+    private static void SettleTransfer(Campaign campaign, Nation nation, ScenarioState seed,
+        IReadOnlyList<ScenarioState> gained, Nation owner, bool peacefully, bool restoration)
+    {
+        var state = nation.Movement;
+        var definition = Movements.DefinitionOf(nation);
+        if (state is null || definition is null || seed is null) return;
+        var defines = campaign.Defines;
+
+        // The cadres become the country's militia, and so does the street: every supporter in
+        // the ground that came over is somebody who can be handed a rifle, and the fighters
+        // sent in ahead are already there. The tunnels and the camps give them ground to hold.
         var perFormation = defines.MovementMilitiaPerCadres * (definition.Has("armed_wing") ? 0.7f : 1f);
-        var street = MovementRules.PeopleOf(region, definition, out _) * state.Support.GetValueOrDefault(region.MapIndex);
-        var hidden = state.Infiltrated.GetValueOrDefault(region.MapIndex);
-        state.Infiltrated.Remove(region.MapIndex);
+        var street = 0f;
+        var hidden = 0f;
+        foreach (var region in gained)
+        {
+            street += MovementRules.PeopleOf(region, definition, out _) * state.Support.GetValueOrDefault(region.MapIndex);
+            hidden += state.Infiltrated.GetValueOrDefault(region.MapIndex);
+            state.Infiltrated.Remove(region.MapIndex);
+        }
         var formations = Math.Min(defines.MovementUprisingMilitiaMax,
             (int)(state.Cadres / MathF.Max(1f, perFormation)) +
             (int)(street / MathF.Max(1f, defines.MovementMilitiaPerSupporters)) +
@@ -854,7 +952,7 @@ public static class MovementRules
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
             // It holds ground of its own since this morning, which the day's border table cannot know.
             CampaignDiplomacy.ForgetBorders();
-            CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, region.MapIndex, "uprising", onOwnInitiative: false);
+            CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
         }
         // The borders are on the map, so the movement is done being a movement: ground of
         // its own makes it a country at once (the same rule SynchroniseTerritory applies a
@@ -863,7 +961,6 @@ public static class MovementRules
         GraduateToStatehood(campaign, nation, restoration);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
-        return true;
     }
 
     internal static float Roll(int seed, int nationId, int day, int salt)

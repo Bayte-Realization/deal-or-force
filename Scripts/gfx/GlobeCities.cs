@@ -557,8 +557,9 @@ public sealed partial class GlobePresentation
         var capitals = new List<(Nation Nation, Vector3 Normal)>();
         if (_campaign is not null)
             foreach (var nation in _campaign.Nations)
-                if (!string.IsNullOrWhiteSpace(nation.CapitalName))
-                    capitals.Add((nation, SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, 1f).Normalized()));
+                if (CapitalCore.HasSeat(_campaign, nation))
+                    capitals.Add((nation, SurfacePoint(CapitalCore.EffectiveLatitude(_campaign, nation),
+                        CapitalCore.EffectiveLongitude(_campaign, nation), 1f).Normalized()));
         foreach (var (marker, normal) in _capitalMarkers)
         {
             if (!IsInstanceValid(marker)) continue;
@@ -589,9 +590,9 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>What the country calls its capital, as the country picker says it.</summary>
-    private static string StarCapitalName(Nation nation)
+    private string StarCapitalName(Nation nation)
     {
-        return CountryNames.Capital(nation);
+        return nation is null ? "" : CountryNames.Capital(nation, _campaign);
     }
 
     /// <summary>Whether a drawn capital star stands on this city, which then needs no dot of its own.</summary>

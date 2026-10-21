@@ -380,7 +380,7 @@ public partial class DealOrForceGame
             _countryCardStanding.TooltipText = "";
             if (_countryDossierTab == "Overview")
             {
-            CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
+            CardRow(_countryCardRows, CountryNames.CapitalTitle(_campaign, nation), CountryNames.Capital(nation, _campaign));
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
             CardRow(_countryCardRows, "Treasury", Fmt.Money(nation.Treasury), null,
                 nation.Treasury < 0f ? "state.negative" : "text.bright");
@@ -429,7 +429,7 @@ public partial class DealOrForceGame
 
         if (_countryDossierTab == "Overview")
         {
-        CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
+        CardRow(_countryCardRows, CountryNames.CapitalTitle(_campaign, nation), CountryNames.Capital(nation, _campaign));
         if (CanInspectNation(nation.Id))
         {
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));

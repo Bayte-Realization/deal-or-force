@@ -50,7 +50,7 @@ public sealed partial class Defines
         ["RecruitmentSystem"] = "recruitment", ["EventSystem"] = "events",
         ["GovernanceEvents"] = "politics", ["MovementRules"] = "movements", ["MovementAi"] = "movements",
         ["ColonisationCore"] = "colonisation", ["SubjectSystem"] = "subjects", ["SubmissionSystem"] = "subjects",
-        ["PeacefulFormationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
+        ["PeacefulFormationAi"] = "formable_nations", ["FormableProclamationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
         ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
         ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia",
         ["Escalation"] = "escalation", ["ProxyWars"] = "proxy_wars", ["Factions"] = "de_facto_factions", ["Coups"] = "coups",

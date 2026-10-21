@@ -66,11 +66,16 @@ static class MovementPowerFingerprintTests
         // (`AppointMinisterCommand`, `RecruitPoliticianCommand`, `SubjectInteractionCommand`,
         // `ReleaseCountryCommand`, `SetNationalCosmeticsCommand`), which CampaignFingerprint
         // mixes into the hash on purpose; all new nation fields are guarded at their defaults.
+        // Re-recorded on 21 October 2026 together with ClaudeStateFingerprintTests: the system table
+        // maps the new FormableProclamationAi to formable_nations; removing only that entry gives
+        // back 0x8359F0BC7D23DB59 here.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
-        Check(withoutMovement == 0xC61E4B5A545EF746UL || withoutMovement == 0x1177971A21B6E7A1UL || withoutMovement == 0x8359F0BC7D23DB59UL,
+        Check(withoutMovement == 0xC61E4B5A545EF746UL || withoutMovement == 0x1177971A21B6E7A1UL || withoutMovement == 0x8359F0BC7D23DB59UL ||
+              withoutMovement == 0x1180F22A98EAE162UL,
             $"a world without movement state retains its pre-fix golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0xA23F81F73533FB1EUL || withMovement == 0x71F64E4719513FBDUL || withMovement == 0x8EAA3D4C9098B9C5UL,
+        Check(withMovement == 0xA23F81F73533FB1EUL || withMovement == 0x71F64E4719513FBDUL || withMovement == 0x8EAA3D4C9098B9C5UL ||
+              withMovement == 0x792CD510E6A1ECC2UL,
             $"an empty legacy movement retains its pre-fix presence and militancy fingerprint (got 0x{withMovement:X16})");
         var legacy = JsonSerializer.Deserialize<Defines>("{}");
         Check(CampaignFingerprint.Of(Fixture(false, legacy)) == CampaignFingerprint.Of(Fixture(false)),

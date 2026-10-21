@@ -382,8 +382,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
         BuildCapitalMarkers(campaign);
         ReconcileArmyMarkers(campaign);
         BuildFleetMarkers(campaign);
-        if (campaign.Player is { } player && !string.IsNullOrWhiteSpace(player.CapitalName))
-            FocusOn(player.CapitalLatitude, player.CapitalLongitude, 15.8f);
+        if (campaign.Player is { } player && Simulation.CapitalCore.HasSeat(campaign, player))
+            FocusOn(Simulation.CapitalCore.EffectiveLatitude(campaign, player), Simulation.CapitalCore.EffectiveLongitude(campaign, player), 15.8f);
 
         if (_mapTask is null)
         {
@@ -4254,12 +4254,17 @@ void fragment() {
 
         foreach (var nation in campaign.Nations)
         {
-            if (string.IsNullOrWhiteSpace(nation.CapitalName) || TerrainGone(nation.CapitalLatitude, nation.CapitalLongitude)) continue;
+            // Tiny authored countries may have no raster province at all. Retain their
+            // authored point, but never use that fallback for a placed, captured capital.
+            var unplaced = nation.CapitalProvinceId == 0 && nation.CapitalStateMapIndex == 0 &&
+                campaign.StatesOf(nation).Length > 0 && !string.IsNullOrWhiteSpace(nation.CapitalName);
+            if (!unplaced && !Simulation.CapitalCore.HasSeat(campaign, nation)) continue;
+            var latitude = unplaced ? nation.CapitalLatitude : Simulation.CapitalCore.EffectiveLatitude(campaign, nation);
+            var longitude = unplaced ? nation.CapitalLongitude : Simulation.CapitalCore.EffectiveLongitude(campaign, nation);
+            if (TerrainGone(latitude, longitude)) continue;
             // A country that has been conquered has nowhere to be governed from, and its
             // marker used to go on standing in the middle of somebody else's country. One
             // the map never placed - too small for the raster - keeps the point it was given.
-            if (campaign.StatesOf(nation).Length == 0) continue;
-            if (nation.CapitalStateMapIndex > 0 && !Simulation.CapitalCore.HasCapital(campaign, nation)) continue;
 
             var marker = new Sprite3D
             {
@@ -4272,7 +4277,7 @@ void fragment() {
                 Modulate = Ui.Colour("globe.selection")
             };
 
-            marker.Position = SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, SurfaceMarkerRadius);
+            marker.Position = SurfacePoint(latitude, longitude, SurfaceMarkerRadius);
             OrientSurfaceCounter(marker, marker.Position.Normalized());
             _capitalRoot.AddChild(marker);
             var normal = marker.Position.Normalized();

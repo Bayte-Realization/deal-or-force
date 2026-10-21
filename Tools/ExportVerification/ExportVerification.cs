@@ -128,6 +128,29 @@ public partial class ExportVerification : Node
                         return;
                     }
                 }
+                if (args.Contains("--verify-peace-beneficiary-only"))
+                {
+                    await VerifyPeaceBeneficiary(game);
+                    if (args.Contains("--verify-benelux-motto")) await VerifyBeneluxMotto(game);
+                    if (args.Contains("--verify-capital-loss")) await VerifyCapitalLoss(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-benelux-motto"))
+                {
+                    await VerifyBeneluxMotto(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-capital-loss"))
+                {
+                    await VerifyCapitalLoss(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-partial-withdrawal-only"))
                 {
                     await VerifyPartialWithdrawal(game);

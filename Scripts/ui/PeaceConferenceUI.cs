@@ -171,7 +171,8 @@ public partial class DealOrForceGame
         _conferenceWhitePeaceButton.Name = "ConferenceWhitePeace";
         shell.AddChild(_conferenceWhitePeaceButton);
         var actions = new GridContainer { Name = "ConferenceFooter", Columns = 2 };
-        actions.AddThemeConstantOverride("separation", 6);
+        actions.AddThemeConstantOverride("h_separation", 6);
+        actions.AddThemeConstantOverride("v_separation", 6);
         shell.AddChild(actions);
         var clear = ActionButton("Clear", ClearPeaceDemand, 92, 34);
         clear.TooltipText = Ui.Tip(Tr("Drop every claim and start the settlement again."));
@@ -382,6 +383,11 @@ public partial class DealOrForceGame
         if (_peaceDemand is null || _peaceWar is null) return;
         var command = WrittenPeaceCommand.From(_peaceDemand);
         _campaign.Commands.Enqueue(command); _campaign.Commands.ApplyAll(_campaign);
+        if (_campaign.Commands.SubmitInterceptor is not null && !command.Delivered && command.Note.Length == 0)
+        {
+            _peaceVerdict.Text = Tr("Order sent to the host. Awaiting confirmation.");
+            return;
+        }
         if (command.Delivered)
         {
             var summary = command.Note;

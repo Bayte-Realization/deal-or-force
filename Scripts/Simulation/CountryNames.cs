@@ -262,10 +262,11 @@ public static class CountryNames
     /// name as a key. The dossier said "Warsaw" under a map that said "Варшава", and the capital
     /// of Guernsey stood on the Russian map as "Saint Peter Port".
     /// </summary>
-    public static string Capital(Nation nation)
+    public static string Capital(Nation nation, Campaign campaign = null)
     {
-        if (nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)) return "";
-        var name = nation.CapitalName;
+        if (nation is null) return "";
+        var name = campaign is null ? nation.CapitalName : CapitalCore.EffectiveName(campaign, nation);
+        if (string.IsNullOrWhiteSpace(name)) return campaign is null ? "" : Loc.Get("No government seat");
         if (Loc.Has("capital." + name)) return Loc.Get("capital." + name);
         var cities = CityCatalog.All;
         if (!ReferenceEquals(cities, _citiesFrom) || _citiesByName is null)
@@ -283,6 +284,10 @@ public static class CountryNames
             ? found.DisplayName
             : Loc.Get(name);
     }
+
+    public static string CapitalTitle(Campaign campaign, Nation nation) =>
+        campaign is not null && !CapitalCore.HasSeat(campaign, nation) ? "Government seat" :
+        nation?.GovernmentSeatProvinceId > 0 ? "Temporary government seat" : "Capital";
 
     /// <summary>Optional localized short identity for narrow HUD columns. A formed
     /// state's identity wins over its founder; full names remain in dossiers/tooltips.</summary>

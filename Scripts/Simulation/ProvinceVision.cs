@@ -30,6 +30,44 @@ public static partial class CampaignIntel
     {
         public int Epoch;
         public readonly Dictionary<int, ProvinceVision> Viewers = new();
+        // Provinces grouped by who controls them (ProvincesHeldBy), with what they were built from.
+        public int HeldEpoch = -1, HeldRevision = -1;
+        public ushort[] HeldSource;
+        public int[] HeldStart = Array.Empty<int>(), HeldNext = Array.Empty<int>(), HeldProvinces = Array.Empty<int>();
+    }
+
+    /// <summary>
+    /// The provinces a map index controls, in ascending order, from a grouping rebuilt only when
+    /// the map or the day changes. An agent network reveals a share of its target's provinces,
+    /// and walking all thirty-five thousand of them to find those was four fifths of every
+    /// visibility rebuild - a hundred rebuilds a day in a world at war.
+    /// </summary>
+    internal static ReadOnlySpan<int> ProvincesHeldBy(Campaign c, ushort[] controllers, int mapIndex)
+    {
+        var cache = Caches.GetOrCreateValue(c);
+        if (cache.HeldEpoch != cache.Epoch || cache.HeldRevision != c.MapRevision || !ReferenceEquals(cache.HeldSource, controllers))
+        {
+            // Rebuilt every time a province changes hands, which in a world at war is hourly:
+            // the arrays are kept and refilled rather than allocated again.
+            var top = 0;
+            for (var p = 1; p < controllers.Length; p++) if (controllers[p] > top) top = controllers[p];
+            if (cache.HeldStart.Length < top + 2) { cache.HeldStart = new int[top + 2]; cache.HeldNext = new int[top + 2]; }
+            if (cache.HeldProvinces.Length < controllers.Length) cache.HeldProvinces = new int[controllers.Length];
+            var start = cache.HeldStart;
+            Array.Clear(start);
+            for (var p = 1; p < controllers.Length; p++) start[controllers[p] + 1]++;
+            for (var i = 1; i < start.Length; i++) start[i] += start[i - 1];
+            var next = cache.HeldNext;
+            Array.Copy(start, next, start.Length);
+            var provinces = cache.HeldProvinces;
+            for (var p = 1; p < controllers.Length; p++) provinces[next[controllers[p]]++] = p;
+            cache.HeldSource = controllers;
+            cache.HeldRevision = c.MapRevision;
+            cache.HeldEpoch = cache.Epoch;
+        }
+        if (mapIndex < 0 || mapIndex + 1 >= cache.HeldStart.Length) return ReadOnlySpan<int>.Empty;
+        var from = cache.HeldStart[mapIndex];
+        return cache.HeldProvinces.AsSpan(from, cache.HeldStart[mapIndex + 1] - from);
     }
     private static readonly ConditionalWeakTable<Campaign, Cache> Caches = new();
 

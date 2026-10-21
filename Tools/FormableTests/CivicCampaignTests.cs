@@ -53,6 +53,12 @@ static class CivicCampaignTests
             c.Armies.Count == armies && c.Wars.Count == wars, "peaceful transfer creates neither militia nor war and preserves parent");
         Check(garrison.NationId == movement.Id,
             "an agreed referendum carries the local garrison with the new country");
+        // The question is Scotland's, not Aberdeen's: the whole authored homeland whose own
+        // residents voted for it comes over in the same act.
+        var homelandRegions = definition.Homeland.Select(id => Movements.StateById(c, id)).Where(r => r is not null).ToArray();
+        var homelandTaken = homelandRegions.Count(r => r.NationMapIndex == movement.MapIndex);
+        Check(homelandTaken == homelandRegions.Length && homelandTaken > 1,
+            $"the agreed vote carries the whole Scottish homeland, not one region ({homelandTaken} of {homelandRegions.Length})");
         Check(CampaignDiplomacy.Get(c, parent.Id, movement.Id).TruceUntil > c.ElapsedDays,
             "settlement protects against immediate attack");
         var options = new JsonSerializerOptions { IncludeFields = true, PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate };
