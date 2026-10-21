@@ -22,7 +22,8 @@ public static class SupplyStressTest
             campaign.TradeRoutesDay > campaign.ElapsedDays)
             return new(false, 0, Array.Empty<Row>());
 
-        var routes = campaign.TradeRoutes.Where(r => r.BuyerId == nation.Id && r.SellerId != nation.Id).ToArray();
+        var routes = TradeNetwork.RoutesTouching(campaign, nation.Id)
+            .Where(r => r.BuyerId == nation.Id && r.SellerId != nation.Id).ToArray();
         var rows = new List<Row>();
         var excluded = 0;
         foreach (var group in routes.Where(r => r.SellerId == supplierId).GroupBy(r => r.Commodity))

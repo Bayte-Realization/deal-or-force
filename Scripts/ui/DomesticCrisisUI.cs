@@ -49,6 +49,9 @@ public partial class DealOrForceGame
         var civilReason = CivilWarOutbreak.EligibilityReason(_campaign, nation);
         var civilChance = civilReason.Length == 0 ? CivilWarOutbreak.Chance(_campaign, nation) : 0f;
         PolicyStat(_policyList, "Weekly outbreak chance", civilChance.ToString("P2"), "stability");
+        if (civilReason.Length == 0 && civilChance > 0f)
+            foreach (var factor in CivilWarOutbreak.Factors(_campaign, nation))
+                PolicyText(_policyList, factor, "text.body");
         PolicyText(_policyList, "This is a weekly risk, not a countdown. Low stability, recent coups and defeats raise it. Armed opposition can take only connected governed territory; a foreign office does not grant land.", "text.caption");
         if (civilReason.Length > 0) PolicyText(_policyList, civilReason, "text.body_soft");
         else PolicyText(_policyList, "An outbreak is possible. Restore institutional stability before the next weekly review.", "state.warning");

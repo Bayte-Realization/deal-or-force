@@ -20,6 +20,7 @@ public partial class MusicDirector : Node
     private Node _asker;
     private Func<MusicCatalog.Moment> _askMoment;
     private Func<MusicReadout> _askSituation;
+    private Func<bool> _askSilence;
     private MusicCatalog.Moment _moment = MusicCatalog.Moment.Menu;
     private MusicReadout _readout = new(MusicMood.Calm, "No campaign pressure recorded.");
     private bool _started;
@@ -52,8 +53,15 @@ public partial class MusicDirector : Node
         return _instance;
     }
 
-    public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null)
-    { _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
+    /// <param name="silence">
+    /// While this says so, nothing plays: a world under a console curse has no soundtrack
+    /// (WorldCurses). Asked of the scene, so leaving it for the menu brings the music back.
+    /// </param>
+    public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null,
+        Func<bool> silence = null)
+    { _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; _askSilence = silence; if (IsInsideTree()) Follow(); }
+
+    private bool Silenced => _askSilence is not null && _asker is not null && IsInstanceValid(_asker) && _askSilence();
 
     public override void _Ready()
     {
@@ -84,7 +92,7 @@ public partial class MusicDirector : Node
     public override void _ExitTree()
     {
         // There is no deferred tween callback left to revive an obsolete scene's selection.
-        _transition.Reset(); _playing = ""; _asker = null; _askMoment = null; _askSituation = null;
+        _transition.Reset(); _playing = ""; _asker = null; _askMoment = null; _askSituation = null; _askSilence = null;
         if (ReferenceEquals(_instance, this)) _instance = null;
     }
 
@@ -102,6 +110,7 @@ public partial class MusicDirector : Node
     private void Follow()
     {
         if (_decks[0] is null) return;
+        if (Silenced) { FadeToSilence(1.5); return; }
         var live = _asker is not null && IsInstanceValid(_asker);
         var moment = live && _askMoment is not null ? _askMoment() : _moment;
         _readout = live && _askSituation is not null ? _askSituation() : new(MusicMood.Calm, "No campaign pressure recorded.");
@@ -145,6 +154,7 @@ public partial class MusicDirector : Node
 
     private void PlayNext()
     {
+        if (Silenced) { FadeToSilence(1.5); return; }
         var available = Pool().Where(t => !_unavailable.Contains(t.Name)).ToList();
         if (available.Count > 1) available.RemoveAll(t => t.Name == _playing);
         while (available.Count > 0)
@@ -182,10 +192,10 @@ public partial class MusicDirector : Node
         RefreshVolume(); _decks[next].Play();
     }
 
-    private void FadeToSilence()
+    private void FadeToSilence(double seconds = -1)
     {
         if (_playing.Length == 0) return;
         _playing = "";
-        _transition.BeginSilence(MusicCatalog.Director.FadeSeconds);
+        _transition.BeginSilence(seconds >= 0 ? seconds : MusicCatalog.Director.FadeSeconds);
     }
 }

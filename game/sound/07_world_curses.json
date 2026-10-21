@@ -1,0 +1,16 @@
+// The console curses (`snowgrave`, `weirdroute`; Scripts/Simulation/WorldCurses.cs), generated with
+// Creative Claw (ElevenLabs sound effects) and levelled: the casts to -22 LUFS beside the headline
+// stings, the splash to -24. The static the weird route turns to with no water anywhere is
+// synthesized noise (ffmpeg anoisesrc with a mains hum and a line whine) and played by the curse
+// layer itself; `frozen` names the one bed a world under the ice still hears, at every height.
+{
+  "cues": {
+    "curse_snowgrave": { "file": "audio/curses/curse_snowgrave.ogg", "channel": "strategic", "cooldown_ms": 2000 },
+    "curse_weirdroute": { "file": "audio/curses/curse_weirdroute.ogg", "channel": "strategic", "cooldown_ms": 2000 },
+    "curse_drowned": { "file": "audio/curses/curse_drowned.ogg", "channel": "strategic", "cooldown_ms": 2600, "yields_to_anything_playing": true }
+  },
+  "map_ambience": {
+    "beds": { "frozen_wind": "audio/curses/curse_frozen_wind.ogg" },
+    "frozen": "frozen_wind"
+  }
+}

@@ -33,7 +33,7 @@
       "bbox": [63.0, 68.6, 36.0, 50.0] },
     "south_arabia": { "name": "South Arabia", "adjective": "South Arabian", "countries": ["YEM"],
       "bbox": [12.0, 19.0, 42.0, 54.0] },
-    "transnistria": { "name": "Transnistria", "adjective": "Dniester", "countries": ["MDA"],
+    "transnistria": { "name": "Transnistria", "adjective": "Dniester", "countries": ["MDA", "PMR"],
       "regions": ["pmr_x01"], "bbox": [46.4, 48.0, 28.4, 30.1] },
     "gagauzia": { "name": "Gagauzia", "adjective": "Gagauz", "countries": ["MDA"],
       "bbox": [45.4, 46.8, 28.1, 29.1] },

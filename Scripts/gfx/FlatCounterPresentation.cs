@@ -15,6 +15,8 @@ public sealed partial class GlobePresentation
     private Vector2 _densityViewport;
     private bool _counterDensityDirty = true;
     private bool _flatStrategicCounters;
+    private readonly Dictionary<int, List<ArmyStackMarker>> _provinceStackScratch = new();
+    private readonly List<List<ArmyStackMarker>> _provinceStackPool = new();
 
     // Geography is authoritative. Collision avoidance must never move a division
     // counter away from its province or merge it with a neighbouring province.
@@ -74,11 +76,25 @@ public sealed partial class GlobePresentation
                 node.Position = marker.DisplayPosition;
                 continue;
             }
+            var isMoving = false;
+            for (var i = 0; i < marker.Stack.Count; i++)
+            {
+                var army = marker.Stack[i];
+                if (army.IsMoving && army.Route.Count > 0)
+                {
+                    isMoving = true;
+                    break;
+                }
+            }
+            if (isMoving)
+            {
+                marker.TargetPosition = ArmyMarkerPosition(marker);
+            }
             var remaining = marker.TargetPosition - marker.DisplayPosition;
             if (remaining.LengthSquared() < 1e-10f) continue;
             // A camera pan or zoom moves the target of a stationary counter every frame. That
             // is not the formation marching, and easing it would make the whole map swim.
-            if (!marker.Stack.Any(army => army.IsMoving && army.Route.Count > 0))
+            if (!isMoving)
             {
                 marker.DisplayPosition = marker.TargetPosition;
                 node.Position = marker.DisplayPosition;
@@ -129,15 +145,42 @@ public sealed partial class GlobePresentation
     {
         foreach (var marker in _armyStacks.Values) marker.LayoutOffset = Vector2.Zero;
         if (!_flatMap) return;
-        foreach (var group in _armyStacks.Values
-                     .Where(marker => marker.Stack.Count > 0 && marker.Stack[0].ProvinceId > 0)
-                     .GroupBy(marker => marker.Stack[0].ProvinceId))
+        var poolIndex = 0;
+        foreach (var list in _provinceStackScratch.Values) list.Clear();
+        _provinceStackScratch.Clear();
+
+        foreach (var marker in _armyStacks.Values)
         {
-            var markers = group.OrderBy(marker => marker.NationId)
-                .ThenBy(marker => marker.Stack[0].Id).ToArray();
-            if (markers.Length < 2) continue;
-            var columns = markers.Length <= 2 ? markers.Length : 2;
-            var rows = (markers.Length + columns - 1) / columns;
+            if (marker.Stack.Count == 0 || marker.Stack[0].ProvinceId <= 0) continue;
+            var provinceId = marker.Stack[0].ProvinceId;
+            if (!_provinceStackScratch.TryGetValue(provinceId, out var list))
+            {
+                if (poolIndex < _provinceStackPool.Count)
+                {
+                    list = _provinceStackPool[poolIndex++];
+                    list.Clear();
+                }
+                else
+                {
+                    list = new List<ArmyStackMarker>(4);
+                    _provinceStackPool.Add(list);
+                    poolIndex++;
+                }
+                _provinceStackScratch[provinceId] = list;
+            }
+            list.Add(marker);
+        }
+
+        foreach (var markers in _provinceStackScratch.Values)
+        {
+            if (markers.Count < 2) continue;
+            markers.Sort(static (a, b) =>
+            {
+                var c = a.NationId.CompareTo(b.NationId);
+                return c != 0 ? c : a.Stack[0].Id.CompareTo(b.Stack[0].Id);
+            });
+            var columns = markers.Count <= 2 ? markers.Count : 2;
+            var rows = (markers.Count + columns - 1) / columns;
             var width = 64f;
             var height = 40f;
             if (markers[0].Plate?.Texture is { } texture)
@@ -146,7 +189,7 @@ public sealed partial class GlobePresentation
                 height = texture.GetHeight() * markers[0].Plate.PixelSize * _counterFlatFar;
             }
             var gap = Math.Clamp(Ui.Metric("map.flat_counter_gap", 4f), 0f, 16f);
-            for (var index = 0; index < markers.Length; index++)
+            for (var index = 0; index < markers.Count; index++)
             {
                 var column = index % columns;
                 var row = index / columns;
@@ -202,6 +245,7 @@ public sealed partial class GlobePresentation
         _densityView = new Vector3(_flatX, _flatY, _flatZoom);
         _occupiedCounterCells.Clear();
         LayoutFlatArmyStackOffsets();
+        var screenBounds = new Rect2(-80, -50, Size.X + 160, Size.Y + 100);
         foreach (var marker in _armyStacks.Values)
         {
             marker.TargetPosition = ArmyMarkerPosition(marker);
@@ -209,11 +253,11 @@ public sealed partial class GlobePresentation
             // eased position is rather than where the province is - otherwise two counters
             // mid-glide overlap for the length of the glide.
             marker.Node.Position = marker.DisplayPosition;
-            RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
             // Auxiliary base/port cards may fit around armies, never the reverse.
             if (!marker.Node.IsVisibleInTree() || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
             var at = _camera.UnprojectPosition(marker.Node.GlobalPosition);
-            if (!new Rect2(-80, -50, Size.X + 160, Size.Y + 100).HasPoint(at)) continue;
+            if (!screenBounds.HasPoint(at)) continue;
+            RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
             var half = marker.Plate.Texture.GetSize() * marker.Plate.PixelSize * _counterFlatFar * .5f;
             TakeCounterRoom(new Rect2(at - half, half * 2f));
         }

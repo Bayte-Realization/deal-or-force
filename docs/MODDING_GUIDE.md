@@ -2025,6 +2025,77 @@ administration that levies its own dues. The `MovementStrike*`, `MovementMarch*`
 `MovementParallel*` defines are in `Scripts/Simulation/MovementPower.cs` and can be set from any
 `common/defines` file.
 
+### Sound, music and pictures
+
+Everything the game plays or shows outside the map is data in four folders. A mod layers its own
+`music/`, `sound/`, `gfx/` and `common/` files over the base game's and replaces any entry by
+naming it.
+
+**Music** (`music/*.json`). A track is a file, a moment (`menu`, `campaign` or `any`), the moods
+it suits (`calm`, `uneasy`, `crisis`, `war`, `recovery`, `systemiccrisis`; none means any), a
+weight, a volume trim and optionally the regions it belongs to:
+
+```json
+{
+  "tracks": {
+    "andes_dawn": {
+      "file": "audio/andes_dawn.ogg", "label": "Dawn over the Andes",
+      "when": "campaign", "moods": ["calm"], "regions": ["south_america", "bol"], "weight": 3
+    }
+  }
+}
+```
+
+A region tag is a continent (`europe`, `north_america`), a sub-region of the country table
+(`western_asia`, `caribbean`, `southern_asia`) or a country's own tag (`irn`); spaces and hyphens
+read as underscores, so "North America" and `north_america` are one tag. The most specific tag
+wins: a country hears the tracks tagged with its own tag, else its sub-region's, else its
+continent's, and untagged tracks always play. `"remove": true` takes a track out of rotation.
+Level new music to about -19 LUFS, the level of the rest of the score.
+
+**Cues** (`sound/*.json`, `cues`). A moment the game has a sound for: a file, a channel
+(`strategic`, `battle`, `interface`), a volume, a cooldown and whether it yields to anything
+already speaking. `"war_declared": "audio/mine.wav"` replaces one and keeps its timing.
+
+**Headline stings** (`common/news/*.json`, `stings`). Which cue a kind of news makes when it
+reaches the rail beside the map: `"coup": "news_coup"`; `""` silences a kind. Only news the rail
+shows sounds, never the player's own act, and `sting_gap_ms` keeps a busy day to one sound.
+
+**Map ambience** (`sound/*.json`, `map_ambience`). The sound of the ground under the tactical
+camera: `beds` name looping recordings, `terrain` gives each terrain id the beds it lends and
+their shares, `sea` and `open_country` name the beds for water and for ground with no mix.
+
+```json
+{ "map_ambience": { "beds": { "volcano": "audio/volcano.ogg" },
+                    "terrain": { "volcanic": { "volcano": 1 } } } }
+```
+
+**The listening library** (`presentation/*.json`, `assets`). What the in-game library lists:
+a name, a purpose, a kind (`music`, `sound`, `image`), a file and its source, optionally a
+measured waveform (`duration_seconds`, `peaks`).
+
+**Loading illustrations** (`gfx/`). Every picture whose file name starts with `loading_` is one:
+the loading screen shows them in turn behind the dossier card. A mod adds one by dropping
+`gfx/loading/loading_my_picture.jpg` into its package, and replaces a base one by using the same
+name. 16:9, about 1920 x 1080.
+
+**Event pictures** (`common/event_pictures/*.json`, and an event's own `picture`). The band above
+an event's title. `"events": { "my_event": "finance" }` names one of the shared pictures
+(`gfx/events/event_finance.jpg`); a path under `gfx/` or a `res://` path points at any picture,
+which is how a mod uses its own. An event's own `"picture"` field wins over the table. 3:2, about
+1152 x 768.
+
+Two rules about `gfx/`, because the sprite catalogue reads all of it: every picture there becomes
+a sprite named by its file name wherever it is filed, so prefix new art (`event_`, `loading_`) to
+keep it from taking an icon's name; and every JSON file there is read as sprite declarations, so
+tables like the event pictures live in `common/`.
+
+**Dependencies** (`common/subjects/*.json`). Besides tribute, manpower and the war rules, a kind
+says whether foreign money can raise an independence movement in it (`agitable`, default true)
+and whether it leaves by war (`armed_rebellion`, default true). The base game's leases are
+neither, and its overseas territories and associated states leave peacefully.
+`Defines.SubjectAgitationMinPopulation` (100 000) is the fewest people agitation can work on.
+
 ### The console and mod diagnostics
 
 An experimental native Luau adapter supports `engine_script_entry` and persistent

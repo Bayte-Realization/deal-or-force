@@ -334,7 +334,9 @@ public partial class DealOrForceGame
                 supplied > 0.985f ? "state.positive" :
                 supplied > 0.8f ? "state.warning" : "state.negative");
             row.Supply.Text = supplied.ToString("P0");
-            row.Select.TooltipText = Ui.Tip(Simulation.Loc.Get(definition.Description));
+            var description = Simulation.Loc.Get(definition.Description);
+            var cause = EconomicExposure.Cause(_campaign, player, row.Good);
+            row.Select.TooltipText = Ui.Tip(cause.Length == 0 ? description : description + "\n" + cause);
             // Highlight the row background, not every descendant (including commodity art).
             row.Select.Modulate = Colors.White;
             row.Select.SelfModulate = supplied < 0.985f
@@ -449,12 +451,12 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null) return;
         var player = _campaign.Player;
 
-        // What flowed each way with each partner, from this week's named routes. Routes
-        // are not saved - they are a consequence of the week, worked out again here.
+        // What flowed each way with each partner. The market week already filed this
+        // country's routes; the page reads that list instead of every route in the world.
         var soldTo = new Dictionary<int, float>();
         var boughtFrom = new Dictionary<int, float>();
         var byGood = new Dictionary<int, List<TradeRoute>>();
-        foreach (var route in _campaign.TradeRoutes)
+        foreach (var route in TradeNetwork.RoutesTouching(_campaign, player.Id))
         {
             if (route.SellerId == player.Id)
             {

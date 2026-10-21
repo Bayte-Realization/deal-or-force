@@ -31,13 +31,33 @@ public static class FrontDisengagement
     internal static bool TryCoverHole(Campaign c, Nation nation, StrategicWar war, DrawnFrontLine line,
         int hole, out Army moving, IReadOnlyList<Army> candidates = null)
     {
+        SelectionContext context = null;
+        try { return TryCoverHole(c, nation, war, line, hole, out moving, ref context, candidates); }
+        finally { context?.Dispose(); }
+    }
+
+    /// <summary>The caller may reuse read-only battle/position facts within ONE arrangement.
+    /// Orders can change, so fallback retreat crowding is still read live. A detachment
+    /// invalidates this context BEFORE its command is applied.</summary>
+    internal static bool TryCoverHole(Campaign c, Nation nation, StrategicWar war, DrawnFrontLine line,
+        int hole, out Army moving, ref SelectionContext context, IReadOnlyList<Army> candidates = null)
+    {
+        using var measured = SimProfiler.Measure("      staff:disengage");
         moving = null;
+        if (context is not null && !context.Matches(c, war, nation.Id))
+        { context.Dispose(); context = null; }
         if (!c.Defines.FrontStaffDisengages || war is null || war.Ended ||
-            !WarCoalition.SafeRetreatProvince(c, war, nation.Id, hole)) return false;
+            !(context?.Safe(hole) ?? WarCoalition.SafeRetreatProvince(c, war, nation.Id, hole))) return false;
         // An assault's departure tile is already covered by its fighting troops, even
         // when advances are deliberately excluded from routine defensive redistribution.
-        foreach (var unit in c.Armies)
-            if (unit.NationId == nation.Id && unit.ProvinceId == hole && unit.Divisions >= .1f) return false;
+        if (context is not null)
+        {
+            if (context.Occupied.Contains(hole)) return false;
+        }
+        else
+            foreach (var unit in c.Armies)
+                if (unit.NationId == nation.Id && unit.ProvinceId == hole && unit.Divisions >= .1f) return false;
+        context?.BeginHole(hole);
         Army best = null;
         int[] bestRoute = null;
         var bestRetreat = -1;
@@ -46,7 +66,8 @@ public static class FrontDisengagement
         foreach (var army in candidates ?? c.Armies)
         {
             if (!Eligible(c, nation, war, line, army)) continue;
-            var battle = c.Battles.Find(b => b.Id == army.BattleId && !b.Ended && b.WarId == war.Id);
+            context ??= new SelectionContext(c, war, nation.Id, hole);
+            var battle = context.Battle(army.BattleId);
             if (battle is null || c.ElapsedDays - battle.StartedDay < Math.Max(0, c.Defines.FrontDisengagementMinimumBattleDays)) continue;
             var attacking = battle.Attackers.Contains(army.Id);
             if (!attacking && !battle.Defenders.Contains(army.Id)) continue;
@@ -56,34 +77,29 @@ public static class FrontDisengagement
                 ? MathF.Min(army.Divisions - 1f, MathF.Max(1f, MathF.Floor(army.Divisions *
                     Math.Clamp(c.Defines.FrontDisengagementMaximumShare, .05f, .5f)))) : army.Divisions;
             var share = take / army.Divisions;
-            var ownDivisions = 0f;
-            var ownPower = 0f;
-            var coveringPower = 0f;
-            foreach (var id in attacking ? battle.Attackers : battle.Defenders)
-            {
-                var unit = c.Armies.Find(a => a.Id == id && a.BattleId == battle.Id);
-                if (unit is null) continue;
-                coveringPower += unit.Power;
-                if (unit.NationId == nation.Id) { ownDivisions += unit.Divisions; ownPower += unit.Power; }
-            }
+            SideTotals totals;
+            using (SimProfiler.Measure("        disengage:participants"))
+                totals = context.Totals(battle, attacking);
             // Do not leave the healthy anchor and call two exhausted counters a rearguard.
-            if (ownDivisions - take < .99f || ownPower - army.Power * share < MathF.Max(.05f, ownPower * .5f)) continue;
+            if (totals.OwnDivisions - take < .99f || totals.OwnPower - army.Power * share < MathF.Max(.05f, totals.OwnPower * .5f)) continue;
             if (!attacking)
             {
-                var pressure = 0f;
-                foreach (var id in battle.Attackers)
-                    if (c.Armies.Find(a => a.Id == id && a.BattleId == battle.Id) is { } enemy) pressure += enemy.Power;
-                if (coveringPower - army.Power * share < pressure *
+                if (totals.CoveringPower - army.Power * share < totals.Pressure *
                     Math.Clamp(c.Defines.FrontDisengagementDefenceRatio, 0f, 2f)) continue;
             }
-            var from = attacking ? army.ProvinceId : Warfare.WithdrawalProvince(c, war, army, hole);
+            int from;
+            using (SimProfiler.Measure("        disengage:retreat"))
+                from = attacking ? army.ProvinceId : context.WithdrawalProvince(army);
             if (from <= 0) continue;
             // All routing is checked BEFORE the command can detach a formation or yield ground.
-            var route = from == hole ? Array.Empty<int>() : WarCoalition.FriendlyRoute(c, war, nation.Id, from, hole);
+            int[] route;
+            using (SimProfiler.Measure("        disengage:route"))
+                route = context.Route(from);
             if (from != hole && route.Length == 0) continue;
             var safe = true;
+            using (SimProfiler.Measure("        disengage:safety"))
             foreach (var step in route)
-                if (!WarCoalition.SafeRetreatProvince(c, war, nation.Id, step)) { safe = false; break; }
+                if (!context.Safe(step)) { safe = false; break; }
             if (!safe) continue;
             var score = route.Length + (attacking ? 0 : 1) + army.Power / MathF.Max(.01f, army.Divisions);
             if (score > bestScore || score == bestScore && best is not null && army.Id >= best.Id) continue;
@@ -93,6 +109,8 @@ public static class FrontDisengagement
         var objective = line?.Objectives.GetValueOrDefault(best.Id, -1) ?? -1;
         var order = new WithdrawArmyFromBattleCommand
         { IssuerId = nation.Id, ArmyId = best.Id, TargetProvinceId = bestRetreat, Share = bestShare };
+        context?.Dispose();
+        context = null; // Splitting/withdrawing changes positions, powers and participant lists.
         order.Apply(c);
         if (!order.Withdrawn) return false;
         moving = c.Armies.Find(a => a.Id == order.WithdrawnArmyId);
@@ -118,5 +136,158 @@ public static class FrontDisengagement
         }
         Orders++;
         return true;
+    }
+
+    internal readonly record struct SideTotals(float OwnDivisions, float OwnPower, float CoveringPower, float Pressure);
+
+    /// <summary>No static campaign cache and no saved state. Only the staff's short read-only
+    /// selection window, not a promise that next hour's battlefield is still the same.</summary>
+    internal sealed class SelectionContext : IDisposable
+    {
+        private readonly Campaign _campaign;
+        private readonly StrategicWar _war;
+        private readonly int _nation;
+        private readonly ProvinceTopology _map;
+        private readonly ushort[] _controllers;
+        private readonly int _mapRevision;
+        private readonly int _armyCount;
+        private readonly int _battleCount;
+        private readonly int _attacker;
+        private readonly int _defender;
+        private readonly HashSet<int> _attackerAllies;
+        private readonly HashSet<int> _defenderAllies;
+        private readonly Dictionary<(int Id, int Battle), Army> _units = new();
+        private readonly Dictionary<int, LandBattle> _battles = new();
+        private readonly Dictionary<(LandBattle Battle, bool Attacking), SideTotals> _totals = new();
+        private readonly HashSet<ushort> _friendly = new();
+        private readonly HashSet<ushort> _routeAllowed = new();
+        private readonly HashSet<int> _unsafe = new();
+        private readonly Dictionary<(int From, int Hole), int[]> _holeRoutes = new();
+        private readonly Dictionary<(int Army, int Hole), int> _retreats = new();
+        // Bounded origins; arrays belong only to this arrangement, not the campaign.
+        private readonly Dictionary<int, FriendlyRouteSearch> _searches = new();
+        private readonly Queue<int> _searchOrder = new();
+        private int _hole;
+        internal readonly HashSet<int> Occupied = new();
+
+        internal SelectionContext(Campaign c, StrategicWar war, int nation, int hole)
+        {
+            using var measured = SimProfiler.Measure("        disengage:index");
+            _campaign = c; _war = war; _nation = nation; _map = c.ProvinceMap;
+            _controllers = c.ProvinceController; _mapRevision = c.MapRevision;
+            _armyCount = c.Armies.Count; _battleCount = c.Battles.Count; _hole = hole;
+            _attacker = war.AttackerId; _defender = war.DefenderId;
+            _attackerAllies = new(war.AttackerAllies); _defenderAllies = new(war.DefenderAllies);
+            var own = c.NationById(nation);
+            if (own is not null) _friendly.Add((ushort)own.MapIndex);
+            if (war is not null && !war.Ended && war.Involves(nation))
+                WarCoalition.FillControllers(c, war, war.IsAttacking(nation), _friendly);
+            if (war.BelligerentCount == 2)
+            {
+                if (own is not null) _routeAllowed.Add((ushort)own.MapIndex);
+            }
+            else WarCoalition.FillControllers(c, war, war.IsAttacking(nation), _routeAllowed);
+            foreach (var battle in c.Battles)
+            {
+                if (battle.Ended) continue;
+                _unsafe.Add(battle.ProvinceId);
+                if (battle.WarId == war.Id) _battles.TryAdd(battle.Id, battle);
+            }
+            foreach (var unit in c.Armies)
+            {
+                // TryAdd preserves Find's first matching entry even in a damaged archive.
+                _units.TryAdd((unit.Id, unit.BattleId), unit);
+                if (!(unit.Divisions >= .1f)) continue;
+                if (unit.NationId == nation) Occupied.Add(unit.ProvinceId);
+                if (war.Opposes(nation, unit.NationId)) _unsafe.Add(unit.ProvinceId);
+            }
+        }
+
+        internal bool Matches(Campaign c, StrategicWar war, int nation) =>
+            ReferenceEquals(c, _campaign) && ReferenceEquals(war, _war) && nation == _nation &&
+            ReferenceEquals(c.ProvinceMap, _map) && ReferenceEquals(c.ProvinceController, _controllers) &&
+            c.MapRevision == _mapRevision && c.Armies.Count == _armyCount && c.Battles.Count == _battleCount &&
+            war.AttackerId == _attacker && war.DefenderId == _defender &&
+            _attackerAllies.SetEquals(war.AttackerAllies) && _defenderAllies.SetEquals(war.DefenderAllies);
+
+        internal void BeginHole(int hole)
+        {
+            if (_hole == hole) return;
+            // Route trees survive target changes, not materialized route arrays.
+            _holeRoutes.Clear(); _retreats.Clear();
+            _hole = hole;
+        }
+
+        internal bool Safe(int province) => province > 0 && province <= _map.ProvinceCount &&
+            !_map.IsWater(province) && _friendly.Contains(_controllers[province]) && !_unsafe.Contains(province);
+
+        internal LandBattle Battle(int id) => _battles.GetValueOrDefault(id);
+
+        internal SideTotals Totals(LandBattle battle, bool attacking)
+        {
+            var key = (battle, attacking);
+            if (_totals.TryGetValue(key, out var existing)) return existing;
+            float divisions = 0, power = 0, covering = 0, pressure = 0;
+            // Retain the original participant order and floating-point addition order.
+            foreach (var id in attacking ? battle.Attackers : battle.Defenders)
+            {
+                if (!_units.TryGetValue((id, battle.Id), out var unit)) continue;
+                covering += unit.Power;
+                if (unit.NationId == _nation) { divisions += unit.Divisions; power += unit.Power; }
+            }
+            if (!attacking)
+                foreach (var id in battle.Attackers)
+                    if (_units.TryGetValue((id, battle.Id), out var enemy)) pressure += enemy.Power;
+            return _totals[key] = new(divisions, power, covering, pressure);
+        }
+
+        internal int[] Route(int from)
+        {
+            if (from == _hole) return Array.Empty<int>();
+            // Materialize once for stacked candidates; continue the same forward BFS
+            // for the next hole instead of traversing the country from scratch.
+            var key = (from, _hole);
+            if (_holeRoutes.TryGetValue(key, out var found)) return found;
+            if (!_searches.TryGetValue(from, out var search))
+            {
+                if (_searches.Count >= 8)
+                {
+                    var oldest = _searchOrder.Dequeue();
+                    _searches[oldest].Dispose(); _searches.Remove(oldest);
+                }
+                search = new FriendlyRouteSearch(_map, _controllers, from, _routeAllowed);
+                _searches.Add(from, search); _searchOrder.Enqueue(from);
+            }
+            return _holeRoutes[key] = search.Route(_hole, out _);
+        }
+
+        public void Dispose()
+        {
+            foreach (var search in _searches.Values) search.Dispose();
+            _searches.Clear(); _searchOrder.Clear(); _holeRoutes.Clear(); _retreats.Clear();
+        }
+
+        internal int WithdrawalProvince(Army army)
+        {
+            var from = army.ProvinceId;
+            if (from <= 0 || from >= _map.Neighbors.Length) return 0;
+            var key = (army.Id, _hole);
+            if (_retreats.TryGetValue(key, out var cached)) return cached;
+            return WithdrawalProvinceUncached(army, from);
+        }
+
+        private int WithdrawalProvinceUncached(Army army, int from)
+        {
+            if (_hole > 0 && _hole <= _map.ProvinceCount)
+            {
+                if (_map.Neighbors[from].AsSpan().Contains(_hole) && Safe(_hole))
+                    return _retreats[(army.Id, _hole)] = _hole;
+                var route = Route(from);
+                if (route.Length > 0 && Safe(route[0])) return _retreats[(army.Id, _hole)] = route[0];
+            }
+            // Reposting reserves can change their queued destinations between holes.
+            // Keep this rare crowding-sensitive fallback live, not in the position cache.
+            return WarCoalition.SpreadRetreatProvince(_campaign, _war, army, from);
+        }
     }
 }

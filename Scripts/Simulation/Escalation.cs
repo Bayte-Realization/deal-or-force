@@ -466,9 +466,10 @@ public static class Escalation
         if (relation.GuaranteeByA || relation.GuaranteeByB) factor *= 0.4f;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id)) factor *= 0.2f;
         // Structural tension is not softened by distance: an armistice line is an armistice line.
+        var globalCycle = GeopoliticalCycle.GlobalTensionOffset(c);
         var reasons = structural * MathF.Max(factor, MathF.Min(1f, factor * 2f)) +
                       (hostility + grievance + lostLand + rivalry + proxy + ideology) * factor;
-        var target = M.Clamp(reasons + relation.TensionBaseline, 0f, 100f);
+        var target = M.Clamp(reasons + relation.TensionBaseline + globalCycle, 0f, 100f);
         return new TensionDrivers(structural, hostility, grievance, lostLand, rivalry, proxy, ideology, factor, target,
             relation.TensionBaseline);
     }

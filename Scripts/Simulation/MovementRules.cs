@@ -308,7 +308,6 @@ public static class MovementRules
     public int Week = -1;
     public int MapRevision = -1;
     public int States = -1;
-    public long Total;
     public readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
     public readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
     public readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
@@ -349,11 +348,9 @@ public static class MovementRules
     private static void EnsurePeopleCache(Campaign campaign)
     {
         var cache = campaign.MovementPeople;
-        long total = 0;
-        for (var i = 0; i < campaign.States.Count; i++) total += campaign.States[i].Population;
         var week = campaign.ElapsedDays / 7;
         if (cache.Week == week && cache.MapRevision == campaign.MapRevision &&
-            cache.States == campaign.States.Count && cache.Total == total)
+            cache.States == campaign.States.Count)
         {
             return;
         }
@@ -363,7 +360,6 @@ public static class MovementRules
         cache.Week = week;
         cache.MapRevision = campaign.MapRevision;
         cache.States = campaign.States.Count;
-        cache.Total = total;
     }
 
     private static Dictionary<ScenarioState, long> CultureTotalsOf(Campaign campaign, string culture)
@@ -740,21 +736,70 @@ public static class MovementRules
         if (campaign is null || nation?.Movement is not { Dissolved: false } || definition is null ||
             seed is null || owner is null) return zone;
         zone.Add(seed);
+        var ownerTotalStates = campaign.StatesOf(owner).Length;
         // Map order, so the same campaign always takes the same borders in the same sequence.
         foreach (var region in campaign.States.OrderBy(candidate => candidate.MapIndex))
         {
             if (region is null || region.MapIndex == seed.MapIndex) continue;
             if (region.NationMapIndex != owner.MapIndex) continue;
             if (region.Unclaimed || region.Population <= 0) continue;
-            if (!MovementReach.IsHomeland(campaign, definition, region)) continue;
+            bool isHome = MovementReach.IsHomeland(campaign, definition, region) ||
+                (campaign.Homelands.TryGetValue(nation.Id, out var homes) &&
+                 (homes.Contains(region.MapIndex) || homes.Contains(TerritorialClaims.Origin(region))));
+            if (!isHome) continue;
             // A chunk some other army stands on is a different war, not a free border.
             if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) continue;
-            // A ballot frees only ground that actually voted for it.
-            if (peacefulVote &&
-                CivilIndependence.ResidentSupport(nation, region) <= campaign.Defines.CivilReferendumMajority) continue;
+            if (peacefulVote)
+            {
+                var votes = CivilIndependence.ResidentSupport(nation, region);
+                if (!float.IsFinite(votes) || votes <= campaign.Defines.CivilReferendumMajority) continue;
+            }
+            // Peaceful secession must not dissolve the parent state entirely without a war.
+            if (peacefulVote && zone.Count + 1 >= ownerTotalStates)
+                continue;
             zone.Add(region);
         }
-        return zone;
+        // A vote frees each region that carried it, joined up or not; a rising holds what it
+        // can reach from the flashpoint.
+        return peacefulVote ? zone : Connected(campaign, nation, zone);
+    }
+
+    /// <summary>
+    /// The part of a zone that hangs together: the seed and every zone region that can be reached
+    /// from it over zone regions or ground the nation already holds. A homeland scattered across
+    /// a map - by a war, or by a homeland that drifted - rose as one act and left snakes and
+    /// islands; the rest waits for its own flashpoint. A referendum is not held to this: each
+    /// region that votes to leave has chosen for itself.
+    /// </summary>
+    private static List<ScenarioState> Connected(Campaign campaign, Nation nation, List<ScenarioState> zone)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null || zone.Count <= 1) return zone;
+        var wanted = new HashSet<int>();
+        foreach (var region in zone) wanted.Add(region.MapIndex);
+        var held = new HashSet<int>();
+        foreach (var region in campaign.StatesOf(nation)) held.Add(region.MapIndex);
+        var links = new Dictionary<int, HashSet<int>>();
+        for (var province = 1; province <= map.ProvinceCount; province++)
+        {
+            int here = map.ProvinceToState[province];
+            if (!wanted.Contains(here) && !held.Contains(here)) continue;
+            foreach (var next in map.Neighbors[province])
+            {
+                int there = map.ProvinceToState[next];
+                if (there == here || (!wanted.Contains(there) && !held.Contains(there))) continue;
+                if (!links.TryGetValue(here, out var set)) links[here] = set = new HashSet<int>();
+                set.Add(there);
+            }
+        }
+        var reached = new HashSet<int> { zone[0].MapIndex };
+        var queue = new Queue<int>();
+        queue.Enqueue(zone[0].MapIndex);
+        while (queue.Count > 0)
+            if (links.TryGetValue(queue.Dequeue(), out var next))
+                foreach (var region in next)
+                    if (reached.Add(region)) queue.Enqueue(region);
+        return zone.Where(region => reached.Contains(region.MapIndex)).ToList();
     }
 
     /// <summary>
@@ -799,8 +844,21 @@ public static class MovementRules
         // Whole-region movement settlements must not overwrite a third party's occupation,
         // including restorations and peaceful referendums. They need an actual military settlement.
         if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) return false;
-        if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
-        if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        if (settle)
+        {
+            if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
+            if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        }
+        else
+        {
+            // Inside TakeZone: the seed region already verified political/military mandate.
+            // Secondary regions in the same homeland zone under the same owner need only
+            // verify they are valid homeland ground with no foreign occupation and sane data.
+            var def = Movements.DefinitionOf(nation);
+            if (!restoration && def is not null && !MovementReach.IsHomeland(campaign, def, region) &&
+                !(campaign.Homelands.TryGetValue(nation.Id, out var h) && (h.Contains(region.MapIndex) || h.Contains(TerritorialClaims.Origin(region)))))
+                return false;
+        }
         if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||
             !float.IsFinite(region.Stability) || !float.IsFinite(region.StandardOfLiving) ||
             !float.IsFinite(region.Literacy) || !float.IsFinite(nation.Gdp) ||
@@ -954,6 +1012,12 @@ public static class MovementRules
             CampaignDiplomacy.ForgetBorders();
             CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
         }
+        // Remember the newly liberated regions as the nation's homeland so restorations and title checks recognize them.
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var homes))
+            campaign.Homelands[nation.Id] = gained.Select(r => r.MapIndex).ToList();
+        else
+            foreach (var r in gained)
+                if (!homes.Contains(r.MapIndex)) homes.Add(r.MapIndex);
         // The borders are on the map, so the movement is done being a movement: ground of
         // its own makes it a country at once (the same rule SynchroniseTerritory applies a
         // week later to ground gained any other way). What follows - wars, peace, exile -

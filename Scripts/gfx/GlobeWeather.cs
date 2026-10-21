@@ -155,7 +155,8 @@ public sealed partial class GlobePresentation
         // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a
         // frozen program.
         var paused = _campaign is null || _campaign.IsPaused;
-        _weatherClock += delta * (paused ? 0.25 : 1.0);
+        // Except under the ice, where the sky is as still as everything else.
+        if (!Simulation.WorldCurses.Frozen(_campaign)) _weatherClock += delta * (paused ? 0.25 : 1.0);
         var clock = (float)(_weatherClock % 100000.0);
         var readability = Simulation.WeatherReadability.Read(defines);
 

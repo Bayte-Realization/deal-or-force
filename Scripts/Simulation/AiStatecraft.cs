@@ -365,7 +365,14 @@ public static partial class AiStatecraft
         // week, which is the one term of the circle that needs an answer before it is built.
         using (SimProfiler.Measure("    dip:circle"))
             BuildCircle(campaign, nation, campaign.NationById(nation.WarPlanTargetId));
-        if (Circle.Count == 0) return;
+        // A patron with nobody next door can still be the only friend of a government
+        // that is coming apart. The empty circle used to end the week before that was asked.
+        if (Circle.Count == 0)
+        {
+            if (TryOfferCrisisGrant(campaign, nation)) return;
+            TryHedgeSupply(campaign, nation);
+            return;
+        }
         var neighbours = NeighboursOf(campaign, nation.MapIndex);
 
         foreach (var other in Circle)
@@ -468,6 +475,18 @@ public static partial class AiStatecraft
         if (TryBuyKindredLand(campaign, nation))
             return;
 
+        // A client whose institutions are failing, after our own fear and our own people.
+        // The cheque is the ordinary deal table. A player still has to sign.
+        using (SimProfiler.Measure("    dip:crisis_grant"))
+        if (TryOfferCrisisGrant(campaign, nation))
+            return;
+
+        // A scarce good that arrives from one partner, before a week spent only on being liked.
+        // The paper is a trade agreement. A player who is asked still has to sign. No land moves.
+        using (SimProfiler.Measure("    dip:supply_hedge"))
+        if (TryHedgeSupply(campaign, nation))
+            return;
+
         // Nothing has crossed a threshold yet, which is where every relationship starts:
         // neighbours dislike each other by default, so warmth has to be worked at. A
         // country spends the week courting whichever neighbour it is least unhappy with.
@@ -509,6 +528,76 @@ public static partial class AiStatecraft
             ActShortOfWar(campaign, nation, worstRival);
         }
         }
+    }
+
+    /// <summary>
+    /// Offer one cash grant to the ally or guarantor-client whose institutions are furthest
+    /// gone. No land is on the table. An AI client answers by the deal table; a player
+    /// gets the paper and nothing moves until they sign.
+    /// </summary>
+    internal static bool TryOfferCrisisGrant(Campaign campaign, Nation nation)
+    {
+        var defines = campaign?.Defines;
+        if (defines is null || nation is null || nation.IsHuman || nation.Movement is not null) return false;
+        if (!defines.AiCrisisGrants || !campaign.FeatureEnabled("deals")) return false;
+        if (!float.IsFinite(nation.Stability) || nation.Stability < defines.CivilWarStabilityThreshold) return false;
+
+        Nation client = null;
+        var worst = float.MaxValue;
+        foreach (var other in campaign.Nations)
+        {
+            if (other.Id == nation.Id || other.Movement is not null) continue;
+            if (nation.DecisionAvailableDay.GetValueOrDefault("crisis_grant/" + other.Id) > campaign.ElapsedDays) continue;
+            if (!StandsBehind(campaign, nation, other) || !InstitutionsFailing(campaign, other)) continue;
+            if (CampaignDiplomacy.AtWar(campaign, nation.Id, other.Id)) continue;
+            if (other.Stability < worst || (other.Stability == worst && client is not null && other.Id < client.Id))
+            {
+                worst = other.Stability;
+                client = other;
+            }
+        }
+        if (client is null) return false;
+        if (!Ultimatum.CanNegotiateDeal(campaign, nation, client, out _)) return false;
+        var package = AgreementSystem.AidAmount(campaign, nation, client, out _);
+        if (!float.IsFinite(package) || package < 0.01f) return false;
+        var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
+        if (!fiscal.CanSpend) return false;
+        package = MathF.Min(package, fiscal.DiscretionaryCash);
+        if (package < 0.01f) return false;
+
+        var deal = new Ultimatum.Deal(new Ultimatum.Side { Cash = package }, new Ultimatum.Side());
+        var outcome = DealNegotiations.Submit(campaign, nation, client, deal);
+        var pending = campaign.DealOffers.Any(offer => offer.Pending && offer.FromId == nation.Id && offer.ToId == client.Id);
+        if (!outcome.Accepted && !pending) return false;
+        nation.DecisionAvailableDay["crisis_grant/" + client.Id] =
+            campaign.ElapsedDays + Math.Max(30, defines.AiCrisisGrantRetryDays);
+        Count("crisis_grant");
+        return true;
+    }
+
+    private static bool StandsBehind(Campaign campaign, Nation patron, Nation client)
+    {
+        var relation = CampaignDiplomacy.Peek(campaign, patron.Id, client.Id);
+        if (relation is null || relation.Stance == DiplomaticStance.AtWar) return false;
+        return relation.Stance == DiplomaticStance.Allied || relation.GuaranteedBy(patron.Id);
+    }
+
+    /// <summary>
+    /// The same strain a civil war reads, including in a player's country when random
+    /// outbreaks are switched off. A subject is somebody else's crisis.
+    /// </summary>
+    private static bool InstitutionsFailing(Campaign campaign, Nation client)
+    {
+        if (client.IsSubject || campaign.Fallen.Contains(client.Id) || client.Population <= 0) return false;
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.CivilConflict && war.Involves(client.Id)) return true;
+        var defines = campaign.Defines;
+        if (!float.IsFinite(client.Stability) || client.Stability >= defines.CivilWarStabilityThreshold) return false;
+        if (client.Population < defines.CivilWarMinimumPopulation) return false;
+        var regions = 0;
+        foreach (var state in campaign.StatesOf(client))
+            if (state.Population > 0) regions++;
+        return regions >= defines.CivilWarMinimumRegions;
     }
 
     // ---------------------------------------------------------------- economy ----------
@@ -1488,6 +1577,16 @@ public static partial class AiStatecraft
 
 public sealed partial class Defines
 {
+    /// <summary>
+    /// An ally or guarantor may offer cash when a client's institutions are failing.
+    /// The money moves through the ordinary deal table. A player still has to sign.
+    /// Off: that week is spent on courtship instead.
+    /// </summary>
+    public bool AiCrisisGrants { get; set; } = true;
+
+    /// <summary>Days before the same patron offers that client another stabilization grant.</summary>
+    public int AiCrisisGrantRetryDays { get; set; } = 360;
+
     /// <summary>
     /// Whether allied powers may agree to divide a weak common neighbour by simultaneous
     /// demands. The practice of every imperial age and outlawed by the post-UN world: off

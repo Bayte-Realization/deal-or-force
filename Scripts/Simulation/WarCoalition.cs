@@ -43,15 +43,45 @@ public static class WarCoalition
         return false;
     }
 
+    // The staff asks the same question dozens of times a day - one route per candidate per
+    // hole per arrangement - so the answers live for the day and die with the first border
+    // change (a capture bumps the map revision). Same inputs, same answer; only the work
+    // is shared.
+    private static Campaign _routeCacheFor;
+    private static long _routeCacheStamp;
+    private static readonly Dictionary<(int Nation, int From, int To), int[]> RouteCache = new();
+    private static readonly Dictionary<(int War, int Nation), HashSet<ushort>> AllowedCache = new();
+
     internal static int[] FriendlyRoute(Campaign c, StrategicWar war, int nationId, int from, int to)
     {
         if (c.ProvinceMap is null || c.ProvinceController is null || c.NationById(nationId) is not { } own)
             return Array.Empty<int>();
+        var stamp = ((long)c.ElapsedDays << 24) ^ (uint)c.MapRevision;
+        if (!ReferenceEquals(_routeCacheFor, c) || _routeCacheStamp != stamp)
+        {
+            RouteCache.Clear();
+            AllowedCache.Clear();
+            _routeCacheFor = c;
+            _routeCacheStamp = stamp;
+        }
+        if (RouteCache.Count > 8192) RouteCache.Clear();
+        var key = (nationId, from, to);
+        if (RouteCache.TryGetValue(key, out var cached)) return cached;
+        int[] route;
         if (war is null || war.Ended || war.BelligerentCount == 2)
-            return c.ProvinceMap.FindRoute(from, to, (ushort)own.MapIndex, c.ProvinceController);
-        var allowed = new HashSet<ushort>();
-        FillControllers(c, war, war.IsAttacking(nationId), allowed);
-        return c.ProvinceMap.FindOperationalRoute(from, to, allowed, c.ProvinceController);
+            route = c.ProvinceMap.FindRoute(from, to, (ushort)own.MapIndex, c.ProvinceController);
+        else
+        {
+            var allowedKey = (war.Id, nationId);
+            if (!AllowedCache.TryGetValue(allowedKey, out var allowed))
+            {
+                allowed = new HashSet<ushort>();
+                FillControllers(c, war, war.IsAttacking(nationId), allowed);
+                AllowedCache[allowedKey] = allowed;
+            }
+            route = c.ProvinceMap.FindOperationalRoute(from, to, allowed, c.ProvinceController);
+        }
+        return RouteCache[key] = route;
     }
 
     internal static bool SafeRetreatProvince(Campaign c, StrategicWar war, int nationId, int province)

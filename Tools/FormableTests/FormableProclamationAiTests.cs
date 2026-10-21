@@ -83,6 +83,8 @@ static class FormableProclamationAiTests
             ActualSovietEurasianChoice();
             GlobalAiLoop();
             RuleFingerprints();
+            ConsolidationLeadershipAndSwitch();
+            EstablishedSuccessorPartner();
             PartialRestorationKeepsForeignLand();
         }
         finally { FormableNations.ResetCatalog(); FormableProclamationAi.ResetCatalog(); }
@@ -335,6 +337,56 @@ static class FormableProclamationAiTests
     {
         PartialRestoration(false);
         PartialRestoration(true);
+    }
+
+    private static void ConsolidationLeadershipAndSwitch()
+    {
+        var (c, n, other, land) = Fixture("CZE", "czech");
+        other.Tag = "SVK";
+        var all = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).ToArray();
+        var d = Definition(n, all, "leadership_proclamation_fixture") with
+        { EligibleTags = new[] { "CZE", "SVK" }, PeacefulAccession = true };
+        Add(d);
+        StatePartition.Annex(c, land.Skip(1).ToArray(), other, asConquest: false);
+        other.FormedNationId = "incompatible_fixture";
+        Check(Consolidation.Project(c, n)?.Definition.Id == d.Id,
+            "a larger holder with an incompatible prior identity cannot permanently block a viable founder");
+        other.FormedNationId = ""; other.SubjectType = "puppet"; other.OverlordId = n.Id;
+        Check(Consolidation.Project(c, n)?.Definition.Id == d.Id,
+            "a larger subject has no independent founding precedence over its sovereign");
+        other.SubjectType = "";
+        Check(Consolidation.Project(c, n) is null,
+            "a genuinely eligible larger founder still retains natural leadership precedence");
+        n.ConsolidationProject = d.Id; n.ConsolidationAmbition = 1;
+        Check(Consolidation.WarValue(c, n, other) > 0,
+            "a live kindred project can contribute the existing bounded strategic incentive");
+        c.SetFeature("formable_nations", false);
+        Check(Consolidation.Project(c, n) is null && Consolidation.WarValue(c, n, other) == 0,
+            "disabling formable nations removes both union courting projects and their war appetite");
+    }
+
+    private static void EstablishedSuccessorPartner()
+    {
+        var (c, n, other, _) = Fixture();
+        other.IsHuman = false; other.IsPlayer = false; c.HumanSeats.Clear();
+        other.Movement = new MovementState { Landless = false, StatehoodDay = 0 };
+        var all = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).ToArray();
+        var d = Definition(n, all, "successor_partner_fixture") with { PeacefulAccession = true };
+        Add(d);
+        other.Movement.Exile = true;
+        Check(!PeacefulFormation.Accept(c, n, other, d) && !PeacefulFormation.Participates(c, n, other, d),
+            "an exiled movement cannot sign away an active country's land");
+        other.Movement.Exile = false; other.Movement.StatehoodDay = -1;
+        Check(!PeacefulFormation.Accept(c, n, other, d),
+            "a movement that has never established statehood cannot sign an accession treaty");
+        other.Movement.StatehoodDay = 0;
+        Check(PeacefulFormation.Accept(c, n, other, d) && PeacefulFormation.Participates(c, n, other, d) &&
+                FormableNations.Evaluate(c, n, d).CanForm,
+            "a settled sovereign successor can explicitly join another country's peaceful foundation");
+        new FormNationCommand { IssuerId = n.Id, FormableId = d.Id }.Apply(c);
+        Check(n.FormedNationId == d.Id && c.Fallen.Contains(other.Id) &&
+                all.All(p => c.ProvinceMap.ProvinceToNation[p] == n.MapIndex),
+            "the ordinary priced command really integrates the consented successor's territory");
     }
 
     private static void PartialRestoration(bool humanRemainder)

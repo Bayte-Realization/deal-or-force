@@ -345,6 +345,16 @@ public partial class DealOrForceGame
             "A verse, and eight seconds later the game closes. It does not save first. " +
             "The verse is in game/common/console.",
             _ => ConsoleTouchGrass());
+        // And two that cannot be taken back, after the routes of Deltarune that cannot either.
+        Add("snowgrave", "FUN", "snowgrave",
+            "The world freezes under a thick sheet of ice. The calendar goes on; nothing else ever " +
+            "moves again, and the music stops for good. Saved with the world - there is no way back.",
+            _ => ConsoleSnowgrave());
+        Add("weirdroute", "FUN", "weirdroute",
+            "The music stops, and every army in the world - and every one raised after - marches over " +
+            "any border to the nearest water and walks into it. A world with no water gets static " +
+            "instead. Saved with the world - there is no way back.",
+            _ => ConsoleWeirdRoute());
 
         _consoleCommands = table;
         _consoleByName = new Dictionary<string, ConsoleCommand>(StringComparer.OrdinalIgnoreCase);
@@ -409,8 +419,9 @@ public partial class DealOrForceGame
         foreach (var command in _consoleCommands)
         {
             // Not itself, or it recurses; not `clear`, or the report is wiped as it is written;
-            // not `touchgrass`, or the test closes the game it is testing.
-            if (command.Name is "selftest" or "clear" or "touchgrass") continue;
+            // not `touchgrass`, or the test closes the game it is testing; not the curses, or
+            // it spoils the world it is testing for good.
+            if (command.Name is "selftest" or "clear" or "touchgrass" or "snowgrave" or "weirdroute") continue;
             try
             {
                 command.Run("");

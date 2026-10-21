@@ -33,14 +33,32 @@ public partial class LoadingScreen : Control
     private TextureRect _paper;
     public bool CanDismiss => _dismiss is { Visible: true };
 
+    /// <summary>
+    /// The setting that takes the generated pictures away (`loading_without_ai_art`): the screen
+    /// is then the plain chart it was at first - grid, frame, seal and dossier. Read straight from
+    /// the player's file, because the first loading screen stands before the catalogues exist.
+    /// </summary>
+    private static bool Plain()
+    {
+        try
+        {
+            // The campaign scene started on its own (from the editor) shows its first loading
+            // screen before it has told the settings where the player's file is.
+            if (!PlayerSettings.Located) PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
+            return SettingsCatalog.Flag("loading_without_ai_art");
+        }
+        catch (System.Exception) { return false; }
+    }
+
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Stop;
         FocusMode = FocusModeEnum.All;
+        var plain = Plain();
         _scene = new TextureRect
         {
-            Name = "LoadingScene", Texture = NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            Name = "LoadingScene", Texture = plain ? null : NextScene(), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered, MouseFilter = MouseFilterEnum.Ignore,
             SelfModulate = new Color(.78f, .80f, .84f)
         };
@@ -65,6 +83,7 @@ public partial class LoadingScreen : Control
         };
         AddChild(_shade);
         _shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        _shade.Visible = !plain;
         if (_scene.Texture is not null)
         {
             // A slow drift, not a slideshow. No fade-in: a loading stage can hold the frame for
@@ -94,6 +113,8 @@ public partial class LoadingScreen : Control
             ShadowColor = new Color(0, 0, 0, .35f), ShadowSize = 18
         });
         AddChild(_card);
+        // The dark card is there so the words read over a picture; the plain chart needs none.
+        _card.Visible = !plain;
         _body = new VBoxContainer { Name = "Dossier", MouseFilter = MouseFilterEnum.Ignore };
         _body.AddThemeConstantOverride("separation", 20);
         AddChild(_body);
@@ -165,20 +186,39 @@ public partial class LoadingScreen : Control
         _frame.QueueRedraw();
     }
 
-    /// <summary>The next illustration in turn, the first one by the clock; null when there are none.</summary>
+    /// <summary>
+    /// The next illustration in turn, the first one by the clock; null when there are none.
+    /// Every sprite named loading_* is one - the base game's gfx/loading and a mod's gfx alike, a
+    /// mod replacing one by giving its file the same name - and before the sprite catalogue
+    /// exists, at the very first loading, the base folder is read directly.
+    /// </summary>
     private static Texture2D NextScene()
     {
-        string[] files;
+        string[] paths;
         try
         {
-            files = ResourceLoader.ListDirectory(SceneFolder)
-                .Where(f => f.EndsWith(".jpg") || f.EndsWith(".png") || f.EndsWith(".webp"))
-                .OrderBy(f => f, System.StringComparer.Ordinal).ToArray();
+            paths = SpriteCatalog.Count > 0
+                ? SpriteCatalog.Names.Where(name => name.StartsWith("loading_", System.StringComparison.Ordinal))
+                    .OrderBy(name => name, System.StringComparer.Ordinal)
+                    .Select(name => SpriteCatalog.TextureOf(name)).Where(path => path.Length > 0).ToArray()
+                : ResourceLoader.ListDirectory(SceneFolder)
+                    .Where(f => f.EndsWith(".jpg") || f.EndsWith(".png") || f.EndsWith(".webp"))
+                    .OrderBy(f => f, System.StringComparer.Ordinal).Select(f => SceneFolder + f).ToArray();
         }
         catch (System.Exception) { return null; }
-        if (files.Length == 0) return null;
-        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % files.Length) : (_sceneTurn + 1) % files.Length;
-        return GD.Load<Texture2D>(SceneFolder + files[_sceneTurn]);
+        if (paths.Length == 0) return null;
+        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % paths.Length) : (_sceneTurn + 1) % paths.Length;
+        return Picture(paths[_sceneTurn]);
+    }
+
+    /// <summary>An imported picture, or a mod's loose file read as it is.</summary>
+    private static Texture2D Picture(string path)
+    {
+        if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
+        var loose = path.StartsWith("res://", System.StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
+        if (!System.IO.File.Exists(loose)) return null;
+        var image = Image.LoadFromFile(loose);
+        return image is null || image.IsEmpty() ? null : ImageTexture.CreateFromImage(image);
     }
 
     public void SetStage(string heading, string stage, double completed, string detail)

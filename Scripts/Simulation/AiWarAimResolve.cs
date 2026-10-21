@@ -63,6 +63,12 @@ public static partial class AiStatecraft
             nation.Stability < c.Defines.AiWarStabilityFloor || nation.WarSupport < c.Defines.AiWarSupportFloor ||
             WarWeariness.TimeToStop(c, war, winning: true)) return false;
         if (draft is { Subjugate.Length: > 0 }) return false;
+        if (draft is not null && draft.Provinces.Count > 0)
+        {
+            var duration = c.ElapsedDays - war.StartedDay;
+            if (duration >= c.Defines.AiStalemateDays || war.Stalled || nation.WarSupport < 0.65f)
+                return false;
+        }
         var enemies = war.EnemiesOf(nation.Id).Select(c.NationById).Where(n => n is not null)
             .Select(n => n.MapIndex).ToHashSet();
         var aims = c.States.Where(s => enemies.Contains(s.NationMapIndex) && StrategicWarAim(c, nation, war, s))

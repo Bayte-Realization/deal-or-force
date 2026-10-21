@@ -23,6 +23,10 @@ static class Program
         if (args.Length == 0) PeaceBattleAssignmentTests.Run();
         if (args.Contains("--partial-front-only")) { PartialFrontWithdrawalTests.Run(); return; }
         if (args.Length == 0) PartialFrontWithdrawalTests.Run();
+        if (args.Contains("--front-disengagement-performance-only")) { FrontDisengagementPerformanceTests.Run(); return; }
+        if (args.Length == 0) FrontDisengagementPerformanceTests.Run();
+        if (args.Contains("--friendly-route-search-only")) { FriendlyRouteSearchTests.Run(); return; }
+        if (args.Length == 0) FriendlyRouteSearchTests.Run();
         if (args.Contains("--move-battle-preflight-only")) { MoveBattlePreflightTests.Run(); return; }
         if (args.Length == 0) MoveBattlePreflightTests.Run();
         if (args.Contains("--open-advance-only")) { OpenAdvanceTests.Run(); return; }

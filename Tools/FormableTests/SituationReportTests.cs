@@ -78,8 +78,16 @@ static class SituationReportTests
         Check(SituationReport.Read(c, n).All(i => i.Id != "military_plot"), "disabled military plots do not advertise a transition");
         c.Defines.CivilWarStrikesPlayers = true; c.Defines.CivilWarEarliestDay = 0; n.Stability = .01f;
         var civil = SituationReport.Read(c, n).Single(i => i.Id == "civil_war");
-        Check(civil.DeadlineDay < 0 && civil.Facts.Length == 1 && civil.Consequences[0].Contains("not a countdown"),
-            "civil outbreak warning is weekly probability, never a countdown");
+        Check(civil.DeadlineDay < 0 && civil.Facts.Length == 1 && civil.Facts[0].Label.Contains("chance")
+            && civil.Causes.Any(cause => cause.Contains("below the line") || cause.Contains("ниже порога"))
+            && civil.Consequences[0].Contains("not a countdown"),
+            "civil outbreak warning names why the weekly chance is what it is, and is never a countdown");
+        var plainChance = civil.Facts[0].Value;
+        var namedCoup = civil.Causes.Any(cause => cause.Contains("coup") || cause.Contains("переворот"));
+        n.LastMilitaryCoupDay = c.ElapsedDays;
+        var doubled = SituationReport.Read(c, n).Single(i => i.Id == "civil_war");
+        Check(namedCoup || (doubled.Facts[0].Value != plainChance && doubled.Causes.Any(cause => cause.Contains("coup") || cause.Contains("переворот"))),
+            "a recent military coup is named beside the weekly chance and changes it");
         c.Defines.CivilWarStrikesPlayers = false;
         Check(SituationReport.Read(c, n).All(i => i.Id != "civil_war"), "player protection uses the actual simulation gate");
 

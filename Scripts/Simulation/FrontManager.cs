@@ -237,6 +237,7 @@ public static class FrontManager
 
     private static void Arrange(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line)
     {
+        using var measured = SimProfiler.Measure("    staff:arrange");
         if (Posts.Count == 0) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -313,6 +314,9 @@ public static class FrontManager
             var order = Need[right].CompareTo(Need[left]);
             return order != 0 ? order : left.CompareTo(right);
         });
+        FrontDisengagement.SelectionContext disengagement = null;
+        try
+        {
         foreach (var hole in Posts)
         {
             if (budget <= 0) break;
@@ -364,7 +368,7 @@ public static class FrontManager
                 }
             if (!filled && war is not null && BattleCandidates.Count > 0)
             {
-                if (FrontDisengagement.TryCoverHole(campaign, nation, war, line, hole, out var detached, BattleCandidates))
+                if (FrontDisengagement.TryCoverHole(campaign, nation, war, line, hole, out var detached, ref disengagement, BattleCandidates))
                 {
                     var alreadyCounted = false;
                     foreach (var units in Allocated.Values) alreadyCounted |= units.Remove(detached);
@@ -374,6 +378,9 @@ public static class FrontManager
                 }
             }
         }
+
+        }
+        finally { disengagement?.Dispose(); }
 
         // Then the weight of the line. Each post's share of the divisions is its share of the
         // pressure - a post with an enemy corps next to it wants more than one facing an empty

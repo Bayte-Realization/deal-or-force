@@ -13,5 +13,9 @@
   "Too few residents or governed regions for a territorial civil war.": "Too few residents or governed regions for a territorial civil war.",
   "Institutions remain above the civil-war instability threshold.": "Institutions remain above the civil-war instability threshold.",
   "Civil-war outbreaks in player countries": "Civil-war outbreaks in player countries",
-  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown."
+  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.",
+  "The weekly chance starts from how far stability sits below the line.": "The weekly chance starts from how far stability sits below the line.",
+  "A recent military coup doubles that chance.": "A recent military coup doubles that chance.",
+  "A losing war abroad raises that chance.": "A losing war abroad raises that chance.",
+  "Imperial overstretch raises that chance.": "Imperial overstretch raises that chance."
 }

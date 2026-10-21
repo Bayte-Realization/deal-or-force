@@ -53,6 +53,10 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        if (campaign.Curse.Length > 0)
+        {
+            MixText("world_curse"); MixText(campaign.Curse); Mix(campaign.CurseDay); Mix(campaign.CurseDrowned);
+        }
         if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
             campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
         {
@@ -97,6 +101,21 @@ public static class CampaignFingerprint
         {
             MixText("ai_fiscal_runway");
             Mix(campaign.Defines.AiFiscalReserveWeeks);
+        }
+        if (!campaign.Defines.AiCrisisGrants || campaign.Defines.AiCrisisGrantRetryDays != 360)
+        {
+            MixText("crisis_grant_rule");
+            Mix(campaign.Defines.AiCrisisGrants ? 1 : 0);
+            Mix(campaign.Defines.AiCrisisGrantRetryDays);
+        }
+        if (!campaign.Defines.AiSupplyHedges || campaign.Defines.AiSupplyHedgeShare != 0.75f ||
+            campaign.Defines.AiSupplyHedgeSatisfaction != 0.875f || campaign.Defines.AiSupplyHedgeRetryDays != 180)
+        {
+            MixText("supply_hedge_rule");
+            Mix(campaign.Defines.AiSupplyHedges ? 1 : 0);
+            MixFloat(campaign.Defines.AiSupplyHedgeShare);
+            MixFloat(campaign.Defines.AiSupplyHedgeSatisfaction);
+            Mix(campaign.Defines.AiSupplyHedgeRetryDays);
         }
         // Preserve the old default fingerprint, but detect different modded assault
         // rules before peers reach a battle and make different decisions.
@@ -339,6 +358,26 @@ public static class CampaignFingerprint
             { MixText("political_scandal"); Mix(nation.LastPoliticalScandalDay); }
             if (nation.LastMilitaryCoupDay >= 0)
             { MixText("last_military_coup"); Mix(nation.LastMilitaryCoupDay); }
+            var grantClocks = 0;
+            foreach (var clock in nation.DecisionAvailableDay)
+                if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal)) grantClocks++;
+            if (grantClocks > 0)
+            {
+                MixText("crisis_grant");
+                foreach (var clock in nation.DecisionAvailableDay.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+            }
+            var hedgeClocks = 0;
+            foreach (var clock in nation.DecisionAvailableDay)
+                if (clock.Key.StartsWith("supply_hedge/", StringComparison.Ordinal)) hedgeClocks++;
+            if (hedgeClocks > 0)
+            {
+                MixText("supply_hedge");
+                foreach (var clock in nation.DecisionAvailableDay.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    if (clock.Key.StartsWith("supply_hedge/", StringComparison.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+            }
             foreach (var origin in nation.RenouncedTerritoryOrigins.OrderBy(id => id)) Mix(origin);
             Mix(-17);
             // Kept empty-state compatible, like the movement command state above: a country

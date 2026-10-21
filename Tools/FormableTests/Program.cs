@@ -10,8 +10,11 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--inspect-save")) { InspectSave(args); return; }
         if (args.Contains("--formable-proclamation-ai-only")) { FormableProclamationAiTests.Run(); return; }
         if (args.Length == 0) FormableProclamationAiTests.Run();
+        if (args.Contains("--smaller-polity-only")) { SmallerPolityTests.Run(); return; }
+        if (args.Length == 0) SmallerPolityTests.Run();
         if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
         if (args.Length == 0) OrganicBlocTests.Run();
         if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }
@@ -52,6 +55,7 @@ static class Program
         if (args.Contains("--rulers-subjects-only")) { RulersAndSubjectsTests.Run(); return; }
         if (args.Contains("--macao-only")) { MacaoProbe.Run(); return; }
         if (args.Contains("--dependencies-only")) { DependencyPlausibilityTests.Run(); return; }
+        if (args.Contains("--curses-only")) { WorldCurseTests.Run(); return; }
         if (args.Contains("--subject-growth-only")) { SubjectGrowthProbe.Run(); return; }
         if (args.Contains("--micro-enclave-only")) { MicroEnclaveGrowthTests.Run(); return; }
         if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
@@ -65,6 +69,7 @@ static class Program
         if (args.Contains("--mobilisation-only")) { MobilisationAndStockpileTests.RunAll(); return; }
         if (args.Length == 0) { RulersAndSubjectsTests.Run(); MobilisationAndStockpileTests.RunAll(); }
         if (args.Length == 0) DependencyPlausibilityTests.Run();
+        if (args.Length == 0) WorldCurseTests.Run();
         if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
         if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
         if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
@@ -120,6 +125,11 @@ static class Program
         if (args.Length == 0) TerritorialDealProtectionTests.Run();
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
+        if (args.Contains("--crisis-grant-only")) { CrisisGrantTests.Run(); return; }
+        if (args.Contains("--war-score-index-only")) { WarScoreIndexTests.Run(); return; }
+        if (args.Contains("--supply-hedge-only")) { SupplyHedgeTests.Run(); return; }
+        if (args.Contains("--exposure-only")) { StrategicReportsTests.Run(); SupplyStressTests.Run(); return; }
+        if (args.Length == 0) { CrisisGrantTests.Run(); WarScoreIndexTests.Run(); SupplyHedgeTests.Run(); }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
         if (args.Contains("--music-transition-only")) { MusicTransitionTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
@@ -462,5 +472,46 @@ static class Program
         Check(rus.DisplayName == "Россия" && rus.MapName == "Россия", "Russian identity and map names use stable keys");
         Loc.Language = "english";
         Check(rus.DisplayName == "Russia", "missing localized stable key falls back to country name");
+    }
+
+    private static void InspectSave(string[] args)
+    {
+        var folder = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : @"C:\Users\User\Documents\Deal or Force\save games";
+        var slot = args.Length > 2 && !args[2].StartsWith("--") ? args[2] : "campaign_20261021_215222";
+        Console.WriteLine($"Loading save: {folder} / {slot} ...");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = SaveSystem.Load(folder, slot, "");
+        sw.Stop();
+        Console.WriteLine($"Save loaded in {sw.ElapsedMilliseconds} ms. Success: {result.Success}, Warning: {result.Warning}");
+        if (result.Campaign is null) return;
+        var c = result.Campaign;
+        Console.WriteLine($"Campaign Day: {c.ElapsedDays}, Date: {c.Date:yyyy-MM-dd}");
+        Console.WriteLine($"Player: {c.Player?.Tag} ({c.Player?.DisplayName}), Treasury: {c.Player?.Treasury}");
+        Console.WriteLine($"Nations: {c.Nations.Count} (Alive: {c.Nations.Count(n => c.HasOwnedLand(n))}, Fallen: {c.Fallen.Count}, Landless: {c.Nations.Count(n => n.Landless)})");
+        Console.WriteLine($"States: {c.States.Count}, Armies: {c.Armies.Count}, Wars: {c.Wars.Count}, Battles: {c.Battles.Count}");
+        Console.WriteLine($"FrontLines: {c.FrontLines.Count}, Organizations: {c.Organizations.Count}, PendingEvents: {c.PendingEvents.Count}");
+        Console.WriteLine($"Chronicle entries: {c.Chronicle.Entries.Count}");
+        Console.WriteLine($"Armies in battle: {c.Armies.Count(a => a.InBattle)}, Armies with route: {c.Armies.Count(a => a.Route.Count > 0)}");
+
+        var totalArmies = c.Armies.Count;
+        var totalPersonnel = c.Armies.Sum(a => (long)a.Personnel);
+        Console.WriteLine($"Total Armies: {totalArmies}, Total Personnel: {totalPersonnel:N0}");
+
+        SimProfiler.Reset();
+        c.IsPaused = false;
+        Console.WriteLine("\n--- Ticking 5 days and measuring profile ---");
+        for (int i = 0; i < 5; i++)
+        {
+            sw.Restart();
+            c.TickDay();
+            sw.Stop();
+            Console.WriteLine($"Day {c.ElapsedDays} ({c.Date:yyyy-MM-dd}) ticked in {sw.ElapsedMilliseconds} ms ({sw.ElapsedTicks} ticks)");
+        }
+
+        Console.WriteLine("\n--- SimProfiler Timings (top 30) ---");
+        foreach (var entry in SimProfiler.All.OrderByDescending(p => p.TotalMilliseconds).Take(30))
+        {
+            Console.WriteLine($"  {entry.Name,-45}: {entry.TotalMilliseconds:0.00} ms total (runs: {entry.Runs}, mean: {entry.MeanMilliseconds:0.00} ms, alloc: {entry.AllocatedBytes / 1024} KB)");
+        }
     }
 }

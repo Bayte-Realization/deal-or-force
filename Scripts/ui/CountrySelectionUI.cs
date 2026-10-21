@@ -241,6 +241,7 @@ public partial class DealOrForceGame
         if (_isLoading || !PickerSeedParsed(out var seed) || seed == _campaign.Seed) return;
         var previousSeed = _campaignSeed;
         _campaignSeed = seed;
+        _campaignSeedChosen = true;
         var rebuilt = _pickerScenarioEntry is null
             ? await RebuildCampaignWithLoading()
             : await RebuildAuthoredScenarioWithLoading(_pickerScenarioEntry);

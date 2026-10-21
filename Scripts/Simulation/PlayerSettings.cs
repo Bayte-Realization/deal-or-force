@@ -42,6 +42,9 @@ public static class PlayerSettings
         Load();
     }
 
+    /// <summary>Whether Godot has said where the file lives yet.</summary>
+    public static bool Located => !string.IsNullOrEmpty(_directory);
+
     private static string Path => string.IsNullOrEmpty(_directory)
         ? null
         : System.IO.Path.Combine(_directory, FileName);

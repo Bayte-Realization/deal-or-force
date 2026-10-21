@@ -20,6 +20,21 @@ public sealed partial class Defines
     public float AiKindredTreasuryShare { get; set; } = 0.25f;
     /// <summary>Days before the same neighbour is asked again for kindred land.</summary>
     public int AiKindredRetryDays { get; set; } = 540;
+
+    /// <summary>
+    /// A government that buys a scarce good mostly from one partner asks someone else
+    /// for an ordinary trade agreement. Off: that week is spent on courtship instead.
+    /// </summary>
+    public bool AiSupplyHedges { get; set; } = true;
+
+    /// <summary>One partner's share of this good's imports, above which a second supplier is worth asking.</summary>
+    public float AiSupplyHedgeShare { get; set; } = 0.75f;
+
+    /// <summary>Below this satisfaction the shortage itself is reason enough to ask, even when the good is not half imported.</summary>
+    public float AiSupplyHedgeSatisfaction { get; set; } = 0.875f;
+
+    /// <summary>Days before the same good is hedged again.</summary>
+    public int AiSupplyHedgeRetryDays { get; set; } = 180;
 }
 
 public static partial class AiStatecraft
@@ -95,6 +110,16 @@ public static partial class AiStatecraft
         var tradeThreshold = defines.AiTradeThreshold / reach;
         var pactThreshold = defines.AiPactThreshold / reach;
         var allianceThreshold = defines.AiAllianceThreshold / reach;
+        if (GeopoliticalCycle.IsDetenteEra(campaign))
+        {
+            tradeThreshold *= 0.88f;
+            pactThreshold *= 0.90f;
+        }
+        else if (GeopoliticalCycle.IsFrictionEra(campaign))
+        {
+            tradeThreshold *= 1.10f;
+            pactThreshold *= 1.10f;
+        }
 
         if (relation.EmbargoBy(nation.Id) && opinion >= defines.AiEmbargoReconcileOpinion)
         {
@@ -280,5 +305,108 @@ public static partial class AiStatecraft
             return false;
         Count("kindred_land");
         return true;
+    }
+
+    /// <summary>
+    /// Ask one other country for a trade agreement when a scarce good is mostly one partner's,
+    /// or is arriving with no partner's name on it. The agreement is the ordinary one.
+    /// An AI partner answers by the same willingness bar as any other trade agreement.
+    /// A player gets the paper and nothing is signed until they do. No land is on it.
+    /// </summary>
+    internal static bool TryHedgeSupply(Campaign campaign, Nation nation)
+    {
+        var defines = campaign?.Defines;
+        if (defines is null || nation is null || nation.IsHuman || nation.Movement is not null) return false;
+        if (!defines.AiSupplyHedges) return false;
+        if (nation.Population <= 0) return false;
+
+        var line = EconomicExposure.DominantShare(defines);
+        var shortAt = defines.AiSupplyHedgeSatisfaction;
+        if (!float.IsFinite(shortAt)) shortAt = 0.875f;
+        shortAt = Math.Clamp(shortAt, 0.05f, 0.99f);
+
+        EconomicExposure.Row chosen = null;
+        foreach (var row in EconomicExposure.Read(campaign, nation))
+        {
+            if (nation.DecisionAvailableDay.GetValueOrDefault("supply_hedge/" + (int)row.Good) > campaign.ElapsedDays)
+                continue;
+            var shortOf = float.IsFinite(row.Satisfaction) && row.Satisfaction < shortAt;
+            var concentrated = row.Suppliers.Length > 0 && row.LargestImportShare + 0.0001f >= line;
+            var unnamed = row.Suppliers.Length == 0 && row.Imports > 0.001f;
+            if (concentrated && (shortOf || row.ImportShare >= 0.5f) || unnamed && shortOf)
+            {
+                if (chosen is null || row.LargestImportShare > chosen.LargestImportShare ||
+                    row.LargestImportShare == chosen.LargestImportShare && (int)row.Good < (int)chosen.Good)
+                    chosen = row;
+            }
+        }
+        if (chosen is null) return false;
+
+        var dominant = chosen.Suppliers.Length > 0 ? chosen.Suppliers[0].NationId : -1;
+        Nation alternate = null;
+        if (chosen.Suppliers.Length > 1)
+            alternate = campaign.NationById(chosen.Suppliers[1].NationId);
+        if (!CanHedgeWith(campaign, nation, alternate, dominant))
+        {
+            alternate = null;
+            foreach (var other in campaign.Nations)
+            {
+                if (other.Id == nation.Id || other.Id == dominant) continue;
+                if (alternate is not null && other.Id >= alternate.Id) continue;
+                if (!other.Market.TryGetValue(chosen.Good, out var quote)) continue;
+                if (quote.Production - quote.Demand <= 0.0001f) continue;
+                if (!CanHedgeWith(campaign, nation, other, dominant)) continue;
+                alternate = other;
+            }
+        }
+        if (alternate is null) return false;
+
+        var key = "supply_hedge/" + (int)chosen.Good;
+        if (alternate.IsHuman)
+        {
+            if (!campaign.FeatureEnabled("deals") || campaign.ProvinceMap is null) return false;
+            var deal = new Ultimatum.Deal(new Ultimatum.Side { TradeAgreement = true }, new Ultimatum.Side());
+            DealNegotiations.Submit(campaign, nation, alternate, deal);
+            var pending = false;
+            foreach (var offer in campaign.DealOffers)
+                if (offer.Pending && offer.FromId == nation.Id && offer.ToId == alternate.Id &&
+                    offer.From.TradeAgreement && offer.From.Cash == 0f && (offer.From.Regions?.Length ?? 0) == 0 &&
+                    (offer.To.Regions?.Length ?? 0) == 0)
+                    pending = true;
+            if (!pending) return false;
+        }
+        else
+        {
+            if (!AgreementSystem.CanPropose(campaign, nation, alternate, AgreementKind.TradeAgreement, out _))
+                return false;
+            var offer = new ProposeAgreementCommand
+            {
+                IssuerId = nation.Id, TargetId = alternate.Id, Kind = AgreementKind.TradeAgreement
+            };
+            offer.Apply(campaign);
+            if (offer.Result != AgreementResult.Signed) return false;
+        }
+
+        nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, defines.AiSupplyHedgeRetryDays);
+        Count("supply_hedge");
+        return true;
+    }
+
+    private static bool CanHedgeWith(Campaign campaign, Nation buyer, Nation other, int dominantId)
+    {
+        if (other is null || other.Id == buyer.Id || other.Id == dominantId) return false;
+        if (other.Population <= 0 || other.Movement is not null) return false;
+        var relation = CampaignDiplomacy.Peek(campaign, buyer.Id, other.Id);
+        if (relation is { Stance: DiplomaticStance.AtWar }) return false;
+        if (relation is { EmbargoByA: true } or { EmbargoByB: true }) return false;
+        if (relation?.TradeAgreement == true) return false;
+        foreach (var offer in campaign.DealOffers)
+            if (offer.Pending && offer.ExpiresDay > campaign.ElapsedDays &&
+                (offer.FromId == buyer.Id && offer.ToId == other.Id || offer.FromId == other.Id && offer.ToId == buyer.Id))
+                return false;
+        if (other.IsHuman) return campaign.FeatureEnabled("deals") && campaign.ProvinceMap is not null;
+        return AgreementSystem.CanPropose(campaign, buyer, other, AgreementKind.TradeAgreement, out _, preview: true) &&
+            AgreementSystem.Willingness(campaign, other, buyer, AgreementKind.TradeAgreement, preview: true) >=
+            AgreementSystem.Needed(campaign, AgreementKind.TradeAgreement);
     }
 }

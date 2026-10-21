@@ -188,8 +188,8 @@ public static class StabilityCore
 
         var country = people > 0 ? (float)(weighted / people) : weights.Base;
         // A country whose capital has been lost, or that never had one on the map, is
-        // judged by the rest of itself rather than by nothing.
-        if (capitalStability < 0f) capitalStability = country;
+        // judged by the rest of itself rather than by nothing, with a mild prestige/authority drag.
+        if (capitalStability < 0f) capitalStability = country * 0.85f;
 
         var share = M.Clamp01(weights.CapitalShare);
         var geography = capitalStability * share + country * (1f - share);
@@ -202,8 +202,10 @@ public static class StabilityCore
         nation.ImperialOverstretch = Overstretch(campaign, nation);
         var overstretchCost = nation.ImperialOverstretch * weights.ImperialOverstretch;
 
+        var relocationCost = nation.GovernmentSeatProvinceId > 0 ? 0.05f : 0f;
+
         var memory = SocialMemory.StabilityEffect(campaign, nation);
-        var target = geography - warCost - overstretchCost + nation.StabilityBias + nation.StabilityGovernance + memory;
+        var target = geography - warCost - overstretchCost - relocationCost + nation.StabilityBias + nation.StabilityGovernance + memory;
 
         if (drivers is not null)
         {
@@ -212,6 +214,7 @@ public static class StabilityCore
             drivers.Add("The rest of the country, by population", country * (1f - share));
             if (warCost > 0f) drivers.Add("The war", -warCost);
             if (overstretchCost > 0f) drivers.Add(Loc.Get("Imperial overstretch"), -overstretchCost);
+            if (relocationCost > 0f) drivers.Add(Loc.Get("Wartime government relocation"), -relocationCost);
             drivers.Add("What this country is, beyond its conditions", nation.StabilityBias);
             if (MathF.Abs(nation.StabilityGovernance) > 0.0005f)
                 drivers.Add("How it has been governed lately", nation.StabilityGovernance);

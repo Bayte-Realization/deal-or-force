@@ -149,38 +149,65 @@ public static class Statecraft
         foreach (var nation in campaign.Nations)
         {
             if (nation.Notoriety < CoalitionThreshold || nation.Population <= 0) continue;
-            if (CoalitionAgainst(campaign, nation.Id) is not null) continue;
+            var existingCoalition = CoalitionAgainst(campaign, nation.Id);
 
             // Who joins: everyone who can see them and has reason to worry. A country that
             // is already their ally does not, and neither does a country too far away to be
             // next - a coalition is neighbours, not a petition.
             Candidates.Clear();
-            foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
+            var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex).ToHashSet();
+            foreach (var other in campaign.Nations)
             {
-                var neighbour = NationByMapIndex(campaign, mapIndex);
-                if (neighbour is null || neighbour.Id == nation.Id || neighbour.Population <= 0) continue;
-                var relation = CampaignDiplomacy.Peek(campaign, neighbour.Id, nation.Id);
+                if (other.Id == nation.Id || other.Population <= 0 || other.IsSubject) continue;
+                if (!landNeighbours.Contains(other.MapIndex) && AllianceSystem.CapitalKm(other, nation) > 1500f) continue;
+                var relation = CampaignDiplomacy.Peek(campaign, other.Id, nation.Id);
                 if (relation is { Stance: DiplomaticStance.Allied }) continue;
                 if (relation is not null && relation.Opinion > 30f) continue;
-                Candidates.Add(neighbour.Id);
+                Candidates.Add(other.Id);
             }
             if (Candidates.Count < 2) continue;
 
-            var coalition = new Coalition { TargetId = nation.Id, FormedDay = campaign.ElapsedDays };
-            Candidates.Sort();
-            coalition.MemberIds.AddRange(Candidates);
-            campaign.Coalitions.Add(coalition);
-
-            // Containing the same country is the oldest reason two governments have ever
-            // found to get on with each other.
-            foreach (var memberId in coalition.MemberIds)
-            foreach (var otherId in coalition.MemberIds)
+            if (existingCoalition is null)
             {
-                if (memberId >= otherId) continue;
-                OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, memberId, otherId),
-                    "coalition_partner");
+                var coalition = new Coalition { TargetId = nation.Id, FormedDay = campaign.ElapsedDays };
+                Candidates.Sort();
+                coalition.MemberIds.AddRange(Candidates);
+                campaign.Coalitions.Add(coalition);
+
+                // Containing the same country is the oldest reason two governments have ever
+                // found to get on with each other.
+                foreach (var memberId in coalition.MemberIds)
+                foreach (var otherId in coalition.MemberIds)
+                {
+                    if (memberId >= otherId) continue;
+                    OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, memberId, otherId),
+                        "coalition_partner");
+                }
+                campaign.MarkStrategicChange();
             }
-            campaign.MarkStrategicChange();
+            else
+            {
+                var changed = false;
+                foreach (var candidate in Candidates)
+                {
+                    if (!existingCoalition.MemberIds.Contains(candidate))
+                    {
+                        existingCoalition.MemberIds.Add(candidate);
+                        changed = true;
+                        foreach (var otherId in existingCoalition.MemberIds)
+                        {
+                            if (candidate == otherId) continue;
+                            OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, candidate, otherId),
+                                "coalition_partner");
+                        }
+                    }
+                }
+                if (changed)
+                {
+                    existingCoalition.MemberIds.Sort();
+                    campaign.MarkStrategicChange();
+                }
+            }
         }
     }
 

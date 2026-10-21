@@ -90,5 +90,10 @@
   "AiPeaceIndemnityBudget": 55,
   "AiCapitulationWarSupport": 0.30,
   "AiPeaceBudgetShare": 0.85,
-  "AiMayAttackPlayer": true
+  "AiMayAttackPlayer": true,
+
+  // An ally or a guarantor may put cash on the deal table when a client's institutions
+  // are failing. A player still signs. Off spends that week on ordinary courtship.
+  "AiCrisisGrants": true,
+  "AiCrisisGrantRetryDays": 360
 }

@@ -874,6 +874,11 @@ public static class SaveSystem
 
         /// <summary>Whether the campaign was being watched rather than played.</summary>
         public bool ObserverMode;
+
+        /// <summary>The console curse the world is under (WorldCurses); absent in an ordinary save.</summary>
+        public string Curse;
+        public int CurseDay = -1;
+        public int CurseDrowned;
         // Derived authority, separate from the cinematic/no-popups ObserverMode.
         // Console observation has no human seats; that must not become a human country
         // on reload. Absent in legacy saves, where the historical fallback is retained.
@@ -994,6 +999,9 @@ public static class SaveSystem
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
             ObserverMode = campaign.ObserverMode,
+            Curse = campaign.Curse.Length > 0 ? campaign.Curse : null,
+            CurseDay = campaign.CurseDay,
+            CurseDrowned = campaign.CurseDrowned,
             NoHumanAuthority = campaign.HumanSeats.Count == 0 && campaign.Nations.All(n => !n.IsHuman),
             Settings = new Dictionary<string, string>(campaign.Settings),
             FeatureDefaults = new Dictionary<string, bool>(campaign.Defines.Features),
@@ -1111,6 +1119,9 @@ public static class SaveSystem
             foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
             campaign.History.Restore(History);
             campaign.ObserverMode = ObserverMode;
+            campaign.Curse = Curse ?? "";
+            campaign.CurseDay = CurseDay;
+            campaign.CurseDrowned = CurseDrowned;
             foreach (var (id, value) in Settings) campaign.Settings[id] = value;
             campaign.DestroyedProvinces.UnionWith(DestroyedProvinces ?? new HashSet<int>());
             campaign.CrossoverScars.UnionWith(CrossoverScars ?? new());
@@ -1136,6 +1147,26 @@ public static class SaveSystem
             // world differ from the one that was saved, which is a desync in multiplayer.
             foreach (var loadedNation in campaign.Nations)
                 if (!loadedNation.DebtInitialized) SovereignFinance.NormalizeAccounts(campaign, loadedNation);
+
+            // Sanitize anomalous proclamations where an established sovereign country took on a minor regional restoration.
+            foreach (var nation in campaign.Nations)
+            {
+                if (!string.IsNullOrEmpty(nation.FormedNationId))
+                {
+                    var restoredTag = FormableRestorations.RestoredTag(nation.FormedNationId);
+                    if (restoredTag != null)
+                    {
+                        var founderAuthored = FormableRestorations.Authored(campaign, nation.Tag);
+                        var targetAuthored = FormableRestorations.Authored(campaign, restoredTag);
+                        if (founderAuthored.Length > 0 && founderAuthored.Length >= targetAuthored.Length)
+                        {
+                            nation.FormedNationId = "";
+                            nation.Name = CountryNames.Of(nation.Tag);
+                            nation.NameProclaimed = false;
+                        }
+                    }
+                }
+            }
 
             // And any country this campaign founded rather than loaded says again who it is
             // for. The demography catalogue is read from files and has never heard of it.

@@ -148,11 +148,18 @@ public static class SituationReport
             {
                 var chance = CivilWarOutbreak.Chance(c, n);
                 if (chance > 0)
+                {
+                    var causes = new List<string>
+                    {
+                        Loc.Format("Stability {0:P1}; the outbreak threshold is {1:P1}.", n.Stability, d.CivilWarStabilityThreshold)
+                    };
+                    foreach (var factor in CivilWarOutbreak.Factors(c, n)) causes.Add(T(factor));
                     items.Add(new("civil_war", SituationPriority.Warning, SituationArea.Society,
                         T("Armed opposition could emerge"), T("The country meets the simulation's outbreak conditions."),
-                        new[] { Loc.Format("Stability {0:P1}; the outbreak threshold is {1:P1}.", n.Stability, d.CivilWarStabilityThreshold) },
+                        causes.ToArray(),
                         new[] { T("A weekly review may start a territorial civil war. This probability is not a countdown or a prediction.") },
                         new[] { F("Weekly outbreak chance", chance.ToString("P2")) }, SituationRoute.Crises, T("Review institutional responses")));
+                }
             }
         }
 
@@ -184,7 +191,9 @@ public static class SituationReport
                     ? SituationPriority.Critical : SituationPriority.Warning, SituationArea.Economy,
                 Loc.Format("Shortage: {0}", T(good.Name)), T("Available supply is below current demand."),
                 new[] { T("The latest market clearing records production, imports, exports and demand."),
-                    T("A missing good may be a production problem, a trade bottleneck or higher demand; inspect the market before choosing a response.") },
+                    EconomicExposure.Cause(c, n, quote.Commodity) is { Length: > 0 } why
+                        ? why
+                        : T("The week's partners are not on the books yet.") },
                 new[] { T("Shortages can constrain households or production chains according to the commodity's uses.") },
                 new[] { F("Demand met", quote.Satisfaction.ToString("P0")), F("Domestic production", quote.Production.ToString("N2")),
                     F("Imports / exports", Loc.Format("{0:N2} / {1:N2}", quote.Imports, quote.Exports)), F("Demand", quote.Demand.ToString("N2")) },

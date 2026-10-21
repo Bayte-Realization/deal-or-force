@@ -208,6 +208,93 @@ public static class FormableNations
             catch (Exception ex) { errors?.Add($"formable '{entry.Name}': {ex.Message}"); }
         }
     }
+    /// <summary>
+    /// Whether proclaiming this state would make the country smaller than it already is.
+    ///
+    /// The comparison is the identity it still holds, not every province it has occupied.
+    /// That identity is the bookmark ground of its tag, the ground of a state it has already
+    /// proclaimed, and the whole of a larger union it is already pursuing. A formable that
+    /// covers that ground is the same country or a bigger one — a union, a restored greater
+    /// state — and stays legal. A formable that leaves the heartland out, and is smaller by
+    /// the land or by the people on it, is a great power taking a breakaway's name. A holder
+    /// whose own identity is only that smaller ground, or who has no prior identity at all,
+    /// is the breakaway itself and is not refused here.
+    /// </summary>
+    public static bool SmallerThanCountry(Campaign campaign, Nation nation, FormableNation definition)
+    {
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || nation is null || definition is null)
+            return false;
+        var formable = LandProvinces(campaign, PeacefulFormation.Territory(campaign, definition));
+        if (formable.Count == 0) return false;
+
+        var identity = new HashSet<int>();
+        AddHeld(campaign, nation, FormableRestorations.Authored(campaign, nation.Tag), identity);
+        if (!string.IsNullOrEmpty(nation.FormedNationId) &&
+            Find(campaign, nation.FormedNationId) is { } formed &&
+            !string.Equals(formed.Id, definition.Id, StringComparison.OrdinalIgnoreCase))
+            AddHeld(campaign, nation, PeacefulFormation.Territory(campaign, formed), identity);
+        if (!string.IsNullOrEmpty(nation.ConsolidationProject) &&
+            Find(campaign, nation.ConsolidationProject) is { } pursued)
+            foreach (var province in LandProvinces(campaign, PeacefulFormation.Territory(campaign, pursued)))
+                identity.Add(province);
+        if (identity.Count == 0 || formable.IsSupersetOf(identity)) return false;
+        if (formable.Count < identity.Count) return true;
+        return People(campaign, formable) < People(campaign, identity);
+    }
+
+    private static HashSet<int> LandProvinces(Campaign campaign, IEnumerable<int> provinces)
+    {
+        var land = new HashSet<int>();
+        var map = campaign.ProvinceMap;
+        if (provinces is null || map is null) return land;
+        foreach (var province in provinces)
+        {
+            if (province <= 0 || province > map.ProvinceCount || map.WaterByProvince[province]) continue;
+            land.Add(province);
+        }
+        return land;
+    }
+
+    /// <summary>Bookmark or formable ground the country itself owns and controls.</summary>
+    private static void AddHeld(Campaign campaign, Nation nation, IEnumerable<int> provinces, HashSet<int> into)
+    {
+        var map = campaign.ProvinceMap;
+        var controller = campaign.ProvinceController;
+        if (provinces is null || map is null || controller is null) return;
+        var owner = (ushort)nation.MapIndex;
+        foreach (var province in provinces)
+        {
+            if (province <= 0 || province > map.ProvinceCount || province >= controller.Length || map.WaterByProvince[province]) continue;
+            if (map.ProvinceToNation[province] != owner || controller[province] != owner) continue;
+            into.Add(province);
+        }
+    }
+
+    /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
+    private static long People(Campaign campaign, HashSet<int> provinces)
+    {
+        if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
+        var map = campaign.ProvinceMap;
+        var totals = new Dictionary<int, int>();
+        var inside = new Dictionary<int, int>();
+        for (var province = 1; province <= map.ProvinceCount; province++)
+        {
+            if (map.WaterByProvince[province]) continue;
+            var state = map.ProvinceToState[province];
+            totals[state] = totals.GetValueOrDefault(state) + 1;
+            if (provinces.Contains(province)) inside[state] = inside.GetValueOrDefault(state) + 1;
+        }
+        long people = 0;
+        foreach (var state in campaign.States)
+        {
+            if (state is null || state.Population <= 0) continue;
+            if (!inside.TryGetValue(state.MapIndex, out var part) || part <= 0) continue;
+            if (!totals.TryGetValue(state.MapIndex, out var all) || all <= 0) continue;
+            people += (long)Math.Round(state.Population * (part / (double)all));
+        }
+        return people;
+    }
+
     public static FormationStatus Evaluate(Campaign campaign, Nation nation, FormableNation d)
     {
         if (campaign is null || nation is null || d is null) return new(Array.Empty<FormationRequirement>(), 0, 0, 0);
@@ -249,6 +336,8 @@ public static class FormableNations
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
         requirements.Add(new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id)));
+        requirements.Add(new(Loc.Get("The new state is not smaller than the country already is"),
+            !SmallerThanCountry(campaign, nation, d)));
 
         // What kind of state may proclaim it. A caliphate is not something a parliamentary
         // republic declares, and the Soviet Union is not proclaimed by a monarchy: for the

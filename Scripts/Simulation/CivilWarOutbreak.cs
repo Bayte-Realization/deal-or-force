@@ -124,17 +124,42 @@ public static class CivilWarOutbreak
             !float.IsFinite(d.CivilWarStabilityThreshold)) return 0f;
         var depth = M.Clamp01((d.CivilWarStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CivilWarStabilityThreshold));
         var chance = d.CivilWarWeeklyChance * depth;
-        // Both coup routes set LastCoupDay. The independent military timestamp preserves
-        // an earlier coup's existing multiplier even after a later institutional transition.
-        var coupDay = nation.LastMilitaryCoupDay;
-        var coup = coupDay >= 0 && coupDay <= c.ElapsedDays &&
-            c.ElapsedDays - (long)coupDay <= d.CivilWarCoupMemoryDays;
-        if (coup) chance *= 2f;
-        // A country at war abroad and losing has its army away from home.
-        if (c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.Involves(nation.Id) &&
-                            (w.IsAttacking(nation.Id) ? w.WarScore : -w.WarScore) < -10f)) chance *= 1.5f;
+        if (RecentMilitaryCoup(c, nation)) chance *= 2f;
+        if (LosingForeignWar(c, nation)) chance *= 1.5f;
         if (nation.ImperialOverstretch > 0.05f) chance *= (1f + nation.ImperialOverstretch * 0.75f);
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
+    }
+
+    /// <summary>
+    /// Why <see cref="Chance"/> is the number it is, as localisation keys. Only the factors
+    /// that are actually on are named, in the order the chance multiplies them.
+    /// </summary>
+    public static string[] Factors(Campaign c, Nation nation)
+    {
+        if (c is null || nation is null || Chance(c, nation) <= 0f) return Array.Empty<string>();
+        var factors = new List<string> { "The weekly chance starts from how far stability sits below the line." };
+        if (RecentMilitaryCoup(c, nation)) factors.Add("A recent military coup doubles that chance.");
+        if (LosingForeignWar(c, nation)) factors.Add("A losing war abroad raises that chance.");
+        if (nation.ImperialOverstretch > 0.05f) factors.Add("Imperial overstretch raises that chance.");
+        return factors.ToArray();
+    }
+
+    /// <summary>Both coup routes set LastCoupDay. This stamp keeps a military coup's multiplier after a later institutional transition.</summary>
+    private static bool RecentMilitaryCoup(Campaign c, Nation nation)
+    {
+        var coupDay = nation.LastMilitaryCoupDay;
+        var memory = c.Defines.CivilWarCoupMemoryDays;
+        return coupDay >= 0 && coupDay <= c.ElapsedDays && c.ElapsedDays - (long)coupDay <= memory;
+    }
+
+    /// <summary>A country at war abroad and losing has its army away from home.</summary>
+    private static bool LosingForeignWar(Campaign c, Nation nation)
+    {
+        foreach (var war in c.Wars)
+            if (!war.Ended && !war.CivilConflict && war.Involves(nation.Id) &&
+                (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) < -10f)
+                return true;
+        return false;
     }
 
     internal static void RestoreMilitaryCoupMemory(Campaign campaign)

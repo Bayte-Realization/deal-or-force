@@ -241,5 +241,38 @@ static class MovementZoneTests
             Movements.StateById(narrow, "z_0"), narrow.Nations[0], peacefulVote: false);
         Check(zone.Select(region => region.Id).SequenceEqual(new[] { "z_0", "z_1", "z_2" }),
             "the zone is the authored homeland this holder governs, in map order");
+
+        // A mandate is not a military victory over an unrelated occupier.
+        var occupied = Fixture(false);
+        Movements.Activate(occupied, MovementCatalog.Of(CivicId));
+        var ballot = occupied.NationByTag("ZTC"); var original = occupied.Nations[0];
+        ballot.Movement.Legitimacy = .9f;
+        foreach (var index in new[] { 3001, 3002, 3003 }) ballot.Movement.Support[index] = .9f;
+        ballot.Movement.ReadyOnDay[CivilIndependence.ConsentKey(original.Id)] = 500;
+        var occupiedProvince = Enumerable.Range(1, occupied.ProvinceMap.ProvinceCount)
+            .First(p => occupied.ProvinceMap.ProvinceToState[p] == 3002);
+        occupied.ProvinceController[occupiedProvince] = (ushort)occupied.Nations[1].MapIndex;
+        var before = CampaignFingerprint.Of(occupied); var random = occupied.Random.State;
+        var preview = MovementRules.ZoneOf(occupied, ballot, Movements.DefinitionOf(ballot),
+            Movements.StateById(occupied, "z_0"), original, peacefulVote: true);
+        Check(preview.Select(r => r.Id).SequenceEqual(new[] { "z_0", "z_2" }) &&
+              CampaignFingerprint.Of(occupied) == before && occupied.Random.State == random,
+            "the actual zone preview is read-only and excludes a foreign-occupied secondary region");
+        Check(CivilIndependence.Ratify(occupied, ballot, Movements.StateById(occupied, "z_0")) &&
+              Movements.StateById(occupied, "z_2").NationMapIndex == ballot.MapIndex &&
+              Movements.StateById(occupied, "z_1").NationMapIndex == original.MapIndex &&
+              occupied.ProvinceController[occupiedProvince] == occupied.Nations[1].MapIndex,
+            "one referendum takes every qualified free region while preserving the occupier's actual control");
+
+        var allHome = Fixture(false);
+        Movements.Activate(allHome, MovementCatalog.Of(CivicId));
+        var ambitious = allHome.NationByTag("ZTC"); var parentHome = allHome.Nations[0];
+        ambitious.Movement.Legitimacy = .9f;
+        allHome.Homelands[ambitious.Id] = allHome.StatesOf(parentHome).Select(r => r.MapIndex).ToList();
+        foreach (var region in allHome.StatesOf(parentHome)) ambitious.Movement.Support[region.MapIndex] = .9f;
+        ambitious.Movement.ReadyOnDay[CivilIndependence.ConsentKey(parentHome.Id)] = 500;
+        Check(CivilIndependence.Ratify(allHome, ambitious, Movements.StateById(allHome, "z_0")) &&
+              allHome.StatesOf(ambitious).Length > 1 && allHome.StatesOf(parentHome).Length == 1 && allHome.Wars.Count == 0,
+            "a large peaceful zone still leaves a sovereign parent instead of silently dissolving it after its capital voted first");
     }
 }

@@ -60,6 +60,14 @@ public sealed class SecessionWeights
     public int JoinLimit = 6;
 
     /// <summary>
+    /// The least share of a neighbouring region's people that must be the seceding people for
+    /// the region to come along. Ground where they hardly live is not theirs to take, however
+    /// angry it is - that was how a Dagestani secession walked off with Rostov and Kharkiv.
+    /// A federal break, which is about conditions rather than a people, does not need it.
+    /// </summary>
+    public float JoinPeopleShare = 0.20f;
+
+    /// <summary>
     /// And the whole thing is capped, because a country does not cease to exist in one
     /// afternoon. Past this share of the country's people the joiners are dropped, largest
     /// first, until what leaves is a secession rather than a dissolution.
@@ -180,6 +188,7 @@ public static class SecessionCore
                 case "join_pressure": Weights.JoinPressure = value; break;
                 case "join_discontent": Weights.JoinDiscontent = value; break;
                 case "join_limit": Weights.JoinLimit = (int)MathF.Round(value); break;
+                case "join_people_share": Weights.JoinPeopleShare = value; break;
                 case "maximum_share": Weights.MaximumShare = value; break;
                 case "militia_formations": Weights.MilitiaFormations = (int)MathF.Round(value); break;
                 case "stability": Weights.Stability = value; break;

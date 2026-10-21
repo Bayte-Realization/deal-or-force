@@ -1,0 +1,41 @@
+// What the ground sounds like under the tactical camera (MapAmbience).
+//
+// The map samples nine points around the view centre and mixes the beds of the terrain under
+// each, so a coast or a forest edge blends rather than switches. Open water is `sea`; a terrain
+// with no mix below is `open_country`. The high wind of the strategic camera and the front heard
+// near a battle are separate layers and stay as they are.
+//
+//   beds         name: a looping recording, relative to this sound/ folder (null removes one)
+//   terrain      terrain id (common/terrain): { bed: share }, shares of one point summing to 1
+//                at most; null drops a terrain back to open country
+//
+// A mod gives its own terrain a sound with three lines:
+//   { "map_ambience": { "beds": { "volcano": "audio/volcano.ogg" }, "terrain": { "volcanic": { "volcano": 1 } } } }
+// The base beds were generated with Creative Claw (ElevenLabs sound effects), cross-faded into
+// seamless 27-second loops and levelled to -43 LUFS beside land_calm.
+{
+  "map_ambience": {
+    "beds": {
+      "land_calm": "audio/ambience/land_calm.ogg",
+      "sea_coast": "audio/ambience/sea_coast.ogg",
+      "forest": "audio/ambience/forest.ogg",
+      "jungle": "audio/ambience/jungle.ogg",
+      "desert_wind": "audio/ambience/desert_wind.ogg",
+      "mountain_snow": "audio/ambience/mountain_snow.ogg",
+      "city_far": "audio/ambience/city_far.ogg",
+      "rain": "audio/ambience/rain.ogg"
+    },
+    "open_country": "land_calm",
+    "sea": "sea_coast",
+    "terrain": {
+      "forest": { "forest": 1 },
+      "jungle": { "jungle": 1 },
+      "desert": { "desert_wind": 1 },
+      "mountains": { "mountain_snow": 1 },
+      "tundra": { "mountain_snow": 0.7, "land_calm": 0.3 },
+      "ice": { "mountain_snow": 1 },
+      "urban": { "city_far": 1 },
+      "marsh": { "rain": 0.55, "land_calm": 0.45 }
+    }
+  }
+}

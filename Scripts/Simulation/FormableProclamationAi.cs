@@ -127,6 +127,18 @@ public static class FormableProclamationAi
         // religious mandates, prior identity, other founders, ideology and the full cash price.
         var status = FormableNations.Evaluate(campaign, nation, definition);
         if (!status.CanForm) return No(status.Requirements.FirstOrDefault(r => !r.Met)?.Label ?? "The foundation is not ready.", status.Cost);
+
+        // Countries do not diminish their sovereign stature for a smaller regional identity;
+        // established sovereign nations strive for greater unions, reunifications, and expansive statehood.
+        var founderAuthored = FormableRestorations.Authored(campaign, nation.Tag);
+        if (founderAuthored.Length > 0)
+        {
+            var map = campaign.ProvinceMap;
+            var territoryProvinces = PeacefulFormation.Territory(campaign, definition)
+                .Where(p => p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]).ToArray();
+            if (territoryProvinces.Length > 0 && territoryProvinces.Length < founderAuthored.Length)
+                return No("The government will not diminish its sovereign domain for a smaller regional identity.", status.Cost);
+        }
         // A player's loyal single-player dependency is not consent to have the AI erase
         // their country. The command's older subject route predates that distinction.
         var foreignOwners = PeacefulFormation.Territory(campaign, definition)

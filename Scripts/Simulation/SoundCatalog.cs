@@ -96,6 +96,21 @@ public static class SoundCatalog
 
     private static readonly Dictionary<string, Cue> Cues = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, Channel> Channels = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> Beds = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, (string Bed, float Share)[]> TerrainMixes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The sound of the ground under the tactical camera (MapAmbience, `map_ambience` in sound/):
+    /// each bed a looping recording by name, each terrain the beds it lends and their shares.
+    /// Open water is <see cref="SeaBed"/>; ground whose terrain names no mix is <see cref="OpenCountryBed"/>.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> AmbienceBeds => Beds;
+    public static IReadOnlyDictionary<string, (string Bed, float Share)[]> TerrainAmbience => TerrainMixes;
+    public static string OpenCountryBed { get; private set; } = "";
+    public static string SeaBed { get; private set; } = "";
+
+    /// <summary>The only bed a world under the ice of `snowgrave` still has, at every height (WorldCurses).</summary>
+    public static string FrozenBed { get; private set; } = "";
 
     /// <summary>Raised whenever the tables are rebuilt, so loaded streams can be dropped.</summary>
     public static event Action Changed;
@@ -122,6 +137,9 @@ public static class SoundCatalog
     {
         Cues.Clear();
         Channels.Clear();
+        Beds.Clear();
+        TerrainMixes.Clear();
+        OpenCountryBed = SeaBed = FrozenBed = "";
         var root = GameDataLoader.DataFolder("sound");
         if (root is not null) LoadTree(root, "res://game/sound", null);
         Changed?.Invoke();
@@ -209,6 +227,8 @@ public static class SoundCatalog
                     musicDuck, ambienceDuck);
             }
 
+        if (root.TryGetProperty("map_ambience", out var ambience)) MergeAmbience(ambience, assetRoot, origin, errors);
+
         if (!root.TryGetProperty("cues", out var cues) || cues.ValueKind != JsonValueKind.Object) return;
 
         foreach (var declaration in cues.EnumerateObject())
@@ -262,6 +282,43 @@ public static class SoundCatalog
 
             Cues[name] = new Cue(name, file, channel, volumeDb, cooldown, yielding);
         }
+    }
+
+    /// <summary>
+    /// The `map_ambience` block: `beds` (name: file), `terrain` (terrain id: {bed: share}, or null
+    /// to drop a mix), and the `open_country` and `sea` beds. Later files override by name.
+    /// </summary>
+    private static void MergeAmbience(JsonElement block, string assetRoot, string origin, List<string> errors)
+    {
+        if (block.ValueKind != JsonValueKind.Object) { errors?.Add($"{origin}: map_ambience must be an object"); return; }
+        if (block.TryGetProperty("beds", out var beds) && beds.ValueKind == JsonValueKind.Object)
+            foreach (var bed in beds.EnumerateObject())
+            {
+                if (bed.Value.ValueKind == JsonValueKind.Null) { Beds.Remove(bed.Name); continue; }
+                if (bed.Value.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(bed.Value.GetString()))
+                { errors?.Add($"{origin}: ambience bed '{bed.Name}' needs a file"); continue; }
+                Beds[bed.Name] = GameDataLoader.ResolveAssetPath(bed.Value.GetString(), assetRoot);
+            }
+        if (block.TryGetProperty("terrain", out var terrain) && terrain.ValueKind == JsonValueKind.Object)
+            foreach (var entry in terrain.EnumerateObject())
+            {
+                if (entry.Value.ValueKind == JsonValueKind.Null) { TerrainMixes.Remove(entry.Name); continue; }
+                if (entry.Value.ValueKind != JsonValueKind.Object)
+                { errors?.Add($"{origin}: ambience for terrain '{entry.Name}' must be an object of bed: share"); continue; }
+                var mix = new List<(string Bed, float Share)>();
+                foreach (var share in entry.Value.EnumerateObject())
+                    if (share.Value.ValueKind == JsonValueKind.Number && share.Value.TryGetSingle(out var value) &&
+                        float.IsFinite(value) && value > 0f)
+                        mix.Add((share.Name, Math.Min(value, 1f)));
+                    else errors?.Add($"{origin}: ambience share '{entry.Name}.{share.Name}' must be a positive number");
+                TerrainMixes[entry.Name] = mix.ToArray();
+            }
+        if (block.TryGetProperty("open_country", out var open) && open.ValueKind == JsonValueKind.String)
+            OpenCountryBed = open.GetString() ?? "";
+        if (block.TryGetProperty("sea", out var sea) && sea.ValueKind == JsonValueKind.String)
+            SeaBed = sea.GetString() ?? "";
+        if (block.TryGetProperty("frozen", out var frozen) && frozen.ValueKind == JsonValueKind.String)
+            FrozenBed = frozen.GetString() ?? "";
     }
 
     private static float Single(JsonElement element, float fallback) =>

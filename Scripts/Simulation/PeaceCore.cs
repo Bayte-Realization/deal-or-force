@@ -188,7 +188,30 @@ public static class PeaceNegotiation
         if (score >= 0 || responder is null || responder.IsHuman ||
             !AiStatecraft.ShouldPressWarAim(campaign, responder, war)) return 0;
         var penalty = campaign.Defines.AiWarAimResolvePenalty;
-        return float.IsFinite(penalty) ? Math.Clamp(penalty, 0f, 100f) : 70f;
+        if (!float.IsFinite(penalty)) penalty = 70f;
+        penalty = Math.Clamp(penalty, 0f, 100f);
+
+        var duration = campaign.ElapsedDays - war.StartedDay;
+        var stalemateDiscount = 0f;
+        if (duration > 365)
+        {
+            var years = (duration - 365f) / 365f;
+            stalemateDiscount = terms == PeaceTerms.StatusQuo ? MathF.Min(0.85f, years * 0.35f) : MathF.Min(0.60f, years * 0.20f);
+        }
+        if (war.Stalled)
+            stalemateDiscount = MathF.Max(stalemateDiscount, terms == PeaceTerms.StatusQuo ? 0.65f : 0.40f);
+
+        var wearinessDiscount = WarWeariness.Weariness(campaign, war) / 100f * 0.5f;
+        stalemateDiscount = MathF.Min(0.90f, stalemateDiscount + wearinessDiscount);
+
+        if (terms == PeaceTerms.StatusQuo)
+        {
+            var responderOccupied = war.IsAttacking(responder.Id) ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
+            if (responderOccupied > 0.02f)
+                stalemateDiscount = MathF.Max(stalemateDiscount, 0.50f + MathF.Min(0.40f, responderOccupied));
+        }
+
+        return MathF.Max(0f, penalty * (1f - stalemateDiscount));
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)

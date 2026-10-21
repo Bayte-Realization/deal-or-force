@@ -104,5 +104,28 @@ static class CivicCampaignTests
             "negotiation lock expires and escalation is capped");
         c.SetFeature("militia", false);
         Check(!MilitiaCore.Found(c, movement, region), "militia switch also gates external founding calls");
+
+        // Verify multi-region armed uprising liberates the movement's whole homeland zone of interest:
+        c.SetFeature("militia", true);
+        var cameroon = c.NationByTag("CMR");
+        var ambazonia = c.NationByTag("ABZ");
+        if (cameroon is not null && ambazonia?.Movement is not null)
+        {
+            var abzDef = Movements.DefinitionOf(ambazonia);
+            var spark = Movements.StateById(c, "cm_nw");
+            var second = Movements.StateById(c, "cm_sw");
+            if (spark is not null && second is not null && spark.NationMapIndex == cameroon.MapIndex && second.NationMapIndex == cameroon.MapIndex)
+            {
+                ambazonia.Treasury = 1f;
+                ambazonia.Movement.Cadres = 15000f;
+                ambazonia.Movement.Support[spark.MapIndex] = 0.85f;
+                var takenArmed = MovementRules.TakeZone(c, ambazonia, spark, cameroon);
+                Check(takenArmed == 2, $"armed uprising liberated whole homeland zone of interest ({takenArmed} regions)");
+                Check(spark.NationMapIndex == ambazonia.MapIndex && second.NationMapIndex == ambazonia.MapIndex,
+                    "both Ambazonian homeland regions transferred to Ambazonia upon uprising");
+                Check(c.Homelands.ContainsKey(ambazonia.Id) && c.Homelands[ambazonia.Id].Contains(spark.MapIndex) &&
+                      c.Homelands[ambazonia.Id].Contains(second.MapIndex), "liberated regions recorded in nation homelands");
+            }
+        }
     }
 }

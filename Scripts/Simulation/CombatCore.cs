@@ -4,6 +4,16 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>
+    /// How far one side's day of fighting may run above or below what its numbers say, as a
+    /// share: the fortunes of war. 0.18 lets a lucky day hit about a fifth harder and a bad one
+    /// a fifth softer, rarely both at once; zero makes every battle a sum, as it was.
+    /// </summary>
+    public float CombatFortune { get; set; } = 0.18f;
+}
+
 public static partial class Warfare
 {
     /// <summary>
@@ -460,6 +470,16 @@ public static partial class Warfare
         return $"{landed.Count:N0} formation(s) landed into a contested beach";
     }
 
+    /// <summary>One side's fortune for today's fighting: 1 ± Defines.CombatFortune, triangular, from the seed.</summary>
+    private static float Fortune(Campaign campaign, LandBattle battle, int side)
+    {
+        var spread = M.Clamp(campaign.Defines.CombatFortune, 0f, 0.6f);
+        if (spread <= 0f) return 1f;
+        var first = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F7);
+        var second = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F8);
+        return 1f + spread * (first + second - 1f);
+    }
+
     private static void ResolveBattles(Campaign campaign)
     {
         foreach (var battle in campaign.Battles)
@@ -595,6 +615,16 @@ public static partial class Warfare
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 attackerEngagement * attackerStripped;
+
+            // The fortunes of war (Defines.CombatFortune): each side's day runs a little above or
+            // below what its numbers say - the weather, a commander's call, a bridge that held -
+            // in its fire and in its staying power alike. Drawn from the campaign seed, the battle
+            // and the day, so a seed replays its war exactly and another seed fights it otherwise;
+            // centred on one, so fortune decides battles without tilting the world.
+            var attackerFortune = Fortune(campaign, battle, 1);
+            var defenderFortune = Fortune(campaign, battle, 2);
+            attackerOffence *= attackerFortune; attackerProtection *= attackerFortune;
+            defenderOffence *= defenderFortune; defenderProtection *= defenderFortune;
 
             var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
             var pressureOnAttacker = M.Clamp(defenderOffence / M.Max(0.01f, attackerProtection), 0.05f, 14f);

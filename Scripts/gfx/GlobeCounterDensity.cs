@@ -24,8 +24,11 @@ public sealed partial class GlobePresentation
                 marker.TargetPosition = pos;
                 OrientSurfaceArmyCard(marker);
             }
-            if (marker.Node.Visible) SizeSurfaceArmyCounter(marker);
-            RefreshProvinceCounterDisplay(marker, false);
+            if (marker.Node.Visible)
+            {
+                SizeSurfaceArmyCounter(marker);
+                RefreshProvinceCounterDisplay(marker, false);
+            }
         }
     }
 }

@@ -134,6 +134,9 @@ public sealed class CampaignCommandQueue
 
     public int Count => _pending.Count;
 
+    /// <summary>Throw away every order not yet carried out: a frozen world carries out none.</summary>
+    internal void Discard() => _pending.Clear();
+
     public void Enqueue(ICampaignCommand command)
     {
         if (command is null) return;
@@ -775,6 +778,17 @@ public sealed partial class Campaign
     private IEnumerable<int> TickStages()
     {
         if (IsPaused || SimulationFault.Length > 0) yield break;
+        // A world under the ice or the static (WorldCurses): the clock goes on and nothing
+        // else does - no system runs and no order is carried out, the player's included.
+        if (WorldCurses.Frozen(this))
+        {
+            Commands.Discard();
+            ElapsedHours += TickHours;
+            Date.Advance(TickHours);
+            StepOpensNewDay = false;
+            DiagnosticLogs.SetDay(ElapsedDays);
+            yield break;
+        }
         DiagnosticLogs.SetDay(ElapsedDays);
         if (DiagnosticLogs.Enabled) DiagnosticLogs.Write("simulation", $"DAY_BEGIN date={Date} pending_commands={Commands.Count}");
 
@@ -798,6 +812,8 @@ public sealed partial class Campaign
         // have to run before the fighting, not after it.
         StepOpensNewDay = daysCrossed > 0;
         DiagnosticLogs.SetDay(ElapsedDays);
+        // The weird route walks every formation towards the water before anything else moves.
+        if (Curse.Length > 0) WorldCurses.March(this);
 
         // Each pass is measured so both the in-game console (`sim`) and the headless
         // bench can say which system a slow day was actually spent in, rather than

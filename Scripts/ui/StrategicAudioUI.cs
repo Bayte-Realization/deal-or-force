@@ -82,7 +82,9 @@ public partial class DealOrForceGame
             : MusicCatalog.Moment.Menu,
             () => _hudLayer is { Visible: true }
                 ? MusicSituation.Read(_campaign, _campaign?.Player, _openScreen == "Region" ? _selectedState : null, _observerMode)
-                : new MusicReadout(MusicMood.Calm, "No campaign pressure recorded."));
+                : new MusicReadout(MusicMood.Calm, "No campaign pressure recorded."),
+            // A cursed world has no soundtrack, ever again (WorldCurses); the menu keeps its own.
+            () => _hudLayer is { Visible: true } && WorldCurses.Any(_campaign));
 
         // And under all of it, the sound of the map from where the camera is.
         _mapAmbience = new MapAmbience(() => _hudLayer is { Visible: true } ? _globe : null, () => _campaign);

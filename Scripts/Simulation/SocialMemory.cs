@@ -258,6 +258,7 @@ public static class SocialMemory
         }
         if (images) foreach (var relation in c.Relations.Values)
         {
+            if (((c.ElapsedDays + relation.A + relation.B) % interval) != 0) continue;
             if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
             ReviewForeign(c, a, b, relation);
             ReviewForeign(c, b, a, relation);

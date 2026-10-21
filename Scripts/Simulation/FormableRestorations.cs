@@ -137,6 +137,9 @@ public static class FormableRestorations
     /// or it rose on this country's old ground (a rebel state, a breakaway); or it is the
     /// government in exile of it. Never the country that swallowed it, unless that country
     /// is - by culture - the same nation, which is the one case a restoration is a reunion.
+    ///
+    /// Reunion is not a licence to take the smaller name. A holder that is already a larger
+    /// state, or is pursuing one, is refused by <see cref="FormableNations.SmallerThanCountry"/>.
     /// </summary>
     public static bool MayRestore(Campaign campaign, Nation founder, string tag)
     {

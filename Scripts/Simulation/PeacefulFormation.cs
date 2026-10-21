@@ -42,7 +42,7 @@ public static class PeacefulFormation
     public static bool Participates(Campaign campaign, Nation founder, Nation partner, FormableNation definition)
     {
         if (partner is null || partner.Id == founder.Id) return partner?.Id == founder.Id;
-        if (!AtPeace(campaign, partner) || partner.Movement is not null) return false;
+        if (!AtPeace(campaign, partner) || !FormableProclamationAi.EstablishedCountry(partner) || partner.Landless) return false;
         // No foreign dependencies can be signed away by their nominal government.
         if (partner.IsSubject && !partner.AnswersTo(founder.Id)) return false;
         if (HumanControlled(campaign, partner))
@@ -82,7 +82,7 @@ public static class PeacefulFormation
             !FormableNations.CompatibleProclamation(founder, definition)) return "This country cannot lead the foundation.";
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return "Territorial map ready";
         if (!AtPeace(campaign, founder) || !AtPeace(campaign, partner)) return "Both countries must be at peace.";
-        if (partner.Movement is not null || (partner.IsSubject && !partner.AnswersTo(founder.Id)))
+        if (!FormableProclamationAi.EstablishedCountry(partner) || partner.Landless || (partner.IsSubject && !partner.AnswersTo(founder.Id)))
             return "The partner must control its own foreign policy.";
         if (HumanControlled(campaign, partner) && campaign.HumanSeats.Count > 1) return "Human-controlled countries cannot merge in multiplayer.";
         if (founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability)
@@ -137,7 +137,7 @@ public static class PeacefulFormation
             founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability ||
             !FormableNations.ReligionMandate(campaign, founder, definition) ||
             !AtPeace(campaign, founder) || !AtPeace(campaign, partner) ||
-            (partner.IsSubject && !partner.AnswersTo(founder.Id)) || partner.Movement is not null ||
+            (partner.IsSubject && !partner.AnswersTo(founder.Id)) || !FormableProclamationAi.EstablishedCountry(partner) || partner.Landless ||
             (HumanControlled(campaign, partner) && campaign.HumanSeats.Count > 1)) return false;
         if (campaign.ProvinceMap is null || !Territory(campaign, definition).Any(p => p > 0 && p <= campaign.ProvinceMap.ProvinceCount &&
             campaign.ProvinceMap.ProvinceToNation[p] == partner.MapIndex)) return false;

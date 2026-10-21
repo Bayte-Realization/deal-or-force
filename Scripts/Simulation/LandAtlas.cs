@@ -91,6 +91,22 @@ public static class LandAtlas
     /// catalogue lists precisely, more for a macro-region, which would otherwise be right by
     /// accident about every small revolt inside it.
     /// </summary>
+    /// <summary>The share of these regions' people living in a land, 0 to 1.</summary>
+    public static float Share(Campaign campaign, LandDefinition land, IReadOnlyCollection<int> regions)
+    {
+        if (campaign is null || land is null || regions is null || regions.Count == 0) return 0f;
+        var wanted = new HashSet<int>(regions);
+        long total = 0, covered = 0;
+        foreach (var state in campaign.States)
+        {
+            if (!wanted.Contains(state.MapIndex)) continue;
+            var people = Math.Max(0L, state.Population);
+            total += people;
+            if (Matches(land, state, CentreOf(campaign, state.MapIndex), true, out _)) covered += people;
+        }
+        return total <= 0 ? 0f : covered / (float)total;
+    }
+
     public static LandDefinition BestFor(Campaign campaign, IReadOnlyCollection<int> regions, string parentTag = "")
     {
         if (campaign is null || regions is null || regions.Count == 0) return null;
@@ -168,8 +184,12 @@ public static class LandAtlas
         exact = false;
         if (!string.IsNullOrWhiteSpace(state.Id) && land.RegionIds.Contains(state.Id))
         {
-            exact = true;
-            return true;
+            // Even an exact region match names a state after the land only when the land's
+            // own countries agree the ground is their kind. Without this, a shard of a
+            // collapsed great power that happened to sit on one foreign province inherited
+            // that province's tiny land name - a Russia answering to "Transnistria".
+            exact = countryMatchesParent || StateBelongsToLandCountry(land, state);
+            return exact;
         }
         if (!string.IsNullOrWhiteSpace(state.Name) && land.RegionNames.Contains(state.Name))
         {

@@ -93,6 +93,11 @@
   // half a continent because the week went badly.
   "join_limit": 6,
 
+  // Only the core's own neighbours come along, and only where the seceding people are at least
+  // this share of the region (a federal break, about conditions rather than a people, is exempt).
+  // Ground that is another country's core never comes along: that is a different war.
+  "join_people_share": 0.20,
+
   // And the hard cap. Past this share of the parent's people the joiners are handed back,
   // largest first, until what leaves is a secession rather than a dissolution. The core is
   // never handed back: a people leaving is the thing that happened, whatever share of the

@@ -116,6 +116,17 @@ static class MediaLibraryTests
             "a coup and a world war have their own stings; routine news makes no sound");
         Check(new[] { "diplomacy_page", "deal_sent", "deal_concluded", "covert_launched", "map_focus" }.All(OnDisk),
             "the interface sounds the code plays are declared and present, the page turn included");
+        Check(SoundCatalog.AmbienceBeds.Count >= 8 && SoundCatalog.AmbienceBeds.Values.All(f => Ships(f)) &&
+              SoundCatalog.AmbienceBeds.ContainsKey(SoundCatalog.OpenCountryBed) && SoundCatalog.AmbienceBeds.ContainsKey(SoundCatalog.SeaBed) &&
+              SoundCatalog.TerrainAmbience.Values.All(mix => mix.All(part => SoundCatalog.AmbienceBeds.ContainsKey(part.Bed))),
+            "every map ambience bed ships with the game and every terrain mix names a declared bed");
+        var ambienceErrors = new List<string>();
+        SoundCatalog.Merge("""{"map_ambience":{"beds":{"volcano":"audio/volcano.ogg"},"terrain":{"volcanic":{"volcano":1},"marsh":null}}}""",
+            "res://mods/fire", "volcano", ambienceErrors);
+        Check(ambienceErrors.Count == 0 && SoundCatalog.AmbienceBeds["volcano"] == "res://mods/fire/audio/volcano.ogg" &&
+              SoundCatalog.TerrainAmbience["volcanic"].Single().Bed == "volcano" && !SoundCatalog.TerrainAmbience.ContainsKey("marsh"),
+            "a mod gives its own terrain a sound and drops a mix with null");
+        SoundCatalog.Load();
         EventPictures.ResetCatalog();
         var events = EventCatalog.All.ToArray();
         bool Ships(string path) => path.StartsWith("res://game/") && System.IO.File.Exists(System.IO.Path.Combine(gameRoot, path["res://game/".Length..]));

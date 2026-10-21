@@ -1,0 +1,10 @@
+// Whether each new game is a new world. On, a fresh seed is rolled for every new campaign, so
+// history goes its own way each time; off, every game starts from the same seed. Either way the
+// country picker shows the seed and rebuilds exactly the world a typed seed names.
+{
+  "fresh_world_each_game": {
+    "category": "game", "order": 105, "kind": "toggle", "default": true,
+    "name": "A new world in every game",
+    "description": "Roll a new world seed for every new campaign, so history unfolds differently each time. Off: every game starts from the same seed. The country picker always shows the seed, and a typed seed rebuilds exactly that world."
+  }
+}

@@ -161,7 +161,7 @@ public static class SecessionEvents
         }
         if (people < weights.MinimumPopulation) return null;
 
-        Accrete(campaign, parent, owned, taken, leaving, ref people);
+        Accrete(campaign, parent, owned, taken, leaving, culture, ref people);
         Trim(parent, leaving, ref people);
         while (leaving.Count >= owned.Length && leaving.Count > 0)
         {
@@ -357,11 +357,19 @@ public static class SecessionEvents
     /// lose. Nationality is not consulted here at all - this is the ground that was next to
     /// the thing that happened, and a border does not ask.
     /// </summary>
+    /// <remarks>
+    /// Only the core's own neighbours, and only ground that is plausibly theirs: a region where
+    /// the seceding people are a real share, or one breaking for the same federal reasons, and
+    /// never another country's core. Growing from whatever had already joined walked a secession
+    /// off in a line through the angriest regions next door - a Dagestani republic reaching
+    /// Kharkiv through Kalmykia, Rostov and Voronezh.
+    /// </remarks>
     private static void Accrete(Campaign campaign, Nation parent, ScenarioState[] owned,
-        HashSet<int> taken, List<SecessionPiece> leaving, ref long people)
+        HashSet<int> taken, List<SecessionPiece> leaving, string culture, ref long people)
     {
         var weights = SecessionCore.Weights;
         if (weights.JoinLimit <= 0) return;
+        var core = new HashSet<int>(taken);
 
         var joined = 0;
         var growing = true;
@@ -378,7 +386,8 @@ public static class SecessionEvents
                 // The national capital cannot be accreted into a peripheral border secession.
                 if (state.MapIndex == parent.CapitalStateMapIndex) continue;
                 if (taken.Contains(state.MapIndex)) continue;
-                if (!Touches(taken, state.MapIndex)) continue;
+                if (!Touches(core, state.MapIndex)) continue;
+                if (!Belongs(campaign, parent, state, culture, weights.JoinPeopleShare)) continue;
 
                 var willing = MathF.Max(
                     state.SecessionPressure >= weights.JoinPressure ? state.SecessionPressure : 0f,
@@ -403,6 +412,20 @@ public static class SecessionEvents
             joined++;
             growing = true;
         }
+    }
+
+    /// <summary>Whether a region next to a secession's core is ground that could plausibly go with it.</summary>
+    private static bool Belongs(Campaign campaign, Nation parent, ScenarioState state, string culture, float share)
+    {
+        // Somebody else's core - land the parent conquered - is not the secession's to take.
+        if (state.CoreTags.Count > 0 && !state.CoreTags.Contains(parent.Tag, StringComparer.OrdinalIgnoreCase))
+            return false;
+        if (SecessionCore.IsFederalBreak(campaign, parent, state)) return true;
+        if (string.IsNullOrWhiteSpace(culture) || state.Population <= 0) return true;
+        long theirs = 0;
+        foreach (var (people, size) in EconomySystem.Cultures(state))
+            if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) theirs += size;
+        return theirs >= state.Population * (double)share;
     }
 
     private static bool Touches(HashSet<int> taken, int region) =>
@@ -631,7 +654,15 @@ public static class SecessionEvents
         // this seed the fall flow (MovementFall.Decide) never sees a secession-born country
         // that later loses everything, and it lingers for ever as a stateless ghost with an
         // economy, a militia and no ground.
-        campaign.Homelands[born.Id] = leaving.Select(piece => piece.MapIndex).ToList();
+        //
+        // The core, not everything that came along, and added to rather than replaced: a homeland
+        // rewritten with whatever left each time drifted across the map with every fall and rise.
+        var homeland = leaving.Where(piece => piece.Cause != SecessionCause.Discontent).Select(piece => piece.MapIndex).ToList();
+        if (homeland.Count == 0) homeland = leaving.Select(piece => piece.MapIndex).ToList();
+        if (campaign.Homelands.TryGetValue(born.Id, out var earlier) && earlier is { Count: > 0 })
+            homeland = earlier.Concat(homeland).Distinct().ToList();
+        campaign.Homelands[born.Id] = homeland;
+        var coreRegions = homeland.ToHashSet();
         shape?.Invoke(born);
 
         // Partition productive capacity BEFORE changing the parent's resident count:
@@ -662,13 +693,20 @@ public static class SecessionEvents
 
         parent.LastSecessionDay = campaign.ElapsedDays;
         born.LastSecessionDay = campaign.ElapsedDays;
-        var seat = campaign.StatesOf(born).OrderByDescending(s => s.Population).FirstOrDefault();
+        // The capital stands in the core - the people's own ground - not in whichever region that
+        // came along is the most populous: a Dagestani state does not govern from Rostov.
+        var seat = campaign.StatesOf(born).Where(s => coreRegions.Contains(s.MapIndex) || coreRegions.Contains(s.ParentMapIndex))
+                       .OrderByDescending(s => s.Population).FirstOrDefault()
+                   ?? campaign.StatesOf(born).OrderByDescending(s => s.Population).FirstOrDefault();
         if (seat is not null)
         {
             CapitalCore.Establish(campaign, born, seat);
             born.CapitalName = seat.Name;
         }
         campaign.LocateCapitals(preserveExisting: true);
+        // A revived movement keeps the name it fell with only while that name still describes
+        // the ground it has come back on.
+        if (matchingMovement is not null) NationNaming.Refit(campaign, born, "revived");
 
         // Its baseline is its own. A country that has never been this country before has no
         // institutions to take credit for, so what the formula explains is all there is -
@@ -1033,7 +1071,15 @@ public static class SecessionEvents
                 .Where(idx => idx.HasValue && idx.Value > 0)
                 .Select(idx => idx.Value)
                 .ToHashSet();
-            if (homelandIndices.Overlaps(leavingIndices))
+            // And a real overlap: half the people leaving live in its homeland. One shared region
+            // let an exile Dagestani state come back as the ruler of Rostov and Voronezh.
+            long inside = 0, all = 0;
+            foreach (var piece in leaving)
+            {
+                all += Math.Max(0, piece.Population);
+                if (homelandIndices.Contains(piece.MapIndex)) inside += Math.Max(0, piece.Population);
+            }
+            if (inside > 0 && inside * 2 >= all)
                 return nation;
         }
         return null;

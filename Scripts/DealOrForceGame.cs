@@ -145,6 +145,7 @@ public partial class DealOrForceGame : Control
             _modLoader.PresentCrossoverWorks ??= works => _globe?.PresentCrossoverWorks(works);
             _modLoader.OnFrame(_campaign, delta);
         }
+        UpdateWorldCurse(delta);
         if (IsNetworkClient) { if (_campaign is not null) ReportFrameCost(delta); return; }
         if (_campaign is null) return;
         // Reported whether or not time is running: a measurement that only arrives when
@@ -635,8 +636,20 @@ public partial class DealOrForceGame : Control
     /// starts; a save carries the seed of the world it came from.</summary>
     private int _campaignSeed = 20260830;
 
+    /// <summary>The player typed this seed into the picker: build that world, roll nothing.</summary>
+    private bool _campaignSeedChosen;
+
     private void StartCampaign()
     {
+        // A new world unless one was asked for. The fixed default played the same history in
+        // every game - the same coups, the same wars in the same months - which is the opposite
+        // of what two hundred and sixty countries are for. The picker shows the seed, and typing
+        // it back replays that world exactly; the setting turns the dice off for those who want
+        // one world to learn.
+        if (!_campaignSeedChosen && SettingsCatalog.Flag("fresh_world_each_game"))
+            _campaignSeed = CampaignSeedSelection.Roll();
+        _campaignSeedChosen = false;
+        if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
         _pickerScenarioEntry = null;
         if (_campaign is not null)
             _campaign.Changed -= Refresh;
@@ -705,6 +718,8 @@ public partial class DealOrForceGame : Control
         BuildMovementPanel();
         BuildHotseatInterface();
         BuildNetworkMultiplayerInterface();
+        // Over the campaign and its interface, under the pause menu and the console.
+        BuildWorldCurseLayer();
         BuildPauseMenu();
         BuildSaveLoadInterface();
         BuildEventInterface();

@@ -13,6 +13,16 @@ public sealed partial class Defines
     /// </summary>
     public int FoundingNameSettleDays { get; set; } = 730;
 
+    /// <summary>
+    /// The least share of a founded state's people that must still live on what its name is for
+    /// - its people, its land, its region - before the name is recomposed from the ground it now
+    /// holds. A Dagestani republic that has become mostly Rostov and Voronezh is the Don.
+    /// </summary>
+    public float NameHoldMinimum { get; set; } = 0.30f;
+
+    /// <summary>Days a new government must hold before the form of state in the name follows it.</summary>
+    public int NameFormFollowsDays { get; set; } = 180;
+
     /// <summary>The stability below which a newborn state still calls itself provisional.</summary>
     public float FoundingSettleStability { get; set; } = 0.50f;
 }
@@ -819,6 +829,10 @@ public static class NationNaming
         if (parent.FoundNameKind == "literal") return ("literal", parent.FoundNameId);
         if (parent.FoundNameKind == "tag" && Loc.Has("country." + parent.FoundNameId + ".name"))
             return ("tag", parent.FoundNameId);
+        // A movement's tag row is the movement's label ("Belarusian democratic forces"), not a
+        // country: what it founds is called by the state name the movement fights for.
+        if (parent.Movement is not null && MovementCatalog.Of(parent.Movement.Id)?.StateName is { Length: > 0 } stateName)
+            return ("literal", stateName);
         if (Loc.Has("country." + parent.Tag + ".name")) return ("tag", parent.Tag);
         // Civil opposition's raw name is a recipe of its own. Prefer its country base,
         // not a new state called "Republic of National Salvation Front of ...".
@@ -978,7 +992,8 @@ public static class NationNaming
         ("Holy State of ", 14), ("People's Republic of ", 21), ("Military Government of ", 22),
         ("Federation of ", 14), ("Commune of ", 12), ("Technate of ", 12),
         ("Provisional Government of ", 25), ("Free ", 5), ("Islamic Emirate of ", 19),
-        ("Cossack Host of ", 16), ("Patriarchate of ", 15),
+        ("Cossack Host of ", 16), ("Patriarchate of ", 15), ("Military Command of ", 20),
+        ("Provisional Council of ", 23), ("Liberation Front of ", 20), ("Военное Командование ", 21),
         ("Республика ", 11), ("Королевство ", 12), ("Исламская Республика ", 21),
         ("Святое Государство ", 19), ("Священное Государство ", 22), ("Народная Республика ", 21),
         ("Военное Правительство ", 23), ("Федерация ", 11), ("Коммуна ", 9), ("Технат ", 8),
@@ -1205,8 +1220,88 @@ public static class NationNaming
     }
 
     /// <summary>
+    /// How much of a founded state's people still live on what its name is for, 0 to 1: the
+    /// people's share for a people's name, the land's share for a land, the region's for a
+    /// region, the share of ground that is that country's core for a country's. A kind this
+    /// cannot measure answers 1 and is never recomposed.
+    /// </summary>
+    public static float NameHold(Campaign campaign, Nation nation, int[] regions)
+    {
+        if (campaign is null || nation is null || regions is null || regions.Length == 0) return 1f;
+        var wanted = new HashSet<int>(regions);
+        var states = campaign.States.Where(state => wanted.Contains(state.MapIndex) && state.Population > 0).ToArray();
+        long total = states.Sum(state => (long)state.Population);
+        if (total <= 0) return 1f;
+        var id = nation.FoundNameId ?? "";
+        long held = 0;
+        switch (nation.FoundNameKind)
+        {
+            case "culture":
+            case "culture_adj":
+                foreach (var state in states)
+                    foreach (var (people, size) in EconomySystem.Cultures(state))
+                        if (string.Equals(people, id, StringComparison.OrdinalIgnoreCase)) held += size;
+                break;
+            case "land":
+                return LandAtlas.Find(id) is { } land ? LandAtlas.Share(campaign, land, regions) : 1f;
+            case "region":
+                foreach (var state in states)
+                    if (string.Equals(state.Id, id, StringComparison.OrdinalIgnoreCase) ||
+                        campaign.States.Find(s => s.MapIndex == state.ParentMapIndex) is { } whole &&
+                        string.Equals(whole.Id, id, StringComparison.OrdinalIgnoreCase))
+                        held += state.Population;
+                // A region names the state it is the seat of; a fifth of the people is a seat.
+                return M.Clamp01(held / (float)total * 2.5f);
+            case "tag":
+            case "free_tag":
+                foreach (var state in states)
+                    if (state.CoreTags.Contains(id, StringComparer.OrdinalIgnoreCase)) held += state.Population;
+                break;
+            default:
+                return 1f;
+        }
+        return M.Clamp01(held / (float)total);
+    }
+
+    /// <summary>
+    /// Recompose a founded state's name from the ground it holds now, if the name it has stopped
+    /// describing that ground. True when it changed. A typed name is never touched.
+    /// </summary>
+    public static bool Refit(Campaign campaign, Nation nation, string reason)
+    {
+        if (campaign is null || nation is null || !string.IsNullOrWhiteSpace(nation.CustomName) ||
+            string.IsNullOrEmpty(nation.FoundNameKind)) return false;
+        var regions = campaign.StatesOf(nation).Select(state => state.MapIndex).ToArray();
+        if (regions.Length == 0) return false;
+        if (NameHold(campaign, nation, regions) >= campaign.Defines.NameHoldMinimum) return false;
+        var parent = campaign.NationById(nation.SecededFromId) ?? campaign.NationById(nation.ReleasedFromId);
+        var culture = !string.IsNullOrWhiteSpace(nation.DeclaredCulture) && IsPeoplesGround(campaign, regions, nation.DeclaredCulture)
+            ? nation.DeclaredCulture : GroundPeople(campaign, regions);
+        var (kind, id) = BaseFor(campaign, parent, regions, culture, "auto");
+        if (string.Equals(kind, nation.FoundNameKind, StringComparison.Ordinal) &&
+            string.Equals(id, nation.FoundNameId, StringComparison.OrdinalIgnoreCase)) return false;
+        var before = Render(campaign, nation, false);
+        nation.FoundNameKind = kind;
+        nation.FoundNameId = id;
+        nation.FoundNameForm = FormFor(nation.Government, nation.Ideology, nation.DeclaredReligion, culture);
+        nation.FoundNameBase = BaseName(campaign, nation);
+        nation.NameSettledDay = campaign.ElapsedDays;
+        var after = Render(campaign, nation, false);
+        if (string.Equals(before, after, StringComparison.Ordinal)) return false;
+        campaign.Chronicle.Record(campaign, "state_named", nation.Id, place: after);
+        DiagnosticLogs.Write("simulation",
+            $"FOUNDING_NAME nation={nation.Tag} reason={reason} kind={kind} id={id} before={before} after={after} day={campaign.ElapsedDays}");
+        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
+        return true;
+    }
+
+    /// <summary>
     /// Once a month: a founded state that has survived and settled stops calling itself a
-    /// council and takes the name its politics have earned.
+    /// council and takes the name its politics have earned; one whose name no longer describes
+    /// the ground it holds is renamed from that ground; and once settled, the form of state
+    /// follows a government that has held for half a year, so a junta is not a "Republic" and a
+    /// restored republic is not a "Military Command".
     /// </summary>
     public static void Tick(Campaign campaign)
     {
@@ -1214,7 +1309,17 @@ public static class NationNaming
         if (campaign.ElapsedDays % 30 != 11) return;
         foreach (var nation in campaign.Nations)
         {
-            if (nation.NameSettledDay >= 0 || string.IsNullOrEmpty(nation.FoundNameKind)) continue;
+            if (string.IsNullOrEmpty(nation.FoundNameKind) || !string.IsNullOrWhiteSpace(nation.CustomName)) continue;
+            if (nation.Movement is null || !nation.Movement.Landless) Refit(campaign, nation, "ground");
+            if (nation.NameSettledDay >= 0)
+            {
+                if (nation.Government != "provisional_government" &&
+                    campaign.ElapsedDays - nation.PoliticsChangedDay >= campaign.Defines.NameFormFollowsDays &&
+                    !string.Equals(FormFor(nation.Government, nation.Ideology, nation.DeclaredReligion, nation.DeclaredCulture),
+                        nation.FoundNameForm, StringComparison.OrdinalIgnoreCase))
+                    Settle(campaign, nation, "regime");
+                continue;
+            }
             if (campaign.ElapsedDays < campaign.Defines.FoundingNameSettleDays) continue;
             if (nation.Stability < campaign.Defines.FoundingSettleStability) continue;
             if (nation.Government == "provisional_government") continue;

@@ -581,8 +581,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         UpdateFogTint();
         UpdateFogVisibility();
         UpdateWeather(delta);
-        UpdateTradeTraffic(delta);
-        UpdateEventPulses(delta);
+        UpdateIce(delta);
+        // A frozen world's ships stand where the ice caught them, and its news does not pulse.
+        var worldDelta = Simulation.WorldCurses.Frozen(_campaign) ? 0.0 : delta;
+        UpdateTradeTraffic(worldDelta);
+        UpdateEventPulses(worldDelta);
         KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && (_capitalRevision != _campaign.CapitalRevision ||
@@ -639,7 +642,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (IsInstanceValid(_frontPreview)) _frontPreview.Visible = MilitaryMarkersEnabled && _frontMesh.GetSurfaceCount() > 0;
         if (visualDue)
             using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
-        if (_battleMarkers.Count > 0) QueueRedraw();
+        if (_battleMarkers.Count > 0 && (visualDue || _dragging || _boxSelecting || FlatViewInMotion)) QueueRedraw();
         if (visualDue) UpdateCityLabels(visualStep);
         UpdateMapModePaletteIfNeeded();
 
@@ -3584,7 +3587,7 @@ void fragment() {
             if (marker.TargetPosition != position || !marker.MotionSettled)
             {
                 marker.TargetPosition = position;
-                InvalidateFlatCounterDensity();
+                if (!marker.MotionSettled) InvalidateFlatCounterDensity();
             }
             marker.Normal = SurfacePoint(location.Latitude, location.Longitude, 1f);
             OrientSurfaceArmyCard(marker);
@@ -3788,11 +3791,6 @@ void fragment() {
             hash.Add(bucket.LocationId);
             hash.Add(bucket.FallbackLatitude);
             hash.Add(bucket.FallbackLongitude);
-            // A division marching inside one province keeps its bucket but must still move
-            // its counter smoothly along its MoveProgress.
-            hash.Add(Mathf.RoundToInt(army.Latitude * 40f));
-            hash.Add(Mathf.RoundToInt(army.Longitude * 40f));
-            hash.Add(Mathf.RoundToInt(army.MoveProgress * 25f));
             // The counter's text is divisions over men; reinforcement changes it without a
             // march, and a fingerprint that ignored it would freeze the label.
             hash.Add(army.Divisions);

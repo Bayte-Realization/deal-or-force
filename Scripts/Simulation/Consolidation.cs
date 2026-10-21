@@ -127,7 +127,8 @@ public static class Consolidation
         // likely to give. Not one whose foreign policy another capital holds - it cannot sign.
         var partners = owners.Keys.Where(mapIndex => mapIndex != founder.MapIndex && mapIndex != 0)
             .Select(mapIndex => c.Nations.Find(n => n.MapIndex == mapIndex))
-            .Where(n => n is { Movement: null, Population: > 0 } && !n.AnswersTo(founder.Id) && !founder.AnswersTo(n.Id) &&
+            .Where(n => n is { Population: > 0 } && FormableProclamationAi.EstablishedCountry(n) && !n.Landless &&
+                        !n.AnswersTo(founder.Id) && !founder.AnswersTo(n.Id) &&
                         !n.IsSubject)
             .OrderByDescending(n => PeacefulFormation.Willingness(c, founder, n))
             .ThenByDescending(n => owners[n.MapIndex]).ThenBy(n => n.Id)
@@ -177,17 +178,13 @@ public static class Consolidation
     /// </summary>
     public static (FormableNation Definition, Dictionary<int, int> Owners, int Total)? Project(Campaign c, Nation founder)
     {
+        if (c?.ProvinceMap is null || founder is null || !c.FeatureEnabled("formable_nations")) return null;
         var map = c.ProvinceMap;
         (FormableNation, Dictionary<int, int>, int)? best = null;
         var bestShare = 0f;
         foreach (var definition in FormableNations.All)
         {
-            if (!definition.AiFoundation || !definition.PeacefulAccession || !FormableNations.Eligible(c, founder, definition) ||
-                !FormableNations.CompatibleProclamation(founder, definition)) continue;
-            if (definition.RequiredIdeology.Length > 0 &&
-                !definition.RequiredIdeology.Contains(founder.Ideology, StringComparer.OrdinalIgnoreCase)) continue;
-            if (definition.RequiredGovernment.Length > 0 &&
-                !definition.RequiredGovernment.Contains(founder.Government, StringComparer.OrdinalIgnoreCase)) continue;
+            if (!definition.AiFoundation || !definition.PeacefulAccession || !CanPursue(c, founder, definition)) continue;
             if (c.Nations.Any(n => n.FormedNationId == definition.Id)) continue;
             var (owners, total) = Owners(c, definition);
             if (total == 0) continue;
@@ -199,7 +196,7 @@ public static class Consolidation
             {
                 if (mapIndex == founder.MapIndex || count <= mine) continue;
                 var other = c.Nations.Find(n => n.MapIndex == mapIndex);
-                if (other is not null && FormableNations.Eligible(other, definition)) { outranked = true; break; }
+                if (other is not null && CanPursue(c, other, definition)) { outranked = true; break; }
             }
             if (outranked) continue;
             // A union of kin: how kindred the rest of it is to us, weighted by how much each holds.
@@ -222,6 +219,15 @@ public static class Consolidation
         }
         return best;
     }
+
+    // A larger holder only has precedence if it could actually lead this project. A
+    // subject or a country with an incompatible prior identity must not freeze it forever.
+    private static bool CanPursue(Campaign c, Nation n, FormableNation d) => n.Population > 0 && !n.IsSubject &&
+        !n.Landless && !c.Fallen.Contains(n.Id) && c.HasOwnedLand(n) && FormableProclamationAi.EstablishedCountry(n) &&
+        FormableNations.Eligible(c, n, d) && FormableNations.CompatibleProclamation(n, d) &&
+        FormableNations.ReligionMandate(c, n, d) &&
+        (d.RequiredIdeology.Length == 0 || d.RequiredIdeology.Contains(n.Ideology, StringComparer.OrdinalIgnoreCase)) &&
+        (d.RequiredGovernment.Length == 0 || d.RequiredGovernment.Contains(n.Government, StringComparer.OrdinalIgnoreCase));
 
     private static Campaign _ownersFor;
     private static int _ownersDay = int.MinValue;
@@ -260,7 +266,8 @@ public static class Consolidation
     /// </summary>
     public static float WarValue(Campaign c, Nation nation, Nation other)
     {
-        if (c is null || nation is null || other is null || string.IsNullOrEmpty(nation.ConsolidationProject)) return 0f;
+        if (c is null || nation is null || other is null || !c.FeatureEnabled("formable_nations") ||
+            string.IsNullOrEmpty(nation.ConsolidationProject)) return 0f;
         if (nation.ConsolidationAmbition < c.Defines.ConsolidationForceAmbition) return 0f;
         var definition = FormableNations.Find(nation.ConsolidationProject);
         if (definition is null || !definition.AiFoundation || !FormableNations.Eligible(c, nation, definition) ||

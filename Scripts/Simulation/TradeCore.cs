@@ -118,6 +118,58 @@ public static class TradeNetwork
         internal float[] DistanceTable;
         internal int DistanceNationCount;
         internal readonly Dictionary<int, (float Latitude, float Longitude)> CapitalCoordinates = new();
+        // Filed while the routes are written, so a screen can ask "who sold to this country"
+        // without walking every other country's week. Cleared with the routes and marked
+        // ready only when the pass finishes, so a half-run week is not treated as complete.
+        internal bool IndexReady;
+        internal int FiledCount;
+        internal readonly Dictionary<int, List<TradeRoute>> Touching = new();
+    }
+
+    private static readonly TradeRoute[] NoRoutes = Array.Empty<TradeRoute>();
+
+    /// <summary>How many times a finished market week has filed its routes. Reading does not move it.</summary>
+    internal static int ImportIndexBuilds { get; private set; }
+
+    /// <summary>How many times a reader had to walk the whole route list because the index was not ready.</summary>
+    internal static int RouteScans { get; private set; }
+
+    /// <summary>The week's routes were filed under the countries that touch them.</summary>
+    public static bool IndexReady(Campaign campaign) =>
+        campaign is not null && Workspace(campaign).IndexReady;
+
+    /// <summary>
+    /// Routes this country sells or buys. After a finished market week this is the list
+    /// written during that week. Before that — a save just loaded, or a test that put
+    /// routes in by hand — it is the same filter of <see cref="Campaign.TradeRoutes"/>.
+    /// </summary>
+    public static IReadOnlyList<TradeRoute> RoutesTouching(Campaign campaign, int nationId)
+    {
+        if (campaign is null) return NoRoutes;
+        var work = Workspace(campaign);
+        // A hand-edited route list — a test, or a week that was cleared and rewritten —
+        // is not the list that was filed. Count is enough: the live week never adds a
+        // route except through Deliver, which files it in the same breath.
+        if (work.IndexReady && work.FiledCount == campaign.TradeRoutes.Count)
+            return work.Touching.TryGetValue(nationId, out var filed) ? filed : NoRoutes;
+        RouteScans++;
+        var found = new List<TradeRoute>();
+        foreach (var route in campaign.TradeRoutes)
+            if (route.SellerId == nationId || route.BuyerId == nationId) found.Add(route);
+        return found;
+    }
+
+    private static void BeginRouteIndex(TradeWorkspace work)
+    {
+        work.IndexReady = false;
+        foreach (var list in work.Touching.Values) list.Clear();
+    }
+
+    private static void Touch(TradeWorkspace work, int nationId, TradeRoute route)
+    {
+        if (!work.Touching.TryGetValue(nationId, out var list))
+            work.Touching[nationId] = list = new List<TradeRoute>();
+        list.Add(route);
     }
     private static readonly ConditionalWeakTable<Campaign, TradeWorkspace> Workspaces = new();
     private static TradeWorkspace Workspace(Campaign campaign) =>
@@ -143,6 +195,7 @@ public static class TradeNetwork
         var work = Workspace(campaign);
         campaign.TradeRoutes.Clear();
         work.UsedRouteRecords = 0;
+        BeginRouteIndex(work);
         foreach (var nation in nations)
         {
             nation.TradePartners.Clear();
@@ -169,6 +222,9 @@ public static class TradeNetwork
             yield return 0;
         }
         campaign.TradeRoutesDay = campaign.ElapsedDays;
+        work.FiledCount = campaign.TradeRoutes.Count;
+        work.IndexReady = true;
+        ImportIndexBuilds++;
     }
 
     private static void RouteOne(Campaign campaign, Commodity commodity, TradeWorkspace work)
@@ -316,6 +372,8 @@ public static class TradeNetwork
         route.Volume = volume;
         route.Value = value;
         campaign.TradeRoutes.Add(route);
+        Touch(work, seller.Id, route);
+        if (buyer.Id != seller.Id) Touch(work, buyer.Id, route);
 
         seller.TradePartners[buyer.Id] = seller.TradePartners.GetValueOrDefault(buyer.Id) + value;
         buyer.TradePartners[seller.Id] = buyer.TradePartners.GetValueOrDefault(seller.Id) + value;
