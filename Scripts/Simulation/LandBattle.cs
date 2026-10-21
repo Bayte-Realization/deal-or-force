@@ -5,6 +5,7 @@ namespace DealOrForce.Simulation;
 /// <summary>A readable daily combat record. Battles spend organisation and cost people.</summary>
 public sealed class LandBattle
 {
+    [System.Text.Json.Serialization.JsonConverter(typeof(LandBattleRoundConverter))]
     public sealed class Round
     {
         public int Day;

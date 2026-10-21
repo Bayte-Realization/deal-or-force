@@ -1,0 +1,400 @@
+{
+  "siberia": {
+    "name": "Siberia",
+    "adjective": "Siberian",
+    "countries": ["RUS"],
+    "region_ids": ["ru_oms", "ru_nvs", "ru_tom", "ru_krs", "ru_irk", "ru_tyu", "ru_yan", "ru_khm", "ru_alt", "ru_al", "ru_bu", "ru_ty", "ru_zab"],
+    "macro": true,
+    "box": { "lat_min": 49.0, "lat_max": 77.0, "lon_min": 60.0, "lon_max": 130.0 }
+  },
+  "ural": {
+    "name": "Urals",
+    "adjective": "Ural",
+    "countries": ["RUS"],
+    "region_ids": ["ru_sve", "ru_che", "ru_per", "ru_kgn", "ru_ore", "ru_ba"],
+    "macro": true,
+    "box": { "lat_min": 50.0, "lat_max": 68.0, "lon_min": 54.0, "lon_max": 65.0 }
+  },
+  "far_east": {
+    "name": "Far East",
+    "adjective": "Far Eastern",
+    "countries": ["RUS"],
+    "region_ids": ["ru_pri", "ru_kha", "ru_amu", "ru_sak", "ru_kam", "ru_mag", "ru_chu", "ru_yev"],
+    "macro": true,
+    "box": { "lat_min": 42.0, "lat_max": 75.0, "lon_min": 125.0, "lon_max": 180.0 }
+  },
+  "don_kuban": {
+    "name": "Don and Kuban",
+    "adjective": "Cossack",
+    "countries": ["RUS"],
+    "region_ids": ["ru_ros", "ru_kda", "ru_sta"],
+    "box": { "lat_min": 43.0, "lat_max": 50.0, "lon_min": 36.0, "lon_max": 45.0 }
+  },
+  "caucasus": {
+    "name": "North Caucasus",
+    "adjective": "Caucasian",
+    "countries": ["RUS"],
+    "region_ids": ["ru_da", "ru_ce", "ru_in", "ru_kb", "ru_kc", "ru_se"],
+    "box": { "lat_min": 41.0, "lat_max": 45.0, "lon_min": 39.0, "lon_max": 49.0 }
+  },
+  "volga": {
+    "name": "Volga",
+    "adjective": "Volga",
+    "countries": ["RUS"],
+    "region_ids": ["ru_ta", "ru_sam", "ru_sar", "ru_vgg", "ru_uln", "ru_pnz", "ru_ast"],
+    "macro": true,
+    "box": { "lat_min": 45.0, "lat_max": 57.0, "lon_min": 42.0, "lon_max": 54.0 }
+  },
+  "donbas": {
+    "name": "Donbas",
+    "adjective": "Donetsk",
+    "countries": ["UKR", "RUS"],
+    "region_ids": ["ua_14", "ua_09"]
+  },
+  "crimea": {
+    "name": "Crimea",
+    "adjective": "Crimean",
+    "countries": ["UKR", "RUS"],
+    "region_ids": ["ua_43"]
+  },
+  "novorossiya": {
+    "name": "Novorossiya",
+    "adjective": "Novorossiyan",
+    "countries": ["UKR", "RUS"],
+    "region_ids": ["ua_23", "ua_65", "ua_51", "ua_48"]
+  },
+  "galicia": {
+    "name": "Galicia",
+    "adjective": "Galician",
+    "countries": ["UKR", "POL"],
+    "region_ids": ["ua_46", "ua_26", "ua_61"]
+  },
+  "pomorye": {
+    "name": "Pomorye",
+    "adjective": "Pomor",
+    "countries": ["RUS"],
+    "region_ids": ["ru_ark", "ru_mur", "ru_vlg", "ru_nen"]
+  },
+  "ingria": {
+    "name": "Ingria",
+    "adjective": "Ingrian",
+    "countries": ["RUS"],
+    "region_ids": ["ru_len", "ru_spe", "ru_psk", "ru_ngr"]
+  },
+  "kuban": {
+    "name": "Kuban",
+    "adjective": "Kuban",
+    "countries": ["RUS"],
+    "region_ids": ["ru_kda", "ru_ad", "ru_sta"]
+  },
+  "don": {
+    "name": "Don",
+    "adjective": "Don",
+    "countries": ["RUS"],
+    "region_ids": ["ru_ros", "ru_vgg"]
+  },
+  "chernozemye": {
+    "name": "Black Earth",
+    "adjective": "Chernozem",
+    "countries": ["RUS"],
+    "region_ids": ["ru_vor", "ru_krs", "ru_bel", "ru_lip", "ru_tam", "ru_orl", "ru_bry"]
+  },
+  "hadhramaut": {
+    "name": "Hadhramaut",
+    "adjective": "Hadhrami",
+    "countries": ["YEM"],
+    "region_ids": ["ye_hd", "ye_mr", "ye_sh"],
+    "box": { "lat_min": 13.5, "lat_max": 19.0, "lon_min": 46.5, "lon_max": 53.2 }
+  },
+  "south_arabia": {
+    "name": "South Arabia",
+    "adjective": "South Arabian",
+    "countries": ["YEM"],
+    "region_ids": ["ye_ad", "ye_ab", "ye_lh", "ye_ta", "ye_dl"]
+  },
+  "deseret": {
+    "name": "Deseret",
+    "adjective": "Deseret",
+    "countries": ["USA"],
+    "region_ids": ["us_ut", "us_az", "us_nm", "us_co", "us_nv"]
+  },
+  "alaska": {
+    "name": "Alaska",
+    "adjective": "Alaskan",
+    "countries": ["USA"],
+    "region_ids": ["us_ak"]
+  },
+  "florida": {
+    "name": "Florida",
+    "adjective": "Floridian",
+    "countries": ["USA"],
+    "region_ids": ["us_fl"]
+  },
+  "yunnan": {
+    "name": "Yunnan",
+    "adjective": "Yunnanese",
+    "countries": ["CHN"],
+    "region_ids": ["cn_yn", "cn_gz"]
+  },
+  "shanxi": {
+    "name": "Shanxi",
+    "adjective": "Shanxi",
+    "countries": ["CHN"],
+    "region_ids": ["cn_sx", "cn_sd", "cn_ha", "cn_he"]
+  },
+  "xibei": {
+    "name": "Xibei",
+    "adjective": "Northwest",
+    "countries": ["CHN"],
+    "region_ids": ["cn_gs", "cn_qh", "cn_nx", "cn_sn"]
+  },
+  "hokkaido": {
+    "name": "Hokkaido",
+    "adjective": "Ezo",
+    "countries": ["JPN"],
+    "region_ids": ["jp_01"]
+  },
+  "ryukyu": {
+    "name": "Ryukyu",
+    "adjective": "Ryukyuan",
+    "countries": ["JPN"],
+    "region_ids": ["jp_47"]
+  },
+  "rio_grande": {
+    "name": "Rio Grande",
+    "adjective": "Riograndense",
+    "countries": ["BRA"],
+    "region_ids": ["br_rs", "br_sc", "br_pr"]
+  },
+  "sao_paulo": {
+    "name": "Sao Paulo",
+    "adjective": "Paulista",
+    "countries": ["BRA"],
+    "region_ids": ["br_sp"]
+  },
+  "nordeste": {
+    "name": "Nordeste",
+    "adjective": "Equatorial",
+    "countries": ["BRA"],
+    "region_ids": ["br_pe", "br_ba", "br_ce", "br_rn", "br_pb", "br_al", "br_se", "br_pi", "br_ma"],
+    "macro": true
+  },
+  "yucatan": {
+    "name": "Yucatan",
+    "adjective": "Yucatecan",
+    "countries": ["MEX"],
+    "region_ids": ["mx_yuc", "mx_cam", "mx_roo", "mx_tab", "mx_chp"]
+  },
+  "kivu": {
+    "name": "Kivu",
+    "adjective": "Kivu",
+    "countries": ["COD"],
+    "region_ids": ["cd_nk", "cd_sk", "cd_it"]
+  },
+  "cabinda": {
+    "name": "Cabinda",
+    "adjective": "Cabindan",
+    "countries": ["AGO"],
+    "region_ids": ["ao_cab"]
+  },
+  "ambazonia": {
+    "name": "Ambazonia",
+    "adjective": "Ambazonian",
+    "countries": ["CMR"],
+    "region_ids": ["cm_nw", "cm_sw"]
+  },
+  "cascadia": {
+    "name": "Cascadia",
+    "adjective": "Cascadian",
+    "countries": ["USA", "CAN"],
+    "region_ids": ["us_wa", "us_or", "ca_bc"],
+    "macro": true
+  },
+  "california": {
+    "name": "California",
+    "adjective": "Californian",
+    "countries": ["USA"],
+    "region_ids": ["us_ca"]
+  },
+  "texas": {
+    "name": "Texas",
+    "adjective": "Texan",
+    "countries": ["USA"],
+    "region_ids": ["us_tx"]
+  },
+  "dixie": {
+    "name": "Dixie",
+    "adjective": "Southern",
+    "countries": ["USA"],
+    "region_ids": ["us_al", "us_ms", "us_ga", "us_fl", "us_sc", "us_nc", "us_tn", "us_la"],
+    "macro": true
+  },
+  "new_england": {
+    "name": "New England",
+    "adjective": "New England",
+    "countries": ["USA"],
+    "region_ids": ["us_ma", "us_me", "us_vt", "us_nh", "us_ct", "us_ri"],
+    "macro": true
+  },
+  "great_lakes": {
+    "name": "Great Lakes",
+    "adjective": "Midwestern",
+    "countries": ["USA"],
+    "region_ids": ["us_il", "us_oh", "us_mi", "us_in", "us_wi", "us_mn"],
+    "macro": true
+  },
+  "manchuria": {
+    "name": "Manchuria",
+    "adjective": "Manchurian",
+    "countries": ["CHN"],
+    "region_ids": ["cn_ln", "cn_jl", "cn_hl"],
+    "macro": true
+  },
+  "canton": {
+    "name": "Canton",
+    "adjective": "Cantonese",
+    "countries": ["CHN"],
+    "region_ids": ["cn_gd", "cn_gx", "cn_hi"],
+    "macro": true
+  },
+  "sichuan": {
+    "name": "Sichuan",
+    "adjective": "Sichuanese",
+    "countries": ["CHN"],
+    "region_ids": ["cn_sc", "cn_cq"],
+    "macro": true
+  },
+  "jiangnan": {
+    "name": "Jiangnan",
+    "adjective": "Jiangnan",
+    "countries": ["CHN"],
+    "region_ids": ["cn_sh", "cn_js", "cn_zj"],
+    "macro": true
+  },
+  "tibet": {
+    "name": "Tibet",
+    "adjective": "Tibetan",
+    "countries": ["CHN"],
+    "region_ids": ["cn_xz"],
+    "macro": true
+  },
+  "xinjiang": {
+    "name": "East Turkestan",
+    "adjective": "Uyghur",
+    "countries": ["CHN"],
+    "region_ids": ["cn_xj"],
+    "macro": true
+  },
+  "deccan": {
+    "name": "Deccan",
+    "adjective": "Deccani",
+    "countries": ["IND"],
+    "region_ids": ["in_mh", "in_ka", "in_ap", "in_tg"],
+    "macro": true
+  },
+  "bengal": {
+    "name": "Bengal",
+    "adjective": "Bengali",
+    "countries": ["IND", "BGD"],
+    "region_ids": ["in_wb"]
+  },
+  "punjab": {
+    "name": "Punjab",
+    "adjective": "Punjabi",
+    "countries": ["IND", "PAK"],
+    "region_ids": ["in_pb", "in_hr", "pk_pb"]
+  },
+  "dravida": {
+    "name": "Dravida",
+    "adjective": "Dravidian",
+    "countries": ["IND"],
+    "region_ids": ["in_tn", "in_kl"],
+    "macro": true
+  },
+  "bavaria": {
+    "name": "Bavaria",
+    "adjective": "Bavarian",
+    "countries": ["DEU"],
+    "region_ids": ["de_by"]
+  },
+  "rhineland": {
+    "name": "Rhineland",
+    "adjective": "Rhenish",
+    "countries": ["DEU"],
+    "region_ids": ["de_nw", "de_rp", "de_sl"]
+  },
+  "padania": {
+    "name": "Padania",
+    "adjective": "Padanian",
+    "countries": ["ITA"],
+    "region_ids": ["it_25", "it_34", "it_21", "it_36", "it_45"],
+    "macro": true
+  },
+  "two_sicilies": {
+    "name": "Two Sicilies",
+    "adjective": "Sicilian",
+    "countries": ["ITA"],
+    "region_ids": ["it_72", "it_82", "it_78", "it_75", "it_77", "it_88"],
+    "macro": true
+  },
+  "catalonia": {
+    "name": "Catalonia",
+    "adjective": "Catalan",
+    "countries": ["ESP"],
+    "region_ids": ["es_ct"]
+  },
+  "basque": {
+    "name": "Basque Country",
+    "adjective": "Basque",
+    "countries": ["ESP", "FRA"],
+    "region_ids": ["es_pv", "es_nc"]
+  },
+  "scotland": {
+    "name": "Scotland",
+    "adjective": "Scottish",
+    "countries": ["GBR"],
+    "region_ids": ["gb_sct"]
+  },
+  "wales": {
+    "name": "Wales",
+    "adjective": "Welsh",
+    "countries": ["GBR"],
+    "region_ids": ["gb_wls"]
+  },
+  "hejaz": {
+    "name": "Hejaz",
+    "adjective": "Hejazi",
+    "countries": ["SAU"],
+    "region_ids": ["sa_02", "sa_03"]
+  },
+  "nejd": {
+    "name": "Nejd",
+    "adjective": "Nejdi",
+    "countries": ["SAU"],
+    "region_ids": ["sa_01"]
+  },
+  "al_hasa": {
+    "name": "Al-Hasa",
+    "adjective": "Eastern Arabian",
+    "countries": ["SAU"],
+    "region_ids": ["sa_04"]
+  },
+  "kurdistan": {
+    "name": "Kurdistan",
+    "adjective": "Kurdish",
+    "countries": ["IRQ", "SYR", "TUR", "IRN"],
+    "region_ids": ["iq_kr", "sy_ha", "tr_di", "ir_16"]
+  },
+  "cyrenaica": {
+    "name": "Cyrenaica",
+    "adjective": "Cyrenaican",
+    "countries": ["LBY"],
+    "region_ids": ["ly_cy"]
+  },
+  "tripolitania": {
+    "name": "Tripolitania",
+    "adjective": "Tripolitanian",
+    "countries": ["LBY"],
+    "region_ids": ["ly_tr"]
+  }
+}

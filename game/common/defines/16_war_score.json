@@ -38,5 +38,7 @@
   "WarScoreCollapseOccupation": 0.9,
   "WarScoreCollapseOccupationBroken": 0.6,
   "WarScoreCollapseArmy": 0.15,
-  "WarScorePeopleWeight": 0.5
+  "WarScorePeopleWeight": 0.5,
+  "WarScoreMin": -100,
+  "WarScoreMax": 100
 }

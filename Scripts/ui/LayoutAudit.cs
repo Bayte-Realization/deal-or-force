@@ -78,6 +78,7 @@ public static class LayoutAudit
 
     private static void Walk(Node node, List<Finding> found)
     {
+        if (node is SubViewport or Node3D) return;
         if (node is Control { Visible: false }) return;
 
         if (node is Label label && !string.IsNullOrWhiteSpace(label.Text) && label.IsVisibleInTree())
@@ -93,7 +94,8 @@ public static class LayoutAudit
                     Fault.Clipped, wanted));
         }
 
-        foreach (var child in node.GetChildren()) Walk(child, found);
+        var count = node.GetChildCount();
+        for (var i = 0; i < count; i++) Walk(node.GetChild(i), found);
     }
 
     /// <summary>
@@ -154,7 +156,7 @@ public static class LayoutAudit
 
     /// <summary>Seconds between sweeps. Slow enough to be free, quick enough to blame the
     /// panel you just opened rather than one from a minute ago.</summary>
-    private const double WatchInterval = 1.0;
+    private const double WatchInterval = 2.5;
 
     private static double _sinceLastSweep;
 

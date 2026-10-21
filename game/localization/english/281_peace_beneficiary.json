@@ -1,0 +1,12 @@
+{
+  "Choose an existing country to receive the peace terms.": "Choose an existing country to receive the peace terms.",
+  "The beneficiary must be a belligerent on your side of this war.": "The beneficiary must be a belligerent on your side of this war.",
+  "The beneficiary must be a surviving country with territory of its own.": "The beneficiary must be a surviving country with territory of its own.",
+  "Awarding peace terms to an ally is disabled in this campaign.": "Awarding peace terms to an ally is disabled in this campaign.",
+  "An independent country cannot be awarded to a peace beneficiary.": "An independent country cannot be awarded to a peace beneficiary.",
+  "{0} already answers to {1}": "{0} already answers to {1}",
+  "{0} received {1} in reparations": "{0} received {1} in reparations",
+  "a trade agreement was imposed between {0} and {1}": "a trade agreement was imposed between {0} and {1}",
+  "Peace beneficiary: {0}.": "Peace beneficiary: {0}.",
+  "your country to answer to {0} as a {1}": "your country to answer to {0} as a {1}"
+}

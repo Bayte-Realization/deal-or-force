@@ -897,7 +897,10 @@ public partial class DealOrForceGame
         if (war is null) return $"{_campaign.Player.Name} is not at war.";
         // Signed from the player's side, because that is how anybody testing a peace thinks
         // about it: 60 means "I am winning by sixty", whichever side of the war I am on.
-        war.WarScore = war.AttackerId == _campaign.Player.Id ? score : -score;
+        var low = MathF.Min(_campaign.Defines.WarScoreMin, _campaign.Defines.WarScoreMax);
+        var high = MathF.Max(_campaign.Defines.WarScoreMin, _campaign.Defines.WarScoreMax);
+        var signed = war.AttackerId == _campaign.Player.Id ? score : -score;
+        war.WarScore = Math.Clamp(signed, low, high);
         Refresh();
         return $"{EscapeBb(war.Name)}: war score set to {war.WarScore:0.0}. `peace` opens the conference.";
     }

@@ -2,7 +2,11 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10.
+A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10. Version **0.8.1**.
+
+> **[LanguageKit](LanguageKit/README.md)** — the Godot 4.8 Beta1 language kit: source integrations
+> for Luau, F#, Nim, Odin, Rust and Kotlin, with build recipes, probes and a workbench
+> ([руководство](LanguageKit/GUIDE_RU.md)).
 
 Active development branch: **ReimAlpha**. [October 13 checkpoint](docs/REIMALPHA_2026_10_13_RU.md).
 
@@ -92,7 +96,7 @@ examples at all three levels: JSON, GDScript, compiled C#. The rest is in
 ## Language development kit
 
 The project retains source integrations for **Luau, F#, Nim, Odin, Rust and Kotlin**.
-See the [kit and build recipes](Tools/GodotLanguages/README.md) and
+See the [kit and build recipes](LanguageKit/README.md) and
 [support levels / migration policy](docs/LANGUAGE_BACKENDS_RU.md). All six ran together
 in the Godot 4.8 Beta1 .NET workbench; this does not certify every export or API.
 The campaign remains C#. Rust is reserved for rare, measured hard cases; players and

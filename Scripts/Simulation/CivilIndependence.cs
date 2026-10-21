@@ -95,7 +95,8 @@ public static class CivilIndependence
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + Math.Max(1, c.Defines.CivilReferendumTruceDays);
         relation.NonAggressionPact = true;
-        movement.Movement.LastReport = Loc.Format("A negotiated vote in {0} established peaceful independence.", place);
+        if (movement.Movement is not null)
+            movement.Movement.LastReport = Loc.Format("A negotiated vote in {0} established peaceful independence.", place);
         c.Chronicle.Record(c, "peaceful_independence", movement.Id, owner.Id, place);
         c.MarkMapChanged();
         return true;

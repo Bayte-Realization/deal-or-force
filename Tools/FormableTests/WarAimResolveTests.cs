@@ -75,3 +75,4 @@ static class WarAimResolveTests
             "shared culture alone does not invent total-conquest aims for unrelated wars");
     }
 }
+

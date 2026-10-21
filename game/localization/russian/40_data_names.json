@@ -15,6 +15,8 @@
   "Self-governing, and turns up when the senior partner is attacked. Usually.": "Управляет собой сам и приходит, когда нападают на старшего партнёра. Обычно.",
   "Client state": "Клиентское государство",
   "Nobody signed anything. The money and the weapons come from one direction.": "Никто ничего не подписывал. Деньги и оружие идут с одной стороны.",
+  "Special administrative region": "Особый административный регион",
+  "A large frontier or minority bloc under one administration, answering to the senior partner abroad.": "Крупный пограничный или национальный блок под единой администрацией, который во внешней политике отвечает старшему партнёру.",
 
   // ----------------------------------------------------- common/formable_nations --
   "United Korea": "Единая Корея",
@@ -147,5 +149,7 @@
   "The federation of 1958, which lasted four years. Ten island governments that share a court, a university and a cricket team.": "Федерация 1958 года, продержавшаяся четыре года. Десять островных правительств с общим судом, общим университетом и общей сборной по крикету.",
 
   "Australasia": "Австралазия",
-  "The seventh state that New Zealand was offered in 1901 and declined, taken up a century and a quarter late.": "Седьмой штат, который Новой Зеландии предложили в 1901 году и от которого она отказалась, — принятый с опозданием на век с четвертью."
+  "The seventh state that New Zealand was offered in 1901 and declined, taken up a century and a quarter late.": "Седьмой штат, который Новой Зеландии предложили в 1901 году и от которого она отказалась, — принятый с опозданием на век с четвертью.",
+  "Personal union": "Персональная уния",
+  "Two crowns, one head. Its own laws, its own treasury, its own flag - and a foreign policy that answers to the senior branch.": "Две короны, одна голова. Свои законы, своя казна, свой флаг — и внешняя политика, отвечающая перед старшей ветвью."
 }

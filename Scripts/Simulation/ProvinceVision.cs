@@ -17,7 +17,7 @@ public sealed class ProvinceVision
     // holds what changes, while everything else here (armies, battles, landings) moves by
     // the hour. Kept with the exact controller map it was built from, compared whole.
     internal byte[] TerritoryReach = Array.Empty<byte>();
-    internal ushort[] TerritoryControllers = Array.Empty<ushort>();
+    internal int TerritoryMapRevision = -1;
     internal int TerritoryMapIndex = -1;
     internal int TerritoryDepth = -1;
     public int Revision { get; internal set; }
@@ -82,8 +82,8 @@ public static partial class CampaignIntel
         // flooding the armies over a finished territory arrives exactly where flooding
         // everything at once did.
         if (view.TerritoryMapIndex == nation.MapIndex && view.TerritoryDepth == borderDepth &&
-            view.TerritoryReach.Length == view.Reach.Length &&
-            controllers.AsSpan().SequenceEqual(view.TerritoryControllers))
+            view.TerritoryMapRevision == c.MapRevision &&
+            view.TerritoryReach.Length == view.Reach.Length)
         {
             Array.Copy(view.TerritoryReach, view.Reach, view.Reach.Length);
         }
@@ -94,8 +94,7 @@ public static partial class CampaignIntel
             Flood();
             if (view.TerritoryReach.Length != view.Reach.Length) view.TerritoryReach = new byte[view.Reach.Length];
             Array.Copy(view.Reach, view.TerritoryReach, view.Reach.Length);
-            if (view.TerritoryControllers.Length != controllers.Length) view.TerritoryControllers = new ushort[controllers.Length];
-            Array.Copy(controllers, view.TerritoryControllers, controllers.Length);
+            view.TerritoryMapRevision = c.MapRevision;
             view.TerritoryMapIndex = nation.MapIndex;
             view.TerritoryDepth = borderDepth;
         }

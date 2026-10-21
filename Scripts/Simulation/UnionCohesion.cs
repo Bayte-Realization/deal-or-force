@@ -113,7 +113,17 @@ public static class UnionCohesion
         for (var index = 0; index < nationsAtStart; index++)
         {
             var nation = campaign.Nations[index];
-            if (string.IsNullOrEmpty(nation.FormedNationId)) continue;
+            var isFormed = !string.IsNullOrEmpty(nation.FormedNationId);
+            var isVulnerableFederation = !isFormed && campaign.FeatureEnabled("federal_fracture") &&
+                                         (nation.Government is "federation" or "confederation" || nation.Tag is "USA" or "RUS") &&
+                                         nation.Population >= 20_000_000 &&
+                                         campaign.StatesOf(nation).Length >= 4 &&
+                                         (nation.Stability < 0.38f ||
+                                          (nation.Stability < 0.48f && nation.DebtCondition >= DebtCondition.Insolvent) ||
+                                          nation.DebtCondition >= DebtCondition.Default ||
+                                          (nation.DomesticCrisis?.CoupPressure > 0.40f) ||
+                                          (WarWeariness.NationalFatigue(campaign, nation) >= 0.55f));
+            if (!isFormed && !isVulnerableFederation) continue;
             // A state proclaimed last month is not judged this month: the ink is still wet.
             if (campaign.ElapsedDays < nation.FormedNationDay + defines.UnionGraceDays) continue;
             var atWar = false;
@@ -127,8 +137,8 @@ public static class UnionCohesion
             nation.UnionCohesion = Math.Clamp(nation.UnionCohesion + weekly / 7f, 0f, 1f);
             if (nation.UnionCohesion >= defines.UnionCohesionFloor) continue;
             if (campaign.ElapsedDays - nation.UnionLastSecessionDay < defines.UnionSecessionCooldownDays) continue;
-            // Not while it is fighting for its life: a war abroad is the cheapest unity there is.
-            if (atWar) continue;
+            // A foreign war abroad rallies a country only while stability holds; a broken state collapses under fire.
+            if (atWar && nation.Stability >= 0.25f && WarWeariness.NationalFatigue(campaign, nation) < 0.50f) continue;
             if (!LoseTheAngriestRegion(campaign, nation)) continue;
             nation.UnionLastSecessionDay = campaign.ElapsedDays;
             // Losing a region settles the rest for a while, the way a divorce does.
@@ -158,8 +168,29 @@ public static class UnionCohesion
         var states = campaign.StatesOf(nation);
         if (states.Length < 2) return null;      // a country of one region cannot lose a region
         ScenarioState angriest = null;
+        var highestScore = -1f;
         foreach (var state in states)
-            if (angriest is null || state.Radicalism > angriest.Radicalism) angriest = state;
+        {
+            var score = state.Radicalism;
+            if (campaign.ProvinceMap is not null)
+            {
+                foreach (var candidate in campaign.Nations)
+                {
+                    if (candidate.Movement is { Landless: true } &&
+                        ((campaign.Homelands.TryGetValue(candidate.Id, out var h) && h.Contains(state.MapIndex)) ||
+                         candidate.Movement.HeadquartersStateMapIndex == state.MapIndex))
+                    {
+                        score += 0.25f;
+                        break;
+                    }
+                }
+            }
+            if (angriest is null || score > highestScore)
+            {
+                angriest = state;
+                highestScore = score;
+            }
+        }
         return angriest;
     }
 

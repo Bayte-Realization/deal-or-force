@@ -45,7 +45,7 @@
       "description": "The Zaydi Houthi movement, which has held Sanaa and north-western Yemen since 2014. Iran backs it; since November 2023 it has attacked shipping in the Red Sea.",
       "parent": "YEM", "colour": "#4e7d3a",
       "capital": "Sanaa", "capital_at": [44.21, 15.35],
-      "parent_capital": "Aden", "parent_capital_at": [45.03, 12.79],
+      "parent_capital": "Marib", "parent_capital_at": [45.32, 15.46],
       "government": "theocracy", "ideology": "theocratic_rule", "peoples": ["arab_yemeni"],
       "regions": ["ye_sn", "ye_sd", "ye_hj", "ye_dh", "ye_ja", "ye_hu"],
       "areas": [
@@ -54,9 +54,12 @@
       "except": [
         [[42.6, 12.6], [43.6, 12.6], [43.6, 13.95], [42.6, 13.95]]
       ],
+      "holds": [
+        [[44.75, 15.10], [45.35, 15.10], [45.35, 15.65], [44.75, 15.65]]
+      ],
       "claims_state": true,
-      "relation": "truce", "truce_days": 540,
-      "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.5, "war_support": 0.85,
+      "relation": "war", "war_name": "Yemeni Civil War",
+      "army_share": 0.0, "fighters": 60000, "parent_fighters": 45000, "militia": 3, "stability": 0.5, "war_support": 0.85,
       "patrons": ["IRN"], "listed_by": ["USA", "SAU", "ARE", "ISR", "GBR"]
     },
     {
@@ -71,8 +74,9 @@
         [[38.75, 36.72], [39.45, 36.72], [40.1, 36.88], [40.25, 36.82], [40.15, 36.5], [39.3, 36.42], [38.85, 36.45]]
       ],
       "claims_state": true,
-      "relation": "truce", "truce_days": 730,
-      "army_share": 0.0, "fighters": 30000, "militia": 2, "stability": 0.35, "war_support": 0.7,
+      "relation": "war", "war_name": "Syrian Civil War",
+      "army_share": 0.0, "fighters": 45000, "parent_fighters": 30000, "militia": 3,
+      "stability": 0.35, "war_support": 0.7,
       "overlord": "TUR", "subject_type": "client"
     },
     {
@@ -84,10 +88,16 @@
       "areas": [
         [[36.1, 36.05], [36.35, 36.3], [36.55, 36.27], [36.67, 36.24], [36.85, 36.26], [36.95, 36.15], [36.8, 36.0], [36.72, 35.85], [36.62, 35.68], [36.45, 35.62], [36.3, 35.7], [36.25, 35.82], [36.12, 35.92]]
       ],
+      // The December 2024 posture: the Aleppo countryside taken in the first weeks of the
+      // offensive and held as occupied ground, so the front with Damascus opens at Hama
+      // rather than at Idlib - the fall of the capital still has to be fought for.
+      "holds_regions": ["sy_hl"],
       "claims_state": true,
-      "relation": "truce", "truce_days": 365,
-      "army_share": 0.0, "fighters": 25000, "militia": 2, "stability": 0.45, "war_support": 0.8,
-      "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
+      "relation": "war", "war_name": "Syrian Civil War",
+      "parent_modifier": "syrian_army_overstretched",
+      "army_share": 0.0, "fighters": 55000, "parent_fighters": 30000, "militia": 4,
+      "stability": 0.45, "war_support": 0.9,
+      "patrons": ["TUR", "QAT"], "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
     },
     {
       "id": "north_and_east_syria", "tag": "SDF", "name": "North and East Syria",
@@ -101,8 +111,10 @@
         [[38.1, 36.6], [38.15, 36.95], [38.75, 36.85], [38.75, 36.5], [38.4, 36.45]],
         [[37.75, 36.4], [37.85, 36.65], [38.1, 36.75], [38.2, 36.45], [38.0, 36.3]]
       ],
-      "relation": "peace",
-      "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.5, "war_support": 0.7,
+      "relation": "war", "war_name": "Syrian Civil War",
+      "parent_modifier": "syrian_army_overstretched",
+      "army_share": 0.0, "fighters": 85000, "parent_fighters": 30000, "militia": 4,
+      "stability": 0.5, "war_support": 0.6,
       "patrons": ["USA"], "listed_by": ["TUR"]
     },
     {
@@ -290,12 +302,13 @@
         "ye_la",
         "ye_ab"
       ],
-      "relation": "peace",
+      "relation": "war",
+      "war_name": "Southern Yemeni War",
       "army_share": 0.0,
       "fighters": 40000,
       "militia": 2,
       "stability": 0.5,
-      "war_support": 0.6,
+      "war_support": 0.78,
       "patrons": [
         "ARE"
       ]
@@ -423,20 +436,30 @@
     { "between": ["HTH", "SAU"], "structural": 40, "tension": 48, "grievance": [45, 30] },
     { "between": ["HTH", "YEM"], "structural": 60, "tension": 55, "grievance": [40, 50] },
     { "between": ["HTH", "ARE"], "structural": 30, "tension": 40 },
-    { "between": ["HTH", "GBR"], "structural": 20, "tension": 55 },
     { "between": ["HTS", "SYR"], "structural": 60, "tension": 62, "grievance": [50, 40] },
     { "between": ["HTS", "RUS"], "structural": 35, "tension": 50 },
+    { "between": ["HTS", "SDF"], "structural": 65, "tension": 75, "grievance": [50, 50] },
+    { "between": ["HTS", "SIG"], "structural": 45, "tension": 55, "grievance": [30, 25] },
     { "between": ["SDF", "TUR"], "structural": 55, "tension": 68, "grievance": [45, 40] },
     { "between": ["SIG", "SDF"], "structural": 55, "tension": 70, "grievance": [30, 45] },
     { "between": ["SIG", "SYR"], "structural": 55, "tension": 55, "grievance": [50, 35] },
-    { "between": ["SDF", "SYR"], "structural": 30, "tension": 35 },
+    { "between": ["SDF", "SYR"], "structural": 40, "tension": 50, "grievance": [40, 35] },
     { "between": ["LNA", "LBY"], "structural": 50, "tension": 45, "grievance": [30, 30] },
     { "between": ["LNA", "TUR"], "structural": 30, "tension": 35 },
     { "between": ["RSF", "EGY"], "structural": 20, "tension": 40 }
   ],
 
   "sponsorships": [
+    { "sponsor": "RUS", "client": "SYR", "war": ["SYR", "HTS"], "level": 3 },
+    { "sponsor": "IRN", "client": "SYR", "war": ["SYR", "HTS"], "level": 2 },
+    { "sponsor": "USA", "client": "SDF", "war": ["SYR", "SDF"], "level": 2 },
+    { "sponsor": "TUR", "client": "SIG", "war": ["SYR", "SIG"], "level": 2 },
+    { "sponsor": "QAT", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 },
+    { "sponsor": "TUR", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 },
     { "sponsor": "ARE", "client": "RSF", "war": ["SDN", "RSF"], "level": 2 },
+    { "sponsor": "IRN", "client": "HTH", "war": ["YEM", "HTH"], "level": 2 },
+    { "sponsor": "SAU", "client": "YEM", "war": ["YEM", "HTH"], "level": 2 },
+    { "sponsor": "ARE", "client": "YEM", "war": ["YEM", "HTH"], "level": 1 },
     { "sponsor": "EGY", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
     { "sponsor": "TUR", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
     { "sponsor": "IRN", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },

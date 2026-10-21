@@ -1,0 +1,25 @@
+// Deal or Force - who holds a deterrent no neighbour can afford to test (Deterrence.cs).
+//
+// A row is a country tag and a tier. Tier 1 is mutual assured destruction: two tier-1
+// countries do not fight each other directly, because the war judgement prices such a war
+// out of the arithmetic (Defines.AiMutualDeterrencePrice). Higher tiers are reserved for
+// mods that want a second rung - a defence that survives a first strike, say - the code
+// reads "at least 1" everywhere today.
+//
+// The club of 2024, as history left it. A mod for an earlier era ships this file empty, or
+// without it, and the mechanic never speaks; a mod for a future one adds the rows its
+// history wrote. Acquisition in play is a technology with `effects: deterrence`, not a row
+// here - rows are who already holds one when the scenario opens.
+{
+  "holders": {
+    "RUS": 1,
+    "USA": 1,
+    "CHN": 1,
+    "FRA": 1,
+    "GBR": 1,
+    "IND": 1,
+    "PAK": 1,
+    "PRK": 1,
+    "ISR": 1
+  }
+}

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
@@ -42,6 +43,30 @@ public static class WarCoalition
         return false;
     }
 
+    internal static int[] FriendlyRoute(Campaign c, StrategicWar war, int nationId, int from, int to)
+    {
+        if (c.ProvinceMap is null || c.ProvinceController is null || c.NationById(nationId) is not { } own)
+            return Array.Empty<int>();
+        if (war is null || war.Ended || war.BelligerentCount == 2)
+            return c.ProvinceMap.FindRoute(from, to, (ushort)own.MapIndex, c.ProvinceController);
+        var allowed = new HashSet<ushort>();
+        FillControllers(c, war, war.IsAttacking(nationId), allowed);
+        return c.ProvinceMap.FindOperationalRoute(from, to, allowed, c.ProvinceController);
+    }
+
+    internal static bool SafeRetreatProvince(Campaign c, StrategicWar war, int nationId, int province)
+    {
+        if (c.ProvinceMap is null || c.ProvinceController is null || province <= 0 ||
+            province > c.ProvinceMap.ProvinceCount || c.ProvinceMap.IsWater(province) ||
+            !FriendlyController(c, war, nationId, c.ProvinceController[province])) return false;
+        foreach (var battle in c.Battles)
+            if (!battle.Ended && battle.ProvinceId == province) return false;
+        foreach (var unit in c.Armies)
+            if (unit.ProvinceId == province && unit.Divisions >= .1f &&
+                war is not null && war.Opposes(nationId, unit.NationId)) return false;
+        return true;
+    }
+
     /// <summary>An offensive corridor may cross the war's countries, never a neutral shortcut.</summary>
     public static int[] OperationalRoute(Campaign c, StrategicWar war, int nationId,
         int from, int to, ushort[] controllers)
@@ -78,5 +103,58 @@ public static class WarCoalition
             else if ((allied == 0 || (lowestId && p < allied)) && FriendlyController(c, war, army.NationId, controls[p])) allied = p;
         }
         return ownRetreat > 0 ? ownRetreat : allied;
+    }
+
+    /// <summary>
+    /// Intelligently select a safe retreat province that spreads retreating units across
+    /// the frontline rather than bunching them all into a single lowest-id tile.
+    /// </summary>
+    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from)
+    {
+        var map = c.ProvinceMap;
+        var controls = c.ProvinceController;
+        var own = c.NationById(army.NationId);
+        if (map is null || controls is null || own is null || from <= 0 || from >= map.Neighbors.Length) return 0;
+
+        var bestProvince = 0;
+        var bestScore = float.MinValue;
+
+        foreach (var p in map.Neighbors[from])
+        {
+            if (map.IsWater(p)) continue;
+            var isOwn = controls[p] == own.MapIndex;
+            var isAllied = !isOwn && FriendlyController(c, war, army.NationId, controls[p]);
+            if ((!isOwn && !isAllied) || !SafeRetreatProvince(c, war, army.NationId, p)) continue;
+
+            // Score: own ground strongly preferred
+            var score = isOwn ? 100f : 50f;
+
+            // Count friendly formations already in or heading to this province
+            var crowding = 0;
+            foreach (var other in c.Armies)
+            {
+                if (other.Id == army.Id || other.NationId != army.NationId) continue;
+                if (other.ProvinceId == p || (other.Route.Count > 0 && other.OrderProvinceId == p))
+                    crowding++;
+            }
+            score -= crowding * 15f;
+
+            // Give a bonus if this province borders an enemy and is currently unheld / under-defended
+            var bordersEnemy = false;
+            foreach (var n in map.Neighbors[p])
+            {
+                if (map.IsWater(n)) continue;
+                if (HostileController(c, war, army.NationId, controls[n])) { bordersEnemy = true; break; }
+            }
+            if (bordersEnemy && crowding == 0) score += 25f;
+
+            // Deterministic tie-breaker: prefer lowest ID if score is equal
+            if (score > bestScore || (MathF.Abs(score - bestScore) < 0.001f && (bestProvince == 0 || p < bestProvince)))
+            {
+                bestScore = score;
+                bestProvince = p;
+            }
+        }
+        return bestProvince;
     }
 }

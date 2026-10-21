@@ -96,6 +96,15 @@ public static class CountryNames
 
     public static string Resolve(Nation nation, bool map)
     {
+        if (nation is not null && !string.IsNullOrWhiteSpace(nation.CustomName))
+            return Loc.Get(nation.CustomName);
+        // A state the campaign founded carries the name its people, ground and politics
+        // call for. A proclaimed formable or a restoration still wins over it: the new
+        // proclamation is what the country has become, and the name it took at birth is
+        // what it was.
+        if (nation is not null && string.IsNullOrEmpty(nation.FormedNationId) &&
+            NationNaming.Render(null, nation, map) is { Length: > 0 } founded)
+            return founded;
         var identity = Identity(nation);
         var role = map ? ".map" : ".name";
         Variants.TryGetValue(nation.Tag ?? "", out var variant);
@@ -112,7 +121,10 @@ public static class CountryNames
         // politics give a state - a France gone communist is a People's Republic. Not on the
         // map, where the short name is the label.
         var plain = Plain(nation, map, identity + role, variant);
-        if (!map && Form(nation) is { Length: > 0 } form) return Loc.Format(form, plain);
+        // A name that already says what kind of state it is does not need a second coat of
+        // paint: "Republic of United Republic of Tanzania" is the same joke as "ATM machine".
+        if (!map && Form(nation) is { Length: > 0 } form && !NationNaming.CarriesStateForm(plain))
+            return Loc.Format(form, plain);
         return plain;
     }
 
@@ -122,6 +134,11 @@ public static class CountryNames
         if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
         if (Loc.Has(key)) return Loc.Get(key);
         if (map) return Plain(nation, false, key[..^".map".Length] + ".name", variant);
+        // A proclaimed state whose identity row was never written is still the state its
+        // catalogue names. Eighty-one of the eighty-six formables carry a name in their data
+        // and no localisation row, and the row's absence used to put the key itself on the
+        // map: "formable.gulf_union.name" where a country's name belonged.
+        if (FormableNameOf(key) is { Length: > 0 } formable) return formable;
         // An armed opposition is named for what it wants and the country it wants it in:
         // "rising:salvation_front:ETH" reads "National Salvation Front of Ethiopia" in the
         // reader's own language, with the country's own translated name (CivilWarOutbreak).
@@ -134,7 +151,49 @@ public static class CountryNames
                 return Loc.Format("rising." + parts[1], country);
             }
         }
-        return Loc.Get(nation.Name);
+        return NameOfRecord(nation);
+    }
+
+    /// <summary>
+    /// The name stored on the nation, translated where it can be and never handed back as a
+    /// key. A save written while the name had been stored as a recipe - the old Gulf Union
+    /// card - must open as a country, not as "formable.gulf_union.name".
+    /// </summary>
+    private static string NameOfRecord(Nation nation)
+    {
+        var raw = nation.Name ?? "";
+        if (NationNaming.TryTranslate(raw, out var translated)) return translated;
+        if (FormableNameOf(raw) is { Length: > 0 } formable) return formable;
+        // Nothing left but the country's own row, and failing that its tag. A tag is short,
+        // ugly and true; a key is none of those things.
+        var own = Loc.Has($"country.{nation.Tag}.name") ? Loc.Get($"country.{nation.Tag}.name") : "";
+        if (own.Length > 0) return own;
+        return string.IsNullOrWhiteSpace(nation.Tag) ? raw : nation.Tag;
+    }
+
+    /// <summary>The catalogue name behind a "formable.&lt;id&gt;.name" key, or nothing.</summary>
+    private static string FormableNameOf(string key)
+    {
+        if (string.IsNullOrEmpty(key) || !key.StartsWith("formable.", StringComparison.Ordinal)) return "";
+        var id = key["formable.".Length..];
+        if (id.EndsWith(".name", StringComparison.Ordinal)) id = id[..^".name".Length];
+        else if (id.EndsWith(".map", StringComparison.Ordinal)) id = id[..^".map".Length];
+        var definition = FormableNations.Find(id);
+        return definition is { Name.Length: > 0 } ? Loc.GetOr(definition.Name, definition.Name) : "";
+    }
+
+    /// <summary>
+    /// A name written into history or a war's record, read back for the player: translated
+    /// where a row exists, the catalogue's name where the record holds a key, and nothing
+    /// rather than a key when neither can answer. Chronicle entries outlive the language and
+    /// the catalogue version that wrote them, so both routes are needed at read time.
+    /// </summary>
+    public static string Recorded(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        if (Loc.Has(text)) return Loc.Get(text);
+        if (FormableNameOf(text) is { Length: > 0 } formable) return formable;
+        return NationNaming.LooksLikeKey(text) ? "" : text;
     }
 
     /// <summary>
@@ -240,4 +299,30 @@ public sealed partial class Nation
     /// <summary>The government and ideology the country had when first seen (CountryNames.Form).</summary>
     public string StartGovernment = "";
     public string StartIdeology = "";
+    /// <summary>Optional player or restoration custom name override.</summary>
+    public string CustomName = "";
+    /// <summary>Optional arbitrary flag sprite override (e.g. flag_rus_communism).</summary>
+    public string CustomFlag = "";
+}
+
+public sealed class SetNationalCosmeticsCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetNationId { get; init; } = -1;
+    public string CustomName { get; init; } = "";
+    public string CustomFlag { get; init; } = "";
+
+    public void Apply(Campaign campaign)
+    {
+        if (campaign is null) return;
+        var issuer = campaign.NationById(IssuerId);
+        var target = TargetNationId >= 0 ? campaign.NationById(TargetNationId) : issuer;
+        if (issuer is null || target is null) return;
+        // Player may customize their own nation, a direct subject of theirs, or a political movement
+        if (target.Id != issuer.Id && !target.AnswersTo(issuer.Id) && target.Movement is null) return;
+        target.CustomName = (CustomName ?? "").Trim();
+        target.CustomFlag = (CustomFlag ?? "").Trim();
+        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
+    }
 }

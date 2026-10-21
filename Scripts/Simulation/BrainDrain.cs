@@ -64,6 +64,10 @@ public static class BrainDrain
         var inflationPush = n.Inflation > 0.12f ? M.Clamp(n.Inflation - 0.12f, 0f, 0.40f) * 0.25f : 0f;
         var youthBulgePush = s.StandardOfLiving < 0.42f && s.Literacy < 0.72f && stress > 0.15f ? 0.12f : 0f;
 
+        var foodSatisfaction = n.Market.TryGetValue(Commodity.Food, out var foodQ) ? Math.Clamp(foodQ.Satisfaction, 0f, 1f) : 1f;
+        var refugeeSurge = damage > 0.10f ? (damage - 0.10f) * 0.55f : 0f;
+        var faminePush = foodSatisfaction < 0.45f ? (0.45f - foodSatisfaction) * 0.65f : 0f;
+
         var warPush = atWar ? 0.18f : 0f;
         var damagePush = damage * 0.45f;
         var stressPush = stress * 0.30f;
@@ -72,7 +76,8 @@ public static class BrainDrain
         var jobPush = unemployment * 0.35f;
 
         var push = warPush + damagePush + stressPush + stabilityPush + radicalismPush + jobPush +
-                   politicalAlienation + identityAlienation + inflationPush + youthBulgePush;
+                   politicalAlienation + identityAlienation + inflationPush + youthBulgePush +
+                   refugeeSurge + faminePush;
 
         var universities = s.Buildings.GetValueOrDefault(BuildingKind.University);
         var labs = s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab);
@@ -86,8 +91,9 @@ public static class BrainDrain
         var anchor = livingAnchor + campusAnchor + retentionSpirit + borderControls + educationFocus;
 
         var net = MathF.Max(0f, push - anchor);
-        // Educated specialists have the means and qualifications to relocate fastest.
-        var mobility = (0.40f + 0.60f * M.Clamp01(s.Literacy)) * (ModifierSystem.Has(n, "strict_border_controls") ? 0.55f : 1f);
+        // Educated specialists relocate fastest, but war devastation displaces refugees regardless of education.
+        var baseMobility = 0.40f + 0.60f * M.Clamp01(s.Literacy) + (damage > 0.10f ? 0.35f : 0f);
+        var mobility = baseMobility * (ModifierSystem.Has(n, "strict_border_controls") ? 0.55f : 1f);
         var result = M.Clamp01(net * mobility);
 
         if (explain is not null)
@@ -95,6 +101,8 @@ public static class BrainDrain
             explain.Begin(Loc.Get("Emigration & brain-drain pressure"), "share");
             if (warPush > 0f) explain.Add(Loc.Get("Active war"), warPush * mobility);
             if (damagePush > 0.0005f) explain.Add(Loc.Get("Local war damage"), damagePush * mobility);
+            if (refugeeSurge > 0.0005f) explain.Add(Loc.Get("War refugee displacement"), refugeeSurge * mobility);
+            if (faminePush > 0.0005f) explain.Add(Loc.Get("Famine & starvation flight"), faminePush * mobility);
             if (stressPush > 0.0005f) explain.Add(Loc.Get("Household livelihood stress"), stressPush * mobility);
             if (stabilityPush > 0.0005f) explain.Add(Loc.Get("Low regional stability"), stabilityPush * mobility);
             if (radicalismPush > 0.0005f) explain.Add(Loc.Get("Social radicalism"), radicalismPush * mobility);
@@ -145,8 +153,10 @@ public static class BrainDrain
                           (!string.IsNullOrEmpty(sourcePrimary) && DemographyCatalog.IsPrimary(candidate.Tag, sourcePrimary))
                 ? 0.16f : 0f;
             var openDoors = ModifierSystem.Has(candidate, "open_migration_doors") ? 0.35f : 0f;
+            // An aging destination experiencing workforce contraction exerts higher demand and pull for workers.
+            var laborShortagePull = MathF.Max(0f, 0.62f - candidate.WorkingShare) * 1.5f;
 
-            var score = livingGap * 1.35f + stabilityBonus + tradeLink + sameContinent + friendly + productivityBonus + kinship + openDoors;
+            var score = livingGap * 1.35f + stabilityBonus + tradeLink + sameContinent + friendly + productivityBonus + kinship + openDoors + laborShortagePull;
             if (score > bestScore)
             {
                 bestScore = score;

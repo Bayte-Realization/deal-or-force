@@ -7,16 +7,16 @@ namespace DealOrForce.Simulation;
 public sealed partial class Defines
 {
     /// <summary>A war this old starts to weigh on both governments: every year after it adds this much to what they will accept, up to the cap.</summary>
-    public int PeaceWearinessAfterDays { get; set; } = 730;
-    public float PeaceWearinessPerYear { get; set; } = 12f;
-    public float PeaceWearinessCap { get; set; } = 40f;
+    public int PeaceWearinessAfterDays { get; set; } = 450;
+    public float PeaceWearinessPerYear { get; set; } = 15f;
+    public float PeaceWearinessCap { get; set; } = 45f;
     /// <summary>A war whose score has moved less than this over half a year is standing still.</summary>
-    public float WarStalledScore { get; set; } = 8f;
+    public float WarStalledScore { get; set; } = 6f;
     /// <summary>After this long a side that is not winning a war that stands still asks for a white peace, and after the second, anyone does.</summary>
-    public int AiStalemateDays { get; set; } = 730;
-    public int AiWearyDays { get; set; } = 1460;
+    public int AiStalemateDays { get; set; } = 450;
+    public int AiWearyDays { get; set; } = 900;
     /// <summary>A war with nobody's player in it ends of exhaustion at this age: each side keeps what it holds securely.</summary>
-    public int PeaceForcedEndDays { get; set; } = 2920;
+    public int PeaceForcedEndDays { get; set; } = 1825;
     /// <summary>An AI war with no battle and no province ever contested ends in white peace after this many days. Zero disables it.</summary>
     public int AiNoContactPeaceDays { get; set; } = 365;
     /// <summary>Earlier white peace for an AI war with no front and no land or naval route on either side. Zero disables the early check.</summary>
@@ -66,6 +66,14 @@ public sealed partial class StrategicWar
 /// </summary>
 public static class WarWeariness
 {
+    /// <summary>Derived fatigue, not a second stored meter. Only a belligerent can be
+    /// weary of its current war; support is the existing national willingness to fight.</summary>
+    public static float NationalFatigue(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Involves(nation.Id)) return M.Clamp01(1f - nation.WarSupport);
+        return 0f;
+    }
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) return;

@@ -1,0 +1,37 @@
+// Deal or Force - which house sits on which crown (DynastyCatalog.cs).
+//
+// A row is a house and the tags wearing it. Nothing here is state: it is the genealogy a
+// claim reads. In 2024 no shared house is in crisis, so the dynastic casus belli sleeps;
+// when a monarchy of one house falls into civil war or below the stability floor, a cousin
+// crown acquires the oldest reason for a war there is, and the peace that ends it restores
+// a personal union rather than annexing.
+//
+// A mod for an older age writes the houses of that age - Habsburg, Bourbon, Romanov,
+// Piast - and the same two strings (dynastic_claim, personal_union) do the rest. That is
+// the room-for-modders rule: the era lives in data, the mechanic in two seams.
+{
+  "dynasties": {
+    "windsor": ["GBR", "CAN", "AUS", "NZL", "JAM", "BHS", "BRB", "PNG", "SLB", "TUV", "GRD", "LCA", "VCT", "ATG", "BLZ"],
+    "glucksburg": ["NOR", "DNK"],
+    "bourbon-anjou": ["ESP"],
+    "orange-nassau": ["NLD"],
+    "saxe-coburg-gotha": ["BEL"],
+    "bernadotte": ["SWE"],
+    "nassau-weilburg": ["LUX"],
+    "yamato": ["JPN"],
+    "chakri": ["THA"],
+    "norodom": ["KHM"],
+    "johor": ["MYS"],
+    "bolkiah": ["BRN"],
+    "saud": ["SAU"],
+    "hashemite": ["JOR"],
+    "alaouite": ["MAR"],
+    "busaidi": ["OMN"],
+    "thani": ["QAT"],
+    "al-sabah": ["KWT"],
+    "khalifa": ["ARE"],
+    "moshoeshoe": ["LSO"],
+    "dlamini": ["SWZ"],
+    "tupou": ["TON"]
+  }
+}

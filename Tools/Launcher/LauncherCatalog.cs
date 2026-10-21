@@ -24,6 +24,8 @@ public sealed class Package
     public int Order { get; set; }
     public string Error { get; set; } = "";
     public string Status => !Owned ? L.T("Not owned") : !Enabled ? L.T("Off") : Error.Length > 0 ? Error : L.T("Will load");
+    /// <summary>What the row's colour says: "ready", "off", "locked" (not owned) or "problem" (on, but cannot load).</summary>
+    public string Kind => !Owned ? "locked" : !Enabled ? "off" : Active && Error.Length == 0 ? "ready" : "problem";
 }
 
 public sealed class LauncherCatalog

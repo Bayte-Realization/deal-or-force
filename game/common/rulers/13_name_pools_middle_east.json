@@ -1,0 +1,28 @@
+{
+  "names": {
+    "arabic": {
+      "given": ["Abdullah", "Adel", "Ahmad", "Ali", "Amir", "Anwar", "Ayman", "Bassam", "Bilal", "Faisal", "Farid", "Ghassan", "Hadi", "Hamza", "Hassan", "Hussein", "Ibrahim", "Idris", "Ismail", "Jamal", "Karim", "Khalid", "Mahmoud", "Majid", "Mansour", "Marwan", "Mustafa", "Nabil", "Nasser", "Omar", "Osama", "Qasim", "Rashid", "Saad", "Salim", "Samir", "Sultan", "Tariq", "Yousef", "Zayd", "Aisha", "Amal", "Fatima", "Huda", "Layla", "Mariam", "Nadia", "Noura", "Rania", "Salma", "Yasmin"],
+      "family": ["al-Amin", "al-Ansari", "al-Assad", "al-Bakr", "al-Farsi", "al-Ghamdi", "al-Hadi", "al-Hakim", "al-Hariri", "al-Hashimi", "al-Jaber", "al-Khalifa", "al-Khatib", "al-Mahmoud", "al-Mansoor", "al-Masri", "al-Najjar", "al-Otaibi", "al-Qasimi", "al-Rashid", "al-Sabah", "al-Sayed", "al-Sharif", "al-Suwaidi", "al-Tamimi", "al-Zahrani", "bin Laden", "bin Salman", "Haddad", "Khoury", "Nasser", "Saleh"]
+    },
+    "semitic": {
+      "given": ["Avraham", "Yitzhak", "Yaakov", "Moshe", "David", "Shlomo", "Yosef", "Binyamin", "Efraim", "Menachem", "Naftali", "Reuven", "Shimon", "Yehuda", "Zev", "Amir", "Ariel", "Eli", "Gilad", "Itai", "Lior", "Noam", "Oren", "Ran", "Tal", "Uri", "Yonatan", "Sarah", "Rivka", "Rachel", "Leah", "Miriam", "Tamar", "Yael", "Noa", "Maya", "Shira", "Ayelet", "Dalia", "Naomi"],
+      "family": ["Ben-Ami", "Ben-David", "Ben-Gurion", "Cohen", "Dayan", "Eitan", "Gilad", "Goldberg", "Grossman", "HaLevi", "Katz", "Klein", "Levin", "Levy", "Mizrahi", "Peres", "Rabin", "Rosen", "Shamir", "Shapiro", "Tal", "Weizman", "Yaari", "Zohar", "Aboudi", "Mansour", "Sasson"]
+    },
+    "iranian": {
+      "given": ["Abbas", "Ali", "Amir", "Arash", "Ardeshir", "Bahram", "Behrouz", "Cyrus", "Dariush", "Ebrahim", "Farhad", "Fereydoun", "Gholam", "Hamid", "Hassan", "Hossein", "Iraj", "Javad", "Kamran", "Kaveh", "Khosrow", "Mahmoud", "Majid", "Mehdi", "Mohammad", "Nader", "Nasser", "Omid", "Parviz", "Reza", "Rostam", "Saeed", "Shahram", "Sohrab", "Vahid", "Anahita", "Azadeh", "Fatemeh", "Golnar", "Leila", "Maryam", "Neda", "Parisa", "Shirin", "Zahra"],
+      "family": ["Ahmadi", "Akbari", "Alavi", "Amiri", "Ansari", "Azizi", "Bagheri", "Bahrami", "Ebrahimi", "Farhadi", "Ghasemi", "Hashemi", "Hosseini", "Jafari", "Karimi", "Kazemi", "Khorasani", "Mahmoudi", "Mousavi", "Najafi", "Nouri", "Rahimi", "Rezaei", "Sadeghi", "Salehi", "Shirazi", "Tabatabai", "Tehrani", "Yazdi", "Zare"]
+    },
+    "turkic": {
+      "given": ["Ahmet", "Ali", "Alparslan", "Arda", "Aslan", "Batur", "Bayram", "Berk", "Burak", "Cem", "Cengiz", "Deniz", "Emre", "Eren", "Erol", "Fatih", "Gökhan", "Hakan", "Halil", "Hasan", "Ilhan", "Ismail", "Kaan", "Kemal", "Levent", "Mehmet", "Mert", "Murat", "Mustafa", "Oğuz", "Orhan", "Osman", "Özgür", "Selim", "Serdar", "Sinan", "Tamer", "Timur", "Tolga", "Umut", "Yusuf", "Zeki", "Aylin", "Elif", "Emine", "Esra", "Fatma", "Gül", "Leyla", "Selma", "Zeynep"],
+      "family": ["Akbulut", "Aksoy", "Aydın", "Balcı", "Bayraktar", "Çelik", "Demir", "Doğan", "Erdem", "Erdoğan", "Güler", "Kaplan", "Kaya", "Kılıç", "Koç", "Korkmaz", "Kurt", "Özdemir", "Öztürk", "Polat", "Şahin", "Şimşek", "Soylu", "Tekin", "Türk", "Uzun", "Yavuz", "Yıldırım", "Yılmaz", "Akhmetov", "Karimov", "Nazarbayev"]
+    },
+    "caucasian": {
+      "given": ["Aslan", "Akhmed", "Ali", "Arsen", "Asker", "Bekir", "Beslan", "Dzhambulat", "Emin", "Gadzhi", "Giorgi", "Irakli", "Islam", "Kazbek", "Levan", "Magomed", "Murat", "Nino", "Oleg", "Rashid", "Ruslan", "Soslan", "Tamerlan", "Timur", "Vakhtang", "Zaur", "Zviad", "Amina", "Elina", "Fatima", "Khadija", "Lana", "Madina", "Nino", "Svetlana", "Zarina"],
+      "family": ["Abashidze", "Abdulaev", "Aliev", "Bagapsh", "Beridze", "Dadiani", "Dzhabrailov", "Gelashvili", "Ismailov", "Kadyrov", "Khachaturov", "Khetagurov", "Magomedov", "Mamedov", "Nazarov", "Orbeliani", "Pataridze", "Saatov", "Sulakvelidze", "Tsiklauri", "Umarov", "Vazagov", "Zakharov", "Zurabishvili"]
+    },
+    "berber": {
+      "given": ["Amazigh", "Amar", "Ameziane", "Arezki", "Arslan", "Belkacem", "Brahim", "Chaoui", "Dihya", "Djamel", "Ferhat", "Hocine", "Idir", "Kaci", "Kamel", "Lounes", "Massinissa", "Meziane", "Mohand", "Mokrane", "Mouloud", "Nadir", "Omar", "Rabah", "Ramdane", "Saïd", "Slimane", "Tahar", "Yacine", "Zinedine", "Amina", "Dihya", "Kahina", "Lynda", "Nadia", "Tassadit", "Thanina"],
+      "family": ["Ait-Ahmed", "Ait-Ali", "Amrouche", "Benali", "Benmoussa", "Boudiaf", "Bouzid", "Chaker", "Haddou", "Hamadi", "Iboudraren", "Kaci", "Larbi", "Mammeri", "Meziane", "Ouali", "Ouyahia", "Saadi", "Yahiaoui", "Zeroual"]
+    }
+  }
+}

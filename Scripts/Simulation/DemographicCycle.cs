@@ -131,17 +131,21 @@ public static class DemographicCycle
     /// deliberate - its births and deaths are the figures this moves on, and a second clock of its
     /// own would drift away from them.
     /// </summary>
+    private static readonly List<PopulationGroup> WealthOrder = new();
+
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(DemographicCycle))) return;
         var defines = campaign.Defines;
         if (!defines.DemographyAgeStructureEnabled) return;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
+        var anyChanged = false;
         foreach (var state in campaign.States)
         {
             if (state is null || state.Unclaimed || state.Population <= 0) continue;
             if (state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
             state.LastDemographyDay = state.LastHouseholdReviewDay;
+            anyChanged = true;
             var population = Math.Max(1f, state.Population);
             var born = Math.Clamp(state.ReviewBirths / population, 0f, 0.2f);
             var died = Math.Clamp(state.ReviewDeaths / population, 0f, 0.2f);
@@ -157,6 +161,7 @@ public static class DemographicCycle
             state.OldShare = Math.Clamp(old + aged - oldDeaths, 0.02f, 0.45f);
             MoveCultures(campaign, state);
         }
+        if (anyChanged) Aggregate(campaign);
     }
 
     /// <summary>
@@ -174,7 +179,9 @@ public static class DemographicCycle
     {
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
-        var dominant = groups.OrderByDescending(group => group.Size).First();
+        var dominant = groups[0];
+        for (var i = 1; i < groups.Count; i++)
+            if (groups[i].Size > dominant.Size) dominant = groups[i];
         var net = state.ReviewNetMigration;
         if (net > 0)
         {
@@ -182,8 +189,15 @@ public static class DemographicCycle
             PopulationGroup host = null;
             if (share >= campaign.Defines.DemographyFloodShare && Sender(campaign, state) is { Length: > 0 } culture)
                 host = Group(groups, culture, state);
-            host ??= groups.Where(group => !string.Equals(group.Culture, dominant.Culture, StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(group => group.Size).FirstOrDefault();
+            if (host is null)
+            {
+                for (var i = 0; i < groups.Count; i++)
+                {
+                    var group = groups[i];
+                    if (string.Equals(group.Culture, dominant.Culture, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (host is null || group.Size > host.Size) host = group;
+                }
+            }
             if (host is not null)
             {
                 var moved = Math.Min(net, Math.Max(0, dominant.Size - 1));
@@ -196,11 +210,19 @@ public static class DemographicCycle
             // Emigration takes from everyone, and takes most where there are skills to sell.
             var leaving = -net;
             long total = 0;
-            foreach (var group in groups) total += group.Size;
+            WealthOrder.Clear();
+            for (var i = 0; i < groups.Count; i++)
+            {
+                var g = groups[i];
+                total += g.Size;
+                WealthOrder.Add(g);
+            }
             total = Math.Max(1, total);
-            foreach (var group in groups.OrderByDescending(group => group.Wealth))
+            WealthOrder.Sort((a, b) => b.Wealth.CompareTo(a.Wealth));
+            for (var i = 0; i < WealthOrder.Count; i++)
             {
                 if (leaving <= 0) break;
+                var group = WealthOrder[i];
                 var take = Math.Min(leaving, (long)Math.Round(leaving * group.Size / (double)total));
                 take = Math.Min(take, group.Size);
                 group.Size -= take;
@@ -211,8 +233,10 @@ public static class DemographicCycle
         // Assimilation: a minority nothing keeps adding to becomes the country around it, slowly.
         var adopted = campaign.Defines.DemographyAssimilationAnnual;
         if (adopted <= 0f) return;
-        foreach (var group in groups.ToArray())
+        var count = groups.Count;
+        for (var i = 0; i < count; i++)
         {
+            var group = groups[i];
             if (ReferenceEquals(group, dominant) || group.Size <= 0) continue;
             var moved = (long)Math.Floor(group.Size * adopted);
             if (moved <= 0) continue;
@@ -224,7 +248,9 @@ public static class DemographicCycle
     /// <summary>The culture arriving in this region: the country's chief sender of migrants, if known.</summary>
     private static string Sender(Campaign campaign, ScenarioState state)
     {
-        var owner = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
+        Nation owner = null;
+        for (var i = 0; i < campaign.Nations.Count; i++)
+            if (campaign.Nations[i].MapIndex == state.NationMapIndex) { owner = campaign.Nations[i]; break; }
         if (owner is null || owner.BrainGainSourceId < 0) return "";
         var source = campaign.NationById(owner.BrainGainSourceId);
         if (source is null) return "";
@@ -305,13 +331,11 @@ public static class DemographicCycle
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null || nation.WorkingShare <= 0f) yield break;
-        // The dictionary is the country's own, kept and refilled: asked once a day for every
-        // country, and a fresh dictionary a day was the collector's budget.
-        var modifiers = nation.DemographicCycleModifiers ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        modifiers.Clear();
         var excess = nation.OldShareExcess;
         if (excess > 0.005f)
         {
+            var modifiers = nation.DemographicCycleModifiers ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            modifiers.Clear();
             modifiers["stability_weekly"] = -excess * 0.05f;
             modifiers["living_weekly"] = -excess * 0.04f;
             yield return (Loc.Get("A country growing old"), modifiers);
@@ -319,7 +343,8 @@ public static class DemographicCycle
         }
         if (nation.YoungShare > 0.34f)
         {
-            // Schools to build and jobs to find, and the energy that comes with them.
+            var modifiers = nation.DemographicCycleModifiers ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            modifiers.Clear();
             modifiers["living_weekly"] = -0.004f;
             modifiers["stability_weekly"] = 0.003f;
             yield return (Loc.Get("A country full of young people"), modifiers);
@@ -384,3 +409,4 @@ public sealed partial class Nation
     /// <summary>What the age structure adds, kept between asks. Not saved; refilled from scratch.</summary>
     internal Dictionary<string, float> DemographicCycleModifiers;
 }
+

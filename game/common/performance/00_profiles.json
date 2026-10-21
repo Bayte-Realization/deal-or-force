@@ -1,0 +1,84 @@
+// Deal or Force - what the picture is allowed to cost (Scripts/Simulation/PerformanceProfile.cs).
+//
+// A strategy game is played on whatever the player already owns, and the machine that runs it
+// is not always the one it was designed on: a laptop on its integrated chip, a card that fell
+// off the bus and left Windows drawing through its own software rasteriser, a driver that
+// silently switched the game to OpenGL. The game must degrade in quality rather than in frame
+// rate, and it must do so by itself, because a player whose machine is already struggling is
+// not going to find a settings screen.
+//
+// "order" is the ladder: 0 is the best picture and each step down is allowed to cost less.
+// A mod can add a tier, change what one spends, or rename the markers that mean "no GPU".
+{
+  // Adapter names that mean the frame is being drawn by a processor. Godot reports the
+  // adapter, and these are the ones Windows, Mesa and SwiftShader actually use.
+  "software_markers": [
+    "basic render driver",
+    "microsoft basic",
+    "llvmpipe",
+    "softpipe",
+    "swiftshader",
+    "software rasterizer",
+    "warp"
+  ],
+
+  // What is switched off when the frame rate is too low to keep, worst first.
+  "tiers": {
+    "high": {
+      "order": 0,
+      "label": "High",
+      "description": "The picture as authored.",
+      "render_scale": 1.0,
+      "map_smoothing": true,
+      "sun_shadows": true,
+      "city_labels": true,
+      "trade_traffic": true,
+      "weather": true,
+      "max_fps": 0
+    },
+    "balanced": {
+      "order": 1,
+      "label": "Balanced",
+      "description": "The same picture at 85 % of the pixels, which is invisible on most screens and a quarter of the fill cost.",
+      "render_scale": 0.85,
+      "map_smoothing": true,
+      "sun_shadows": true,
+      "city_labels": true,
+      "trade_traffic": true,
+      "weather": true,
+      "max_fps": 0
+    },
+    "low": {
+      "order": 2,
+      "label": "Low",
+      "description": "A cheaper map: no sun shadows, no city names, no weather. Country names and armies stay.",
+      "render_scale": 0.7,
+      "map_smoothing": true,
+      "sun_shadows": false,
+      "city_labels": false,
+      "trade_traffic": false,
+      "weather": false,
+      "max_fps": 60
+    },
+    "software": {
+      "order": 3,
+      "label": "Processor",
+      "description": "For a machine drawing the game without a graphics card: half the pixels, the flat raster, the strategic layers only, and a thirty-frame cap.",
+      "render_scale": 0.5,
+      "map_smoothing": false,
+      "sun_shadows": false,
+      "city_labels": false,
+      "trade_traffic": false,
+      "weather": false,
+      "max_fps": 30
+    }
+  },
+
+  // A frame slower than this counts towards stepping down; a frame faster than the second
+  // one counts towards stepping back up. 34 ms is twenty-nine frames a second, which is where
+  // a map that is being dragged stops feeling like a map.
+  "slow_frame_ms": 34.0,
+  "fast_frame_ms": 11.0,
+  "step_down_seconds": 4.0,
+  "step_up_seconds": 20.0
+}

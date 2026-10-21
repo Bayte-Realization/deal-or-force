@@ -41,6 +41,10 @@
   // top speed thirty days is a second and a half.
   "AutosaveMinimumSeconds": 120,
   "SaveTextFormat": false,
+  // Diagnostics only: walk every object in the snapshot before writing. Off because the
+  // weekly live-integrity gate plus the serializer's own refusal of NaN/Infinity already
+  // protect the last good save, and the full walk costs more than writing the file.
+  "SaveDeepIntegrity": false,
   "SecondsPerDay": 5,
   "GlobeRadius": 2600,
   "LandRelief": 26,

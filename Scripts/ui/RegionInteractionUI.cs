@@ -437,9 +437,16 @@ public partial class DealOrForceGame
             "Who holds it right now. An army takes control; a treaty takes ownership.",
             controller == owner ? "text.bright" : "state.warning");
         if (controller != owner && controller is not null && CanInspectNation(controller.Id))
+        {
             DetailRow("Occupation", Fmt.Percent(occupation),
                 "How firmly the occupier holds it. Above the secure threshold it can be kept at a peace.",
                 occupation >= _campaign.Defines.OccupationSecureThreshold ? "state.positive" : "state.warning");
+            var slip = Simulation.OccupationResistance.WeeklySlip(_campaign, _selectedProvinceId);
+            if (slip > 0f)
+                DetailRow("Resistance",
+                    Simulation.Loc.Format("slipping {0:P1} of the hold a week", slip / MathF.Max(0.0001f, occupation)),
+                    "Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further.");
+        }
 
         DetailHeading("GROUND");
         DetailRow("Neighbours", adjacent.Length.ToString("N0"),

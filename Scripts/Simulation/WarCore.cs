@@ -163,6 +163,25 @@ public sealed partial class StrategicWar
     /// <summary>How many countries are in it. Two is the ordinary war.</summary>
     public int BelligerentCount => 2 + AttackerAllies.Count + DefenderAllies.Count;
 
+    /// <summary>
+    /// Put a country on one side of an existing war. A leader cannot change sides, and a
+    /// member already on the other side is moved rather than counted twice.
+    /// </summary>
+    public void Join(int nationId, bool attacking)
+    {
+        if (nationId < 0 || nationId == AttackerId || nationId == DefenderId) return;
+        if (attacking)
+        {
+            DefenderAllies.Remove(nationId);
+            AttackerAllies.Add(nationId);
+        }
+        else
+        {
+            AttackerAllies.Remove(nationId);
+            DefenderAllies.Add(nationId);
+        }
+    }
+
     public IReadOnlySet<int> FriendlyFront(int nationId) =>
         IsAttacking(nationId) ? AttackerFront : IsDefending(nationId) ? DefenderFront : EmptyFront;
 
@@ -185,18 +204,45 @@ public static class WarNames
         if (war.Name.Length > 0 && Loc.Has(war.Name)) return Loc.Get(war.Name);
         var attacker = campaign?.NationById(war.AttackerId);
         var defender = campaign?.NationById(war.DefenderId);
+        if (attacker is null || defender is null) return Literal(war.Name);
         // A war against a rising of the country's own people is that country's civil war.
-        var rising = attacker?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? defender
-            : defender?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? attacker : null;
+        var rising = attacker.Name.StartsWith("rising:", StringComparison.Ordinal) ? defender
+            : defender.Name.StartsWith("rising:", StringComparison.Ordinal) ? attacker : null;
         if (rising is not null && war.CivilConflict)
             return Loc.Format("{0} Civil War", rising.DisplayName);
-        if (attacker is not null && defender is not null &&
-            (war.Name.Length == 0 || war.Name == $"{attacker.Name}–{defender.Name} War"))
-            return Loc.Format("{0}–{1} War", attacker.DisplayName, defender.DisplayName);
-        if (attacker is not null && defender is not null && war.Name == $"{attacker.Name}–{defender.Name} Border War")
-            return Loc.Format("{0}–{1} Border War", attacker.DisplayName, defender.DisplayName);
-        return war.Name;
+        // A secession is the same war seen from the other side: the parent state and the
+        // province that left it. Naming it after both countries reads as a tautology -
+        // "Gulf Union-Republic of East War" - when it is one country's civil war.
+        if (SeniorSide(war, attacker, defender) is { } senior)
+            return Loc.Format("{0} Civil War", senior.DisplayName);
+        // A pair name is rebuilt from today's names, not today's spellings of yesterday's.
+        if (IsPairName(war.Name) || NationNaming.LooksLikeKey(war.Name))
+            return Loc.Format(war.Name.EndsWith(" Border War", StringComparison.Ordinal)
+                ? "{0}–{1} Border War" : "{0}–{1} War", attacker.DisplayName, defender.DisplayName);
+        return Literal(war.Name);
     }
+
+    /// <summary>A stored name that is only a key is not a name.</summary>
+    private static string Literal(string name) =>
+        name.Length > 0 && !NationNaming.LooksLikeKey(name) ? name : "";
+
+    /// <summary>
+    /// The state a civil war is being fought over, or nothing when this is a war between
+    /// two separate countries. A breakaway names its parent; a parent names the breakaway.
+    /// </summary>
+    private static Nation SeniorSide(StrategicWar war, Nation attacker, Nation defender)
+    {
+        if (attacker.SecededFromId == defender.Id) return defender;
+        if (defender.SecededFromId == attacker.Id) return attacker;
+        if (!war.CivilConflict) return null;
+        if (WarAims.IsRebel(attacker) && !WarAims.IsRebel(defender)) return defender;
+        if (WarAims.IsRebel(defender) && !WarAims.IsRebel(attacker)) return attacker;
+        return defender;
+    }
+
+    /// <summary>A war the game wrote from two country names, rather than a history name.</summary>
+    private static bool IsPairName(string name) =>
+        name.EndsWith(" War", StringComparison.Ordinal) && name.Contains("\u2013", StringComparison.Ordinal);
 }
 
 public static class WarBootstrap
@@ -206,6 +252,7 @@ public static class WarBootstrap
         var russia = campaign.NationByTag("RUS");
         var ukraine = campaign.NationByTag("UKR");
         if (russia is null || ukraine is null) return;
+        campaign.MarkWarsChanged();
         campaign.Wars.Add(new StrategicWar
         {
             Id = 0,
@@ -455,6 +502,13 @@ public static partial class FrontPlanner
     {
         // Filtered by hand: the lambda captured the war, so this was a fresh closure and a
         // fresh enumerator for every one of the world's wars, every day.
+        //
+        // The doctrine is resolved once per country on a side, not once per division. Every
+        // division of a country is answered by the same profile, and this ran hourly for
+        // every war in the world - a quarter of a thousand lookups a day to arrive at a
+        // dozen answers. The profile is still read fresh for each country, so an army that
+        // has just lost its supply still switches to the defensive posture this hour.
+        var profiles = new Dictionary<int, AiStrategyDefinition>();
         foreach (var army in assigned)
         {
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
@@ -463,7 +517,8 @@ public static partial class FrontPlanner
             // A player's divisions are the player's - unless the general staff in the field
             // was handed over, in which case they march by the same rule as everybody else's.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
-            var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
+            if (!profiles.TryGetValue(nation.Id, out var profile))
+                profiles[nation.Id] = profile = AiStrategyCatalog.Resolve(campaign, war, nation);
             if (army.Planning < profile.ExecutePlanningThreshold && !Warfare.CanStartOpenAdvance(campaign, war, army)) continue;
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
         }
@@ -490,7 +545,16 @@ public static partial class FrontPlanner
         var score = attacking ? war.WarScore : -war.WarScore;
         var ours = attacking ? war.AttackerLosses : war.DefenderLosses;
         var theirs = attacking ? war.DefenderLosses : war.AttackerLosses;
-        if (score < -10f && ours > theirs * 3f && ours / MathF.Max(1f, nation.Population) > c.Defines.AiBleedingLossShare)
+        // Wars for existence are the exception to bleeding conservatively. A side whose own
+        // ground is under the enemy's boot does not get to sit the war out no matter what
+        // the losses say; an attacker who is actually taking ground is not "bleeding for
+        // nothing" either - the occupation is the point. The cut below is for futile
+        // bleeding, and futile is measured by the map, not by the casualty list.
+        var ownGroundGone = (attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue) >= 0.05f;
+        var gainingGround = war.DefenderOccupiedValue >= 0.02f || war.AttackerOccupiedValue >= 0.02f;
+        var bleeding = score < -10f && ours > theirs * 3f &&
+            ours / MathF.Max(1f, nation.Population) > c.Defines.AiBleedingLossShare;
+        if (bleeding && !(ownGroundGone || gainingGround))
         {
             pressing = false;
             share *= 0.2f;
@@ -501,7 +565,14 @@ public static partial class FrontPlanner
             // counter-offensives actively contest lost ground when the army is intact.
             var territoryThreatened = war.DefenderOccupiedValue > 0.005f || score < -2f;
             var canPress = ours <= theirs * 2.5f && nation.WarSupport >= 0.20f;
-            if (territoryThreatened && canPress)
+            if (ownGroundGone)
+            {
+                // A tenth of the country occupied is a war for existence: the counter-offensive
+                // becomes the majority posture, and the casualty list does not veto it.
+                pressing = true;
+                share = MathF.Max(share, canPress ? 0.55f : 0.45f);
+            }
+            else if (territoryThreatened && canPress)
             {
                 pressing = true;
                 share = MathF.Max(share, 0.45f);
@@ -513,11 +584,18 @@ public static partial class FrontPlanner
                 share = MathF.Max(share, 0.38f);
             }
         }
+        else if (ownGroundGone)
+        {
+            // An attacker whose own land is being taken while they attack abroad presses
+            // regardless of the ledger: the war at home is the one that matters.
+            pressing = true;
+            share = MathF.Max(share, 0.5f);
+        }
         return share;
     }
 
-    private static int AdvanceCount(int count, float share, bool attacking) =>
-        Math.Min(count, Math.Max(share > 0 && count > 0 && (attacking || count <= 3) ? 1 : 0, (int)MathF.Round(count * share)));
+    private static int AdvanceCount(int count, float share, bool pressingOrAttacking) =>
+        Math.Min(count, Math.Max(share > 0 && count > 0 && (pressingOrAttacking || count <= 3) ? 1 : 0, (int)MathF.Round(count * share)));
 
     /// <summary>Fill missing roles with a replacement without reordering formations already marching.</summary>
     internal static void GiveIdleRole(Campaign c, Army army)
@@ -750,7 +828,7 @@ public static partial class FrontPlanner
         // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
         // the cure is not here. It is that a division should be re-posted when its post has
         // stopped being useful, not when the list it came from was rebuilt.
-        armies.Sort((a, b) => b.Power.CompareTo(a.Power));
+        armies.Sort((a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
 
         var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
         var advance = AdvanceCount(armies.Count, advanceShare, pressing);

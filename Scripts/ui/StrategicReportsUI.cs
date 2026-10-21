@@ -50,9 +50,37 @@ public partial class DealOrForceGame
             card.AddChild(Title($"{entry.Date.Day:D2}.{entry.Date.Month:D2}.{entry.Date.Year} · {entry.Date.Hour:D2}:00", 12, Ui.Colour("text.accent_dim")));
             var key = "chronicle." + entry.Kind;
             card.AddChild(Title(Simulation.Loc.Format(key, Tr(entry.ActorName), Tr(entry.TargetName), Tr(entry.Subject), Tr(entry.Place)), 15, Ui.Colour("text.body")));
+            var actions = new HBoxContainer();
+            actions.AddThemeConstantOverride("separation", 8);
             var actor = _campaign.NationById(entry.ActorId);
-            if (actor is not null) card.AddChild(ActionButton("Locate country", () =>
-            { CloseLedger(); _globe.SetMapModeSubject(actor); _globe.FocusOn(actor.CapitalLatitude, actor.CapitalLongitude, 6.8f); }, 160, 30));
+            if (actor is not null) actions.AddChild(ActionButton("Locate country", () =>
+            { CloseLedger(); _globe.SetMapModeSubject(actor); _globe.FocusOn(actor.CapitalLatitude, actor.CapitalLongitude, 6.8f); }, 150, 30));
+            var target = _campaign.NationById(entry.TargetId);
+            if (target is not null && target.Id != entry.ActorId)
+                actions.AddChild(ActionButton("Locate counterpart", () =>
+                { CloseLedger(); _globe.SetMapModeSubject(target); _globe.FocusOn(target.CapitalLatitude, target.CapitalLongitude, 6.8f); }, 165, 30));
+            if (!string.IsNullOrWhiteSpace(entry.Place))
+            {
+                var region = _campaign.States.FirstOrDefault(s =>
+                    string.Equals(s.Name, entry.Place, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(s.DisplayName, entry.Place, StringComparison.OrdinalIgnoreCase));
+                if (region is not null && _campaign.ProvinceMap is not null)
+                {
+                    var prov = Enumerable.Range(1, _campaign.ProvinceMap.ProvinceCount)
+                        .FirstOrDefault(p => _campaign.ProvinceMap.ProvinceToState[p] == region.MapIndex);
+                    if (prov > 0)
+                    {
+                        var center = _campaign.ProvinceMap.CenterOf(prov);
+                        actions.AddChild(ActionButton("Jump to hotspot", () =>
+                        {
+                            CloseLedger();
+                            _selectedState = region;
+                            _globe.FocusOn(center.Latitude, center.Longitude, 7.5f);
+                        }, 155, 30));
+                    }
+                }
+            }
+            if (actions.GetChildCount() > 0) card.AddChild(actions);
         }
         var paging = new HBoxContainer();
         _ledgerReportRows.AddChild(paging);

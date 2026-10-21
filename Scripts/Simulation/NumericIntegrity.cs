@@ -105,6 +105,16 @@ public static class NumericIntegrity
         foreach (var a in c.Armies) { var issue = ScalarIssue(a, "army " + a.Id); if (issue is not null) return issue; }
         foreach (var b in c.Battles) { var issue = ScalarIssue(b, "battle " + b.Id); if (issue is not null) return issue; }
         foreach (var w in c.Wars) { var issue = ScalarIssue(w, "war " + w.Id); if (issue is not null) return issue; }
+        foreach (var f in c.Fleets) { var issue = ScalarIssue(f, "fleet " + f.Id); if (issue is not null) return issue; }
+        foreach (var f in c.SupportFormations) { var issue = ScalarIssue(f, "support " + f.Id); if (issue is not null) return issue; }
+        if (c.ProvinceOccupation is { } occupation)
+            for (var index = 0; index < occupation.Length; index++)
+                if (!float.IsFinite(occupation[index])) return "occupation[" + index + "]";
+        foreach (var relation in c.Relations.Values)
+        {
+            var issue = ScalarIssue(relation, "relation");
+            if (issue is not null) return issue;
+        }
         return null;
     }
 

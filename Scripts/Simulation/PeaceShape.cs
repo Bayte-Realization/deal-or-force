@@ -46,11 +46,23 @@ public static class PeaceShape
     /// <summary>The argument a winner makes for what it takes, one per war.</summary>
     public enum Aim { People, Sea, Buffer, Wealth }
 
-    public static Aim AimOf(Campaign campaign, StrategicWar war, Nation winner) =>
-        (war.IsAttacking(winner.Id) && war.Justification == "irredentism") ||
-        (!war.Limited && campaign.States.Any(s=>war.EnemiesOf(winner.Id).Any(id=>campaign.NationById(id)?.MapIndex==s.NationMapIndex) &&
-            AiStatecraft.ConsolidationAim(campaign,winner,s))) ? Aim.People :
-        (Aim)(int)(MovementRules.Roll(campaign.Seed, winner.Id, war.Id, 4242) * 4f % 4f);
+    public static Aim AimOf(Campaign campaign, StrategicWar war, Nation winner)
+    {
+        if (war is null || winner is null) return Aim.Wealth;
+        if (war.CivilConflict || WarAims.IsRebel(winner)) return Aim.People;
+        if ((war.IsAttacking(winner.Id) && war.Justification is "irredentism" or "reconquest") ||
+            (!war.Limited && campaign.States.Any(s => war.EnemiesOf(winner.Id).Any(id =>
+                campaign.NationById(id)?.MapIndex == s.NationMapIndex) && AiStatecraft.ConsolidationAim(campaign, winner, s))))
+            return Aim.People;
+        // A border incident and a coalition war are about the shape of the frontier, not
+        // about a particular people; a total war is fought over the country itself.
+        return WarAims.Of(campaign, war, winner) switch
+        {
+            WarAimKind.Limited or WarAimKind.Coalition => Aim.Buffer,
+            WarAimKind.Total => Aim.People,
+            _ => (Aim)(int)(MovementRules.Roll(campaign.Seed, winner.Id, war.Id, 4242) * 4f % 4f)
+        };
+    }
 
     // ------------------------------------------------------------------ the map of regions --
 
@@ -257,9 +269,7 @@ public static class PeaceShape
         var aim = AimOf(campaign, war, winner);
 
         // What the winner stands on, region by region, and what each region is worth to it.
-        var winnerCultures = new HashSet<string>(
-            (IEnumerable<string>)DemographyCatalog.PrimarySet(winner.Tag) ?? winner.FoundedCultures ?? new List<string>(),
-            StringComparer.OrdinalIgnoreCase);
+        var winnerCultures = WarAims.Cultures(winner);
         var winnerRegions = campaign.States.Where(state => state.NationMapIndex == winner.MapIndex).Select(state => state.MapIndex).ToHashSet();
         var anchors = Anchors(campaign, graph, winner, winnerRegions);
         var landlocked = !winnerRegions.Any(graph.Coastal.Contains);
@@ -272,7 +282,10 @@ public static class PeaceShape
             var goal = state.MapIndex == war.ClaimedStateMapIndex;
             var ours = CultureShare(state, winnerCultures);
             var wasOurs = TerritorialClaims.TitleOf(campaign, winner, state) == TerritorialTitle.Homeland;
-            if (!goal && held < defines.PeaceShapeOccupiedShare && !(wasOurs && held > 0f) && !(ours > 0.5f && held > 0.1f)) continue;
+            var rebelWeight = WarAims.ClaimWeight(campaign, war, winner, state);
+            var rebelClaim = rebelWeight > 0f;
+            if (!goal && held < defines.PeaceShapeOccupiedShare && !(wasOurs && held > 0f) &&
+                !(ours > 0.5f && held > 0.1f) && !rebelClaim) continue;
 
             var perProvince = state.Population / MathF.Max(1f, provinces.Count);
             var value = (state.Population / 1_000_000f + 0.05f) * (0.20f + perProvince / 100_000f) * (0.35f + held);
@@ -288,6 +301,7 @@ public static class PeaceShape
                 value *= 0.6f + MathF.Min(2f, built / MathF.Max(1f, state.Population / 1_000_000f) * 0.1f);
             }
             if (goal) value *= 5f;
+            if (rebelClaim) value *= rebelWeight;
             if (aim == Aim.People && ours > .5f &&
                 losers.Any(loser => loser.CapitalStateMapIndex == state.MapIndex)) value *= 3f;
             // And the part of any decision nobody can quite explain afterwards.
@@ -589,6 +603,14 @@ public static class PeaceShape
             while (queue.Count > 0)
                 foreach (var next in Touching(graph, queue.Dequeue()))
                     if (chosen.Contains(next) && reached.Add(next)) queue.Enqueue(next);
+            foreach (var loserIndex in loserIndices)
+            {
+                var before = campaign.States.Where(state => state.NationMapIndex == loserIndex).Select(state => state.MapIndex).ToHashSet();
+                if (before.Count == 0 || !before.All(chosen.Contains) || !reached.Overlaps(before)) continue;
+                var loser = campaign.Nations.Find(nation => nation.MapIndex == loserIndex);
+                if (loser is not null && Reintegration.CanAnnexWhole(campaign, war, winner, loser))
+                    foreach (var region in before) reached.Add(region);
+            }
             foreach (var region in chosen.Where(region => !reached.Contains(region)).ToList())
             {
                 chosen.Remove(region);

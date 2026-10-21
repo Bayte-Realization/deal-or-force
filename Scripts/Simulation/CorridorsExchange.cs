@@ -56,7 +56,7 @@ public static partial class Corridors
         var parts = Pieces(c, nation);
         if (parts.Count < 2) return false;
         var limit = Math.Max(1, c.Defines.EnclaveSwapMaxProvinces);
-        var authored = new HashSet<int>(ProvinceOwnership.ProvincesOf(nation.Tag));
+        var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
         var best = int.MaxValue;
         foreach (var piece in parts.Skip(1))
         {
@@ -66,7 +66,7 @@ public static partial class Corridors
             if (holder.Movement is not null || holder.Population <= 0) continue;
             var theirParts = Pieces(c, holder);
             if (theirParts.Count < 2) continue;
-            var theirAuthored = new HashSet<int>(ProvinceOwnership.ProvincesOf(holder.Tag));
+            var theirAuthored = ProvinceOwnership.ProvinceSetOf(holder.Tag);
             foreach (var theirs in theirParts.Skip(1))
             {
                 if (theirs.Count > limit || Authored(theirs, theirAuthored)) continue;

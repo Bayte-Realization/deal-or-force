@@ -1,5 +1,13 @@
 {
   "assets": {
+    "quiet_horizon": {
+      "name": "Quiet horizon",
+      "purpose": "A new warm instrumental with no bells requested. Manual audition; automatic peace-time rotation is unchanged.",
+      "kind": "music",
+      "file": "music/audio/quiet_horizon.mp3",
+      "volume_db": -5.5,
+      "source": "CreativeClaw · ElevenLabs Music v2.5 · generated instrumental"
+    },
     "quiet_current": {
       "name": "Quiet current",
       "purpose": "A low, warm peace-time groove. Soft-timbre alternative to the earlier recordings.",

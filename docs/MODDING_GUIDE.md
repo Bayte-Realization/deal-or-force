@@ -1226,6 +1226,47 @@ largest when left out). A war over ground of the country's own homeland - the re
 when the world first saw it - is declared as a reconquest, which is a justified war.
 `renounce_claim` strikes a region off the country's homeland for good.
 
+### Dated history: any era, not only 2024
+
+`events/*.json` uses the same event format plus a `date`. The
+campaign reads it on that date, checks the ordinary `trigger` for each country and
+applies the same `options`/`effects`; the player sees the card, an AI takes
+`ai_option`. Set `Defines.StartYear` in a scenario or mod to open in another era -
+1789, 1444 or -0300 (300 BCE) - and the same files can carry revolutions, successions,
+councils or leagues. No C# change is needed for a new date; a date before the common
+era is written `-0300-01-01`, not forced through year one.
+
+```json
+{
+  "a_dated_crisis": {
+    "title": "A dated crisis",
+    "description": "What happened, in prose.",
+    "date": "1789-07-14",
+    "window_days": 30,
+    "trigger": { "tags": ["FRA"] },
+    "ai_option": 1,
+    "options": [
+      { "title": "Reform", "effects": { "stability": 0.03 } },
+      { "title": "Resist", "effects": { "stability": -0.07 } }
+    ]
+  }
+}
+```
+
+- `date` is `YYYY-MM-DD` (or `year`/`month`/`day`); `window_days` is how long a
+  missed event may still fire; `repeat_days` makes it recur from that anchor.
+- An event with no `options` applies its root `effects` directly.
+- Firing is remembered per country in the saved `EventMemory`; a reload cannot
+  deal the same one-shot twice.
+- The engine does not create states or change governments by itself. Use the
+  existing commands/mod hooks for those, or extend the effect vocabulary.
+- A 2024 campaign never fires a 1789 event merely because the file exists; the
+  date window is the gate.
+
+The shipped `00_long_century.json` is a proof pack, not a claim to have written
+every event of the period. A total-conversion mod can replace it with its own
+eras; the loader reads every file in the folder.
+
 ### Lost lands
 
 A region a country held at the start and does not hold now - it seceded, rose under a

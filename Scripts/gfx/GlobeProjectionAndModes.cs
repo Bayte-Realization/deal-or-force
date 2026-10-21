@@ -118,12 +118,16 @@ public sealed partial class GlobePresentation
     }
     private StrategicMapMode _mapMode;
     private ImageTexture _mapModeTexture;
+    private Image _mapModeImage;
+    private byte[] _mapModePixels;
     private int _lastMapModeDay = int.MinValue;
 
     public bool IsFlatMap => _flatMap;
     public StrategicMapMode MapMode => _mapMode;
     private Commodity _resourceGood = Commodity.Coal;
     private ImageTexture _resourceTexture;
+    private Image _resourceImage;
+    private byte[] _resourcePixels;
     public Commodity ResourceGood => _resourceGood;
     public void SetResourceGood(Commodity good)
     {
@@ -133,7 +137,8 @@ public sealed partial class GlobePresentation
 
     private void RefreshResourcePalette()
     {
-        var pixels = new byte[256 * 256 * 4];
+        var pixels = _resourcePixels ??= new byte[256 * 256 * 4];
+        Array.Clear(pixels);
         var survey = ResourceAtlas.Read(_campaign, _resourceGood, InterfaceSkin.Metric("resources.minimum_potential", .05f));
         var levels = survey.Regions.ToDictionary(r => r.MapIndex, r => r.Intensity);
         var map = _campaign.ProvinceMap;
@@ -149,9 +154,10 @@ public sealed partial class GlobePresentation
                 pixels[i + 2] = (byte)Mathf.RoundToInt(colour.B * 255);
                 pixels[i + 3] = 255;
             }
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(image);
-        else _resourceTexture.Update(image);
+        if (_resourceImage is null) _resourceImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _resourceImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(_resourceImage);
+        else _resourceTexture.Update(_resourceImage);
         _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
@@ -311,10 +317,43 @@ public sealed partial class GlobePresentation
         var topology = _campaign?.ProvinceMap;
         if (topology is not null && stack.Count > 0 && stack[0].ProvinceId > 0 &&
             stack[0].ProvinceId <= topology.ProvinceCount)
-            // A counter represents one occupied province, even when some members
-            // are marching. Averaging their interpolated routes would drag the entire
-            // stack (including stationary members) away from its authoritative centre.
-            return topology.CenterOf(stack[0].ProvinceId);
+        {
+            // When the entire stack is actively marching along the same route step,
+            // smoothly interpolate its visual card position from its province centre
+            // toward the next province so divisions glide across the map instead of
+            // jumping abruptly between provinces. Stationary stacks stay at the exact
+            // province centre.
+            var start = topology.CenterOf(stack[0].ProvinceId);
+            var nextProvince = stack[0].Route.Count > 0 ? stack[0].Route[0] : -1;
+            if (nextProvince > 0 && nextProvince <= topology.ProvinceCount)
+            {
+                var allMarchingSameStep = true;
+                var progressSum = 0f;
+                for (var i = 0; i < stack.Count; i++)
+                {
+                    var a = stack[i];
+                    if (a.Route.Count == 0 || a.Route[0] != nextProvince || a.MoveProgress <= 0.001f)
+                    {
+                        allMarchingSameStep = false;
+                        break;
+                    }
+                    progressSum += a.MoveProgress;
+                }
+                if (allMarchingSameStep)
+                {
+                    var next = topology.CenterOf(nextProvince);
+                    var t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp(progressSum / stack.Count, 0f, 1f));
+                    var dLon = next.Longitude - start.Longitude;
+                    if (dLon > 180f) dLon -= 360f;
+                    else if (dLon < -180f) dLon += 360f;
+                    var lon = start.Longitude + dLon * t;
+                    if (lon > 180f) lon -= 360f;
+                    else if (lon <= -180f) lon += 360f;
+                    return (Mathf.Lerp(start.Latitude, next.Latitude, t), lon);
+                }
+            }
+            return start;
+        }
         return AverageArmyLocation(stack);
     }
 
@@ -341,9 +380,9 @@ public sealed partial class GlobePresentation
         foreach (var marker in _armyStacks.Values)
             if (IsInstanceValid(marker.Node))
             {
-                var position = ArmyMarkerPosition(marker);
-                if (marker.Node.Position != position) marker.Node.Position = position;
-                OrientSurfaceArmyCard(marker);
+                // Per-frame flat updates only write the target; the projection switch snaps
+                // both values through SnapArmyMarkerPositions before this method is used.
+                marker.TargetPosition = ArmyMarkerPosition(marker);
             }
         if (FlatViewInMotion) QueueRedraw();
         foreach (var glyph in _countryGlyphs)
@@ -362,6 +401,7 @@ public sealed partial class GlobePresentation
         if (_flatMap)
         {
             UpdateFlatWorldPositions();
+            SnapArmyMarkerPositions();
             return;
         }
 
@@ -370,12 +410,7 @@ public sealed partial class GlobePresentation
         foreach (var (node, normal) in _fleetMarkers)
             if (IsInstanceValid(node)) node.Position = normal * SurfaceMarkerRadius;
         ReprojectSupportMarkers();
-        foreach (var marker in _armyStacks.Values)
-            if (IsInstanceValid(marker.Node))
-            {
-                marker.Node.Position = ArmyPresentationPoint(marker.Stack);
-                OrientSurfaceArmyCard(marker);
-            }
+        SnapArmyMarkerPositions();
         foreach (var glyph in _countryGlyphs)
         {
             if (!IsInstanceValid(glyph.Node)) continue;
@@ -445,14 +480,21 @@ public sealed partial class GlobePresentation
             return;
         }
 
-        var pixels = new byte[256 * 256 * 4];
-        var knownNations = _campaign.Nations.Where(n => CanShowMilitary(n.Id)).ToArray();
-        var populationLogs = knownNations.Select(nation => Math.Log10(Math.Max(1, nation.Population))).DefaultIfEmpty(0).ToArray();
-        var gdpLogs = knownNations.Select(nation => Math.Log10(Math.Max(0.01, nation.Gdp))).DefaultIfEmpty(0).ToArray();
-        var minPopulation = populationLogs.Min();
-        var maxPopulation = populationLogs.Max();
-        var minGdp = gdpLogs.Min();
-        var maxGdp = gdpLogs.Max();
+        var pixels = _mapModePixels ??= new byte[256 * 256 * 4];
+        Array.Clear(pixels);
+        double minPopulation = double.MaxValue, maxPopulation = double.MinValue;
+        double minGdp = double.MaxValue, maxGdp = double.MinValue;
+        foreach (var nation in _campaign.Nations)
+        {
+            if (!CanShowMilitary(nation.Id)) continue;
+            var popLog = Math.Log10(Math.Max(1, nation.Population));
+            var gdpLog = Math.Log10(Math.Max(0.01, nation.Gdp));
+            if (popLog < minPopulation) minPopulation = popLog;
+            if (popLog > maxPopulation) maxPopulation = popLog;
+            if (gdpLog < minGdp) minGdp = gdpLog;
+            if (gdpLog > maxGdp) maxGdp = gdpLog;
+        }
+        if (minPopulation == double.MaxValue) minPopulation = maxPopulation = minGdp = maxGdp = 0;
 
         foreach (var nation in _campaign.Nations)
         {
@@ -466,13 +508,14 @@ public sealed partial class GlobePresentation
             pixels[write + 3] = 255;
         }
 
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        if (_mapModeImage is null) _mapModeImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _mapModeImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
         if (_mapModeTexture is null)
         {
-            _mapModeTexture = ImageTexture.CreateFromImage(image);
+            _mapModeTexture = ImageTexture.CreateFromImage(_mapModeImage);
             _globeMaterial.SetShaderParameter("map_mode_colors", _mapModeTexture);
         }
-        else _mapModeTexture.Update(image);
+        else _mapModeTexture.Update(_mapModeImage);
         _globeMaterial.SetShaderParameter("map_mode", 1f);
     }
 
@@ -485,22 +528,24 @@ public sealed partial class GlobePresentation
         {
             case StrategicMapMode.Diplomatic:
                 if (nation == player) return Ui.Colour("map.player");
-                var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+                var relation = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
                 if (CampaignDiplomacy.AtWar(_campaign, player.Id, nation.Id)) return Ui.Colour("map.at_war");
                 // A defence bloc is an alliance on the map whatever the treaty table says: NATO's
                 // members are bound through the organization, not forty bilateral pacts.
                 if (InternationalOrganizations.DefencePartners(_campaign, player.Id).Contains(nation.Id))
                     return Ui.Colour("map.allied");
-                var together = relation.Stance != DiplomaticStance.Rival &&
+                var stance = relation?.Stance ?? DiplomaticStance.Neutral;
+                var opinion = relation?.Opinion ?? 0f;
+                var together = stance != DiplomaticStance.Rival &&
                     InternationalOrganizations.Memberships(_campaign, player.Id).Any(o => o.Members.Contains(nation.Id));
-                return relation.Stance switch
+                return stance switch
                 {
-                    _ when together && relation.Stance != DiplomaticStance.Allied && relation.Stance != DiplomaticStance.Friendly =>
+                    _ when together && stance != DiplomaticStance.Allied && stance != DiplomaticStance.Friendly =>
                         Ui.Colour("map.friendly").Lerp(Ui.Colour("map.neutral"), 0.45f),
                     DiplomaticStance.Allied => Ui.Colour("map.allied"),
                     DiplomaticStance.Friendly => Ui.Colour("map.friendly"),
                     DiplomaticStance.Rival => Ui.Colour("map.rival"),
-                    _ => Color.FromHsv(0.58f, 0.10f, Mathf.Clamp(0.46f + relation.Opinion / 500f, 0.30f, 0.65f))
+                    _ => Color.FromHsv(0.58f, 0.10f, Mathf.Clamp(0.46f + opinion / 500f, 0.30f, 0.65f))
                 };
             case StrategicMapMode.Wars:
                 if (nation == player) return Ui.Colour("map.war_self");

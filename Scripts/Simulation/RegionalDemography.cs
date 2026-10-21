@@ -1,30 +1,33 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
-/// <summary>A dated observation, not a second, live population model.</summary>
-public sealed record DemographicArea(string Name, int Page, long Population,
-    IReadOnlyDictionary<string, long> Counts, long Unmapped);
-
+/// <summary>
+/// One published observation of a region's people: a date, a source, and the head-counts a
+/// census or survey actually recorded.
+///
+/// Absolute head-counts, not percentages. Averaging shares would let a district of two
+/// thousand people outvote a province of two million, and the whole point of citing a source
+/// is that the numbers are the ones that were published.
+/// </summary>
 public sealed class DemographicReference
 {
-    public string RegionId { get; }
-    public DateOnly Date { get; }
-    public string Source { get; }
-    public string Url { get; }
-    public string Table { get; }
-    public IReadOnlyList<DemographicArea> Areas { get; }
-    public long Population { get; }
-    public long Mapped { get; }
-    public long Unmapped { get; }
-    public long Unlisted => Population - Mapped - Unmapped;
-    public double Coverage => Mapped / (double)Population;
-    public IReadOnlyList<(string Culture, float Share)> CultureMix { get; }
+    public string RegionId = "";
+    public DateOnly Date;
+    public string Source = "";
+    public string Url = "";
+    public string Table = "";
+    public long Population;
+    public long Mapped;
+    public long Unmapped;
+    public long Unlisted => Math.Max(0L, Population - Mapped - Unmapped);
+    public float Coverage => Population <= 0 ? 0f : (float)(Mapped / (double)Population);
+    public IReadOnlyList<DemographicArea> Areas = Array.Empty<DemographicArea>();
+    public IReadOnlyList<(string Culture, float Share)> CultureMix = Array.Empty<(string, float)>();
 
     internal DemographicReference(string regionId, DateOnly date, string source, string url,
         string table, List<DemographicArea> areas)
@@ -53,11 +56,31 @@ public sealed class DemographicReference
 /// </summary>
 public static class RegionalDemography
 {
-    private static readonly Dictionary<string, DemographicReference> References = new(StringComparer.Ordinal);
-    static RegionalDemography() => ResetCatalog();
+    private static readonly Dictionary<string, DemographicReference> References = new(StringComparer.OrdinalIgnoreCase);
+    private static bool _loaded;
 
-    public static DemographicReference Find(string regionId) =>
-        regionId is not null && References.TryGetValue(regionId, out var reference) ? reference : null;
+    /// <summary>
+    /// Read the catalogue the first time anything asks for it, and never from a static
+    /// constructor.
+    ///
+    /// A static constructor runs the moment any member of this type is touched, which for a
+    /// catalogue this size was in the middle of seeding a world's economy - the point where
+    /// the process had the most already allocated - and it took the whole suite down with an
+    /// out-of-memory. Loading on first use puts it where every other catalogue loads, and
+    /// where a caller can see it happen.
+    /// </summary>
+    private static void EnsureLoaded()
+    {
+        if (_loaded) return;
+        _loaded = true;
+        ResetCatalog();
+    }
+
+    public static DemographicReference Find(string regionId)
+    {
+        EnsureLoaded();
+        return regionId is not null && References.TryGetValue(regionId, out var reference) ? reference : null;
+    }
 
     /// <summary>Split regions inherit a reference at the parent's scale, not a new local census.</summary>
     public static DemographicReference ReferenceFor(Campaign campaign, ScenarioState state)
@@ -70,6 +93,7 @@ public static class RegionalDemography
 
     public static void ResetCatalog()
     {
+        _loaded = true;
         References.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "regional_demography"))
             using (document) Merge(document.RootElement, null);
@@ -106,41 +130,60 @@ public static class RegionalDemography
             var name = Text(area, "name");
             if (!names.Add(name)) throw new FormatException("duplicate observation area: " + name);
             var page = Number(area, "page");
-            if (page is < 1 or > int.MaxValue) throw new FormatException("page must be positive.");
-            var population = Number(area, "population");
-            if (population <= 0) throw new FormatException("population must be positive.");
-            var unmapped = Number(area, "unmapped");
-            if (!area.TryGetProperty("counts", out var entries) || entries.ValueKind != JsonValueKind.Object ||
-                entries.EnumerateObject().Count() > 512) throw new FormatException("counts must contain at most 512 cultures.");
-            var counts = new Dictionary<string, long>(StringComparer.Ordinal);
-            var total = unmapped;
-            foreach (var count in entries.EnumerateObject())
+            if (page < 0) throw new FormatException("page must not be negative.");
+            var population = Long(area, "population");
+            if (population < 0) throw new FormatException("population must not be negative.");
+            var unmapped = Long(area, "unmapped");
+            if (unmapped < 0 || unmapped > population) throw new FormatException("unmapped must be between zero and the area's population.");
+            var counts = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            if (area.TryGetProperty("counts", out var observed) && observed.ValueKind == JsonValueKind.Object)
             {
-                if (DemographyCatalog.Culture(count.Name) is null || count.Value.ValueKind != JsonValueKind.Number ||
-                    !count.Value.TryGetInt64(out var people) || people < 0 || !counts.TryAdd(count.Name, people))
-                    throw new FormatException("invalid or duplicate culture count: " + count.Name);
-                total = checked(total + people);
+                foreach (var entry in observed.EnumerateObject())
+                {
+                    if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                    if (DemographyCatalog.Culture(entry.Name) is null)
+                        throw new FormatException($"unknown culture '{entry.Name}'.");
+                    var people = Count(entry.Value, entry.Name);
+                    if (people < 0) throw new FormatException($"count '{entry.Name}' must not be negative.");
+                    counts[entry.Name] = people;
+                }
             }
-            if (total > population || total == unmapped) throw new FormatException("counts must be positive in sum and not exceed population.");
-            areas.Add(new DemographicArea(name, (int)page, population,
-                new ReadOnlyDictionary<string, long>(counts), unmapped));
+            var total = counts.Values.Sum();
+            if (total + unmapped > population) throw new FormatException("counted and unmapped people exceed the area's population.");
+            areas.Add(new DemographicArea(name, page, population, unmapped, counts));
         }
+        if (areas.Count == 0) throw new FormatException("at least one observation area is required.");
         return new DemographicReference(id, date, source, url, table, areas);
     }
 
-    private static string Text(JsonElement value, string key)
+    private static string Text(JsonElement value, string property) =>
+        value.TryGetProperty(property, out var text) && text.ValueKind == JsonValueKind.String
+            ? (text.GetString() ?? "").Trim() : "";
+
+    private static long Long(JsonElement value, string property)
     {
-        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(key, out var field) ||
-            field.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(field.GetString()))
-            throw new FormatException(key + " must be non-empty text.");
-        return field.GetString();
+        if (!value.TryGetProperty(property, out var number)) return 0;
+        if (number.ValueKind != JsonValueKind.Number || !number.TryGetInt64(out var count) || count < 0)
+            throw new FormatException($"{property} must be a non-negative whole number.");
+        return count;
     }
 
-    private static long Number(JsonElement value, string key)
+    private static long Count(JsonElement value, string name)
     {
-        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(key, out var field) ||
-            field.ValueKind != JsonValueKind.Number || !field.TryGetInt64(out var number) || number < 0)
-            throw new FormatException(key + " must be a non-negative integer.");
-        return number;
+        if (value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out var count) || count < 0)
+            throw new FormatException($"count '{name}' must be a non-negative whole number.");
+        return count;
+    }
+
+    private static float Number(JsonElement value, string property)
+    {
+        if (!value.TryGetProperty(property, out var number)) return 0f;
+        if (number.ValueKind != JsonValueKind.Number || !number.TryGetSingle(out var page) || page < 0f || !float.IsFinite(page))
+            throw new FormatException($"{property} must be a non-negative number.");
+        return page;
     }
 }
+
+/// <summary>One area a source observed: a province, a district, a survey stratum.</summary>
+public sealed record DemographicArea(string Name, float Page, long Population, long Unmapped,
+    IReadOnlyDictionary<string, long> Counts);

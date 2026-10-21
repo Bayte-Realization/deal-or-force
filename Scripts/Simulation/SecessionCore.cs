@@ -67,6 +67,8 @@ public sealed class SecessionWeights
     public float MaximumShare = 0.40f;
 
     public int MilitiaFormations = 4;
+
+
     public float Stability = 0.42f;
     public float WarSupport = 0.80f;
 
@@ -348,6 +350,14 @@ public static class SecessionCore
         foreach (var army in campaign.Armies)
             if (army.NationId == parent.Id) divisions += army.Divisions;
         accept -= M.Clamp01(divisions / M.Max(1f, weights.ArmyResolveDivisions)) * weights.ArmyResolve;
+
+        // Heartland: a state resists its own titular people breaking away far more fiercely.
+        var primaryCultures = DemographyCatalog.PrimaryCultures(parent.Tag);
+        if (primaryCultures.Count > 0 && leaving.Any(p =>
+            EconomySystem.Cultures(campaign.States.Find(s => s.MapIndex == p.MapIndex)).Any(group => primaryCultures.Contains(group.Culture))))
+        {
+            accept -= 0.35f;
+        }
 
         accept = M.Clamp01(accept);
         var accepted = campaign.Random.NextFloat() < accept;

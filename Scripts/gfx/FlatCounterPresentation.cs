@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Godot;
 
 namespace DealOrForce;
@@ -17,7 +18,144 @@ public sealed partial class GlobePresentation
 
     // Geography is authoritative. Collision avoidance must never move a division
     // counter away from its province or merge it with a neighbouring province.
-    private Vector3 ArmyMarkerPosition(ArmyStackMarker marker) => ArmyPresentationPoint(marker.Stack);
+    private Vector3 ArmyMarkerPosition(ArmyStackMarker marker)
+    {
+        var position = ArmyPresentationPoint(marker.Stack);
+        // Several countries can stand in one province. Their counters stay anchored to that
+        // province, but a small deterministic fan-out keeps two flags from occupying exactly
+        // the same pixels. The offset is presentation only; click, province and save data
+        // continue to use the army's real province.
+        if (_flatMap && marker.LayoutOffset != Vector2.Zero)
+            position += new Vector3(marker.LayoutOffset.X, -marker.LayoutOffset.Y, 0f) *
+                (_camera.Size / Math.Max(1f, Size.Y));
+        return position;
+    }
+
+    /// <summary>
+    /// The one place a counter's size is decided, so a counter is never drawn at a size the
+    /// frame's own layout pass would not choose.
+    ///
+    /// `SizeArmyCounter` used to scale by `_counterWorldPixel` alone while `UpdateCounterScale`
+    /// scaled by `_counterWorldPixel * _counterFlatFar`. A counter created or re-laid-out
+    /// between the two was therefore drawn at the full, un-foreshortened size for a frame or
+    /// two before the next pass pulled it back - which is exactly the momentary swell a player
+    /// sees when a division crosses a border and a new counter appears next to its neighbours.
+    /// </summary>
+    private void ApplyArmyCounterScale(ArmyStackMarker marker)
+    {
+        if (marker.Node is null || !IsInstanceValid(marker.Node)) return;
+        marker.Node.Scale = Vector3.One * _counterWorldPixel * _counterFlatFar;
+    }
+
+    /// <summary>
+    /// Ease every counter toward where it belongs. Called every frame, not on the tenth-of-a-
+    /// second visual cadence, because the whole point is that motion is continuous.
+    ///
+    /// The counter's target is geography and is written by the reconcile pass; this only moves
+    /// the drawn node toward it. A counter that is already there costs one comparison, and one
+    /// that has just been created snaps rather than flying in from wherever it was spawned.
+    /// </summary>
+    private void UpdateArmyMarkerMotion(float delta)
+    {
+        if (!IsInstanceValid(_armyRoot) || _armyStacks.Count == 0) return;
+        // Frame-rate independent ease: the same glide at 30fps and at 144fps. The constant is
+        // how much of the remaining distance is covered per 60th of a second.
+        var blend = 1f - MathF.Exp(-delta * 6.5f);
+        blend = Mathf.Clamp(blend, 0f, 1f);
+        foreach (var marker in _armyStacks.Values)
+        {
+            var node = marker.Node;
+            if (node is null || !IsInstanceValid(node)) continue;
+            if (!marker.MotionSettled)
+            {
+                // A brand-new counter appears where it belongs. Nothing flies in from nowhere.
+                marker.DisplayPosition = marker.TargetPosition;
+                marker.MotionSettled = true;
+                node.Position = marker.DisplayPosition;
+                continue;
+            }
+            var remaining = marker.TargetPosition - marker.DisplayPosition;
+            if (remaining.LengthSquared() < 1e-10f) continue;
+            // A camera pan or zoom moves the target of a stationary counter every frame. That
+            // is not the formation marching, and easing it would make the whole map swim.
+            if (!marker.Stack.Any(army => army.IsMoving && army.Route.Count > 0))
+            {
+                marker.DisplayPosition = marker.TargetPosition;
+                node.Position = marker.DisplayPosition;
+                OrientSurfaceArmyCard(marker);
+                if (!_flatMap) SizeSurfaceArmyCounter(marker);
+                continue;
+            }
+            marker.DisplayPosition += remaining * blend;
+            // On the globe the card lies on the surface, so the eased point is pushed back out
+            // to the sphere rather than cutting the chord through the planet.
+            if (!_flatMap)
+            {
+                var length = marker.DisplayPosition.Length();
+                if (length > 0.0001f) marker.DisplayPosition *= SurfaceMarkerRadius / length;
+            }
+            node.Position = marker.DisplayPosition;
+            // Orientation follows the ground under the card, so it has to be recomputed as the
+            // card slides rather than left at the bearing it was created with.
+            OrientSurfaceArmyCard(marker);
+            if (!_flatMap) SizeSurfaceArmyCounter(marker);
+        }
+    }
+
+    /// <summary>Projection switches and fresh maps place counters immediately; normal motion
+    /// is eased by <see cref="UpdateArmyMarkerMotion"/>.</summary>
+    private void SnapArmyMarkerPositions()
+    {
+        foreach (var marker in _armyStacks.Values)
+        {
+            if (marker.Node is null || !IsInstanceValid(marker.Node)) continue;
+            var position = ArmyMarkerPosition(marker);
+            marker.TargetPosition = position;
+            marker.DisplayPosition = position;
+            marker.MotionSettled = true;
+            marker.Node.Position = position;
+            OrientSurfaceArmyCard(marker);
+            if (!_flatMap) SizeSurfaceArmyCounter(marker);
+        }
+    }
+
+    /// <summary>
+    /// Splits only the pixels, never the geography. One stack keeps the province centre; two
+    /// or more stacks of different nations in the same province are arranged in a compact
+    /// two-column grid around it. The grid is recomputed with the same cadence as auxiliary
+    /// card layout, so zooming does not leave stale gaps.
+    /// </summary>
+    private void LayoutFlatArmyStackOffsets()
+    {
+        foreach (var marker in _armyStacks.Values) marker.LayoutOffset = Vector2.Zero;
+        if (!_flatMap) return;
+        foreach (var group in _armyStacks.Values
+                     .Where(marker => marker.Stack.Count > 0 && marker.Stack[0].ProvinceId > 0)
+                     .GroupBy(marker => marker.Stack[0].ProvinceId))
+        {
+            var markers = group.OrderBy(marker => marker.NationId)
+                .ThenBy(marker => marker.Stack[0].Id).ToArray();
+            if (markers.Length < 2) continue;
+            var columns = markers.Length <= 2 ? markers.Length : 2;
+            var rows = (markers.Length + columns - 1) / columns;
+            var width = 64f;
+            var height = 40f;
+            if (markers[0].Plate?.Texture is { } texture)
+            {
+                width = texture.GetWidth() * markers[0].Plate.PixelSize * _counterFlatFar;
+                height = texture.GetHeight() * markers[0].Plate.PixelSize * _counterFlatFar;
+            }
+            var gap = Math.Clamp(Ui.Metric("map.flat_counter_gap", 4f), 0f, 16f);
+            for (var index = 0; index < markers.Length; index++)
+            {
+                var column = index % columns;
+                var row = index / columns;
+                markers[index].LayoutOffset = new Vector2(
+                    (column - (columns - 1) * .5f) * (width + gap),
+                    (row - (rows - 1) * .5f) * (height + gap));
+            }
+        }
+    }
 
     private void DrawFlatCounterLeaders()
     {
@@ -26,7 +164,7 @@ public sealed partial class GlobePresentation
         {
             if (!IsInstanceValid(counter.Node) || !counter.Node.IsVisibleInTree()) continue;
             var anchor = counter.Support is { } support
-                ? _supportMarkerRoot.ToGlobal(FlatPoint(support.Latitude, support.Longitude, FlatMarkerZ + .002f))
+                ? _supportMarkerRoot.ToGlobal(FlatPoint(support.Latitude, support.Longitude, FlatMarkerZ - .002f))
                 : _fleetRoot.ToGlobal(counter.Anchor);
             var at = _camera.UnprojectPosition(anchor);
             var center = _camera.UnprojectPosition(counter.Node.GlobalPosition);
@@ -46,8 +184,9 @@ public sealed partial class GlobePresentation
         _cityDirty = true;
     }
 
-    /// <summary>Only auxiliary counters search for free space. Army counters remain
-    /// at their geographic anchor in every zoom and selection state.</summary>
+    /// <summary>Only auxiliary counters search for arbitrary free space. Army counters keep
+    /// their province as the anchor; when several nations share one province they are fanned
+    /// out inside it by a deterministic screen-pixel grid, never moved to another province.</summary>
     private void UpdateFlatCounterDensity()
     {
         var now = Time.GetTicksMsec();
@@ -62,9 +201,14 @@ public sealed partial class GlobePresentation
         _densityViewport = Size;
         _densityView = new Vector3(_flatX, _flatY, _flatZoom);
         _occupiedCounterCells.Clear();
+        LayoutFlatArmyStackOffsets();
         foreach (var marker in _armyStacks.Values)
         {
-            marker.Node.Position = ArmyMarkerPosition(marker);
+            marker.TargetPosition = ArmyMarkerPosition(marker);
+            // The room a counter takes up is the room it is drawn in, which is where the
+            // eased position is rather than where the province is - otherwise two counters
+            // mid-glide overlap for the length of the glide.
+            marker.Node.Position = marker.DisplayPosition;
             RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
             // Auxiliary base/port cards may fit around armies, never the reverse.
             if (!marker.Node.IsVisibleInTree() || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
@@ -85,7 +229,7 @@ public sealed partial class GlobePresentation
         marker.Compact = compact;
         marker.Plate.Visible = true;
         marker.Plate.Scale = Vector3.One;
-        marker.Count.Visible = !compact;
+        marker.Count.Visible = true;
         var divisions = 0f;
         var personnel = 0f;
         var fingerprint = new HashCode();
@@ -95,8 +239,22 @@ public sealed partial class GlobePresentation
             personnel += DivisionPersonnel(army);
             fingerprint.Add(army.Id);
         }
-        var text = $"{Mathf.CeilToInt(divisions)}" + (compact ? "" : $"\n{personnel / 1000f:0.#}k");
-        if (marker.Count.Text != text) marker.Count.Text = text;
+        var divCount = Mathf.CeilToInt(divisions);
+        var menTenths = (int)MathF.Round(personnel / 100f);
+        var textChanged = marker.ShownDivisions != divCount ||
+                          (!compact && marker.ShownMenTenths != menTenths) ||
+                          marker.ShownCompact != compact;
+        if (textChanged)
+        {
+            marker.ShownDivisions = divCount;
+            marker.ShownMenTenths = menTenths;
+            marker.ShownCompact = compact;
+            var text = compact
+                ? (menTenths > 0 ? $"{divCount}·{menTenths / 10f:0.#}k" : divCount.ToString())
+                : $"{divCount}\n{menTenths / 10f:0.#}k";
+            marker.CountText = text;
+            if (marker.Count.Text != text) marker.Count.Text = text;
+        }
         var signature = fingerprint.ToHashCode();
         if (signature != marker.DisplayFingerprint)
         {
@@ -104,8 +262,8 @@ public sealed partial class GlobePresentation
             var ids = new Godot.Collections.Array<int>();
             foreach (var army in marker.DisplayStack) ids.Add(army.Id);
             marker.Node.SetMeta("display_army_ids", ids);
+            marker.Node.SetMeta("display_provinces", 1);
         }
-        marker.Node.SetMeta("display_provinces", 1);
         UpdateArmyConditionBars(marker);
     }
 
@@ -168,7 +326,7 @@ public sealed partial class GlobePresentation
         foreach (var (id, marker) in _supportMapMarkers)
         {
             if (!marker.Node.IsVisibleInTree()) continue;
-            var anchor = FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ + .002f);
+            var anchor = FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - .002f);
             _auxiliaryCounters.Add((marker.Node, marker.Plate, anchor, id, marker));
         }
         foreach (var (id, parts) in _fleetNodes)
@@ -185,19 +343,35 @@ public sealed partial class GlobePresentation
             if (counter.Support is { } support) support.DisplayOffset = Vector2.Zero;
             else _flatFleetOffsets[counter.Id] = Vector2.Zero;
             var offset = Vector2.Zero;
+            var crowded = false;
             if (at.X >= -80 && at.Y >= -50 && at.X <= Size.X + 80 && at.Y <= Size.Y + 50)
             {
                 var gap = Math.Clamp(Ui.Metric("map.flat_counter_gap", 4f), 0f, 16f);
                 var size = new Vector2(counter.Plate.Texture.GetWidth(), counter.Plate.Texture.GetHeight()) *
                     counter.Plate.PixelSize * _counterFlatFar + Vector2.One * gap;
                 var room = new Rect2(at - size * .5f, size);
-                offset = FindFreeCounterOffset(room);
+                // Long-range support belongs behind the line, not on top of it. Its card gets a
+                // one-card tail bias only when a land counter already holds the province centre;
+                // a base with no army still draws its support card at the base itself.
+                var supportBias = counter.Support is null || !CounterRoomOccupied(room)
+                    ? Vector2.Zero
+                    : new Vector2(0f, -size.Y * Math.Clamp(Ui.Metric("map.flat_support_bias", 1f), 0f, 2.5f));
+                room.Position += supportBias;
+                var found = TryFindFreeCounterOffset(room, out var slot);
+                offset = found ? slot : supportBias;
+                if (!found && counter.Support is not null) crowded = true;
                 room.Position += offset;
                 TakeCounterRoom(room);
+                offset += supportBias;
             }
             if (counter.Support is { } marker) marker.DisplayOffset = offset;
             else _flatFleetOffsets[counter.Id] = offset;
             counter.Node.Position = counter.Anchor + new Vector3(offset.X, -offset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
+            // A crowded auxiliary card recedes instead of masking a division: it draws
+            // behind the line already, and the fade keeps even that behind-line legible.
+            var plate = counter.Plate;
+            plate.Modulate = new Color(1f, 1f, 1f, crowded ? 0.45f : 1f);
+            if (counter.Support is { } supportMarker) supportMarker.DisplayFaded = crowded;
         }
     }
 

@@ -236,6 +236,7 @@ public partial class DealOrForceGame
         RefreshPolicyRates(nation);
         RefreshPolitics(nation);
         RefreshIdentity(nation);
+        RefreshRulersAndCabinetSection(nation);
         RefreshAddress(nation);
         _updatingStateAffairs = false;
 
@@ -319,6 +320,7 @@ public partial class DealOrForceGame
         // The order is the order somebody works in.
         BuildStateBudget(rows);
         BuildPolicyRates(rows);
+        BuildRulersAndCabinetSection(rows);
         BuildPoliticsControls(rows);
         BuildAddressControls(rows);
 

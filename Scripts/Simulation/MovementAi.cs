@@ -25,6 +25,7 @@ public sealed partial class Defines
 /// </summary>
 public static class MovementAi
 {
+    private static readonly List<ScenarioState> UprisingCandidates = new();
     /// <summary>A public crisis is an opening, not free support, cadres or a successful
     /// uprising. Think still validates every command, cost, occupation and methods gate.</summary>
     internal static float UprisingAppetite(Campaign c, Nation movement, MovementDefinition definition,
@@ -53,11 +54,14 @@ public static class MovementAi
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MovementAi))) yield break;
         if (campaign.ElapsedDays == 0) yield break;
         var week = Math.Max(1, campaign.Defines.EconomyTickDays);
-        // On the same day as its week (MovementRules.Tick), so it acts on what that week made of it.
-        foreach (var nation in campaign.Nations.ToList())
+        // On the same day as its week (MovementRules.Tick), so it acts on what that week made
+        // of it. The walk goes by index (Id == index): a think can found a nation, and the
+        // founder takes its turn tomorrow rather than stretching this pass.
+        for (var id = 0; id < campaign.Nations.Count; id++)
         {
+            var nation = campaign.Nations[id];
             if (nation.Movement is not { Dissolved: false } || nation.IsHuman ||
-                !MovementRules.OnItsDay(campaign, nation.Id, week)) continue;
+                !MovementRules.OnItsDay(campaign, id, week)) continue;
             using (SimProfiler.Measure("movements"))
             using (SimProfiler.Measure("  mov:ai"))
             using (SimProfiler.Measure("    mov:think")) Think(campaign, nation);
@@ -112,12 +116,24 @@ public static class MovementAi
         if (campaign.ElapsedDays >= defines.MovementAiUprisingAfterDays && !definition.Has("humanitarian") &&
             MovementMethods.WillRise(campaign, nation, definition))
         {
-            // The homeland first, then the likeliest.
+            // The homeland first, then the likeliest. A normal movement only needs the
+            // regions where it actually has support; the old walk asked UprisingChance of
+            // all eighteen hundred regions for every movement, every week.
             var forHire = definition.Has("for_hire");
+            UprisingCandidates.Clear();
+            if (forHire)
+                UprisingCandidates.AddRange(campaign.States);
+            else
+                foreach (var (mapIndex, support) in state.Support)
+                {
+                    if (support < defines.MovementUprisingSupport) continue;
+                    if (MovementPower.StateOf(campaign, mapIndex) is { } candidate)
+                        UprisingCandidates.Add(candidate);
+                }
             ScenarioState target = null;
             var targetHome = false;
             var targetChance = 0f;
-            foreach (var region in campaign.States)
+            foreach (var region in UprisingCandidates)
             {
                 if (region.NationMapIndex == nation.MapIndex) continue;
                 if (forHire ? region.Stability > 0.35f
@@ -139,18 +155,21 @@ public static class MovementAi
         // Recognition from whoever thinks best of it.
         Nation asked = null;
         var warmest = float.MinValue;
-        foreach (var other in campaign.Nations)
+        var readyRecognition = state.ReadyOnDay.GetValueOrDefault("recognition", 0) <= campaign.ElapsedDays;
+        if (readyRecognition && done < 2)
         {
-            if (other.Movement is not null || other.Id == nation.Id || state.RecognisedBy.Contains(other.Id) ||
-                campaign.StatesOf(other).Length == 0) continue;
-            var opinion = CampaignDiplomacy.Get(campaign, other.Id, nation.Id).Opinion;
-            if (opinion <= warmest) continue;
-            warmest = opinion;
-            asked = other;
+            foreach (var other in campaign.Nations)
+            {
+                if (other.Movement is not null || other.Id == nation.Id || state.RecognisedBy.Contains(other.Id) ||
+                    campaign.StatesOf(other).Length == 0) continue;
+                var opinion = CampaignDiplomacy.Peek(campaign, other.Id, nation.Id)?.Opinion ?? 0f;
+                if (opinion <= warmest) continue;
+                warmest = opinion;
+                asked = other;
+            }
+            if (asked is not null && warmest >= MovementActions.RecognitionNeeds(defines, state))
+                Try("recognition", target: asked.Id);
         }
-        if (asked is not null && CampaignDiplomacy.Get(campaign, asked.Id, nation.Id).Opinion >=
-            MovementActions.RecognitionNeeds(defines, state))
-            Try("recognition", target: asked.Id);
 
         // The street is its army: at war with ground of its own, it hands out rifles where it is
         // followed, and before a rising it sends fighters in ahead.
@@ -214,10 +233,10 @@ public static class MovementAi
         // Otherwise the following: where most of its people are still to be won over.
         ScenarioState ground = null;
         var groundScore = 0f;
-        foreach (var region in campaign.States)
+        foreach (var (region, known) in MovementRules.PeopleIn(campaign, definition))
         {
             if (region.NationMapIndex == nation.MapIndex) continue;
-            var people = MovementRules.PeopleOf(campaign, region, definition, out _);
+            var people = known.Own;
             if (people <= 0 || !MovementReach.CanOperate(campaign, nation, region, definition)) continue;
             var score = people * (1f - state.Support.GetValueOrDefault(region.MapIndex)) *
                         (MovementDefinition.Listed(definition.Homeland, region.Id) ? 3f : 1f);

@@ -90,6 +90,7 @@ public static class OpinionCatalog
 }
 
 /// <summary>One reason, as this pair of countries currently holds it.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(OpinionReasonConverter))]
 public sealed class OpinionReason
 {
     public string Id = "";
@@ -202,17 +203,18 @@ public static class OpinionSystem
     public static void Settle(Campaign campaign, DiplomaticRelation relation)
     {
         if (relation is null) return;
-        // By hand, for the same reason as the sweep above: RemoveAll's predicate closes
-        // over `campaign`, and this runs every time any country remembers or forgets
-        // anything about anyone - a closure and a delegate for a list that is almost
-        // always already correct.
         for (var index = relation.Reasons.Count - 1; index >= 0; index--)
         {
             var reason = relation.Reasons[index];
             if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
                 relation.Reasons.RemoveAt(index);
         }
+        Explain(campaign, relation, updateOpinion: true);
+    }
 
+    public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false)
+    {
+        if (relation is null) return;
         relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
         foreach (var reason in relation.Reasons)
@@ -255,7 +257,7 @@ public static class OpinionSystem
             total += memory;
             relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
         }
-        relation.Opinion = M.Clamp(total, -100f, 100f);
+        if (updateOpinion) relation.Opinion = M.Clamp(total, -100f, 100f);
         relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
     }
 
@@ -272,6 +274,10 @@ public static class OpinionSystem
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
         foreach (var relation in campaign.Relations.Values)
-            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0) Settle(campaign, relation);
+        {
+            if (relation.MissionByA is not null || relation.MissionByB is not null) DiplomaticOutreach.Tick(campaign, relation);
+            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0)
+                Settle(campaign, relation);
+        }
     }
 }

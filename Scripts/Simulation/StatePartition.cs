@@ -49,12 +49,15 @@ public static class StatePartition
         if (topology is null || newOwner is null || provinces is null) return Array.Empty<ScenarioState>();
 
         var touched = new HashSet<int>();
+        var formerOwnerIndices = asConquest ? new HashSet<ushort>() : null;
         var moved = 0;
         var peopleTaken = 0L;
         foreach (var province in provinces)
         {
             if (province <= 0 || province > topology.ProvinceCount) continue;
-            if (topology.ProvinceToNation[province] == (ushort)newOwner.MapIndex) continue;
+            var prevOwner = topology.ProvinceToNation[province];
+            if (prevOwner == (ushort)newOwner.MapIndex) continue;
+            if (prevOwner > 0) formerOwnerIndices?.Add(prevOwner);
             var stateIndex = topology.ProvinceToState[province];
             if (touched.Add(stateIndex))
             {
@@ -102,6 +105,19 @@ public static class StatePartition
         Reunify(campaign);
 
         campaign.InvalidateStateIndex();
+        if (formerOwnerIndices is { Count: > 0 })
+        {
+            foreach (var ownerMapIndex in formerOwnerIndices)
+            {
+                var formerOwner = campaign.Nations.Find(n => n.MapIndex == ownerMapIndex);
+                if (formerOwner is null || formerOwner.Movement is not null || campaign.HasOwnedLand(formerOwner)) continue;
+                formerOwner.Gdp = 0f;
+                formerOwner.GrossOutput = 0f;
+                formerOwner.WeeklyTaxIncome = 0f;
+                formerOwner.WeeklyExpenses = 0f;
+                formerOwner.WeeklyBalance = 0f;
+            }
+        }
         campaign.MarkMapChanged();
         return created;
     }

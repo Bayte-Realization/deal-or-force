@@ -344,8 +344,11 @@ public static class Attrition
             // peacetime establishment.
             var target = nation.EstablishedDivisions * defines.ArmyRebuildCeiling;
             if (warNeed > target)
-                target = MathF.Min(warNeed, nation.EstablishedDivisions *
-                    (overrun ? defines.ArmyWarCeilingOverrun : defines.ArmyWarCeiling));
+            {
+                var budgetCeiling = nation.EstablishedDivisions *
+                    (overrun ? defines.ArmyWarCeilingOverrun : defines.ArmyWarCeiling);
+                target = MathF.Max(budgetCeiling, MathF.Min(warNeed, overrun ? warNeed : MathF.Max(budgetCeiling, warNeed * 0.75f)));
+            }
             if (strength >= target) continue;
             // At war it borrows for the army it needs, as far as a country at war may.
             var mayBorrow = (overrun || shortOfFront) && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare;
@@ -364,10 +367,12 @@ public static class Attrition
                 {
                     IssuerId = nation.Id,
                     StateMapIndex = home,
-                    Divisions = 1f
+                    Divisions = 1f,
+                    AllowDeficit = mayBorrow
                 }.Apply(campaign);
                 strength += 1f;
             }
+            if (mayBorrow) SovereignFinance.NormalizeAccounts(campaign, nation);
             Standing[nation.Id] = strength;
         }
     }
@@ -420,14 +425,27 @@ public static class Attrition
     private static int HomeState(Campaign campaign, Nation nation)
     {
         var best = -1;
+        var bestControlled = -1;
         var people = 0L;
+        var controlledPeople = 0L;
         foreach (var state in campaign.States)
         {
             if (state.NationMapIndex != nation.MapIndex) continue;
-            if (state.Population <= people) continue;
-            people = state.Population;
-            best = state.MapIndex;
+            if (state.Population > people)
+            {
+                people = state.Population;
+                best = state.MapIndex;
+            }
+            if (state.Population > controlledPeople &&
+                RecruitmentSystem.DeploymentProvince(campaign, nation.Id, state.MapIndex) > 0)
+            {
+                controlledPeople = state.Population;
+                bestControlled = state.MapIndex;
+            }
         }
-        return best;
+        // A capital or largest region under occupation is not a place a division can be
+        // trained. The emergency path uses the largest region the country still controls;
+        // the ordinary path keeps its old answer when every region is occupied.
+        return bestControlled >= 0 ? bestControlled : best;
     }
 }

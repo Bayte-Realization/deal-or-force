@@ -93,6 +93,14 @@ public sealed class SubjectType
     /// like a parody of the game.
     /// </summary>
     public bool Imposable = true;
+
+    /// <summary>
+    /// Whether this kind of dependency can receive administrative land grants. A dependent
+    /// or leased territory is a piece of the sovereign's own state, not a regional
+    /// administration that should be grown into half the metropolis; Macau must not become a
+    /// mainland blob because a cultural-group match made it a convenient recipient.
+    /// </summary>
+    public bool ReceivesLandGrants = true;
 }
 
 /// <summary>The numbers that decide how a dependency ages, all of them from the same file.</summary>
@@ -179,6 +187,7 @@ public static class SubjectCatalog
             Flag(value2, "overlord_defends", v => type.OverlordDefends = v);
             Flag(value2, "shares_overlord_politics", v => type.SharesOverlordPolitics = v);
             Flag(value2, "imposable", v => type.Imposable = v);
+            Flag(value2, "receives_land_grants", v => type.ReceivesLandGrants = v);
             Read(value2, "demand_cost", v => type.DemandCost = Math.Max(0f, v));
             Read(value2, "annex_below_liberty", v => type.AnnexBelowLiberty = M.Clamp01(v));
             if (value2.TryGetProperty("annex_after_days", out var absorb) && absorb.TryGetInt32(out var after))
@@ -276,6 +285,7 @@ public static class SubjectSystem
             if (!war.Ended && war.Involves(overlord.Id) && war.Involves(subject.Id))
             {
                 war.Ended = true;
+                campaign.MarkWarsChanged();
                 war.EndedDay = campaign.ElapsedDays;
                 war.WinnerId = overlord.Id;
                 war.PeaceSummary = $"{subject.Name} became a {SubjectCatalog.Of(typeId)?.Name ?? typeId}.";
@@ -298,6 +308,10 @@ public static class SubjectSystem
         subject.SubjectType = "";
         subject.SubjectSinceDay = -9999;
         subject.LibertyDesire = 0f;
+        subject.SubjectIntegrating = false;
+        subject.SubjectIntegrationProgress = 0f;
+        subject.SubjectConspiring = false;
+        subject.SubjectForeignBackers.Clear();
 
         if (overlord is not null)
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, subject.Id, overlord.Id),
@@ -326,22 +340,28 @@ public static class SubjectSystem
         }
         var type = SubjectCatalog.Of(subject.SubjectType);
         if (type is null) { refusal = $"no such kind as '{subject.SubjectType}'"; return false; }
-        if (type.AnnexAfterDays < 0)
+        var wasReleasedByOverlord = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
+        var integrated = subject.SubjectIntegrationProgress >= 0.999f;
+        if (type.AnnexAfterDays < 0 && !wasReleasedByOverlord && !integrated)
         {
             refusal = $"a {type.Name.ToLowerInvariant()} is not a thing a country absorbs";
             return false;
         }
         var held = campaign.ElapsedDays - subject.SubjectSinceDay;
-        if (held < type.AnnexAfterDays)
+        var requiredDays = integrated ? 0
+            : wasReleasedByOverlord ? (type.AnnexAfterDays >= 0 ? Math.Min(type.AnnexAfterDays, 365) : 365)
+            : type.AnnexAfterDays;
+        if (held < requiredDays)
         {
             refusal = $"{subject.Tag} has answered for {held / 365.0:0.0} year(s) of the " +
-                      $"{type.AnnexAfterDays / 365.0:0.0} it takes";
+                      $"{requiredDays / 365.0:0.0} it takes";
             return false;
         }
-        if (subject.LibertyDesire > type.AnnexBelowLiberty)
+        var maxLiberty = type.AnnexBelowLiberty > 0f ? type.AnnexBelowLiberty : 0.55f;
+        if (subject.LibertyDesire > maxLiberty)
         {
             refusal = $"{subject.Tag} wants out {subject.LibertyDesire:P0} of the way, and " +
-                      $"{type.AnnexBelowLiberty:P0} is as much as goes quietly";
+                      $"{maxLiberty:P0} is as much as goes quietly";
             return false;
         }
         // A neighbour, or a country whose capital and coast are a strait away - the reach a
@@ -399,9 +419,27 @@ public static class SubjectSystem
         var weights = SubjectCatalog.Weights;
         var want = type.LibertyDesire;
 
-        // How big it has grown against the country holding it.
+        // How big it has grown against the country holding it - or how big the whole conspiracy
+        // of subjects is when they have bound themselves together in a secret liberty pact.
         var theirs = Math.Max(1L, overlord.Population);
-        want += M.Clamp01(subject.Population / (float)theirs) * weights.SizePull;
+        var effectivePop = subject.Population;
+        if (subject.SubjectConspiring)
+        {
+            var conspirators = 0;
+            long pactPop = 0;
+            foreach (var peer in campaign.Nations)
+            {
+                if (!peer.AnswersTo(overlord.Id) || !peer.SubjectConspiring) continue;
+                conspirators++;
+                pactPop += Math.Max(0L, peer.Population);
+            }
+            if (conspirators >= 2)
+            {
+                effectivePop = Math.Max(effectivePop, pactPop);
+                want += Math.Min(0.28f, 0.10f + (conspirators - 1) * 0.06f);
+            }
+        }
+        want += M.Clamp01(effectivePop / (float)theirs) * weights.SizePull;
 
         // Whether that country can govern itself.
         want += (1f - M.Clamp01(overlord.Stability)) * weights.OverlordInstabilityPull;
@@ -420,10 +458,27 @@ public static class SubjectSystem
             want += weights.OverlordInstabilityPull * 0.65f;
         if (overlord.ImperialOverstretch > 0.05f)
             want += overlord.ImperialOverstretch * 0.35f;
+        if (subject.SubjectIntegrating)
+            want += 0.14f;
+
+        // Foreign powers actively agitating or sponsoring this subject's independence.
+        if (subject.SubjectForeignBackers.Count > 0)
+        {
+            var backerBoost = 0f;
+            foreach (var backerId in subject.SubjectForeignBackers)
+            {
+                var backer = campaign.NationById(backerId);
+                if (backer is null || backer.Id == overlord.Id || backer.IsSubject || !campaign.HasOwnedLand(backer)) continue;
+                var weight = M.Clamp(backer.Population / (float)theirs, 0.25f, 1.5f);
+                backerBoost += 0.18f + 0.08f * weight;
+            }
+            want += Math.Min(0.55f, backerBoost);
+        }
 
         // Against all of which: being small and held by something enormous is an argument.
-        var ratio = subject.Population <= 0 ? 1f : M.Clamp01(subject.Population / (float)theirs);
+        var ratio = effectivePop <= 0 ? 1f : M.Clamp01(effectivePop / (float)theirs);
         want -= (1f - ratio) * weights.OverlordStrengthHold;
+        want += subject.SubjectLibertyModifier;
 
         return Math.Max(0f, want);
     }
@@ -461,7 +516,9 @@ public static class SubjectSystem
             // Tribute is taken from what the subject actually raised, not from what it has.
             // A dependency that is not earning does not pay, which is what makes holding a
             // ruined country a cost rather than a windfall.
-            var tribute = Math.Max(0f, subject.WeeklyTaxIncome) * type.Tribute;
+            var tribute = subject.SubjectTributeHolidayUntilDay > campaign.ElapsedDays
+                ? 0f
+                : Math.Max(0f, subject.WeeklyTaxIncome) * type.Tribute;
             if (tribute > 0f)
             {
                 subject.Treasury -= tribute;
@@ -486,11 +543,14 @@ public static class SubjectSystem
             }
 
             // And what it thinks about all that.
+            SubjectInteractions.TickSubjectWeek(campaign, overlord, subject);
+            if (!subject.IsSubject) continue;
             if (campaign.ElapsedDays - subject.SubjectSinceDay < type.GraceDays) continue;
             var want = LibertyDesireOf(campaign, subject);
             var weights = SubjectCatalog.Weights;
+            var drift = weights.DriftPerWeek * (subject.SubjectConspiring || subject.SubjectForeignBackers.Count > 0 ? 1.6f : 1f);
             subject.LibertyDesire = want > subject.LibertyDesire
-                ? Math.Min(want, subject.LibertyDesire + weights.DriftPerWeek)
+                ? Math.Min(want, subject.LibertyDesire + drift)
                 : Math.Max(want, subject.LibertyDesire - weights.DriftPerWeek);
 
             if (subject.LibertyDesire >= weights.BreakAt) { leaving.Add(subject); continue; }
@@ -499,12 +559,21 @@ public static class SubjectSystem
             // rest take the option when they have it and the subject is small enough that
             // taking it is a formality rather than a decision.
             if (campaign.Player is not null && campaign.Player.Id == overlord.Id) continue;
-            if (subject.Population > overlord.Population * weights.AnnexSizeLimit) continue;
+            var wasReleased = subject.ReleasedFromId == overlord.Id || subject.SecededFromId == overlord.Id;
+            var sizeCap = wasReleased ? Math.Max(weights.AnnexSizeLimit, 0.55f) : weights.AnnexSizeLimit;
+            if (subject.Population > overlord.Population * sizeCap) continue;
             if (MayAnnex(campaign, overlord, subject, out _)) absorbing.Add(subject);
         }
 
         foreach (var subject in leaving)
         {
+            if (!subject.IsSubject) continue;
+            var overlord = campaign.NationById(subject.OverlordId);
+            if (overlord is not null && (subject.SubjectConspiring || subject.SubjectForeignBackers.Count > 0))
+            {
+                SubjectInteractions.TriggerSubjectRebellion(campaign, overlord, subject);
+                continue;
+            }
             var overlordId = subject.OverlordId;
             Release(campaign, subject, broke: true);
             if (overlordId >= 0) campaign.Chronicle.Record(campaign, "subject_broke_free", subject.Id, overlordId);
@@ -514,5 +583,6 @@ public static class SubjectSystem
             var overlord = campaign.NationById(subject.OverlordId);
             if (overlord is not null) Annex(campaign, overlord, subject, out _);
         }
+        CountryRelease.TickAi(campaign);
     }
 }

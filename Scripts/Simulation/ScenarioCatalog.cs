@@ -149,6 +149,8 @@ public static class ScenarioCatalog
     /// </summary>
     public static Campaign CreateBaseCampaign(int seed, string manifestPath = "")
     {
+        if (WorldMapTables.CountryRows.Length == 0 || WorldMapTables.StateRows.Length == 0)
+            WorldMapTables.ResetCatalog();
         var campaign = new Campaign(seed);
         var playerTag = ScenarioPlayerTag(manifestPath);
         if (playerTag.Length == 0) playerTag = DefaultPlayerTag;

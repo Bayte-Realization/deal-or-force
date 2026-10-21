@@ -158,6 +158,7 @@ public partial class DealOrForceGame
     {
         if (_hudLayer is null) return;
         LayoutHudReadability();
+        LayoutCampaignAlerts();
         LayoutCampaignNavigation();
         LayoutMapControls();
         LayoutMapSelectionCards();

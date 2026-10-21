@@ -5,6 +5,15 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>The share of a militia formation's establishment its home region sends back
+    /// each day - the wounded returning, the village volunteering - while the formation
+    /// holds ground the nation controls. Without it a militia drained by the line it held
+    /// stays a muster roll of zeroes, and the bench counts the zeroes as nobody at home.</summary>
+    public float MilitiaVolunteerSharePerDay { get; set; } = 0.02f;
+}
+
 /// <summary>
 /// People who take up arms without being told to.
 ///
@@ -171,6 +180,22 @@ public static class MilitiaCore
             Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + 1;
             var key = ((long)army.NationId << 32) | (uint)army.StateMapIndex;
             Here[key] = Here.GetValueOrDefault(key) + 1;
+            // The militia's men are the region's own, so its losses come home: the wounded
+            // walk back, and the village keeps volunteering while its ground is held. A
+            // formation drained holding a line does not stay a muster roll of zeroes - it
+            // fills again from home, a little each day, when there is a home to fill from.
+            if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0)
+            {
+                var controls = campaign.ProvinceController;
+                if (controls is not null && army.ProvinceId > 0 &&
+                    controls[army.ProvinceId] == (ushort)army.NationId)
+                {
+                    var room = army.MaxPersonnel - army.Personnel;
+                    var gain = (int)MathF.Min(room, MathF.Max(1f, army.MaxPersonnel * campaign.Defines.MilitiaVolunteerSharePerDay));
+                    army.Personnel += gain;
+                    army.Recovering = MathF.Max(0f, army.Recovering - gain);
+                }
+            }
         }
 
         foreach (var nation in campaign.Nations)

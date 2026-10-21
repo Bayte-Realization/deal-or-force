@@ -117,6 +117,9 @@ public partial class DealOrForceGame : Control
     public override void _Process(double delta)
     {
         if (_isLoading || !_startupComplete) return;
+        // Before anything else in the frame: a machine that cannot hold thirty frames a second
+        // has to be allowed to spend less on this frame, not the one after a settings screen.
+        MaintainQuality(delta);
         BindStepCompletion();
         RefreshMediaPreview();
         // Before any of the early returns below it: a panel is read while the game is
@@ -328,8 +331,28 @@ public partial class DealOrForceGame : Control
         // Space is a sacred strategy-game time key: it never activates a focused
         // button, confirms a dialog or changes projection. During a campaign it
         // only toggles time, and outside a campaign it is deliberately consumed.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } &&
+            GetViewport().GuiGetFocusOwner() is Control focused &&
+            focused is not LineEdit && focused is not TextEdit)
+        {
+            // Escape is a window command, not a button command. A clicked button keeps
+            // keyboard focus in Godot, and a focused control can swallow the event before
+            // the campaign's own close chain sees it; release it first so the same Esc works
+            // after a click as it does from an empty map.
+            focused.ReleaseFocus();
+        }
+
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+        if (key.Keycode == Key.Escape && MovementPanelOwnsEscape())
+        {
+            // The movement card is a HUD dock, and a focused control inside it may otherwise
+            // consume Escape before the unhandled close chain runs. Answer it here, where the
+            // card is known to be the topmost thing that owns the key.
+            CloseMovementPanel();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (_sovereignFinanceLayer is { Visible: true } && _handbookLayer is not { Visible: true } &&
             _developerConsoleLayer is not { Visible: true } &&
             _pauseMenuLayer is not { Visible: true } && _settingsLayer is not { Visible: true } &&
@@ -590,6 +613,8 @@ public partial class DealOrForceGame : Control
             CloseTradeScreen();
         else if (_productionLayer is { Visible: true })
             CloseProductionScreen();
+        else if (_movementPanel is { Visible: true })
+            CloseMovementPanel();
         else if (_sidePanel.Visible && _dossierReturnArmyIds is not null)
             ReturnToArmyOrders();
         else if (_sidePanel.Visible)
@@ -1118,8 +1143,14 @@ public partial class DealOrForceGame : Control
         ApplyDossierTab();
     }
 
-    private void CloseSidePanel()
+    private void CloseSidePanel() => CloseSidePanel(dropRegionSelection: true);
+
+    private void CloseSidePanel(bool dropRegionSelection)
     {
+        // A region dossier is the only side panel that owns map ground. Closing it must take
+        // the tint off that ground too; every other dossier leaves the map alone, and a panel
+        // making way for the movement card keeps the region its actions are aimed at.
+        var closeRegionSelection = dropRegionSelection && _regionControls is { Visible: true };
         ForgetDossierReturn();
         _sidePanel.Visible = false;
         _globe.SetMapModeSubject(null);
@@ -1128,6 +1159,7 @@ public partial class DealOrForceGame : Control
         _selectedArmy = null;
         _selectedArmies.Clear();
         _globe.SelectArmy(-1);
+        if (closeRegionSelection) ClearRegionSelection();
     }
 
     private void OnCountryPicked(GlobePick pick)
@@ -1270,6 +1302,7 @@ public partial class DealOrForceGame : Control
         if (_campaign is null || _globe is null) return;
         if (!NewsPlace(line.ActorId, line.TargetId, line.Kind, out var latitude, out var longitude)) return;
         _globe.FocusOn(latitude, longitude, 5.5f);
+        PlayStrategicCue("map_focus");
     }
 
     private bool NewsPlace(int actorId, int targetId, string kind, out float latitude, out float longitude)
@@ -1770,6 +1803,7 @@ public partial class DealOrForceGame : Control
         if (_settingsLayer is { Visible: true }) ShowSettingsCategory(_settingsCategory);
         if (_saveLoadLayer is { Visible: true }) RefreshSaveSlots();
         if (_armyPanel is { Visible: true }) RefreshArmyPanel();
+        if (MapSelectionShowing) ShowMapSelectionContent();
 
         if (_campaign is not null && _dossierScreen == "Economy") ShowEconomyScreen();
         if (_campaign is not null && _dossierScreen == "Decisions" && _dossierTab == "Decisions")

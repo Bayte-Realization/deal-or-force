@@ -1,0 +1,16 @@
+{
+  "names": {
+    "east_slavic": {
+      "given": ["Aleksandr", "Aleksei", "Anatoly", "Andrei", "Anton", "Arkady", "Boris", "Dmitry", "Egor", "Fyodor", "Gennady", "Grigory", "Igor", "Ilya", "Ivan", "Kirill", "Konstantin", "Leonid", "Maxim", "Mikhail", "Nikolai", "Oleg", "Pavel", "Pyotr", "Roman", "Sergei", "Stanislav", "Stepan", "Vadim", "Valentin", "Vasily", "Viktor", "Vladimir", "Vyacheslav", "Yuri", "Anna", "Ekaterina", "Elena", "Irina", "Ksenia", "Larisa", "Lyudmila", "Nadezhda", "Natalia", "Olga", "Svetlana", "Tatiana", "Vera", "Yulia"],
+      "family": ["Afanasyev", "Belov", "Bondarenko", "Fedorov", "Gusev", "Ivanov", "Karpov", "Kiselev", "Kovalenko", "Kozlov", "Kuznetsov", "Lebedev", "Makarov", "Medvedev", "Mikhailov", "Morozov", "Nikitin", "Novikov", "Orlov", "Pavlov", "Petrov", "Popov", "Romanov", "Semenov", "Shevchenko", "Smirnov", "Sokolov", "Solovyov", "Stepanov", "Tarasov", "Vasiliev", "Vinogradov", "Volkov", "Vorobyov", "Yakovlev", "Zaitsev", "Zhukov"]
+    },
+    "west_slavic": {
+      "given": ["Adam", "Aleksander", "Andrzej", "Antoni", "Bogdan", "Czesław", "Dariusz", "Dominik", "Edward", "Filip", "Grzegorz", "Henryk", "Jakub", "Jan", "Jerzy", "Józef", "Kacper", "Kamil", "Karol", "Krzysztof", "Leszek", "Łukasz", "Maciej", "Marek", "Mateusz", "Michał", "Mikołaj", "Paweł", "Piotr", "Rafał", "Robert", "Stanisław", "Szymon", "Tadeusz", "Tomasz", "Wojciech", "Zbigniew", "Agata", "Anna", "Barbara", "Ewa", "Halina", "Iwona", "Jadwiga", "Katarzyna", "Magdalena", "Małgorzata", "Zofia"],
+      "family": ["Bąk", "Dąbrowski", "Górski", "Jankowski", "Jaworski", "Kaczmarek", "Kamiński", "Kowalski", "Kozłowski", "Krawczyk", "Król", "Lewandowski", "Mazur", "Michalski", "Nowak", "Nowicki", "Olszewski", "Pawlak", "Piotrowski", "Sikora", "Szymański", "Wójcik", "Woźniak", "Zieliński", "Zalewski", "Černý", "Dvořák", "Horák", "Novák", "Procházka", "Svoboda", "Urban", "Veselý", "Zeman"]
+    },
+    "south_slavic": {
+      "given": ["Aleksandar", "Andrej", "Bogdan", "Boris", "Branko", "Damir", "Darko", "Dragan", "Dušan", "Filip", "Goran", "Igor", "Ivan", "Jovan", "Luka", "Marko", "Milan", "Miloš", "Nebojša", "Nikola", "Novak", "Predrag", "Radovan", "Saša", "Slobodan", "Stevan", "Stjepan", "Tomislav", "Vedran", "Vladimir", "Zoran", "Ana", "Biljana", "Dragana", "Jelena", "Katarina", "Marija", "Milica", "Nataša", "Sanja", "Snežana", "Tijana", "Vesna"],
+      "family": ["Babić", "Bogdanović", "Cvetković", "Đorđević", "Filipović", "Ilić", "Janković", "Jovanović", "Kostić", "Kovačević", "Lazić", "Lukić", "Marković", "Milić", "Nikolić", "Novaković", "Pavlović", "Petrović", "Popović", "Ristić", "Simić", "Stanković", "Stojanović", "Todorović", "Vuković", "Zorić", "Horvat", "Kovačić", "Marić", "Perić", "Šimić", "Tomić"]
+    }
+  }
+}

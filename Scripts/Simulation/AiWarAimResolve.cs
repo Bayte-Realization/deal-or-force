@@ -17,8 +17,18 @@ public static partial class AiStatecraft
 {
     internal static bool StrategicWarAim(Campaign c, Nation nation, StrategicWar war, ScenarioState region)
     {
+        // A war of absorption values every region of the enemy, not just the one the
+        // declaration named. Otherwise the front and the peace writer disagree about what
+        // the war is for.
+        if (!war.Limited &&
+            war.Justification is ("hegemony" or "annexation" or "reunification" or "conquest" or "imperialism") &&
+            war.EnemiesOf(nation.Id).Select(c.NationById)
+                .Any(enemy => enemy is not null && enemy.MapIndex == region.NationMapIndex)) return true;
         if (region.MapIndex == war.ClaimedStateMapIndex ||
             TerritorialClaims.TitleOf(c, nation, region) == TerritorialTitle.Homeland) return true;
+        // A rising's national ground: its own people next to the ground it already holds.
+        // This is a claim to press, not a free transfer; the peace still prices it.
+        if (WarAims.RebelClaim(c, war, nation, region)) return true;
         // A small, authored consolidation project remains this participant's interest
         // inside a coalition war. Shared culture alone is not a world-conquest mandate.
         if (!war.Limited && ConsolidationAim(c,nation,region)) return true;
@@ -90,3 +100,4 @@ public static partial class AiStatecraft
         return ready > 0 && ready >= resistance * advantage;
     }
 }
+

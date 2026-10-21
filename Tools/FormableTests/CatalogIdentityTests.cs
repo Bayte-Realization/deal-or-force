@@ -121,3 +121,4 @@ static class ObserverAuthorityTests
             "returning to a country still saves and restores a normal human seat");
     }
 }
+

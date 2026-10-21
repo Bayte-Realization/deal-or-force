@@ -1,0 +1,129 @@
+{
+  "year_of_elections_2024": {
+    "title": "The year of elections",
+    "description": "More than half the world's people live in countries holding national elections this year. No single campaign is the story; the year itself changes the temperature of every government.",
+    "date": "2024-01-01",
+    "window_days": 31,
+    "effects": { "political_points": 4, "stability": -0.002, "state.radicalism": 0.002 }
+  },
+  "french_revolution_1789": {
+    "title": "The Bastille falls",
+    "description": "Paris has turned a fiscal argument into a question about who governs France. The old order can still be defended, or it can be reformed before the streets decide the answer.",
+    "date": "1789-07-14",
+    "window_days": 30,
+    "trigger": { "tags": ["FRA"] },
+    "ai_option": 1,
+    "options": [
+      {
+        "title": "Reform the monarchy",
+        "consequence": "A constitutional settlement costs political credit but cools the streets.",
+        "effects": { "stability": 0.035, "state.radicalism": -0.025, "political_points": -12 }
+      },
+      {
+        "title": "Defend the old order",
+        "consequence": "The crown keeps its authority and inherits a revolution.",
+        "effects": { "stability": -0.075, "state.radicalism": 0.065, "treasury_percent": -0.02 }
+      }
+    ]
+  },
+  "vienna_congress_1815": {
+    "title": "The Congress of Vienna",
+    "description": "The great powers have bought a settlement with the map of Europe. Its balance is fragile, but for the first time in a generation the cabinets believe a general war can be avoided.",
+    "date": "1815-06-09",
+    "window_days": 30,
+    "trigger": { "tags": ["AUT", "RUS", "GBR", "FRA"] },
+    "effects": { "stability": 0.018, "political_points": 8 }
+  },
+  "springtime_of_nations_1848": {
+    "title": "The springtime of nations",
+    "description": "Petitions, barricades and newspapers have spread from one capital to the next. Governments that answer only with cavalry discover what a connected continent can do.",
+    "date": "1848-02-22",
+    "window_days": 45,
+    "trigger": { "tags": ["FRA", "AUT", "GER", "ITA"] },
+    "effects": { "stability": -0.045, "state.radicalism": 0.05, "political_points": -6 }
+  },
+  "july_crisis_1914": {
+    "title": "The July Crisis",
+    "description": "A pistol shot in Sarajevo has become an ultimatum, and the alliances are moving faster than the diplomats. Every cabinet now reads the same map and reaches a different conclusion.",
+    "date": "1914-07-28",
+    "window_days": 21,
+    "trigger": { "tags": ["AUT", "RUS", "GER", "FRA", "GBR"] },
+    "effects": { "stability": -0.05, "war_support": 0.04, "treasury_percent": -0.02 }
+  },
+  "russian_revolution_1917": {
+    "title": "The Russian Revolution",
+    "description": "The war has outlived the government that entered it. Petrograd's garrison will not fire on the crowds, and the old regime has lost the argument in the streets before it has lost it in the palace.",
+    "date": "1917-03-08",
+    "window_days": 45,
+    "trigger": { "tags": ["RUS"] },
+    "effects": { "stability": -0.12, "state.radicalism": 0.08, "political_points": -15 }
+  },
+  "great_depression_1929": {
+    "title": "The Great Depression",
+    "description": "A collapse that began in one market has become a world of closed factories and frightened banks. Every government is asked what it will sacrifice to keep its people employed.",
+    "date": "1929-10-29",
+    "window_days": 60,
+    "effects": { "gdp_percent": -0.05, "treasury_percent": -0.03, "stability": -0.04, "state.radicalism": 0.02, "credit_confidence": -0.08 }
+  },
+  "united_nations_1945": {
+    "title": "The United Nations",
+    "description": "The victors sign a charter in San Francisco. It promises a forum where the next disagreement can be argued instead of bombed, and everyone knows how much that promise depends on the signatories.",
+    "date": "1945-10-24",
+    "window_days": 60,
+    "trigger": { "tags": ["USA", "GBR", "RUS", "FRA", "CHN"] },
+    "effects": { "stability": 0.012, "political_points": 6 }
+  },
+  "year_of_africa_1960": {
+    "title": "The Year of Africa",
+    "description": "Seventeen colonies become independent in a single year. The imperial capitals discover that a flag lowered overseas is not the end of the argument, only its next stage.",
+    "date": "1960-01-01",
+    "window_days": 90,
+    "trigger": { "tags": ["GBR", "FRA", "BEL", "NLD", "POR"] },
+    "effects": { "treasury_percent": -0.02, "stability": -0.02, "political_points": 5 }
+  },
+  "oil_shock_1973": {
+    "title": "The oil shock",
+    "description": "An embargo turns a cheap input into a strategic weapon. Inflation and unemployment rise together, and the old assumption that energy would always be cheap dies in a single quarter.",
+    "date": "1973-10-17",
+    "window_days": 45,
+    "effects": { "inflation": 0.03, "gdp_percent": -0.025, "treasury_percent": -0.02, "stability": -0.015 }
+  },
+  "berlin_wall_1989": {
+    "title": "The Berlin Wall opens",
+    "description": "A press conference and a crowd at a checkpoint undo forty years of arithmetic. The eastern order is still standing on paper while its citizens walk through the gap.",
+    "date": "1989-11-09",
+    "window_days": 30,
+    "trigger": { "tags": ["RUS", "GER"] },
+    "effects": { "stability": -0.035, "state.radicalism": 0.025, "political_points": -4 }
+  },
+  "ussr_dissolution_1991": {
+    "title": "The Union dissolves",
+    "description": "The republics leave a union that no longer commands their obedience. A superpower becomes fifteen states, and every alliance and border it guaranteed is now a question.",
+    "date": "1991-12-26",
+    "window_days": 45,
+    "trigger": { "tags": ["RUS"] },
+    "effects": { "stability": -0.12, "political_points": -15, "state.radicalism": 0.05 }
+  },
+  "financial_crisis_2008": {
+    "title": "The financial crisis",
+    "description": "A credit market that everyone believed was safe stops clearing. Governments discover that the bill for a global balance sheet arrives in national treasuries.",
+    "date": "2008-09-15",
+    "window_days": 45,
+    "effects": { "gdp_percent": -0.04, "credit_confidence": -0.08, "treasury_percent": -0.03, "stability": -0.015 }
+  },
+  "pandemic_2020": {
+    "title": "The pandemic",
+    "description": "A new virus closes borders, shops and schools in the same week. The state is asked to do things it had forgotten were part of governing: buy time, pay wages and count the dead.",
+    "date": "2020-03-11",
+    "window_days": 60,
+    "effects": { "gdp_percent": -0.035, "treasury_percent": -0.04, "stability": -0.02, "standard_of_living": -0.01, "state.radicalism": 0.01 }
+  },
+  "ukraine_war_2022": {
+    "title": "The war in Ukraine",
+    "description": "A full-scale invasion returns a land war to Europe and turns energy, food and alliances into one connected crisis. Neutrality becomes a position that has to be defended.",
+    "date": "2022-02-24",
+    "window_days": 45,
+    "trigger": { "tags": ["RUS", "UKR"] },
+    "effects": { "stability": -0.04, "war_support": 0.04, "treasury_percent": -0.02 }
+  }
+}

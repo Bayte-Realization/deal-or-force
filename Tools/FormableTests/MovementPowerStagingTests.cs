@@ -52,9 +52,27 @@ static class MovementPowerStagingTests
         return c;
     }
 
+    static Campaign WorldWithDue()
+    {
+        // Movement power is staggered by nation, the same way the weekly movement review
+        // already was. Pick a day on which the review actually produces a strike, march or
+        // administration, so the staging contract is exercised rather than an empty day.
+        for (var day = 3; day < 17; day++)
+        {
+            var probe = World(day);
+            if (!probe.Nations.Any(n => n.Movement is { Dissolved: false } &&
+                MovementRules.OnItsDay(probe, n.Id, 7))) continue;
+            MovementPower.Tick(probe);
+            if (probe.Chronicle.Read(-1, -1, true)
+                .Any(entry => entry.Kind is "general_strike" or "march_failed" or "march_toppled" or "march_concessions"))
+                return World(day);
+        }
+        return World(3);
+    }
+
     static void OriginalOrderAndAmounts()
     {
-        var original = World(); var staged = World(); var eager = World();
+        var original = WorldWithDue(); var staged = WorldWithDue(); var eager = WorldWithDue();
         Check(CampaignFingerprint.Of(original) == CampaignFingerprint.Of(staged) &&
               CampaignFingerprint.Of(staged) == CampaignFingerprint.Of(eager), "paired seed 27 worlds start identically");
         var before = CampaignFingerprint.Of(original);
@@ -62,8 +80,10 @@ static class MovementPowerStagingTests
         var stages = MovementPower.TickStages(staged).Count();
         MovementPower.Tick(eager);
         var wanted = CampaignFingerprint.Of(original);
-        Check(stages == staged.Nations.Count(n => n.Movement is { Dissolved: false }),
-            "each active movement, including a human, receives exactly one bounded stage");
+        var due = staged.Nations.Count(n => n.Movement is { Dissolved: false } &&
+            MovementRules.OnItsDay(staged, n.Id, 7));
+        Check(stages == due,
+            "each due movement, including a human, receives exactly one bounded stage");
         Check(wanted == CampaignFingerprint.Of(staged) && wanted == CampaignFingerprint.Of(eager),
             "original sequential review, staged review and public eager wrapper have identical authoritative results");
         Check(original.Random.State == staged.Random.State && staged.Random.State == eager.Random.State,
@@ -79,9 +99,9 @@ static class MovementPowerStagingTests
     static void DisabledAndUnscheduledAreNoOps()
     {
         Check(!MovementPower.TickStages(null).Any(), "null world has no stages");
-        foreach (var kind in new[] { "feature", "system", "day" })
+        foreach (var kind in new[] { "feature", "system" })
         {
-            var c = World(kind == "day" ? 4 : 3);
+            var c = World(3);
             if (kind == "feature") c.SetFeature("movements", false);
             if (kind == "system")
             { c.Defines.Features["test_movement_gate"] = false; c.Defines.FeatureSystems[nameof(MovementPower)] = "test_movement_gate"; }
@@ -112,7 +132,7 @@ static class MovementPowerStagingTests
 
     static void ExternalOrderCompletesTheMovementReview()
     {
-        var expected = World(2); var staged = World(2);
+        var expected = WorldWithDue(); var staged = WorldWithDue();
         SimProfiler.Reset();
         var frames = 0;
         while (SimProfiler.All.FirstOrDefault(s => s.Name == "movement power")?.Runs < 1 ||
@@ -138,10 +158,10 @@ static class MovementPowerStagingTests
     static void OriginalTick(Campaign c)
     {
         if (c is null || !c.FeatureEnabled("movements") || !MechanicFeatures.SystemEnabled(c, nameof(MovementPower))) return;
-        if (c.ElapsedDays % 7 != 3) return;
         foreach (var nation in c.Nations)
         {
             if (nation.Movement is not { Dissolved: false } state) continue;
+            if (!MovementRules.OnItsDay(c, nation.Id, 7)) continue;
             if (MovementPower.Momentum(c, nation) >= c.Defines.MovementParallelMomentum) OriginalAdminister(c, nation, state);
             if (nation.IsHuman) continue;
             foreach (var action in new[] { "march", "strike" })

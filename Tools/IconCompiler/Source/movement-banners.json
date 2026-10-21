@@ -1,11 +1,12 @@
 {
-  "note": "Restore the pre-workshop regional banners. These are regional/cultural identities, not a claim that every image is an official party logo.",
+  "note": "Restore the authored movement or homeland banners. These are not all official party logos. Runtime sprite bindings take precedence over old tag-named PNGs; see game/gfx/flags/96_movement_historical_bindings.json and docs/MOVEMENT_FLAG_CORRECTIONS_2026_10_20_RU.md.",
   "banners": {
+    "flag_afc": "flag_cod",
     "flag_bvc": "flag_culture_bavarian",
     "flag_scv": "flag_culture_scottish",
     "flag_wcv": "flag_culture_welsh",
     "flag_qcv": "flag_culture_quebecois",
-    "flag_bdf": "flag_culture_belarusian",
+    "flag_bdf": "flag_blr_nationalism",
     "flag_ccc": "flag_culture_catalan_nationalism",
     "flag_ich": "flag_culture_chechen",
     "flag_ipb": "flag_culture_igbo",

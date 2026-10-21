@@ -1,0 +1,12 @@
+// Deal or Force - war aims and rebel claims (WarAims.cs).
+//
+// These are the peaceful edge of a rising: what it may ask for beyond the region it
+// declared independence in. The claim must touch ground the rising already holds and
+// must have a substantial population of its peoples; an unrelated neighbour is not a
+// national claim just because it is adjacent. Every claim is still paid for in war score.
+{
+  "WarAimRebelsClaimBeyondHomeland": true,
+  "WarAimRebelCultureShare": 0.30,
+  "WarAimRebelCultureWeight": 2.0,
+  "WarAimRebelPeaceMinimumBudget": 18.0
+}

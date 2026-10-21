@@ -10,7 +10,8 @@ namespace DealOrForce;
 /// Opt-in verification of the shipped executable, not an editor-only script.
 /// Official release templates disable external script/scene overrides. Keep the
 /// probe built in so CI can test the actual pack, assembly and loose data together.
-/// It never loads an existing save or writes a campaign; normal launches do nothing.
+/// Normal launches do nothing. A development-only late-save probe accepts only an
+/// explicit temporary copy and redirects all saves away from the player's archive.
 /// </summary>
 public partial class ExportVerification : Node
 {
@@ -91,6 +92,73 @@ public partial class ExportVerification : Node
                     Loc.Language = args[languageAt + 1];
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
+                }
+                if (args.Contains("--verify-political-appointments-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-campaign-alerts-only"))
+                {
+                    await VerifyCampaignAlerts(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                var lateSaveAt = Array.IndexOf(args, "--verify-late-save");
+                if (developmentProbe && lateSaveAt >= 0 && lateSaveAt + 1 < args.Length)
+                {
+                    var soakDaysAt = Array.IndexOf(args, "--verify-late-save-days");
+                    var soakDays = soakDaysAt >= 0 && soakDaysAt + 1 < args.Length && int.TryParse(args[soakDaysAt + 1], out var parsedDays)
+                        ? Math.Clamp(parsedDays, 1, 365) : 30;
+                    await VerifyLateSaveStability(game, args[lateSaveAt + 1], soakDays);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-counter-textures-only"))
+                {
+                    VerifyCounterTextureLifetime(game);
+                    if (!args.Contains("--verify-partial-withdrawal-only"))
+                    {
+                        GD.Print($"EXPORT_VERIFY failures={_failures}");
+                        GetTree().Quit(_failures == 0 ? 0 : 1);
+                        return;
+                    }
+                }
+                if (args.Contains("--verify-partial-withdrawal-only"))
+                {
+                    await VerifyPartialWithdrawal(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-portraits-front-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    VerifyLeaderPhotoFormats();
+                    await VerifyFrontOverlay(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-institutions-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    VerifyLeaderPhotoFormats();
+                    await VerifyInstitutions(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-country-dossier-only"))
+                {
+                    await VerifyCountryDossier(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
                 }
                 if (args.Contains("--verify-occupation-map-only"))
                 {

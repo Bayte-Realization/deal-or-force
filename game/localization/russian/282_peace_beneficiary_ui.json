@@ -1,0 +1,9 @@
+{
+  "Peace beneficiary": "Получатель уступок",
+  "Unavailable recipient: {0}": "Получатель недоступен: {0}",
+  "One recipient per proposal. Territory, reparations, trade and subject terms go to the selected country.": "Один получатель на предложение. Выбранной стране достаются земли, репарации, торговые уступки и подчинённая страна.",
+  "Independent release is not an award to an ally; choose your own country for this term.": "Независимость — не награда союзнику. Для этого условия выберите свою страну.",
+  "The whole package goes to {0}.": "Весь пакет получает: {0}.",
+  "Striped ground is occupation, not ownership. The solid preview uses the beneficiary's colour; nothing changes until acceptance.": "Полосы — оккупация, не владение. Проект границ окрашен в цвет получателя; до принятия договора земля не передаётся.",
+  "These terms can be offered; a human player must confirm.": "Условия можно предложить; игрок должен подтвердить их лично."
+}

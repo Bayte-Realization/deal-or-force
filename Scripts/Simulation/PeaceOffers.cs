@@ -26,6 +26,17 @@ public static class PeaceOffers
     /// <summary>How long a government waits for an answer before withdrawing the offer.</summary>
     public const int OfferStandsForDays = 60;
 
+    /// <summary>The authority and pending-offer guard shared by execution and the conference preview.</summary>
+    public static string DeliveryBlockReason(Campaign campaign, StrategicWar war, Nation proposer, Nation opponent)
+    {
+        if (campaign is null || war is null || war.Ended || proposer is null || opponent is null)
+            return Loc.Get("There is no war to end");
+        if (!CanAddress(campaign, war, proposer, opponent) ||
+            (opponent.IsHuman && (war.PendingOffer is not null || war.PendingOfferFromId >= 0)))
+            return Loc.Get("The offer cannot bypass a human coalition member or replace a pending offer.");
+        return "";
+    }
+
     /// <summary>
     /// Put a settlement to the other side. Against another AI that is the same act as
     /// signing it, because both answers are computed here; against a person it is left on
@@ -35,9 +46,9 @@ public static class PeaceOffers
         PeaceDemand demand)
     {
         if (campaign is null || war is null || war.Ended || proposer is null || opponent is null) return false;
-        if (!CanAddress(campaign, war, proposer, opponent)) return false;
+        if (demand is null || demand.ProposerId != proposer.Id || demand.WarId != war.Id) return false;
+        if (DeliveryBlockReason(campaign, war, proposer, opponent).Length > 0) return false;
         if (!opponent.IsHuman) return PeaceConference.Resolve(campaign, war, demand);
-        if (war.PendingOffer is not null || war.PendingOfferFromId >= 0) return false;
         if (PeaceConference.BlockReason(campaign, war, demand).Length > 0) return false;
 
         // Store the same whole-region border that validation priced and acceptance will
@@ -58,14 +69,12 @@ public static class PeaceOffers
         PeaceTerms terms)
     {
         if (campaign is null || war is null || war.Ended || proposer is null || opponent is null) return false;
-        if (!CanAddress(campaign, war, proposer, opponent)) return false;
+        if (DeliveryBlockReason(campaign, war, proposer, opponent).Length > 0) return false;
         if (!opponent.IsHuman)
         {
             PeaceNegotiation.Resolve(campaign, war, proposer.Id, terms);
             return war.Ended;
         }
-        if (war.PendingOffer is not null || war.PendingOfferFromId >= 0) return false;
-
         war.PendingOffer = null;
         war.PendingOfferIsWritten = false;
         war.PendingOfferTerms = terms;
@@ -120,6 +129,9 @@ public static class PeaceOffers
         if (demand is null || topology is null) return $"{name} proposes a settlement.";
 
         var lines = new List<string>();
+        var beneficiary = PeaceConference.Beneficiary(campaign, demand);
+        if (demand.BeneficiaryId >= 0 && beneficiary is not null)
+            lines.Add(Loc.Format("Peace beneficiary: {0}.", beneficiary.DisplayName));
         if (demand.Provinces.Count > 0)
         {
             var perState = new Dictionary<int, int>();
@@ -152,14 +164,17 @@ public static class PeaceOffers
         if (demand.Humiliate) extras.Add("the terms read out in public");
         if (demand.LongTruce) extras.Add("a ten-year truce instead of five");
         if (demand.Subjugate.Length > 0)
-            extras.Add($"your country to answer to theirs as a " +
-                       $"{SubjectCatalog.Of(demand.Subjugate)?.Name?.ToLowerInvariant() ?? demand.Subjugate}");
+            extras.Add(demand.BeneficiaryId >= 0 && beneficiary is not null
+                ? Loc.Format("your country to answer to {0} as a {1}", beneficiary.DisplayName,
+                    Loc.Get(SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate))
+                : $"your country to answer to theirs as a " +
+                  $"{SubjectCatalog.Of(demand.Subjugate)?.Name?.ToLowerInvariant() ?? demand.Subjugate}");
         if (extras.Count > 0) lines.Add($"They also want {string.Join(", ", extras)}.");
         if (lines.Count == 0) lines.Add("They propose an end to the war on the pre-war border.");
         return $"{name} has put a settlement to you.\n\n{string.Join("\n", lines)}";
     }
 
-    /// <summary>Sign what was offered, or send them away. Either way the table is cleared.</summary>
+    /// <summary>Sign a still-valid offer, or send it away. A stale or unsafe offer stays on the table.</summary>
     public static bool Answer(Campaign campaign, StrategicWar war, int answeringNationId, bool accept)
     {
         if (!AwaitingAnswer(war, answeringNationId)) return false;
@@ -167,6 +182,14 @@ public static class PeaceOffers
         var demand = war.PendingOffer;
         var terms = war.PendingOfferTerms;
         var proposerId = war.PendingOfferFromId;
+        if (accept)
+        {
+            var proposer = campaign?.NationById(proposerId);
+            var opponent = campaign?.NationById(answeringNationId);
+            if (proposer is null || opponent is null || !CanAddress(campaign, war, proposer, opponent)) return false;
+            if (written && (demand is null || demand.ProposerId != proposerId || demand.WarId != war.Id ||
+                PeaceConference.BlockReason(campaign, war, demand).Length > 0)) return false;
+        }
         Clear(war);
 
         if (!accept)

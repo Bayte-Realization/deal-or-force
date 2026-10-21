@@ -1,0 +1,27 @@
+// Headline stings and the 21 October interface sounds, generated with Creative Claw
+// (ElevenLabs sound effects) and levelled: stings to -22 LUFS beside event_alert, interface
+// touches to -27 LUFS beside the atlas cues.
+//
+// Which headline sounds which sting is common/news/40_stings.json. Every sting yields to
+// anything already speaking, so it never queues behind a battle report or a peace.
+{
+  "cues": {
+    "news_coup": { "file": "audio/news/news_coup.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_regime_change": { "file": "audio/news/news_regime_change.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_election": { "file": "audio/news/news_election.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_strike": { "file": "audio/news/news_strike.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_scandal": { "file": "audio/news/news_scandal.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_treaty": { "file": "audio/news/news_treaty.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_new_nation": { "file": "audio/news/news_new_nation.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_clashes": { "file": "audio/news/news_clashes.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_world_war": { "file": "audio/news/news_world_war.ogg", "channel": "strategic", "cooldown_ms": 30000, "yields_to_anything_playing": true },
+    "news_alliance_broken": { "file": "audio/news/news_alliance_broken.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_default": { "file": "audio/news/news_default.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+
+    "diplomacy_page": { "file": "audio/interface/ui_page_turn.ogg", "channel": "interface", "cooldown_ms": 400 },
+    "deal_sent": { "file": "audio/interface/ui_telegraph.ogg", "channel": "interface", "cooldown_ms": 800 },
+    "deal_concluded": { "file": "audio/interface/ui_coins.ogg", "channel": "interface", "cooldown_ms": 800 },
+    "covert_launched": { "file": "audio/interface/ui_covert_open.ogg", "channel": "interface", "cooldown_ms": 800 },
+    "map_focus": { "file": "audio/interface/ui_map_pin.ogg", "channel": "interface", "cooldown_ms": 300 }
+  }
+}

@@ -23,30 +23,59 @@ public static partial class Warfare
     private static readonly HashSet<ushort> OpeningEnemyMaps = new();
 
     internal static bool CanStartOpenAdvance(Campaign c, StrategicWar war, Army army)
+        => army is not null && army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead &&
+            OpenAdvanceTarget(c, war, army) > 0;
+
+    // An emergency reserve must pass exactly the same visibility, readiness and
+    // local cover rules as a planned advance; a direct move is not an AI loophole.
+    internal static int ReserveOpening(Campaign c, StrategicWar war, Army army) =>
+        army is not null && war is not null && army.OrderKind is ArmyOrder.Manual or ArmyOrder.ReserveFront &&
+        army.FrontLineId < 0 && (army.AssignedWarId < 0 || army.AssignedWarId == war.Id)
+            ? OpenAdvanceTarget(c, war, army) : -1;
+
+    private static int OpenAdvanceTarget(Campaign c, StrategicWar war, Army army)
     {
         if (c?.ProvinceMap is null || c.ProvinceController is null || army is null || war is null || war.Ended ||
             !c.Defines.AiStartsUnopposedAdvance || !war.Involves(army.NationId) ||
-            army.OrderKind is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) ||
             army.DirectOrder || army.SupportOnly || army.InBattle || army.IsMoving || army.EmbarkedFleetId >= 0 ||
-            army.ProvinceId <= 0 || army.ProvinceId > c.ProvinceMap.ProvinceCount) return false;
+            army.ProvinceId <= 0 || army.ProvinceId > c.ProvinceMap.ProvinceCount) return -1;
         // Assess the proposed active plan with the same value-only F# rule as a
         // real assault. This neither unpauses it nor duplicates strict/disabled
         // floors, nonfinite handling and recovery semantics in another predicate.
         var readiness = Rules.AssaultRules.Assess(true, true, true, true, false,
             army.ReadyDay, c.ElapsedDays, army.Organisation, army.SupplyLevel,
             c.Defines.AutonomousAssaultMinimumOrganisation, c.Defines.AutonomousAssaultMinimumSupply);
-        if (!readiness.Ready) return false;
+        if (!readiness.Ready) return -1;
         EnsureIndexed(c);
         OpeningEnemyMaps.Clear();
         WarCoalition.FillControllers(c, war, !war.IsAttacking(army.NationId), OpeningEnemyMaps);
         // Ask the same selector and cover rule the advance will actually use, not
         // a second optimistic forecast. No arbitrary enemy targets or hidden armies.
         var target = ChooseAssaultTarget(c, c.ProvinceMap, war, army, c.ProvinceController, OpeningEnemyMaps);
-        if (target <= 0 || !CampaignIntel.CanSeeProvince(c, army.NationId, target)) return false;
+        if (target <= 0 || !CampaignIntel.CanSeeProvince(c, army.NationId, target)) return -1;
         foreach (var defender in InProvince(target))
-            if (war.Opposes(army.NationId, defender.NationId) && defender.Divisions >= .1f) return false;
-        return !CoverRefuses(c, c.ProvinceMap, war, army, target);
+            if (war.Opposes(army.NationId, defender.NationId) && defender.Divisions >= .1f) return -1;
+        return CoverRefuses(c, c.ProvinceMap, war, army, target) ? -1 : target;
     }
+
+    private static Campaign _coverCampaign;
+    private static long _coverStep = -1;
+    private static int _coverWarId = -1;
+    private static int _coverMapRevision = -1;
+    private static readonly Dictionary<long, (float Power, float Weight)> CoverCache = new();
+
+    private static void EnsureCoverCache(Campaign c, StrategicWar war)
+    {
+        if (ReferenceEquals(_coverCampaign, c) && _coverStep == c.ElapsedHours &&
+            _coverWarId == war.Id && _coverMapRevision == c.MapRevision) return;
+        CoverCache.Clear();
+        _coverCampaign = c;
+        _coverStep = c.ElapsedHours;
+        _coverWarId = war.Id;
+        _coverMapRevision = c.MapRevision;
+    }
+
+    internal static void InvalidateCoverCache() => _coverMapRevision = -1;
 
     private static int ChooseAssaultTarget(Campaign campaign, ProvinceTopology topology,
         StrategicWar war, Army army, ushort[] controllers, HashSet<ushort> enemyMaps)
@@ -156,7 +185,9 @@ public static partial class Warfare
         var coveringPower = 0f;
         var covering = 0f;
         Cover(campaign, topology, target, war, army.NationId, ref coveringPower, ref covering);
-        return coveringPower > PushingOn(campaign, topology, war, army, target) * campaign.Defines.GapExploitAdvantage;
+        var urgent = war.IsDefending(army.NationId) && (war.DefenderOccupiedValue > 0.005f || war.WarScore < -2f);
+        var advantage = urgent ? campaign.Defines.GapExploitAdvantage * 2.0f : campaign.Defines.GapExploitAdvantage;
+        return coveringPower > PushingOn(campaign, topology, war, army, target) * advantage;
     }
 
     /// <summary>
@@ -177,9 +208,11 @@ public static partial class Warfare
             {
                 if (!WarCoalition.SameSide(war, other.NationId, army.NationId) || other.InBattle || other.IsMoving) continue;
                 if (other.ReadyDay > campaign.ElapsedDays) continue;
-                if (other.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead && other.PlanActive)
+                if (other.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)
                     power += other.Power;
                 else if (other.OrderKind is ArmyOrder.DefendFront)
+                    power += other.Power * 0.75f;
+                else if (other.OrderKind is ArmyOrder.ReserveFront)
                     power += other.Power * 0.5f;
             }
         return MathF.Max(power, army.Power);
@@ -194,6 +227,15 @@ public static partial class Warfare
     private static void Cover(Campaign campaign, ProvinceTopology topology,
         int target, StrategicWar war, int advancingNationId, ref float coveringPower, ref float covering)
     {
+        EnsureCoverCache(campaign, war);
+        var sideBit = war.IsAttacking(advancingNationId) ? 1L : 0L;
+        var cacheKey = ((long)target << 1) | sideBit;
+        if (CoverCache.TryGetValue(cacheKey, out var cached))
+        {
+            coveringPower += cached.Power;
+            covering += cached.Weight;
+            return;
+        }
         var radius = Math.Max(1, campaign.Defines.FrontCoverageRadius);
         var falloff = M.Clamp01(campaign.Defines.FrontCoverageFalloff);
         var seen = CoverSeen;
@@ -205,6 +247,8 @@ public static partial class Warfare
         ring.Add(target);
         next.Clear();
         var weight = 1f;
+        var localPower = 0f;
+        var localCovering = 0f;
         for (var hop = 0; hop < radius; hop++)
         {
             next.Clear();
@@ -216,14 +260,17 @@ public static partial class Warfare
                 foreach (var other in InProvince(neighbour))
                 {
                     if (!war.Opposes(advancingNationId, other.NationId) || other.Divisions < 0.1f) continue;
-                    coveringPower += M.Max(other.Power,
+                    localPower += M.Max(other.Power,
                         other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
-                    covering += weight;
+                    localCovering += weight;
                 }
             }
             (ring, next) = (next, ring);
             weight *= falloff;
         }
+        CoverCache[cacheKey] = (localPower, localCovering);
+        coveringPower += localPower;
+        covering += localCovering;
     }
 
 }

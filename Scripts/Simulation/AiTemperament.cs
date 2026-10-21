@@ -158,6 +158,12 @@ public static class AiTemperament
         // map, moving when it was not expected to. Instability and one-man rule both feed it.
         var volatility = M.Lerp(Born(9004), (1f - stability) * 0.6f + authority * 0.4f, 0.4f);
 
+        var (oppShift, cunShift, foreShift, volShift) = Rulers.TemperamentShift(campaign, nation);
+        opportunism += oppShift;
+        cunning += cunShift;
+        foresight += foreShift;
+        volatility += volShift;
+
         return new Character(M.Clamp01(opportunism), M.Clamp01(cunning),
             M.Clamp01(foresight), M.Clamp01(volatility));
     }

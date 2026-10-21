@@ -85,6 +85,35 @@ public static class FormableRestorations
         campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
             campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>());
 
+    /// <summary>
+    /// The ground the bookmark wrote for the tag is home whether or not it was taken back.
+    /// At a restoration the lost parts go into the country's homelands, so the claims
+    /// machinery - disputes, recovery goals, the staff's preference for lost ground - sees
+    /// a country with an unfinished sentence at its border, not a stranger's line. Without
+    /// this a restored country sat quietly inside whatever it first retook: it had no
+    /// homeland titles beyond the ground in hand, and nothing in the world told it the rest
+    /// was still its own.
+    /// </summary>
+    public static void SeedLostHomelands(Campaign campaign, Nation nation, string restoredTag)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || nation is null || string.IsNullOrEmpty(restoredTag)) return;
+        var toState = topology.ProvinceToState;
+        var held = new HashSet<int>(campaign.StatesOf(nation).Select(state => state.MapIndex));
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var home))
+            campaign.Homelands[nation.Id] = home = new List<int>();
+        var grew = false;
+        foreach (var province in Authored(campaign, restoredTag))
+        {
+            if (province <= 0 || province >= toState.Length) continue;
+            var state = toState[province];
+            if (held.Contains(state) || home.Contains(state)) continue;
+            home.Add(state);
+            grew = true;
+        }
+        if (grew) campaign.MarkStrategicChange();
+    }
+
     private static FormableNation Restoration(Campaign campaign, Nation gone)
     {
         var name = CountryNames.Of(gone.Tag);
@@ -117,12 +146,14 @@ public static class FormableRestorations
             if (DemographyCatalog.IsPrimary(founder.Tag, culture) ||
                 founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) return true;
         if (campaign is null || campaign.ProvinceMap is null) return false;
-        // Founded on its ground: a revolt whose capital stands inside the old borders.
-        if (!string.IsNullOrEmpty(founder.FoundedInRevolt) || founder.Movement is { Landless: false })
+        // Founded on its ground: a revolt or successor state whose regions stand inside the old borders.
+        if (!string.IsNullOrEmpty(founder.FoundedInRevolt) || founder.Movement is { Landless: false } || founder.SecededFromId >= 0)
         {
             var toState = campaign.ProvinceMap.ProvinceToState;
+            var heldStates = campaign.StatesOf(founder).Select(s => s.MapIndex).ToHashSet();
             foreach (var province in Authored(campaign, tag))
-                if (province > 0 && province < toState.Length && toState[province] == founder.CapitalStateMapIndex)
+                if (province > 0 && province < toState.Length &&
+                    (toState[province] == founder.CapitalStateMapIndex || heldStates.Contains(toState[province])))
                     return true;
         }
         return false;

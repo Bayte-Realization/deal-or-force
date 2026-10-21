@@ -1,0 +1,41 @@
+{
+  "names": {
+    "vietnamese": {
+      "family_first": true,
+      "given": ["Anh", "Bao", "Binh", "Canh", "Chinh", "Cuong", "Duc", "Dung", "Giang", "Hai", "Hieu", "Hoang", "Hung", "Huy", "Khanh", "Kien", "Linh", "Long", "Minh", "Nam", "Nghia", "Ngoc", "Phong", "Phuc", "Quan", "Quang", "Son", "Tam", "Thanh", "Thang", "Trung", "Tuan", "Viet", "Vinh", "Hoa", "Lan", "Mai", "Thu", "Trang", "Yen"],
+      "family": ["Bui", "Cao", "Dang", "Dao", "Do", "Duong", "Dinh", "Ha", "Ho", "Huynh", "Le", "Luong", "Ly", "Mai", "Ngo", "Nguyen", "Pham", "Phan", "Quach", "Ta", "Thai", "Tran", "Truong", "Vu", "Vo"]
+    },
+    "thai": {
+      "given": ["Anan", "Anucha", "Arthit", "Bancha", "Chai", "Chalerm", "Charnchai", "Chatchai", "Chinnawat", "Decha", "Kittisak", "Kriang", "Manop", "Narong", "Nattapong", "Phanom", "Pongsak", "Prasert", "Prayut", "Rattanakorn", "Somchai", "Somsak", "Suchart", "Suthep", "Thanom", "Wichai", "Worawut", "Achara", "Aree", "Duangjai", "Kanya", "Malinee", "Siriporn", "Sunee", "Wilai"],
+      "family": ["Boonsri", "Chaiyaporn", "Chantarasiri", "Intharaphan", "Kaewkla", "Khamla", "Lertchai", "Mekhala", "Nakhon", "Phanich", "Prasertsuk", "Rattanaporn", "Saengthong", "Srisai", "Suwannarat", "Thongchai", "Wattana", "Wongsawat", "Yodmani"]
+    },
+    "burmese": {
+      "given": ["Aung", "Bogyoke", "Chit", "Hla", "Htun", "Kyaw", "Lwin", "Maung", "Min", "Myint", "Naing", "Nay", "Nyein", "Phyo", "Soe", "Thant", "Thein", "Thura", "Tun", "Win", "Ye", "Zaw", "Zeya", "Aye", "Ei", "Khin", "Mi", "Myat", "Nilar", "Su", "Thandar", "Thiri", "Wai"],
+      "family": ["Aung", "Hlaing", "Htun", "Kyaw", "Lwin", "Maung", "Min", "Myint", "Naing", "Oo", "Phyo", "Soe", "Thein", "Tun", "Win", "Zaw"]
+    },
+    "malay": {
+      "given": ["Abdul", "Ahmad", "Amir", "Anwar", "Azman", "Azrul", "Bahari", "Fauzi", "Hafiz", "Hamzah", "Hassan", "Ibrahim", "Ismail", "Khairul", "Mahathir", "Megat", "Muhammad", "Nazri", "Rahim", "Razak", "Ridzuan", "Salleh", "Shahrul", "Sufian", "Tengku", "Yusof", "Zulkifli", "Aisyah", "Farah", "Hafizah", "Nurul", "Siti", "Zainab"],
+      "family": ["Abdullah", "Ahmad", "Ali", "Aziz", "Bakar", "Hamid", "Hassan", "Ibrahim", "Ismail", "Jaafar", "Kadir", "Kassim", "Latif", "Mahmud", "Osman", "Rahman", "Razak", "Salleh", "Yusof", "Zainal"]
+    },
+    "tagalog": {
+      "given": ["Alfredo", "Andres", "Antonio", "Benigno", "Carlos", "Cesar", "Corazon", "Eduardo", "Emilio", "Ferdinand", "Fidel", "Francisco", "Gloria", "Gregorio", "Jose", "Juan", "Lorenzo", "Manuel", "Marcelo", "Maria", "Nestor", "Rafael", "Ramon", "Rodrigo", "Salvador", "Sergio", "Teodoro", "Vicente", "Aurora", "Imelda", "Leni", "Liza"],
+      "family": ["Aquino", "Bautista", "Cruz", "Dela Cruz", "Enriquez", "Estrada", "Garcia", "Gonzales", "Lim", "Lopez", "Macapagal", "Magbanua", "Marcos", "Mendoza", "Navarro", "Ramos", "Reyes", "Rizal", "Robles", "Santos", "Sison", "Tan", "Villanueva"]
+    },
+    "arab_yemeni": {
+      "given": ["Abdullah", "Adel", "Ahmed", "Ali", "Ammar", "Anwar", "Aref", "Bakri", "Faisal", "Faraj", "Hadi", "Hamoud", "Hassan", "Hussein", "Ibrahim", "Ismail", "Jaber", "Khalid", "Mahdi", "Mohsen", "Mujahid", "Nasser", "Qasim", "Saleh", "Salim", "Sultan", "Tariq", "Yahya", "Yousef", "Zaid", "Amal", "Aisha", "Fatima", "Huda", "Mariam", "Nadia", "Rania", "Salma"],
+      "family": ["al-Ahmar", "al-Ansi", "al-Awlaki", "al-Bakri", "al-Eryani", "al-Hadhrami", "al-Hakimi", "al-Houthi", "al-Iryani", "al-Jabri", "al-Kibsi", "al-Maqtari", "al-Mutawakkil", "al-Qadhi", "al-Radaei", "al-Sabri", "al-Sanabani", "al-Shami", "al-Shaabi", "al-Subaihi", "al-Zindani", "Bakr", "Basindawa", "Hadi", "Saleh"]
+    },
+    "arab_gulf": {
+      "given": ["Abdullah", "Ahmed", "Ali", "Bandar", "Fahd", "Faisal", "Hamad", "Jaber", "Khalid", "Majid", "Mansour", "Mohammed", "Nasser", "Nawaf", "Saad", "Salem", "Saud", "Sultan", "Talal", "Turki", "Yousef", "Zayed", "Aisha", "Fatima", "Hessa", "Latifa", "Mariam", "Noura", "Shaikha"],
+      "family": ["al-Ahmed", "al-Dosari", "al-Fahd", "al-Ghanim", "al-Harbi", "al-Jaber", "al-Khalifa", "al-Maktoum", "al-Marri", "al-Nahyan", "al-Otaibi", "al-Qasimi", "al-Sabah", "al-Saud", "al-Shamsi", "al-Suwaidi", "al-Thani"]
+    },
+    "arab_levantine": {
+      "given": ["Adnan", "Ahmad", "Ali", "Bashar", "Bassel", "Fares", "Firas", "Ghassan", "Hafez", "Hassan", "Hisham", "Imad", "Jamil", "Kamal", "Karim", "Maher", "Marwan", "Michel", "Nizar", "Omar", "Rami", "Rifaat", "Sami", "Suleiman", "Walid", "Yasser", "Ziad", "Amal", "Dima", "Lina", "Maya", "Nour", "Rana", "Reem", "Salma"],
+      "family": ["Abboud", "Aflaq", "Assad", "Atassi", "Azzam", "Barakat", "Chamoun", "Darwish", "Frangieh", "Gemayel", "Haddad", "Hariri", "Hrawi", "Jumblatt", "Khoury", "Lahoud", "Mikati", "Moawad", "Nasser", "Qabbani", "Saad", "Sarkis", "Shihab", "Suleiman", "Tlass"]
+    },
+    "arab_maghrebi": {
+      "given": ["Abdelaziz", "Abdelkader", "Ahmed", "Ali", "Amine", "Anis", "Ayman", "Brahim", "Driss", "Fouad", "Hamid", "Hassan", "Hocine", "Idriss", "Kamel", "Karim", "Mahmoud", "Mehdi", "Mohamed", "Mokhtar", "Moulay", "Nabil", "Omar", "Rachid", "Saad", "Salah", "Tarik", "Youssef", "Zine", "Amina", "Fatima", "Khadija", "Leila", "Nadia", "Samira"],
+      "family": ["Alaoui", "Amrani", "Benali", "Benjelloun", "Bennani", "Berrada", "Bouzid", "Chraibi", "El Fassi", "El Idrissi", "Haddad", "Hamdaoui", "Kettani", "Lahlou", "Mansouri", "Mernissi", "Ouazzani", "Sabri", "Tazi", "Zeroual"]
+    }
+  }
+}

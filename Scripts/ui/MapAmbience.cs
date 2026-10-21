@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -11,15 +12,33 @@ namespace DealOrForce;
 /// them, which over a long campaign is most of the time. This fills the silence from the
 /// camera's point of view, the same way the weather fills the sky: from the strategic height
 /// a hush of high wind over the world; brought down to the tactical distance the wind falls
-/// away into open country; and near a battle the player can see, the front beyond the hills.
-/// Three loops, crossfaded slowly, under every cue and at the effects volume.
+/// away into the sound of the ground under the camera - open country, forest, jungle, desert,
+/// snow, a city, the sea; and near a battle the player can see, the front beyond the hills.
+/// Loops crossfaded slowly, under every cue and at the effects volume.
 /// </summary>
 public sealed partial class MapAmbience : Node
 {
     private const string Folder = "res://game/sound/audio/ambience/";
     private readonly Func<GlobePresentation> _globe;
     private readonly Func<Campaign> _campaign;
-    private AudioStreamPlayer _high, _land, _front;
+    private AudioStreamPlayer _high, _front;
+    // Each terrain lends the tactical camera the bed of its ground, a marsh a share of rain;
+    // open water is the sea, and ground with no bed of its own is open country.
+    private static readonly (string Terrain, (string Bed, float Share)[] Mix)[] Ground =
+    {
+        ("forest", new[] { ("forest", 1f) }),
+        ("jungle", new[] { ("jungle", 1f) }),
+        ("desert", new[] { ("desert_wind", 1f) }),
+        ("mountains", new[] { ("mountain_snow", 1f) }),
+        ("tundra", new[] { ("mountain_snow", .7f), ("land_calm", .3f) }),
+        ("ice", new[] { ("mountain_snow", 1f) }),
+        ("urban", new[] { ("city_far", 1f) }),
+        ("marsh", new[] { ("rain", .55f), ("land_calm", .45f) }),
+    };
+    private const string OpenCountry = "land_calm", Sea = "sea_coast";
+    private static readonly string[] BedNames = { OpenCountry, Sea, "forest", "jungle", "desert_wind", "mountain_snow", "city_far", "rain" };
+    private readonly Dictionary<string, AudioStreamPlayer> _beds = new();
+    private readonly Dictionary<string, float> _ground = new();
     private readonly AudioFocusEnvelope _cueFocus = new();
     private float _frontNear;
     private double _frontCheck;
@@ -40,7 +59,7 @@ public sealed partial class MapAmbience : Node
     public override void _Ready()
     {
         _high = Loop("wind_high.ogg");
-        _land = Loop("land_calm.ogg");
+        foreach (var bed in BedNames) _beds[bed] = Loop(bed + ".ogg");
         _front = Loop("front_far.ogg");
     }
 
@@ -68,7 +87,7 @@ public sealed partial class MapAmbience : Node
         {
             // Keep the loops' phases; audition must not restart or randomize the map's sound.
             Silence(_high, !AuditionSuppressed);
-            Silence(_land, !AuditionSuppressed);
+            foreach (var bed in _beds.Values) Silence(bed, !AuditionSuppressed);
             Silence(_front, !AuditionSuppressed);
             return;
         }
@@ -87,12 +106,46 @@ public sealed partial class MapAmbience : Node
         {
             _frontCheck = 0.5;
             _frontNear = FrontNear(campaign, globe, height);
+            if (land > 0.001f) Survey(campaign.ProvinceMap, globe, height);
         }
 
         var step = 1f - MathF.Exp(-(float)delta * 1.5f);
         Mix(_high, live ? high * 0.55f * level : 0f, step);
-        Mix(_land, live ? land * 0.45f * level : 0f, step);
+        foreach (var (name, player) in _beds)
+            Mix(player, live ? land * 0.45f * _ground.GetValueOrDefault(name) * level : 0f, step);
         Mix(_front, live ? _frontNear * 0.70f * level : 0f, step);
+    }
+
+    /// <summary>
+    /// What ground is under the camera: nine points around the view centre, so a coast or a
+    /// forest edge blends the beds instead of switching them. Presentation only.
+    /// </summary>
+    private void Survey(ProvinceTopology map, GlobePresentation globe, float height)
+    {
+        _ground.Clear();
+        if (map is null) { _ground[OpenCountry] = 1f; return; }
+        var (latitude, longitude) = globe.ViewCentre;
+        var radius = Mathf.Lerp(.5f, 2.5f, Mathf.InverseLerp(5.3f, 8.6f, height));
+        const float point = 1f / 9f;
+        for (var i = 0; i < 9; i++)
+        {
+            var angle = i * MathF.Tau / 8f;
+            var lat = i == 8 ? latitude : Math.Clamp(latitude + radius * MathF.Sin(angle), -89f, 89f);
+            var lon = i == 8 ? longitude : longitude + radius * MathF.Cos(angle) / MathF.Max(.2f, MathF.Cos(Mathf.DegToRad(latitude)));
+            var province = CityCatalog.ProvinceUnder(map, lat, lon);
+            if (province <= 0) { Add(Sea, point); continue; }
+            var terrain = map.TerrainAt(province).Id;
+            var known = false;
+            foreach (var (id, mix) in Ground)
+            {
+                if (id != terrain) continue;
+                foreach (var (bed, share) in mix) Add(bed, point * share);
+                known = true; break;
+            }
+            if (!known) Add(OpenCountry, point);
+        }
+
+        void Add(string bed, float share) => _ground[bed] = _ground.GetValueOrDefault(bed) + share;
     }
 
     /// <summary>How close the camera is to a battle the player can see, 0 to 1; only from low down.</summary>

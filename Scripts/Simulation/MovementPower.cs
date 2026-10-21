@@ -50,7 +50,7 @@ public static class MovementPower
     private static int _stateIndexCount = -1;
 
     /// <summary>Regions by map index, rebuilt when the map or region list changes.</summary>
-    private static ScenarioState StateOf(Campaign campaign, int mapIndex)
+    internal static ScenarioState StateOf(Campaign campaign, int mapIndex)
     {
         if (!ReferenceEquals(_stateIndexCampaign, campaign) ||
             _stateIndexRevision != campaign.MapRevision || _stateIndexCount != campaign.States.Count)
@@ -69,23 +69,44 @@ public static class MovementPower
     /// Panel reads must not fix the value for the rest of a day: recognition, recruiting
     /// and campaigning can change those inputs while paused, before another command.
     /// </summary>
-    public static float Momentum(Campaign c, Nation nation)
+    public static float Momentum(Campaign c, Nation nation) => Momentum(c, nation, useDayIndex: false);
+
+    /// <summary>
+    /// The same question for the weekly simulation pass, answered from the day's people
+    /// index. Panel reads and commands keep <see cref="Momentum"/> and its fresh walk:
+    /// only the scheduled pass may use the index, because only it runs at a stable point
+    /// in the day after populations have been reviewed.
+    /// </summary>
+    internal static float ScheduledMomentum(Campaign c, Nation nation) => Momentum(c, nation, useDayIndex: true);
+
+    private static float Momentum(Campaign c, Nation nation, bool useDayIndex)
     {
         if (c is null || nation?.Movement is not { Dissolved: false } state) return 0f;
         var definition = Movements.DefinitionOf(nation);
         long people = 0;
         var following = 0f;
         if (definition is not null)
-            // Deliberately the fresh walk, not the day-only people index: a panel read must
-            // see a population that changed while the world was paused, and the same-day
-            // command that follows must act on the number the panel showed.
-            foreach (var region in c.States)
-            {
-                var own = MovementRules.PeopleOf(region, definition, out var faithful) + faithful;
-                if (own <= 0) continue;
-                people += own;
-                following += own * state.Support.GetValueOrDefault(region.MapIndex);
-            }
+        {
+            if (useDayIndex)
+                foreach (var (region, known) in MovementRules.PeopleIn(c, definition))
+                {
+                    var own = known.Own + known.Faithful;
+                    if (own <= 0) continue;
+                    people += own;
+                    following += own * state.Support.GetValueOrDefault(region.MapIndex);
+                }
+            else
+                // Deliberately the fresh walk, not the day-only people index: a panel read
+                // must see a population that changed while the world was paused, and the
+                // same-day command that follows must act on the number the panel showed.
+                foreach (var region in c.States)
+                {
+                    var own = MovementRules.PeopleOf(region, definition, out var faithful) + faithful;
+                    if (own <= 0) continue;
+                    people += own;
+                    following += own * state.Support.GetValueOrDefault(region.MapIndex);
+                }
+        }
         var breadth = people > 0 ? following / people : 0f;
         var momentum = 0.35f * breadth + 0.25f * M.Clamp01(state.Legitimacy) + 0.15f * MathF.Min(1f, state.RecognisedBy.Count / 8f) +
                        0.15f * MathF.Min(1f, state.Cadres / 20000f) + 0.10f * MathF.Min(1f, state.IncomeWeekly * 52f / 0.5f);
@@ -260,20 +281,24 @@ public static class MovementPower
     public static IEnumerable<int> TickStages(Campaign c)
     {
         if (c is null || !c.FeatureEnabled("movements") || !MechanicFeatures.SystemEnabled(c, nameof(MovementPower))) yield break;
-        if (c.ElapsedDays % 7 != 3) yield break;
         var defines = c.Defines;
+        // One movement's week on its own day, the same stagger MovementRules uses for the
+        // weekly review. Running every movement's momentum on one day made that day's step
+        // several times the median and was the visible hitch at the top speed.
+        const int cycle = 7;
         foreach (var nation in c.Nations)
         {
             if (nation.Movement is not { Dissolved: false } state) continue;
+            if (!MovementRules.OnItsDay(c, nation.Id, cycle)) continue;
             using (SimProfiler.Measure("movement power"))
             {
-                var momentum = Momentum(c, nation);
+                var momentum = ScheduledMomentum(c, nation);
                 if (momentum >= defines.MovementParallelMomentum)
                 {
                     Administer(c, nation, state);
                     // The levy raises the movement's weekly income, and momentum counts that
                     // income. Read it again before asking whether the same movement may march.
-                    momentum = Momentum(c, nation);
+                    momentum = ScheduledMomentum(c, nation);
                 }
                 if (!nation.IsHuman)
                     foreach (var action in MarchStrikeActions)

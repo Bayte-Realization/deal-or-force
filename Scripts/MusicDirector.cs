@@ -27,7 +27,7 @@ public partial class MusicDirector : Node
     private int _catalogRevision = -1;
     private string _playing = "";
     private double _clock;
-    private string _region = "";
+    private string _region = "", _subRegion = "", _country = "";
     private bool _auditionSuppressed;
 
     public void SuppressForAudition(bool suppressed)
@@ -111,8 +111,8 @@ public partial class MusicDirector : Node
         if (catalogChanged) { _catalogRevision = MusicCatalog.Revision; _unavailable.Clear(); }
         var reset = !_started || moment != _moment || adaptive != _lastAdaptive;
         _lastAdaptive = adaptive;
-        var regionChanged = _region != _readout.Region;
-        _region = _readout.Region;
+        var regionChanged = _region != _readout.Region || _subRegion != _readout.SubRegion || _country != _readout.Country;
+        _region = _readout.Region; _subRegion = _readout.SubRegion; _country = _readout.Country;
         var moodChanged = _mood.Observe(requested, Time.GetTicksMsec() / 1000d, MusicCatalog.Director, reset);
         _moment = moment; _started = true;
         if (reset || catalogChanged || moodChanged || regionChanged)
@@ -125,7 +125,7 @@ public partial class MusicDirector : Node
     }
 
     private IReadOnlyList<MusicCatalog.Track> Pool() => Adaptive
-        ? MusicCatalog.For(_moment, _mood.Current, _region) : MusicCatalog.For(_moment);
+        ? MusicCatalog.For(_moment, _mood.Current, _region, _subRegion, _country) : MusicCatalog.For(_moment);
 
     private void RequestNext(bool advance)
     {

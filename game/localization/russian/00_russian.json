@@ -202,6 +202,9 @@
   "PEACE NEGOTIATION": "МИРНЫЕ ПЕРЕГОВОРЫ",
   "Diplomatic overview": "Дипломатический обзор",
   "Diplomatic mission": "Дипломатическая миссия",
+  "Recall diplomatic mission": "Отозвать дипломатическую миссию",
+  "Diplomatic mission launched. Goodwill will accrue weekly.": "Дипломатическая миссия начата. Отношения будут улучшаться еженедельно.",
+  "Diplomatic mission recalled.": "Дипломатическая миссия отозвана.",
   "Diplomatic crisis": "Дипломатический кризис",
   "Diplomatic confrontation": "Дипломатическое противостояние",
   "Diplomatic action is still on cooldown.": "Дипломатическое действие ещё на перезарядке.",
@@ -895,5 +898,8 @@
   "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.": "Отмечать города точкой и названием: столицы и крупнейшие города издалека, небольшие города при приближении. Названия никогда не налезают друг на друга.",
   "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.": "Автоматическая горизонтальная прокрутка камеры для показов и таймлапсов (F6). Нажмите ещё раз, чтобы остановить.",
   "PAN": "ОБЗОР",
-  "RANGE": "РАДИУС"
+  "RANGE": "РАДИУС",
+  "Resistance": "Сопротивление",
+  "slipping {0:P1} of the hold a week": "сползает {0:P1} удержания в неделю",
+  "Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further.": "Партизаны и тихое несотрудничество спускают оккупацию неделю за неделей. Гарнизон замедляет их; соплеменники оккупанта в регионе — ещё сильнее."
 }

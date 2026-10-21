@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -73,16 +74,45 @@ public static class Delegation
     /// are worth taking.</summary>
     public const string Cabinet = "cabinet";
 
-    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Command, Navy, Diplomacy, Cabinet };
+    public const string Construction = "construction";
+    public const string Research = "research";
+    public const string Personnel = "personnel";
+
+    /// <summary>The colonial office: the subject management every other overlord runs —
+    /// granting land to a fitting existing subject rather than founding micro-vassals, and
+    /// releasing an unruly, culturally foreign periphery as an autonomous satellite when the
+    /// empire is overstretched. It acts on the same monthly review and the same thresholds
+    /// the computer's overlords use. Founding a subject, annexing one or granting land by
+    /// hand stays the player's, and the office only ever acts on the same monthly day it
+    /// would for anybody else.</summary>
+    public const string Subjects = "subjects";
+
+    private const string ManualConstruction = "construction_manual";
+    private const string ManualResearch = "research_manual";
+
+    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Command, Navy, Diplomacy, Cabinet, Construction, Research, Personnel, Subjects };
 
     /// <summary>Whether this country has handed that portfolio over.</summary>
     public static bool Holds(Nation nation, string portfolio) =>
-        nation is not null && (portfolio == Army ? !nation.ArmyByHand : nation.Delegated.Contains(portfolio));
+        nation is not null && (portfolio switch
+        {
+            Army => !nation.ArmyByHand,
+            // Preserve old saves: research was automatic and the delegated treasury also built.
+            Research => !nation.Delegated.Contains(ManualResearch),
+            Construction => nation.Delegated.Contains(Construction) ||
+                nation.Delegated.Contains(Budget) && !nation.Delegated.Contains(ManualConstruction),
+            _ => nation.Delegated.Contains(portfolio)
+        });
 
     public static void Set(Nation nation, string portfolio, bool delegated)
     {
         if (nation is null || !((IList<string>)Portfolios).Contains(portfolio)) return;
         if (portfolio == Army) { nation.ArmyByHand = !delegated; return; }
+        if (portfolio is Research or Construction)
+        {
+            var marker = portfolio == Research ? ManualResearch : ManualConstruction;
+            if (delegated) nation.Delegated.Remove(marker); else nation.Delegated.Add(marker);
+        }
         if (delegated) nation.Delegated.Add(portfolio);
         else nation.Delegated.Remove(portfolio);
     }
@@ -109,6 +139,7 @@ public static class Delegation
     {
         if (campaign is null || nation is null || nation.Delegated.Count == 0) return;
         if (Holds(nation, Budget)) AiStatecraft.GovernTheBudget(campaign, nation);
+        else if (Holds(nation, Construction)) AiStatecraft.PlanConstruction(campaign, nation);
         if (Holds(nation, Trade)) RunTheTradeDesk(campaign, nation);
         if (Holds(nation, Cabinet)) AiStatecraft.RunTheCabinet(campaign, nation);
     }
@@ -133,23 +164,40 @@ public static class Delegation
     /// </summary>
     private static void RunTheTradeDesk(Campaign campaign, Nation nation)
     {
+        var atWar = campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+        var fiscalStress = nation.DebtCondition >= DebtCondition.Stressed || nation.Treasury < 0.5f;
+
         foreach (var (commodity, quote) in nation.Market)
         {
             var definition = CommodityCatalog.Get(commodity);
             if (definition is null) continue;
 
             var essential = definition.EssentialWeight >= 0.5f;
+            var military = CommodityCatalog.IdOf(commodity) is "ammunition" or "fuel" or "oil" or "iron_ore" or "rare_earths";
             var short_ = quote.IsShortage;
             var covered = quote.Demand <= 0.001f ? 1f : quote.Production / quote.Demand;
 
             if (short_)
             {
                 // Buy it first, and do not haggle while people are going without.
-                Instruct(nation, commodity, TradeDesk.ImportPriority, essential ? 2.5f : 1.6f);
+                var priority = (essential || (atWar && military)) ? 2.5f : 1.6f;
+                // If treasury is in severe distress, don't overspend on non-essentials
+                if (fiscalStress && !essential && !military) priority = 1.0f;
+
+                Instruct(nation, commodity, TradeDesk.ImportPriority, priority);
                 Instruct(nation, commodity, TradeDesk.ImportCeiling, 1f);
                 // And stop selling what we do not have.
                 Instruct(nation, commodity, TradeDesk.ExportReserve,
-                    essential ? 1f : M.Clamp(1f - covered, 0f, 1f));
+                    essential || (atWar && military) ? 1f : M.Clamp(1f - covered, 0f, 1f));
+                continue;
+            }
+
+            // In wartime, reserve military and fuel stocks even if slightly above demand
+            if (atWar && military && covered < 1.6f)
+            {
+                Instruct(nation, commodity, TradeDesk.ExportReserve, 0.40f);
+                Instruct(nation, commodity, TradeDesk.ImportPriority, 1.8f);
+                Instruct(nation, commodity, TradeDesk.ImportCeiling, 1f);
                 continue;
             }
 

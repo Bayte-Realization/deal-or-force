@@ -104,7 +104,9 @@ foreach ($path in (Get-ChildItem 'game/common/cultures' -Filter '*.json' | Sort-
     foreach ($entry in $cultureData.PSObject.Properties) {
         if ($entry.Name.StartsWith('//')) { continue }
         if ($null -eq $entry.Value.colour) { continue }
-        $families += @{ name = 'flag_culture_' + $entry.Name; colour = $entry.Value.colour }
+        # A people's flag follows their politics too: a fascistic or theocratic turn under
+        # any culture's name flies a cloth of its own, same as the movements do.
+        $families += @{ name = 'flag_culture_' + $entry.Name; colour = $entry.Value.colour; deep = $true }
     }
 }
 foreach ($path in (Get-ChildItem 'game/common/formable_nations' -Filter '*.json' | Sort-Object Name)) {

@@ -113,14 +113,16 @@ public static class NationalCourses
 
     public static void Tick(Campaign c)
     {
+        var coursesEnabled = c.FeatureEnabled("national_courses");
+        var reviewDays = Math.Clamp(c.Defines.CourseReviewDays, 1, 90);
         foreach (var n in c.Nations)
         {
             var m = n.NationalCourse;
-            n.NationalCourseActive = c.FeatureEnabled("national_courses");
+            n.NationalCourseActive = coursesEnabled;
             if (!n.NationalCourseActive || c.Fallen.Contains(n.Id))
             { m.LastReviewDay = c.ElapsedDays; continue; }
             if (!m.Initialized) { Initialize(c, n); continue; }
-            if (c.ElapsedDays - m.LastReviewDay < Math.Clamp(c.Defines.CourseReviewDays, 1, 90)) continue;
+            if (c.ElapsedDays - m.LastReviewDay < reviewDays) continue;
             var days = Math.Min(90, c.ElapsedDays - m.LastReviewDay);
             m.LastReviewDay = c.ElapsedDays;
             var politics = n.Government + ":" + n.Ideology;

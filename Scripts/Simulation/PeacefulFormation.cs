@@ -213,6 +213,75 @@ public static class PeacefulFormation
         SupportCore.IndexReach(campaign);
         campaign.MarkStrategicChange();
     }
+
+    /// <summary>Direct bilateral integration of a partner state (e.g. cultural shard or consented merger).</summary>
+    public static void IntegratePartner(Campaign campaign, Nation founder, Nation partner)
+    {
+        if (campaign is null || founder is null || partner is null || founder.Id == partner.Id) return;
+        var map = campaign.ProvinceMap;
+        if (map is not null)
+        {
+            var provinces = new List<int>();
+            for (var p = 1; p <= map.ProvinceCount; p++)
+            {
+                if (map.ProvinceToNation[p] == partner.MapIndex && !map.WaterByProvince[p])
+                    provinces.Add(p);
+            }
+            if (provinces.Count > 0)
+                StatePartition.Annex(campaign, provinces, founder, asConquest: false);
+        }
+
+        ProductionProgramme.MigrateLegacy(founder, ProductionProgramme.Allocate(campaign, founder));
+        ProductionProgramme.MigrateLegacy(partner, ProductionProgramme.Allocate(campaign, partner));
+
+        var rawAnnual = founder.Gdp / MathF.Max(.0001f, founder.OutputScale);
+        var gdp = partner.Gdp;
+        rawAnnual += gdp / MathF.Max(.0001f, partner.OutputScale);
+        founder.Gdp += gdp;
+        partner.Gdp = 0;
+        partner.Population = 0;
+
+        campaign.Fallen.Add(partner.Id);
+        SovereignFinance.MergeAccounts(campaign, founder, partner);
+        founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;
+        founder.ConvertedCivilianUnits = (int)Math.Min(int.MaxValue, (long)founder.ConvertedCivilianUnits + partner.ConvertedCivilianUnits);
+        foreach (var line in partner.ProductionLines.Where(l => l is not null))
+        {
+            var existing = founder.ProductionLines.Find(l => l is not null && l.Good == line.Good);
+            if (existing is null) founder.ProductionLines.Add(new ProductionLine { Good = line.Good, Units = line.Units });
+            else existing.Units = (int)Math.Min(int.MaxValue, (long)existing.Units + line.Units);
+        }
+        partner.ProductionLines.Clear(); partner.ConvertedCivilianUnits = 0;
+        foreach (var culture in DemographyCatalog.PrimaryCultures(founder.Tag).Concat(partner.FoundedCultures)
+                     .Concat(DemographyCatalog.PrimaryCultures(partner.Tag)))
+            if (!founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) founder.FoundedCultures.Add(culture);
+        foreach (var technology in partner.Technologies)
+            if (!founder.Technologies.Contains(technology)) founder.Technologies.Add(technology);
+        foreach (var progress in partner.ResearchProgress)
+            founder.ResearchProgress[progress.Key] = Math.Max(founder.ResearchProgress.GetValueOrDefault(progress.Key), progress.Value);
+        foreach (var army in campaign.Armies.Where(a => a.NationId == partner.Id)) army.NationId = founder.Id;
+        foreach (var group in campaign.ArmyGroups.Where(a => a.NationId == partner.Id)) group.NationId = founder.Id;
+        foreach (var line in campaign.FrontLines.Where(a => a.NationId == partner.Id))
+        { line.NationId = founder.Id; line.BorderRevision = int.MinValue; line.PostsDay = int.MinValue; }
+        foreach (var fleet in campaign.Fleets.Where(a => a.NationId == partner.Id)) fleet.NationId = founder.Id;
+        foreach (var unit in campaign.SupportFormations.Where(a => a.NationId == partner.Id)) unit.NationId = founder.Id;
+        foreach (var order in campaign.SupportOrders.Where(a => a.NationId == partner.Id)) order.NationId = founder.Id;
+        foreach (var order in campaign.Recruitment.Where(a => a.NationId == partner.Id)) order.NationId = founder.Id;
+        foreach (var project in campaign.Construction.Where(a => a.NationId == partner.Id)) project.NationId = founder.Id;
+        foreach (var child in campaign.Nations.Where(n => n.AnswersTo(partner.Id))) child.OverlordId = founder.Id;
+        SubjectSystem.Release(campaign, partner);
+        partner.CapitalStateMapIndex = 0; partner.CapitalProvinceId = 0;
+        if (partner.IsHuman) campaign.ConfigureSinglePlayer(founder.Id);
+
+        founder.Population = campaign.StatesOf(founder).Sum(s => s.Population);
+        if (founder.FoundedCultures.Count > 0) DemographyCatalog.Declare(founder.Tag, founder.FoundedCultures);
+        if (rawAnnual > .0001f) founder.OutputScale = founder.Gdp / rawAnnual;
+        var allocation = ProductionProgramme.Allocate(campaign, founder);
+        founder.ArmsFocus = allocation.RawCivilian == 0 ? 0 : allocation.Converted / (float)allocation.RawCivilian;
+        campaign.LocateCapitals();
+        SupportCore.IndexReach(campaign);
+        campaign.MarkStrategicChange();
+    }
 }
 
 public sealed class InviteFormationCommand : ICampaignCommand

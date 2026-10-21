@@ -5,6 +5,7 @@ using System.Linq;
 namespace DealOrForce.Simulation;
 
 /// <summary>Facts emitted only by successful simulation actions; no UI-owned state or inferred causes.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(ChronicleEntryConverter))]
 public sealed record ChronicleEntry(long Sequence, int Day, GameDate Date, string Kind,
     int ActorId, int TargetId, string ActorName, string TargetName, string Subject, string Place, bool Public);
 

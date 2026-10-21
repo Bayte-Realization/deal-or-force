@@ -20,6 +20,7 @@ public partial class DealOrForceGame
     private Label _pickerSubheading = null!;
     private VBoxContainer _pickerSeats = null!;
     private Control _pickerFlag = null!;
+    private VBoxContainer _pickerLeaderBox;
     private Nation _pickerNation;
     private bool _pickerHotseatMode;
     private LineEdit _pickerSeed = null!;
@@ -99,6 +100,8 @@ public partial class DealOrForceGame
         nameRow.AddChild(_pickerName);
         _pickerTier = Title("KOR · major power", 13, Ui.Colour("text.muted"));
         rows.AddChild(_pickerTier);
+        _pickerLeaderBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddChild(_pickerLeaderBox);
         _pickerStats = Title("", 15, Ui.Colour("text.bright"));
         _pickerStats.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerStats);
@@ -321,6 +324,11 @@ public partial class DealOrForceGame
         _pickerName.Text = nation.DisplayName;
         SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
+        if (_pickerLeaderBox is not null)
+        {
+            ClearRuntimeChildren(_pickerLeaderBox);
+            _pickerLeaderBox.AddChild(BuildGrandStrategyLeaderHeader(nation, compact: true));
+        }
         _pickerStats.Text = nation.Landless
             ? Simulation.Loc.Format("Headquarters  {0}, {1}\nCadres  {2}    Standing  {3}\nTreasury  {4}\nNo land: it campaigns, raises money and rises up to take some.",
                 MovementRules.RegionName(_campaign, nation.Movement.HeadquartersStateMapIndex),

@@ -15,6 +15,9 @@
   "ht_ou": {
     "population": 11263077,
     "urbanization": 0.584,
+    // The gangs, the roadblocks and the burned prisons of 2023-2024: half the capital
+    // answers to armed neighbourhoods, and the police have left whole districts to them.
+    "radicalism": 0.55,
     "cultures": { "haitian": 0.96, "dominican": 0.02, "creole_african": 0.01, "american": 0.005, "french": 0.005 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.435, "Coal": 0.232, "Oil": 0.406, "IronOre": 0.156, "RareEarths": 0.072, "NaturalGas": 0.434, "Timber": 2.725, "Bauxite": 0.095, "Uranium": 0.005 }

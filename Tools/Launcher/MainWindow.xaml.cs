@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 
 namespace DealOrForce.Launcher;
@@ -21,6 +22,8 @@ public partial class MainWindow : Window
         _enginePath = Path.Combine(catalog.Profile, "launcher_engine.txt");
         _godot = godot ?? (File.Exists(_enginePath) ? File.ReadAllText(_enginePath).Trim() : Environment.GetEnvironmentVariable("GODOT_NET"));
         InitializeComponent();
+        KeyArt.Source = KeyArtOfTheDay();
+        VersionChip.Text = DealOrForce.Simulation.GameBuildInfo.VersionLabel.Replace("DoF ", "");
         L.TranslateTree(this);
         LanguageButton.Content = L.LanguageLabel;
         EngineButton.Visibility = catalog.IsProject ? Visibility.Visible : Visibility.Collapsed;
@@ -50,10 +53,14 @@ public partial class MainWindow : Window
         EmptyMessage.Text = Search.Text.Length > 0 ? L.T("Nothing found. Try another name or ID.") : _dlc
             ? L.T("No expansions found.\n\nAdd an expansion folder with a dlc.json to dlc, then press \"Refresh\".")
             : L.T("No mods installed yet.\n\nAdd a mod folder with a manifest.json to mods, then press \"Refresh\".\n\n_templates holds examples for authors; they are not active mods.");
-        ModsTab.Background = Brush(!_dlc ? "#665632" : "#213340");
-        DlcTab.Background = Brush(_dlc ? "#665632" : "#213340");
-        Summary.Text = L.F("READY TO LAUNCH\n{0} expansions  ·  {1} mods",
-            _catalog.Packages.Count(p => p.IsDlc && p.Active), _catalog.Packages.Count(p => !p.IsDlc && p.Active));
+        ModsTab.Background = Brush(!_dlc ? "#5E5032" : "#1C2E3A");
+        DlcTab.Background = Brush(_dlc ? "#5E5032" : "#1C2E3A");
+        ModsTab.BorderBrush = Brush(!_dlc ? "#C9AE6C" : "#4A5A62");
+        DlcTab.BorderBrush = Brush(_dlc ? "#C9AE6C" : "#4A5A62");
+        DlcCount.Text = _catalog.Packages.Count(p => p.IsDlc && p.Active).ToString();
+        ModCount.Text = _catalog.Packages.Count(p => !p.IsDlc && p.Active).ToString();
+        var problems = _catalog.Packages.Count(p => p.Kind == "problem");
+        Summary.Text = problems > 0 ? L.F("{0} enabled items cannot load: see the list.", problems) : L.T("Ready to launch.");
         Earlier.IsEnabled = Later.IsEnabled = !_dlc && PackageList.SelectedItem != null;
         if (_catalog.SettingsError.Length > 0) Status.Text = L.T("Settings error. Open the profile folder; the backup is the .bak file.");
         else if (_catalog.Warnings.Count > 0) Status.Text = L.F("Discovery warnings: {0}. Details are in the log.", _catalog.Warnings.Count);
@@ -97,6 +104,27 @@ public partial class MainWindow : Window
     }
 
     private static SolidColorBrush Brush(string hex) => (SolidColorBrush)new BrushConverter().ConvertFromString(hex)!;
+
+    /// <summary>
+    /// One of the game's loading-screen illustrations, a different one each day, so the launcher
+    /// opens on the same world the game does. Embedded, because an exported build packs its own
+    /// copies where a launcher cannot read them.
+    /// </summary>
+    private static BitmapImage? KeyArtOfTheDay()
+    {
+        string[] art = { "loading_war_room", "loading_negotiation_hall", "loading_port_dusk", "loading_winter_front" };
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.UriSource = new Uri($"pack://application:,,,/Art/{art[DateTime.Now.DayOfYear % art.Length]}.jpg");
+            image.DecodePixelWidth = 1100;
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.EndInit();
+            return image;
+        }
+        catch (Exception) { return null; }
+    }
     private void ModsClick(object sender, RoutedEventArgs e) { _dlc = false; RefreshView(); }
     private void DlcClick(object sender, RoutedEventArgs e) { _dlc = true; RefreshView(); }
     private void SearchChanged(object sender, TextChangedEventArgs e) => RefreshView();

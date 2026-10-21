@@ -37,19 +37,39 @@ static class CivicCampaignTests
         Check(CivilIndependence.ParentConsents(c, movement, parent), "authorisation is an actual campaign command");
         var votes = CivilIndependence.ResidentSupport(movement, region);
         Check(votes > .5f, "majority uses all residents, not just a selected people's fraction");
+        var secedingProvince = PeaceConference.ProvincesOfState(c.ProvinceMap, region.MapIndex).First();
+        var garrison = new Army
+        {
+            Id = c.Armies.Select(a => a.Id).DefaultIfEmpty().Max() + 1,
+            NationId = parent.Id, ProvinceId = secedingProvince, Divisions = 1f,
+            Strength = .8f, Cohesion = .8f, SupplyLevel = .8f, Personnel = 12_000,
+            MaxPersonnel = 15_000, TemplateId = "line_infantry"
+        };
+        c.Armies.Add(garrison);
+        c.Defines.PeacefulSecessionDefectionShare = 1f;
         var armies = c.Armies.Count; var wars = c.Wars.Count;
         Check(CivilIndependence.Ratify(c, movement, region), "qualified agreed referendum transfers territory");
         Check(region.NationMapIndex == movement.MapIndex && c.StatesOf(parent).Length > 0 &&
             c.Armies.Count == armies && c.Wars.Count == wars, "peaceful transfer creates neither militia nor war and preserves parent");
+        Check(garrison.NationId == movement.Id,
+            "an agreed referendum carries the local garrison with the new country");
         Check(CampaignDiplomacy.Get(c, parent.Id, movement.Id).TruceUntil > c.ElapsedDays,
             "settlement protects against immediate attack");
         var options = new JsonSerializerOptions { IncludeFields = true, PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate };
         var saved = JsonSerializer.Deserialize<MovementState>(JsonSerializer.Serialize(movement.Movement, options), options);
         Check(saved.ReadyOnDay.ContainsKey(CivilIndependence.ConsentKey(parent.Id)), "referendum consent survives serialization");
-        Check(SecessionEvents.NameFor(c, "scottish", "us_ca", "California", parent) == "California",
-            "diaspora state uses a local name, not a remote homeland");
-        Check(SecessionEvents.NameFor(c, "scottish", "gb_hld", "Highlands", parent) == "Highlands",
-            "existing state name is not duplicated");
+        // A diaspora is named for where it is, not for the homeland its people came from:
+        // Scots in California found California. And a secession seated in one region is that
+        // region, not the whole land its box sits in - the Highlands are Highland, and
+        // calling the state founded there Scotland would be the second thing with that name.
+        var diaspora = SecessionEvents.NameFor(c, "scottish", "us_ca", "California", parent);
+        Check(diaspora.Contains("California", StringComparison.OrdinalIgnoreCase) &&
+              !diaspora.Contains("Scotland", StringComparison.OrdinalIgnoreCase),
+            "diaspora state uses a local name, not a remote homeland: " + diaspora);
+        var highlands = SecessionEvents.NameFor(c, "scottish", "gb_hld", "Highlands", parent);
+        Check(highlands.Contains("Highland", StringComparison.OrdinalIgnoreCase) &&
+              !highlands.Contains("Scotland", StringComparison.OrdinalIgnoreCase),
+            "existing state name is not duplicated: " + highlands);
         var war = new StrategicWar { CivilConflict = true, AiNegotiationUnlockDay = 540, WarScore = 95 };
         Check(CivilWarPersistence.NegotiationLocked(c, war), "civil conflict cannot bargain away its future on an early score spike");
         war.Id = c.Wars.Select(w => w.Id).DefaultIfEmpty().Max() + 1;

@@ -13,7 +13,13 @@
 {
 
   // Combat
-  "DefenderAdvantage": 2.30,
+  "DefenderAdvantage": 2.50,
+  "HomelandDefenseBonus": 1.25,
+  "CapitalDefenseBonus": 1.20,
+  "FrontalDefenseBonus": 1.25,
+  "EntrenchmentShellingResistance": 0.60,
+  "BreakthroughEntrenchmentResistance": 0.70,
+  "UrbanBreakthroughPenalty": 0.50,
   "CombatWidth": 80,
   "CombatWidthPerDirection": 20,
   "MaxAttackDirections": 4,
@@ -31,7 +37,7 @@
   "BrokenCasualtyMultiplier": 2.4,
   "AttackerCasualtyMultiplier": 2.4,
   "EntrenchmentBonus": 1.80,
-  "EntrenchmentPerDay": 0.030,
+  "EntrenchmentPerDay": 0.045,
   "EntrenchmentAtScenarioStart": 0.85,
   "EntrenchmentLostPerCombatDay": 0.020,
   "EntrenchmentUnderFireShare": 0.75,
@@ -105,5 +111,24 @@
   "WoundedShareOfCasualties": 0.75,
   "PrisonersRepatriatedShare": 0.92,
   "PrisonerExchangeMinimum": 500,
-  "PrisonerExchangeIntervalDays": 30
+  "PrisonerExchangeIntervalDays": 30,
+
+  // Operational tempo (CombatTempo.cs). A prepared and supplied attack with local
+  // superiority can break organisation faster instead of only grinding; a dug-in,
+  // supplied defence can turn a spent attack back. These are bounded fractions, not
+  // free victories: below the pressure floors both stay at zero.
+  "BreakthroughPressureFloor": 1.35,
+  "BreakthroughPressureSpan": 1.75,
+  "BreakthroughPlanningFloor": 0.35,
+  "BreakthroughSupplyFloor": 0.45,
+  "BreakthroughOrganisationBonus": 0.45,
+  "BreakthroughAttackerRelief": 0.18,
+  "CounterattackPressureFloor": 1.15,
+  "CounterattackPressureSpan": 1.50,
+  "CounterattackEntrenchmentFloor": 0.40,
+  "CounterattackSupplyFloor": 0.45,
+  "CounterattackOrganisationBonus": 0.50,
+  "CounterattackDefenderRelief": 0.20,
+  "CounterattackVulnerabilityWeight": 1.50,
+  "DesperateCounterattackBonus": 0.30
 }

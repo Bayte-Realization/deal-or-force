@@ -1,0 +1,82 @@
+// The world-regions score of 20-21 October: a calm and a tense piece for each part of the
+// world that had no music of its own, a war underscore for everyone, and the menu's signature
+// theme. Generated through Creative Claw (Lyria 3.5) and levelled to -19 LUFS like the rest.
+//
+// A region tag is a continent ("europe", "africa", "oceania"), a sub-region of the country
+// table ("western_asia", "central_asia", "caribbean") or a country's own tag ("irn"); spaces
+// and hyphens read as underscores. The most specific tag wins: a country in Western Asia
+// hears the Middle East, not the continent's East Asian companions, and falls back to them
+// only for a mood its sub-region has no track for. Iran is Southern Asia in the table and
+// Middle Eastern in music, so it is named by tag. Untagged tracks still play everywhere.
+{
+  "tracks": {
+    "menu_theme_atlas": {
+      "file": "audio/menu_theme_atlas.ogg", "label": "Turning the globe",
+      "when": "menu", "weight": 3, "volume_db": 0
+    },
+    "world_war": {
+      "file": "audio/world_war.ogg", "label": "Arrows on the map",
+      "when": "campaign", "moods": ["war"], "weight": 2, "volume_db": 0
+    },
+    "europe_calm": {
+      "file": "audio/europe_calm.ogg", "label": "Morning papers",
+      "when": "campaign", "moods": ["calm"], "regions": ["europe"], "weight": 3, "volume_db": 0
+    },
+    "europe_tense": {
+      "file": "audio/europe_tense.ogg", "label": "Border winter",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["europe"], "weight": 3, "volume_db": 0
+    },
+    "eurasia_calm": {
+      "file": "audio/eurasia_calm.ogg", "label": "Trains across the plain",
+      "when": "campaign", "moods": ["calm"], "regions": ["eastern_europe", "central_asia"], "weight": 3, "volume_db": 0
+    },
+    "eurasia_tense": {
+      "file": "audio/eurasia_tense.ogg", "label": "Frozen rail yards",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["eastern_europe", "central_asia"], "weight": 3, "volume_db": 0
+    },
+    "middle_east_calm": {
+      "file": "audio/middle_east_calm.ogg", "label": "Evening oud",
+      "when": "campaign", "moods": ["calm"], "regions": ["western_asia", "northern_africa", "irn"], "weight": 3, "volume_db": 0
+    },
+    "middle_east_tense": {
+      "file": "audio/middle_east_tense.ogg", "label": "Sand in the wires",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["western_asia", "northern_africa", "irn"], "weight": 3, "volume_db": 0
+    },
+    "africa_calm": {
+      "file": "audio/africa_calm.ogg", "label": "Markets opening",
+      "when": "campaign", "moods": ["calm"], "regions": ["africa"], "weight": 3, "volume_db": 0
+    },
+    "africa_tense": {
+      "file": "audio/africa_tense.ogg", "label": "Dry season",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["africa"], "weight": 3, "volume_db": 0
+    },
+    "south_america_calm": {
+      "file": "audio/south_america_calm.ogg", "label": "Harbour at golden hour",
+      "when": "campaign", "moods": ["calm"], "regions": ["south_america", "central_america", "caribbean"], "weight": 3, "volume_db": 0
+    },
+    "oceania_calm": {
+      "file": "audio/oceania_calm.ogg", "label": "Thin cables",
+      "when": "campaign", "moods": ["calm"], "regions": ["oceania"], "weight": 3, "volume_db": 0
+    },
+    "oceania_tense": {
+      "file": "audio/oceania_tense.ogg", "label": "Ships on the horizon",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["oceania"], "weight": 3, "volume_db": 0
+    },
+    "latin_tense": {
+      "file": "audio/latin_tense.ogg", "label": "Curfew radio",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["south_america", "central_america", "caribbean"], "weight": 3, "volume_db": 0
+    },
+    "north_america_tense": {
+      "file": "audio/north_america_tense.ogg", "label": "Briefing room",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["northern_america"], "weight": 3, "volume_db": 0
+    },
+    "south_asia_tense": {
+      "file": "audio/south_asia_tense.ogg", "label": "City under curfew",
+      "when": "campaign", "moods": ["uneasy", "crisis", "war"], "regions": ["southern_asia"], "weight": 3, "volume_db": 0
+    },
+    "after_ceasefire": {
+      "file": "audio/after_ceasefire.ogg", "label": "After the ceasefire",
+      "when": "campaign", "moods": ["recovery"], "weight": 2, "volume_db": 0
+    }
+  }
+}

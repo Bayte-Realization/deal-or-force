@@ -143,13 +143,13 @@ public sealed partial class GlobePresentation
         var cloudFull = defines?.CloudFullDistance ?? 10.5f;
         var cloudClear = defines?.CloudClearDistance ?? 7.6f;
         var allowed = Simulation.WeatherReadability.LayersAllowed(_campaign);
-        var clouds = !allowed || !_weatherEnabled || !_cloudsShown || replaced || cloudFull <= cloudClear ? 0f
+        var clouds = !allowed || !QualityWeather || !_weatherEnabled || !_cloudsShown || replaced || cloudFull <= cloudClear ? 0f
             : Mathf.SmoothStep(cloudClear, cloudFull, distance);
 
         var mistFull = defines?.MistFullDistance ?? 6.0f;
         var mistClear = defines?.MistClearDistance ?? 8.2f;
         var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionTexture is not null;
-        var mist = !allowed || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
+        var mist = !allowed || !QualityWeather || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
         // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a

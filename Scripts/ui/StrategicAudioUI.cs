@@ -19,6 +19,8 @@ public partial class DealOrForceGame
     private readonly Dictionary<int, (int State, BuildingKind Building, int Count)> _audioConstruction = new();
     private readonly HashSet<int> _audioSupportFormations = new();
     private int _audioKnownTechCount = -1;
+    private long _audioNewsSeen = -1;
+    private ulong _lastNewsStingAt;
 
     /// <summary>
     /// Put the player's three volumes onto the players.
@@ -209,6 +211,8 @@ public partial class DealOrForceGame
         _audioConstruction.Clear();
         _audioSupportFormations.Clear();
         _audioKnownTechCount = -1;
+        // A loaded campaign's old news is not news: only what happens from here sounds.
+        _audioNewsSeen = _campaign.Chronicle.Entries.Count > 0 ? _campaign.Chronicle.Entries[^1].Sequence : 0;
         foreach (var battle in _campaign.Battles.Where(battle => battle.Ended))
             _knownEndedBattles.Add(battle.Id);
     }
@@ -229,6 +233,41 @@ public partial class DealOrForceGame
 
         if (playerLost) PlayStrategicCue("battle_lost");
         else if (playerWon) PlayStrategicCue("battle_won");
+        else RefreshNewsAudio();
+    }
+
+    /// <summary>
+    /// A headline the rail will show makes its sound (common/news "stings"): the most
+    /// important of what arrived since the last look, at most one per gap. The player's own
+    /// acts are left out - declaring a war or signing a peace already sounded from the button.
+    /// </summary>
+    private void RefreshNewsAudio()
+    {
+        var player = _campaign.Player;
+        if (_audioNewsSeen < 0)
+        {
+            _audioNewsSeen = _campaign.Chronicle.Entries.Count > 0 ? _campaign.Chronicle.Entries[^1].Sequence : 0;
+            return;
+        }
+        NewsFeed.Line best = null;
+        var bestWeight = -1;
+        var newest = _audioNewsSeen;
+        foreach (var line in NewsFeed.Lines(_campaign, _audioNewsSeen, 64))
+        {
+            newest = System.Math.Max(newest, line.Sequence);
+            if (line.ActorId == player.Id || NewsFeed.Sting(line.Kind).Length == 0) continue;
+            var ours = line.TargetId == player.Id;
+            var importance = NewsFeed.Importance(line.Kind);
+            if (importance < NewsFeed.RailMinimum && !ours) continue;
+            var weight = importance * 2 + (ours ? 1 : 0);
+            if (weight > bestWeight) { best = line; bestWeight = weight; }
+        }
+        _audioNewsSeen = newest;
+        if (best is null) return;
+        var now = Time.GetTicksMsec();
+        if (_lastNewsStingAt > 0 && now - _lastNewsStingAt < (ulong)NewsFeed.StingGapMs) return;
+        _lastNewsStingAt = now;
+        PlayStrategicCue(NewsFeed.Sting(best.Kind));
     }
 
     private void RefreshDomesticAudio()

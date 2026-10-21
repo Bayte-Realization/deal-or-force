@@ -1,0 +1,14 @@
+{
+  "Movement flag style": "Movement flag style",
+  "Choose whether political and independence movements fly their official movement insignia or the regional/homeland flag of the territory they represent.": "Choose whether political and independence movements fly their official movement insignia or the regional/homeland flag of the territory they represent.",
+  "Official movement flag": "Official movement flag",
+  "Regional / homeland flag": "Regional / homeland flag",
+  "Flag: Regional": "Flag: Regional",
+  "Flag: Movement": "Flag: Movement",
+  "Toggle between the official movement flag and the regional homeland flag.": "Toggle between the official movement flag and the regional homeland flag.",
+  "disengaged from battle and moving": "disengaged from battle and moving",
+  "Retreat": "Retreat",
+  "Withdraw only this formation from the battle to a friendly province.": "Withdraw only this formation from the battle to a friendly province.",
+  "Withdrawn: {0}": "Withdrawn: {0}",
+  "Cannot retreat: {0}": "Cannot retreat: {0}"
+}

@@ -350,11 +350,22 @@ public static class MovementDealings
     /// ground - funds them, or recognises them - whatever it thinks of them otherwise, which is
     /// how most of the last century's insurgencies were paid for.
     /// </summary>
+    // The list of living movements changes only when an uprising founds one, so it is kept
+    // for the day: a newborn movement joins its countries' deliberations tomorrow.
+    private static Campaign _movementsFor;
+    private static int _movementsDay = -1;
+    private static readonly List<Nation> LivingMovements = new();
+
     internal static void Ai(Campaign campaign)
     {
-        var movements = new List<Nation>();
-        foreach (var candidate in campaign.Nations) if (candidate.Movement is { Dissolved: false }) movements.Add(candidate);
-        if (movements.Count == 0) return;
+        if (!ReferenceEquals(_movementsFor, campaign) || _movementsDay != campaign.ElapsedDays)
+        {
+            LivingMovements.Clear();
+            foreach (var candidate in campaign.Nations) if (candidate.Movement is { Dissolved: false }) LivingMovements.Add(candidate);
+            _movementsFor = campaign;
+            _movementsDay = campaign.ElapsedDays;
+        }
+        if (LivingMovements.Count == 0) return;
         // Each country once every four weeks - no country's policy towards a movement is a
         // weekly matter - and on a day of its own, so a twenty-eighth of the world each day
         // rather than a quarter of it on one day in seven.
@@ -364,7 +375,7 @@ public static class MovementDealings
             if (!MovementRules.OnItsDay(campaign, country.Id, cycle)) continue;
             if (country.IsHuman || country.Movement is not null || campaign.StatesOf(country).Length == 0) continue;
             var acted = false;
-            foreach (var movement in movements)
+            foreach (var movement in LivingMovements)
             {
                 if (acted) break;
                 var state = movement.Movement;

@@ -153,7 +153,7 @@ public sealed partial class GlobePresentation
             _starNamesBuilt = (-1, -1, 0);
             InvalidateCities();
         }
-        var wanted = CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
+        var wanted = QualityCityLabels && CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
                      ViewDistance <= CityTierDistance(0);
         _cityRoot.Visible = wanted;
         if (!wanted)

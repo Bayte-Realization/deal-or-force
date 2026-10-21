@@ -2,6 +2,7 @@
 {
   "talent_retention_programme": {
     "name": "Talent retention programme",
+    "resource_costs": {"political_points": 20},
     "description": "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.",
     "cooldown_days": 540,
     "gdp_cost_share": 0.0022,
@@ -22,6 +23,7 @@
   },
   "pronatalist_family_programme": {
     "name": "Pronatalist family charter",
+    "resource_costs": {"political_points": 25},
     "description": "Introduce generous child grants, subsidized family housing and parental tax relief to raise birth rates and stave off demographic winter.",
     "cooldown_days": 540,
     "gdp_cost_share": 0.0025,
@@ -42,6 +44,7 @@
   },
   "open_migration_doors_policy": {
     "name": "Open doors to foreign labour",
+    "resource_costs": {"political_points": 20},
     "description": "Lift immigration quotas and recruit workers abroad to offset an ageing workforce, boosting economic output while bringing new cultures into your cities.",
     "cooldown_days": 450,
     "gdp_cost_share": 0.0012,
@@ -64,6 +67,7 @@
   },
   "strict_border_controls_policy": {
     "name": "Enforce strict border controls",
+    "resource_costs": {"political_points": 15},
     "description": "Close immigration quotas and tighten exit permits to halt demographic replacement and curb specialist flight, relying solely on native births.",
     "cooldown_days": 450,
     "gdp_cost_share": 0.0014,

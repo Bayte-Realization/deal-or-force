@@ -233,12 +233,12 @@ public static class SupportCore
     /// </summary>
     public static void IndexReach(Campaign campaign)
     {
-        campaign.SupportByNation.Clear();
+        foreach (var list in campaign.SupportByNation.Values) list.Clear();
         foreach (var formation in campaign.SupportFormations)
         {
             if (!Enabled(campaign, formation.TypeId)) continue;
             if (!campaign.SupportByNation.TryGetValue(formation.NationId, out var list))
-                campaign.SupportByNation[formation.NationId] = list = new List<SupportFormation>();
+                campaign.SupportByNation[formation.NationId] = list = new List<SupportFormation>(8);
             list.Add(formation);
         }
     }

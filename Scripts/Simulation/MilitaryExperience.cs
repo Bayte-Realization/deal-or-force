@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -68,6 +68,11 @@ public static class MilitaryExperience
     public const string Air = "air";
     public const string Navy = "navy";
 
+    private static readonly Dictionary<int, int> Engaged = new();
+    private static readonly Dictionary<int, int> Drilling = new();
+    private static readonly Dictionary<int, int> Flying = new();
+    private static readonly Dictionary<int, int> AtSea = new();
+
     public static void Tick(Campaign campaign)
     {
         if (campaign is null || campaign.Nations.Count == 0) return;
@@ -76,8 +81,8 @@ public static class MilitaryExperience
 
         // One pass over the world, then one over the countries: asking each of two hundred and
         // sixty countries to walk the army list is the mistake the AI tables already fixed once.
-        var engaged = new Dictionary<int, int>();
-        var drilling = new Dictionary<int, int>();
+        var engaged = Engaged; engaged.Clear();
+        var drilling = Drilling; drilling.Clear();
         foreach (var army in campaign.Armies)
         {
             if (army.Training)
@@ -87,12 +92,12 @@ public static class MilitaryExperience
             }
             if (army.InBattle) engaged[army.NationId] = engaged.GetValueOrDefault(army.NationId) + 1;
         }
-        var flying = new Dictionary<int, int>();
+        var flying = Flying; flying.Clear();
         foreach (var formation in campaign.SupportFormations)
             if (formation.Strength > 0.05f && !string.IsNullOrEmpty(formation.Mission) &&
                 formation.Mission != SupportCore.MissionStandby)
                 flying[formation.NationId] = flying.GetValueOrDefault(formation.NationId) + 1;
-        var atSea = new Dictionary<int, int>();
+        var atSea = AtSea; atSea.Clear();
         foreach (var fleet in campaign.Fleets)
             if (fleet.Hulls > 0 && (fleet.InAction || fleet.Mission != FleetMission.Anchored))
                 atSea[fleet.NationId] = atSea.GetValueOrDefault(fleet.NationId) + 1;
@@ -167,8 +172,26 @@ public static class MilitaryExperience
             var own = new List<Army>();
             foreach (var army in campaign.Armies)
                 if (army.NationId == nation.Id && !army.Training && !army.InBattle) own.Add(army);
-            own.Sort((left, right) => left.Organisation.CompareTo(right.Organisation));
+            own.Sort((left, right) =>
+            {
+                var cmp = left.Organisation.CompareTo(right.Organisation);
+                return cmp != 0 ? cmp : left.Id.CompareTo(right.Id);
+            });
             for (var index = 0; index < own.Count && room > 0; index++, room--) own[index].Training = true;
+
+            // Put accumulated army experience back into the forces instead of hoarding thousands.
+            if (nation.ArmyExperience >= 40f && !ModifierSystem.Has(nation, "intensive_field_course") && nation.Treasury >= 0.1f)
+            {
+                new ConductMilitaryExerciseCommand { IssuerId = nation.Id }.Apply(campaign);
+            }
+            else if (nation.ArmyExperience >= 35f)
+            {
+                var candidate = own.FirstOrDefault(a => a.Experience < 0.40f || a.Cohesion < 0.60f);
+                if (candidate is not null)
+                {
+                    new RetrainArmyCommand { IssuerId = nation.Id, ArmyId = candidate.Id }.Apply(campaign);
+                }
+            }
         }
     }
 }

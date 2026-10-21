@@ -33,5 +33,6 @@
   "chronicle.ultimatum_refused": "{1} refuses the ultimatum of {0}: {2}.",
   "chronicle.deal_signed": "{0} strikes a bargain with {1}: {2}.",
   "chronicle.accession_signed": "{0} signs the accession treaty: {2}.",
-  "chronicle.accession_declined": "{0} declines the invitation into {2}."
+  "chronicle.accession_declined": "{0} declines the invitation into {2}.",
+  "chronicle.shard_consolidated": "{0} unites with kindred state {2} into a single nation."
 }

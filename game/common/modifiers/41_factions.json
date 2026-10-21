@@ -12,5 +12,11 @@
     "description": "Fighting on every frontier at once after the offensives of late 2023: battalions surrendering whole, officers deserting, conscripts who do not want to be there.",
     "days": 1460, "positive": false,
     "modifiers": { "army_attack": -0.15, "army_defense": -0.08, "organisation_recovery": -0.10, "stability_weekly": -0.0005 }
+  },
+  "syrian_army_overstretched": {
+    "name": "An army holding every front",
+    "description": "Thirteen years of war, sanctions and divisions moved from one crisis to the next. The army holds the line with the men who are still paid, the allies who are still willing, and the promise that nobody is coming.",
+    "days": 1460, "positive": false,
+    "modifiers": { "army_attack": -0.12, "army_defense": -0.10, "organisation_recovery": -0.12, "reinforcement_rate": -0.10, "stability_weekly": -0.0004 }
   }
 }

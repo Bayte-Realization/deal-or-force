@@ -80,8 +80,19 @@ public static class ClaudeStateFingerprintTests
         // own divergence checks rather than by the two lists below. The check names the value it
         // got, because "the golden fingerprint moved" without the new number costs a full
         // rebuild-and-guess cycle every time.
+        // Re-recorded an eighth time on 17 October 2026 (0x3E980D973FE069C3 -> 0x72AC94DB733B784D -> 0xDA7C6F9772777A1D).
+        // Cause established by reading the mixing code: BuiltIns and FeatureSystems added the
+        // eleventh built-in mechanic (`rulers`), which CampaignFingerprint mixes into the hash on
+        // purpose; all new nation fields remain guarded by HasCustomLeadership / HasCustomSubjectState.
+        // Re-recorded 21 October 2026 (0x8A569EFA7BB8A70D -> 0xE51AA42BB91EDE15).
+        // The current compiled catalogue adds culture_union to Defines.Features and BuiltIns.
+        // Removing only those two entries restores 0x8A569EFA7BB8A70D exactly; also removing
+        // CommissionNewFleetCommand and ConsolidateSubjectsCommand restores 0xDA7C6F9772777A1D.
+        // The 20 October probe assembly reproduces both older values with the same frozen data.
+        // Current and HEAD fingerprint code mix identical inputs on this default fixture, and
+        // bypassing catalogue loading still produces the new value. Keep one strict golden.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0x72AC94DB733B784DUL,
+        Check(fixture == 0xE51AA42BB91EDE15UL,
             $"new fields at their legacy defaults retain the pre-fix golden fingerprint (got 0x{fixture:X16})");
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();

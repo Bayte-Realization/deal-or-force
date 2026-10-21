@@ -87,6 +87,22 @@
     ["MEX", "USA"],
     ["VNM", "CHN"],
     ["IDN", "AUS"],
-    ["ZAF", "NGA"]
+    ["ZAF", "NGA"],
+
+    // Peace treaties that have actually held: Egypt since Camp David, Jordan since 1994, and
+    // the three Arab states that normalised under the Abraham Accords. A pact here is a promise
+    // not to attack, which is exactly what those treaties are.
+    ["ISR", "EGY"],
+    ["ISR", "JOR"],
+    ["ISR", "ARE"],
+    ["ISR", "BHR"],
+    ["ISR", "MAR"],
+
+    // The Shusha declaration of 2021, which made Turkey and Azerbaijan allies in name as well
+    // as in practice.
+    ["TUR", "AZE"],
+
+    // The partnership treaty Russia and Iran were already acting on in 2024.
+    ["RUS", "IRN"]
   ]
 }

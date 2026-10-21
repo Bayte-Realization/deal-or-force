@@ -54,3 +54,4 @@ static class TerritorialDealProtectionTests
         Check(!Ultimatum.AssessNegotiatedDeal(c, buyer, seller, deal).TerritoryProtected, "a human government retains explicit consent to its own terms");
     }
 }
+

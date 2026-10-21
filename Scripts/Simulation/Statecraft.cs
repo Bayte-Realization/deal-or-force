@@ -216,6 +216,16 @@ public static class Statecraft
     /// the world starts counting. Three things count as a reason here, and each of them is
     /// answered out of state the game already keeps rather than a flag somebody sets.
     /// </summary>
+    private static bool IsMonarchy(string government) =>
+        government is "absolute_monarchy" or "constitutional_monarchy";
+
+    private static bool InCivilWar(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+            if (war is { Ended: false, CivilConflict: true } && war.Involves(nation.Id)) return true;
+        return false;
+    }
+
     public static string CasusBelli(Campaign campaign, Nation attacker, Nation defender)
     {
         if (campaign is null || attacker is null || defender is null) return "";
@@ -270,6 +280,17 @@ public static class Statecraft
                 return "intervention";
         }
 
+        // A crown in crisis while a cousin of the same house sits on a neighbouring throne:
+        // the oldest reason in the book, and the one the twentieth century closed. Dormant
+        // in 2024 - no shared house is in crisis - and one row of data away for any older
+        // age (DynastyCatalog). The peace that ends such a war restores a personal union
+        // rather than annexing; see AiPeaceOutcomes.
+        if (campaign.Defines.DynasticClaimsEnabled &&
+            IsMonarchy(attacker.Government) && IsMonarchy(defender.Government) &&
+            DynastyCatalog.Shares(attacker.Tag, defender.Tag) &&
+            (defender.Stability < campaign.Defines.DynasticClaimStabilityMax || InCivilWar(campaign, defender)))
+            return "dynastic_claim";
+
         // And then everything else the two of them remember, weighed the way the opinion panel
         // already weighs it.
         //
@@ -306,6 +327,13 @@ public static class Statecraft
             if (!string.IsNullOrEmpty(gravest) && gravestWeight <= campaign.Defines.CasusBelliGrudgeFloor)
                 return gravest;
         }
+
+        // A state much stronger than a small neighbour can simply take it. This is not a
+        // grievance and it is not free: RecordDeclaration still records the act, and the
+        // notoriety and the coalition that follows are the price. It is a reason the strong
+        // have always given, and without it the AI could want a conquest it was never
+        // allowed to name.
+        if (AnnexationAmbition.HegemonyCause(campaign, attacker, defender)) return "hegemony";
 
         return "";
     }
@@ -700,7 +728,12 @@ public static class CasusBelliNames
         ["irredentism"] = "Our people live there",
         ["defence_of_an_ally"] = "Attacked a country we are bound to",
         ["border_clashes"] = "Months of shooting across the border",
-        ["intervention"] = "Fighting people we armed"
+        ["intervention"] = "Fighting people we armed",
+        ["dynastic_claim"] = "A cousin crown in crisis, and our house the senior one",
+        ["hegemony"] = "The strong do what they can",
+        ["reunification"] = "One people, one state",
+        ["conquest"] = "A war to take the country",
+        ["imperialism"] = "The strong do what they can"
     };
 
     /// <summary>The sentence a reason is said in, or an empty string when there is no reason.</summary>
@@ -711,4 +744,3 @@ public static class CasusBelliNames
         return OpinionCatalog.Find(id)?.Name ?? "";
     }
 }
-

@@ -225,10 +225,14 @@ public partial class DealOrForceGame
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
                 break;
 
+            case "graphics_quality":
+                // Automatic is the governor's to move; a named tier is the player's and stops it.
+                RebuildQualityProfile();
+                break;
+
             case "render_scale":
-                if (_globe is not null &&
-                    float.TryParse(SettingsCatalog.Chosen("render_scale"), NumberStyles.Float, CultureInfo.InvariantCulture, out var share))
-                    _globe.RenderScale = share;
+                // The profile owns the tier's share; this is the player's own multiplier on top.
+                if (_globe is not null) _globe.ApplyQuality(_globe.Quality);
                 break;
 
             case "vsync":

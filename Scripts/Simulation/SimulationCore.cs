@@ -349,9 +349,10 @@ public sealed partial class Nation
     /// Converts weekly gross output into the GDP scale the campaign was authored in.
     /// Calibrated once, at seed, so day-zero emergent GDP equals the historical 2024
     /// figure the scenario shipped; everything after that is genuinely emergent.
+    ///
+    /// Zero means "not calibrated yet" - a save written before output became emergent
+    /// deserialises to zero and is recalibrated on load rather than rejected.
     /// </summary>
-    /// <summary>Zero means "not calibrated yet" - a save written before output became
-    /// emergent deserialises to zero and is recalibrated on load rather than rejected.</summary>
     public float OutputScale;
 
     /// <summary>Share of the jobs the nation's buildings demand that its pops actually fill.</summary>
@@ -439,16 +440,16 @@ public sealed partial class Nation
     public bool GovernmentSetsKeyRate;
 
     /// <summary>
-    /// How much money this government is having printed for it, as a share of a year's
-    /// output per year. Zero for everybody until somebody decides otherwise, and forced back
-    /// to zero the moment the central bank is independent again.
-    /// </summary>
-    /// <summary>
     /// Portfolios this country has handed to its own civil service - see
     /// <see cref="Delegation"/>. Empty for everybody except a player who asked.
     /// </summary>
     public readonly HashSet<string> Delegated = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// How much money this government is having printed for it, as a share of a year's
+    /// output per year. Zero for everybody until somebody decides otherwise, and forced back
+    /// to zero the moment the central bank is independent again.
+    /// </summary>
     public float MoneyPrinting;
 
     /// <summary>
@@ -478,6 +479,13 @@ public sealed partial class Campaign
     public readonly List<ArmyGroup> ArmyGroups = new();
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
+
+    /// <summary>Bumped whenever a war is added, ended or reshaped. Readers that keep a
+    /// snapshot of the active wars (AtWar's cache) use it as their change stamp.</summary>
+    public int WarRevision { get; private set; }
+
+    /// <summary>Call at every war-list or war-state change a war-cache reader must see.</summary>
+    public void MarkWarsChanged() => WarRevision++;
 
     /// <summary>Lines the player has brushed onto the map, and who is on them.</summary>
     public readonly List<DrawnFrontLine> FrontLines = new();
@@ -557,6 +565,9 @@ public sealed partial class Campaign
     public ushort[] ProvinceController { get; private set; }
     public float[] ProvinceOccupation { get; private set; }
     public int MapRevision { get; private set; }
+    public int LastTacticalDoctrineDay = -1;
+    public int LastStrategicDoctrineDay = -1;
+    internal readonly MovementRules.MovementPeopleCache MovementPeople = new();
     public bool InitialDeploymentCompleted { get; private set; }
     internal int NextBattleId { get; set; }
     private ushort[] _pendingProvinceController;
@@ -642,7 +653,24 @@ public sealed partial class Campaign
                 DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
     }
 
+    private Dictionary<int, Nation> _nationsByMapIndex;
+    public Dictionary<int, Nation> NationsByMapIndex()
+    {
+        if (_nationsByMapIndex == null || _nationsByMapIndex.Count != Nations.Count)
+        {
+            _nationsByMapIndex = new Dictionary<int, Nation>();
+            for (var i = 0; i < Nations.Count; i++) _nationsByMapIndex[Nations[i].MapIndex] = Nations[i];
+        }
+        return _nationsByMapIndex;
+    }
+
     public Nation NationById(int id) => id >= 0 && id < Nations.Count ? Nations[id] : null;
+    public Nation NationByMapIndex(int mapIndex)
+    {
+        for (var i = 0; i < Nations.Count; i++)
+            if (Nations[i].MapIndex == mapIndex) return Nations[i];
+        return null;
+    }
     public Nation NationByTag(string tag) => Nations.FirstOrDefault(n =>
         string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(n.Iso, tag, StringComparison.OrdinalIgnoreCase));
@@ -791,6 +819,11 @@ public sealed partial class Campaign
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
+        // The ordinary staff is conservative by design. A war for existence is the one
+        // exception: mend a hole with a reserve, take an empty enemy province, or queue an
+        // emergency formation - all through the same commands and the same manpower/debt
+        // rules every player uses.
+        using (SimProfiler.Measure("war emergency")) WarEmergency.Tick(this);
         // What the services learned from that fighting, and what the army is reading: articles of
         // the war doctrine are studied by the day, and they are shares of the same arithmetic.
         using (SimProfiler.Measure("military experience")) MilitaryExperience.Tick(this);
@@ -807,6 +840,7 @@ public sealed partial class Campaign
         {
             RecruitmentSystem.Tick(this);
             Contractors.Tick(this);
+            using (SimProfiler.Measure("stockpiles")) StrategicStockpiles.TickDay(this);
             yield return 0;
             SupportCore.Tick(this);
             yield return 0;
@@ -838,6 +872,10 @@ public sealed partial class Campaign
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
             yield return 0;
+            // A formation that has been cut off or is standing among its own people can
+            // change sides. Monthly, deterministic, and only after the fighting has moved.
+            using (SimProfiler.Measure("defections")) Defections.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
@@ -865,6 +903,8 @@ public sealed partial class Campaign
             foreach (var _ in AiStatecraft.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("consolidation")) Consolidation.Tick(this);
             yield return 0;
+            using (SimProfiler.Measure("culture union")) CultureUnion.Tick(this);
+            yield return 0;
             using (SimProfiler.Measure("corridors")) Corridors.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
@@ -874,6 +914,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("addresses")) AddressToNation.Tick(this);
             foreach (var _ in MovementPower.TickStages(this)) yield return 0;
             yield return 0;
+            using (SimProfiler.Measure("historical events")) HistoricalTimeline.Tick(this);
             using (SimProfiler.Measure("events")) EventSystem.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("history")) History.Capture(this);
@@ -893,12 +934,14 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("demography"))
         {
             DemographicCycle.Tick(this);
-            DemographicCycle.Aggregate(this);
         }
         // A country that is running out of people is counted here, straight after the cycle that
         // counts them. What becomes of its empty ground is a later decision about inheritance,
         // deliberately not this line (DEMOGRAPHIC_EXTINCTION_DESIGN_RU.md).
         using (SimProfiler.Measure("extinction")) DemographicExtinction.Tick(this);
+        // What holding somebody else's ground costs: once a week, an occupation nobody is
+        // standing in slips (OccupationResistance, gated, off by default like extinction).
+        using (SimProfiler.Measure("resistance")) OccupationResistance.Tick(this);
             yield return 0;
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
@@ -909,6 +952,7 @@ public sealed partial class Campaign
             // because a state that has just lost a province is a state in exactly the
             // condition this reads.
             using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
+            using (SimProfiler.Measure("rulers")) Rulers.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
             yield return 0;
@@ -935,6 +979,9 @@ public sealed partial class Campaign
             // And first sight of identities: a country that declares nothing yet declares
             // what it already is - its own plurality, silently and at nobody's cost.
             StateIdentity.EnsureDeclared(this);
+            // And what a founded state has decided to call itself, once it has stood long
+            // enough to have decided anything.
+            NationNaming.Tick(this);
             yield return 0;
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
@@ -1185,6 +1232,8 @@ public sealed partial class Campaign
         Movements.Place(this);
         if (ElapsedDays == 0 && FeatureEnabled("national_courses"))
             foreach (var nation in Nations) NationalCourses.Initialize(this, nation);
+        // Who leads: a person per chair, rolled once at the world's first morning.
+        Rulers.Found(this);
 
         MapRevision++;
 
@@ -1267,6 +1316,14 @@ public sealed partial class Campaign
             }
             nation.CapitalStateMapIndex = topology.ProvinceToState[best];
             nation.CapitalProvinceId = best;
+            // A capital's name is a city ("Port Sudan", "Seoul"), not a region, so a name that is
+            // none of the country's region names is the authored seat, not a stale one. Only a
+            // country with no capital name at all borrows the name of the region it sits in.
+            var state = States.Find(s => s.MapIndex == nation.CapitalStateMapIndex);
+            if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && string.IsNullOrWhiteSpace(nation.CapitalName))
+            {
+                nation.CapitalName = state.Name;
+            }
         }
     }
 

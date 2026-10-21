@@ -1,0 +1,9 @@
+{
+  "diplomatic_outreach": {
+    "name": "Sustained diplomatic engagement",
+    "opinion": 24,
+    "days": 365,
+    "decays": true,
+    "max_stacks": 1
+  }
+}

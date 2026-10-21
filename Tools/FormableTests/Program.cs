@@ -10,6 +10,20 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
+        if (args.Length == 0) OrganicBlocTests.Run();
+        if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }
+        if (args.Length == 0) DiplomaticMissionTests.Run();
+        if (args.Contains("--campaign-alerts-only")) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); return; }
+        if (args.Length == 0) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); }
+        if (args.Contains("--elections-only")) { ElectionTests.Run(); return; }
+        if (args.Length == 0) ElectionTests.Run();
+        if (args.Contains("--regional-administration-only")) { RegionalAdministrationTests.Run(); return; }
+        if (args.Length == 0) RegionalAdministrationTests.Run();
+        if (args.Contains("--political-identity-only")) { PoliticalIdentityTests.Run(); return; }
+        if (args.Length == 0) PoliticalIdentityTests.Run();
+        if (args.Contains("--person-names-only")) { PersonNameCatalogTests.Run(); return; }
+        if (args.Length == 0) PersonNameCatalogTests.Run();
         if (args.Contains("--performance-regressions-only")) { PerformanceRegressionTests.Run(); return; }
         if (args.Length == 0) PerformanceRegressionTests.Run();
         if (args.Contains("--decision-resources-only")) { DecisionResourceTests.Run(); return; }
@@ -18,6 +32,8 @@ static class Program
         if (args.Length == 0) ServiceExerciseTests.Run();
         if (args.Contains("--order-observation-only")) { ArmyOrderObservationTests.Run(); return; }
         if (args.Length == 0) ArmyOrderObservationTests.Run();
+        if (args.Contains("--shard-consolidation-only")) { ShardConsolidationTests.Run(); return; }
+        if (args.Length == 0) ShardConsolidationTests.Run();
         if (args.Contains("--audit-movement-flags")) { FlagArtworkTests.AuditMovementBanners(); return; }
         if (args.Contains("--audit-content-identities")) { ContentIdentityAudit.Run(); return; }
         if (args.Contains("--catalogue-identity-only")) { CatalogIdentityTests.Run(); return; }
@@ -27,6 +43,24 @@ static class Program
         if (args.Contains("--core-refactor-only")) { CoreRefactorTests.Run(); return; }
         if (args.Contains("--agenda-only")) { AgendaWorkspaceTests.Run(); return; }
         if (args.Contains("--extinction-only")) { DemographicExtinctionTests.Run(); return; }
+        if (args.Contains("--deterrence-only")) { DeterrenceTests.Run(); return; }
+        if (args.Contains("--resistance-only")) { OccupationResistanceTests.Run(); return; }
+        if (args.Contains("--partition-only")) { PartitionTests.Run(); return; }
+        if (args.Contains("--dynasty-only")) { DynastyTests.Run(); return; }
+        if (args.Contains("--rulers-subjects-only")) { RulersAndSubjectsTests.Run(); return; }
+        if (args.Contains("--macao-only")) { MacaoProbe.Run(); return; }
+        if (args.Contains("--subject-growth-only")) { SubjectGrowthProbe.Run(); return; }
+        if (args.Contains("--micro-enclave-only")) { MicroEnclaveGrowthTests.Run(); return; }
+        if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
+        if (args.Contains("--founding-names-only")) { FoundingNameTests.Run(); return; }
+        if (args.Contains("--flag-survey-only")) { FlagSurvey.Run(); return; }
+        if (args.Contains("--tick-bench-only")) { TickBench.Run(); return; }
+        if (args.Contains("--name-survey-only")) { FoundingNameSurvey.Run(); return; }
+        if (args.Contains("--diaspora-only")) { DiasporaProbe.Run(); return; }
+        if (args.Contains("--hot-wars-names-only")) { HotWarAndNamePoolTests.Run(); return; }
+        if (args.Contains("--annexation-only")) { AnnexationTests.Run(); return; }
+        if (args.Contains("--mobilisation-only")) { MobilisationAndStockpileTests.RunAll(); return; }
+        if (args.Length == 0) { RulersAndSubjectsTests.Run(); MobilisationAndStockpileTests.RunAll(); }
         if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
         if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
         if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
@@ -38,6 +72,9 @@ static class Program
         if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
         if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
+        if (args.Contains("--war-aims-only")) { WarAimsTests.Run(); CombatTempoTests.Run(); return; }
+        if (args.Contains("--combat-tempo-only")) { CombatTempoTests.Run(); return; }
+        if (args.Contains("--defections-only")) { DefectionsTests.Run(); return; }
         if (args.Contains("--participant-objective-only")) { ParticipantWarObjectiveTests.Run(); return; }
         if (args.Length == 0) ParticipantWarObjectiveTests.Run();
         if (args.Contains("--war-aim-resolve-only")) { WarAimResolveTests.Run(); return; }
@@ -64,6 +101,8 @@ static class Program
         if (args.Contains("--assault-presentation-only")) { ArmyAssaultPresentationTests.Run(); return; }
         if (args.Contains("--assault-rules-only")) { AssaultRulesBackendTests.Run(); return; }
         if (args.Contains("--garrison-only")) { GarrisonPlannerTests.Run(); return; }
+        if (args.Contains("--historical-only")) { HistoricalTimelineTests.Run(); return; }
+        if (args.Contains("--war-emergency-only")) { WarEmergencyTests.Run(); return; }
         if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
         if (args.Contains("--deals-only")) { DealTests.Run(); TerritorialDealProtectionTests.Run(); return; }
         if (args.Contains("--territorial-recovery-only")) { TerritorialRecoveryTests.Run(); return; }
@@ -84,15 +123,26 @@ static class Program
         if (args.Contains("--promises-only")) { GovernmentPromiseTests.Run(); return; }
         if (args.Contains("--goals-only")) { StrategicGoalTests.Run(); return; }
         if (args.Contains("--state-identity-only")) { StateIdentityTests.Run(); return; }
+        if (args.Contains("--rulers-only")) { RulerNamesTests.Run(); return; }
+        if (args.Contains("--ruler-ages-only")) { RulerAgeTests.Run(); return; }
+        if (args.Contains("--quality-profiles-only")) { QualityProfileTests.Run(); return; }
+        if (args.Contains("--counter-cards-only")) { CounterCardTests.Run(); return; }
         if (args.Contains("--ai-promises-only")) { AiPromiseTests.Run(); return; }
         if (args.Contains("--doctrine-only")) { TacticalDoctrineTests.Run(); return; }
         if (args.Contains("--strategy-only")) { StrategicDoctrineTests.Run(); return; }
         if (args.Contains("--names-only")) { CountryNameTests.Run(); return; }
+        if (args.Contains("--naming-only")) { NamingTests.Run(); return; }
+        if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
+        if (args.Contains("--name-probe")) { NameProbe.Run(); return; }
+
+        if (args.Contains("--ruler-names-only")) { RulerNameTests.Run(); return; }
+
+
         if (args.Contains("--federal-outcome-only")) { FederalFractureOutcomeTests.Run(); return; }
         if (args.Contains("--movement-power-state-only")) { MovementPowerStateTests.Run(); return; }
+        if (args.Contains("--movement-staging-only")) { MovementPowerStagingTests.Run(); return; }
         if (args.Contains("--campaign-isolation-only")) { CampaignIsolationTests.Run(); return; }
         if (args.Length == 0) CampaignIsolationTests.Run();
-        if (args.Contains("--movement-staging-only")) { MovementPowerStagingTests.Run(); return; }
         if (args.Length == 0) MovementPowerStagingTests.Run();
         if (args.Contains("--movement-power-fingerprint-only")) { MovementPowerFingerprintTests.Run(); return; }
         if (args.Contains("--feed-only")) { NewsFeedTests.Run(); return; }
@@ -156,6 +206,10 @@ static class Program
         HouseholdTests.Run();
         BrainDrainTests.Run();
         DemographicExtinctionTests.Run();
+        DeterrenceTests.Run();
+        OccupationResistanceTests.Run();
+        PartitionTests.Run();
+        DynastyTests.Run();
         DismantlementTests.Run();
         DomesticCrisesTests.Run();
         FederalFractureOutcomeTests.Run();
@@ -220,6 +274,9 @@ static class Program
         IdentityResearchTests.Run();
         RestorationTests.Run();
         PeaceIntentTests.Run();
+        WarAimsTests.Run();
+        CombatTempoTests.Run();
+        DefectionsTests.Run();
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();
@@ -230,6 +287,8 @@ static class Program
         ArmyAssaultPresentationTests.Run();
         AssaultRulesBackendTests.Run();
         GarrisonPlannerTests.Run();
+        HistoricalTimelineTests.Run();
+        WarEmergencyTests.Run();
         ForeignAssistanceTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
@@ -258,7 +317,11 @@ static class Program
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         ScenarioMapDraftTests.Run();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         using var navigationDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
             "gui", "20_campaign_structure.json")), GameDataLoader.ForgivingJson);
         var declaredNavigation = navigationDocument.RootElement.GetProperty("campaign").GetProperty("navigation")

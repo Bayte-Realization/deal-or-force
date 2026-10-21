@@ -15,6 +15,10 @@ public sealed partial class Nation
 {
     // Original region identities, so giving up a title also covers every partition.
     public HashSet<int> RenouncedTerritoryOrigins = new();
+
+    /// <summary>The country renamed itself in play - a proclamation, a formable, a rising -
+    /// so its name no longer answering the shipped roster means the world moved, not the data.</summary>
+    public bool NameProclaimed;
 }
 
 public sealed partial class Defines

@@ -120,7 +120,7 @@ public static partial class AiStatecraft
     /// cost is priced in - so that the two can simply be subtracted.
     /// </summary>
     private static float WarValue(Campaign campaign, Nation nation, Nation other,
-        List<(string Part, float Amount)> parts = null)
+        List<(string Part, float Amount)> parts = null, bool refreshAssessment = true)
     {
         var defines = campaign.Defines;
 
@@ -130,14 +130,15 @@ public static partial class AiStatecraft
         // there is to take: the weakness of a country of one region is a fraction of the same
         // weakness in a country of ten.
         var mine = Strength(campaign, nation);
-        var theirs = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) +
-                     HelpFor(campaign, nation, other) * defines.AiAllyCommitment;
+        var theirs = CampaignIntel.EstimatedStrength(campaign, nation.Id, other, refreshAssessment) +
+                     HelpFor(campaign, nation, other, refreshAssessment) * defines.AiAllyCommitment;
         if (mine <= 0.01f) return 0f;
         var advantage = mine / M.Max(0.01f, theirs);
         var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
         var minimumAdvantage = MinimumAdvantageFor(campaign, nation, other, relation);
         if (advantage < minimumAdvantage) return 0f;
-        var worth = M.Clamp(RegionCount.GetValueOrDefault(other.MapIndex) / M.Max(1f, defines.AiWorthRegions),
+        var regionsHeld = refreshAssessment ? RegionsHeldBy(campaign, other.MapIndex) : campaign.States.Count(s => s.NationMapIndex == other.MapIndex);
+        var worth = M.Clamp(regionsHeld / M.Max(1f, defines.AiWorthRegions),
             defines.AiWorthFloor, 1f);
         parts?.Add(($"advantage {advantage:0.00} (ours {mine:0} vs theirs {theirs:0})", 0f));
         // Weakness makes a war possible; it does not make it wanted. A government with no
@@ -151,7 +152,7 @@ public static partial class AiStatecraft
 
         // What is actually over there. A neighbour with forty million people is worth more
         // than one with four, and the old rule could not tell them apart.
-        var people = RegionCount.GetValueOrDefault(other.MapIndex) / 30f;
+        var people = regionsHeld / 30f;
         value += Part(parts, "people", M.Clamp(people, 0f, 2.2f) * defines.AiConquestAppetite);
 
         // Our own people on the wrong side of the border. The sharpest motive there is, and
@@ -364,6 +365,13 @@ public static partial class AiStatecraft
             Restraint(campaign, other) >= defines.AiDemocraticPeaceRestraint)
             price += Part(parts, "democratic peace", defines.AiDemocraticPeacePrice * (cause ? 0.6f : 1f));
 
+        // Two countries that each hold a deterrent the other cannot survive using do not
+        // fight directly: they fight by proxy, by sanction and by patience. The price is
+        // what makes that true in the sum rather than in a script - and it is paid only
+        // between holders, so a holder's war against anybody else stays an ordinary war.
+        var deterrent = Simulation.Deterrence.MutualPrice(campaign, nation, other);
+        if (deterrent > 0f) price += Part(parts, "mutual deterrence", deterrent);
+
         // The state of the country itself. A tired, poor, unstable government has other
         // problems, and the old rule folded this into a multiplier where it could never
         // outweigh an appetite.
@@ -397,12 +405,12 @@ public static partial class AiStatecraft
     public static (float Value, float Price,
                    List<(string Part, float Amount)> ValueParts,
                    List<(string Part, float Amount)> PriceParts)
-        JudgeWarParts(Campaign campaign, Nation nation, Nation other)
+        JudgeWarParts(Campaign campaign, Nation nation, Nation other, bool refreshAssessment = true)
     {
         var value = new List<(string Part, float Amount)>();
         var price = new List<(string Part, float Amount)>();
         if (campaign is null || nation is null || other is null) return (0f, 0f, value, price);
-        var worth = WarValue(campaign, nation, other, value);
+        var worth = WarValue(campaign, nation, other, value, refreshAssessment);
         var cost = WarPrice(campaign, nation, other, price);
         return (worth, cost, value, price);
     }
@@ -580,6 +588,9 @@ public static partial class AiStatecraft
             var theirs = CampaignDiplomacy.Peek(campaign, attacker.Id, friendId);
             if (theirs is { Stance: DiplomaticStance.Allied }) continue;
             var commitment = theirs is { NonAggressionPact: true } ? 0.35f : 1f;
+            if (campaign.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(friendId))) commitment *= 0.2f;
+            if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Default) commitment *= 0.5f;
+            if (friend.Stability < 0.35f) commitment *= 0.5f;
             help += CampaignIntel.EstimatedStrength(campaign, attacker.Id, friend, refreshAssessment) * commitment;
         }
         return help;
@@ -661,7 +672,7 @@ public static partial class AiStatecraft
             PlanCandidates.Add((friend, relation.Opinion - theirs * 0.5f));
         }
         if (PlanCandidates.Count == 0) return;
-        PlanCandidates.Sort((a, b) => a.Score.CompareTo(b.Score));
+        PlanCandidates.Sort((a, b) => a.Score != b.Score ? a.Score.CompareTo(b.Score) : a.Friend.Id.CompareTo(b.Friend.Id));
 
         var reach = 1 + (int)MathF.Floor(M.Max(0f, campaign.Defines.AiForesightReach) *
                                          M.Clamp01(AiTemperament.Of(campaign, nation).Foresight));

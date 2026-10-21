@@ -5,12 +5,22 @@
     <RootNamespace>DealOrForce</RootNamespace>
     <AssemblyName>DealOrForce</AssemblyName>
     <!--
+      Every source file here is UTF-8 without a byte-order mark, and several carry Cyrillic
+      literals ("Северная " in the legacy name migration, for one). Without this the compiler
+      falls back to the system ANSI code page and those literals reach the assembly as
+      mojibake, so a name repaired on a Russian machine never matches the Russian it was
+      meant to match.
+    -->
+    <CodePage>65001</CodePage>
+    <!--
       `build/` is the exported game, and the exported game now carries the mod templates -
       which are C# - so the SDK's `**/*.cs` glob found them and tried to compile the build
       into the thing that produced it. Excluding the folder from every default glob at once
       is the honest fix; a `Compile Remove` would leave Content and None still pointing at
       several hundred megabytes of output.
     -->
+    <!-- The portable language kit contains independent examples and build/test hosts.
+         Like Tools, it must not be globbed into the game's C# assembly or content. -->
     <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;LanguageKit\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>

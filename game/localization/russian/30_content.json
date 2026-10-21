@@ -1,14 +1,3 @@
-// What the game's own data calls things: goods, buildings, terrain, trades, faiths,
-// peoples, decisions, the modifiers they leave behind, what one country remembers about
-// another, the events and the fleets.
-//
-// Kept apart from the interface's own strings for the same reason the country names are:
-// it is a different job. Somebody translating a menu and somebody checking three hundred
-// ethnonyms are rarely the same person and never in the same sitting.
-//
-// The key is the English text exactly as the data file writes it. A mod that adds a good,
-// a people or an event ships its own rows for it; one that does not reads in whatever the
-// mod called it.
 {
   "A cultural moment": "Культурный момент",
   "A day for celebration": "День для праздника",
@@ -565,8 +554,6 @@
   "Zhuang": "Чжуаны",
   "Zoroastrian": "Зороастрийцы",
   "Zulu": "Зулусы",
-
-  // Что стоит каждый вариант события - строка под кнопкой.
   "Costs treasury; raises GDP, productivity and construction capacity.": "Стоит казне; поднимает ВВП, производительность и мощности строительства.",
   "Preserves cash; modest stability loss.": "Бережёт деньги; небольшая потеря стабильности.",
   "Costs treasury; improves living standards and reduces radicalism.": "Стоит казне; поднимает уровень жизни и снижает радикализм.",
@@ -587,8 +574,6 @@
   "No cost; a brief lift.": "Ничего не стоит; недолгий подъём.",
   "Costs treasury; literacy and productivity rise.": "Стоит казне; растут грамотность и производительность.",
   "Free; a small national lift.": "Бесплатно; небольшой подъём в стране.",
-
-  // Торговые инструкции, которые может отдать страна; объявлены в common/trade.
   "Import priority": "Приоритет импорта",
   "How far up the queue this country stands when the world is short of this good. Buyers are served in order of how badly they need it; this weighs that need. It decides who is served first, not how much arrives.": "Место страны в очереди, когда товара в мире не хватает. Покупателей обслуживают по остроте нехватки, и это вес к ней. Влияет на то, кого обслужат раньше; объём от этого не меняется.",
   "Import ceiling": "Потолок импорта",
@@ -641,5 +626,39 @@
   "Hezbollah": "Хезболла",
   "The Lebanese Shia political party and paramilitary organisation founded during the Lebanese Civil War. It fields an extensive rocket arsenal and militia forces in southern Lebanon and the Beqaa Valley, exercising decisive military influence and participating in the Lebanese parliament and cabinet.": "Ливанская шиитская политическая партия и военизированная организация, возникшая в годы гражданской войны в Ливане. Располагает внушительным ракетным арсеналом и отрядами ополчения на юге Ливана и в долине Бекаа, обладая решающим военным влиянием и участвуя в парламенте и правительстве Ливана.",
   "Balkan Federation": "Балканская Федерация",
-  "The historical project of Balkan solidarity: Yugoslavia, Bulgaria, Greece and Albania uniting the peninsula under a shared federal constitution and common regional market.": "Исторический проект балканской солидарности: Югославия, Болгария, Греция и Албания, объединяющие полуостров под общей федеральной конституцией и единым региональным рынком."
+  "The historical project of Balkan solidarity: Yugoslavia, Bulgaria, Greece and Albania uniting the peninsula under a shared federal constitution and common regional market.": "Исторический проект балканской солидарности: Югославия, Болгария, Греция и Албания, объединяющие полуостров под общей федеральной конституцией и единым региональным рынком.",
+  "Viv Ansanm": "Вив Ансанм",
+  "The Haitian gang coalition of G9 Family and Allies, G-Pep and their allies, formalised in 2024 under Jimmy Chérizier. It controls most of Port-au-Prince, taxes what moves through it, and has forced its way into every negotiation about the country's future.": "Гаитянская коалиция банд «G9 Семья и союзники», «G-Пеп» и их партнёров, оформленная в 2024 году Джимми Черизье. Она держит большую часть Порт-о-Пренса, облагает пошлиной всё, что через неё проходит, и заставила впустить себя в любые переговоры о будущем страны.",
+  "An army holding every front": "Армия, держащая все фронты",
+  "Thirteen years of war, sanctions and divisions moved from one crisis to the next. The army holds the line with the men who are still paid, the allies who are still willing, and the promise that nobody is coming.": "Тринадцать лет войны, санкций и раскола — от одного кризиса к другому. Армия держит фронт теми, кому ещё платят, союзниками, которые ещё согласны, и обещанием, что помощь не придёт.",
+  "Graphics quality": "Качество графики",
+  "How much of the picture the game may spend on this machine. Automatic starts from what the graphics card is and lowers the picture by itself when the frame rate falls; a named level stays where it is put.": "Сколько картинки игра может требовать от этой машины. «Автоматически» отталкивается от видеокарты и сам снижает картинку, когда падает частота кадров; выбранный уровень остаётся как поставлен.",
+  "Alaskan Independence Party": "Партия независимости Аляски",
+  "The party founded in 1984 on the argument that Alaska joined the Union by a flawed plebiscite and could leave it by a valid one. It has held ballot lines ever since, sent a governor-elect through its slate in 1990, and never stopped running candidates for office; its programme today is a vote on statehood's terms rather than a militia in the tundra.": "Партия, основанная в 1984 году на тезисе, что Аляска вошла в Союз по порочному плебисциту и может выйти по законному. Все эти годы она держит избирательные строки, в 1990-м провела губернатора своим списком и не перестаёт выставлять кандидатов; её программа сегодня — голосование об условиях штатности, а не ополчение в тундре.",
+  "Texas Nationalist Movement": "Техасское националистическое движение",
+  "The organisation carrying the Texas independence question, from the Republic's mythology to the legislature petitions of the 2020s. Its partisans gather signatures rather than rifles and quote the annexation terms the way constitutional lawyers quote them; the legislature keeps refusing to hear the question, which is why the movement keeps asking.": "Организация, несущая техасский вопрос о независимости — от мифологии Республики до петиций легислатуры 2020-х. Её сторонники собирают подписи, а не винтовки, и цитируют условия аннексии, как цитируют их конституционные юристы; легислатура отказывается слышать вопрос — потому движение задаёт его снова.",
+  "Yes California": "Да, Калифорния",
+  "The California independence campaign of the 2010s, born the same year as the Calexit bumper sticker. Its case is economic - the world's fifth-largest economy inside a union it outvoted in - and its methods are pamphlets, petitions and a standing referendum drive that never quite finds a place on the ballot.": "Кампания за независимость Калифорнии 2010-х, родившаяся вместе с наклейкой Calexit. Её довод экономический — пятая экономика мира внутри союза, в котором она оказалась в меньшинстве, — а методы листовки, петиции и постоянная кампания за референдум, который так и не попадает в бюллетень.",
+  "Hawaiian Sovereignty Movement": "Движение суверенитета Гавайев",
+  "Silesian Autonomy Movement": "Силезское автономистское движение",
+  "The Ruch Autonomii Śląska, founded in 2001 to restore the autonomy Upper Silesia held between the wars. It wins real seats in the regional assembly, fights for Silesian as a regional language, and answers the charge of separatism the same way every time: Poland is our country, Silesia is our home, and the two were promised a charter.": "Рух Автономії Шльонська, основанный в 2001 году ради восстановления автономии Верхней Силезии межвоенных лет. Он реально берёт места в сеймике воеводства, борется за статус силезского как регионального языка и отвечает на упрёк в сепаратизме одинаково: Польша — наша страна, Силезия — наш дом, и хартия между ними была обещана.",
+  "Choose an existing foreign country.": "Выберите существующую иностранную страну.",
+  "The broad movement for Native Hawaiian self-determination, from the Kanaka Maoli flights over the Kingdom's overthrow in 1893 to the mauna protectors of this decade. It is a movement of lawsuits, blocks and civic education more than of parties, and its question - what does the United States hold Hawai'i by? - has never been answered to its satisfaction.": "Широкое движение за самоопределение коренных гавайцев — от полётов канака-маоли над свержением Королевства в 1893-м до защитников мауны этого десятилетия. Это движение судов, блокад и гражданского просвещения больше, чем партий, и его вопрос — на каком основании Соединённые Штаты держат Гавайи? — так и не получил удовлетворительного ответа.",
+  "The legal government of {0} has returned to its homeland and resumed governance over its people.": "Законное правительство {0} вернулось на родную землю и вновь правит своим народом.",
+  "chronicle.movement_statehood": "{0} держит землю за собой и встаёт в ряд государств мира.",
+  "chronicle.reintegration": "{0} и {2} снова одна страна.",
+  "Choose a kindred country to unite with.": "Выберите единокровную страну для объединения.",
+  "Cultural unions are disabled in this scenario.": "Культурные союзы отключены в этом сценарии.",
+  "A union of peoples needs peoples that are the same.": "Для союза народов народы должны быть одним народом.",
+  "Both countries must be alive to unite.": "Обе страны должны существовать, чтобы объединиться.",
+  "Both countries must be sovereign to unite by consent.": "Обе страны должны быть суверенны для союза по согласию.",
+  "Union is a peace-time act; neither country may be at war.": "Союз — дело мира; ни одна страна не может быть в войне.",
+  "Human countries cannot merge in multiplayer.": "Страны игроков не объединяются в мультиплеере.",
+  "Relations must not be hostile before union talks.": "Отношения не должны быть враждебными до переговоров о союзе.",
+  "Both governments need enough standing to carry a union.": "Обоим правительствам нужна опора, чтобы вынести союз.",
+  "The countries must share a border to become one.": "Чтобы стать одной страной, нужно иметь общую границу.",
+  "This country declined recently; give it time.": "Эта страна недавно отказалась; дайте ей время.",
+  "chronicle.culture_union": "{0} и {2} стали одной страной — по согласию обоих правительств.",
+  "Unification Proposal from {0}": "Предложение об объединении от {0}",
+  "{0} invites our kindred peoples to merge our lands, armed forces, and institutions into a single unified sovereign state.": "{0} приглашает наш родный народ слить наши земли, вооружённые силы и институты в единое суверенное государство."
 }

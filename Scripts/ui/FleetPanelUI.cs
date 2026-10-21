@@ -244,17 +244,25 @@ public partial class DealOrForceGame
     }
 
     /// <summary>Lay down hulls for the selected fleet, or cancel what has not been finished.</summary>
-    private void OrderHulls(int count)
+    private void OrderHulls(int count) => OrderHullsWithMode(count, MobilisationMode.Standard);
+
+    private void OrderHullsWithMode(int count, MobilisationMode mode)
     {
         if (_selectedFleet is null || _campaign.Player is null) return;
-        var order = new OrderHullsCommand { IssuerId = _campaign.Player.Id, FleetId = _selectedFleet.Id, Count = count };
+        var order = new OrderHullsCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            FleetId = _selectedFleet.Id,
+            Count = count,
+            Mode = mode
+        };
         _campaign.Commands.Enqueue(order);
         _campaign.Commands.ApplyAll(_campaign);
         ShowSelectedFleet();
         if (order.Refusal.Length > 0) { SetFleetFeedback(order.Refusal); return; }
         var cost = Fmt.Money(_campaign.Defines.HullCost * System.Math.Abs(count));
         SetFleetFeedback(count > 0
-            ? Simulation.Loc.Format("{0:N0} hulls laid down: {1} over the time they take to build.", count, cost)
+            ? Simulation.Loc.Format("{0:N0} hulls laid down ({1}): {2} over the time they take to build.", count, mode, cost)
             : Tr("The unfinished hulls are cancelled. What was spent on them is spent."));
     }
 
@@ -472,7 +480,7 @@ public partial class DealOrForceGame
         cargo.AddChild(unload);
 
         // The yards. Hulls are laid down for this fleet and join it as they are finished.
-        rows.AddChild(Title("YARDS", 11, Ui.Colour("text.caption")));
+        rows.AddChild(Title("YARDS & NAVAL MOBILISATION", 11, Ui.Colour("text.caption")));
         _fleetYards = Title("", 12, Ui.Colour("text.body_soft"));
         _fleetYards.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_fleetYards);
@@ -485,6 +493,12 @@ public partial class DealOrForceGame
         _fleetCancelHulls = ActionButton("Cancel orders", () => OrderHulls(-_selectedFleet?.HullsOrdered ?? 0), 148, 30);
         _fleetCancelHulls.TooltipText = Ui.Tip(Tr("Cancel orders\nStop every hull not yet finished for this fleet. What was spent on them is not returned."));
         yards.AddChild(_fleetCancelHulls);
+
+        var rapidYards = new HBoxContainer();
+        rapidYards.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(rapidYards);
+        rapidYards.AddChild(ActionButton("Rapid +15 hulls", () => OrderHullsWithMode(15, MobilisationMode.RapidCallUp), 148, 28));
+        rapidYards.AddChild(ActionButton("Emergency +30 hulls", () => OrderHullsWithMode(30, MobilisationMode.TotalMobilisation), 148, 28, true));
 
         _fleetFeedback = Title("", 11, Ui.Colour("text.hint"));
         _fleetFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;

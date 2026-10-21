@@ -238,9 +238,12 @@ static class AssaultReadinessTests
             "restoring both defaults restores the authoritative fingerprint");
 
         // Same fixture and current catalogue golden as ClaudeStateFingerprintTests.
-        // Verified on pristine 2b807905 before these war fixes: 0xA59805E352DD0319.
-        // The old 0x545E835F82EA7E2A predates the registered mechanic/command tables;
-        // default assault floors still add no bytes. Keep the actual value diagnostic.
+        // Counterfactual verified 21 October 2026 against the 20 October probe assembly:
+        // removing ONLY culture_union from Defines.Features and MechanicFeatures.BuiltIns
+        // restores 0x8A569EFA7BB8A70D exactly. Also removing the FeatureCommands bindings
+        // CommissionNewFleetCommand and ConsolidateSubjectsCommand restores the earlier
+        // 0xDA7C6F9772777A1D. The feature and command tables are authoritative; default
+        // assault floors still add no bytes. Keep a single strict golden.
         c = new Campaign(112017) { ScenarioId = "living_world_fingerprint_fixture" };
         for (var id = 0; id < 3; id++)
             c.Nations.Add(new Nation { Id = id, MapIndex = 501 + id, Tag = "FP" + id,
@@ -249,7 +252,7 @@ static class AssaultReadinessTests
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
         var actual = CampaignFingerprint.Of(c);
-        Check(actual == 0x72AC94DB733B784DUL,
+        Check(actual == 0xE51AA42BB91EDE15UL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
     }
 

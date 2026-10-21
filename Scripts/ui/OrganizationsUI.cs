@@ -142,6 +142,18 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Common fund: {0} · institutional cohesion: {1}%", Fmt.Money(o.Budget), (o.Cohesion * 100).ToString("0")), 16));
         _conflictsPage.AddChild(Gauge(o.Cohesion * 100, Ui.Colour("text.accent"), 200));
         _conflictsPage.AddChild(WrappedUltimatumText("Members pay dues every week. Arrears erode cohesion, and below 25% the collective defence no longer holds.", 13));
+        if (InternationalOrganizations.Leader(_campaign, o) is { } leader)
+        {
+            var challenger = InternationalOrganizations.Challenger(_campaign, o);
+            var leadLine = challenger is not null
+                ? Loc.Format("Leading power: {0} · contested by {1}", leader.DisplayName, challenger.DisplayName)
+                : Loc.Format("Leading power: {0}", leader.DisplayName);
+            _conflictsPage.AddChild(WrappedUltimatumText(leadLine, 14));
+        }
+        var activeDoc = InternationalOrganizations.Doctrine(o.DoctrineId);
+        _conflictsPage.AddChild(WrappedUltimatumText(activeDoc is not null
+            ? Loc.Format("Bloc doctrine: {0} — {1}", Tr(activeDoc.Name), Tr(activeDoc.Description))
+            : Tr("Bloc doctrine: none adopted yet."), 14));
         _conflictsPage.AddChild(Caption(Loc.Format("MEMBERS ({0})", o.Members.Count)));
         _conflictsPage.AddChild(DiplomacyChips(o.Members.Select(m => _campaign.NationById(m)).Where(n => n is not null)
             .OrderByDescending(n => n.Gdp), Tr("Nobody.")));
@@ -159,6 +171,10 @@ public partial class DealOrForceGame
             row.AddChild(Title(Loc.Format("{0} · {1}/week · {2} unpaid weeks", n.DisplayName,
                 Fmt.Money(InternationalOrganizations.Dues(_campaign, o, n)), o.UnpaidWeeks.GetValueOrDefault(id)), 13, Ui.Colour("text.body")));
             members.AddChild(row);
+            var engagement = OrganizationDynamics.Belonging(_campaign,o,n);
+            var rift = OrganizationDynamics.LeadershipFriction(_campaign,o,n,InternationalOrganizations.Leader(_campaign,o));
+            members.AddChild(WrappedUltimatumText(Loc.Format("Belonging: {0:0}% · leadership dispute: −{1:0} points",
+                engagement*100,rift*100),12));
         }
         var player = _campaign.Player;
         if (o.Invitations.Contains(player.Id))
@@ -186,8 +202,12 @@ public partial class DealOrForceGame
         if (o.Motion is { } m)
         {
             var target = _campaign.NationById(m.TargetId);
+            var subjectText = m.Kind == "doctrine"
+                ? Tr(InternationalOrganizations.Doctrine(m.Subject)?.Name ?? m.Subject)
+                : target?.DisplayName ?? "?";
             _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("{0} · {1}\nVoting closes in {2} days. {3} of {4} have voted yes.",
-                Tr(m.Kind == "admission" ? "Admission vote" : "Common-fund grant"), target?.DisplayName ?? "?",
+                Tr(m.Kind == "admission" ? "Admission vote" : m.Kind == "sanction" ? "Sanctions vote" :
+                   m.Kind == "lift_sanction" ? "Vote to lift sanctions" : m.Kind == "doctrine" ? "Doctrine vote" : "Common-fund grant"), subjectText,
                 Math.Max(0, m.EndsDay - _campaign.ElapsedDays), m.Votes.Count(v => v.Value), o.Members.Count), 15));
             if (m.Kind == "grant") _conflictsPage.AddChild(Title(Fmt.Money(m.Amount), 16, Ui.Colour("text.accent")));
             foreach (var yes in new[] { true, false })
@@ -207,13 +227,27 @@ public partial class DealOrForceGame
             var amount = new SpinBox { Name = "OrganizationGrantAmount", MinValue = 0, MaxValue = o.Budget, Step = .01, CustomMinimumSize = new(0, 36),
                 TooltipText = Ui.Tip(Tr("Grant in billions of dollars. It can only be paid from the existing common fund after the vote.")) };
             _conflictsPage.AddChild(amount);
-            foreach (var kind in new[] { "admission", "grant" })
+            foreach (var kind in new[] { "admission", "grant", "sanction", "lift_sanction" })
             {
                 var captured = kind;
-                _conflictsPage.AddChild(ActionButton(kind == "admission" ? "Propose admission" : "Propose funded grant", () => {
+                _conflictsPage.AddChild(ActionButton(kind == "admission" ? "Propose admission" :
+                    kind == "grant" ? "Propose funded grant" : kind == "sanction" ? "Propose sanctions" : "Propose lifting sanctions", () => {
                     if (countries.Length == 0) return;
                     OrganizationAction(new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "propose", Kind = captured,
                         TargetId = countries[targets.Selected].Id, Amount = (float)amount.Value }, captured + o.Id + countries[targets.Selected].Id + ":" + amount.Value);
+                }, 0, 34, iconPath: "res://game/gfx/interface/icons/icon_decisions.png"));
+            }
+            var doctrines = InternationalOrganizations.Doctrines.OrderBy(d => d.Id).ToArray();
+            if (doctrines.Length > 0)
+            {
+                _conflictsPage.AddChild(Caption("Bloc doctrine"));
+                var docSelect = new OptionButton { Name = "OrganizationDoctrineSelect", CustomMinimumSize = new(0, 36) };
+                foreach (var d in doctrines) docSelect.AddItem(Tr(d.Name));
+                _conflictsPage.AddChild(docSelect);
+                _conflictsPage.AddChild(ActionButton("Propose doctrine", () => {
+                    var chosen = doctrines[docSelect.Selected].Id;
+                    OrganizationAction(new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "propose", Kind = "doctrine", Subject = chosen },
+                        "doctrine:" + o.Id + ":" + chosen);
                 }, 0, 34, iconPath: "res://game/gfx/interface/icons/icon_decisions.png"));
             }
         }

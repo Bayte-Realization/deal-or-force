@@ -129,8 +129,18 @@ public static class HouseholdEconomy
             ? -Math.Clamp(n.Inflation - 0.08f, 0f, 0.30f) * 0.014f
             : 0f;
 
+        var atWar = c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var exhaustion = M.Clamp01(1f - n.WarSupport);
+        var mobilizationShock = exhaustion > 0.08f ? -Math.Min(0.0075f, (exhaustion - 0.08f) * 0.02f) : 0f;
+        if (atWar) mobilizationShock -= 0.0020f;
+        var warNestingDrag = damage > 0.04f ? -Math.Min(0.006f, (damage - 0.04f) * 0.012f) : 0f;
+        var peaceBabyBoom = !atWar && n.Stability > 0.72f && damage < 0.02f
+            ? (n.Stability - 0.72f) * 0.008f
+            : 0f;
+
         var preAgeBirth = Math.Clamp(baseBirth + lowLitBirth + urbanSqueeze + postIndustrial +
-            familyWelfare + traditionBonus + secularPenalty + pronatalist + inflationDrag, 0f, .08f);
+            familyWelfare + traditionBonus + secularPenalty + pronatalist + inflationDrag +
+            mobilizationShock + warNestingDrag + peaceBabyBoom, 0f, .08f);
         var fertilityFactor = c.Defines.DemographyAgeStructureEnabled ? DemographicCycle.FertilityFactor(s) : 1f;
         var ageBirthEffect = preAgeBirth * (fertilityFactor - 1f);
         var birth = Math.Clamp(preAgeBirth + ageBirthEffect, 0f, .08f);
@@ -139,7 +149,13 @@ public static class HouseholdEconomy
         var povertyDeath = (1f - s.StandardOfLiving) * .004f;
         var shortageDeath = scarcity * c.Defines.DemographyShortageDeathAnnual;
         var warDeath = damage * .012f;
-        var preHealthDeath = Math.Clamp(baseDeath + povertyDeath + shortageDeath + warDeath, 0f, .08f);
+        var famineSpike = food < 0.40f ? (0.40f - food) * 0.045f : 0f;
+        var winterExposureDeath = MathF.Abs(n.CapitalLatitude) > 35f && energy < 0.45f ? (0.45f - energy) * 0.015f : 0f;
+        var epidemicDeath = medicine < 0.35f && (damage > 0.10f || scarcity > 0.15f) ? (0.35f - medicine) * 0.020f : 0f;
+        var violenceDeath = s.Radicalism > 0.65f && s.Stability < 0.25f ? (s.Radicalism - 0.65f) * (0.25f - s.Stability) * 0.035f : 0f;
+
+        var preHealthDeath = Math.Clamp(baseDeath + povertyDeath + shortageDeath + warDeath +
+            famineSpike + winterExposureDeath + epidemicDeath + violenceDeath, 0f, .08f);
         var hospitalRelief = preHealthDeath * health * .25f;
         var postHealthDeath = preHealthDeath - hospitalRelief;
         var mortalityFactor = c.Defines.DemographyAgeStructureEnabled ? DemographicCycle.MortalityFactor(s, c.Defines) : 1f;
@@ -162,12 +178,19 @@ public static class HouseholdEconomy
             if (secularPenalty < -0.0001f) netBreakdown.Add(Loc.Get("Secular state norms"), secularPenalty);
             if (pronatalist > 0.0001f) netBreakdown.Add(Loc.Get("Pronatalist family programme"), pronatalist);
             if (inflationDrag < -0.0001f) netBreakdown.Add(Loc.Get("Inflation squeeze on households"), inflationDrag);
+            if (mobilizationShock < -0.0001f) netBreakdown.Add(Loc.Get("Wartime mobilization & family separation"), mobilizationShock);
+            if (warNestingDrag < -0.0001f) netBreakdown.Add(Loc.Get("Housing devastation & displacement"), warNestingDrag);
+            if (peaceBabyBoom > 0.0001f) netBreakdown.Add(Loc.Get("Post-war recovery baby boom"), peaceBabyBoom);
             if (MathF.Abs(ageBirthEffect) > 0.0001f) netBreakdown.Add(Loc.Get("Young cohort share (mothers)"), ageBirthEffect);
             netBreakdown.Add(Loc.Get("Base mortality"), -baseDeath);
             if (oldAgeDeathEffect > 0.0001f) netBreakdown.Add(Loc.Get("Old-age mortality (aging pyramid)"), -oldAgeDeathEffect);
             if (povertyDeath > 0.0001f) netBreakdown.Add(Loc.Get("Low living standard mortality"), -povertyDeath);
             if (shortageDeath > 0.0001f) netBreakdown.Add(Loc.Get("Food, energy & medicine shortages"), -shortageDeath);
             if (warDeath > 0.0001f) netBreakdown.Add(Loc.Get("War devastation & bombardment"), -warDeath);
+            if (famineSpike > 0.0001f) netBreakdown.Add(Loc.Get("Severe famine & starvation"), -famineSpike);
+            if (winterExposureDeath > 0.0001f) netBreakdown.Add(Loc.Get("Winter exposure & heating deficit"), -winterExposureDeath);
+            if (epidemicDeath > 0.0001f) netBreakdown.Add(Loc.Get("Epidemic outbreak & medical collapse"), -epidemicDeath);
+            if (violenceDeath > 0.0001f) netBreakdown.Add(Loc.Get("Civil violence & public breakdown"), -violenceDeath);
             if (hospitalRelief > 0.0001f) netBreakdown.Add(Loc.Get("Hospitals & medical supply relief"), hospitalRelief);
             netBreakdown.Settle(birth - death, Loc.Get("Clamped vital bounds"));
         }

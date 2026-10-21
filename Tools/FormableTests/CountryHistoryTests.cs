@@ -103,7 +103,13 @@ static class CountryHistoryTests
             "treasury", "public_debt", "credit_confidence", "gdp", "population", "tax_rate",
             "military_spending", "literacy", "urbanisation", "agriculture", "standard_of_living",
             "stability", "war_support", "manpower", "trade_policy", "government", "ideology",
-            "primary_cultures"
+            "primary_cultures",
+            // Who leads a country on its first morning. `ApplyCountries` does not read these -
+            // `Rulers` does, from the same folder, from every file whose name says "rulers".
+            // They are listed here so the contract says so out loud rather than the suite
+            // failing on a file that works.
+            "head_of_state", "head_of_government", "state_age", "gov_age", "state_trait", "gov_trait",
+            "ministers"
         };
 
         var folder = Path.Combine(GameDataLoader.DataFolder("history") ?? "", "countries", "2024");

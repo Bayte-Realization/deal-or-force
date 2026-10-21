@@ -61,5 +61,13 @@
   // Rakhine State and western Myanmar. The armed wing of the United League of Arakan (ULA),
   // fighting for the self-determination of the Rakhine people, key member of the Three Brotherhood
   // Alliance in Operation 1027, controlling rural districts, border trade routes and regional hubs.
+  // Port-au-Prince, Haiti. The gang coalition that grew out of a former police informant's
+  // G9 Family and Allies and swallowed most of the capital's neighbourhoods in 2023-2024:
+  // it burned the prisons, besieged the airport and the port, and by the summer of 2024 the
+  // transitional council governed from a hotel room while the coalition held most of the
+  // city. It is a coalition of armed neighbourhoods rather than a party - extortion is its
+  // economy, the diaspora's deportees its recruits - and it has no programme beyond the
+  // bargains it can force.
+  "viv_ansanm": {"tag": "VAN", "name": "Viv Ansanm", "description": "The Haitian gang coalition of G9 Family and Allies, G-Pep and their allies, formalised in 2024 under Jimmy Chérizier. It controls most of Port-au-Prince, taxes what moves through it, and has forced its way into every negotiation about the country's future.", "colour": "#7b1f1f", "peoples": ["haitian"], "faiths": ["catholic"], "headquarters": "ht_ou", "homeland": ["ht_ou"], "support": {"ht_ou": 0.42}, "treasury": 0.04, "cadres": 12000, "legitimacy": 0.08, "government": "provisional_government", "ideology": "nationalism", "state_name": "Haiti", "traits": ["armed_wing", "mass_movement"]},
   "arakan_army": {"tag": "ARA", "name": "Arakan Army", "description": "The ethnic armed organisation founded in 2009 as the military wing of the United League of Arakan. Operating primarily in Rakhine and southern Chin State, it formed the Three Brotherhood Alliance and took control of extensive territory, border gates, and administrative hubs across western Myanmar.", "colour": "#e63946", "peoples": ["rakhine", "burmese"], "faiths": ["theravada"], "headquarters": "mm_16", "homeland": ["mm_16", "mm_14"], "support": {"mm_16": 0.45, "mm_14": 0.08}, "treasury": 0.06, "cadres": 30000, "legitimacy": 0.35, "government": "provisional_government", "ideology": "nationalism", "state_name": "Arakan", "traits": ["armed_wing", "diaspora_lobby"]}
 }

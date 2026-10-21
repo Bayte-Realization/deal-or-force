@@ -33,12 +33,17 @@ public static class MovementReach
         return Centres.GetValueOrDefault(region.MapIndex);
     }
 
-    public static bool CanOperate(Campaign campaign, Nation nation, ScenarioState region, MovementDefinition definition)
+    public static bool CanOperate(Campaign campaign, Nation nation, ScenarioState region, MovementDefinition definition,
+        Nation owner = null)
     {
         if (campaign is null || nation?.Movement is not { } movement || region is null || definition is null) return false;
-        var owner = MovementRules.OwnerOf(campaign, region);
+        owner ??= MovementRules.OwnerOf(campaign, region);
         var hostile = owner is not null && (movement.DesignatedBy.Contains(owner.Id) ||
             CampaignDiplomacy.AtWar(campaign, nation.Id, owner.Id));
+        // A movement that already governs ground can organise anywhere on its own soil;
+        // checking its distance from a homeland it has already won is a question with no
+        // possible answer but no.
+        if (owner is not null && owner.Id == nation.Id) return true;
         if (MovementDefinition.Listed(definition.Homeland, region.Id) || region.MapIndex == movement.HeadquartersStateMapIndex)
             return true;
         // A humanitarian mission needs permission, not simply believers of the same faith.
@@ -61,9 +66,9 @@ public static class MovementReach
     }
 
     public static float SupportCeiling(Campaign campaign, Nation nation, ScenarioState region,
-        MovementDefinition definition, long own, long faithful)
+        MovementDefinition definition, long own, long faithful, Nation owner = null)
     {
-        if (!CanOperate(campaign, nation, region, definition)) return 0f;
+        if (!CanOperate(campaign, nation, region, definition, owner)) return 0f;
         if (own > 0) return MovementRules.MaxSupport;
         // The shared faith supplies a small sympathetic audience, not a territorial mandate.
         return faithful > 0 ? .04f : 0f;

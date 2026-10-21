@@ -21,7 +21,14 @@ public sealed partial class GlobePresentation
 
     private void SizeSurfaceArmyCounter(ArmyStackMarker marker)
     {
-        marker.Node.Scale = Vector3.One * SurfaceCounterWidth(marker.Node);
+        var width = SurfaceCounterWidth(marker.Node);
+        if (MathF.Abs(marker.Node.Scale.X - width) > 0.00015f)
+        {
+            if (marker.Node.Scale.X <= 0.0001f || MathF.Abs(marker.Node.Scale.X - width) > 0.25f)
+                marker.Node.Scale = Vector3.One * width;
+            else
+                marker.Node.Scale = marker.Node.Scale.Lerp(Vector3.One * width, 0.30f);
+        }
     }
 
     // One world footprint and one screen ceiling for all military cards. Individual
@@ -29,11 +36,30 @@ public sealed partial class GlobePresentation
     private float SurfaceCounterWidth(Node3D node, string prefix = "map")
     {
         if (!IsInstanceValid(_camera)) return .06f;
-        var depth = Math.Max(.001f, -_camera.ToLocal(node.GlobalPosition).Z);
-        var unitsPerPixel = _camera.ProjectPosition(Vector2.Zero, depth)
-            .DistanceTo(_camera.ProjectPosition(Vector2.Down, depth));
-        var pixelLimit = Math.Clamp(Ui.Metric(prefix + ".globe_counter_pixels", Ui.Metric("map.globe_counter_pixels", 56f)), 28f, 80f);
-        var worldLimit = Math.Clamp(Ui.Metric(prefix + ".globe_counter_world_width", Ui.Metric("map.globe_counter_world_width", .06f)), .012f, .3f);
+        var camTransform = _camera.GlobalTransform;
+        var pos = node is not null && IsInstanceValid(node) && node.IsInsideTree()
+            ? node.GlobalPosition
+            : node is not null ? node.Position : camTransform.Origin - camTransform.Basis.Z * 5f;
+        var rel = pos - camTransform.Origin;
+        var depth = Math.Max(.001f, -rel.Dot(camTransform.Basis.Z));
+        var viewportH = Math.Max(1f, Size.Y);
+        var unitsPerPixel = 2f * depth * MathF.Tan(Mathf.DegToRad(_camera.Fov * 0.5f)) / viewportH;
+        var defaultPixels = Ui.Metric("map.globe_counter_pixels", 56f);
+        var defaultWorld = Ui.Metric("map.globe_counter_world_width", .06f);
+        var pixelKey = prefix switch
+        {
+            "fleet" => "fleet.globe_counter_pixels",
+            "support" => "support.globe_counter_pixels",
+            _ => "map.globe_counter_pixels"
+        };
+        var worldKey = prefix switch
+        {
+            "fleet" => "fleet.globe_counter_world_width",
+            "support" => "support.globe_counter_world_width",
+            _ => "map.globe_counter_world_width"
+        };
+        var pixelLimit = Math.Clamp(Ui.Metric(pixelKey, defaultPixels), 28f, 80f);
+        var worldLimit = Math.Clamp(Ui.Metric(worldKey, defaultWorld), .012f, .3f);
         // Close cards remain readable but never balloon with altitude to cover a
         // country. Foreshortening is intentional: the card lies on the ground.
         return Math.Min(worldLimit, pixelLimit * unitsPerPixel);

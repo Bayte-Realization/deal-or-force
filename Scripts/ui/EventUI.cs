@@ -10,6 +10,7 @@ public partial class DealOrForceGame
     private Control _eventLayer = null!;
     private Label _eventTitle = null!;
     private Label _eventDescription = null!;
+    private TextureRect _eventPicture = null!;
     private ScrollContainer _eventOptionsScroll = null!;
     private VBoxContainer _eventOptions = null!;
     private ColorRect _eventVeil = null!;
@@ -50,6 +51,15 @@ public partial class DealOrForceGame
         grip.TooltipText = Ui.Tip(Tr("Drag this bar to move the window. The map underneath stays live."));
         grip.GuiInput += input => DragEventWindow(grip, input);
         rows.AddChild(grip);
+        // The picture above the title (common/event_pictures), cut to a band; an event
+        // without one keeps the plain window.
+        _eventPicture = new TextureRect
+        {
+            Name = "EventPicture", ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            CustomMinimumSize = new Vector2(0, 170), MouseFilter = MouseFilterEnum.Ignore, Visible = false
+        };
+        rows.AddChild(_eventPicture);
         _eventTitle = Title("", 28, Ui.Colour("text.accent"));
         rows.AddChild(_eventTitle);
         _eventDescription = Title("", 16, Ui.Colour("text.body_soft"));
@@ -98,6 +108,9 @@ public partial class DealOrForceGame
         // were translated, because Ui.Tip does its own lookup.
         _eventTitle.Text = Loc.Get(pending.Title);
         _eventDescription.Text = Loc.Get(pending.Description);
+        var picture = EventPictures.PathFor(EventCatalog.All.FirstOrDefault(d => d.Title == pending.Title));
+        _eventPicture.Texture = picture.Length > 0 && ResourceLoader.Exists(picture) ? GD.Load<Texture2D>(picture) : null;
+        _eventPicture.Visible = _eventPicture.Texture is not null;
         // Events and mods may offer one, two or many choices; never assume two.
         foreach (var child in _eventOptions.GetChildren())
         {

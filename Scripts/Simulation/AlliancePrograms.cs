@@ -119,18 +119,18 @@ public static class AlliancePrograms
         c.MarkStrategicChange();
         return true;
     }
+    private static readonly List<(long Key, DiplomaticRelation Relation)> ActivePrograms = new();
+
     public static void Tick(Campaign c)
     {
-        // Sort only funded programmes, never the entire remembered-pair archive.
-        // Preserve key order: several contributions may draw on one treasury.
-        List<KeyValuePair<long, DiplomaticRelation>> active = null;
+        ActivePrograms.Clear();
         foreach (var pair in c.Relations)
-            if (Active(pair.Value)) (active ??= new()).Add(pair);
-        if (active is null) return;
-        active.Sort((left, right) => left.Key.CompareTo(right.Key));
-        foreach (var pair in active)
+            if (Active(pair.Value)) ActivePrograms.Add((pair.Key, pair.Value));
+        if (ActivePrograms.Count == 0) return;
+        if (ActivePrograms.Count > 1) ActivePrograms.Sort((x, y) => x.Key.CompareTo(y.Key));
+        for (var i = 0; i < ActivePrograms.Count; i++)
         {
-            var r = pair.Value;
+            var r = ActivePrograms[i].Relation;
             if (!Active(r)) continue;
             var changed = false;
             if (r.AllianceProgramPausedDay >= 0)

@@ -1,0 +1,162 @@
+{
+  "russian": {
+    "countries": ["RUS"], "cultures": ["russian"], "pattern": "{given} {middle} {family}",
+    "male_middle": ["Aleksandrovich","Alekseevich","Andreyevich","Borisovich","Dmitrievich","Evgenyevich","Igorevich","Ivanovich","Mikhailovich","Nikolaevich","Olegovich","Pavlovich","Petrovich","Romanovich","Sergeyevich","Viktorovich","Vladimirovich","Yuryevich"],
+    "female_middle": ["Aleksandrovna","Alekseevna","Andreyevna","Borisovna","Dmitrievna","Evgenyevna","Igorevna","Ivanovna","Mikhailovna","Nikolaevna","Olegovna","Pavlovna","Petrovna","Romanovna","Sergeyevna","Viktorovna","Vladimirovna","Yuryevna"],
+    "male": ["Aleksandr","Alexei","Andrei","Anton","Artyom","Boris","Dmitri","Denis","Evgeny","Fyodor","Gennady","Igor","Ilya","Kirill","Konstantin","Leonid","Maksim","Mikhail","Nikolai","Oleg","Pavel","Roman","Sergei","Viktor","Vladimir","Yuri"],
+    "female": ["Aleksandra","Anastasia","Anna","Daria","Ekaterina","Elena","Evgenia","Galina","Inna","Irina","Kira","Kseniya","Larisa","Lidia","Lyubov","Maria","Marina","Natalia","Nina","Olga","Polina","Sofia","Svetlana","Tatiana","Valentina","Vera"],
+    "family": ["Volkov","Sokolov","Morozov","Orlov","Lebedev","Kuznetsov","Popov","Smirnov","Novikov","Fedorov","Pavlov","Semenov","Egorov","Nikolaev","Makarov","Zakharov","Zaitsev","Solovyov","Borisov","Vasiliev","Vinogradov","Kiselev","Medvedev","Gromov"],
+    "female_family": ["Volkova","Sokolova","Morozova","Orlova","Lebedeva","Kuznetsova","Popova","Smirnova","Novikova","Fedorova","Pavlova","Semenova","Egorova","Nikolaeva","Makarova","Zakharova","Zaitseva","Solovyova","Borisova","Vasilieva","Vinogradova","Kiseleva","Medvedeva","Gromova"]
+  },
+  "ukrainian": {
+    "countries": ["UKR"], "cultures": ["ukrainian","rusyn"],
+    "male": ["Oleksandr","Oleksii","Andrii","Bohdan","Danylo","Dmytro","Denys","Hryhorii","Ivan","Ihor","Kyrylo","Leonid","Maksym","Mykola","Mykhailo","Oleh","Petro","Pavlo","Roman","Serhii","Taras","Vasyl","Viktor","Volodymyr","Yaroslav","Yurii"],
+    "female": ["Alina","Anastasiia","Anna","Bohdana","Daryna","Halyna","Hanna","Iryna","Kateryna","Khrestyna","Larysa","Lesia","Liudmyla","Mariia","Maryna","Nataliia","Nina","Oksana","Olena","Olha","Roksolana","Sofiia","Svitlana","Tetiana","Valentyna","Yuliia"],
+    "family": ["Kovalenko","Shevchenko","Bondarenko","Tkachenko","Kravchenko","Kovalchuk","Melnyk","Shevchuk","Boyko","Savchenko","Honcharenko","Klymenko","Tkachuk","Zakharchenko","Marchenko","Ponomarenko","Hrytsenko","Pavlenko","Lysenko","Oliinyk","Moroz","Kozak","Rudenko","Dovzhenko"]
+  },
+  "belarusian": {
+    "countries": ["BLR"], "cultures": ["belarusian"],
+    "male": ["Aliaksandr","Aliaksei","Andrei","Anatol","Artsiom","Barys","Dzianis","Dzmitry","Henadz","Ihar","Ivan","Kiryl","Leanid","Maksim","Mikalai","Mikhail","Pavel","Piotr","Siarhei","Valiantsin","Sviataslau","Uladzimir","Valery","Viktar","Yauhen","Yury"],
+    "female": ["Aliaksandra","Alena","Anastasiya","Hanna","Darya","Halina","Iryna","Katsiaryna","Khrystsina","Kseniya","Larysa","Liudmila","Maryna","Maryya","Nadzeya","Natallia","Nina","Sviatlana","Tatsiana","Valiantsina","Vera","Volha","Yauheniya","Yuliya"],
+    "family": ["Kavalchuk","Kavalenka","Savich","Kravchanka","Melnik","Shevchuk","Kozak","Marchanka","Piatrou","Zhuk","Maroz","Novik","Sokol","Ruban","Dziuba","Mazurets","Kulik","Zaitsau","Bykau","Karpovich","Klimovich","Huryn","Radkevich","Sidorchuk"]
+  },
+  "polish": {
+    "countries": ["POL"], "cultures": ["polish","silesian","kashubian"],
+    "male": ["Adam","Andrzej","Bartosz","Bogdan","Dawid","Grzegorz","Jakub","Jan","Jerzy","Kamil","Karol","Krzysztof","Maciej","Marek","Michał","Paweł","Piotr","Rafał","Robert","Stanisław","Tomasz","Wojciech","Zbigniew","Łukasz"],
+    "female": ["Agnieszka","Aleksandra","Anna","Barbara","Dorota","Elżbieta","Ewa","Joanna","Julia","Justyna","Karolina","Katarzyna","Kinga","Krystyna","Magdalena","Małgorzata","Maria","Marta","Monika","Natalia","Paulina","Renata","Sylwia","Zofia"],
+    "family": ["Nowak","Kowalski","Wiśniewski","Wójcik","Kowalczyk","Kamiński","Lewandowski","Zieliński","Szymański","Woźniak","Dąbrowski","Kozłowski","Mazur","Jankowski","Wojciechowski","Kwiatkowski","Krawczyk","Piotrowski","Grabowski","Pawłowski","Michalski","Król","Wieczorek","Jabłoński"],
+    "female_family": ["Nowak","Kowalska","Wiśniewska","Wójcik","Kowalczyk","Kamińska","Lewandowska","Zielińska","Szymańska","Woźniak","Dąbrowska","Kozłowska","Mazur","Jankowska","Wojciechowska","Kwiatkowska","Krawczyk","Piotrowska","Grabowska","Pawłowska","Michalska","Król","Wieczorek","Jabłońska"]
+  },
+  "czech": {
+    "countries": ["CZE"], "cultures": ["czech","moravian"],
+    "male": ["Adam","Aleš","David","Filip","František","Jakub","Jan","Jaroslav","Jiří","Josef","Karel","Lukáš","Marek","Martin","Michal","Milan","Miroslav","Ondřej","Pavel","Petr","Radek","Tomáš","Václav","Zdeněk"],
+    "female": ["Adéla","Alena","Anna","Barbora","Dana","Eva","Hana","Helena","Irena","Jana","Jitka","Karolína","Kateřina","Lenka","Lucie","Marie","Martina","Michaela","Monika","Pavla","Petra","Simona","Tereza","Veronika"],
+    "family": ["Novák","Svoboda","Novotný","Dvořák","Černý","Procházka","Kučera","Veselý","Horák","Němec","Marek","Pospíšil","Pokorný","Hájek","Jelínek","Král","Růžička","Beneš","Fiala","Sedláček","Doležal","Zeman","Kolář","Navrátil"],
+    "female_family": ["Nováková","Svobodová","Novotná","Dvořáková","Černá","Procházková","Kučerová","Veselá","Horáková","Němcová","Marková","Pospíšilová","Pokorná","Hájková","Jelínková","Králová","Růžičková","Benešová","Fialová","Sedláčková","Doležalová","Zemanová","Kolářová","Navrátilová"]
+  },
+  "slovak": {
+    "countries": ["SVK"], "cultures": ["slovak"],
+    "male": ["Andrej","Anton","Branislav","Daniel","Dušan","Filip","František","Igor","Ivan","Jakub","Ján","Jozef","Juraj","Ladislav","Lukáš","Marek","Martin","Michal","Milan","Miroslav","Pavol","Peter","Tomáš","Vladimír"],
+    "female": ["Alena","Andrea","Anna","Barbora","Daniela","Eva","Gabriela","Helena","Ivana","Jana","Katarína","Lenka","Lucia","Ľubica","Mária","Martina","Michaela","Monika","Natália","Petra","Silvia","Simona","Veronika","Zuzana"],
+    "family": ["Horváth","Kováč","Varga","Tóth","Nagy","Baláž","Molnár","Lukáč","Kováčik","Kovács","Kollár","Novák","Polák","Šimko","Mráz","Kučera","Sedlák","Urban","Kováčovič","Farkaš","Benko","Švec","Hruška","Bartoš"],
+    "female_family": ["Horváthová","Kováčová","Vargová","Tóthová","Nagyová","Balážová","Molnárová","Lukáčová","Kováčiková","Kovácsová","Kollárová","Nováková","Poláková","Šimková","Mrázová","Kučerová","Sedláková","Urbanová","Kováčovičová","Farkašová","Benková","Švecová","Hrušková","Bartošová"]
+  },
+  "serbo_croatian": {
+    "countries": ["SRB","HRV","BIH","MNE"], "cultures": ["serb","serbian","croat","croatian","bosniak","montenegrin"],
+    "male": ["Aleksandar","Bojan","Boris","Branko","Damir","Darko","Dejan","Dragan","Emir","Goran","Ivan","Marko","Milan","Miloš","Miroslav","Nenad","Nikola","Petar","Predrag","Slobodan","Stefan","Vladimir","Zoran","Željko"],
+    "female": ["Aleksandra","Ana","Bojana","Danijela","Dragana","Dubravka","Ivana","Jasmina","Jelena","Katarina","Ljiljana","Marija","Marina","Milica","Mirjana","Nataša","Nevena","Sanja","Snežana","Tamara","Tatjana","Vesna","Zorana","Željka"],
+    "family": ["Jovanović","Petrović","Nikolić","Marković","Đorđević","Stojanović","Ilić","Pavlović","Popović","Tomić","Savić","Mitrović","Kovačević","Lukić","Janković","Matić","Radić","Babić","Marić","Božić","Jurić","Novak","Knežević","Grgić"]
+  },
+  "slovenian": {
+    "countries": ["SVN"], "cultures": ["slovene","slovenian"],
+    "male": ["Andrej","Anton","Blaž","Bojan","Borut","Damjan","Gregor","Igor","Ivan","Janez","Jernej","Jože","Luka","Marko","Matej","Matjaž","Miha","Milan","Peter","Rok","Simon","Tomaž","Uroš","Žiga"],
+    "female": ["Alenka","Ana","Anja","Barbara","Darja","Eva","Irena","Jana","Janja","Katja","Katarina","Maja","Marija","Mateja","Mojca","Nataša","Nina","Petra","Saša","Simona","Sonja","Tanja","Tina","Urška"],
+    "family": ["Novak","Horvat","Kovačič","Krajnc","Zupančič","Kovač","Potočnik","Mlakar","Vidmar","Kos","Kralj","Turk","Božič","Korošec","Zupan","Bizjak","Kavčič","Rozman","Kotnik","Černe","Kolar","Golob","Kuhar","Košir"]
+  },
+  "bulgarian": {
+    "countries": ["BGR","MKD"], "cultures": ["bulgarian","macedonian"],
+    "male": ["Aleksandar","Angel","Asen","Boris","Boyan","Daniel","Dimitar","Georgi","Hristo","Iliya","Ivan","Kalin","Kiril","Lyubomir","Martin","Mihail","Nikolay","Pavel","Petar","Plamen","Radoslav","Stefan","Todor","Vasil"],
+    "female": ["Aleksandra","Bilyana","Borislava","Daniela","Desislava","Diana","Elena","Emiliya","Gergana","Iva","Ivanka","Kalina","Kristina","Liliya","Maria","Maya","Mila","Nadezhda","Neli","Petya","Radostina","Silviya","Stefka","Vesela"],
+    "family": ["Ivanov","Georgiev","Dimitrov","Petrov","Nikolov","Hristov","Stoyanov","Todorov","Iliev","Vasilev","Angelov","Marinov","Radev","Kolev","Dobrev","Atanasov","Popov","Kostov","Mihaylov","Pavlov","Yordanov","Simeonov","Stefanov","Borisov"],
+    "female_family": ["Ivanova","Georgieva","Dimitrova","Petrova","Nikolova","Hristova","Stoyanova","Todorova","Ilieva","Vasileva","Angelova","Marinova","Radeva","Koleva","Dobreva","Atanasova","Popova","Kostova","Mihaylova","Pavlova","Yordanova","Simeonova","Stefanova","Borisova"]
+  },
+  "romanian": {
+    "countries": ["ROU","ROM","MDA"], "cultures": ["romanian","moldovan","aromanian"],
+    "male": ["Adrian","Alexandru","Andrei","Bogdan","Călin","Cătălin","Claudiu","Cristian","Dan","Daniel","Dorin","Florin","Gabriel","Gheorghe","Ion","Ionuț","Liviu","Lucian","Marian","Mihai","Nicolae","Radu","Sorin","Ștefan"],
+    "female": ["Adriana","Alexandra","Alina","Ana","Andreea","Anca","Bianca","Camelia","Carmen","Claudia","Cristina","Daniela","Diana","Elena","Gabriela","Ioana","Irina","Lavinia","Lidia","Maria","Mihaela","Monica","Oana","Raluca"],
+    "family": ["Popescu","Ionescu","Popa","Dumitrescu","Stan","Stoica","Gheorghe","Dinu","Tudor","Marin","Radu","Munteanu","Diaconu","Vasile","Petrescu","Matei","Stanciu","Cristea","Moldovan","Lungu","Dobre","Barbu","Ilie","Enache"]
+  },
+  "hungarian": {
+    "countries": ["HUN"], "cultures": ["hungarian"], "pattern": "{family} {given}",
+    "male": ["Ádám","András","Attila","Balázs","Béla","Dániel","Ferenc","Gábor","Gergely","György","István","János","József","Károly","László","Márton","Miklós","Norbert","Pál","Péter","Sándor","Tamás","Viktor","Zoltán"],
+    "female": ["Ágnes","Alexandra","Anikó","Anna","Beáta","Boglárka","Csilla","Dóra","Edina","Erika","Eszter","Éva","Gabriella","Ildikó","Judit","Katalin","Krisztina","Mária","Mónika","Orsolya","Réka","Szilvia","Viktória","Zsuzsanna"],
+    "family": ["Nagy","Kovács","Tóth","Szabó","Horváth","Varga","Kiss","Molnár","Németh","Farkas","Balogh","Papp","Takács","Juhász","Lakatos","Mészáros","Oláh","Simon","Rácz","Fekete","Szűcs","Török","Vincze","Szalai"]
+  },
+  "greek": {
+    "countries": ["GRC","GREE","CYP"], "cultures": ["greek","greek_cypriot","pontic_greek"],
+    "male": ["Alexandros","Andreas","Antonis","Christos","Dimitris","Georgios","Giorgos","Ioannis","Konstantinos","Kostas","Leonidas","Marios","Michalis","Nikos","Panagiotis","Pavlos","Petros","Sotiris","Spyridon","Stavros","Stefanos","Theodoros","Vasilis","Viktor"],
+    "female": ["Alexandra","Anastasia","Angeliki","Anna","Athina","Christina","Dimitra","Eirini","Eleni","Evangelia","Georgia","Ioanna","Katerina","Konstantina","Maria","Marina","Niki","Olga","Panagiota","Paraskevi","Sofia","Stavroula","Theodora","Vasiliki"],
+    "family": ["Papadopoulos","Papageorgiou","Papadimitriou","Georgiou","Nikolaou","Dimitriou","Ioannou","Konstantinou","Pavlou","Petrou","Vasileiou","Christou","Oikonomou","Stavrou","Alexandrou","Theodorou","Mihailidis","Georgiadis","Nikolaidis","Antoniadis","Dimitriadis","Karagiannis","Pappas","Rallis"],
+    "female_family": ["Papadopoulou","Papageorgiou","Papadimitriou","Georgiou","Nikolaou","Dimitriou","Ioannou","Konstantinou","Pavlou","Petrou","Vasileiou","Christou","Oikonomou","Stavrou","Alexandrou","Theodorou","Mihailidou","Georgiadou","Nikolaidou","Antoniadou","Dimitriadou","Karagianni","Pappa","Ralli"]
+  },
+  "albanian": {
+    "countries": ["ALB","XKX","KOS"], "cultures": ["albanian","kosovar_albanian"],
+    "male": ["Agron","Altin","Arben","Ardian","Artan","Bashkim","Bujar","Dritan","Edmond","Erion","Fatmir","Fatos","Flamur","Gazmend","Ilir","Luan","Mentor","Mirjan","Petrit","Shkelzen","Sokol","Taulant","Valon","Ylli"],
+    "female": ["Adelina","Albana","Alketa","Anila","Arta","Besa","Blerta","Dafina","Drita","Edlira","Elira","Ermira","Fjolla","Flutura","Gentiana","Iliriana","Lindita","Lirije","Majlinda","Mimoza","Ornela","Shpresa","Teuta","Valbona"],
+    "family": ["Hoxha","Prifti","Gjoka","Dervishi","Leka","Kola","Meta","Gashi","Krasniqi","Berisha","Shala","Hoti","Morina","Kelmendi","Deda","Marku","Pasha","Lleshi","Balla","Nika","Rama","Zeneli","Bardhi","Osmani"]
+  },
+  "german": {
+    "countries": ["DEU","GER","AUT","LIE"], "cultures": ["german","austrian","swiss_german","german_swiss","bavarian","saxon"],
+    "male": ["Alexander","Andreas","Christian","Christoph","Daniel","David","Felix","Florian","Georg","Hans","Heinrich","Jakob","Johannes","Jürgen","Karl","Klaus","Lars","Lukas","Markus","Martin","Matthias","Michael","Stefan","Thomas"],
+    "female": ["Anna","Anja","Barbara","Brigitte","Claudia","Elisabeth","Eva","Hannah","Helena","Ingrid","Julia","Karin","Katharina","Klara","Laura","Lea","Lena","Maria","Martina","Monika","Sabine","Sandra","Sophie","Ursula"],
+    "family": ["Müller","Schmidt","Schneider","Fischer","Weber","Meyer","Wagner","Becker","Schulz","Hoffmann","Schäfer","Koch","Bauer","Richter","Klein","Wolf","Schröder","Neumann","Schwarz","Zimmermann","Braun","Krüger","Hartmann","Lange"]
+  },
+  "french": {
+    "countries": ["FRA","MCO"], "cultures": ["french","walloon","quebecois","french_canadian","occitan","breton","corsican"],
+    "male": ["Alexandre","Alain","Antoine","Arnaud","Benoît","Bernard","Charles","Christophe","Daniel","Étienne","François","Guillaume","Henri","Jacques","Jean","Julien","Laurent","Louis","Luc","Michel","Nicolas","Olivier","Philippe","Pierre"],
+    "female": ["Alice","Amélie","Anne","Brigitte","Camille","Catherine","Cécile","Charlotte","Claire","Élise","Émilie","Florence","Françoise","Hélène","Isabelle","Jeanne","Julie","Laure","Louise","Marie","Nathalie","Pauline","Sophie","Valérie"],
+    "family": ["Martin","Bernard","Thomas","Petit","Robert","Richard","Durand","Dubois","Moreau","Laurent","Simon","Michel","Lefebvre","Leroy","Roux","David","Bertrand","Morel","Fournier","Girard","Bonnet","Dupont","Lambert","Fontaine"]
+  },
+  "italian": {
+    "countries": ["ITA","SMR","VAT"], "cultures": ["italian","sicilian","sardinian","neapolitan","venetian"],
+    "male": ["Alessandro","Andrea","Antonio","Carlo","Claudio","Daniele","Davide","Emanuele","Enrico","Fabio","Federico","Francesco","Gabriele","Giovanni","Giuseppe","Leonardo","Lorenzo","Luca","Luigi","Marco","Matteo","Michele","Paolo","Stefano"],
+    "female": ["Alessandra","Alice","Anna","Barbara","Beatrice","Carla","Chiara","Claudia","Cristina","Daniela","Elena","Elisa","Federica","Francesca","Giulia","Laura","Lucia","Luisa","Maria","Martina","Paola","Roberta","Sara","Silvia"],
+    "family": ["Rossi","Russo","Ferrari","Esposito","Bianchi","Romano","Colombo","Ricci","Marino","Greco","Bruno","Gallo","Conti","De Luca","Mancini","Costa","Giordano","Rizzo","Lombardi","Moretti","Barbieri","Fontana","Santoro","Mariani"]
+  },
+  "spanish": {
+    "countries": ["ESP","MEX","ARG","COL","CHL","PER","VEN","ECU","BOL","PRY","URY","CUB","DOM","GTM","HND","SLV","NIC","CRI","PAN","GNQ"], "cultures": ["spanish","castilian","catalan","galician","argentine","mexican","colombian","chilean","peruvian","venezuelan","ecuadorian","bolivian","paraguayan","uruguayan","cuban","dominican","central_american"],
+    "male": ["Alejandro","Andrés","Antonio","Carlos","Daniel","Diego","Eduardo","Enrique","Fernando","Francisco","Gabriel","Javier","Jorge","José","Juan","Luis","Manuel","Marcos","Mario","Miguel","Pablo","Rafael","Ricardo","Sergio"],
+    "female": ["Adriana","Alejandra","Ana","Beatriz","Camila","Carmen","Carolina","Catalina","Claudia","Cristina","Daniela","Elena","Gabriela","Gloria","Isabel","Laura","Lucía","Luisa","María","Marta","Patricia","Paula","Sofía","Teresa"],
+    "family": ["García","Rodríguez","González","Fernández","López","Martínez","Sánchez","Pérez","Gómez","Martín","Jiménez","Ruiz","Hernández","Díaz","Moreno","Muñoz","Álvarez","Romero","Alonso","Gutiérrez","Navarro","Torres","Vargas","Castillo"]
+  },
+  "portuguese": {
+    "countries": ["PRT","BRA","AGO","MOZ","CPV","STP","GNB"], "cultures": ["portuguese","brazilian"],
+    "male": ["Alexandre","André","António","Bruno","Carlos","Diogo","Eduardo","Fernando","Francisco","Gabriel","Gonçalo","Guilherme","Henrique","João","Jorge","José","Leonardo","Luís","Manuel","Miguel","Paulo","Pedro","Ricardo","Tiago"],
+    "female": ["Adriana","Alexandra","Ana","Beatriz","Bruna","Carla","Carolina","Catarina","Cláudia","Daniela","Diana","Eduarda","Filipa","Francisca","Helena","Inês","Isabel","Joana","Laura","Leonor","Luísa","Mariana","Sofia","Teresa"],
+    "family": ["Silva","Santos","Ferreira","Pereira","Oliveira","Costa","Rodrigues","Martins","Jesus","Sousa","Fernandes","Gonçalves","Gomes","Lopes","Marques","Alves","Almeida","Ribeiro","Pinto","Carvalho","Teixeira","Moreira","Correia","Mendes"]
+  },
+  "english": {
+    "countries": ["GBR","USA","CAN","AUS","NZL","BHS","BRB","JAM","TTO","BLZ","GUY","ATG","DMA","GRD","KNA","LCA","VCT"], "cultures": ["english","scottish","welsh","american","african_american","anglo_canadian","australian","new_zealander","anglo_american"],
+    "male": ["Adam","Andrew","Anthony","Benjamin","Charles","Christopher","Daniel","David","Edward","George","Henry","James","John","Joseph","Matthew","Michael","Nicholas","Oliver","Patrick","Peter","Richard","Robert","Thomas","William"],
+    "female": ["Abigail","Alice","Amanda","Anne","Caroline","Charlotte","Claire","Diana","Eleanor","Elizabeth","Emily","Emma","Grace","Helen","Jane","Jennifer","Julia","Katherine","Laura","Margaret","Mary","Rachel","Sarah","Victoria"],
+    "family": ["Smith","Jones","Brown","Taylor","Wilson","Davies","Evans","Thomas","Johnson","Roberts","Robinson","Thompson","Wright","Walker","White","Edwards","Hughes","Green","Hall","Lewis","Harris","Clarke","Young","Martin"]
+  },
+  "irish": {
+    "countries": ["IRL"], "cultures": ["irish"],
+    "male": ["Aidan","Alan","Brian","Cathal","Cian","Ciarán","Colm","Conor","Cormac","Darragh","Declan","Dermot","Donal","Eamon","Eoin","Fergal","Fionn","Liam","Niall","Oisín","Patrick","Ronan","Seán","Tadhg"],
+    "female": ["Áine","Aoife","Aisling","Bríd","Caoimhe","Ciara","Clodagh","Deirdre","Eileen","Eimear","Emer","Fiona","Gráinne","Maeve","Máire","Niamh","Orla","Róisín","Saoirse","Sarah","Síle","Sinéad","Siobhán","Sorcha"],
+    "family": ["Murphy","Kelly","O'Brien","Walsh","Ryan","O'Connor","O'Neill","O'Reilly","Doyle","McCarthy","Gallagher","O'Doherty","Kennedy","Lynch","Murray","Quinn","Moore","McLaughlin","Carroll","Connolly","Daly","O'Connell","Byrne","Nolan"]
+  },
+  "scandinavian": {
+    "countries": ["SWE","NOR","DNK"], "cultures": ["swedish","norwegian","danish"],
+    "male": ["Anders","Arne","Björn","Carl","Christian","Erik","Fredrik","Gunnar","Henrik","Jens","Johan","Jonas","Karl","Lars","Leif","Magnus","Martin","Mikkel","Nils","Ole","Oskar","Peter","Sven","Thomas"],
+    "female": ["Anna","Astrid","Birgit","Camilla","Charlotte","Elin","Emma","Eva","Freja","Hanna","Helena","Ingrid","Johanna","Karin","Kristina","Lena","Linda","Linnea","Maja","Maria","Nora","Sigrid","Sofia","Solveig"],
+    "family": ["Andersen","Andersson","Berg","Bergström","Christensen","Dahl","Eriksson","Hansen","Holm","Jensen","Johansen","Johansson","Karlsson","Larsen","Lindberg","Lindholm","Lund","Magnussen","Nielsen","Nilsson","Olsen","Pedersen","Persson","Svensson"]
+  },
+  "finnish": {
+    "countries": ["FIN"], "cultures": ["finnish","karelian"],
+    "male": ["Aapo","Aleksi","Antti","Eero","Heikki","Henrik","Ilkka","Jari","Johan","Juha","Juhani","Jukka","Kalle","Lauri","Markku","Matti","Mika","Mikko","Olli","Pekka","Petri","Tapio","Timo","Ville"],
+    "female": ["Aino","Anna","Anni","Eeva","Elina","Emilia","Hanna","Helena","Johanna","Kaisa","Katja","Laura","Leena","Liisa","Maarit","Maija","Maria","Marja","Minna","Outi","Päivi","Riikka","Sanna","Tiina"],
+    "family": ["Korhonen","Virtanen","Mäkinen","Nieminen","Mäkelä","Hämäläinen","Laine","Heikkinen","Koskinen","Järvinen","Lehtonen","Lehtinen","Saarinen","Salminen","Heinonen","Niemi","Heikkilä","Kinnunen","Salonen","Turunen","Salo","Laitinen","Tuominen","Rantanen"]
+  },
+  "estonian": {
+    "countries": ["EST"], "cultures": ["estonian"],
+    "male": ["Andres","Andrus","Arne","Enn","Erik","Indrek","Jaan","Jaak","Jüri","Kaarel","Kristjan","Lauri","Mait","Margus","Marko","Martin","Peeter","Priit","Rain","Rein","Siim","Taavi","Toomas","Urmas"],
+    "female": ["Anu","Eha","Ene","Eve","Helle","Heli","Ingrid","Kadri","Kai","Kaire","Katrin","Kersti","Krista","Kristi","Laura","Liina","Maire","Marika","Merike","Pille","Reet","Riina","Sirje","Tiina"],
+    "family": ["Tamm","Saar","Sepp","Mägi","Kask","Kukk","Rebane","Ilves","Kuusk","Koppel","Oja","Karu","Kallas","Põder","Pärn","Lepp","Raud","Paju","Vaher","Aavik","Leht","Lill","Merisalu","Kivi"]
+  },
+  "latvian": {
+    "countries": ["LVA"], "cultures": ["latvian"],
+    "male": ["Aigars","Aivars","Andris","Arnis","Artis","Dainis","Edgars","Gatis","Ģirts","Ivars","Jānis","Juris","Kaspars","Māris","Mārtiņš","Normunds","Pēteris","Raimonds","Rihards","Uldis","Valdis","Viktors","Vilnis","Visvaldis"],
+    "female": ["Aija","Aina","Agnese","Anita","Dace","Daina","Elīna","Gunta","Ilga","Ilona","Inese","Inga","Inta","Iveta","Laima","Līga","Linda","Māra","Maija","Rasma","Sandra","Sarma","Valda","Vija"],
+    "family": ["Bērziņš","Kalniņš","Ozoliņš","Jansons","Liepiņš","Ozols","Balodis","Eglītis","Zariņš","Pētersons","Vītols","Kļaviņš","Krūmiņš","Lūsis","Vētra","Priede","Saulītis","Straume","Vilks","Mednis","Puriņš","Grīnbergs","Siliņš","Lapiņš"],
+    "female_family": ["Bērziņa","Kalniņa","Ozoliņa","Jansone","Liepiņa","Ozola","Balode","Eglīte","Zariņa","Pētersone","Vītola","Kļaviņa","Krūmiņa","Lūse","Vētra","Priede","Saulīte","Straume","Vilka","Medne","Puriņa","Grīnberga","Siliņa","Lapiņa"]
+  },
+  "lithuanian": {
+    "countries": ["LTU"], "cultures": ["lithuanian"],
+    "male": ["Algirdas","Andrius","Antanas","Arūnas","Dainius","Darius","Donatas","Gediminas","Gintaras","Jonas","Juozas","Kęstutis","Linas","Mantas","Mindaugas","Paulius","Petras","Rimantas","Saulius","Tadas","Tomas","Valdas","Vytautas","Žygimantas"],
+    "female": ["Agnė","Aldona","Aušra","Birutė","Daiva","Dalia","Danguolė","Edita","Eglė","Giedrė","Ieva","Inga","Jolanta","Jurgita","Kristina","Laima","Lina","Loreta","Neringa","Rasa","Rita","Vilija","Virginija","Živilė"],
+    "family": ["Kazlauskas","Jankauskas","Petrauskas","Stankevičius","Vasiliauskas","Žukauskas","Butkus","Paulauskas","Urbonas","Kavaliauskas","Balčiūnas","Šimkus","Vaitkus","Sakalauskas","Savickas","Jasiūnas","Mikalauskas","Gudaitis","Adomaitis","Mažeika","Kairys","Navickas","Rimkus","Dambrauskas"],
+    "female_family": ["Kazlauskienė","Jankauskienė","Petrauskienė","Stankevičienė","Vasiliauskienė","Žukauskienė","Butkienė","Paulauskienė","Urbonienė","Kavaliauskienė","Balčiūnienė","Šimkienė","Vaitkienė","Sakalauskienė","Savickienė","Jasiūnienė","Mikalauskienė","Gudaitienė","Adomaitienė","Mažeikienė","Kairienė","Navickienė","Rimkienė","Dambrauskienė"]
+  }
+}

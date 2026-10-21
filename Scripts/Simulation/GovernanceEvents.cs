@@ -292,6 +292,10 @@ public static class GovernanceEvents
         var wasGovernment = nation.Government;
         var wasIdeology = nation.Ideology;
         if (!campaign.ChangePolitics(nation.Id, chosen.Government, chosen.Ideology, out _)) return false;
+        if (wasGovernment != nation.Government)
+            Rulers.ReplaceHeadOfState(campaign, nation, "");
+        else if (wasIdeology != nation.Ideology)
+            Rulers.ReplaceHeadOfGovernment(campaign, nation, "");
         Recent.Add(new GovernanceReport
         {
             Nation = nation,

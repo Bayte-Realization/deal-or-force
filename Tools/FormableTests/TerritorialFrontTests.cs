@@ -65,3 +65,4 @@ static class TerritorialFrontTests
         Check(ended.Armies[0].Route.Count == 0, "peace does not call up a territorial army");
     }
 }
+

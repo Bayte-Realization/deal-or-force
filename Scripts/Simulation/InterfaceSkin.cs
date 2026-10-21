@@ -238,6 +238,8 @@ public static class InterfaceSkin
         ("war.inset",             "#0e1a25"),
         ("war.inset_border",      "#273848"),
         ("war.killed",            "#c2474f"),
+        ("portrait.anonymous_background", "#b8bcc2"),
+        ("portrait.anonymous_foreground", "#f7f7f7"),
         ("war.wounded",           "#cf9446"),
         ("war.captured",          "#7e93aa"),
     };
@@ -287,7 +289,7 @@ public static class InterfaceSkin
         ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -720f, -52f, -8f, -8f)),
         ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 536f, -62f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
-        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -316f, 90f, -20f, 620f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 612f, -60f)),
         // Top-anchored and as tall as what it holds, rather than stretched to the bottom of
         // the screen: a fleet panel is a dozen lines, and the rest of the column was empty.

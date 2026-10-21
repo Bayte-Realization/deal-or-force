@@ -11,6 +11,10 @@
     },
     "flag_lka_dominion": {
       "requires": { "overlord": "GBR" }, "otherwise": "flag_lka"
+    },
+    "flag_syr": {
+      "requires": { "ideology": ["socialism", "nationalism", "authoritarian_democracy", "despotism", "communist_rule"] },
+      "otherwise": "flag_syr_independence"
     }
   }
 }

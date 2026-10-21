@@ -157,6 +157,7 @@ public partial class DealOrForceGame
             _situationMusic.TooltipText = Ui.Tip(score.CurrentReason + "\n" + Tr("Musical context settles before the track changes; no gameplay rule is affected."));
         }
         var report = SituationReport.Read(_campaign, nation, _observerMode);
+        RefreshCampaignAlerts(report);
         // The attention memory is local presentation state and is not part of a save/network hash.
         if (_situationAttention.Observe(nation.Id, report) && !_observerMode) PlayStrategicCue("situation_alert");
         var hash = new HashCode(); hash.Add(nation.Id); hash.Add(Loc.Language); hash.Add(_campaign.ElapsedDays);
@@ -409,6 +410,8 @@ public partial class DealOrForceGame
         if (input is not InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape }) return false;
         if (_handbookLayer is { Visible: true } || _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } ||
             _pauseMenuLayer is { Visible: true } || _eventLayer is { Visible: true } || _peaceOfferLayer is { Visible: true }) return false;
+        if (_campaignAlertPopup is { Visible: true })
+        { _campaignAlertPopup.Hide(); GetViewport().SetInputAsHandled(); return true; }
         // Search keeps the ordinary first-Esc-to-release-focus contract.
         if (GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit) return false;
         if (_situationLayer is { Visible: true }) { CloseSituationRoom(); GetViewport().SetInputAsHandled(); return true; }

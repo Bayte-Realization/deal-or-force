@@ -2,7 +2,11 @@
 
 # Deal or Force
 
-Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10.
+Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10. Версия **0.8.1**.
+
+> **[LanguageKit](LanguageKit/GUIDE_RU.md)** — языковой комплект Godot 4.8 Beta1: исходные интеграции
+> Luau, F#, Nim, Odin, Rust и Kotlin со сборочными рецептами, проверками и лабораторией
+> ([English](LanguageKit/README.md)).
 
 Основная ветка разработки: **ReimAlpha**. [Контрольная точка 13 октября](docs/REIMALPHA_2026_10_13_RU.md).
 
@@ -89,7 +93,7 @@ mods/my_mod/
 ## Комплект языков разработки
 
 В проекте сохраняются исходные интеграции **Luau, F#, Nim, Odin, Rust и Kotlin**.
-[Руководство и сборка](Tools/GodotLanguages/GUIDE_RU.md),
+[Руководство и сборка](LanguageKit/GUIDE_RU.md),
 [уровни поддержки и правила применения](docs/LANGUAGE_BACKENDS_RU.md).
 Все шесть совместно работают в лаборатории Godot 4.8 Beta1 .NET; это не гарантия
 всех экспортов/API. Кампания остаётся на C#. Rust — только для редких сложных задач

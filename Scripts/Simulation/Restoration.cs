@@ -129,14 +129,36 @@ public static class Restoration
         // A return the exile does not already stand on is one the holder agreed to.
         var negotiated = !Controls(campaign, nation, region);
         if (!MovementRules.TakeRegion(campaign, nation, region, holder, restoration: true)) return false;
-        if (holder is not null) nation.Movement.ReadyOnDay.Remove(ConsentKey(holder.Id));
-        nation.Movement.LastReport = Loc.Format("The government has returned to {0}: {1} stands again.",
-            region.DisplayName, nation.Name);
+        if (holder is not null && nation.Movement is not null) nation.Movement.ReadyOnDay.Remove(ConsentKey(holder.Id));
         campaign.Chronicle.Record(campaign, "restoration", nation.Id, holder?.Id ?? -1, place: region.DisplayName);
         if (negotiated && holder is not null)
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, holder.Id, nation.Id), "restored_us");
-        campaign.MarkStrategicChange();
-        campaign.MarkMapChanged();
+        RestoreExiledNation(campaign, nation);
         return true;
+    }
+
+    /// <summary>
+    /// When an exiled government returns home and holds land of its own again, it ceases
+    /// to be an exile abroad and resumes full sovereign governance as a regular nation.
+    /// </summary>
+    public static void RestoreExiledNation(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation?.Movement is null) return;
+        var state = nation.Movement;
+        if (!state.Landless && !campaign.Fallen.Contains(nation.Id) && state.DesignatedBy.Count == 0) return;
+        state.Landless = false;
+        state.DesignatedBy.Clear();
+        state.RecognisedBy.Clear();
+        campaign.Fallen.Remove(nation.Id);
+        var held = campaign.StatesOf(nation);
+        var seat = held.OrderByDescending(s => s.Population).FirstOrDefault();
+        if (seat is not null)
+        {
+            CapitalCore.Establish(campaign, nation, seat);
+        }
+        campaign.LocateCapitals();
+        campaign.MovementRevision++;
+        campaign.MarkStrategicChange();
+        DiagnosticLogs.Write("simulation", $"NATION_RESTORED nation={nation.Tag} name={nation.Name} regions={held.Length}");
     }
 }

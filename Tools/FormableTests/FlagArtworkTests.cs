@@ -71,6 +71,7 @@ static class FlagArtworkTests
         // movements in it would pass while the picker's landless list showed grey rectangles.
         Movements.Found(campaign);
         MovementBannersKeepTheirIdentity(campaign);
+        HistoricalMovementBindings(campaign);
 
         // Countries and movements: what the map draws for each of them today.
         var missing = new List<string>();
@@ -85,6 +86,12 @@ static class FlagArtworkTests
         Check(missing.Count == 0, $"{countries} countries all fly artwork that exists" +
             (missing.Count == 0 ? "" : $" — missing {missing.Count}: " + string.Join(", ", missing.Take(10))));
         Check(movements > 20, $"{movements} movements all fly artwork that exists");
+        var placeholder = campaign.Nations
+            .Where(nation => WorkshopSized(FlagCatalog.Resolve(campaign, nation)))
+            .Select(nation => nation.Tag).ToArray();
+        Check(placeholder.Length == 0,
+            "no country or movement flies a 192×120 workshop placeholder" +
+            (placeholder.Length == 0 ? "" : ": " + string.Join(", ", placeholder.Take(12))));
 
         // Movements once more by their own banners: a movement is a nation with no land, and the
         // file named after it is what a row in the picker shows.
@@ -121,6 +128,12 @@ static class FlagArtworkTests
         Check(missing.Count == 0, $"{total} formables all fly artwork of their own" +
             (missing.Count == 0 ? "" : $" — {missing.Count} exceptions: " + string.Join(", ", missing.Take(10))));
         Check(own == total, "every formable resolves to art made for it");
+        var formablePlaceholder = FormableNations.All
+            .Where(definition => WorkshopSized("flag_formable_" + definition.Id))
+            .Select(definition => definition.Id).ToArray();
+        Check(formablePlaceholder.Length == 0,
+            "no formable flies a 192×120 workshop placeholder" +
+            (formablePlaceholder.Length == 0 ? "" : ": " + string.Join(", ", formablePlaceholder.Take(12))));
 
         // A flag file that exists but no qualifier names is dead art: worth knowing, not fatal.
         var generic = Directory.Exists(Path.Combine(GameDataLoader.DataFolder(), "gfx", "flags"))
@@ -141,11 +154,18 @@ static class FlagArtworkTests
 
     private static void MovementBannersKeepTheirIdentity(Campaign campaign)
     {
+        // Either authored answer is the movement's own: its painted insignia, or the sourced
+        // regional/homeland flag of the ground it stands for. What must never win is a
+        // procedural government or ideology variant.
         foreach (var movement in campaign.Nations.Where(n => n.Movement is { Landless: true, Exile: false }))
-            Check(FlagCatalog.Resolve(campaign, movement) == "flag_" + movement.Tag.ToLowerInvariant(),
-                movement.Tag + " keeps its own banner ahead of procedural political variants");
+        {
+            var resolved = FlagCatalog.Resolve(campaign, movement);
+            var own = resolved == "flag_" + movement.Tag.ToLowerInvariant() ||
+                      resolved == "flag_" + movement.Tag.ToLowerInvariant() + "_regional";
+            Check(own, movement.Tag + " keeps its own banner ahead of procedural political variants");
+        }
         var hamas = campaign.NationByTag("HMS");
-        Check(SpriteCatalog.Has("flag_hms_theocracy") && FlagCatalog.Resolve(campaign, hamas) == "flag_hms",
+        Check(SpriteCatalog.Has("flag_hms_theocracy") && FlagCatalog.Resolve(campaign, hamas).StartsWith("flag_hms"),
             "the actual theocratic-placeholder regression does not replace Hamas's own flag");
         var before = CampaignFingerprint.Of(campaign);
         FlagCatalog.ResolvePreview(campaign, hamas, "theocracy", "theocratic_rule");
@@ -169,11 +189,42 @@ static class FlagArtworkTests
         foreach (var banner in banners.RootElement.GetProperty("banners").EnumerateObject())
         {
             var directory = Path.Combine(GameDataLoader.DataFolder(), "gfx", "flags");
-            var actual = SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, banner.Name + ".png")));
+            // A later gfx declaration can correct an old tag-named PNG without destroying
+            // that source file. Test the image the game actually loads, not the stale file.
+            var texture = SpriteCatalog.TextureOf(banner.Name);
+            var physical = texture.StartsWith("res://game/", StringComparison.Ordinal)
+                ? Path.Combine(GameDataLoader.DataFolder(), texture["res://game/".Length..]) : texture;
+            var actual = SHA256.HashData(File.ReadAllBytes(physical));
             var original = SHA256.HashData(File.ReadAllBytes(Path.Combine(directory, banner.Value.GetString() + ".png")));
             Check(actual.SequenceEqual(original) && !WorkshopSized(banner.Name),
-                banner.Name + " retains its exact authored regional artwork, not a workshop placeholder");
+                banner.Name + " resolves to its exact authored movement/homeland artwork, not a workshop placeholder");
         }
+    }
+
+    private static void HistoricalMovementBindings(Campaign campaign)
+    {
+        var before = CampaignFingerprint.Of(campaign);
+        var democratic = campaign.NationByTag("BDF");
+        Check(democratic?.Movement is not null, "BDF is the catalogued Belarusian democratic movement");
+        Check(FlagCatalog.Resolve(campaign, democratic) == "flag_bdf" &&
+              SpriteCatalog.TextureOf("flag_bdf") == "res://game/gfx/flags/flag_blr_nationalism.png",
+            "Belarusian democratic forces use the existing white-red-white artwork");
+        Check(SpriteCatalog.TextureOf("flag_bdf") != SpriteCatalog.TextureOf("flag_culture_belarusian"),
+            "correcting one opposition banner does not overwrite the Belarusian cultural/state flag");
+        var congo = campaign.NationByTag("AFC");
+        Check(congo?.Movement is not null && FlagCatalog.Resolve(campaign, congo) == "flag_afc" &&
+              SpriteCatalog.TextureOf("flag_afc") == "res://game/gfx/flags/flag_cod.png",
+            "AFC has a documented Congolese homeland fallback rather than a fabricated blue-yellow banner");
+        Check(before == CampaignFingerprint.Of(campaign), "historical movement flag lookup does not mutate the world");
+        try
+        {
+            var errors = new List<string>();
+            SpriteCatalog.Merge("""{"sprites":{"flag_bdf":"res://game/gfx/flags/flag_blr.png"}}""",
+                "res://game/gfx", "test movement override", errors);
+            Check(errors.Count == 0 && SpriteCatalog.TextureOf(FlagCatalog.Resolve(campaign, democratic)) ==
+                  "res://game/gfx/flags/flag_blr.png", "mods can still explicitly replace a corrected movement banner");
+        }
+        finally { SpriteCatalog.Load(); }
     }
 
     private static bool Artwork(string sprite)

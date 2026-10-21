@@ -211,6 +211,9 @@
   "Diplomatic confrontation": "Diplomatic confrontation",
   "Diplomatic crisis": "Diplomatic crisis",
   "Diplomatic mission": "Diplomatic mission",
+  "Recall diplomatic mission": "Recall diplomatic mission",
+  "Diplomatic mission launched. Goodwill will accrue weekly.": "Diplomatic mission launched. Goodwill will accrue weekly.",
+  "Diplomatic mission recalled.": "Diplomatic mission recalled.",
   "Diplomatic overview": "Diplomatic overview",
   "Direct democracy": "Direct democracy",
   "DISCONNECT / BACK": "DISCONNECT / BACK",
@@ -860,5 +863,8 @@
   "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.": "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.",
   "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.": "Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop.",
   "PAN": "PAN",
-  "RANGE": "RANGE"
+  "RANGE": "RANGE",
+  "Resistance": "Resistance",
+  "slipping {0:P1} of the hold a week": "slipping {0:P1} of the hold a week",
+  "Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further.": "Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further."
 }

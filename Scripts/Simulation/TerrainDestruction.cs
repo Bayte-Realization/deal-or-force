@@ -52,7 +52,7 @@ public sealed partial class Campaign
             if (army.Route.Contains(province)) army.Route.Clear();
         }
         foreach (var battle in Battles.Where(b => b.ProvinceId == province && !b.Ended))
-        { battle.Ended = true; battle.Outcome = "Terrain destroyed"; }
+            Warfare.EndBattleWithoutVictory(this, battle, "Terrain destroyed");
         DestroyedProvinces.Add(province);
         map.DestroyedByProvince[province] = true;
         map.ProvinceToNation[province] = 0;

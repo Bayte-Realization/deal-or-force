@@ -239,7 +239,11 @@ public static class FormableNations
         // Unresolved IDs fail closed rather than silently disappearing.
         var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
         var owned = land.Count(Held);
-        requirements.Add(new(Loc.Format("Foundation territory secured: {0}/{1}", owned, land.Length), land.Length > 0 && owned == land.Length));
+        var requiredCount = !string.IsNullOrEmpty(d.Restores) && land.Length > 1
+            ? Math.Max(1, (int)MathF.Ceiling(land.Length * 0.5f))
+            : land.Length;
+        requirements.Add(new(Loc.Format("Foundation territory secured: {0}/{1}", owned, requiredCount),
+            land.Length > 0 && owned >= requiredCount));
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
         requirements.Add(new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id)));
@@ -295,6 +299,7 @@ public sealed class FormNationCommand : ICampaignCommand
         // every people after that is a promise to be kept (UnionCohesion).
         nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);
         nation.Name = d.Name;
+        nation.NameProclaimed = true;
         // A restored country is that country again: its people are the state's people, so the
         // land it took back is home rather than a province of strangers.
         // Declared rather than assumed: a declaration replaces what the catalogue said, so the
@@ -306,6 +311,7 @@ public sealed class FormNationCommand : ICampaignCommand
                 if (!nation.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase))
                     nation.FoundedCultures.Add(culture);
             DemographyCatalog.Declare(nation.Tag, nation.FoundedCultures);
+            FormableRestorations.SeedLostHomelands(campaign, nation, d.Restores);
         }
         // And its own colour, where one was declared. A proclaimed state that keeps the
         // founder's colour has changed nothing on the one screen a player spends the game

@@ -366,6 +366,7 @@ public static class PeaceNegotiation
         }
 
         war.Ended = true;
+        campaign.MarkWarsChanged();
         war.EndedDay = campaign.ElapsedDays;
         war.PeaceProposerId = proposerId;
         var sideScore = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
@@ -373,6 +374,8 @@ public static class PeaceNegotiation
             ? war.EnemyLeaderOf(proposerId)
             : terms is PeaceTerms.WhitePeace or PeaceTerms.Ceasefire ? -1
             : sideScore > 0f ? proposerId : -1;
+
+        Factions.SettleCivilWarSurvivors(campaign, war);
         war.PeaceSummary = terms switch
         {
             PeaceTerms.Ceasefire => "A one-year ceasefire restored the pre-war control map.",
@@ -414,8 +417,7 @@ public static class PeaceNegotiation
         }
         foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
         {
-            battle.Ended = true;
-            battle.Outcome = "Peace agreement";
+            Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
         campaign.MarkMapChanged();
     }

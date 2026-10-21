@@ -1,0 +1,80 @@
+{
+  "akan": {
+    "countries": ["GHA"], "cultures": ["akan","ashanti","fante"],
+    "male": ["Kwame","Kofi","Kwesi","Kwabena","Kwaku","Yaw","Kojo","Akwasi","Kwadwo","Nana","Osei","Kwamina","Kobina","Kweku","Fiifi","Ato","Ekow","Paa","Samuel","Daniel","Emmanuel","Joseph","Francis","Isaac"],
+    "female": ["Ama","Abena","Akua","Yaa","Afia","Afua","Adwoa","Akosua","Adomaa","Aba","Araba","Esi","Ekua","Mansa","Nana","Maame","Akoto","Adom","Grace","Esther","Mary","Agnes","Adelaide","Elizabeth"],
+    "family": ["Mensah","Owusu","Boateng","Osei","Asante","Appiah","Agyeman","Asamoah","Acheampong","Amoah","Opoku","Adjei","Ankomah","Boadu","Darko","Doku","Frimpong","Gyasi","Koomson","Nkrumah","Obeng","Sarpong","Tetteh","Yeboah"]
+  },
+  "yoruba": {
+    "cultures": ["yoruba"],
+    "male": ["Adebayo","Adekunle","Ademola","Adetokunbo","Akin","Akintunde","Ayodele","Babatunde","Bamidele","Damilola","Femi","Gbolahan","Kayode","Kunle","Lanre","Oladele","Olamide","Olumide","Oluwaseun","Segun","Taiwo","Temitope","Tunde","Yemi"],
+    "female": ["Abimbola","Abiola","Adedoyin","Adeola","Aderonke","Adesola","Ayomide","Bisola","Bolanle","Bukola","Folake","Funke","Titilola","Kehinde","Modupe","Nike","Olajumoke","Olayinka","Omolara","Ronke","Sade","Simisola","Titilayo","Yetunde"],
+    "family": ["Adeyemi","Adeoye","Adebayo","Adegoke","Adesina","Ajayi","Akande","Akinola","Akintola","Alabi","Alao","Awolowo","Balogun","Daramola","Ekunola","Fadeyi","Falana","Lawal","Odusanya","Ogunleye","Oladeji","Olaniyan","Olatunji","Salami"]
+  },
+  "igbo": {
+    "cultures": ["igbo","ibo"],
+    "male": ["Chibuike","Chidi","Chidozie","Chiedozie","Chijioke","Chinedu","Chinonso","Chinua","Chukwudi","Chukwuemeka","Chukwuma","Ebuka","Emeka","Ifeanyi","Ikechukwu","Kelechi","Nnamdi","Obinna","Okechukwu","Onyeka","Osita","Uchenna","Ugochukwu","Uzochukwu"],
+    "female": ["Ada","Adaeze","Adaku","Adanna","Amaka","Chiamaka","Chidinma","Chika","Chinelo","Chinyere","Chizoba","Ebere","Ezinne","Ifeoma","Ijeoma","Ngozi","Nkechi","Nkiru","Nneka","Nnenna","Oluchi","Onyinye","Uchechi","Uju"],
+    "family": ["Okafor","Okonkwo","Okoye","Obi","Obiora","Okeke","Nwankwo","Nwosu","Nwachukwu","Nwoko","Onyema","Onyekwere","Eze","Ezeh","Ezeani","Ibe","Igbokwe","Maduka","Madu","Nduka","Nwokolo","Odo","Ojukwu","Umeh"]
+  },
+  "hausa": {
+    "countries": ["NGA","NER"], "cultures": ["hausa","fulani","fulbe","kanuri"],
+    "male": ["Abdullahi","Abubakar","Ahmadu","Aliyu","Aminu","Bala","Bashir","Garba","Habibu","Hamisu","Haruna","Ibrahim","Isah","Kabiru","Lawal","Malam","Mansur","Muhammadu","Musa","Nasiru","Salisu","Sani","Umaru","Yusuf"],
+    "female": ["Aisha","Amina","Asabe","Asma","Bilkisu","Fadila","Fatima","Hadiza","Hafsat","Halima","Hauwa","Husaina","Jamila","Khadija","Laraba","Maimuna","Maryam","Nafisa","Rahama","Rakiya","Safiya","Saudatu","Talatu","Zainab"],
+    "family": ["Abdullahi","Adamu","Aliyu","Bello","Danjuma","Dantata","Dikko","Dutse","Galadima","Gambo","Gidado","Gwarzo","Hamza","Idris","Jalo","Jibril","Kano","Katsina","Lawan","Maikano","Mustapha","Shehu","Tanko","Yahaya"]
+  },
+  "senegambian": {
+    "countries": ["SEN","GMB","GIN","MLI","GNB"], "cultures": ["wolof","mandinka","malinke","bambara","soninke","serer"],
+    "male": ["Abdou","Abdoulaye","Alassane","Amadou","Babacar","Boubacar","Cheikh","Daouda","Demba","Elhadj","Famara","Ibrahima","Idrissa","Ismaila","Lamine","Mamadou","Mansour","Modou","Moussa","Omar","Ousmane","Samba","Seydou","Souleymane"],
+    "female": ["Aissatou","Aminata","Awa","Binta","Bintou","Coumba","Diarra","Djeneba","Fatou","Fatoumata","Hawa","Kadiatou","Khady","Kumba","Mariama","Mame","Maimouna","Ndeye","Oumou","Penda","Ramatoulaye","Rokhaya","Sira","Sokhna"],
+    "family": ["Ba","Bah","Camara","Cissé","Diagne","Diallo","Diatta","Diop","Faye","Gueye","Jallow","Kane","Keita","Konaté","Ndao","Ndiaye","Ngom","Sakho","Samb","Sanneh","Sarr","Seck","Sow","Touré"]
+  },
+  "amhara": {
+    "countries": ["ETH","ERI"], "cultures": ["amhara","tigrinya","tigrayan"],
+    "male": ["Abebe","Abel","Abiy","Addis","Alemayehu","Ashenafi","Assefa","Bekele","Berhanu","Dawit","Demeke","Endale","Fekadu","Fikru","Getachew","Girma","Haile","Kebede","Meles","Mesfin","Solomon","Tadesse","Tesfaye","Yared"],
+    "female": ["Abeba","Almaz","Aster","Azeb","Beza","Bizunesh","Eden","Eleni","Etsegenet","Fana","Feven","Genet","Hana","Haregeweyn","Hiwot","Hirut","Kidist","Lemlem","Mahlet","Martha","Meseret","Rahel","Selam","Tigist"],
+    "family": ["Abebe","Abera","Alemu","Asfaw","Assefa","Bekele","Birhanu","Demissie","Desta","Eshetu","Gebre","Girma","Haile","Kassa","Kebede","Lemma","Mekonnen","Mengistu","Mulugeta","Negash","Tadesse","Tesfaye","Tsegaye","Worku"]
+  },
+  "somali": {
+    "countries": ["SOM","DJI"], "cultures": ["somali","somali_issa"],
+    "male": ["Abdi","Abdullahi","Abdirahman","Abdirashid","Abdinasir","Ahmed","Ali","Bashir","Dahir","Farah","Hassan","Hussein","Ibrahim","Ismail","Jama","Mahad","Mahamed","Mohamud","Muse","Nur","Omar","Osman","Said","Yusuf"],
+    "female": ["Amina","Anab","Asha","Asli","Bilan","Deeqa","Faduma","Fartun","Fathia","Habiba","Hafsa","Hani","Hawa","Hibo","Hodan","Ifrah","Ilham","Khadra","Khadija","Muna","Nadifa","Nimo","Sahra","Zahra"],
+    "family": ["Abdi","Abdullahi","Adan","Ahmed","Ali","Awale","Barre","Dahir","Dualeh","Farah","Gedi","Guled","Hassan","Hussein","Ibrahim","Ismail","Jama","Khalif","Mohamed","Mohamud","Nur","Omar","Osman","Warsame"]
+  },
+  "swahili": {
+    "countries": ["KEN","TZA","UGA","COM"], "cultures": ["swahili","kikuyu","kamba","luhya"],
+    "male": ["Abdalla","Ali","Baraka","Daudi","Hamisi","Hassan","Ibrahim","Jabari","Jafari","Jamal","Juma","Kamau","Karani","Khalfan","Kito","Musa","Mwangi","Omari","Rashid","Salim","Shabani","Suleiman","Tumaini","Yusuf"],
+    "female": ["Aisha","Amina","Asha","Bahati","Chiku","Eshe","Fatuma","Furaha","Halima","Imani","Jamila","Khadija","Malaika","Mariam","Neema","Nia","Nuru","Rehema","Saada","Salma","Subira","Tatu","Wanjiku","Zawadi"],
+    "family": ["Abdalla","Bakari","Hamisi","Hassan","Hussein","Ibrahim","Juma","Kamau","Karume","Kassim","Khamis","Kimani","Kinyua","Maalim","Mbwana","Mohamed","Mushi","Mwangi","Mwasiti","Njoroge","Njuguna","Otieno","Said","Salim"]
+  },
+  "shona": {
+    "countries": ["ZWE","ZMB","MWI"], "cultures": ["shona","chewa","nyanja"],
+    "male": ["Anesu","Blessing","Chipo","Farai","Godfrey","Kudakwashe","Kundai","Kuzivakwashe","Munyaradzi","Nyasha","Patrick","Pride","Ranganai","Rugare","Simba","Simbarashe","Tafadzwa","Takudzwa","Tapiwa","Tawanda","Tendai","Tinashe","Tongai","Zvinashe"],
+    "female": ["Anesu","Chiedza","Chipo","Fadzai","Fadziso","Fungai","Kudzai","Kundai","Maidei","Makanaka","Mufaro","Natsai","Nyarai","Nyasha","Paidamoyo","Rudo","Rufaro","Rutendo","Shamiso","Tadiwa","Tariro","Tatenda","Tendai","Vimbai"],
+    "family": ["Banda","Chikore","Chikowore","Chimbira","Chinheya","Chirume","Chirwa","Dube","Gumbo","Madzima","Makoni","Mapfumo","Maseko","Matanda","Mavhunga","Moyo","Mpofu","Mugari","Mukandi","Mupfumi","Mutasa","Ncube","Ndlovu","Phiri"]
+  },
+  "nguni": {
+    "countries": ["ZAF","SWZ","LSO"], "cultures": ["zulu","xhosa","swazi","sotho","ndebele"],
+    "male": ["Andile","Bheki","Bongani","Dumisani","Jabulani","Khaya","Lungile","Mandla","Menzi","Mfundo","Mlungisi","Musa","Nathi","Nkosinathi","Sandile","Sibusiso","Sifiso","Simphiwe","Sipho","Siyabonga","Thabo","Themba","Vusi","Zwelakhe"],
+    "female": ["Ayanda","Bongi","Buhle","Busisiwe","Dineo","Gugu","Lerato","Lindiwe","Lungile","Masego","Mbali","Nandi","Nokuthula","Noluthando","Nomsa","Nompumelelo","Nonhlanhla","Nosipho","Ntombi","Sibongile","Sindi","Thandi","Thembi","Zanele"],
+    "family": ["Dlamini","Mkhize","Khumalo","Zulu","Ndlovu","Nxumalo","Ngcobo","Cele","Buthelezi","Mthembu","Shabalala","Sithole","Mabaso","Mahlangu","Maseko","Mavuso","Mdluli","Mokoena","Molefe","Nkomo","Nkosi","Radebe","Sibiya","Zwane"]
+  },
+  "afrikaner": {
+    "cultures": ["afrikaner","dutch"], "countries": ["NLD","NAM"],
+    "male": ["Adriaan","Albert","Andries","Barend","Christiaan","Cornelis","Daan","David","Dirk","Frans","Gerrit","Hendrik","Jacobus","Jan","Johan","Johannes","Karel","Louis","Nicolaas","Paul","Petrus","Pieter","Stefan","Willem"],
+    "female": ["Aletta","Anna","Annelie","Barbara","Carina","Carla","Catharina","Cornelia","Elisabeth","Elsa","Elsje","Gerda","Hendrika","Hester","Johanna","Karin","Louise","Magdalena","Margaretha","Maria","Marietjie","Petronella","Rina","Susanna"],
+    "family": ["Botha","Bosman","Coetzee","De Beer","De Bruyn","De Klerk","De Villiers","Du Plessis","Du Toit","Fourie","Grobler","Jacobs","Kruger","Louw","Malan","Marais","Meyer","Nel","Olivier","Smit","Steyn","Van der Merwe","Van Wyk","Visser"]
+  },
+  "maori": {
+    "cultures": ["maori"],
+    "male": ["Anaru","Arapata","Hemi","Hēnare","Hirini","Hoani","Hohepa","Hone","Kauri","Matiu","Mikaere","Nikau","Pāora","Pita","Rawiri","Reihana","Rīki","Ropata","Tama","Tāne","Te Aroha","Timi","Wiremu","Wīremu"],
+    "female": ["Aroha","Hana","Hine","Hinerangi","Hinewai","Huhana","Kahurangi","Katarina","Keita","Kiri","Maia","Mere","Moana","Ngahuia","Ngaire","Pare","Piki","Rangimarie","Riria","Roimata","Ruiha","Tui","Wai","Whina"],
+    "family": ["Henare","Katene","Kereama","King","Kingi","Mahuta","Matiu","Ngata","Pene","Peters","Puketapu","Reedy","Ropata","Ruha","Ruru","Taiaroa","Tamehana","Te Aho","Te Rangi","Tipene","Turia","Walker","Whetu","Wilson"]
+  },
+  "samoan": {
+    "countries": ["WSM","TON","TUV","TKL"], "cultures": ["samoan","tongan","tuvaluan","tokelauan"],
+    "male": ["Afa","Aisea","Aleki","Alofa","Amosa","Apelu","Esera","Iakopo","Ioane","Iosefa","Iosia","Kalepo","Laki","Leota","Mika","Mosese","Paulo","Peni","Peteru","Samuela","Siaosi","Sione","Tavita","Toa"],
+    "female": ["Alofa","Ana","Atelina","Eleni","Fale","Fiafia","Foua","Ila","Lagi","Lani","Lina","Luisa","Malia","Mele","Mere","Moana","Ofa","Penina","Sala","Sina","Sita","Suliana","Tala","Vika"],
+    "family": ["Aiono","Alai","Alo","Faumuina","Fepuleai","Fiti","Fonoti","Latu","Leilua","Leota","Lolo","Mafi","Malietoa","Manu","Mata","Moe","Moala","Paea","Pili","Pule","Satele","Sione","Taito","Tui"]
+  }
+}

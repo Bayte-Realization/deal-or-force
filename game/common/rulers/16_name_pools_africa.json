@@ -1,0 +1,28 @@
+{
+  "names": {
+    "niger_congo": {
+      "given": ["Adebayo", "Adeola", "Akin", "Amadi", "Babatunde", "Bamidele", "Chidi", "Chinedu", "Chukwu", "Emeka", "Femi", "Gbenga", "Ifeanyi", "Ikenna", "Jide", "Kelechi", "Kofi", "Kwame", "Kwesi", "Lekan", "Mensah", "Nnamdi", "Obi", "Obinna", "Oluwaseun", "Segun", "Tunde", "Uche", "Yaw", "Abena", "Adaeze", "Akosua", "Amara", "Chiamaka", "Efua", "Folake", "Ngozi", "Nneka", "Oluwadamilola", "Yaa"],
+      "family": ["Achebe", "Adeyemi", "Agyeman", "Akintola", "Asante", "Awolowo", "Balogun", "Boateng", "Danquah", "Eze", "Falana", "Gowon", "Ibrahim", "Jaja", "Kufuor", "Mensah", "Nkrumah", "Nwosu", "Obasanjo", "Okafor", "Okonkwo", "Osei", "Owusu", "Soyinka", "Uba", "Yeboah"]
+    },
+    "chadic": {
+      "given": ["Abdou", "Abubakar", "Ahmadou", "Ali", "Aminu", "Bello", "Bukar", "Garba", "Hassan", "Ibrahim", "Idriss", "Issa", "Mahamadou", "Mamadou", "Moussa", "Oumarou", "Sani", "Sule", "Usman", "Yakubu", "Aicha", "Amina", "Fadima", "Hadiza", "Halima", "Mariama", "Ramatou", "Zainab"],
+      "family": ["Abubakar", "Adamou", "Bello", "Boukar", "Déby", "Garba", "Issa", "Mahamadou", "Moussa", "N'Gaba", "Oumarou", "Sani", "Tandja", "Yakubu"]
+    },
+    "cushitic": {
+      "given": ["Abdi", "Abdirahman", "Abdullahi", "Ahmed", "Ali", "Ayan", "Bashir", "Farah", "Guled", "Hassan", "Hersi", "Ismail", "Jama", "Khadar", "Mahad", "Mohamed", "Musa", "Omar", "Osman", "Said", "Warsame", "Yusuf", "Asha", "Fadumo", "Halima", "Hodan", "Ifrah", "Sahra", "Ubah"],
+      "family": ["Abdi", "Abdullahi", "Ahmed", "Ali", "Farah", "Hassan", "Hersi", "Ismail", "Jama", "Mohamud", "Musa", "Omar", "Osman", "Samatar", "Warsame", "Yusuf"]
+    },
+    "nilotic": {
+      "given": ["Achol", "Adut", "Akec", "Akech", "Ater", "Bol", "Deng", "Garang", "Gatluak", "John", "Kuol", "Lam", "Lual", "Machar", "Majak", "Malual", "Manyang", "Mayen", "Nyachoat", "Ochan", "Okello", "Olara", "Otto", "Peter", "Riek", "Taban", "Yel", "Aluel", "Ayaa", "Nyandeng", "Nyibol"],
+      "family": ["Achol", "Aguer", "Akec", "Ater", "Bol", "Deng", "Garang", "Kuol", "Lual", "Machar", "Majak", "Malual", "Mayen", "Ochan", "Okello", "Riek", "Taban"]
+    },
+    "bantu": {
+      "given": ["Amos", "Benedict", "Charles", "Chikondi", "Davie", "Edwin", "Frank", "Gift", "Isaac", "James", "John", "Joseph", "Kelvin", "Kondwani", "Lameck", "Moses", "Mphatso", "Patrick", "Peter", "Samuel", "Simon", "Tapiwa", "Tendai", "Thabo", "Tinashe", "Watson", "Agnes", "Chisomo", "Grace", "Mercy", "Misozi", "Thandiwe"],
+      "family": ["Banda", "Chirwa", "Dlamini", "Kachingwe", "Kalua", "Kanyama", "Kaunda", "Khama", "Lungu", "Mabuza", "Moyo", "Mthembu", "Mugabe", "Muluzi", "Mutharika", "Mzuzu", "Ndlovu", "Nkomo", "Nyasulu", "Phiri", "Sibanda", "Tembo", "Zuma", "Zvobgo"]
+    },
+    "khoisan": {
+      "given": ["Aob", "Dawid", "Frans", "Gai", "Hans", "Klaas", "Koos", "Petrus", "Sarel", "Willem", "Xam", "Anna", "Elsie", "Katriena", "Lena", "Maria", "Sara", "Susan"],
+      "family": ["Aob", "Blou", "Dawid", "Gai", "Klaas", "Kruiper", "Nou", "Ous", "Petrus", "Witbooi", "Xam"]
+    }
+  }
+}

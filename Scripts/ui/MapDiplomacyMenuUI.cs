@@ -15,13 +15,14 @@ public partial class DealOrForceGame
     private Label _mapDiplomacyFeedback = null!;
 
     /// <summary>Adds one diplomacy action button to the floating map menu.</summary>
-    private void AddMapDiplomacyAction(VBoxContainer rows, string caption, string iconRole, Action action,
+    private Button AddMapDiplomacyAction(VBoxContainer rows, string caption, string iconRole, Action action,
         string tooltip, bool primary = false)
     {
         var button = ActionButton(caption, action, 0, 34, primary);
         button.TooltipText = Ui.Tip(Tr(tooltip));
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         rows.AddChild(button);
+        return button;
     }
 
     /// <summary>Closes the floating map diplomacy menu if it is open.</summary>
@@ -90,6 +91,17 @@ public partial class DealOrForceGame
             rows.AddChild(dying);
         }
 
+        // A deterrent holder says so here too: it is the first fact a neighbour weighing a
+        // war needs, and the reason the war they were weighing is not on the table.
+        if (Simulation.Deterrence.TierOf(_campaign, target) >= 1)
+        {
+            var deterrent = Title(Simulation.Loc.Get("Deterrent power: mutual assured destruction."),
+                10, Ui.Colour("text.caption"));
+            deterrent.CustomMinimumSize = new Vector2(200, 0);
+            deterrent.ClipText = true;
+            rows.AddChild(deterrent);
+        }
+
         var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
         var atWar = relation is { Stance: DiplomaticStance.AtWar };
         if (relation is not null)
@@ -111,8 +123,15 @@ public partial class DealOrForceGame
         }
 
         // --- Influence ---
-        AddMapDiplomacyAction(rows, Tr("Improve relations"), "INFLUENCE", ImproveDiplomacyRelations,
-            Tr("Offer a diplomatic overture to raise opinion."));
+        Button missionButton = null;
+        missionButton = AddMapDiplomacyAction(rows, Tr("Improve relations"), "INFLUENCE", () =>
+        {
+            var feedback = SendOrRecallDiplomaticMission(target);
+            if (_mapDiplomacyFeedback is not null) _mapDiplomacyFeedback.Text = feedback;
+            RefreshOutreachButton(missionButton,target);
+        }, "");
+        missionButton.Name = "MapDiplomaticMission";
+        RefreshOutreachButton(missionButton,target);
         AddMapDiplomacyAction(rows, Tr("Denounce"), "INFLUENCE", DenounceDiplomacyTarget,
             Tr("Publicly denounce them, lowering opinion and raising tension."));
 

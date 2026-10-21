@@ -353,6 +353,8 @@ public partial class DealOrForceGame
         };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
+        if (command.Outcome.Accepted) PlayStrategicCue("deal_concluded");
+        else if (command.Outcome.PendingOfferId > 0 || _networkConnected && !_networkIsHost) PlayStrategicCue("deal_sent");
         ForceDiplomacyRefresh();
         RefreshCountryViews("Diplomacy");
         Refresh();

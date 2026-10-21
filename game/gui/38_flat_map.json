@@ -13,6 +13,7 @@
     "map.flat_counter_min_ratio": 0.25,
     "map.front_width_pixels": 1.6,
     "map.flat_counter_gap": 4,
+    "map.flat_support_bias": 1.0,
     "map.flat_fleet_counter_width": 64,
     "map.flat_capital_pixels": 14,
     "map.flat_zoom_step": 0.15,

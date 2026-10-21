@@ -1,0 +1,36 @@
+{
+  "names": {
+    "somali": {
+      "given": ["Abdi", "Abdirahman", "Abdullahi", "Ahmed", "Ali", "Ayan", "Bashir", "Farah", "Guled", "Hassan", "Hersi", "Ismail", "Jama", "Khadar", "Mahad", "Mohamed", "Musa", "Omar", "Osman", "Said", "Warsame", "Yusuf", "Asha", "Fadumo", "Halima", "Hodan", "Ifrah", "Sahra", "Ubah"],
+      "family": ["Abdi", "Abdullahi", "Ahmed", "Ali", "Farah", "Hassan", "Hersi", "Ismail", "Jama", "Mohamud", "Musa", "Omar", "Osman", "Samatar", "Warsame", "Yusuf"]
+    },
+    "amhara": {
+      "given": ["Abebe", "Alemayehu", "Assefa", "Bekele", "Berhanu", "Dawit", "Endalkachew", "Fikre", "Getachew", "Girma", "Haile", "Hailu", "Kassa", "Kebede", "Meles", "Mengistu", "Negasso", "Tesfaye", "Tewodros", "Yohannes", "Zerihun", "Aster", "Bethlehem", "Hirut", "Marta", "Meseret", "Selam", "Tigist"],
+      "family": ["Abebe", "Alemayehu", "Assefa", "Bekele", "Berhanu", "Desta", "Gebre", "Getachew", "Girma", "Haile", "Kassa", "Kebede", "Mekonnen", "Tesfaye", "Wolde", "Yohannes"]
+    },
+    "oromo": {
+      "given": ["Abdi", "Abdisa", "Abera", "Bekele", "Boru", "Chala", "Daba", "Dawit", "Gemechu", "Gudina", "Haile", "Jarso", "Kebede", "Lelisa", "Lemma", "Merga", "Negaso", "Obbo", "Tolera", "Waqjira", "Yadeta", "Ayantu", "Bontu", "Chaltu", "Kalkidan", "Lensa", "Milkessa"],
+      "family": ["Adola", "Bekele", "Boru", "Daba", "Gudina", "Jarso", "Kebede", "Lemma", "Merga", "Tolera", "Waqjira", "Yadeta"]
+    },
+    "hausa": {
+      "given": ["Abdullahi", "Abubakar", "Ahmad", "Aliyu", "Bello", "Buhari", "Danladi", "Garba", "Haruna", "Ibrahim", "Idris", "Isah", "Kabiru", "Mahmud", "Mamman", "Muhammad", "Musa", "Nasiru", "Sani", "Shehu", "Suleiman", "Usman", "Yakubu", "Yusuf", "Aisha", "Amina", "Fatima", "Hadiza", "Halima", "Zainab"],
+      "family": ["Abubakar", "Ahmad", "Aliyu", "Bello", "Buhari", "Danjuma", "Garba", "Haruna", "Ibrahim", "Idris", "Isah", "Kabiru", "Mahmud", "Muhammad", "Musa", "Sani", "Shehu", "Suleiman", "Usman", "Yakubu"]
+    },
+    "yoruba": {
+      "given": ["Adebayo", "Adeola", "Akin", "Akinwande", "Babatunde", "Bamidele", "Bola", "Dapo", "Femi", "Gbenga", "Jide", "Kunle", "Lekan", "Olamide", "Oluwaseun", "Segun", "Tayo", "Tunde", "Wale", "Yemi", "Abiodun", "Adedayo", "Adewale", "Ayodele", "Funmilayo", "Modupe", "Morayo", "Titilayo", "Yetunde"],
+      "family": ["Adeyemi", "Adeyinka", "Akintola", "Awolowo", "Balogun", "Falana", "Fashola", "Ogunlesi", "Ojudu", "Oladipo", "Olawale", "Osuntokun", "Soyinka", "Tinubu"]
+    },
+    "igbo": {
+      "given": ["Chidi", "Chinedu", "Chukwu", "Emeka", "Ifeanyi", "Ikenna", "Kelechi", "Nnamdi", "Obi", "Obinna", "Uche", "Uzoma", "Chiamaka", "Ngozi", "Nneka", "Adaeze", "Chinwe", "Ifeoma", "Nkiru", "Obiageli"],
+      "family": ["Achebe", "Eze", "Ibe", "Nwosu", "Okafor", "Okonkwo", "Onyeka", "Uba", "Ude", "Ugwu"]
+    },
+    "zulu": {
+      "given": ["Bongani", "Dumisani", "Jabulani", "Mandla", "Sibusiso", "Sipho", "Thabo", "Themba", "Thulani", "Vusi", "Zola", "Busisiwe", "Lindiwe", "Nandi", "Nokuthula", "Nomvula", "Thandiwe", "Zanele"],
+      "family": ["Buthelezi", "Dlamini", "Khumalo", "Mahlangu", "Maseko", "Mbeki", "Mkhize", "Mthembu", "Ndlovu", "Ngcobo", "Shabalala", "Zulu", "Zuma"]
+    },
+    "xhosa": {
+      "given": ["Andile", "Ayanda", "Bongani", "Luthando", "Lwazi", "Mandla", "Sipho", "Sizwe", "Thabo", "Themba", "Vuyo", "Zola", "Nandi", "Nokuthula", "Nomvula", "Thandiwe", "Zanele"],
+      "family": ["Mabaso", "Madikizela", "Mahlangu", "Mbeki", "Mnguni", "Mthembu", "Ndlovu", "Ngcuka", "Sisulu", "Tshabalala"]
+    }
+  }
+}

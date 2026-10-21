@@ -15,6 +15,14 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--peace-beneficiary-only")) { PeaceBeneficiaryTests.Run(); return; }
+        if (args.Length == 0) PeaceBeneficiaryTests.Run();
+        if (args.Contains("--peace-battle-assignment-only")) { PeaceBattleAssignmentTests.Run(); return; }
+        if (args.Length == 0) PeaceBattleAssignmentTests.Run();
+        if (args.Contains("--partial-front-only")) { PartialFrontWithdrawalTests.Run(); return; }
+        if (args.Length == 0) PartialFrontWithdrawalTests.Run();
+        if (args.Contains("--move-battle-preflight-only")) { MoveBattlePreflightTests.Run(); return; }
+        if (args.Length == 0) MoveBattlePreflightTests.Run();
         if (args.Contains("--open-advance-only")) { OpenAdvanceTests.Run(); return; }
         if (args.Contains("--front-cache-isolation-only")) { FrontCacheIsolationTests.Run(); return; }
         if (args.Contains("--march-continuity-only")) { MarchContinuityTests.Run(); return; }

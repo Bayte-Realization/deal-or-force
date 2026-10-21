@@ -288,6 +288,22 @@ public static class HistoryDataLoader
             if (value.TryGetProperty("primary_cultures", out var primary) && primary.ValueKind == JsonValueKind.Array)
                 DemographyCatalog.Declare(nation.Tag, primary.EnumerateArray()
                     .Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()));
+            if (value.TryGetProperty("head_of_state", out var hos) && hos.ValueKind == JsonValueKind.String)
+                nation.HeadOfStateName = hos.GetString() ?? "";
+            if (value.TryGetProperty("head_of_state_trait", out var hosTrait) && hosTrait.ValueKind == JsonValueKind.String)
+                nation.HeadOfStateTrait = hosTrait.GetString() ?? "";
+            if (value.TryGetProperty("head_of_state_birth_year", out var hosBirth) && hosBirth.TryGetInt32(out var hosBy))
+                nation.HeadOfStateBirthYear = hosBy;
+            if (value.TryGetProperty("head_of_government", out var hog) && hog.ValueKind == JsonValueKind.String)
+                nation.HeadOfGovernmentName = hog.GetString() ?? "";
+            if (value.TryGetProperty("head_of_government_trait", out var hogTrait) && hogTrait.ValueKind == JsonValueKind.String)
+                nation.HeadOfGovernmentTrait = hogTrait.GetString() ?? "";
+            if (value.TryGetProperty("head_of_government_birth_year", out var hogBirth) && hogBirth.TryGetInt32(out var hogBy))
+                nation.HeadOfGovernmentBirthYear = hogBy;
+            if (value.TryGetProperty("cabinet", out var cab) && cab.ValueKind == JsonValueKind.Object)
+                foreach (var kv in cab.EnumerateObject())
+                    if (kv.Value.ValueKind == JsonValueKind.String && kv.Value.GetString() is { Length: > 0 } optId)
+                        nation.Cabinet[kv.Name] = optId;
         }
     }
 

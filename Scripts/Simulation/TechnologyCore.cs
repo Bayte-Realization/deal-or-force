@@ -506,7 +506,7 @@ public static class ResearchSystem
             var current = TechnologyCatalog.Of(nation.CurrentResearch);
             if (current is null || !Available(nation, current))
             {
-                current = Choose(campaign, nation, survey);
+                current = nation.IsHuman && !Delegation.Holds(nation, Delegation.Research) ? null : Choose(campaign, nation, survey);
                 nation.CurrentResearch = current?.Id ?? "";
             }
             nation.ResearchPerWeek = WeeklyPoints(campaign, nation);

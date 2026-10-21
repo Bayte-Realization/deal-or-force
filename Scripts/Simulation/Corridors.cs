@@ -58,7 +58,7 @@ public static partial class Corridors
     {
         if (TryExchange(c, nation)) return;
         var parts = Pieces(c, nation);
-        var authored = new HashSet<int>(ProvinceOwnership.ProvincesOf(nation.Tag));
+        var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
         if (parts.Count >= 2)
         {
             var main = parts[0];
@@ -77,7 +77,7 @@ public static partial class Corridors
         TryBuyPores(c, nation);
     }
 
-    private static bool Authored(HashSet<int> piece, HashSet<int> authored) =>
+    private static bool Authored(HashSet<int> piece, IReadOnlySet<int> authored) =>
         piece.Count > 0 && piece.Count(authored.Contains) * 10 >= piece.Count * 6;
 
     /// <summary>One land province of this region, or 0 when the region is not on the map. The index is the same walk as the pores.</summary>
@@ -99,7 +99,7 @@ public static partial class Corridors
         EnsurePores(c);
         var pieces = new List<HashSet<int>>();
         if (_components.TryGetValue(nation.MapIndex, out var cached))
-            foreach (var piece in cached) pieces.Add(new HashSet<int>(piece));
+            foreach (var piece in cached) pieces.Add(piece);
         var capital = nation.CapitalStateMapIndex;
         pieces.Sort((a, b) =>
         {
@@ -247,7 +247,7 @@ public static partial class Corridors
         var ownerIndex = map.ProvinceToNation[pore.First()];
         var owner = c.Nations.Find(n => n.MapIndex == ownerIndex);
         if (owner is null || owner.Movement is not null || !Approachable(c, nation, owner)) return false;
-        var authored = new HashSet<int>(ProvinceOwnership.ProvincesOf(owner.Tag));
+        var authored = ProvinceOwnership.ProvinceSetOf(owner.Tag);
         if (Authored(pore, authored)) return false;
         var regions = WholeRegions(c, owner, pore);
         if (regions.Length == 0) return false;
@@ -272,7 +272,7 @@ public static partial class Corridors
         if (pore.Count == 0) return false;
         var owner = c.Nations.Find(n => n.MapIndex == c.ProvinceMap.ProvinceToNation[pore.First()]);
         if (owner is null) return false;
-        var authored = new HashSet<int>(ProvinceOwnership.ProvincesOf(owner.Tag));
+        var authored = ProvinceOwnership.ProvinceSetOf(owner.Tag);
         if (Authored(pore, authored)) return false;
         if (WholeRegions(c, owner, pore).Length == 0) return false;
         holder = owner.DisplayName;
@@ -435,7 +435,7 @@ public static partial class Corridors
         var parts = Pieces(c, nation);
         if (parts.Count < 2) return false;
         main = parts[0];
-        var authored = new HashSet<int>(ProvinceOwnership.ProvincesOf(nation.Tag));
+        var authored = ProvinceOwnership.ProvinceSetOf(nation.Tag);
         foreach (var candidate in parts.Skip(1))
         {
             if (candidate.Count < Math.Max(1, c.Defines.CorridorMinimumProvinces)) continue;

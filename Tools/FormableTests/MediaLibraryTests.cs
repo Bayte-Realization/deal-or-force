@@ -78,9 +78,11 @@ static class MediaLibraryTests
         Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "europe").Any(t => t.Name == "quiet_current") &&
               MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Crisis, "europe").Any(t => t.Name == "faultlines_in_motion"),
             "new universal score is scheduled by its intended context");
-        Check(MusicCatalog.For(MusicCatalog.Moment.Menu, MusicMood.Calm).Single().Name == "quiet_current" &&
-              MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Recovery, "europe").Single().Name == "quiet_current",
-            "soft peace alternative covers the menus and recovery as well as ordinary calm");
+        Check(MusicCatalog.For(MusicCatalog.Moment.Menu, MusicMood.Calm).Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal)
+                  .SequenceEqual(new[] { "menu_theme_atlas", "quiet_current" }) &&
+              MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Recovery, "europe").Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal)
+                  .SequenceEqual(new[] { "after_ceasefire", "quiet_current" }),
+            "soft peace alternative covers the menus and recovery as well as ordinary calm, beside the menu's own theme and the ceasefire piece");
         Check(!MusicCatalog.All.Any(t => t.Name is "frayed_civic" or "afterimage_republic") &&
               MediaLibraryCatalog.Find("frayed_civic") is { Kind: LibraryMediaKind.Music } &&
               MediaLibraryCatalog.Find("afterimage_republic") is { Kind: LibraryMediaKind.Music },
@@ -88,5 +90,41 @@ static class MediaLibraryTests
         Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "asia").Any(t => t.Name == "night_desk") &&
               MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Calm, "asia").Any(t => t.Name == "window_after_rain"),
             "regional Asian peace companions are preserved");
+        static IEnumerable<string> Pool(MusicMood mood, string continent, string subRegion) =>
+            MusicCatalog.For(MusicCatalog.Moment.Campaign, mood, continent, subRegion).Select(t => t.Name);
+        Check(Pool(MusicMood.Calm, "Asia", "Western Asia").Contains("middle_east_calm") && !Pool(MusicMood.Calm, "Asia", "Western Asia").Contains("night_desk") &&
+              Pool(MusicMood.Calm, "Asia", "South-Eastern Asia").Contains("night_desk") && !Pool(MusicMood.Calm, "Asia", "South-Eastern Asia").Contains("middle_east_calm"),
+            "the most specific region wins: the Middle East hears its own music, not East Asia's");
+        Check(Pool(MusicMood.War, "Asia", "Central Asia").Contains("eurasia_tense") && !Pool(MusicMood.War, "Asia", "Central Asia").Contains("pressure_lines") &&
+              Pool(MusicMood.Crisis, "Africa", "Northern Africa").Contains("middle_east_tense") && Pool(MusicMood.Crisis, "Africa", "Western Africa").Contains("africa_tense"),
+            "sub-regions pick their own palette for tension as well as peace");
+        Check(Pool(MusicMood.Calm, "North America", "Northern America").Contains("western_wind") &&
+              Pool(MusicMood.Calm, "North America", "Caribbean").Contains("south_america_calm"),
+            "a continent written with a space matches a tag written with an underscore");
+        Check(MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Crisis, "Asia", "Southern Asia", "IRN").Any(t => t.Name == "middle_east_tense") &&
+              MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Crisis, "Asia", "Southern Asia", "IRN").All(t => t.Name != "unsent_telegram"),
+            "a country's own tag is the most specific region: Iran hears the Middle East");
+        Check(Pool(MusicMood.War, "Europe", "Western Europe").Contains("world_war") && Pool(MusicMood.War, "Oceania", "Polynesia").Contains("world_war"),
+            "the world-war underscore plays in every region");
+        NewsFeed.ResetCatalog();
+        var gameRoot = System.IO.Path.GetDirectoryName(GameDataLoader.DataFolder("sound"));
+        bool OnDisk(string cue) => SoundCatalog.Get(cue).File is { Length: > 0 } file && file.StartsWith("res://game/") &&
+            System.IO.File.Exists(System.IO.Path.Combine(gameRoot, file["res://game/".Length..]));
+        Check(NewsFeed.Stings.Count >= 40 && NewsFeed.Stings.Values.Where(cue => cue.Length > 0).All(OnDisk) && NewsFeed.StingGapMs >= 1000,
+            "every headline sting names a declared cue whose recording ships with the game");
+        Check(NewsFeed.Sting("coup") == "news_coup" && NewsFeed.Sting("world_war_began") == "news_world_war" && NewsFeed.Sting("aid_sent") == "",
+            "a coup and a world war have their own stings; routine news makes no sound");
+        Check(new[] { "diplomacy_page", "deal_sent", "deal_concluded", "covert_launched", "map_focus" }.All(OnDisk),
+            "the interface sounds the code plays are declared and present, the page turn included");
+        EventPictures.ResetCatalog();
+        var events = EventCatalog.All.ToArray();
+        bool Ships(string path) => path.StartsWith("res://game/") && System.IO.File.Exists(System.IO.Path.Combine(gameRoot, path["res://game/".Length..]));
+        var bare = events.Where(e => !Ships(EventPictures.PathFor(e))).Select(e => e.Id).ToArray();
+        Check(bare.Length == 0, "every base-game event has a picture that ships with the game" + (bare.Length > 0 ? ": missing " + string.Join(", ", bare) : ""));
+        Check(EventPictures.Table.Keys.All(id => events.Any(e => string.Equals(e.Id, id, StringComparison.OrdinalIgnoreCase))),
+            "the picture table names no event that does not exist");
+        Check(EventPictures.Resolve("finance") == "res://game/gfx/events/event_finance.jpg" &&
+              EventPictures.Resolve("leaders/x.png") == "res://game/gfx/leaders/x.png" && EventPictures.Resolve("res://mod/a.png") == "res://mod/a.png",
+            "a picture is a shared name, a path under gfx/ or a mod's own path");
     }
 }

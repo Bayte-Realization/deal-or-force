@@ -87,3 +87,4 @@ static class CampaignIsolationTests
     static string Routes(Campaign c) => string.Join(";",c.TradeRoutes.Select(r =>
         $"{r.SellerId}/{r.BuyerId}/{r.Commodity}/{r.Volume:R}/{r.Value:R}"));
 }
+

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -79,15 +80,39 @@ public static class Shipbuilding
         var defines = campaign.Defines;
         foreach (var nation in campaign.Nations)
         {
-            var buildDays = BuildDays(campaign, nation);
+            var baseBuildDays = BuildDays(campaign, nation);
             var ordered = 0;
+            var highestMode = MobilisationMode.Standard;
             foreach (var fleet in campaign.Fleets)
-                if (fleet.NationId == nation.Id && fleet.Hulls > 0) ordered += fleet.HullsOrdered;
+                if (fleet.NationId == nation.Id && fleet.Hulls > 0 && fleet.HullsOrdered > 0)
+                {
+                    ordered += fleet.HullsOrdered;
+                    if (fleet.HullOrderMode > highestMode) highestMode = fleet.HullOrderMode;
+                }
             if (ordered <= 0) continue;
 
-            var working = MathF.Min(Slipways(campaign, nation), ordered);
+            var slipMultiplier = highestMode switch
+            {
+                MobilisationMode.RapidCallUp => 2.2f,
+                MobilisationMode.TotalMobilisation => 4.5f,
+                _ => 1f
+            };
+            var timeFactor = highestMode switch
+            {
+                MobilisationMode.RapidCallUp => 0.40f,
+                MobilisationMode.TotalMobilisation => 0.16f,
+                _ => 1f
+            };
+            var costFactor = highestMode switch
+            {
+                MobilisationMode.RapidCallUp => 1.35f,
+                MobilisationMode.TotalMobilisation => 1.75f,
+                _ => 1f
+            };
+            var buildDays = MathF.Max(14f, baseBuildDays * timeFactor);
+            var working = MathF.Min(Slipways(campaign, nation, highestMode) * slipMultiplier, ordered);
             if (working <= 0f) continue;
-            var cost = working * defines.HullCost / buildDays;
+            var cost = working * (defines.HullCost * costFactor) / buildDays;
             // A yard is paid as it works. One the treasury cannot pay stops for the day rather
             // than building on credit the country never voted.
             if (nation.Treasury < cost) continue;
@@ -107,7 +132,11 @@ public static class Shipbuilding
                     fleet.HullProgress -= 1f;
                     Commission(fleet);
                 }
-                if (fleet.HullsOrdered == 0) fleet.HullProgress = 0f;
+                if (fleet.HullsOrdered == 0)
+                {
+                    fleet.HullProgress = 0f;
+                    fleet.HullOrderMode = MobilisationMode.Standard;
+                }
             }
         }
     }
@@ -128,7 +157,7 @@ public static class Shipbuilding
     /// How many hulls a country can have on the slipways at once: its old yards and its new
     /// ones. Worked out for every country once a day, from one pass over the regions.
     /// </summary>
-    public static float Slipways(Campaign campaign, Nation nation)
+    public static float Slipways(Campaign campaign, Nation nation, MobilisationMode mode = MobilisationMode.Standard)
     {
         if (!ReferenceEquals(_slipwaysCampaign, campaign) || _slipwaysDay != campaign.ElapsedDays)
         {
@@ -144,15 +173,33 @@ public static class Shipbuilding
             foreach (var state in campaign.States)
             {
                 var yards = state.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
-                if (yards <= 0) continue;
+                var ports = state.Buildings.GetValueOrDefault(BuildingKind.Port);
+                if (yards <= 0 && ports <= 0) continue;
                 var owner = NavalOperations.NationAt(campaign, state.NationMapIndex);
                 if (owner is null) continue;
                 var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
                 SlipwaysByNation[owner.Id] = SlipwaysByNation.GetValueOrDefault(owner.Id) +
-                                             yards * yield * defines.SlipwaysPerShipyard;
+                                             yards * yield * defines.SlipwaysPerShipyard +
+                                             ports * yield * 0.35f;
             }
         }
-        return SlipwaysByNation.GetValueOrDefault(nation.Id);
+        var baseSlips = SlipwaysByNation.GetValueOrDefault(nation.Id);
+        if (mode != MobilisationMode.Standard)
+        {
+            if (baseSlips <= 0f && campaign?.ProvinceMap is not null)
+            {
+                // Emergency civilian port requisition if the country controls any sea coast
+                foreach (var coast in SeaLanes.CoastalProvinces(campaign.ProvinceMap))
+                    if (campaign.ProvinceController[coast] == nation.MapIndex)
+                        return mode == MobilisationMode.TotalMobilisation ? 4f : 2f;
+            }
+            else if (baseSlips > 0f)
+            {
+                var factor = mode == MobilisationMode.TotalMobilisation ? 2.2f : 1.4f;
+                return baseSlips * factor;
+            }
+        }
+        return baseSlips;
     }
 
     /// <summary>What the yards are costing a country a day, at the hulls it has on them now.</summary>
@@ -226,6 +273,7 @@ public sealed class OrderHullsCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public int FleetId { get; init; }
     public int Count { get; init; }
+    public MobilisationMode Mode { get; init; } = MobilisationMode.Standard;
 
     /// <summary>Why nothing was ordered, or empty when it was.</summary>
     public string Refusal { get; private set; } = "";
@@ -237,12 +285,97 @@ public sealed class OrderHullsCommand : ICampaignCommand
         var nation = campaign.NationById(IssuerId);
         if (fleet is null || nation is null || fleet.NationId != IssuerId) { Refusal = Loc.Get("That fleet is not yours to order."); return; }
         if (Count == 0) { Refusal = Loc.Get("Nothing to order."); return; }
-        if (Count > 0 && Shipbuilding.Slipways(campaign, nation) <= 0f)
+        if (Count > 0 && Shipbuilding.Slipways(campaign, nation, Mode) <= 0f)
         {
             Refusal = Loc.Get("Your country has no naval yards. Build a shipyard on the coast first.");
             return;
         }
-        fleet.HullsOrdered = Math.Clamp(fleet.HullsOrdered + Count, 0, 500);
-        if (fleet.HullsOrdered == 0) fleet.HullProgress = 0f;
+        if (Count > 0 && (Mode != MobilisationMode.Standard || nation.StockpilesSeeded))
+        {
+            var bill = StrategicStockpiles.HullMaterialBill(Count, Mode);
+            StrategicStockpiles.ConsumeBill(campaign, nation, bill);
+            if (Mode == MobilisationMode.RapidCallUp)
+                nation.Stability = M.Clamp(nation.Stability - 0.0015f * Count, 0.05f, 1f);
+            else if (Mode == MobilisationMode.TotalMobilisation)
+                nation.Stability = M.Clamp(nation.Stability - 0.003f * Count, 0.05f, 1f);
+        }
+        if (Count > 0 && Mode > fleet.HullOrderMode) fleet.HullOrderMode = Mode;
+        fleet.HullsOrdered = Math.Clamp(fleet.HullsOrdered + Count, 0, 2000);
+        if (fleet.HullsOrdered == 0)
+        {
+            fleet.HullProgress = 0f;
+            fleet.HullOrderMode = MobilisationMode.Standard;
+        }
+        campaign.MarkStrategicChange();
+    }
+}
+
+/// <summary>Commission a brand-new squadron in any controlled coastal harbour.</summary>
+public sealed class CommissionNewFleetCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int ProvinceId { get; init; }
+    public int Hulls { get; init; } = 5;
+    public MobilisationMode Mode { get; init; } = MobilisationMode.RapidCallUp;
+    public string CustomName { get; init; } = "";
+    public string Refusal { get; private set; } = "";
+
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        var nation = campaign?.NationById(IssuerId);
+        var map = campaign?.ProvinceMap;
+        if (nation is null || map is null || Hulls < 1) { Refusal = Loc.Get("Invalid naval order."); return; }
+        var portProvince = ProvinceId;
+        if (portProvince <= 0 || SeaLanes.HarbourOf(map, portProvince) < 0 || campaign.ProvinceController[portProvince] != nation.MapIndex)
+        {
+            portProvince = -1;
+            foreach (var coast in SeaLanes.CoastalProvinces(map))
+                if (campaign.ProvinceController[coast] == nation.MapIndex && SeaLanes.HarbourOf(map, coast) >= 0)
+                { portProvince = coast; break; }
+        }
+        if (portProvince <= 0)
+        {
+            Refusal = Loc.Get("No controlled coastal harbour available to commission a new fleet.");
+            return;
+        }
+        var upFrontCost = campaign.Defines.HullCost * Hulls * (Mode == MobilisationMode.TotalMobilisation ? 1.5f : 1.15f);
+        if (nation.Treasury < upFrontCost)
+        {
+            Refusal = Loc.Format("Requires {0} in treasury to commission a new squadron.", Fmt.Money(upFrontCost));
+            return;
+        }
+        nation.Treasury -= upFrontCost;
+        var bill = StrategicStockpiles.HullMaterialBill(Hulls, Mode);
+        StrategicStockpiles.ConsumeBill(campaign, nation, bill);
+        if (Mode == MobilisationMode.TotalMobilisation)
+            nation.Stability = M.Clamp(nation.Stability - 0.003f * Hulls, 0.05f, 1f);
+
+        SeaLanes.TryHarbourPoint(map, portProvince, out var lat, out var lon);
+        var nextId = campaign.Fleets.Count == 0 ? 1 : campaign.Fleets.Max(f => f.Id) + 1;
+        var countOwned = campaign.Fleets.Count(f => f.NationId == nation.Id) + 1;
+        var fleet = new Fleet
+        {
+            Id = nextId,
+            NationId = nation.Id,
+            Name = string.IsNullOrWhiteSpace(CustomName) ? $"{countOwned}. {nation.Tag} Squadron" : CustomName.Trim(),
+            Hulls = Mode == MobilisationMode.TotalMobilisation ? Math.Max(1, Hulls / 2) : 1,
+            HullsOrdered = Mode == MobilisationMode.TotalMobilisation ? Hulls - Math.Max(1, Hulls / 2) : Hulls - 1,
+            HullOrderMode = Mode,
+            Establishment = Hulls,
+            HomeProvinceId = portProvince,
+            BerthProvinceId = portProvince,
+            HomeLatitude = lat,
+            HomeLongitude = lon,
+            Latitude = lat,
+            Longitude = lon,
+            Strength = 0.85f,
+            Organisation = 0.70f,
+            Supply = 0.90f,
+            Readiness = 0.85f,
+            Mission = FleetMission.Anchored
+        };
+        campaign.Fleets.Add(fleet);
+        campaign.MarkStrategicChange();
     }
 }

@@ -54,6 +54,7 @@ public static class NationalModifiers
         new("support_losses", "Long-range losses", "Strength long-range formations lose over a defended front.", HigherIsBetter: false),
         new("support_recovery", "Long-range recovery", "How fast worn long-range formations are brought back to strength."),
         new("militia_readiness", "Militia readiness", "How quickly a threatened region raises its own militia."),
+        new("deterrence", "Deterrence", "The standing of a power no neighbour attacks directly: a war between two holders is priced out of the arithmetic."),
         // The navy.
         new("naval_speed", "Fleet speed", "How fast a fleet sails."),
         new("shipbuilding_speed", "Shipbuilding speed", "How fast the yards lay down and finish hulls."),
@@ -97,6 +98,7 @@ public static class NationalModifiers
         foreach (var source in TacticalDoctrines.Sources(nation)) yield return source;
         foreach (var source in StrategicDoctrines.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
+        foreach (var source in Rulers.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology && technology.Effects.Count > 0)
                 yield return (technology.Name, technology.Effects);
@@ -119,9 +121,30 @@ public static class NationalModifiers
         // the sum is exactly what a new dictionary would have held.
         var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         totals.Clear();
-        foreach (var (_, modifiers) in Sources(nation))
+        static void Add(Dictionary<string, float> totals, IReadOnlyDictionary<string, float> modifiers)
+        {
+            if (modifiers is null || modifiers.Count == 0) return;
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
+        }
+        foreach (var (_, modifiers) in NationalCourses.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in UnionCohesion.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in DemographicCycle.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in TacticalDoctrines.Sources(nation)) Add(totals, modifiers);
+        if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
+        if (nation.LawsActive)
+            foreach (var category in PoliticalPolicyCatalog.NationalCategories)
+                if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
+        if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
+            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) Add(totals, definition.Modifiers);
+        foreach (var (_, modifiers) in Rulers.Sources(nation)) Add(totals, modifiers);
+        foreach (var id in nation.Technologies)
+            if (TechnologyCatalog.Of(id) is { } technology) Add(totals, technology.Effects);
+        foreach (var active in nation.Modifiers)
+            if (ModifierCatalog.Get(active.Id) is { } spirit) Add(totals, spirit.Modifiers);
+        if (GovernmentCatalog.Of(nation.Government) is { } government) Add(totals, government.Modifiers);
+        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) Add(totals, ideology.Modifiers);
+        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) Add(totals, focus.Modifiers);
         return totals;
     }
 

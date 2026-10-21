@@ -12,6 +12,11 @@ namespace DealOrForce;
 /// </summary>
 public sealed partial class GlobePresentation
 {
+    // Long-range cards sit just behind land counters, never in front of them. The flat map
+    // and the globe use the same one-pixel-scale depth bias in their own coordinate systems.
+    private const float SupportMarkerDepthBias = .002f;
+    private const float SupportSurfaceDepthFactor = .9994f;
+
     private sealed class SupportMapMarker
     {
         public Node3D Node = null!;
@@ -25,6 +30,7 @@ public sealed partial class GlobePresentation
         /// <summary>How many formations share this base, so the group can be centred on it.</summary>
         public int AtBase = 1;
         public Vector2 DisplayOffset;
+        public bool DisplayFaded;
     }
 
     private Node3D _supportMarkerRoot = null!;
@@ -184,6 +190,10 @@ public sealed partial class GlobePresentation
             hash.Add(formation.TypeId);
             hash.Add(formation.BaseProvinceId);
             hash.Add(formation.StateMapIndex);
+            var hasArmyAtBase = false;
+            foreach (var army in _campaign.Armies)
+                if (army.ProvinceId == formation.BaseProvinceId) { hasArmyAtBase = true; break; }
+            hash.Add(hasArmyAtBase);
         }
         var fingerprint = hash.ToHashCode();
         var reachHash = new HashCode();
@@ -220,9 +230,14 @@ public sealed partial class GlobePresentation
             var slot = withinBase.GetValueOrDefault(formation.BaseProvinceId);
             withinBase[formation.BaseProvinceId] = slot + 1;
             var center = map.CenterOf(formation.BaseProvinceId);
-            // Several wings at the same airbase must not become one unclickable icon.
-            var latitude = center.Latitude;
-            var longitude = center.Longitude;
+            // Several wings at the same airbase must not become one unclickable icon,
+            // and if a ground army is stationed in the same province, offset the long-range
+            // air/missile base row slightly north-east so it never covers the ground counter!
+            var hasGroundArmy = false;
+            foreach (var army in _campaign.Armies)
+                if (army.ProvinceId == formation.BaseProvinceId) { hasGroundArmy = true; break; }
+            var latitude = center.Latitude + (hasGroundArmy ? 0.58f : 0f);
+            var longitude = center.Longitude + (hasGroundArmy ? 0.42f : 0f);
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
             _supportMarkerRoot.AddChild(node);
             // The symbol is part of the card now: cut out and fitted into its slot on the
@@ -232,7 +247,7 @@ public sealed partial class GlobePresentation
             var iconPath = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
             var plate = new Sprite3D
             {
-                Texture = SupportPlate(iconPath),
+                Texture = SupportPlate(iconPath, nation: _campaign.NationById(formation.NationId)),
                 Name = "SupportCard", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
                 AlphaCut = SpriteBase3D.AlphaCutMode.Discard,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -243,9 +258,9 @@ public sealed partial class GlobePresentation
             {
                 Font = PresentationFonts.For("ui.default"),
                 FontSize = 20, OutlineSize = 3, Offset = new Vector2(16, 0),
-                RenderPriority = 10, OutlineRenderPriority = 9,
+                RenderPriority = 8, OutlineRenderPriority = 7,
                 Name = "SupportReadiness", Billboard = BaseMaterial3D.BillboardModeEnum.Disabled,
-                NoDepthTest = true,
+                NoDepthTest = false,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Modulate = new Color(.91f, .95f, .96f)
             };
@@ -272,8 +287,8 @@ public sealed partial class GlobePresentation
     private void PlaceSupportMarker(SupportMapMarker marker)
     {
         marker.Node.Position = _flatMap
-            ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ + .002f)
-            : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * 1.0004f);
+            ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
+            : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
         var flatScale = MathF.Max(.00001f, _counterWorldPixel);
         marker.Node.Scale = Vector3.One * (_flatMap ? flatScale * _counterFlatFar : SurfaceCounterWidth(marker.Node, "support"));
         OrientSurfaceCounter(marker.Node, marker.Node.Position.Normalized());
@@ -292,9 +307,9 @@ public sealed partial class GlobePresentation
         marker.Plate.PixelSize = platePixel;
         marker.Readiness.PixelSize = platePixel * .85f;
         marker.Readiness.Visible = !_flatMap || (!_flatStrategicCounters && _selectedSupportIds.Contains(marker.Formation.Id));
-        marker.Readiness.Position = Vector3.Zero;
+        marker.Readiness.Position = new Vector3(0f, 0f, .02f);
         marker.Readiness.Width = 0f;
-        marker.Readiness.RenderPriority = 20;
+        marker.Readiness.RenderPriority = 8;
         marker.Readiness.HorizontalAlignment = HorizontalAlignment.Center;
         marker.Readiness.VerticalAlignment = VerticalAlignment.Center;
     }
@@ -307,7 +322,8 @@ public sealed partial class GlobePresentation
         {
             var icon = SpriteCatalog.TextureOf($"icon_{type.Icon}", $"res://game/gfx/interface/icons/icon_{type.Icon}.png");
             marker.Plate.Texture = SupportPlate(icon, _selectedSupportIds.Contains(formation.Id),
-                displaced ? Ui.Colour("support.displaced") : SupportArmColour(type.Kind));
+                displaced ? Ui.Colour("support.displaced") : SupportArmColour(type.Kind),
+                _campaign.NationById(formation.NationId));
             var compact = _flatMap && (_flatStrategicCounters || !_selectedSupportIds.Contains(formation.Id));
             if (compact)
                 marker.Plate.Texture = CompactCounterTexture(marker.Plate.Texture, new Rect2I(7, 13, 28, 30));
@@ -358,8 +374,8 @@ public sealed partial class GlobePresentation
                 else
                 {
                     var position = _flatMap
-                        ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ + .002f)
-                        : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * 1.0004f);
+                        ? FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - SupportMarkerDepthBias)
+                        : SurfacePoint(marker.Latitude, marker.Longitude, SurfaceMarkerRadius * SupportSurfaceDepthFactor);
                     if (_flatMap)
                     {
                         position += new Vector3(marker.DisplayOffset.X, -marker.DisplayOffset.Y, 0f) * (_camera.Size / Math.Max(1f, Size.Y));
@@ -383,7 +399,7 @@ public sealed partial class GlobePresentation
                     var basis = CountryLabelSurfaceBasis(marker.Latitude, marker.Longitude, 1f, 0f);
                     var offset = basis.X * ((marker.Slot % 3) - (inRow - 1) * .5f) * card * spacing +
                                  basis.Y * ((rows - 1) * .5f - row) * card * aspect * spacing;
-                    position = (position + offset).Normalized() * SurfaceMarkerRadius * 1.0004f;
+                    position = (position + offset).Normalized() * SurfaceMarkerRadius * SupportSurfaceDepthFactor;
                     if (marker.Node.Position != position) marker.Node.Position = position;
                     OrientSurfaceCounter(marker.Node, position.Normalized());
                     marker.Node.Scale = Vector3.One * card;
@@ -589,34 +605,96 @@ public sealed partial class GlobePresentation
     /// is inside the frame by construction - it used to be a sprite of its own parked over
     /// the card, and a wide drawing simply overran the frame it was meant to sit in.
     /// </summary>
-    private Texture2D SupportPlate(string path, bool selected = false, Color? arm = null)
+    private Texture2D SupportPlate(string path, bool selected = false, Color? arm = null, Nation nation = null)
     {
         var accent = arm ?? Ui.Colour("support.standby");
-        var key = path + "|" + selected + "|" + accent.ToHtml();
+        var flagSprite = nation is not null ? FlagSpriteFor(nation) : "";
+        var key = path + "|" + selected + "|" + accent.ToHtml() + "|" + (nation is null ? "" : nation.Color) + "|" + flagSprite;
         if (_supportPlates.TryGetValue(key, out var cached)) return cached;
         const int width = 96, height = 56;
-        var data = new byte[width * height * 4];
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
+        const int s = 3;
+        var w = width * s;
+        var h = height * s;
+        var national = nation is not null ? new Color(nation.Color) : accent;
+        var brass = new Color(0.84f, 0.72f, 0.44f);
+        var line = selected ? Ui.Colour("text.accent") : national.Lightened(0.28f);
+        var ink = new Color(0.025f, 0.035f, 0.045f, 0.99f);
+        var topBg = new Color(0.13f, 0.165f, 0.20f, 0.96f);
+        var botBg = new Color(0.055f, 0.080f, 0.105f, 0.96f);
+        const float radius = 5.5f * s;
+        const float bandBottom = 15.5f * s;
+        var data = new byte[w * h * 4];
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
         {
-            var border = x < 2 || x >= width - 2 || y < 2 || y >= height - 2;
-            var strip = x >= 3 && x < 7;
-            var line = selected ? Ui.Colour("text.accent") : accent.Lerp(new Color(.35f, .46f, .53f), .5f);
-            var colour = strip ? accent : border ? line : new Color(.055f, .095f, .13f);
-            var r = (byte)(colour.R * 255);
-            var g = (byte)(colour.G * 255);
-            var b = (byte)(colour.B * 255);
-            var offset = (y * width + x) * 4;
-            data[offset] = r; data[offset + 1] = g; data[offset + 2] = b;
-            data[offset + 3] = (byte)(border ? 245 : 226);
+            var inward = -RoundedBox(x + 0.5f, y + 0.5f, w, h, radius);
+            if (inward < 0f)
+            {
+                WritePixel(data, w, x, y, new Color(ink.R, ink.G, ink.B, 0f));
+                continue;
+            }
+            Color colour;
+            if (inward < 0.9f * s) colour = ink;
+            else if (inward < 3.6f * s) colour = line;
+            else if (inward < 4.5f * s) colour = selected ? Colors.White : brass.Lerp(national.Lightened(0.42f), 0.4f);
+            else
+            {
+                colour = topBg.Lerp(botBg, y / (float)h);
+                if (y < bandBottom)
+                {
+                    colour = national.Lightened(0.10f).Lerp(national.Darkened(0.24f), y / bandBottom);
+                    if (x > 36 * s) colour = colour.Lerp(accent.Darkened(0.15f), 0.55f);
+                }
+                else if (y < bandBottom + 1.2f * s)
+                {
+                    colour = accent.Lightened(0.25f);
+                }
+                else if (x >= 4.5f * s && x < 7.5f * s)
+                {
+                    colour = accent;
+                }
+            }
+            WritePixel(data, w, x, y, colour);
         }
-        var card = Image.CreateFromData(width, height, false, Image.Format.Rgba8, data);
+
+        // Left glowing arm medallion slot (x = 8.5..36.5, y = 18..50).
+        const float slotLeft = 8.5f * s, slotTop = 18f * s, slotRight = 36.5f * s, slotBottom = 50f * s;
+        for (var y = (int)slotTop; y <= (int)slotBottom; y++)
+        for (var x = (int)slotLeft; x <= (int)slotRight; x++)
+        {
+            var inside = -RoundedBoxAt(x + 0.5f, y + 0.5f, slotLeft, slotTop, slotRight, slotBottom, 3.2f * s);
+            if (inside < 0f) continue;
+            var col = inside < 1.1f * s ? accent.Lightened(0.32f) : accent.Darkened(0.55f);
+            BlendPixel(data, w, x, y, col, 0.94f);
+        }
+
+        // Right recessed readiness bay (x = 39..90, y = 18..50).
+        const float rLeft = 39f * s, rTop = 18f * s, rRight = 90f * s, rBottom = 50f * s;
+        for (var y = (int)rTop; y <= (int)rBottom; y++)
+        for (var x = (int)rLeft; x <= (int)rRight; x++)
+        {
+            var inside = -RoundedBoxAt(x + 0.5f, y + 0.5f, rLeft, rTop, rRight, rBottom, 2.8f * s);
+            if (inside < 0f) continue;
+            var col = inside < 0.9f * s ? new Color(0.22f, 0.28f, 0.34f, 0.90f) : new Color(0.04f, 0.055f, 0.075f, 0.92f);
+            BlendPixel(data, w, x, y, col, 0.92f);
+        }
+
+        // Prominent National Flag badge in the top-left canton (x = 6..34, y = 3.5..15.5).
+        if (!string.IsNullOrWhiteSpace(flagSprite) || nation is not null)
+            PaintFlagChip(data, w, flagSprite, 6f * s, 3.5f * s, 28f * s, 12.5f * s, nation);
+        // Long-range support chevron insignia on the top-right header
+        var supportGold = new Color(0.96f, 0.88f, 0.52f, 0.95f);
+        StrokeLine(data, w, 76f * s, 5.5f * s, 82f * s, 10.5f * s, 1.8f * s, supportGold);
+        StrokeLine(data, w, 82f * s, 10.5f * s, 88f * s, 5.5f * s, 1.8f * s, supportGold);
+        StrokeLine(data, w, 76f * s, 9.5f * s, 82f * s, 14.5f * s, 1.8f * s, supportGold);
+        StrokeLine(data, w, 82f * s, 14.5f * s, 88f * s, 9.5f * s, 1.8f * s, supportGold);
+
+        var card = Image.CreateFromData(w, h, false, Image.Format.Rgba8, data);
+        card.Resize(width, height, Image.Interpolation.Lanczos);
         var icon = SupportCutoutImage(path);
         if (icon is not null)
         {
-            // Fitted to the slot whatever bounds the cut-out came to: a wide plane and a
-            // compact drone share one footprint here, both wholly inside the frame.
-            const float slot = 26f;
+            const float slot = 24f;
             var iconWidth = icon.GetWidth();
             var iconHeight = icon.GetHeight();
             var span = MathF.Max(iconWidth, iconHeight);
@@ -629,7 +707,7 @@ public sealed partial class GlobePresentation
                 iconHeight = icon.GetHeight();
             }
             card.BlendRect(icon, new Rect2I(0, 0, iconWidth, iconHeight),
-                new Vector2I(21 - iconWidth / 2, 28 - iconHeight / 2));
+                new Vector2I(22 - iconWidth / 2, 34 - iconHeight / 2));
         }
         return _supportPlates[key] = ImageTexture.CreateFromImage(card);
     }

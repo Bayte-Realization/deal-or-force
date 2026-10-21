@@ -103,10 +103,30 @@ public partial class DealOrForceGame
     private async Task WaitForMapPresentation()
     {
         _globe.LoadingInputBlocked = true;
+        // A map that stops answering used to be an endless "Ready" on the loading screen: the
+        // loop waited for a ready flag that would never be set and had no idea anything was
+        // wrong. Two minutes with no progress at all is not a slow map, it is a map that is
+        // not coming - and the player is owed the stage it stopped at rather than a still frame.
+        var lastStage = "";
+        var lastProgress = -1d;
+        var lastChange = Time.GetTicksMsec();
         while (!_globe.IsMapPresentationReady)
         {
             if (!string.IsNullOrEmpty(_globe.MapLoadingError)) throw new InvalidOperationException(_globe.MapLoadingError);
-            await LoadingPhase(_globe.MapLoadingStage, _globe.MapLoadingProgress);
+            var stage = _globe.MapLoadingStage;
+            var progress = _globe.MapLoadingProgress;
+            var now = Time.GetTicksMsec();
+            if (!string.Equals(stage, lastStage, StringComparison.Ordinal) || Math.Abs(progress - lastProgress) > 0.001f)
+            {
+                lastStage = stage;
+                lastProgress = progress;
+                lastChange = now;
+            }
+            else if (now - lastChange > 120000)
+                throw new InvalidOperationException(
+                    $"The map stopped answering while {stage} was in progress. " +
+                    "Close any other copy of the game that is running, then try again.");
+            await LoadingPhase(stage, progress);
         }
     }
 

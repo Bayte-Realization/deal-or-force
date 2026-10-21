@@ -345,6 +345,29 @@ public static class CovertOperations
     {
         var d = c.Defines;
         var power = definition.Power;
+        if (definition.Effect is "sabotage" or "unrest" or "opposition")
+        {
+            if (target.IsSubject)
+            {
+                var agitate = 0.18f * power;
+                target.SubjectLibertyModifier = MathF.Min(0.95f, target.SubjectLibertyModifier + agitate);
+                target.LibertyDesire = M.Clamp01(target.LibertyDesire + agitate);
+                if (!target.SubjectForeignBackers.Contains(owner.Id))
+                    target.SubjectForeignBackers.Add(owner.Id);
+                target.LastForeignAgitationDay = c.ElapsedDays;
+            }
+            else
+            {
+                foreach (var subject in SubjectSystem.SubjectsOf(c, target))
+                {
+                    var agitate = (definition.Effect == "opposition" ? 0.16f : 0.10f) * power;
+                    subject.SubjectLibertyModifier = MathF.Min(0.95f, subject.SubjectLibertyModifier + agitate);
+                    subject.LibertyDesire = M.Clamp01(subject.LibertyDesire + agitate);
+                    if (definition.Effect is "opposition" or "unrest" && !subject.SubjectForeignBackers.Contains(owner.Id))
+                        subject.SubjectForeignBackers.Add(owner.Id);
+                }
+            }
+        }
         switch (definition.Effect)
         {
             case "sabotage":

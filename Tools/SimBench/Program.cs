@@ -51,6 +51,13 @@ public static class Program
 
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
+        // The roster contract covers the world the bookmark opens with. Countries the
+        // simulation itself founds - secessions, risings, proclamations, fifteen years of
+        // them - generate their tags from culture names and answer to no shipped row; that
+        // is the living world working, so the definition check below skips them.
+        var bookmarkTags = new HashSet<string>(
+            campaign.Nations.Where(n => !string.IsNullOrWhiteSpace(n.Tag)).Select(n => n.Tag),
+            StringComparer.Ordinal);
         // `--load <folder> <slot>`: the reports below run on a saved campaign instead of 2024 -
         // a player's century-old world, where the faults that only age shows are.
         var loadAt = Array.IndexOf(args, "--load");
@@ -702,6 +709,10 @@ public static class Program
         }
 
         var profileAt = Array.IndexOf(args, "--profile");
+        if (args.Contains("--personnel-lifecycle")) return PoliticalLifecycleProbe.Run(campaign, Math.Min(days, 36500));
+        if (args.Contains("--staff-watch")) return StaffWatchProbe.Run(campaign, Math.Min(days,3650));
+        if (args.Contains("--diplomacy-world")) return DiplomaticWorldProbe.Run(campaign, Math.Min(days,3650));
+        if (args.Contains("--front-disengagement-world")) return FrontDisengagementProbe.Run(campaign, days);
         if (profileAt >= 0) return Profile(campaign,
             profileAt + 1 < args.Length && int.TryParse(args[profileAt + 1], out var profileDays) ? profileDays : 120);
 
@@ -889,7 +900,7 @@ public static class Program
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         failures += Check("the shipped country definitions describe the world the game starts in",
-            ShippedCountriesMatchTheScenario(campaign));
+            ShippedCountriesMatchTheScenario(campaign, bookmarkTags));
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
@@ -1421,6 +1432,7 @@ public static class Program
         Console.WriteLine($"  countries in more than one war: {bare.Sum(sample => sample.Pairs):N0} country-war pair(s) sampled, " +
                           $"{bare.Sum(sample => sample.Bare):N0} with a front of their own and nobody of theirs on it.");
         Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
+        Console.WriteLine($"  war emergency: reinforced {WarEmergency.Reinforced:N0}, rushed {WarEmergency.Rushed:N0}, raised {WarEmergency.Raised:N0}.");
         Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
         Console.WriteLine($"  at peace, {ThreatPosture.Moves:N0} division(s) were moved to the borders their countries fear.");
         Console.WriteLine($"  the disposition moved {ArmyDisposition.Relieved:N0} starving formation(s) to ground that could feed them " +
@@ -1875,6 +1887,7 @@ public static class Program
         for (var day = 0; day < days; day++) campaign.TickDay();
         var folder = Path.Combine(Path.GetTempPath(), "dof_save_cost");
         Directory.CreateDirectory(folder);
+        SimProfiler.Reset();
         var watch = Stopwatch.StartNew();
         var prepared = SaveSystem.Prepare(folder, "probe", campaign, "", "probe", true);
         var prepareMs = watch.Elapsed.TotalMilliseconds;
@@ -1891,6 +1904,10 @@ public static class Program
             SaveSystem.Prepare(folder, "probe_warm", campaign, "", "probe", true);
             warm.Add(watch.Elapsed.TotalMilliseconds);
         }
+        foreach (var sample in SimProfiler.All.OrderByDescending(entry => entry.TotalMilliseconds))
+            if (sample.Runs > 0)
+                Console.WriteLine($"    save phase {sample.Name,-20} {sample.TotalMilliseconds,8:N0} ms  " +
+                                  $"×{sample.Runs}  {sample.AllocatedBytes / 1048576.0,7:0.0} MB");
         watch.Restart();
         var historyBytes = JsonSerializer.SerializeToUtf8Bytes(
             Enumerable.Range(0, campaign.Nations.Count).ToDictionary(id => id, id => campaign.History.ForNation(id)));
@@ -1898,10 +1915,21 @@ public static class Program
                           $"the history alone {watch.Elapsed.TotalMilliseconds:N0} ms for {historyBytes.Length / 1048576.0:0.0} MB.");
         var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
         byte[] json;
-        using (var input = new MemoryStream(compressed))
-        using (var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
-        using (var output = new MemoryStream())
+        // Sniff the container instead of assuming gzip: saves may be this game's Brotli
+        // ("BDF2" magic), gzip, or plain JSON, and the probe measures whatever was written.
+        if (compressed.Length >= 4 && System.Text.Encoding.ASCII.GetString(compressed, 0, 4) == "BDF2")
         {
+            using var input = new MemoryStream(compressed, 4, compressed.Length - 4);
+            using var brotli = new System.IO.Compression.BrotliStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            brotli.CopyTo(output);
+            json = output.ToArray();
+        }
+        else
+        {
+            using var input = new MemoryStream(compressed);
+            using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
             gzip.CopyTo(output);
             json = output.ToArray();
         }
@@ -1914,6 +1942,14 @@ public static class Program
             using var memory = new MemoryStream();
             using (var gzip = new System.IO.Compression.GZipStream(memory, level, true)) gzip.Write(json);
             Console.WriteLine($"  gzip {level,-12} {watch.Elapsed.TotalMilliseconds,7:N0} ms  {memory.Length / 1048576.0,6:0.0} MB");
+        }
+        foreach (var level in new[] { System.IO.Compression.CompressionLevel.Optimal,
+                     System.IO.Compression.CompressionLevel.SmallestSize })
+        {
+            watch.Restart();
+            using var memory = new MemoryStream();
+            using (var brotli = new System.IO.Compression.BrotliStream(memory, level, true)) brotli.Write(json);
+            Console.WriteLine($"  brotli {level,-10} {watch.Elapsed.TotalMilliseconds,7:N0} ms  {memory.Length / 1048576.0,6:0.0} MB");
         }
         watch.Restart();
         using (var document = System.Text.Json.JsonDocument.Parse(json))
@@ -5399,7 +5435,7 @@ public static class Program
     /// edits one world while playing another. So every country the scenario creates must
     /// have a definition, and the definition must say what the game says.
     /// </summary>
-    private static string ShippedCountriesMatchTheScenario(Campaign campaign)
+    private static string ShippedCountriesMatchTheScenario(Campaign campaign, HashSet<string> bookmarkTags)
     {
         var shipped = new Dictionary<string, (string Name, string Color, string Capital)>(StringComparer.Ordinal);
         foreach (var document in GameDataLoader.DataDocuments("common", "countries"))
@@ -5422,9 +5458,16 @@ public static class Program
         {
             if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
             // Movements are declared in common/movements, not common/countries; the de facto
-            // powers of 2024 in history/factions.
+            // powers of 2024 in history/factions. A country the simulation founded answers to
+            // a tag the bookmark never shipped, and is nobody's drift.
             if (nation.Movement is not null || nation.FactionId.Length > 0) continue;
+            if (!bookmarkTags.Contains(nation.Tag)) continue;
             if (!shipped.TryGetValue(nation.Tag, out var entry)) { missing.Add(nation.Tag); continue; }
+            // A country that renamed itself in play (a proclamation, a formable, a rising, a
+            // faction settling back into its parent) answers a different name than the roster,
+            // and the proclamation repaints the colour with it - the living world working,
+            // not drift. Its having a definition at all is still required.
+            if (nation.NameProclaimed) continue;
             if (!string.Equals(entry.Name, nation.Name, StringComparison.Ordinal))
                 drifted.Add($"{nation.Tag} name: file '{entry.Name}', game '{nation.Name}'");
             else if (!string.Equals(entry.Color, nation.Color, StringComparison.OrdinalIgnoreCase))
@@ -11554,6 +11597,11 @@ public static class Program
         PeaceTermCatalog.ResetCatalog();
         SecessionCore.ResetCatalog();
         SocialIncidentCatalog.ResetCatalog();
+        // Dated history and deterrence are lazy catalogues too: reading them here is what
+        // makes the folder audit see the real reader instead of an allowlist entry.
+        EventCatalog.ResetCatalog();
+        Deterrence.ResetCatalog();
+        _ = Deterrence.Holders.Count;
         _ = UnitTypeCatalog.All.Count();
         // And the catalogues read the first time something needs them - the handbook when F1 is
         // pressed, the news weights at the first headline, the coups at the first review - so a
@@ -11682,6 +11730,18 @@ public static class Program
         foreach (var property in typeof(NationHistorySample).GetProperties())
             if (property.GetIndexParameters().Length == 0 && !Equals(property.GetValue(sample), property.GetValue(sampleBack)))
                 wrong.Add($"NationHistorySample.{property.Name}");
+
+        foreach (var rowType in new[] { typeof(PublicImage), typeof(MarketQuote), typeof(OpinionReason), typeof(LandBattle.Round) })
+        {
+            var instance = Activator.CreateInstance(rowType)!;
+            var rowFields = rowType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            for (var index = 0; index < rowFields.Length; index++)
+                rowFields[index].SetValue(instance, Distinct(rowFields[index].FieldType, index));
+            var restored = JsonSerializer.Deserialize(JsonSerializer.Serialize(instance, rowType), rowType)!;
+            foreach (var field in rowFields)
+                if (!Equals(field.GetValue(instance), field.GetValue(restored)))
+                    wrong.Add($"{rowType.Name}.{field.Name}");
+        }
 
         if (wrong.Count > 0)
             return $"{wrong.Count} field(s) do not survive their save row: {string.Join(", ", wrong)} - add them to Simulation/SaveRows.cs";
@@ -11942,6 +12002,8 @@ public static class Program
 
                 // Ground changed hands, so of course the figures moved.
                 if (held != hadRegions) continue;
+                // A fallen country's books closing is the fall flow working, not a cliff.
+                if (campaign.Fallen.Contains(nation.Id)) continue;
                 if (was < 1f) continue;
 
                 var drop = 1f - nation.Gdp / was;
@@ -12156,7 +12218,8 @@ public static class Program
         // A white peace will not be looked at until a war is four months old, and forty
         // days of real ticking is what this check can afford. The war is aged rather than
         // fought, which is the one thing being proved here that the calendar is not.
-        war.StartedDay -= 200;
+        war.StartedDay -= Math.Max(200, (int)campaign.Defines.AiWearyDays + 10);
+        war.WarScore = 0f;
         PeaceNegotiation.Resolve(campaign, war, aggressor.Id, PeaceTerms.WhitePeace);
         if (!war.Ended) return $"a white peace did not end the war: {war.LastNegotiation}";
         foreach (var friend in friends)

@@ -74,7 +74,14 @@ public static partial class AiStatecraft
             nation.WelfareSpending = M.Clamp(nation.WelfareSpending - defines.AiSocialStep, 0.01f, 0.20f);
         }
 
-        using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar);
+        if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Construction))
+            using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, atWar);
+    }
+
+    public static void PlanConstruction(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || !campaign.FeatureEnabled("construction")) return;
+        using (SimProfiler.Measure("    eco:build")) Build(campaign, nation, AiFiscalPolicy.AtWar(campaign, nation));
     }
 
     /// <summary>

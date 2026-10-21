@@ -15,6 +15,7 @@ public partial class DealOrForceGame
     private VBoxContainer _subjectActions = null!;
     private Button _integrateButton = null!;
     private Button _allianceButton = null!;
+    private Button _countryImproveButton = null!;
     private Button _guaranteeButton = null!;
     private int _pendingWarTarget = -1;
 
@@ -31,7 +32,8 @@ public partial class DealOrForceGame
         row.AddThemeConstantOverride("separation", 5);
         list.AddChild(Title("Relations and treaties", 12, Ui.Colour("text.caption")));
         list.AddChild(row);
-        row.AddChild(ActionButton("Improve", ImproveSelectedRelations, 96, 32, true));
+        _countryImproveButton = ActionButton("Improve", ImproveSelectedRelations, 96, 32, true);
+        row.AddChild(_countryImproveButton);
         row.AddChild(ActionButton("Denounce", DenounceSelected, 96, 32));
         row.AddChild(ActionButton("Capital", FocusSelectedCapital, 96, 32));
         var pacts = new VBoxContainer();
@@ -375,6 +377,7 @@ public partial class DealOrForceGame
                 : why);
         }
         if (!_countryActions.Visible) return;
+        RefreshOutreachButton(_countryImproveButton, nation);
         RefreshDiplomaticPeaceButton(_negotiatePeaceButton, nation);
         _declareWarButton.Visible = !_negotiatePeaceButton.Visible;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
@@ -397,14 +400,9 @@ public partial class DealOrForceGame
     private void ImproveSelectedRelations()
     {
         if (!ValidForeignSelection()) return;
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, _selectedNation.Id);
-        var before = relation.Opinion;
-        _campaign.Commands.Enqueue(new ImproveRelationsCommand { IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id });
-        _campaign.Commands.ApplyAll(_campaign);
+        var feedback = SendOrRecallDiplomaticMission(_selectedNation);
         _pendingWarTarget = -1;
-        _countryActionFeedback.Text = relation.Opinion > before
-            ? $"Diplomatic mission succeeded: relations {relation.Opinion:+0;-0;0}."
-            : "Diplomatic action is on cooldown or the treasury is insufficient.";
+        _countryActionFeedback.Text = feedback;
         RefreshCountryViews("Diplomatic mission");
     }
 

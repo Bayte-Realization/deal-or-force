@@ -183,7 +183,7 @@ public static class ScriptLibrary
             }
             if (entry.TryGetProperty("add", out var add) && add.TryGetSingle(out var addition))
                 score += addition;
-            if (entry.TryGetProperty("factor", out var factor) && factor.TryGetSingle(out var multiplier))
+            if ((entry.TryGetProperty("factor", out var factor) || entry.TryGetProperty("multiply", out factor)) && factor.TryGetSingle(out var multiplier))
                 score *= multiplier;
         }
         return score;

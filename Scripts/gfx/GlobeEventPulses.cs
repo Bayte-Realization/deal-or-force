@@ -184,6 +184,8 @@ void fragment() {
             // A campaign just opened or loaded: what happened in the last weeks is still news.
             _pulseSeen = entries[0].Sequence - 1;
         }
+        var maxSeq = Math.Max(entries[0].Sequence, entries[^1].Sequence);
+        if (maxSeq <= _pulseSeen) return;
         foreach (var entry in entries)
         {
             if (entry.Sequence <= _pulseSeen) continue;

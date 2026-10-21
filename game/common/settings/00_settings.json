@@ -227,6 +227,14 @@
     "labels": ["1280 × 720", "1600 × 900", "1920 × 1080", "2560 × 1440", "3440 × 1440", "3840 × 2160"],
     "default": "1920x1080"
   },
+  "graphics_quality": {
+    "category": "video", "order": 314, "kind": "choice",
+    "name": "Graphics quality",
+    "description": "How much of the picture the game may spend on this machine. Automatic starts from what the graphics card is and lowers the picture by itself when the frame rate falls; a named level stays where it is put.",
+    "values": ["auto", "high", "balanced", "low", "software"],
+    "labels": ["Automatic", "High", "Balanced", "Low", "Processor"],
+    "default": "auto"
+  },
   "render_scale": {
     "category": "video", "order": 315, "kind": "choice",
     "name": "Map render resolution",

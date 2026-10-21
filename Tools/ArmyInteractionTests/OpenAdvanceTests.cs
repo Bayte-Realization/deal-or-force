@@ -51,6 +51,29 @@ static class OpenAdvanceTests
         Check(!a.PlanActive, "local defence is not silently converted into an offensive");
         TwoWarsRefreshTheirIndexBeforeEnumeration();
         VisionFollowsAnHourlyMarch();
+        ReserveOpeningsUseTheSameRules();
+    }
+
+    static void ReserveOpeningsUseTheSameRules()
+    {
+        var (c,a) = World(); a.OrderKind = ArmyOrder.ReserveFront;
+        var before = CampaignFingerprint.Of(c); var random = c.Random.State;
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) == 15,
+            "a local reserve sees the same empty neighbouring opportunity");
+        Check(CampaignFingerprint.Of(c) == before && c.Random.State == random,
+            "emergency target assessment is read-only and consumes no world randomness");
+        a.SupportOnly = true;
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) < 0, "a support-only reserve is not converted into a rushing attack");
+        a.SupportOnly = false; a.ReadyDay = c.ElapsedDays + 1;
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) < 0, "emergency openings respect recovery time");
+        a.ReadyDay = 0; a.SupplyLevel = c.Defines.AutonomousAssaultMinimumSupply;
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) < 0, "emergency openings use the same strict F# supply floor");
+        (c,a) = World(); a.OrderKind = ArmyOrder.ReserveFront;
+        var enemy = AdvanceTargetTests.Unit(c,2,1,15,ArmyOrder.DefendFront,4); enemy.BattleId = 99;
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) < 0, "enemy formations already in combat are not mistaken for empty ground");
+        (c,a) = World(); a.OrderKind = ArmyOrder.ReserveFront;
+        AdvanceTargetTests.Unit(c,2,1,16,ArmyOrder.DefendFront,4);
+        Check(Warfare.ReserveOpening(c,c.Wars[0],a) < 0, "emergency direct moves cannot bypass local enemy cover");
     }
 
     static void TwoWarsRefreshTheirIndexBeforeEnumeration()

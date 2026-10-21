@@ -32,6 +32,7 @@ public partial class DealOrForceGame
     private VBoxContainer _countryCardRows;
     private VBoxContainer _countryCardActionsHost;
     private ScrollContainer _countryFactsScroll;
+    private ScrollContainer _countryOrdersScroll;
     private HBoxContainer _countryCardLinks;
 
     private PanelContainer _regionCard;
@@ -75,20 +76,17 @@ public partial class DealOrForceGame
         var header = new HBoxContainer();
         header.AddThemeConstantOverride("separation", 9);
         rows.AddChild(header);
-        _countryCardFlag = FlagBadge("", 30);
+        _countryCardFlag = FlagBadge("", 40);
         header.AddChild(_countryCardFlag);
         var names = new VBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         names.AddThemeConstantOverride("separation", 0);
         header.AddChild(names);
         _countryCardName = Title("", 20, Ui.Colour("text.bright"));
-        _countryCardName.AutowrapMode = TextServer.AutowrapMode.Off;
-        _countryCardName.ClipText = true;
-        _countryCardName.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _countryCardName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _countryCardName.MaxLinesVisible = 3;
         names.AddChild(_countryCardName);
         _countryCardCaption = Title("", 12, Ui.Colour("text.caption"));
-        _countryCardCaption.AutowrapMode = TextServer.AutowrapMode.Off;
-        _countryCardCaption.ClipText = true;
-        _countryCardCaption.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _countryCardCaption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         names.AddChild(_countryCardCaption);
         header.AddChild(ActionButton("×", CloseMapSelection, 34, 32));
 
@@ -96,6 +94,7 @@ public partial class DealOrForceGame
         _countryCardStanding.MouseFilter = Control.MouseFilterEnum.Stop;
         _countryCardStanding.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_countryCardStanding);
+        BuildCountryDossierTabs(rows);
 
         // The card is a static top, a facts panel, and an actions panel, in that order.
         //
@@ -118,7 +117,7 @@ public partial class DealOrForceGame
         var countryFactsScroll = new ScrollContainer
         {
             Name = "CountryFactsScroll",
-            SizeFlagsVertical = Control.SizeFlags.Fill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
@@ -146,11 +145,12 @@ public partial class DealOrForceGame
             Name = "CountryActionsScroll",
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, 140),
+            CustomMinimumSize = new Vector2(0, 80),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
             FollowFocus = true, MouseForcePassScrollEvents = false
         };
+        _countryOrdersScroll = actionsScroll;
         rows.AddChild(actionsScroll);
 
         // Where the diplomatic buttons go while this card is open. They are one set of buttons
@@ -321,13 +321,23 @@ public partial class DealOrForceGame
     private void CloseMapSelection()
     {
         HideMapSelection(true);
+        ClearRegionSelection();
         _globe?.SetMapModeSubject(null);
         ReturnCountryActions();
+    }
+
+    /// <summary>Drop the ground selection and its shader tint, not just the cards that describe it.</summary>
+    private void ClearRegionSelection()
+    {
+        _selectedState = null;
+        _selectedProvinceId = -1;
+        _globe?.ClearSelection();
     }
 
     private void CloseRegionCard()
     {
         if (_regionCard is not null) _regionCard.Visible = false;
+        ClearRegionSelection();
     }
 
     // ------------------------------------------------------------------ the country
@@ -336,16 +346,28 @@ public partial class DealOrForceGame
     {
         var player = _campaign.Player;
         var own = nation == player;
-        SetFlag(_countryCardFlag, nation.Tag, 30);
+        SetFlag(_countryCardFlag, nation.Tag, 40);
         _countryCardName.Text = nation.DisplayName;
         _countryCardCaption.Text = Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name));
-        ClearChildren(_countryCardRows);
+        BeginCountryFactsUpdate();
         ClearChildren(_countryCardLinks);
+        RefreshCountryDossierTabs(nation);
+        _countryCardRows.AddChild(BuildGrandStrategyLeaderHeader(nation, compact: true));
+        if (_countryDossierTab == "Government")
+        {
         CardRow(_countryCardRows, "Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name),
             Tr(PoliticsCore.GovernmentOf(nation).Description));
         CardRow(_countryCardRows, "Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
             Tr(PoliticsCore.IdeologyOf(nation).Description));
+            CardRow(_countryCardRows, "State culture", Simulation.StateIdentity.Caption(_campaign, nation, false));
+            CardRow(_countryCardRows, "State religion", Simulation.StateIdentity.Caption(_campaign, nation, true));
+            foreach (var portfolio in Rulers.AllPortfolios)
+                if (Rulers.ActiveMinister(nation, portfolio.Id) is { } min)
+                    CardRow(_countryCardRows, portfolio.Name,
+                        $"{Rulers.MinisterPersonName(nation, portfolio.Id)} ({Simulation.Loc.Format("{0} yrs", Rulers.MinisterPersonAge(_campaign, nation, portfolio.Id))} · {Tr(min.Name)})");
+            if (own || CanInspectNation(nation.Id)) AddSpiritRows(_countryCardRows, nation);
+        }
 
         var divisions = 0f;
         foreach (var army in _campaign.Armies)
@@ -356,6 +378,8 @@ public partial class DealOrForceGame
             _countryCardStanding.Text = Tr("Your country");
             _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
             _countryCardStanding.TooltipText = "";
+            if (_countryDossierTab == "Overview")
+            {
             CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
             CardRow(_countryCardRows, "GDP", Fmt.Money(nation.Gdp));
             CardRow(_countryCardRows, "Treasury", Fmt.Money(nation.Treasury), null,
@@ -373,12 +397,15 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
-            AddResearchRows(_countryCardRows);
-            AddSpiritRows(_countryCardRows, nation);
-            AddStaffRows(_countryCardRows);
+            }
+            if (_countryDossierTab == "Government")
+            { AddResearchRows(_countryCardRows); AddStaffRows(_countryCardRows); }
+            if (_countryDossierTab == "Relations") AddCountryCompactRelations(nation);
             _countryCardLinks.AddChild(ActionButton("Nation", () => OpenScreen("Nation"), 0, 28));
             _countryCardLinks.AddChild(ActionButton("Economy", () => OpenScreen("Economy"), 0, 28));
-            _countryCardLinks.AddChild(ActionButton("Military", () => OpenScreen("Military"), 0, 28));
+            _countryCardLinks.AddChild(ActionButton("Subjects", () => OpenSubjectsModal(), 0, 28));
+            _countryCardLinks.AddChild(ActionButton("Release", () => OpenReleaseCountryModal(_selectedState), 0, 28));
+            _countryCardLinks.AddChild(ActionButton("Cabinet", OpenPoliticalAppointments, 0, 28));
             ReturnCountryActions();
             return;
         }
@@ -400,6 +427,8 @@ public partial class DealOrForceGame
             .Take(5)
             .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}")));
 
+        if (_countryDossierTab == "Overview")
+        {
         CardRow(_countryCardRows, "Capital", CountryNames.Capital(nation));
         if (CanInspectNation(nation.Id))
         {
@@ -418,13 +447,15 @@ public partial class DealOrForceGame
                     Simulation.Loc.Format("{0} of {1} known", nation.Technologies.Count, TechnologyCatalog.All.Count),
                     nation.Technologies.Count == 0 ? Tr("None yet.") :
                         string.Join("\n", nation.Technologies.Select(id => Tr(TechnologyCatalog.Of(id)?.Name ?? id))));
-            AddSpiritRows(_countryCardRows, nation);
         }
         else
             CardRow(_countryCardRows, "Intelligence", Tr("Unknown (fog of war)"),
                 Tr("What their economy and their army amount to is hidden until you have eyes on them."),
                 "text.muted");
+        }
 
+        if (_countryDossierTab == "Relations")
+        {
         var affinity = PoliticsCore.Affinity(_campaign, player.Id, nation.Id);
         CardRow(_countryCardRows, "Politics", affinity >= 0f ? Tr("close to ours") : Tr("unlike ours"),
             Tr("How alike two governments are moves what they make of each other, every week, " +
@@ -446,9 +477,6 @@ public partial class DealOrForceGame
         if (allies.Count > 0)
             CardRow(_countryCardRows, "Allied to", string.Join(", ", allies.Take(5).Select(ally => ally.Tag)) +
                                                    (allies.Count > 5 ? $" +{allies.Count - 5:N0}" : ""));
-        var overlord = SubjectSystem.OverlordOf(_campaign, nation);
-        if (overlord is not null)
-            CardRow(_countryCardRows, "Answers to", overlord.DisplayName);
         var through = player.TradePartners.GetValueOrDefault(nation.Id);
         if (through > 0.0001f)
             CardRow(_countryCardRows, "Trade through them", Simulation.Loc.Format("{0} a week · {1:P0} of all your trade",
@@ -465,6 +493,8 @@ public partial class DealOrForceGame
                 CardRow(_countryCardRows, TranslateOpinionDriver(driver.Source), val, null, driver.Value >= 0 ? "state.positive" : "state.negative");
             }
         }
+        AddCountryCompactRelations(nation);
+        }
 
         var full = ActionButton("Full diplomacy", () =>
         {
@@ -476,6 +506,8 @@ public partial class DealOrForceGame
             "Everything between you and {0}: what their opinion is made of, what you have signed and what it would take.",
             nation.DisplayName));
         _countryCardLinks.AddChild(full);
+        if (nation.AnswersTo(player.Id))
+            _countryCardLinks.AddChild(ActionButton("Manage subject", () => OpenSubjectsModal(nation), 0, 28, true));
 
         HostCountryActions(_countryCardActionsHost);
         RefreshCountryActions(nation);
@@ -495,14 +527,10 @@ public partial class DealOrForceGame
     private void SyncCountryFactsHeight()
     {
         if (_countryFactsScroll is null || !_countryFactsScroll.IsVisibleInTree()) return;
-        if (_countryFactsScroll.GetChildCount() == 0) return;
-        var facts = _countryFactsScroll.GetChild(0) as Control;
-        if (facts is null) return;
-        // Half the card at most, so a dossier that has grown - alliances, subjects, opinion
-        // drivers - can never squeeze the buttons out of the panel that exists for them.
-        var ceiling = Math.Max(140f, _countryCard.Size.Y * 0.5f);
-        var wanted = new Vector2(0, Math.Min(facts.GetCombinedMinimumSize().Y, ceiling));
-        if (_countryFactsScroll.CustomMinimumSize != wanted) _countryFactsScroll.CustomMinimumSize = wanted;
+        // Facts and actions are separate pages, not two competing scroll panes.
+        // A minimum based on all facts would force the whole card off a 720p screen.
+        if (_countryFactsScroll.CustomMinimumSize != Vector2.Zero)
+            _countryFactsScroll.CustomMinimumSize = Vector2.Zero;
     }
 
     /// <summary>
@@ -617,8 +645,16 @@ public partial class DealOrForceGame
                 Tr("Who holds it right now. An army takes control; a treaty takes ownership."),
                 controller == provinceOwner ? "text.bright" : "state.warning");
             if (controller != provinceOwner && controller is not null && CanInspectNation(controller.Id))
+            {
                 CardRow(_regionCardProvinceRows, "Occupation", Fmt.Percent(_campaign.ProvinceOccupation?[province] ?? 0f),
                     Tr("How firmly the occupier holds it. Above the secure threshold it can be kept at a peace."));
+                var slip = Simulation.OccupationResistance.WeeklySlip(_campaign, province);
+                if (slip > 0f)
+                    CardRow(_regionCardProvinceRows, "Resistance",
+                        Simulation.Loc.Format("slipping {0:P1} of the hold a week",
+                            slip / MathF.Max(0.0001f, _campaign.ProvinceOccupation?[province] ?? 0f)),
+                        Tr("Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further."));
+            }
             var crossings = topology.Neighbors[province].Count(next => topology.IsRiverCrossing(province, next));
             CardRow(_regionCardProvinceRows, "River crossings", crossings.ToString("N0"),
                 crossings == 0
@@ -694,6 +730,8 @@ public partial class DealOrForceGame
     private void CardRow(VBoxContainer parent, string caption, string value, string tooltip = null,
         string valueToken = "text.bright")
     {
+        if (parent == _countryCardRows)
+        { RepaintCountryFact(caption, value, tooltip, valueToken); return; }
         var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 8);
         row.CustomMinimumSize = new Vector2(0, 21);

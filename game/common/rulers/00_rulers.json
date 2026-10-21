@@ -1,0 +1,307 @@
+// Deal or Force - Rulers, heads of government and cabinet portfolios (Scripts/Simulation/Rulers.cs).
+//
+// Everything here is data and can be extended or replaced by a mod:
+//   - "offices": which governments have a head of state, a head of government, or one single office,
+//                and what each office is titled.
+//   - "traits":  personality & leadership traits for rulers, with national modifiers and AI temperament shifts.
+//   - "portfolios": cabinet minister slots and the candidates available for each slot.
+//   - "names":   cultural name pools used when a new leader or successor is generated.
+{
+  "offices": {
+    "parliamentary_republic":  { "dual": true,  "head_of_state": "President",          "head_of_government": "Prime Minister", "term_days": 1460 },
+    "constitutional_monarchy": { "dual": true,  "head_of_state": "Monarch",            "head_of_government": "Prime Minister", "term_days": 1460, "hereditary_state": true },
+    "federation":              { "dual": true,  "head_of_state": "Federal President",  "head_of_government": "Chancellor",     "term_days": 1460 },
+    "presidential_republic":   { "dual": false, "head_of_state": "President",          "head_of_government": "Prime Minister", "term_days": 1825 },
+    "absolute_monarchy":       { "dual": false, "head_of_state": "Monarch",            "head_of_government": "Grand Vizier",   "term_days": 0,    "hereditary_state": true },
+    "one_party_state":         { "dual": false, "head_of_state": "General Secretary",  "head_of_government": "Premier",        "term_days": 3650 },
+    "military_junta":          { "dual": false, "head_of_state": "Chairman",           "head_of_government": "Chief of Staff", "term_days": 0 },
+    "theocracy":               { "dual": true,  "head_of_state": "Supreme Leader",     "head_of_government": "President",      "term_days": 1460, "life_state": true },
+    "technocracy":             { "dual": false, "head_of_state": "Director-General",   "head_of_government": "Chief Coordinator", "term_days": 1825 },
+    "direct_democracy":        { "dual": false, "head_of_state": "Federal Council",    "head_of_government": "Chancellor",     "term_days": 365 },
+    "provisional_government":  { "dual": false, "head_of_state": "Chairman",           "head_of_government": "Acting Premier", "term_days": 730 }
+  },
+
+  "traits": {
+    "reformer": {
+      "name": "Institutional Reformer",
+      "description": "Governs through law, audits and steady administrative repair.",
+      "modifiers": { "research_speed": 0.05, "tax_efficiency": 0.03, "stability_weekly": 0.0002 },
+      "foresight": 0.14,
+      "volatility": -0.10
+    },
+    "hawk": {
+      "name": "Strategic Hawk",
+      "description": "Sees every border as a line of departure and every crisis as a test of resolve.",
+      "modifiers": { "army_attack": 0.05, "war_support_weekly": 0.0004, "recruitment_speed": 0.05 },
+      "opportunism": 0.18,
+      "volatility": 0.12
+    },
+    "industrialist": {
+      "name": "Industrial Planner",
+      "description": "Measures statecraft in steel, power plants, railways and shipyards.",
+      "modifiers": { "construction_speed": 0.07, "output": 0.03 },
+      "foresight": 0.12
+    },
+    "diplomat": {
+      "name": "Seasoned Statesman",
+      "description": "Keeps channels open, builds coalitions and turns trade into leverage.",
+      "modifiers": { "trade_reach": 0.05, "credit_capacity": 0.05, "stability_weekly": 0.00015 },
+      "cunning": 0.14,
+      "foresight": 0.10,
+      "volatility": -0.12
+    },
+    "populist": {
+      "name": "Populist Tribune",
+      "description": "Commands the street and the microphone; volatile, loud and hard to ignore.",
+      "modifiers": { "war_support_weekly": 0.0003, "militia_readiness": 0.08, "radicalism_weekly": -0.0001 },
+      "opportunism": 0.12,
+      "volatility": 0.18,
+      "foresight": -0.08
+    },
+    "iron_hand": {
+      "name": "Iron-Fisted Autocrat",
+      "description": "Answers opposition with the security apparatus and keeps the state on a tight rein.",
+      "modifiers": { "stability_weekly": 0.0003, "radicalism_weekly": -0.00015, "research_speed": -0.02 },
+      "opportunism": 0.14,
+      "cunning": 0.15
+    },
+    "technocrat": {
+      "name": "Fiscal Technocrat",
+      "description": "Runs the treasury by balance sheets, sovereign credit and export margins.",
+      "modifiers": { "tax_efficiency": 0.05, "borrowing_cost": -0.05, "research_speed": 0.04 },
+      "foresight": 0.16,
+      "volatility": -0.14
+    },
+    "veteran_commander": {
+      "name": "Veteran Commander",
+      "description": "Came up through the general staff and understands logistics, reserves and defensive depth.",
+      "modifiers": { "army_defense": 0.06, "supply": 0.05, "organisation_recovery": 0.05 },
+      "cunning": 0.10,
+      "foresight": 0.08
+    },
+    "welfare_architect": {
+      "name": "Social Architect",
+      "description": "Invests in households, clinics and schools so the country holds together from below.",
+      "modifiers": { "living_weekly": 0.0002, "stability_weekly": 0.00015, "reconstruction_speed": 0.06 },
+      "foresight": 0.10,
+      "opportunism": -0.08
+    },
+    "ideologue": {
+      "name": "Unbending Ideologue",
+      "description": "Puts doctrine above compromise at home and abroad.",
+      "modifiers": { "war_support_weekly": 0.0003, "militia_readiness": 0.06, "trade_reach": -0.02 },
+      "opportunism": 0.15,
+      "volatility": 0.14
+    }
+  },
+
+  "portfolios": {
+    "foreign": {
+      "name": "Foreign Minister",
+      "options": {
+        "coalition_builder": {
+          "name": "Coalition Architect",
+          "description": "Strengthens commercial ties and international credit standing.",
+          "modifiers": { "trade_reach": 0.06, "credit_capacity": 0.04 }
+        },
+        "realpolitik_envoy": {
+          "name": "Realpolitik Envoy",
+          "description": "Backs hard deterrence and strategic leverage over sentiment.",
+          "modifiers": { "deterrence": 0.05, "war_support_weekly": 0.0002 }
+        },
+        "trade_negotiator": {
+          "name": "Mercantile Negotiator",
+          "description": "Opens foreign markets and lowers sovereign borrowing costs.",
+          "modifiers": { "trade_reach": 0.08, "borrowing_cost": -0.04 }
+        }
+      }
+    },
+    "economy": {
+      "name": "Economy Minister",
+      "options": {
+        "industrial_mobiliser": {
+          "name": "Industrial Mobiliser",
+          "description": "Pushes factory construction and heavy output.",
+          "modifiers": { "construction_speed": 0.08, "output": 0.03 }
+        },
+        "orthodox_treasurer": {
+          "name": "Orthodox Treasurer",
+          "description": "Tightens tax collection and protects sovereign credit.",
+          "modifiers": { "tax_efficiency": 0.06, "borrowing_cost": -0.06 }
+        },
+        "welfare_economist": {
+          "name": "Social Market Economist",
+          "description": "Raises household living standards and post-war reconstruction.",
+          "modifiers": { "living_weekly": 0.0002, "reconstruction_speed": 0.08 }
+        }
+      }
+    },
+    "defense": {
+      "name": "Defense Minister",
+      "options": {
+        "offensive_strategist": {
+          "name": "Armoured Spearhead Theorist",
+          "description": "Focuses the staff on breakthrough firepower and march tempo.",
+          "modifiers": { "army_attack": 0.06, "army_speed": 0.05 }
+        },
+        "deep_battle_marshal": {
+          "name": "Elastic Defence Marshal",
+          "description": "Prioritises entrenchment, defence in depth and replacements.",
+          "modifiers": { "army_defense": 0.06, "entrenchment_speed": 0.08, "reinforcement_rate": 0.05 }
+        },
+        "quartermaster_general": {
+          "name": "Quartermaster-General",
+          "description": "Keeps depots full, training camps busy and divisions organised.",
+          "modifiers": { "supply": 0.07, "recruitment_speed": 0.07, "organisation_recovery": 0.05 }
+        }
+      }
+    },
+    "interior": {
+      "name": "Interior & Security Minister",
+      "options": {
+        "constitutional_jurist": {
+          "name": "Constitutional Jurist",
+          "description": "Calms regional unrest and strengthens institutional trust.",
+          "modifiers": { "stability_weekly": 0.0003, "radicalism_weekly": -0.00015 }
+        },
+        "security_chief": {
+          "name": "Internal Security Chief",
+          "description": "Suppresses radicalism and keeps territorial militias on call.",
+          "modifiers": { "radicalism_weekly": -0.00025, "militia_readiness": 0.08 }
+        },
+        "science_director": {
+          "name": "National Science Director",
+          "description": "Directs universities, laboratories and technical institutes.",
+          "modifiers": { "research_speed": 0.07, "output": 0.02 }
+        }
+      }
+    }
+  },
+
+  "names": {
+    "default": {
+      "given": ["Alexander", "Victor", "Daniel", "Marcus", "Thomas", "Elena", "Adrian", "Julian", "Helena", "Gabriel", "Christian", "Martin", "Lucas", "Klara", "Stefan", "Arthur", "Felix", "Henrik", "Paul", "Diana", "Sebastian", "leonard", "Clara", "Valerie", "Nadia", "Dominic", "Gregor", "Miriam", "Anton", "Eva"],
+      "family": ["Vance", "Lindholm", "Castell", "Moreau", "Bergmann", "Kovac", "Silva", "Nowak", "Alvarez", "Mercier", "Hartmann", "Richter", "Conti", "Sorensen", "Costa", "Valdez", "Vargas", "Vermeer", "Bauer", "Ferreira", "Keller", "fischer", "Lambert", "dubois", "Hoffmann", "Novotny", "Moran", "Vogel", "santos", "Brandt"]
+    },
+    "russian_east_slavic": {
+      "given": ["Mikhail", "Alexei", "Dmitri", "Sergei", "Nikolai", "Andrei", "Pavel", "Viktor", "Yuri", "Vladimir", "Igor", "Konstantin", "Oleg", "Boris", "Kirill", "Maxim", "Artyom", "Roman", "Grigori", "Anatoli", "Valeri", "Gennadi", "Leonid", "Fyodor", "Stanislav", "Yevgeni", "Denis", "Ilya", "Vyacheslav", "Vadim", "Yelena", "Olga", "Tatiana", "Natalia", "Irina", "Svetlana", "Marina", "Yekaterina", "Anna", "Daria"],
+      "family": ["Volkov", "Sokolov", "Morozov", "Petrov", "Orlov", "Lebedev", "Zaitsev", "Smirnov", "Kuznetsov", "Popov", "Vasiliev", "Novikov", "Fedorov", "Solovyov", "Vinogradov", "Bogdanov", "Vorobyov", "Pavlov", "Golubev", "Kozlov", "Stepanov", "Nikolaev", "Makarov", "Zakharov", "Belov", "Tarasov", "Belyaev", "Komarov", "Baranov", "Kovalyov", "Gromov", "Titov", "Markov", "Lukin", "Voronov", "Nesterov", "Karpov", "Ignatiev", "Chernov", "Krylov"]
+    },
+    "ukrainian": {
+      "given": ["Bohdan", "Taras", "Oleksandr", "Volodymyr", "Andriy", "Mykola", "Vasyl", "Yaroslav", "Rostyslav", "Petro", "Dmytro", "Serhiy", "Viktor", "Yuriy", "Ihor", "Oleh", "Maksym", "Roman", "Vitaliy", "Denys", "Ruslan", "Anatoliy", "Stepan", "Pavlo", "Mykhailo", "Kyrylo", "Vadym", "Ostap", "Lev", "Arsen", "Olena", "Yulia", "Iryna", "Oksana", "Kateryna", "Solomiya", "Lesya", "Natalia", "Hanna", "Tetiana"],
+      "family": ["Kovalenko", "Shevchenko", "Bondarenko", "Tkachenko", "Kravchenko", "Melnyk", "Boyko", "Kovalchuk", "Oliynyk", "Savchenko", "Marchenko", "Rudenko", "Lysenko", "Petrenko", "Pavlenko", "Khmelnytsky", "Doroshenko", "Mazepa", "Symonenko", "Honcharuk", "Polishchuk", "Moroz", "Karpenko", "Chornovil", "Levchenko", "Gavrylyuk", "Tymoshenko", "Ponomarenko", "Vasylenko", "Korniychuk", "Danylyuk", "Hrytsenko", "Kuzmenko", "Shulha", "Zadorozhny", "Koval", "Bilyk", "Stetsenko", "Yaremchuk", "Hnatyuk"]
+    },
+    "west_slavic": {
+      "given": ["Jan", "Piotr", "Marek", "Krzysztof", "Tomasz", "Andrzej", "Michal", "Lukasz", "Jakub", "Pawel", "Mateusz", "Wojciech", "Stanislaw", "Marcin", "Jiri", "Petr", "Vaclav", "Karel", "Ondrej", "Zdenek", "Miroslav", "Milan", "Radek", "Branislav", "Rastislav", "Michal", "Jozef", "Juraj", "Katarzyna", "Agnieszka", "Magdalena", "Zuzana", "Eva", "Hana", "Lenka", "Monika", "Barbora", "Alena"],
+      "family": ["Nowak", "Kowalski", "Wisniewski", "Wojcik", "Kowalczyk", "Kaminski", "Lewandowski", "Zielinski", "Szymanski", "Wozniak", "Dabrowski", "Kozlowski", "Jankowski", "Mazur", "Kwiatkowski", "Krawczyk", "Kaczmarek", "Piotrowski", "Sikorski", "Grabowski", "Novak", "Svoboda", "Novotny", "Dvorak", "Cerny", "Prochazka", "Kucera", "Vesely", "Horak", "Nemec", "Pospisil", "Havel", "Benes", "Kovac", "Varga", "Toth", "Horvath", "Balaz"]
+    },
+    "south_slavic": {
+      "given": ["Milan", "Dragan", "Zoran", "Nikola", "Aleksandar", "Marko", "Stefan", "Dejan", "Goran", "Bojan", "Slobodan", "Milos", "Nenad", "Vladimir", "Dusan", "Stjepan", "Ivan", "Ante", "Josip", "Luka", "Matej", "Tomislav", "Domagoj", "Haris", "Mirza", "Tarik", "Georgi", "Dimitar", "Krasimir", "Plamen", "Boyko", "Janez", "Gregor", "Jelena", "Milica", "Ana", "Marija", "Ivana", "Maja"],
+      "family": ["Jovanovic", "Petrovic", "Nikolic", "Markovic", "Djordjevic", "Stojanovic", "Ilic", "Stankovic", "Pavlovic", "Milosevic", "Vukovic", "Popovic", "Kovacevic", "Horvat", "Babic", "Maric", "Juric", "Novak", "Kovac", "Knezevic", "Matic", "Tadic", "Radic", "Hadzic", "Hodzic", "Begic", "Delic", "Ivanov", "Georgiev", "Dimitrov", "Todorov", "Stoyanov", "Kranjc", "Zupan", "Vidmar", "Mlakar"]
+    },
+    "anglo": {
+      "given": ["William", "James", "Robert", "John", "Michael", "David", "Richard", "Charles", "Thomas", "Christopher", "Daniel", "Matthew", "Andrew", "Edward", "George", "Henry", "Arthur", "Benjamin", "Samuel", "Patrick", "Stephen", "Kenneth", "Brian", "Douglas", "alistair", "Callum", "Liam", "Sean", "Elizabeth", "Margaret", "Victoria", "Eleanor", "Catherine", "Caroline", "Helen", "Claire", "Rachel", "Rebecca", "Abigail", "Hannah"],
+      "family": ["Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Wilson", "Anderson", "Taylor", "Thomas", "Moore", "Jackson", "Thompson", "White", "Harris", "Clark", "Lewis", "Walker", "Hall", "Campbell", "Stewart", "MacDonald", "Murray", "Hamilton", "Crawford", "Fletcher", "Thornton", "Sinclair", "Callaghan", "O'Connor", "Murphy", "Kelly", "Walsh", "Byrne", "Whitman", "Kavanagh", "Hawkins", "Sterling", "Ashford"]
+    },
+    "french": {
+      "given": ["Jean", "Pierre", "Michel", "Philippe", "Alain", "Nicolas", "Christophe", "Laurent", "Stéphane", "Sébastien", "François", "Frédéric", "Olivier", "Éric", "Guillaume", "Antoine", "Julien", "Alexandre", "Thierry", "Patrick", "Bernard", "Christian", "Daniel", "Henri", "Louis", "Maxime", "Romain", "Vincent", "Marie", "Nathalie", "Isabelle", "Sylvie", "Catherine", "Valérie", "Aurélie", "Camille", "Céline", "Sophie", "Claire", "Élodie"],
+      "family": ["Martin", "Bernard", "Dubois", "Thomas", "Robert", "Richard", "Petit", "Durand", "Leroy", "Moreau", "Simon", "Laurent", "Lefebvre", "Michel", "delacroix", "David", "Bertrand", "Roux", "Vincent", "Fournier", "Morel", "Girard", "André", "Lefèvre", "Mercier", "Dupont", "Lambert", "Bonnet", "François", "Martinez", "Legrand", "Garnier", "Faure", "Rousseau", "Blanc", "Guérin", "Boyer", "Chevalier", "Masson", "Beaumont"]
+    },
+    "germanic": {
+      "given": ["Hans", "Friedrich", "Karl", "Wolfgang", "Heinrich", "Klaus", "Jürgen", "Dieter", "Stefan", "Andreas", "Thomas", "Michael", "Christian", "Matthias", "Markus", "Alexander", "Sebastian", "Florian", "Lukas", "Felix", "Maximilian", "Johannes", "Christoph", "Werner", "Gerhard", "Helmut", "Hendrik", "Willem", "Pieter", "Jeroen", "Urs", "Beat", "Anna", "Maria", "Katharina", "Sabine", "Claudia", "Monika", "Julia", "Laura"],
+      "family": ["Müller", "Schmidt", "Schneider", "Fischer", "Weber", "Meyer", "Wagner", "Becker", "Schulz", "Hoffmann", "Schäfer", "Koch", "Bauer", "Richter", "Klein", "Wolf", "Schröder", "Neumann", "Schwarz", "Zimmermann", "Braun", "Krüger", "Hofmann", "Hartmann", "Lange", "Schmitt", "Werner", "Krause", "Meier", "Lehmann", "Van Der Berg", "De Jong", "Jansen", "De Vries", "Bakker", "Visser", "Keller", "Brunner", "Gruber", "Steiner"]
+    },
+    "nordic": {
+      "given": ["Erik", "Lars", "Anders", "Johan", "Per", "Nils", "Karl", "Mikael", "Fredrik", "Henrik", "Magnus", "Olof", "Gustav", "Sven", "Björn", "Håkan", "Ole", "Jan", "Knut", "Svein", "Harald", "Leif", "Jens", "Peter", "Søren", "Morten", "Mikkel", "Matti", "Juhani", "Antti", "Pekka", "Heikki", "Timo", "Sami", "Sigurdur", "Gunnar", "Anna", "Eva", "Karin", "Ingrid", "Astrid", "Freja", "Sari", "Minna"],
+      "family": ["Andersson", "Johansson", "Karlsson", "Nilsson", "Eriksson", "Larsson", "Olsson", "Persson", "Svensson", "Gustafsson", "Pettersson", "Jonsson", "Lindberg", "Lindqvist", "Lindström", "Lindholm", "Hansen", "Johansen", "Olsen", "Larsen", "Solberg", "Bakke", "Moen", "Haugen", "Nielsen", "Jensen", "Møller", "Sorensen", "Rasmussen", "Korhonen", "Virtanen", "Mäkinen", "Nieminen", "Hämäläinen", "Laine", "Heikkinen", "Koskinen", "Järvinen", "Kekkonen", "Halonen"]
+    },
+    "italian": {
+      "given": ["Giuseppe", "Giovanni", "Antonio", "Mario", "Luigi", "Francesco", "Angelo", "Vincenzo", "Pietro", "Salvatore", "Carlo", "Franco", "Domenico", "Bruno", "Paolo", "Michele", "Giorgio", "Aldo", "Sergio", "Luciano", "Marco", "Alessandro", "Andrea", "Matteo", "Lorenzo", "Davide", "Simone", "Federico", "Roberto", "Stefano", "Maria", "Anna", "Giuseppina", "Rosa", "Angela", "Giovanna", "Teresa", "Lucia", "Carmela", "Francesca", "Chiara", "Elena"],
+      "family": ["Rossi", "Russo", "Ferrari", "Esposito", "Bianchi", "Romano", "Colombo", "Ricci", "Marino", "Greco", "Bruno", "Gallo", "Conti", "De Luca", "Mancini", "Costa", "Giordano", "Rizzo", "Lombardi", "Moretti", "Barbieri", "Fontana", "Santoro", "Mariani", "Rinaldi", "Caruso", "Ferrara", "Galli", "Martini", "Leone", "Longo", "Gentile", "Martinelli", "Vitale", "Lombardo", "Serra", "Coppola", "De Santis", "D'Angelo", "Marchetti"]
+    },
+    "hispanic": {
+      "given": ["Mateo", "Alejandro", "Carlos", "Fernando", "Diego", "Javier", "Rafael", "Ricardo", "Eduardo", "Gustavo", "Miguel", "José", "Antonio", "Manuel", "Francisco", "Juan", "Pedro", "Luis", "Jorge", "Alberto", "Sergio", "Andrés", "Gabriel", "Martín", "Nicolás", "Santiago", "Sebastián", "Rodrigo", "Arturo", "Emilio", "Lucía", "Camila", "Valeria", "Sofía", "María", "Carmen", "Ana", "Isabel", "Elena", "Patricia", "Claudia", "Adriana"],
+      "family": ["Mendoza", "Herrera", "Cabrera", "Rojas", "Molina", "Delgado", "Castillo", "Ortega", "Guerrero", "Navarro", "Duarte", "Pacheco", "Salazar", "Aguilar", "García", "Rodríguez", "González", "Fernández", "López", "Martínez", "Sánchez", "Pérez", "Gómez", "Martín", "Jiménez", "Ruiz", "Hernández", "Díaz", "Moreno", "Álvarez", "Romero", "Alonso", "Gutiérrez", "Torres", "Domínguez", "Vázquez", "Ramos", "Gil", "Ramírez", "Serrano"]
+    },
+    "lusophone": {
+      "given": ["João", "José", "António", "Manuel", "Francisco", "Carlos", "Paulo", "Pedro", "Luís", "Miguel", "Rui", "Fernando", "Jorge", "Nuno", "Tiago", "Diogo", "Gonçalo", "Ricardo", "Bruno", "André", "Rafael", "Gabriel", "Lucas", "Mateus", "Guilherme", "Gustavo", "Felipe", "Rodrigo", "Eduardo", "Marcelo", "Maria", "Ana", "Mariana", "Beatriz", "Inês", "Carolina", "Margarida", "Joana", "Sofia", "Catarina", "Juliana", "Fernanda"],
+      "family": ["Silva", "Santos", "Ferreira", "Pereira", "Oliveira", "Costa", "Rodrigues", "Martins", "Jesus", "Sousa", "Fernandes", "Gonçalves", "Gomes", "Lopes", "Marques", "Alves", "Almeida", "Ribeiro", "Pinto", "Carvalho", "Teixeira", "Moreira", "Correia", "Mendes", "Nunes", "Soares", "Vieira", "Monteiro", "Cardoso", "Rocha", "Neves", "Coelho", "Cruz", "Cunha", "Pires", "Ramos", "Reis", "Simões", "Antunes", "Matos"]
+    },
+    "balkan_hellenic": {
+      "given": ["Georgios", "Ioannis", "Konstantinos", "Dimitrios", "Nikolaos", "Panagiotis", "Vasileios", "Christos", "Athanasios", "Michail", "Alexandros", "Ion", "Gheorghe", "Constantin", "Vasile", "Alexandru", "Mihai", "Cristian", "Florin", "Bogdan", "Andrei", "László", "István", "József", "János", "Zoltán", "Sándor", "Gábor", "Ferenc", "Attila", "Tamás", "Arben", "Ilir", "Besnik", "Agim", "Maria", "Eleni", "Aikaterini", "Ioana", "Elena", "Katalin", "Zsuzsanna"],
+      "family": ["Papadopoulos", "Vlahos", "Angelopoulos", "Nikolaidis", "Georgiou", "Athanasiou", "Dimitriou", "Karamanlis", "Mitsotakis", "Venizelos", "Popa", "Popescu", "Radu", "Ionescu", "Dumitru", "Stoica", "Stan", "Gheorghe", "Rusu", "Munteanu", "Matei", "Constantinescu", "Nagy", "Kovács", "Tóth", "Szabó", "Horváth", "Varga", "Kiss", "Molnár", "Németh", "Farkas", "Balogh", "Hoxha", "Shehu", "Krasniqi", "Berisha", "Gashi", "Morina", "Kelmendi"]
+    },
+    "baltic": {
+      "given": ["Jonas", "Vytautas", "Antanas", "Mindaugas", "Darius", "Gintaras", "Tomas", "Mantas", "Lukas", "Kęstutis", "Algirdas", "Gediminas", "Rokas", "Jānis", "Andris", "Juris", "Māris", "Aivars", "Kārlis", "Edgars", "Mārtiņš", "Artūrs", "Roberts", "Toomas", "Andres", "Jaan", "Peeter", "Martin", "Margus", "Urmas", "Rein", "Tarmo", "Indrek", "Kristina", "Irena", "Daiva", "Rūta", "Anna", "Līga", "Ilze", "Katrin", "Kadri"],
+      "family": ["Kazlauskas", "Jankauskas", "Petrauskas", "Stankevičius", "Vasiliauskas", "Žukauskas", "Butkus", "Paulauskas", "Urbonas", "Kavaliauskas", "Savickas", "Landsbergis", "Adamkus", "Bērziņš", "Kalniņš", "Ozoliņš", "Jansons", "Ozols", "Liepiņš", "Krūmiņš", "Balodis", "Eglītis", "Zariņš", "Petersons", "Vītols", "Tamm", "Saar", "Sepp", "Mägi", "Kask", "Kukk", "Rebane", "Ilves", "Pärn", "Koppel", "Rüütel", "Kallas", "Meri"]
+    },
+    "caucasian": {
+      "given": ["Giorgi", "Davit", "Nika", "Aleksandre", "Luka", "Irakli", "Levan", "Zurab", "Mikheil", "Tengiz", "Bidzina", "Vakhtang", "Mamuka", "Archil", "Armen", "Hayk", "Davit", "Tigran", "Vardan", "Karen", "Artur", "Samvel", "Gagik", "Ashot", "Levon", "Aram", "Vahagn", "Sargis", "Ruslan", "Beslan", "Aslan", "Timur", "Nino", "Tamar", "Mariam", "Maia", "Ketevan", "Anahit", "Narine", "Gayane"],
+      "family": ["Beridze", "Kapanadze", "Gelashvili", "Maisuradze", "Giorgadze", "Lomidze", "Tsiklauri", "Bolkvadze", "Nozadze", "Khutsishvili", "Abashidze", "Shevardnadze", "Chavchavadze", "Tsereteli", "Bagrationi", "Javakhishvili", "Harutyunyan", "Sargsyan", "Grigoryan", "Hovhannisyan", "Khachatryan", "Vardanyan", "Petrosyan", "Hakobyan", "Gevorgyan", "Karapetyan", "Minasyan", "Mkrtchyan", "Avetisyan", "Pashinyan", "Kocharyan", "Ter-Petrosyan", "Ardzinba", "Bagapsh", "Bzhania", "Kokoity", "Bibilov", "Gagloev"]
+    },
+    "arabic": {
+      "given": ["Rashid", "Tariq", "Khalid", "Faisal", "Karim", "Mustafa", "Yusuf", "Hassan", "Ibrahim", "Nasser", "Salim", "Omar", "Zayd", "Adel", "Mansour", "Samir", "Mohammed", "Ahmed", "Ali", "Abdullah", "Hussein", "Mahmoud", "Saeed", "Hamza", "Bilal", "Waleed", "Marwan", "Nabil", "Bassam", "Farid", "Jamal", "Anwar", "Fouad", "Mazen", "Rami", "Ziad", "Fatima", "Layla", "Amina", "Nour", "Mariam", "Salma"],
+      "family": ["al-Mansoor", "al-Hariri", "al-Hashimi", "al-Najjar", "al-Sayed", "al-Masri", "al-Rashid", "al-Sabah", "al-Khatib", "al-Tamimi", "al-Zahrani", "al-Otaibi", "al-Qasimi", "al-Ghamdi", "al-Husseini", "al-Dosari", "al-Qahtani", "al-Shehri", "al-Mutairi", "al-Shammari", "al-Anazi", "al-Maliki", "al-Jubouri", "al-Dulaimi", "al-Kubaisi", "al-Rifai", "al-Assad", "al-Sharaa", "al-Houthi", "al-Zubeidi", "al-Alimi", "al-Barghouti", "al-Sisi", "al-Ghannouchi", "al-Tebboune", "al-Alaoui", "al-Burhan", "al-Mahdi", "al-Bashir", "al-Sanussi"]
+    },
+    "persian_kurdish": {
+      "given": ["Reza", "Ali", "Mohammad", "Hossein", "Mehdi", "Hassan", "Saeed", "Hamid", "Javad", "Majid", "Mostafa", "Ebrahim", "Masoud", " Dariush", "Kourosh", "Bahram", "Kaveh", "Farhad", "Babak", "Arash", "Peyman", "Bijan", "Rostam", "Ahmad", "Mahmoud", "Aziz", "Karim", "Mustafa", "Masrour", "Nechirvan", "Bafel", "Qubad", "Mazloum", "Ferhad", "Emomali", "Rustam", "Qohir", "Maryam", "Fatemeh", "Zahra", "Shirin", "Laleh", "Rojda"],
+      "family": ["Hosseini", "Mohammadi", "Karimi", "Rezaei", "Ahmadi", "Moradi", "Jafari", "mousavi", "Rahimi", "Hashemi", "Ebrahimi", "Kazemi", "Fallah", "Shirazi", "Tehrani", "Isfahani", "Tabrizi", "Khorasani", "Pezeshkian", "Zarif", "Ghalibaf", "Larijani", "Shamkhani", "Soleimani", "Barzani", "Talabani", "Zebari", "Dizayee", "Hawrami", "Abdi", "Kobani", "Muslim", "Karzai", "Ghani", "Abdullah", "Massoud", "Akhundzada", "Baradar", "Rahmon", "Rasulzoda"]
+    },
+    "hebrew": {
+      "given": ["David", "Moshe", "Yosef", "Avraham", "Yitzhak", "Yaakov", "Shlomo", "Chaim", "Michael", "Daniel", "Uri", "Avi", "Eitan", "Noam", "Yonatan", "Itai", "Omer", "Nadav", "Amir", "Ronen", "Ehud", "Binyamin", "Yair", "Benny", "Yoav", "Gadi", "Naftali", "Gideon", "Shimon", "ariel", "Yael", "Tamar", "Noa", "Michal", "Maya", "Shira", "Talia", "Ayelet", "Merav", "Orna"],
+      "family": ["Cohen", "Levi", "Mizrachi", "Peretz", "Biton", "Dahan", "Avraham", "Friedman", "Malka", "Azoulay", "Katz", "Yosef", "David", "Amar", "Ohana", "Haddad", "Gabbai", "Shapiro", "Goldstein", "Rosenberg", "Weiss", "Schwartz", "Klein", "Segal", "Golan", "Barak", "Rabin", "Begin", "Shamir", "Netanyahu", "Lapid", "Gantz", "Gallant", "Herzog", "Ben-Gurion", "Dayan", "Sharon", "Eshkol", "Meir", "Livni"]
+    },
+    "turkic": {
+      "given": ["Mehmet", "Mustafa", "Kemal", "Hakan", "Selim", "Timur", "Nurlan", "Rustam", "Ilham", "Serdar", "Almaz", "Orhan", "Murat", "Demir", "Ahmet", "Ali", "Hasan", "Hüseyin", "İbrahim", "İsmail", "Osman", "Yusuf", "Ömer", "Halil", "Abdullah", "Recep", "Tayyip", "Ekrem", "Mansur", "Özgür", "Devlet", "Kassym", "Shavkat", "Sadyr", "Gurbanguly", "Ceyhun", "Zeynep", "Elif", "Ayşe", "Fatma", "Emine", "Meral"],
+      "family": ["Yilmaz", "Kaya", "Demir", "Celik", "Sahin", "Yildirim", "Ozturk", "Aydin", "Ozdemir", "Arslan", "Dogan", "Kilic", "Aslan", "Cetin", "Kara", "Koc", "Kurt", "Ozkan", "Simsek", "Polat", "Karimov", "Nazarbayev", "Tokayev", "Aliyev", "Akhmetov", "Suleymanov", "Mirziyoyev", "Japarov", "Berdymukhamedov", "Pashayev", "Bayramov", "Fidan", "Güler", "Şimşek", "İmamoğlu", "Yavaş", "Özel", "Bahçeli", "Atatürk", "İnönü"]
+    },
+    "chinese": {
+      "given": ["Jian", "Wei", "Ming", "Hao", "Zhen", "Qiang", "Lei", "Jun", "Yang", "Yong", "Jie", "Tao", "Chao", "Peng", "Gang", "Bo", "Bin", "Xin", "Yu", "Kai", "Zhi", "Xiang", "Rui", "Cheng", "Long", "Feng", "Guang", "Hong", "Jinping", "Keqiang", "Yi", "He", "Li", "Fang", "Min", "Jing", "Yan", "Juan", "Xiu", "Ling", "Mei", "Lan"],
+      "family": ["Wang", "Li", "Zhang", "Liu", "Chen", "Yang", "Huang", "Zhao", "Wu", "Zhou", "Xu", "Sun", "Ma", "Zhu", "Hu", "Guo", "He", "Gao", "Lin", "Luo", "Zheng", "Liang", "Xie", "Song", "Tang", "Xu", "Han", "Feng", "Deng", "Cao", "Peng", "Zeng", "Xiao", "Tian", "Dong", "Yuan", "Pan", "Yu", "Jiang", "Cai"]
+    },
+    "japanese": {
+      "given": ["Kenji", "Takashi", "Haruki", "Shinzo", "Taro", "Shigeru", "Fumio", "Yoshihide", "Yukio", "Naoto", "Junichiro", "Keizo", "Ryutaro", "Morihiro", "Kiichi", "Toshiki", "Noboru", "Yasuhiro", "Masayoshi", "Takeo", "Kakuei", "Eisaku", "Hayato", "Nobusuke", "Ichiro", "Shigeru", "Hiroshi", "Satoshi", "Makoto", "Daisuke", "Kazuki", "Kenta", "Tatsuya", "Yuki", "Yoko", "Keiko", "Yuriko", "Sanae", "Seiko", "Tomomi"],
+      "family": ["Sato", "Suzuki", "Takahashi", "Tanaka", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kobayashi", "Kato", "Yoshida", "Yamada", "Sasaki", "Yamaguchi", "Saito", "Matsumoto", "Inoue", "Kimura", "Hayashi", "Shimizu", "Yamazaki", "Mori", "Abe", "Ikeda", "Hashimoto", "Yamashita", "Ishikawa", "Nakajima", "Maeda", "Fujita", "Ogawa", "Goto", "Okada", "Hasegawa", "Murakami", "Kondo", "Ishii", "Ishiba", "Kishida", "Suga"]
+    },
+    "korean": {
+      "given": ["Min-jun", "Ji-hoon", "Seung", "Hyun-woo", "Jun-seo", "Do-yun", "Ye-jun", "Si-woo", "Ha-jun", "Jae-sung", "Dong-hyun", "Sung-min", "Jung-hoon", "Tae-hyung", "Jin-woo", "Young-ho", "Sang-chul", "Kwang-su", "Myung-bak", "Jae-in", "Suk-yeol", "Jae-myung", "Dong-hoon", "Jong-un", "Il-sung", "Jong-il", "Yong-nam", "Tok-hun", "Ryong-hae", "Sun-hee", "Seo-yeon", "Min-seo", "Ji-woo", "Ha-eun", "Geun-hye", "Yo-jong", "Jung-sook", "Kyung-hee"],
+      "family": ["Kim", "Lee", "Park", "Choi", "Jung", "Kang", "Cho", "Yoon", "Jang", "Lim", "Han", "Oh", "Seo", "Shin", "Kwon", "Hwang", "Ahn", "Song", "Ryu", "Jeon", "Hong", "Ko", "Moon", "Yang", "Son", "Bae", "Jo", "Baek", "Heo", "Yoo", "Nam", "Sim", "No", "Joo", "Ha", "Kwak", "Sung", "Cha", "Woo", "Koo"]
+    },
+    "mongolic": {
+      "given": ["Batbayar", "Ganbold", "Enkhbayar", "Sukhbaatar", "Khurelsukh", "Oyun-Erdene", "Zandanshatar", "Battulga", "Elbegdorj", "Bagabandi", "Ochirbat", "Byambasuren", "Altankhuyag", "Saikhanbileg", "Erdenebat", "Temuujin", "Chingis", "Batu", "Tseren", "Dorj", "Naranbaatar", "Munkhbat", "Bold", "Jargal", "Ganzorig", "Otgonbayar", "Nyamdorj", "Amarjargal", "Bolormaa", "Oyungerel", "Sarangerel", "Battsetseg"],
+      "family": ["Ukhnaa", "Luvsannamsrai", "Khaltmaa", "Tsakhiagiin", "Nambaryn", "Natsagiin", "Punsalmaagiin", "Dashiin", "Norovyn", "Chimediin", "Jargaltulgyn", "Damdin", "Khorloogiin", "Yumjaagiin", "Jambyn", "Sükhbaataryn", "Gombojavyn", "bat-Erdene", "Enkhtuvshin", "Sodnom", "Byambadorj", "Purevdorj", "Dashdorj", "Tserendorj", "Genden", "Amar", "Choibalsan", "Tsedenbal", "Batmunkh", "Bazar"]
+    },
+    "southeast_asian": {
+      "given": ["Quang", "Minh", "Duc", "Tuan", "Hung", "Dung", "Nam", "Hieu", "Long", "Chinh", "Lam", "Trong", "Phuc", "Somchai", "Somsak", "Arthit", "Kittisak", "Prayut", "Srettha", "Thaksin", "Paetongtarn", "Anutin", "Aung", "Kyaw", "Zaw", "Min", "Thein", "Win", "Hun", "Sok", "Chann", "Bambang", "Agus", "Budi", "Joko", "Prabowo", "Anwar", "Mahathir", "Najib", "Jose", "Juan", "Ferdinand", "Rodrigo"],
+      "family": ["Nguyen", "Tran", "Le", "Pham", "Hoang", "Huynh", "Phan", "Vu", "Vo", "Dang", "Bui", "Do", "Ho", "Ngo", "Duong", "Ly", "Shinawatra", "Chan-o-cha", "Thavisin", "Charnvirakul", "Phibunsongkhram", "Hlaing", "Lwin", "Soe", "Myint", "Oo", "Sen", "Manet", "Sokha", "Rainsy", "Phomvihane", "Vorachith", "Widodo", "Subianto", "Yudhoyono", "Sukarnoputri", "Ibrahim", "Razak", "Yassin", "Marcos", "Duterte", "Aquino"]
+    },
+    "south_asian": {
+      "given": ["Arjun", "Vikram", "Rajesh", "Sanjay", "Anand", "Prakash", "Dev", "Rohan", "Imran", "Bilal", "Tariq", "Kamal", "Ashoka", "Narendra", "Rahul", "Amit", "Rajnath", "Subrahmanyam", "Manmohan", "Atal", "Jawaharlal", "Vallabhbhai", "Sardar", "Shehbaz", "Nawaz", "Asif", "Zulfikar", "Pervez", "Qamar", "Asim", "Muhammad", "Tarique", "Anura", "Ranil", "Mahinda", "Khadga", "Pushpa", "Sher", "Indira", "Sonia", "Sheikh", "Khaleda", "Benazir"],
+      "family": ["Sharma", "Verma", "Chatterjee", "Patel", "Rao", "Reddy", "Singh", "Mehta", "Khan", "Ahmed", "Hussain", "Sen", "Bose", "Perera", "Modi", "Gandhi", "Shah", "Jaishankar", "Sitharaman", "Vajpayee", "Nehru", "Mukherjee", "Banerjee", "Yadav", "Pawar", "Thackeray", "Naidu", "Stalin", "Vijayan", "Sharif", "Zardari", "Bhutto", "Musharraf", "Bajwa", "Munir", "Yunus", "Hasina", "Rahman", "Zia", "Dissanayake", "Wickremesinghe", "Rajapaksa", "Oli", "Dahal", "Deuba"]
+    },
+    "west_african": {
+      "given": ["Kwame", "Kofi", "Amadou", "Ibrahima", "Moussa", "Chinedu", "Emeka", "Bola", "Olusegun", "Goodluck", "Muhammadu", "Nnamdi", "Obafemi", "Ahmadu", "Kashim", "Aliko", "Ngozi", "Nana", "John", "Jerry", "Macky", "Bassirou", "Ousmane", "Alassane", "Laurent", "Assimi", "Ibrahim", "Abdourahamane", "Mamadi", "Faure", "Patrice", "Umaro", "Adama", "Julius", "George", "Joseph", "Amina", "Fatou", "Ngozi", "Ellen"],
+      "family": ["Diallo", "Traore", "Keita", "Toure", "Mensah", "Okafor", "Adeyemi", "Cisse", "Diop", "Tinubu", "Obasanjo", "Jonathan", "Buhari", "Azikiwe", "Awolowo", "Bello", "Shettima", "Abubakar", "Obi", "Okonjo-Iweala", "Akufo-Addo", "Mahama", "Rawlings", "Nkrumah", "Sall", "Faye", "Sonko", "Senghor", "Ouattara", "Gbagbo", "Houphouët-Boigny", "Goïta", "Sankara", "Compaoré", "Tiani", "Bazoum", "Doumbouya", "Gnassingbé", "Talon", "Boakai", "Weah", "Sirleaf"]
+    },
+    "east_horn_african": {
+      "given": ["Abiy", "Meles", "Hailemariam", "Sahle-Work", "Taye", "Getachew", "Debretsion", "Isaias", "Hassan", "Mohamed", "Hamza", "Muse", "Saeed", "Ismail", "William", "Uhuru", "Mwai", "Daniel", "Jomo", "Raila", "Rigathi", "Musalia", "Samia", "John", "Jakaya", "Benjamin", "Julius", "Yoweri", "Muhoozi", "Paul", "Évariste", "Pierre", "Salva", "Riek", "Juma", "Baraka", "Amina", "Halima", "Wanjiku"],
+      "family": ["Ahmed", "Zenawi", "Desalegn", "Zewde", "Atske Selassie", "Reda", "Gebremichael", "Selassie", "Mengistu", "Afwerki", "Mohamud", "Farmaajo", "Barre", "Roble", "Bihi", "Deni", "Guelleh", "Ruto", "Kenyatta", "Kibaki", "Moi", "Odinga", "Gachagua", "Mudavadi", "Mwangi", "Kamau", "Njoroge", "Otieno", "Suluhu", "Magufuli", "Kikwete", "Mkapa", "Nyerere", "Museveni", "Kainerugaba", "Kagame", "Ndayishimiye", "Nkurunziza", "Kiir", "Machar"]
+    },
+    "central_southern_african": {
+      "given": ["Cyril", "Jacob", "Thabo", "Nelson", "Kgalema", "John", "Julius", "Sipho", "Bongani", "Pieter", "Hendrik", "Emmerson", "Robert", "Morgan", "Nelson", "Hakainde", "Edgar", "Kenneth", "Lazarus", "Joyce", "Hastings", "Filipe", "Armando", "Joaquim", "Samora", "João", "José", "Agostinho", "Félix", "Joseph", "Laurent", "Patrice", "Mobutu", "Denis", "Paul", "Brice", "Ali", "Faustin", "Mahamat", "Andry"],
+      "family": ["Ramaphosa", "Zuma", "Mbeki", "Mandela", "Motlanthe", "Steenhuisen", "Malema", "Ndlovu", "Khumalo", "Dlamini", "Mokoena", "Botha", "De Klerk", "Mnangagwa", "Mugabe", "Tsvangirai", "Chamisa", "Moyo", "Ncube", "Sibanda", "Hichilema", "Lungu", "Kaunda", "Phiri", "Banda", "Chakwera", "Nyusi", "Guebuza", "Chissano", "Machel", "Lourenço", "Dos Santos", "Neto", "Tshisekedi", "Kabila", "Lumumba", "Sassou Nguesso", "Biya", "Oligui", "Bongo", "Touadéra", "Déby", "Rajoelina"]
+    },
+    "slavic": {
+      "given": ["Mikhail", "Alexei", "Dmitri", "Sergei", "Nikolai", "Andrei", "Pavel", "Viktor", "Yelena", "Olga", "Roman", "Bohdan", "Taras", "Jan", "Piotr", "Marek", "Milan", "Dragan"],
+      "family": ["Volkov", "Sokolov", "Morozov", "Kovalenko", "Shevchenko", "Nowicki", "Kowalski", "Novak", "Horvat", "Jovanovic", "Petrov", "Orlov", "Lebedev", "Zaitsev", "Bondarenko", "Mazur"]
+    },
+    "east_asian": {
+      "given": ["Jian", "Wei", "Ming", "Hao", "Zhen", "Kenji", "Takashi", "Haruki", "Shinzo", "Min-jun", "Ji-hoon", "Seung", "Quang", "Minh", "Duc"],
+      "family": ["Lin", "Chen", "Zhang", "Zhao", "Liu", "Huang", "Takahashi", "Watanabe", "Ito", "Yamamoto", "Nakamura", "Kim", "Park", "Choi", "Nguyen", "Tran"]
+    },
+    "african": {
+      "given": ["Kwame", "Kofi", "Amadou", "Ibrahima", "Moussa", "Chinedu", "Emeka", "Tendai", "Thabo", "Sipho", "Juma", "Baraka", "Samuel", "Joseph", "Patrice"],
+      "family": ["Diallo", "Traore", "Keita", "Toure", "Mensah", "Okafor", "Adeyemi", "Ndlovu", "Moyo", "Kenyatta", "Mwangi", "Banda", "Phiri", "Cisse", "Diop"]
+    }
+  }
+}

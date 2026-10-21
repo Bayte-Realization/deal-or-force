@@ -424,6 +424,7 @@ public partial class DealOrForceGame
         var parts = new List<string>();
         AddResult(parts, results, ArmyMoveResult.Issued, append ? "waypoint appended" : "moving");
         AddResult(parts, results, ArmyMoveResult.AttackIssued, "advancing along the marked route; defended provinces require a battle");
+        AddResult(parts, results, ArmyMoveResult.WithdrawnAndMoving, "disengaged from battle and moving");
         AddResult(parts, results, ArmyMoveResult.RouteInterrupted, "route blocked");
         AddResult(parts, results, ArmyMoveResult.QueuedAfterBattle, "queued until battle ends");
         AddResult(parts, results, ArmyMoveResult.OrderCancelled, "order cancelled");
@@ -468,6 +469,7 @@ public partial class DealOrForceGame
         var stopped = 0;
         var withdrawn = 0;
         var blocked = 0;
+        var pending = 0;
         foreach (var army in targets)
         {
             if (army.InBattle)
@@ -475,6 +477,7 @@ public partial class DealOrForceGame
                 var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
                 _campaign.Commands.Enqueue(withdrawal);
                 _campaign.Commands.ApplyAll(_campaign);
+                if (!withdrawal.Applied) { pending++; continue; }
                 if (withdrawal.Withdrawn) withdrawn++; else blocked++;
                 continue;
             }
@@ -484,6 +487,11 @@ public partial class DealOrForceGame
             if (command.Halted) stopped++;
         }
         ShowSelectedArmies();
+        if (pending > 0)
+        {
+            SetArmyFeedback(Tr("Order sent to the host. Awaiting confirmation."));
+            return;
+        }
         if (withdrawn > 0 || blocked > 0)
         {
             SetArmyFeedback(Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}", withdrawn, stopped, blocked));

@@ -80,6 +80,7 @@ public partial class DealOrForceGame
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
         CloseProvinceCard();
+        PlayStrategicCue(command.Refusal.Length > 0 ? "action_denied" : "covert_launched");
         SetArmyFeedback(command.Refusal.Length > 0
             ? Tr(command.Refusal)
             : Simulation.Loc.Format("The operation is under way. It comes due in {0} days.", kind.Days));

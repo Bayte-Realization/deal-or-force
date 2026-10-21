@@ -133,12 +133,10 @@ public static class GovernmentCatalog
 
     public static IReadOnlyList<GovernmentDefinition> All => Definitions;
 
-    public static GovernmentDefinition Of(string id)
-    {
-        foreach (var definition in Definitions)
-            if (string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase)) return definition;
-        return Unknown;
-    }
+    private static readonly Dictionary<string, GovernmentDefinition> ById = new(StringComparer.OrdinalIgnoreCase);
+
+    public static GovernmentDefinition Of(string id) =>
+        id is not null && ById.TryGetValue(id, out var definition) ? definition : Unknown;
 
     public static bool Knows(string id)
     {
@@ -155,6 +153,7 @@ public static class GovernmentCatalog
     public static void ResetCatalog(List<string> errors = null)
     {
         Definitions.Clear();
+        ById.Clear();
         foreach (var document in GameDataLoader.DataDocuments("common", "governments"))
             using (document)
                 Merge(document.RootElement, errors);
@@ -192,11 +191,15 @@ public static class GovernmentCatalog
                 Read(entry.Name, entry.Value, problems);
     }
 
-    private static void Sort() =>
+    private static void Sort()
+    {
         Definitions.Sort((left, right) =>
             left.Order != right.Order
                 ? left.Order.CompareTo(right.Order)
                 : string.CompareOrdinal(left.Id, right.Id));
+        ById.Clear();
+        foreach (var definition in Definitions) ById[definition.Id] = definition;
+    }
 
     private static GovernmentDefinition Read(string id, JsonElement element, List<string> errors)
     {
@@ -266,12 +269,10 @@ public static class IdeologyCatalog
 
     public static IReadOnlyList<IdeologyDefinition> All => Definitions;
 
-    public static IdeologyDefinition Of(string id)
-    {
-        foreach (var definition in Definitions)
-            if (string.Equals(definition.Id, id, StringComparison.OrdinalIgnoreCase)) return definition;
-        return Unknown;
-    }
+    private static readonly Dictionary<string, IdeologyDefinition> ById = new(StringComparer.OrdinalIgnoreCase);
+
+    public static IdeologyDefinition Of(string id) =>
+        id is not null && ById.TryGetValue(id, out var definition) ? definition : Unknown;
 
     public static bool Knows(string id)
     {
@@ -324,11 +325,15 @@ public static class IdeologyCatalog
                 Read(entry.Name, entry.Value, problems);
     }
 
-    private static void Sort() =>
+    private static void Sort()
+    {
         Definitions.Sort((left, right) =>
             left.Order != right.Order
                 ? left.Order.CompareTo(right.Order)
                 : string.CompareOrdinal(left.Id, right.Id));
+        ById.Clear();
+        foreach (var definition in Definitions) ById[definition.Id] = definition;
+    }
 
     private static IdeologyDefinition Read(string id, JsonElement element, List<string> errors)
     {

@@ -76,6 +76,15 @@ public sealed partial class Defines
 	public bool SaveTextFormat { get; set; } = false;
 
 	/// <summary>
+	/// Walk every object in a save with reflection before writing it. The weekly
+	/// <see cref="NumericIntegrity.FirstLiveIssue"/> check is the default gate: it covers the
+	/// numbers that drive the simulation and costs milliseconds, while the full walk costs
+	/// more than serialisation itself and allocates a snapshot-sized graph of boxed floats.
+	/// Turn this on for a diagnostics build, not for a campaign.
+	/// </summary>
+	public bool SaveDeepIntegrity { get; set; } = false;
+
+	/// <summary>
 	/// Real seconds per in-game day at speed 1.
 	///
 	/// Five, so the slowest speed is one a player can watch hour by hour: a little under five
@@ -568,7 +577,7 @@ public sealed partial class Defines
 	public float NavalResponse { get; set; } = 1f;
 
 	/// <summary>Multiplier on the defender's combat power. Attacking is harder.</summary>
-	public float DefenderAdvantage { get; set; } = 2.30f;
+	public float DefenderAdvantage { get; set; } = 2.50f;
 
 	/// <summary>
 	/// Frontage one province gives an attack, before extra directions widen it. This is
@@ -581,7 +590,7 @@ public sealed partial class Defines
 	public float EntrenchmentBonus { get; set; } = 1.80f;
 
 	/// <summary>Entrenchment a division digs per day while it holds ground.</summary>
-	public float EntrenchmentPerDay { get; set; } = 0.030f;
+	public float EntrenchmentPerDay { get; set; } = 0.045f;
 
 	/// <summary>Entrenchment divisions already hold when a campaign opens mid-war.</summary>
 	public float EntrenchmentAtScenarioStart { get; set; } = 0.85f;

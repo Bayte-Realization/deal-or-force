@@ -1,0 +1,8 @@
+{
+  "RegionalAdministrationEnabled": true,
+  "AiAdministrationMaxRegions": 10,
+  "AiAdministrationMaxPopulationShare": 0.50,
+  "AiAdministrationCultureShare": 0.30,
+  "SubjectLandGrantPoliticalCostPerRegion": 3.0,
+  "SubjectLandGrantCooldownDays": 90
+}

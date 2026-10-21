@@ -92,6 +92,7 @@ public sealed partial class DiplomaticRelation
     public readonly List<OpinionReason> Reasons = new();
 
     /// <summary>The same sum, named part by name, for the screen that shows it.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public Breakdown OpinionDrivers = new();
 
     public int Other(int nationId) => nationId == A ? B : A;
@@ -139,12 +140,44 @@ public static class CampaignDiplomacy
         a == b || a < 0 || b < 0 ? null : Peek(campaign, a, b)
             ?? new DiplomaticRelation { A = Math.Min(a, b), B = Math.Max(a, b) };
 
+    private static readonly List<StrategicWar> ActiveWars = new();
+    private static Campaign _activeWarsFor;
+    private static int _activeWarsStamp;
+
+    /// <summary>
+    /// Active wars, rebuilt when the war list's stamp changes, read everywhere. Called from
+    /// pair/third-country loops that run O(countries) times a day over O(wars) each: the
+    /// snapshot costs one filtered copy per war-list change, and each ask stops walking the
+    /// full war list with side-set tests. The stamp is the list's count against the
+    /// campaign's war revision, so a war declared and another ended between two asks still
+    /// reads as a change. Two campaigns in one process each keep their own snapshot.
+    /// </summary>
+    private static List<StrategicWar> ActiveWarsOf(Campaign campaign)
+    {
+        var stamp = campaign.Wars.Count * 1000003 + campaign.WarRevision;
+        if (!ReferenceEquals(_activeWarsFor, campaign) || stamp != _activeWarsStamp || !AllStillActive(ActiveWars))
+        {
+            ActiveWars.Clear();
+            foreach (var war in campaign.Wars)
+                if (!war.Ended) ActiveWars.Add(war);
+            _activeWarsFor = campaign;
+            _activeWarsStamp = stamp;
+        }
+        return ActiveWars;
+    }
+
+    private static bool AllStillActive(List<StrategicWar> wars)
+    {
+        for (var i = 0; i < wars.Count; i++)
+            if (wars[i].Ended) return false;
+        return true;
+    }
+
     public static bool AtWar(Campaign campaign, int a, int b)
     {
-        // Called inside many diplomatic pair/third-country loops. Avoid allocating
-        // a captured predicate for every query; preserve list order and exact rules.
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Opposes(a, b)) return true;
+        var wars = ActiveWarsOf(campaign);
+        for (var index = 0; index < wars.Count; index++)
+            if (!wars[index].Ended && wars[index].Opposes(a, b)) return true;
         return false;
     }
 
@@ -301,13 +334,15 @@ public static class CampaignDiplomacy
             AttackerId = attackerId,
             DefenderId = defenderId,
             StartedDay = campaign.ElapsedDays,
-            CivilConflict = justification is "secession" or "uprising",
+            CivilConflict = justification is "secession" or "uprising" or "civil_war" or "revolution" ||
+                Reintegration.IsBreakawayOf(attacker, defender) || Reintegration.IsBreakawayOf(defender, attacker),
             AiNegotiationUnlockDay = justification is "secession" or "uprising"
                 ? campaign.ElapsedDays + Math.Max(0, campaign.Defines.CivilWarNegotiationDays) : 0,
             ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex),
             Limited = limited
         };
         campaign.Wars.Add(war);
+        campaign.MarkWarsChanged();
         campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);
         // Worked out once, at the declaration, and kept on the war. It is what the attacker's
         // standing is charged for, and it is what the player is owed when they ask why the map
@@ -483,15 +518,24 @@ public sealed class ImproveRelationsCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
+    public bool Active { get; init; } = true;
+    public bool Changed { get; private set; }
+    public string Refusal { get; private set; } = "";
     public void Apply(Campaign campaign)
     {
+        Changed = false; Refusal = "";
         if (!MechanicFeatures.Allows(campaign, this)) return;
+        Refusal = DiplomaticOutreach.Refusal(campaign, IssuerId, TargetId, Active);
+        if (Refusal.Length != 0) return;
+        if (campaign.Defines.DiplomaticMissionsEnabled || !Active)
+        { Changed = DiplomaticOutreach.Set(campaign, IssuerId, TargetId, Active); return; }
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         var nation = campaign.NationById(IssuerId);
         if (relation is null || nation is null || campaign.ElapsedDays - relation.LastActionDay < 14 || nation.Treasury < 0.1f) return;
         nation.Treasury -= 0.1f;
         OpinionSystem.Remember(campaign, relation, "improved_relations");
         relation.LastActionDay = campaign.ElapsedDays;
+        Changed = true;
         if (relation.Opinion >= 35f &&
             relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Rival))
             relation.Stance = DiplomaticStance.Friendly;

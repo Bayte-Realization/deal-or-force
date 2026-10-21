@@ -24,6 +24,15 @@ public sealed class MovementDefinition
     public readonly List<string> Faiths = new();
     private HashSet<string> _peopleLookup;
     private HashSet<string> _faithLookup;
+    private string[] _distinctPeoples;
+    private string[] _distinctFaiths;
+
+    // The catalogue can spell a people twice. Deduplicate once for the day's regional sums
+    // rather than once for every movement's week.
+    internal IReadOnlyList<string> DistinctPeoples =>
+        _distinctPeoples ??= Peoples.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    internal IReadOnlyList<string> DistinctFaiths =>
+        _distinctFaiths ??= Faiths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>
     /// O(1) membership for the walk over every population group in the world.
@@ -43,6 +52,8 @@ public sealed class MovementDefinition
     {
         _peopleLookup = null;
         _faithLookup = null;
+        _distinctPeoples = null;
+        _distinctFaiths = null;
     }
     /// <summary>The region its headquarters stands in on the first day.</summary>
     public string Headquarters = "";
@@ -452,13 +463,13 @@ public static partial class Movements
         campaign.MovementRevision++;
     }
 
-    /// <summary>Every movement in the world, landless or not, dissolved or not.</summary>
+    /// <summary>Every movement in the world, landless or not, dissolved or not. An exile that has returned home and holds sovereign land is governed as a state, not an active movement.</summary>
     public static IEnumerable<Nation> Of(Campaign campaign) =>
-        campaign.Nations.Where(nation => nation.Movement is not null);
+        campaign.Nations.Where(nation => nation.Movement is not null && !(nation.Movement.Exile && !nation.Movement.Landless));
 
     /// <summary>The movements that still exist.</summary>
     public static IEnumerable<Nation> Active(Campaign campaign) =>
-        campaign.Nations.Where(nation => nation.Movement is { Dissolved: false });
+        campaign.Nations.Where(nation => nation.Movement is { Dissolved: false } && !(nation.Movement.Exile && !nation.Movement.Landless));
 
     public static MovementDefinition DefinitionOf(Nation nation)
     {
@@ -475,12 +486,15 @@ public static partial class Movements
         var state = nation.Movement;
         if (Exiles.TryGetValue(state, out var cached) && cached.Item1 == MovementCatalog.Version) return cached.Item2;
         var template = MovementCatalog.Of(MovementCatalog.ExileTemplate);
+        var description = template?.Description ?? "";
+        if (!state.Landless)
+            description = Loc.Format("The legal government of {0} has returned to its homeland and resumed governance over its people.", nation.Name);
         var definition = new MovementDefinition
         {
             Id = state.Id,
             Tag = nation.Tag,
             Name = nation.Name,
-            Description = template?.Description ?? "",
+            Description = description,
             Colour = nation.Color,
             Government = nation.Government,
             Ideology = nation.Ideology,

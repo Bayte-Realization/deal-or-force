@@ -36,6 +36,13 @@ static class ServiceExerciseTests
         wing.NationId = nation.Id; wing.Strength = .01f;
         Check(DecisionCatalog.IsBlocked(c, nation, flight), "a shattered wing must recover before exercising");
         wing.Strength = 1;
+        if(DecisionCatalog.IsBlocked(c,nation,flight))
+        {
+            ScriptedValues.TryRead(c,nation,"available_air_formations",out var available);
+            Console.WriteLine("EXERCISE_DIAGNOSTIC reason="+DecisionCatalog.BlockReason(c,nation,flight)+" available="+available+
+                " base="+wing.BaseProvinceId+" expectedState="+wing.StateMapIndex+" actualState="+c.ProvinceMap.ProvinceToState[1]+
+                " controller="+c.ProvinceController[1]+" owner="+nation.MapIndex+" feature="+c.FeatureEnabled("aviation"));
+        }
         Check(!DecisionCatalog.IsBlocked(c, nation, flight) && DecisionCatalog.BlockReason(c, nation, flight).Length == 0,
             "operational wing at its controlled base unlocks both eligibility APIs");
         c.ProvinceController[1] = (ushort)other.MapIndex;

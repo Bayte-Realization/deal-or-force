@@ -1,0 +1,14 @@
+{
+  "Movement flag style": "Стиль флагов движений",
+  "Choose whether political and independence movements fly their official movement insignia or the regional/homeland flag of the territory they represent.": "Выберите, используют ли политические и освободительные движения официальную эмблему движения или флаг региона/родины, за независимость которого они выступают.",
+  "Official movement flag": "Официальный флаг движения",
+  "Regional / homeland flag": "Региональный флаг автономии/родины",
+  "Flag: Regional": "Флаг: Региональный",
+  "Flag: Movement": "Флаг: Движение",
+  "Toggle between the official movement flag and the regional homeland flag.": "Переключить между официальным флагом движения и региональным флагом родины.",
+  "disengaged from battle and moving": "вышли из боя и на марше",
+  "Retreat": "Отступить",
+  "Withdraw only this formation from the battle to a friendly province.": "Вывести только это формирование из боя в соседнюю дружественную провинцию.",
+  "Withdrawn: {0}": "Выведено: {0}",
+  "Cannot retreat: {0}": "Невозможно отступить: {0}"
+}

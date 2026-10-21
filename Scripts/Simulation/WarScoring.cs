@@ -53,6 +53,10 @@ public sealed partial class Defines
 
     /// <summary>How a region's worth is split between its people and its industry.</summary>
     public float WarScorePeopleWeight { get; set; } = 0.5f;
+
+    /// <summary>The public floor and ceiling of a war score, the same shape players know from other games.</summary>
+    public float WarScoreMin { get; set; } = -100f;
+    public float WarScoreMax { get; set; } = 100f;
 }
 
 /// <summary>
@@ -199,7 +203,20 @@ public static class WarScoring
         // ---- collapse ---------------------------------------------------------------------
         war.Collapsed = HasCollapsed(defines, war.DefenderOccupiedValue, war.DefenderStrengthLeft) ? 1 :
                         HasCollapsed(defines, war.AttackerOccupiedValue, war.AttackerStrengthLeft) ? -1 : 0;
-        war.WarScore = war.Collapsed != 0 ? war.Collapsed * 100f : M.Clamp(score, -100f, 100f);
+        // A collapse is the ceiling or the floor, whichever the campaign declares. Ordinary
+        // scores stay inside the same bounds, so a peace budget and the interface agree.
+        var low = MathF.Min(defines.WarScoreMin, defines.WarScoreMax);
+        var high = MathF.Max(defines.WarScoreMin, defines.WarScoreMax);
+        war.WarScore = war.Collapsed > 0 ? high : war.Collapsed < 0 ? low : ClampScore(defines, score);
+    }
+
+    /// <summary>The same bound the score display and a demand budget read, exposed for the rule tests.</summary>
+    public static float ClampScore(Defines defines, float score)
+    {
+        if (defines is null || !float.IsFinite(score)) return 0f;
+        var low = MathF.Min(defines.WarScoreMin, defines.WarScoreMax);
+        var high = MathF.Max(defines.WarScoreMin, defines.WarScoreMax);
+        return M.Clamp(score, low, high);
     }
 
     /// <summary>The parts of a war's score, attacker-positive, as a localisation format and its value.</summary>

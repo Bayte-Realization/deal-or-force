@@ -60,7 +60,10 @@ public sealed partial class GlobePresentation
         }
         if (updateSelection)
         {
-            _globeMaterial.SetShaderParameter("selected_region_id", (float)SourceEarthData.States[cell]);
+            var regionMapIndex = provinceId > 0 && provinceId < map.ProvinceToState.Length
+                ? map.ProvinceToState[provinceId]
+                : SourceEarthData.States[cell];
+            _globeMaterial.SetShaderParameter("selected_region_id", (float)regionMapIndex);
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);
         }

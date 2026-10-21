@@ -326,10 +326,17 @@ public static class TacticalDoctrines
     /// What has come due, and what every other government is doing about its own book. Each
     /// country keeps its own day of the week, the spread the rest of the cabinet already uses.
     /// </summary>
+    
     public static void Tick(Campaign campaign)
     {
         if (campaign is null) return;
         var day = campaign.ElapsedDays;
+        var runAi = campaign.FeatureEnabled("tactical_doctrines") &&
+                    campaign.LastTacticalDoctrineDay != day;
+        if (runAi)
+        {
+            campaign.LastTacticalDoctrineDay = day;
+        }
         foreach (var nation in campaign.Nations)
         {
             var memory = nation.TacticalDoctrine;
@@ -347,8 +354,7 @@ public static class TacticalDoctrines
                     campaign.MarkStrategicChange();
                 }
             }
-            if (!campaign.FeatureEnabled("tactical_doctrines")) continue;
-            if (!Delegation.RunByAi(nation)) continue;
+            if (!runAi || !Delegation.RunByAi(nation)) continue;
             if ((day + nation.Id) % 7 != 0) continue;
             AiStudy(campaign, nation);
         }

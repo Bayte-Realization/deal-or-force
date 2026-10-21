@@ -154,15 +154,17 @@ public partial class DealOrForceGame
         RefreshDebtHeadline(player);
         WriteStat(_gdp, Fmt.Money(player.Gdp), Fmt.MoneyExact(player.Gdp),
             Fmt.MoneyDelta((float)_gdpTrend.Delta), Fmt.Direction(_gdpTrend.Delta, 0.005d));
+        // One explanation per refresh: this walks the country's vital summary, and the tooltip
+        // and the stat line used to ask for it twice on every redraw.
+        var popExplain = DemographicCycle.Explain(_campaign, player);
         WriteStat(_population, Fmt.People(player.Population),
-            DemographicCycle.Explain(_campaign, player),
+            popExplain,
             Fmt.PeopleDelta(_populationTrend.Delta), Fmt.Direction(_populationTrend.Delta, 1d));
         // A number that moves without saying why is a number a player cannot act on: the births,
         // deaths, migration and age structure behind it are read out where the number is
         // (DemographicCycle.Explain).
         if (_population?.Box is not null && _campaign?.Defines is not null)
         {
-            var popExplain = DemographicCycle.Explain(_campaign, player);
             _population.Box.Plain = popExplain;
             _population.Box.TooltipText = Ui.Tip(
                 Tr("Everyone living in your states, and how that has moved over the last week.") +

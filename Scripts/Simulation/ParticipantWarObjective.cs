@@ -61,3 +61,4 @@ public static partial class FrontPlanner
         }
     }
 }
+

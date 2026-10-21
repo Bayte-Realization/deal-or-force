@@ -1,0 +1,16 @@
+{
+  "names": {
+    "british": {
+      "given": ["Alasdair", "Alistair", "Andrew", "Arthur", "Barnaby", "Callum", "Charles", "Clive", "Colin", "Duncan", "Edmund", "Edward", "Ewan", "Fergus", "George", "Graham", "Harold", "Henry", "Hugh", "Ian", "James", "John", "Kenneth", "Laurence", "Malcolm", "Martin", "Nigel", "Oliver", "Patrick", "Peter", "Richard", "Robert", "Roger", "Rory", "Simon", "Stuart", "Thomas", "Walter", "William", "Eleanor", "Alice", "Beatrice", "Charlotte", "Clara", "Edith", "Florence", "Harriet", "Imogen", "Jane", "Margaret", "Mary", "Matilda", "Rose", "Victoria"],
+      "family": ["Ashworth", "Balfour", "Barker", "Blackwood", "Bramley", "Brent", "Caldwell", "Carrington", "Chamberlain", "Clifford", "Cromwell", "Dalton", "Dunmore", "Fairfax", "Fletcher", "Gaskell", "Graham", "Hargreaves", "Hawthorne", "Holden", "Holmes", "Kendrick", "Langley", "Lockhart", "Marlowe", "Mercer", "Mowbray", "Norton", "Oakes", "Pemberton", "Radcliffe", "Raleigh", "Sinclair", "Stanhope", "Thornton", "Tristram", "Vane", "Wentworth", "Whitmore", "Wycliffe"]
+    },
+    "germanic": {
+      "given": ["Achim", "Adalbert", "Albrecht", "Anton", "Armin", "Bernd", "Bernhard", "Claus", "Dietrich", "Eberhard", "Emil", "Ernst", "Felix", "Ferdinand", "Friedrich", "Georg", "Gottfried", "Günther", "Hannes", "Heinrich", "Helmut", "Hermann", "Joachim", "Jürgen", "Karl", "Konrad", "Lothar", "Ludwig", "Manfred", "Matthias", "Maximilian", "Norbert", "Otto", "Rainer", "Reinhard", "Rudolf", "Siegfried", "Stefan", "Ulrich", "Volker", "Werner", "Wilhelm", "Wolfgang", "Anneliese", "Brigitte", "Charlotte", "Elisabeth", "Greta", "Hannelore", "Ingrid", "Johanna", "Katharina", "Liesel", "Marlene", "Sabine", "Ursula"],
+      "family": ["Adler", "Bachmann", "Bauer", "Becker", "Bergmann", "Brandt", "Brauner", "Dietrich", "Dressler", "Eichmann", "Fischer", "Fuchs", "Graf", "Gruber", "Hartmann", "Hauser", "Hoffmann", "Kaiser", "Keller", "Klein", "Köhler", "Kramer", "Krüger", "Lang", "Lehmann", "Lorenz", "Mayer", "Meier", "Müller", "Neumann", "Peters", "Richter", "Roth", "Sauer", "Schäfer", "Schmidt", "Schneider", "Schröder", "Schulz", "Vogel", "Wagner", "Weber", "Winkler", "Wolf", "Zimmer"]
+    },
+    "celtic": {
+      "given": ["Aidan", "Aonghus", "Brendan", "Brian", "Cathal", "Cian", "Conall", "Cormac", "Declan", "Diarmuid", "Eamon", "Eoin", "Fergus", "Fionn", "Liam", "Niall", "Oisín", "Padraig", "Ruairí", "Seamus", "Tadhg", "Aoife", "Bríd", "Caitlin", "Ciara", "Deirdre", "Eimear", "Fiona", "Grainne", "Maeve", "Niamh", "Orla", "Siobhan", "Una", "Alun", "Dafydd", "Gareth", "Gwyn", "Ianto", "Rhys", "Tegid", "Wyn", "Angharad", "Bronwen", "Cerys", "Eira", "Gwen", "Lowri", "Megan", "Rhiannon"],
+      "family": ["Brennan", "Byrne", "Cahill", "Callaghan", "Casey", "Clancy", "Cullen", "Daly", "Donnelly", "Doyle", "Fitzgerald", "Flanagan", "Gallagher", "Hayes", "Kavanagh", "Keane", "Kelly", "Kennedy", "Lynch", "MacCarthy", "MacNamara", "Madden", "Maguire", "Mahoney", "Molloy", "Moran", "Murphy", "Nolan", "O'Brien", "O'Connor", "O'Donnell", "O'Neill", "O'Sullivan", "Quinn", "Reilly", "Ryan", "Sheehan", "Sullivan", "Walsh", "Davies", "Evans", "Griffiths", "Hughes", "Jones", "Lewis", "Morgan", "Price", "Rees", "Thomas", "Williams"]
+    }
+  }
+}

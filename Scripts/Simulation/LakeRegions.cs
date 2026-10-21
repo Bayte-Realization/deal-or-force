@@ -96,6 +96,8 @@ public static class LakeRegions
     private static ulong _waterLakes;
     private static int _waterWidth, _waterHeight;
 
+    public static void ReleaseWaterCache() => _water = null;
+
     /// <summary>
     /// Which cells are lake water, drawn from the hydrology once and kept until the lakes
     /// change: a campaign is built more than once a session, and drawing every lake of

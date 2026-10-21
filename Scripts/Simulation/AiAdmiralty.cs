@@ -436,7 +436,7 @@ public static class AiAdmiralty
             if (distance >= search) continue;
             Beaches.Add((province, distance));
         }
-        Beaches.Sort((left, right) => left.Distance.CompareTo(right.Distance));
+        Beaches.Sort((left, right) => left.Distance != right.Distance ? left.Distance.CompareTo(right.Distance) : left.Province.CompareTo(right.Province));
     }
 
     /// <summary>

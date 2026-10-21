@@ -36,32 +36,41 @@ public sealed partial class GlobePresentation
     /// </summary>
     private Texture2D ArmyCounterTexture(Nation nation, string templateId)
     {
-        var key = (nation.MapIndex, templateId ?? "line_infantry");
+        // The flag is part of the key. A country that changes its government changes its flag,
+        // and a cached card must not go on flying the old one.
+        var flagSprite = FlagSpriteFor(nation);
+        var resolvedTemplate = string.IsNullOrWhiteSpace(templateId) ? "line_infantry" : templateId;
+        var key = (nation.MapIndex, resolvedTemplate + "#" + flagSprite);
         if (_armyCounterTextures.TryGetValue(key, out var cached)) return cached;
         const int width = 176;
         const int height = 104;
-        // Drawn three times larger and brought down with a Lanczos filter. The card used to be
-        // painted pixel by pixel at its own size, so every diagonal of the symbol and every
-        // corner of the frame was a staircase once the card stood on the map.
-        const int s = 3;
+        // Drawn supersampled and brought down with a Lanczos filter.
+        const int s = 2;
         var w = width * s;
         var h = height * s;
         var pixels = new byte[w * h * 4];
         var national = new Color(nation.Color);
-        var rim = national.Lightened(0.30f);
-        var ink = new Color(0.035f, 0.045f, 0.055f, 0.98f);
-        var top = new Color(0.205f, 0.245f, 0.280f, 0.97f);
-        var bottom = new Color(0.105f, 0.130f, 0.155f, 0.97f);
-        const float radius = 7f * s;
-        // The rim is the counter's nationality: it has to read as a coloured frame at the size a
-        // card stands on the map, so it is wide, and the dark line that parts it from the
-        // ground is a hair.
-        const float inkLine = 0.9f * s;
-        const float rimLine = 7.5f * s;
-        // A card stands on the map at about a third of its own size, so its nationality has to
-        // be broad strokes to survive: the rim, a band across the top and the stripe down the
-        // left are what read as "whose" from across a front.
-        const float bandBottom = 21f * s;
+        var brass = new Color(0.84f, 0.72f, 0.44f);
+        var rimLight = national.Lightened(0.36f).Lerp(brass, 0.22f);
+        var rimBase = national.Lightened(0.18f);
+        var rimDark = national.Darkened(0.24f);
+        var ink = new Color(0.025f, 0.035f, 0.045f, 0.99f);
+        var top = new Color(0.155f, 0.190f, 0.225f, 0.98f);
+        var bottom = new Color(0.075f, 0.095f, 0.118f, 0.98f);
+        const float radius = 7.5f * s;
+        const float inkLine = 1.1f * s;
+        const float rimLine = 6.2f * s;
+        const float bevelLine = 7.5f * s;
+        const float bandBottom = 22.5f * s;
+
+        var counterSymbol = UnitTypeCatalog.Get(resolvedTemplate).CounterSymbol ?? "";
+        var branchRole = resolvedTemplate switch
+        {
+            "marine_brigade" => "marine",
+            "militia" => "militia",
+            _ => counterSymbol
+        };
+        var branch = BranchColour(branchRole);
 
         for (var y = 0; y < h; y++)
         for (var x = 0; x < w; x++)
@@ -69,68 +78,401 @@ public sealed partial class GlobePresentation
             var inward = -RoundedBox(x + 0.5f, y + 0.5f, w, h, radius);
             if (inward < 0f)
             {
-                // Transparent, but in the ink's colour, so the filter does not drag a pale
-                // fringe in from outside the card.
                 WritePixel(pixels, w, x, y, new Color(ink.R, ink.G, ink.B, 0f));
                 continue;
             }
             Color color;
             if (inward < inkLine) color = ink;
-            else if (inward < rimLine) color = rim;
+            else if (inward < rimLine)
+            {
+                var vertical = y / (float)h;
+                color = vertical < 0.35f
+                    ? rimLight.Lerp(rimBase, vertical / 0.35f)
+                    : rimBase.Lerp(rimDark, (vertical - 0.35f) / 0.65f);
+            }
+            else if (inward < bevelLine)
+            {
+                color = (y < h * 0.5f ? brass.Lightened(0.18f) : brass.Darkened(0.28f)).Lerp(national.Lightened(0.40f), 0.35f);
+            }
             else
             {
                 color = top.Lerp(bottom, y / (float)h);
-                if (y < bandBottom) color = national.Darkened(0.12f);
-                // A hairline of light under the band, the way a printed counter catches it, and
-                // the national stripe down the left.
-                else if (y < bandBottom + 1.4f * s) color = color.Lightened(0.16f);
-                if (x >= 9 * s && x < 18 * s && y >= bandBottom && y < h - 9 * s) color = national.Lightened(0.06f);
+                if (y < bandBottom)
+                {
+                    var headerT = y / bandBottom;
+                    color = national.Lightened(0.12f).Lerp(national.Darkened(0.26f), headerT);
+                    var stripe = ((x + y * 2) / (6 * s)) % 2 == 0 ? 0.04f : -0.02f;
+                    color = stripe > 0f ? color.Lightened(stripe) : color.Darkened(-stripe);
+                }
+                else if (y < bandBottom + 1.5f * s)
+                {
+                    color = brass.Lerp(national.Lightened(0.35f), 0.35f);
+                }
+                else if (y >= 74.5f * s)
+                {
+                    color = color.Darkened(0.26f);
+                }
             }
             WritePixel(pixels, w, x, y, color);
         }
 
-        // The unit symbol, NATO's, in the square left of the strength number - kept wholly
-        // clear of the number's field in the middle of the card, where the marker is anchored.
-        // Without the symbology's own frame around it: at the size a card stands on the map a
-        // framed cross reads as an envelope, and the card is the frame.
-        var symbol = new Color(0.92f, 0.95f, 0.97f, 0.96f);
-        const float cx = 37f * s, cy = 54f * s, halfW = 17f * s, halfH = 15f * s, stroke = 6.5f * s;
-        var counterSymbol = UnitTypeCatalog.Get(templateId).CounterSymbol ?? "";
-        if (!PaintSymbolArt(pixels, w, counterSymbol, cx, cy, halfW + stroke / 2f, halfH + stroke / 2f, symbol))
-            switch (counterSymbol)
-            {
-                case "armor":
-                    StrokeEllipse(pixels, w, cx, cy, halfW, halfH * 0.66f, stroke * 0.8f, symbol);
-                    break;
-                case "artillery":
-                    // The dot is the whole art of it: heavy, filled, unmistakable at a glance - the
-                    // one symbol on the map that is solid, because guns do not manoeuvre.
-                    FillDisc(pixels, w, cx, cy, halfH * 0.78f, symbol);
-                    break;
-                case "mechanized":
-                    StrokeEllipse(pixels, w, cx, cy, halfW, halfH * 0.66f, stroke * 0.7f, symbol);
-                    StrokeLine(pixels, w, cx - halfW * 0.62f, cy - halfH * 0.62f, cx + halfW * 0.62f, cy + halfH * 0.62f, stroke * 0.7f, symbol);
-                    StrokeLine(pixels, w, cx - halfW * 0.62f, cy + halfH * 0.62f, cx + halfW * 0.62f, cy - halfH * 0.62f, stroke * 0.7f, symbol);
-                    break;
-                case "motorized":
-                    // The cross on wheels: two of them under it, apart from it, so the mark still
-                    // reads as infantry first.
-                    StrokeLine(pixels, w, cx - halfW, cy - halfH, cx + halfW, cy + halfH * 0.45f, stroke, symbol);
-                    StrokeLine(pixels, w, cx - halfW, cy + halfH * 0.45f, cx + halfW, cy - halfH, stroke, symbol);
-                    FillDisc(pixels, w, cx - halfW * 0.55f, cy + halfH * 1.05f, stroke * 0.62f, symbol);
-                    FillDisc(pixels, w, cx + halfW * 0.55f, cy + halfH * 1.05f, stroke * 0.62f, symbol);
-                    break;
-                default: // infantry: the cross from corner to corner of the frame
-                    StrokeLine(pixels, w, cx - halfW, cy - halfH, cx + halfW, cy + halfH, stroke, symbol);
-                    StrokeLine(pixels, w, cx - halfW, cy + halfH, cx + halfW, cy - halfH, stroke, symbol);
-                    break;
-            }
+        // Center recessed numerical readout bay behind DivisionCount (x = 60..121, y = 25.5..73.5).
+        const float bayLeft = 60f * s, bayTop = 25.5f * s, bayRight = 121f * s, bayBottom = 73.5f * s;
+        for (var y = (int)bayTop; y <= (int)bayBottom; y++)
+        for (var x = (int)bayLeft; x <= (int)bayRight; x++)
+        {
+            var inside = -RoundedBoxAt(x + 0.5f, y + 0.5f, bayLeft, bayTop, bayRight, bayBottom, 3.5f * s);
+            if (inside < 0f) continue;
+            var bayCol = inside < 1.1f * s
+                ? new Color(0.26f, 0.31f, 0.36f, 0.90f)
+                : new Color(0.045f, 0.060f, 0.078f, 0.92f);
+            BlendPixel(pixels, w, x, y, bayCol, 0.92f);
+        }
 
-        var image = Image.CreateFromData(w, h, false, Image.Format.Rgba8, pixels);
-        image.Resize(width, height, Image.Interpolation.Lanczos);
-        var texture = ImageTexture.CreateFromImage(image);
-        _armyCounterTextures[key] = texture;
-        return texture;
+        // Prominent National Flag canton on the top-left (x = 10..57, y = 7..36 -> 47x29 px!).
+        PaintFlagChip(pixels, w, flagSprite, 10f * s, 7f * s, 47f * s, 29f * s, nation);
+
+        // NATO Echelon "XX" (Division) gold marks in the top-right national header bar.
+        var echelonCol = new Color(0.97f, 0.92f, 0.76f, 0.95f);
+        StrokeLine(pixels, w, 134f * s, 10.5f * s, 141f * s, 18.5f * s, 1.8f * s, echelonCol);
+        StrokeLine(pixels, w, 134f * s, 18.5f * s, 141f * s, 10.5f * s, 1.8f * s, echelonCol);
+        StrokeLine(pixels, w, 145f * s, 10.5f * s, 152f * s, 18.5f * s, 1.8f * s, echelonCol);
+        StrokeLine(pixels, w, 145f * s, 18.5f * s, 152f * s, 10.5f * s, 1.8f * s, echelonCol);
+        FillDisc(pixels, w, 160f * s, 14.5f * s, 3.2f * s, national.Lightened(0.38f));
+        StrokeEllipse(pixels, w, 160f * s, 14.5f * s, 3.2f * s, 3.2f * s, 0.9f * s, echelonCol);
+
+        // Heavy Artillery / Long-Range Missile firepower indicator in the header
+        var hasArtillery = branchRole == "artillery" || resolvedTemplate.Contains("artillery");
+        var hasMissile = resolvedTemplate.Contains("missile") || resolvedTemplate.Contains("rocket");
+        if (hasArtillery || hasMissile)
+        {
+            var iconAccent = new Color(1.0f, 0.88f, 0.45f, 0.95f);
+            var iconBase = new Color(0.92f, 0.32f, 0.22f, 0.95f);
+            if (hasMissile)
+            {
+                const float rx = 96f * s, ry = 14.5f * s;
+                StrokeLine(pixels, w, rx - 9f * s, ry, rx + 7f * s, ry, 2.4f * s, iconAccent);
+                StrokeLine(pixels, w, rx + 7f * s, ry, rx + 11f * s, ry, 3.4f * s, iconBase);
+                StrokeLine(pixels, w, rx - 4f * s, ry - 3.5f * s, rx + 4f * s, ry, 1.8f * s, iconAccent);
+                StrokeLine(pixels, w, rx - 4f * s, ry + 3.5f * s, rx + 4f * s, ry, 1.8f * s, iconAccent);
+            }
+            else
+            {
+                const float ax = 96f * s, ay = 14.5f * s;
+                StrokeLine(pixels, w, ax - 7f * s, ay + 4f * s, ax + 7f * s, ay - 4f * s, 2.4f * s, iconAccent);
+                StrokeLine(pixels, w, ax - 7f * s, ay - 4f * s, ax + 7f * s, ay + 4f * s, 2.4f * s, iconAccent);
+                FillDisc(pixels, w, ax, ay, 2.2f * s, iconBase);
+            }
+        }
+
+        // Left NATO Tactical Branch Plate (x = 10..57, y = 39..73.5 -> sits cleanly above condition bars!).
+        const float plateLeft = 10f * s, plateTop = 39f * s, plateRight = 57f * s, plateBottom = 73.5f * s;
+        for (var y = (int)plateTop; y <= (int)plateBottom; y++)
+        for (var x = (int)plateLeft; x <= (int)plateRight; x++)
+        {
+            var inside = -RoundedBoxAt(x + 0.5f, y + 0.5f, plateLeft, plateTop, plateRight, plateBottom, 3.5f * s);
+            if (inside < 0f) continue;
+            var colour = inside < 1.3f * s
+                ? branch.Lightened(0.36f)
+                : branch.Darkened(0.42f).Lerp(branch.Darkened(0.62f), (y - plateTop) / (plateBottom - plateTop));
+            BlendPixel(pixels, w, x, y, colour, 0.96f);
+        }
+
+        var symbol = new Color(0.96f, 0.98f, 1.00f, 0.98f);
+        const float cx = 33.5f * s, cy = 56.2f * s, halfW = 16.5f * s, halfH = 11.5f * s, stroke = 4.6f * s;
+        if (!PaintSymbolArt(pixels, w, counterSymbol, cx, cy, halfW + stroke / 2f, halfH + stroke / 2f, symbol))
+            DrawNatoBranchSymbol(pixels, w, branchRole, cx, cy, halfW, halfH, stroke, symbol);
+
+        // Right Combat Branch Silhouette Medallion (x = 124..166, y = 25.5..73.5).
+        const float rightLeft = 124f * s, rightTop = 25.5f * s, rightRight = 166f * s, rightBottom = 73.5f * s;
+        for (var y = (int)rightTop; y <= (int)rightBottom; y++)
+        for (var x = (int)rightLeft; x <= (int)rightRight; x++)
+        {
+            var inside = -RoundedBoxAt(x + 0.5f, y + 0.5f, rightLeft, rightTop, rightRight, rightBottom, 3.5f * s);
+            if (inside < 0f) continue;
+            var colour = inside < 1.2f * s
+                ? branch.Lightened(0.28f).Lerp(national.Lightened(0.30f), 0.35f)
+                : branch.Darkened(0.55f).Lerp(national.Darkened(0.65f), 0.35f);
+            BlendPixel(pixels, w, x, y, colour, 0.94f);
+        }
+        DrawBranchSilhouette(pixels, w, branchRole, 145f * s, 49.5f * s, s, symbol, branch.Lightened(0.45f));
+
+        try
+        {
+            using var image = Image.CreateFromData(w, h, false, Image.Format.Rgba8, pixels);
+            image.Resize(width, height, Image.Interpolation.Lanczos);
+            var texture = ImageTexture.CreateFromImage(image);
+            _armyCounterTextures[key] = texture;
+            return texture;
+        }
+        catch (Exception e)
+        {
+            GD.PushWarning($"[dof] ArmyCounterTexture fallback for {nation.Tag}: {e.Message}");
+            if (_armyCounterTextures.Values.FirstOrDefault(t => t is not null) is { } fallback)
+                return fallback;
+            return new PlaceholderTexture2D { Size = new Vector2(width, height) };
+        }
+    }
+
+    private static void DrawNatoBranchSymbol(byte[] pixels, int w, string branchRole,
+        float cx, float cy, float halfW, float halfH, float stroke, Color symbol)
+    {
+        switch (branchRole)
+        {
+            case "armor":
+                StrokeEllipse(pixels, w, cx, cy - halfH * 0.12f, halfW * 0.92f, halfH * 0.58f, stroke * 0.82f, symbol);
+                for (var tick = -1; tick <= 1; tick++)
+                    FillDisc(pixels, w, cx + tick * halfW * 0.50f, cy + halfH * 0.65f, stroke * 0.36f, symbol);
+                break;
+            case "artillery":
+                FillDisc(pixels, w, cx, cy, stroke * 1.15f, symbol);
+                StrokeEllipse(pixels, w, cx, cy, stroke * 1.65f, stroke * 1.65f, stroke * 0.42f, symbol);
+                break;
+            case "mechanized":
+                StrokeLine(pixels, w, cx - halfW * 0.85f, cy - halfH * 0.78f, cx + halfW * 0.85f, cy + halfH * 0.78f, stroke * 0.72f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.85f, cy + halfH * 0.78f, cx + halfW * 0.85f, cy - halfH * 0.78f, stroke * 0.72f, symbol);
+                StrokeEllipse(pixels, w, cx, cy, halfW * 0.78f, halfH * 0.55f, stroke * 0.68f, symbol);
+                break;
+            case "motorized":
+                StrokeLine(pixels, w, cx - halfW * 0.88f, cy - halfH * 0.72f, cx + halfW * 0.88f, cy + halfH * 0.48f, stroke * 0.80f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.88f, cy + halfH * 0.48f, cx + halfW * 0.88f, cy - halfH * 0.72f, stroke * 0.80f, symbol);
+                FillDisc(pixels, w, cx - halfW * 0.52f, cy + halfH * 0.82f, stroke * 0.52f, symbol);
+                FillDisc(pixels, w, cx + halfW * 0.52f, cy + halfH * 0.82f, stroke * 0.52f, symbol);
+                break;
+            case "marine":
+                StrokeLine(pixels, w, cx - halfW * 0.85f, cy - halfH * 0.75f, cx + halfW * 0.85f, cy + halfH * 0.75f, stroke * 0.75f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.85f, cy + halfH * 0.75f, cx + halfW * 0.85f, cy - halfH * 0.75f, stroke * 0.75f, symbol);
+                StrokeLine(pixels, w, cx, cy - halfH * 0.78f, cx, cy + halfH * 0.72f, stroke * 0.62f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.45f, cy + halfH * 0.45f, cx + halfW * 0.45f, cy + halfH * 0.45f, stroke * 0.58f, symbol);
+                break;
+            case "militia":
+                StrokeLine(pixels, w, cx - halfW * 0.82f, cy - halfH * 0.72f, cx + halfW * 0.82f, cy + halfH * 0.72f, stroke * 0.75f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.82f, cy + halfH * 0.72f, cx + halfW * 0.82f, cy - halfH * 0.72f, stroke * 0.75f, symbol);
+                StrokeLine(pixels, w, cx, cy - halfH * 0.85f, cx, cy + halfH * 0.85f, stroke * 0.55f, symbol);
+                break;
+            default:
+                StrokeLine(pixels, w, cx - halfW * 0.90f, cy - halfH * 0.82f, cx + halfW * 0.90f, cy + halfH * 0.82f, stroke * 0.88f, symbol);
+                StrokeLine(pixels, w, cx - halfW * 0.90f, cy + halfH * 0.82f, cx + halfW * 0.90f, cy - halfH * 0.82f, stroke * 0.88f, symbol);
+                break;
+        }
+    }
+
+    private static void DrawBranchSilhouette(byte[] pixels, int w, string branchRole,
+        float cx, float cy, int s, Color primary, Color accent)
+    {
+        switch (branchRole)
+        {
+            case "armor":
+                // Main Battle Tank silhouette: track assembly, sloped hull, low turret, and long cannon barrel.
+                StrokeEllipse(pixels, w, cx - 1f * s, cy + 7.5f * s, 14f * s, 4.2f * s, 2.6f * s, primary);
+                for (var wheel = -2; wheel <= 2; wheel++)
+                    FillDisc(pixels, w, cx - 1f * s + wheel * 4.5f * s, cy + 7.5f * s, 1.8f * s, accent);
+                StrokeLine(pixels, w, cx - 15f * s, cy + 3.2f * s, cx + 13f * s, cy + 3.2f * s, 3.8f * s, primary);
+                StrokeLine(pixels, w, cx - 9f * s, cy - 2.2f * s, cx + 4f * s, cy - 2.2f * s, 4.8f * s, primary);
+                StrokeLine(pixels, w, cx + 2f * s, cy - 3.2f * s, cx + 17.5f * s, cy - 5.2f * s, 2.2f * s, accent);
+                break;
+            case "mechanized":
+                // IFV / Armored Carrier silhouette: tracked hull, troop compartment, turret & autocannon.
+                StrokeEllipse(pixels, w, cx, cy + 7.5f * s, 13.5f * s, 3.8f * s, 2.4f * s, primary);
+                StrokeLine(pixels, w, cx - 14f * s, cy + 2.8f * s, cx + 13f * s, cy + 2.8f * s, 4.4f * s, primary);
+                StrokeLine(pixels, w, cx - 11f * s, cy - 1.5f * s, cx + 5f * s, cy - 1.5f * s, 3.6f * s, primary);
+                StrokeLine(pixels, w, cx + 1f * s, cy - 4.2f * s, cx + 15.5f * s, cy - 5.8f * s, 2.0f * s, accent);
+                break;
+            case "motorized":
+                // Tactical 6x6 Truck silhouette: cab, troop canopy bed, chassis, and 3 wheels.
+                StrokeLine(pixels, w, cx - 14f * s, cy + 2.5f * s, cx + 14f * s, cy + 2.5f * s, 3.6f * s, primary);
+                StrokeLine(pixels, w, cx - 13.5f * s, cy - 3.5f * s, cx + 3.5f * s, cy - 3.5f * s, 5.5f * s, primary);
+                StrokeLine(pixels, w, cx + 5.5f * s, cy - 1.8f * s, cx + 12.5f * s, cy - 1.8f * s, 4.2f * s, accent);
+                FillDisc(pixels, w, cx - 10f * s, cy + 7.5f * s, 3.2f * s, primary);
+                FillDisc(pixels, w, cx - 1.5f * s, cy + 7.5f * s, 3.2f * s, primary);
+                FillDisc(pixels, w, cx + 9.5f * s, cy + 7.5f * s, 3.2f * s, primary);
+                break;
+            case "artillery":
+                // Field Howitzer: gun wheel, recoil trail, elevated cannon barrel, and ballistic arc.
+                StrokeLine(pixels, w, cx - 14f * s, cy + 8.5f * s, cx - 3f * s, cy + 4.5f * s, 2.6f * s, primary);
+                FillDisc(pixels, w, cx - 3f * s, cy + 5.5f * s, 4.2f * s, primary);
+                FillDisc(pixels, w, cx - 3f * s, cy + 5.5f * s, 1.8f * s, accent);
+                StrokeLine(pixels, w, cx - 4f * s, cy + 3.5f * s, cx + 13.5f * s, cy - 8.5f * s, 3.2f * s, primary);
+                FillDisc(pixels, w, cx + 15f * s, cy - 9.5f * s, 2.2f * s, accent);
+                for (var seg = 0; seg < 5; seg++)
+                {
+                    var a0 = Mathf.DegToRad(200f + seg * 22f);
+                    var a1 = Mathf.DegToRad(200f + (seg + 1) * 22f);
+                    StrokeLine(pixels, w,
+                        cx + MathF.Cos(a0) * 14f * s, cy - 1f * s + MathF.Sin(a0) * 10f * s,
+                        cx + MathF.Cos(a1) * 14f * s, cy - 1f * s + MathF.Sin(a1) * 10f * s,
+                        1.4f * s, accent);
+                }
+                break;
+            case "marine":
+                // Naval Anchor & Waves crest.
+                StrokeEllipse(pixels, w, cx, cy - 9.5f * s, 3.0f * s, 3.0f * s, 1.8f * s, accent);
+                StrokeLine(pixels, w, cx, cy - 6.5f * s, cx, cy + 7.5f * s, 2.6f * s, primary);
+                StrokeLine(pixels, w, cx - 7.5f * s, cy - 2.5f * s, cx + 7.5f * s, cy - 2.5f * s, 2.2f * s, primary);
+                StrokeLine(pixels, w, cx - 10.5f * s, cy + 2.5f * s, cx, cy + 8.5f * s, 2.4f * s, primary);
+                StrokeLine(pixels, w, cx + 10.5f * s, cy + 2.5f * s, cx, cy + 8.5f * s, 2.4f * s, primary);
+                StrokeLine(pixels, w, cx - 13f * s, cy + 12f * s, cx + 13f * s, cy + 12f * s, 1.8f * s, accent);
+                break;
+            case "militia":
+                // Irregular Partisan Chevron Shield & Rifle.
+                StrokeLine(pixels, w, cx - 10f * s, cy - 9f * s, cx + 10f * s, cy - 9f * s, 2.2f * s, accent);
+                StrokeLine(pixels, w, cx - 10f * s, cy - 9f * s, cx - 8f * s, cy + 3f * s, 2.2f * s, primary);
+                StrokeLine(pixels, w, cx + 10f * s, cy - 9f * s, cx + 8f * s, cy + 3f * s, 2.2f * s, primary);
+                StrokeLine(pixels, w, cx - 8f * s, cy + 3f * s, cx, cy + 11f * s, 2.2f * s, primary);
+                StrokeLine(pixels, w, cx + 8f * s, cy + 3f * s, cx, cy + 11f * s, 2.2f * s, primary);
+                StrokeLine(pixels, w, cx - 6f * s, cy + 4f * s, cx + 6f * s, cy - 5f * s, 2.4f * s, accent);
+                break;
+            default:
+                // Infantry: Crossed Rifles with Bayonets & Tactical Chevron above.
+                StrokeLine(pixels, w, cx - 12f * s, cy + 9.5f * s, cx + 12f * s, cy - 7.5f * s, 2.6f * s, primary);
+                StrokeLine(pixels, w, cx - 12f * s, cy - 7.5f * s, cx + 12f * s, cy + 9.5f * s, 2.6f * s, primary);
+                StrokeLine(pixels, w, cx - 7f * s, cy - 7.5f * s, cx, cy - 12.5f * s, 2.2f * s, accent);
+                StrokeLine(pixels, w, cx + 7f * s, cy - 7.5f * s, cx, cy - 12.5f * s, 2.2f * s, accent);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Which flag this country would fly today, as a sprite name. Asked of the flag catalogue
+    /// rather than built from the tag, so a country that has changed its government shows the
+    /// flag of the government it has.
+    /// </summary>
+    private string FlagSpriteFor(Nation nation)
+    {
+        var sprite = _campaign is not null ? FlagCatalog.Resolve(_campaign, nation) : "";
+        if (string.IsNullOrWhiteSpace(sprite))
+            sprite = "flag_" + (nation.Tag ?? "").ToLowerInvariant();
+        return sprite;
+    }
+
+    /// <summary>Flags already decoded for the cards: one image per sprite, not one per card.</summary>
+    private static readonly Dictionary<string, Image> FlagChipImages = new(StringComparer.Ordinal);
+    private static readonly Queue<string> FlagChipOrder = new();
+    private const int FlagChipImageLimit = 64;
+    private static readonly Dictionary<string, Image> SymbolArtImages = new(StringComparer.OrdinalIgnoreCase);
+
+    // These are owned CPU copies from Texture.GetImage, not textures borrowed by UI.
+    // A changing world must not retain every decoded full-resolution historic flag.
+    private static void RememberFlagChipImage(string key, Image image)
+    {
+        if (FlagChipImages.Remove(key, out var replaced))
+        { if (!ReferenceEquals(replaced, image)) replaced?.Dispose(); }
+        else FlagChipOrder.Enqueue(key);
+        FlagChipImages[key] = image;
+        while (FlagChipImages.Count > FlagChipImageLimit && FlagChipOrder.Count > 0)
+            if (FlagChipImages.Remove(FlagChipOrder.Dequeue(), out var retired)) retired?.Dispose();
+    }
+
+    private static void ClearFlagChipImages()
+    {
+        foreach (var image in FlagChipImages.Values) image?.Dispose();
+        FlagChipImages.Clear(); FlagChipOrder.Clear();
+    }
+
+    private static void PaintFlagChip(byte[] pixels, int width, string sprite,
+        float left, float top, float chipWidth, float chipHeight, Nation nation = null)
+    {
+        var cacheKey = !string.IsNullOrWhiteSpace(sprite) ? sprite : (nation?.Tag ?? "fallback");
+        if (!FlagChipImages.TryGetValue(cacheKey, out var image) || image is null || image.IsEmpty())
+        {
+            image = DealOrForceGame.FlagSpriteTexture(sprite)?.GetImage();
+            if (image is not null && !image.IsEmpty())
+            {
+                if (image.IsCompressed()) image.Decompress();
+                image.Convert(Image.Format.Rgba8);
+                RememberFlagChipImage(cacheKey, image);
+            }
+            else { image?.Dispose(); image = null; }
+        }
+        var x0 = (int)MathF.Round(left);
+        var y0 = (int)MathF.Round(top);
+        var cw = Math.Max(2, (int)MathF.Round(chipWidth));
+        var ch = Math.Max(2, (int)MathF.Round(chipHeight));
+        var outerShadow = new Color(0.015f, 0.022f, 0.030f, 0.98f);
+        var brassRim = new Color(0.88f, 0.76f, 0.46f, 0.96f);
+        for (var y = -2; y <= ch + 1; y++)
+        for (var x = -2; x <= cw + 1; x++)
+        {
+            if (x >= 0 && y >= 0 && x < cw && y < ch) continue;
+            var isInnerRim = x >= -1 && y >= -1 && x <= cw && y <= ch;
+            BlendPixel(pixels, width, x0 + x, y0 + y, isInnerRim ? brassRim : outerShadow, 0.96f);
+        }
+        if (image is not null && !image.IsEmpty())
+        {
+            for (var y = 0; y < ch; y++)
+            for (var x = 0; x < cw; x++)
+            {
+                var u = (x + 0.5f) / cw;
+                var v = (y + 0.5f) / ch;
+                var source = SampleBilinear(image, u, v);
+                var sheen = 1f + MathF.Sin(u * MathF.PI * 2f) * 0.04f - v * 0.06f;
+                var col = new Color(
+                    Mathf.Clamp(source.R * sheen, 0f, 1f),
+                    Mathf.Clamp(source.G * sheen, 0f, 1f),
+                    Mathf.Clamp(source.B * sheen, 0f, 1f), 1f);
+                BlendPixel(pixels, width, x0 + x, y0 + y, col, 1f);
+            }
+        }
+        else if (nation is not null)
+        {
+            // Fallback tricolour banner for dynamically founded breakaway states without a static sprite.
+            var mainCol = new Color(nation.Color);
+            var topStripe = mainCol.Lightened(0.24f);
+            var midStripe = new Color(0.94f, 0.95f, 0.96f);
+            var botStripe = mainCol.Darkened(0.22f);
+            for (var y = 0; y < ch; y++)
+            for (var x = 0; x < cw; x++)
+            {
+                var v = y / (float)ch;
+                var col = v < 0.33f ? topStripe : v < 0.67f ? midStripe : botStripe;
+                BlendPixel(pixels, width, x0 + x, y0 + y, col, 1f);
+            }
+        }
+        for (var x = 0; x < cw; x++)
+            BlendPixel(pixels, width, x0 + x, y0, new Color(1f, 1f, 1f, 0.28f), 0.55f);
+    }
+
+    /// <summary>Bilinear read of an image by normalised coordinates, for shrinking a flag.</summary>
+    private static Color SampleBilinear(Image image, float u, float v)
+    {
+        var w = image.GetWidth();
+        var h = image.GetHeight();
+        if (w <= 0 || h <= 0) return Colors.Transparent;
+        var fx = Mathf.Clamp(u * w - 0.5f, 0f, w - 1);
+        var fy = Mathf.Clamp(v * h - 0.5f, 0f, h - 1);
+        var x0 = (int)fx;
+        var y0 = (int)fy;
+        var x1 = Math.Min(x0 + 1, w - 1);
+        var y1 = Math.Min(y0 + 1, h - 1);
+        var tx = fx - x0;
+        var ty = fy - y0;
+        return image.GetPixel(x0, y0).Lerp(image.GetPixel(x1, y0), tx)
+            .Lerp(image.GetPixel(x0, y1).Lerp(image.GetPixel(x1, y1), tx), ty);
+    }
+
+    /// <summary>The colour a branch of service is drawn in, one per counter symbol.</summary>
+    private static Color BranchColour(string symbol) => symbol switch
+    {
+        "armor" => new Color(0.78f, 0.22f, 0.22f),
+        "mechanized" => new Color(0.22f, 0.58f, 0.52f),
+        "motorized" => new Color(0.38f, 0.56f, 0.26f),
+        "artillery" => new Color(0.86f, 0.48f, 0.12f),
+        "rocket" => new Color(0.88f, 0.32f, 0.16f),
+        "marine" => new Color(0.18f, 0.44f, 0.74f),
+        "air_defence" => new Color(0.52f, 0.36f, 0.72f),
+        "militia" => new Color(0.55f, 0.45f, 0.32f),
+        _ => new Color(0.28f, 0.48f, 0.34f)
+    };
+
+    /// <summary>Signed distance from a point to a rounded rectangle anywhere in the image.</summary>
+    private static float RoundedBoxAt(float x, float y, float left, float top, float right, float bottom, float radius)
+    {
+        var cx = (left + right) * 0.5f;
+        var cy = (top + bottom) * 0.5f;
+        var qx = MathF.Abs(x - cx) - ((right - left) * 0.5f - radius);
+        var qy = MathF.Abs(y - cy) - ((bottom - top) * 0.5f - radius);
+        var outside = MathF.Sqrt(MathF.Max(qx, 0f) * MathF.Max(qx, 0f) + MathF.Max(qy, 0f) * MathF.Max(qy, 0f));
+        return outside + MathF.Min(MathF.Max(qx, qy), 0f) - radius;
     }
 
     /// <summary>
@@ -146,16 +488,19 @@ public sealed partial class GlobePresentation
         var name = "unit_" + symbol.ToLowerInvariant();
         if (!SpriteCatalog.Has(name)) return false;
         var path = SpriteCatalog.TextureOf(name);
-        Image art = null;
         if (string.IsNullOrWhiteSpace(path)) return false;
-        // Imported if Godot has seen it; read straight off the disk if it has not - a mod's
-        // folder, or a picture dropped into the game's own gfx/ since the last import.
-        var loose = path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
-        if (ResourceLoader.Exists(path)) art = GD.Load<Texture2D>(path)?.GetImage();
-        else if (System.IO.File.Exists(loose)) art = Image.LoadFromFile(loose);
-        if (art is null || art.IsEmpty()) return false;
-        if (art.IsCompressed()) art.Decompress();
-        art.Convert(Image.Format.Rgba8);
+        if (!SymbolArtImages.TryGetValue(path, out var baseArt) || baseArt is null || baseArt.IsEmpty())
+        {
+            var loose = path.StartsWith("res://", StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;
+            if (ResourceLoader.Exists(path)) baseArt = GD.Load<Texture2D>(path)?.GetImage();
+            else if (System.IO.File.Exists(loose)) baseArt = Image.LoadFromFile(loose);
+            if (baseArt is null || baseArt.IsEmpty()) return false;
+            if (baseArt.IsCompressed()) baseArt.Decompress();
+            baseArt.Convert(Image.Format.Rgba8);
+            SymbolArtImages[path] = baseArt;
+        }
+        using var art = baseArt.Duplicate() as Image;
+        if (art is null) return false;
         var scale = MathF.Min(halfWidth * 2f / art.GetWidth(), halfHeight * 2f / art.GetHeight());
         var fitWidth = Math.Max(1, (int)(art.GetWidth() * scale));
         var fitHeight = Math.Max(1, (int)(art.GetHeight() * scale));
@@ -353,7 +698,8 @@ public sealed partial class GlobePresentation
             }
             WritePixel(pixels, glowWidth, x, y, new Color(1f, 1f, 1f, alpha));
         }
-        var texture = ImageTexture.CreateFromImage(Image.CreateFromData(glowWidth, glowHeight, false, Image.Format.Rgba8, pixels));
+        using var image = Image.CreateFromData(glowWidth, glowHeight, false, Image.Format.Rgba8, pixels);
+        var texture = ImageTexture.CreateFromImage(image);
         _selectionGlows[key] = texture;
         return texture;
     }

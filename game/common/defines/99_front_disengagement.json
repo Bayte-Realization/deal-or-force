@@ -1,0 +1,6 @@
+{
+  "FrontStaffDisengages": true,
+  "FrontDisengagementMinimumBattleDays": 2,
+  "FrontDisengagementMaximumShare": 0.35,
+  "FrontDisengagementDefenceRatio": 0.8
+}

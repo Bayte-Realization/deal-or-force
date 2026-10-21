@@ -198,6 +198,7 @@ public sealed class ModLoader
         CentralBank.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
+        RulerTraits.ResetCatalog();
         IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
@@ -378,7 +379,8 @@ public sealed class ModLoader
         ("factions", () => Factions.ResetCatalog(), Factions.Merge),
         ("coups", () => Coups.ResetCatalog(), Coups.Merge),
         ("addresses", () => AddressToNation.ResetCatalog(), AddressToNation.Merge),
-        ("covert_operations", () => CovertOperations.ResetCatalog(), CovertOperations.Merge)
+        ("covert_operations", () => CovertOperations.ResetCatalog(), CovertOperations.Merge),
+        ("rulers", () => Rulers.ResetCatalog(), Rulers.MergeCommon)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>

@@ -43,6 +43,39 @@ public partial class DealOrForceGame
     /// button is never pulled out from under a click that is half made.</summary>
     private string _movementBuiltFrom = "";
 
+    /// <summary>
+    /// Put the panel away, whether the × was clicked or Escape was pressed. One exit for
+    /// both keys means a later fix cannot teach one of them something the other forgets.
+    /// </summary>
+    private void CloseMovementPanel()
+    {
+        if (_movementPanel is null) return;
+        _movementPanel.Visible = false;
+    }
+
+    /// <summary>
+    /// Whether Escape should be answered by the movement card rather than by a window above
+    /// it. The card is a HUD dock, not a full-screen page: a dialog opened over it owns Escape
+    /// first, and the map's own selection owns it while a country or region card is standing.
+    /// </summary>
+    private bool MovementPanelOwnsEscape()
+    {
+        // `Visible` is the node's own flag; a hidden parent leaves it true. `IsVisibleInTree`
+        // is the question that matters here, because most of these screens are built once and
+        // then hidden by a layer above them.
+        static bool Shown(Control control) => control is not null && control.IsVisibleInTree();
+        if (!Shown(_movementPanel) || _hudLayer is not { Visible: true }) return false;
+        if (Shown(_sidePanel) || Shown(_armyPanel) || Shown(_countryCard)) return false;
+        return !Shown(_pauseMenuLayer) && !Shown(_settingsLayer) && !Shown(_saveLoadLayer) &&
+               !Shown(_networkLayer) && !Shown(_handbookLayer) && !Shown(_peaceLayer) &&
+               !Shown(_stateAffairsLayer) && !Shown(_sovereignFinanceLayer) &&
+               !Shown(_ledgerLayer) && !Shown(_warLedgerLayer) && !Shown(_diplomacyLayer) &&
+               !Shown(_conflictsLayer) && !Shown(_policyLayer) && !Shown(_tradeScreenLayer) &&
+               !Shown(_productionLayer) && !Shown(_researchLayer) && !Shown(_doctrineLayer) &&
+               !Shown(_supportLayer) && !Shown(_situationLayer) && !Shown(_recruitmentLayer) &&
+               !Shown(_eventLayer) && !Shown(_handoverLayer);
+    }
+
     /// <summary>Built once with the rest of the interface.</summary>
     private void BuildMovementPanel()
     {
@@ -82,7 +115,7 @@ public partial class DealOrForceGame
             return;
         }
         // It takes the place of whatever stood there.
-        if (_sidePanel is { Visible: true }) CloseSidePanel();
+        if (_sidePanel is { Visible: true }) CloseSidePanel(dropRegionSelection: false);
         if (_armyPanel is { Visible: true }) SetArmyPanelVisible(false);
         if (_countryCard is { Visible: true }) HideMapSelection(false);
         _movementSideSeen = false;
@@ -110,11 +143,11 @@ public partial class DealOrForceGame
         var sideOpen = _sidePanel is { Visible: true } || _armyPanel is { Visible: true };
         if (_movementPanel.Visible)
         {
-            if (sideOpen && !_movementSideSeen) _movementPanel.Visible = false;
+            if (sideOpen && !_movementSideSeen) CloseMovementPanel();
             else if (_countryCard is { Visible: true })
             {
                 if (_movementShown == player) _countryCard.Visible = false;
-                else _movementPanel.Visible = false;
+                else CloseMovementPanel();
             }
         }
         _movementSideSeen = sideOpen;
@@ -123,7 +156,7 @@ public partial class DealOrForceGame
     private void ToggleMovementPanel()
     {
         if (_movementPanel is null) return;
-        if (_movementPanel.Visible) { _movementPanel.Visible = false; return; }
+        if (_movementPanel.Visible) { CloseMovementPanel(); return; }
         var own = _campaign?.Player;
         ShowMovement(own?.Movement is not null ? own : _movementShown ?? Movements.Of(_campaign).FirstOrDefault());
     }
@@ -197,7 +230,7 @@ public partial class DealOrForceGame
             seat.AddChild(Ellipsed(Simulation.Loc.Format("{0} region(s) since day {1}",
                 _campaign.StatesOf(nation).Length, state.StatehoodDay), 12, "text.muted", true));
         }
-        var close = ActionButton("×", () => _movementPanel.Visible = false, 30, 28);
+        var close = ActionButton("×", CloseMovementPanel, 30, 28);
         close.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         header.AddChild(close);
 

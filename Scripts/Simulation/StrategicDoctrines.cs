@@ -215,10 +215,13 @@ public static class StrategicDoctrines
     /// The AI's own hand: a country with no course adopts one, and a government whose character has
     /// changed changes course - at long intervals, in peace, and only if it can pay for it.
     /// </summary>
+    
     public static void Tick(Campaign campaign)
     {
         if (campaign is null || !campaign.FeatureEnabled("strategic_doctrines")) return;
         var day = campaign.ElapsedDays;
+        if (campaign.LastStrategicDoctrineDay == day) return;
+        campaign.LastStrategicDoctrineDay = day;
         foreach (var nation in campaign.Nations)
         {
             if (!Delegation.RunByAi(nation)) continue;

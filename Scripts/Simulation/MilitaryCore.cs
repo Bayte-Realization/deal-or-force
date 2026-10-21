@@ -42,7 +42,8 @@ public enum ArmyMoveResult
     InvalidTarget,
     TargetNotControlled,
     NoLandRoute,
-    RouteInterrupted
+    RouteInterrupted,
+    WithdrawnAndMoving
 }
 
 /// <summary>Organisational headquarters. Its divisions remain independent map entities.</summary>
@@ -256,6 +257,27 @@ public sealed class MoveArmyCommand : ICampaignCommand
         }
 
         var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
+        var wasInBattle = army.InBattle;
+        if (wasInBattle && !AppendWaypoint)
+        {
+            // Withdrawal can end a battle and yield ground. Reject a destination without
+            // military access or a real corridor BEFORE any such irreversible side effect.
+            // Defenders plan from the actual first retreat step; trapped formations still
+            // keep the existing option to queue a valid order while their battle continues.
+            if (!BattleDestinationAllowed(campaign, nation, army, controllers, out var refusal))
+            {
+                Result = refusal;
+                return;
+            }
+            if (Warfare.Withdraw(campaign, army, out _, TargetProvinceId))
+            {
+                if (army.ProvinceId == TargetProvinceId)
+                {
+                    SetResult(army, campaign, ArmyMoveResult.WithdrawnAndMoving);
+                    return;
+                }
+            }
+        }
         var routeStart = AppendWaypoint && army.PlannedRoute.Count > 0 ? army.PlannedRoute[^1]
             : AppendWaypoint && army.Route.Count > 0 ? army.Route[^1] : army.ProvinceId;
         if (routeStart == TargetProvinceId)
@@ -272,7 +294,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
                 SetResult(army, campaign, ArmyMoveResult.OrderCancelled);
                 return;
             }
-            SetResult(army, campaign, ArmyMoveResult.AlreadyAtDestination);
+            SetResult(army, campaign, wasInBattle ? ArmyMoveResult.WithdrawnAndMoving : ArmyMoveResult.AlreadyAtDestination);
             return;
         }
 
@@ -392,12 +414,58 @@ public sealed class MoveArmyCommand : ICampaignCommand
         // and the march charges for that province by province.
         SetResult(army, campaign, army.InBattle
             ? ArmyMoveResult.QueuedAfterBattle
+            : wasInBattle ? ArmyMoveResult.WithdrawnAndMoving
             : war is null ? ArmyMoveResult.Issued : ArmyMoveResult.AttackIssued);
+    }
+
+    private bool BattleDestinationAllowed(Campaign campaign, Nation nation, Army army,
+        ushort[] controllers, out ArmyMoveResult refusal)
+    {
+        refusal = ArmyMoveResult.NoLandRoute;
+        var controller = controllers[TargetProvinceId];
+        var targetNation = controller == nation.MapIndex ? null
+            : campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controller);
+        var targetWar = targetNation is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+            !candidate.Ended && candidate.Opposes(nation.Id, targetNation.Id));
+        if (controller != nation.MapIndex && targetWar is null)
+        {
+            refusal = ArmyMoveResult.TargetNotControlled;
+            return false;
+        }
+
+        var from = army.ProvinceId;
+        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
+        if (battle is not null && !battle.Attackers.Contains(army.Id) && battle.Defenders.Contains(army.Id))
+        {
+            var battleWar = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
+            var retreat = Warfare.WithdrawalProvince(campaign, battleWar, army, TargetProvinceId);
+            if (retreat > 0) from = retreat;
+        }
+        if (from == TargetProvinceId) return true;
+        if (targetWar is not null)
+            return WarCoalition.OperationalRoute(campaign, targetWar, nation.Id,
+                from, TargetProvinceId, controllers).Length > 0;
+        if (campaign.ProvinceMap.FindRoute(from, TargetProvinceId, (ushort)nation.MapIndex,
+                controllers, allowUncontrolledStart: true).Length > 0) return true;
+
+        // A route home from hostile ground may be a legal breakout, not an ordinary march.
+        // Match the execution path below without rewriting the army or promoting a neutral
+        // country's province into a corridor merely because a different war exists.
+        var captor = from > 0 && from < controllers.Length && controllers[from] != nation.MapIndex
+            ? campaign.Nations.FirstOrDefault(candidate => candidate.MapIndex == controllers[from]) : null;
+        var captorWar = captor is null ? null : campaign.Wars.FirstOrDefault(candidate =>
+            !candidate.Ended && candidate.Opposes(nation.Id, captor.Id));
+        return captorWar is not null && WarCoalition.OperationalRoute(campaign, captorWar, nation.Id,
+            from, TargetProvinceId, controllers).Length > 0;
     }
 
     private void SetResult(Army army, Campaign campaign, ArmyMoveResult result)
     {
         Result = result;
+        // A rejected order while fighting has no authoritative army side effects, including
+        // its previous feedback. The command result still explains the refusal to its caller.
+        if (army.InBattle && result is ArmyMoveResult.InvalidTarget or
+                ArmyMoveResult.TargetNotControlled or ArmyMoveResult.NoLandRoute) return;
         army.LastMoveResult = result;
         army.LastMoveResultDay = campaign.ElapsedDays;
     }
@@ -410,26 +478,62 @@ public sealed class RaiseArmyCommand : ICampaignCommand
     public int StateMapIndex { get; init; }
     public float Divisions { get; init; } = 1f;
     public string TemplateId { get; init; } = "line_infantry";
+    public MobilisationMode Mode { get; init; } = MobilisationMode.Standard;
+
+    /// <summary>
+    /// Emergency mobilisation for a country whose treasury cannot pay today. The same
+    /// manpower, training queue and placement rules still apply; only the cash check is
+    /// waived, and the deficit remains on the national balance sheet.
+    /// </summary>
+    public bool AllowDeficit { get; init; }
     public string FailureReason { get; private set; } = "";
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
-        if (!float.IsFinite(Divisions) || Divisions != MathF.Floor(Divisions) || Divisions < 1 || Divisions > 6)
-        { FailureReason = "Choose 1–6 whole divisions."; return; }
-        var count = (int)Divisions;
-        FailureReason = RecruitmentSystem.Validate(campaign, IssuerId, StateMapIndex, TemplateId, count);
-        if (FailureReason.Length > 0) return;
         var nation = campaign.NationById(IssuerId);
+        var state = campaign.States.Find(s => s.MapIndex == StateMapIndex);
+        var maxBatch = RecruitmentSystem.MaxDivisionsPerBatch(campaign, nation, state, Mode);
+        if (!float.IsFinite(Divisions) || Divisions != MathF.Floor(Divisions) || Divisions < 1 || Divisions > maxBatch)
+        {
+            FailureReason = Loc.Format("Choose 1–{0} whole divisions.", maxBatch);
+            return;
+        }
+        var count = (int)Divisions;
+        FailureReason = RecruitmentSystem.Validate(campaign, IssuerId, StateMapIndex, TemplateId, count,
+            AllowDeficit, Mode);
+        if (FailureReason.Length > 0) return;
         var template = UnitTypeCatalog.Get(TemplateId);
-        var cost = RecruitmentSystem.CostOf(nation, template) * count;
+        var cost = RecruitmentSystem.TotalBatchCost(campaign, nation, template, count, Mode, out _);
         nation.Treasury -= cost;
         nation.ManpowerReserve -= template.RecruitmentPersonnel * count;
+
+        if (Mode != MobilisationMode.Standard || nation.StockpilesSeeded)
+        {
+            var bill = StrategicStockpiles.DivisionMaterialBill(template, count, Mode);
+            StrategicStockpiles.ConsumeBill(campaign, nation, bill);
+        }
+        if (Mode == MobilisationMode.RapidCallUp)
+        {
+            nation.Stability = M.Clamp(nation.Stability - campaign.Defines.RapidCallUpStabilityPerDivision * count, 0.05f, 1f);
+            if (state is not null) state.Radicalism = M.Clamp01(state.Radicalism + 0.002f * count);
+        }
+        else if (Mode == MobilisationMode.TotalMobilisation)
+        {
+            nation.Stability = M.Clamp(nation.Stability - campaign.Defines.TotalMobilisationStabilityPerDivision * count, 0.05f, 1f);
+            if (state is not null)
+            {
+                state.Radicalism = M.Clamp01(state.Radicalism + 0.005f * count);
+                state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - 0.002f * count);
+            }
+        }
+
         campaign.Recruitment.Add(new RecruitmentOrder
         {
             Id = campaign.NextRecruitmentId++,
             NationId = IssuerId, StateMapIndex = StateMapIndex, TemplateId = TemplateId,
             Count = count, PersonnelPerDivision = template.RecruitmentPersonnel,
-            PaidCost = cost, DurationDays = RecruitmentSystem.TrainingDaysOf(nation, template), LastProcessedDay = campaign.ElapsedDays
+            PaidCost = cost, DurationDays = RecruitmentSystem.TrainingDaysOf(nation, template, Mode),
+            LastProcessedDay = campaign.ElapsedDays, Mode = Mode
         });
         campaign.MarkStrategicChange();
     }
@@ -1036,8 +1140,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                 ? WarCoalition.OperationalRoute(campaign, war, army.NationId, army.ProvinceId, target, controllers)
                 : campaign.ProvinceMap.FindRoute(army.ProvinceId, target, (ushort)nation.MapIndex, controllers);
         if (plannedRoute.Length == 0 && army.ProvinceId != target && !targetIsHostile)
-            plannedRoute = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front,
-                (ushort)nation.MapIndex, controllers);
+        {
+            plannedRoute = WarCoalition.OperationalRoute(campaign, war, army.NationId, army.ProvinceId, target, controllers);
+            if (plannedRoute.Length == 0)
+                plannedRoute = campaign.ProvinceMap.FindRouteToAny(army.ProvinceId, front,
+                    (ushort)nation.MapIndex, controllers);
+        }
         var route = targetIsHostile
             ? plannedRoute.TakeWhile(province => WarCoalition.FriendlyController(campaign, war, army.NationId, controllers[province])).ToArray()
             : plannedRoute;

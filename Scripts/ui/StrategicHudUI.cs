@@ -24,6 +24,9 @@ public partial class DealOrForceGame
         _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
+        // A right-anchored panel whose content is wider than its column would otherwise grow
+        // to the right, past the screen edge. Let it take the extra width from the map side.
+        _outliner.GrowHorizontal = Control.GrowDirection.Begin;
         // One scrollable rail keeps alerts and dossiers inside the available viewport.
         var outer = Margin(_outliner, (int)Ui.Metric("panel.pad", 10), (int)Ui.Metric("spacing.sm", 8));
         outer.ClipContents = true;

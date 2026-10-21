@@ -34,7 +34,11 @@ static class DiplomacyPreviewTests
                 ("pact willingness", () => Number(AgreementSystem.Willingness(c, target, player, AgreementKind.NonAggressionPact, preview: true))),
                 ("aid amount", () => Number(AgreementSystem.AidAmount(c, player, target, out var why, preview: true)) + why),
                 ("alliance eligibility", () => AllianceSystem.CanPropose(c, player, target, out var why, preview: true) + why),
-                ("alliance willingness", () => Number(AllianceSystem.Willingness(c, target, player, refreshAssessment: false)))
+                ("alliance willingness", () => Number(AllianceSystem.Willingness(c, target, player, refreshAssessment: false))),
+                ("war parts preview", () => {
+                    var (w, p, vp, pp) = AiStatecraft.JudgeWarParts(c, target, player, refreshAssessment: false);
+                    return Number(w) + "|" + Number(p) + "|" + vp.Count + "|" + pp.Count;
+                })
             }.Concat(Enum.GetValues<SubmissionRoute>().SelectMany(route => new (string Name, Func<string> Read)[]
             {
                 (route + " refusal", () => SubmissionSystem.Refusal(c, player, target, route, refreshAssessment: false)),

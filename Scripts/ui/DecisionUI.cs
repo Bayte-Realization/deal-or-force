@@ -12,16 +12,14 @@ public partial class DealOrForceGame
     private VBoxContainer _agendaHost;
     private LineEdit _agendaSearch;
     private OptionButton _agendaSectionPicker, _agendaStatusPicker;
+    private ItemList _agendaList;
     private Label _agendaResults, _agendaTitle, _agendaDescription, _agendaCost, _agendaEffects, _agendaReason;
-    private Button _agendaApply, _agendaPrevious, _agendaNext;
-    private readonly List<Button> _agendaButtons = new();
+    private Button _agendaApply;
     private readonly List<AgendaWorkspace.Entry> _agendaPageRows = new();
     private readonly HashSet<string> _goalsSeenComplete = new();
     private AgendaWorkspace.Section _agendaSection;
     private AgendaWorkspace.Filter _agendaFilter;
     private string _agendaQuery = "", _agendaSelected = "";
-    private int _agendaPage;
-    private int _agendaCapacity;
     private Campaign _agendaWorld;
     private int _agendaNation = -1;
 
@@ -44,7 +42,7 @@ public partial class DealOrForceGame
         {
             _agendaWorld = _campaign; _agendaNation = _campaign.Player.Id;
             _agendaSection = AgendaWorkspace.Section.Decisions; _agendaFilter = AgendaWorkspace.Filter.All;
-            _agendaQuery = _agendaSelected = ""; _agendaPage = 0;
+            _agendaQuery = _agendaSelected = "";
             _goalsSeenComplete.Clear();
             if (GodotObject.IsInstanceValid(_agendaHost) && _agendaHost.GetParent() == _decisionControls)
             { _agendaSearch.Text = ""; _agendaSectionPicker.Select(0); _agendaStatusPicker.Select(0); }
@@ -60,7 +58,6 @@ public partial class DealOrForceGame
         if (GodotObject.IsInstanceValid(_agendaHost) && !_agendaHost.IsQueuedForDeletion() &&
             _agendaHost.GetParent() == _decisionControls) return;
         ClearRuntimeChildren(_decisionControls);
-        _agendaButtons.Clear();
         _agendaHost = new VBoxContainer { Name = "AgendaWorkspace" };
         _agendaHost.AddThemeConstantOverride("separation", 7);
         _decisionControls.AddChild(_agendaHost);
@@ -78,38 +75,46 @@ public partial class DealOrForceGame
         _agendaStatusPicker.AccessibilityName = Tr("Agenda status filter");
         selectors.AddChild(_agendaStatusPicker);
         _agendaSectionPicker.ItemSelected += index =>
-        { _agendaSection = (AgendaWorkspace.Section)index; _agendaPage = 0; _agendaSelected = ""; RefreshAgendaControls(); };
+        { _agendaSection = (AgendaWorkspace.Section)index; _agendaSelected = ""; RefreshAgendaControls(); };
         _agendaStatusPicker.ItemSelected += index =>
-        { _agendaFilter = (AgendaWorkspace.Filter)index; _agendaPage = 0; RefreshAgendaControls(); };
+        { _agendaFilter = (AgendaWorkspace.Filter)index; RefreshAgendaControls(); };
 
         _agendaSearch = Placeholder(new LineEdit { Name = "AgendaSearch", ClearButtonEnabled = true,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, Text = _agendaQuery }, "Find an initiative or ID...");
         _agendaSearch.AccessibilityName = Tr("Agenda search");
         _agendaHost.AddChild(_agendaSearch);
-        _agendaSearch.TextChanged += text => { _agendaQuery = text; _agendaPage = 0; RefreshAgendaControls(); };
+        _agendaSearch.TextChanged += text => { _agendaQuery = text; RefreshAgendaControls(); };
         _agendaResults = CardLine("", "text.caption"); _agendaResults.Name = "AgendaResults";
         _agendaHost.AddChild(_agendaResults);
-        var pageSize = Math.Clamp((int)Ui.Metric("agenda.page_size", 4), 1, 12);
-        for (var slot = 0; slot < pageSize; slot++)
+
+        _agendaList = new ItemList
         {
-            var captured = slot;
-            var button = ActionButton("", () =>
+            Name = "AgendaEntries",
+            SelectMode = ItemList.SelectModeEnum.Single,
+            AllowReselect = true,
+            AutoHeight = false,
+            SameColumnWidth = true,
+            FixedColumnWidth = 0,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, AgendaListHeight()),
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            MouseForcePassScrollEvents = false,
+            AccessibilityName = Tr("All matching initiatives")
+        };
+        _agendaList.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
+        _agendaList.AddThemeColorOverride("font_selected_color", Ui.Colour("text.bright"));
+        _agendaList.AddThemeColorOverride("font_hovered_color", Ui.Colour("text.accent"));
+        _agendaList.AddThemeConstantOverride("v_separation", 5);
+        _agendaList.ItemSelected += index =>
+        {
+            if (index >= 0 && index < _agendaPageRows.Count)
             {
-                if (captured < _agendaPageRows.Count)
-                { _agendaSelected = _agendaPageRows[captured].Id; RefreshAgendaControls(); }
-            }, 0, 40);
-            button.Name = "AgendaEntry" + slot;
-            button.Alignment = HorizontalAlignment.Left; button.ClipText = true;
-            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            _agendaHost.AddChild(button); _agendaButtons.Add(button);
-        }
-        var paging = new HBoxContainer();
-        _agendaHost.AddChild(paging);
-        _agendaPrevious = ActionButton("Previous", () => { _agendaPage--; _agendaSelected = ""; RefreshAgendaControls(); }, 0, 28);
-        _agendaPrevious.Name = "AgendaPrevious"; _agendaPrevious.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _agendaNext = ActionButton("Next", () => { _agendaPage++; _agendaSelected = ""; RefreshAgendaControls(); }, 0, 28);
-        _agendaNext.Name = "AgendaNext"; _agendaNext.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        paging.AddChild(_agendaPrevious); paging.AddChild(_agendaNext);
+                _agendaSelected = _agendaPageRows[(int)index].Id;
+                RefreshAgendaDetail(_agendaPageRows[(int)index]);
+            }
+        };
+        _agendaHost.AddChild(_agendaList);
+
         var detail = WorkbenchCard(_agendaHost);
         detail.Name = "AgendaSelectedDetail";
         _agendaTitle = CardLine("", "text.accent"); _agendaTitle.Name = "AgendaTitle";
@@ -124,6 +129,13 @@ public partial class DealOrForceGame
             detail.AddChild(control);
     }
 
+    private float AgendaListHeight()
+    {
+        var height = GetTree()?.Root?.Size.Y ?? (int)GetViewportRect().Size.Y;
+        return height < Ui.Metric("agenda.compact_height", 800)
+            ? Ui.Metric("agenda.list_height_compact", 156) : Ui.Metric("agenda.list_height", 260);
+    }
+
     private void RefreshAgendaControls()
     {
         if (!GodotObject.IsInstanceValid(_agendaHost) || _agendaHost.IsQueuedForDeletion() ||
@@ -131,51 +143,67 @@ public partial class DealOrForceGame
         var nation = _campaign.Player;
         _sideTitle.Text = Tr("Decisions");
         _sideBody.Text = Simulation.Loc.Format("National agenda · treasury {0}", Fmt.Money(nation.Treasury));
+        var wantedHeight = AgendaListHeight();
+        if (Math.Abs(_agendaList.CustomMinimumSize.Y - wantedHeight) > 0.5f)
+        {
+            _agendaList.CustomMinimumSize = new Vector2(0, wantedHeight);
+            _agendaList.Size = new Vector2(_agendaList.Size.X, wantedHeight);
+        }
+
         var entries = AgendaWorkspace.Entries(_campaign, nation, _agendaSection, _agendaQuery, _agendaFilter);
-        var capacity = AgendaPageCapacity();
-        if (capacity != _agendaCapacity && entries.FindIndex(row => row.Id == _agendaSelected) is var selectedIndex && selectedIndex >= 0)
-            _agendaPage = selectedIndex / capacity;
-        _agendaCapacity = capacity;
-        var slice = Rules.CatalogueWindow.Plan(entries.Count, capacity, _agendaPage);
-        _agendaPage = slice.Page;
         _agendaPageRows.Clear();
-        for (var i = 0; i < slice.Count; i++) _agendaPageRows.Add(entries[slice.Start + i]);
+        _agendaPageRows.AddRange(entries);
         if (!_agendaPageRows.Any(row => row.Id == _agendaSelected))
             _agendaSelected = _agendaPageRows.FirstOrDefault().Id ?? "";
+
         var disabled = _agendaSection == AgendaWorkspace.Section.Promises && !_campaign.FeatureEnabled("government_promises") ||
             _agendaSection == AgendaWorkspace.Section.Goals && !_campaign.FeatureEnabled("strategic_goals");
+        var readyCount = _agendaPageRows.Count(r => r.State == AgendaWorkspace.Status.Ready);
         _agendaResults.Text = disabled ? Tr("This mechanic is disabled in this scenario.") : entries.Count == 0 ? Tr("Nothing matches these filters.") :
-            Simulation.Loc.Format("{0} entries · page {1}/{2}", entries.Count, slice.Page + 1, slice.PageCount);
-        _agendaPrevious.Disabled = slice.Page == 0;
-        _agendaNext.Disabled = slice.Page + 1 >= slice.PageCount;
-        for (var i = 0; i < _agendaButtons.Count; i++)
+            Simulation.Loc.Format("{0} initiatives · {1} ready", entries.Count, readyCount);
+
+        var scroll = _agendaList.GetVScrollBar();
+        var prevScroll = scroll?.Value ?? 0;
+
+        while (_agendaList.ItemCount > _agendaPageRows.Count)
+            _agendaList.RemoveItem(_agendaList.ItemCount - 1);
+
+        var selectedIdx = -1;
+        for (var i = 0; i < _agendaPageRows.Count; i++)
         {
-            var button = _agendaButtons[i]; button.Visible = i < _agendaPageRows.Count;
-            if (!button.Visible) continue;
             var row = _agendaPageRows[i];
-            var text = Tr(row.Name) + " · " + Tr("Agenda status: " + row.State);
-            button.Text = text; button.TooltipText = Ui.Tip(text + (row.Reason.Length == 0 ? "" : "\n" + Tr(row.Reason)));
-            button.AccessibilityName = text;
-            button.SetMeta("agenda_id", row.Id);
-            SetAgendaHighlight(button, row.Id == _agendaSelected);
+            var badge = row.State switch
+            {
+                AgendaWorkspace.Status.Ready => "● ",
+                AgendaWorkspace.Status.Active => "◆ ",
+                AgendaWorkspace.Status.Completed => "✓ ",
+                _ => "· "
+            };
+            var text = badge + Tr(row.Name) + " · " + Tr("Agenda status: " + row.State);
+            if (i >= _agendaList.ItemCount) _agendaList.AddItem(text);
+            else _agendaList.SetItemText(i, text);
+            _agendaList.SetItemMetadata(i, row.Id);
+            _agendaList.SetItemTooltip(i, Ui.Tip(text + (row.Reason.Length == 0 ? "" : "\n" + Tr(row.Reason))));
+            _agendaList.SetItemCustomFgColor(i, row.State switch
+            {
+                AgendaWorkspace.Status.Ready => Ui.Colour("state.positive"),
+                AgendaWorkspace.Status.Active => Ui.Colour("text.accent"),
+                AgendaWorkspace.Status.Completed => Ui.Colour("state.info"),
+                _ => Ui.Colour("text.body_soft")
+            });
+            if (row.Id == _agendaSelected) selectedIdx = i;
         }
+
+        if (selectedIdx >= 0) _agendaList.Select(selectedIdx);
+        else _agendaList.DeselectAll();
+        if (scroll is not null && prevScroll > 0 && _agendaList.ItemCount > 0)
+            scroll.Value = prevScroll;
+
         RefreshAgendaDetail(_agendaPageRows.FirstOrDefault(row => row.Id == _agendaSelected));
         if (_campaign.FeatureEnabled("strategic_goals"))
             foreach (var goal in nation.Goals)
                 if (goal.CompletedDay >= 0 && _goalsSeenComplete.Add(goal.Id)) PlayStrategicCue("goal_complete");
                 else if (goal.CompletedDay < 0) _goalsSeenComplete.Remove(goal.Id);
-    }
-
-    private int AgendaPageCapacity()
-    {
-        // The window's height, not the dossier's own rect: a panel that overflows a short
-        // screen must not convince the page that it has room for the tall layout. The
-        // 1280x720 verification caught exactly that - four rows were rendered on a screen
-        // whose own height asked for two.
-        var height = GetTree()?.Root?.Size.Y ?? (int)GetViewportRect().Size.Y;
-        return height < Ui.Metric("agenda.compact_height", 800)
-            ? Math.Clamp((int)Ui.Metric("agenda.compact_page_size", 2), 1, _agendaButtons.Count)
-            : _agendaButtons.Count;
     }
 
     private void RefreshAgendaViewport()
@@ -193,6 +221,7 @@ public partial class DealOrForceGame
         var statuses = new[] { "All statuses", "Ready", "Active", "Completed" };
         for (var i = 0; i < sections.Length; i++) _agendaSectionPicker.SetItemText(i, Tr(sections[i]));
         for (var i = 0; i < statuses.Length; i++) _agendaStatusPicker.SetItemText(i, Tr(statuses[i]));
+        _agendaSearch.PlaceholderText = Tr("Find an initiative or ID...");
         RefreshAgendaControls();
     }
 
@@ -211,11 +240,14 @@ public partial class DealOrForceGame
         if (_agendaSection == AgendaWorkspace.Section.Decisions)
         {
             var d = DecisionCatalog.All.FirstOrDefault(d => d.Id == row.Id);
-            var price = DecisionCatalog.Cost(nation, d);
-            _agendaCost.Text = Simulation.Loc.Format("Cost {0} · cooldown {1} days", Fmt.Money(price), d.CooldownDays);
-            var resources = DecisionResources.PriceText(nation, d);
-            if (resources.Length > 0) _agendaCost.Text += "\n" + resources;
-            lines.AddRange(ScriptedEffects.PreviewForNation(_campaign, nation, d.Effect, price));
+            if (d is { Id.Length: > 0 })
+            {
+                var price = DecisionCatalog.Cost(nation, d);
+                _agendaCost.Text = Simulation.Loc.Format("Cost {0} · cooldown {1} days", Fmt.Money(price), d.CooldownDays);
+                var resources = DecisionResources.PriceText(nation, d);
+                if (resources.Length > 0) _agendaCost.Text += "\n" + resources;
+                lines.AddRange(ScriptedEffects.PreviewForNation(_campaign, nation, d.Effect, price));
+            }
         }
         else if (_agendaSection == AgendaWorkspace.Section.Promises && PromiseCatalog.Find(row.Id) is { } promise)
         {
@@ -259,11 +291,9 @@ public partial class DealOrForceGame
         _agendaSection = section; _agendaFilter = AgendaWorkspace.Filter.All; _agendaQuery = ""; _agendaSelected = id;
         EnsureAgendaControls();
         _agendaSectionPicker.Select((int)section); _agendaStatusPicker.Select(0); _agendaSearch.Text = "";
-        var entries = AgendaWorkspace.Entries(_campaign, _campaign.Player, section);
-        var index = entries.FindIndex(row => row.Id == id);
-        var capacity = AgendaPageCapacity();
-        _agendaPage = Math.Max(0, index) / capacity;
         RefreshAgendaControls();
+        if (_agendaList is not null && _agendaList.GetSelectedItems().Length > 0)
+            _agendaList.EnsureCurrentIsVisible();
     }
 
     private void ExecuteSelectedAgenda()

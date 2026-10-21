@@ -106,8 +106,8 @@ static class CoalitionCombatTests
         c.ProvinceController[2] = c.ProvinceController[4] = 503;
         c.ProvinceMap.Neighbors[3] = new[] { 4, 2 };
         new WithdrawArmyFromBattleCommand { IssuerId = 3, ArmyId = defender.Id }.Apply(c);
-        Check(defender.ProvinceId == 2,
-            "explicit withdrawal preserves lowest-ID own retreat even when neighbour storage is unsorted");
+        Check(defender.ProvinceId == 4,
+            "explicit withdrawal skips a hostile-occupied province despite its friendly controller and unsorted neighbours");
     }
 
     static void CoalitionCorridorKeepsNeutralBorders()

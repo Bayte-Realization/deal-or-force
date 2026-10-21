@@ -30,6 +30,16 @@ public sealed partial class Defines
     public float ConsolidationCourtingAmbition { get; set; } = 0.30f;
     /// <summary>How kindred, on average, a union's other members must be for a country to take it up as its own project.</summary>
     public float ConsolidationMinimumKinship { get; set; } = 0.25f;
+    /// <summary>How often small splinters or cultural shards review potential unifications.</summary>
+    public int ShardConsolidationReviewDays { get; set; } = 30;
+    /// <summary>No shard consolidation before this day.</summary>
+    public int ShardConsolidationEarliestDay { get; set; } = 90;
+    /// <summary>Willingness required for two shards of the same culture to merge.</summary>
+    public float ShardConsolidationAcceptance { get; set; } = 55f;
+    /// <summary>Maximum number of states a nation can hold to be considered a splinter or shard.</summary>
+    public int ShardMaxStates { get; set; } = 6;
+    /// <summary>Maximum population a nation can hold to be considered a splinter or shard.</summary>
+    public long ShardMaxPopulation { get; set; } = 35_000_000;
 }
 
 /// <summary>
@@ -72,6 +82,10 @@ public static class Consolidation
                 continue;
             }
             Review(c, nation);
+            if (string.IsNullOrEmpty(nation.ConsolidationProject))
+            {
+                ReviewShardConsolidation(c, nation);
+            }
         }
     }
 
@@ -264,5 +278,169 @@ public static class Consolidation
         var kinship = PeacefulFormation.CulturalAffinity(nation, other);
         if (theirs <= 0f || kinship < 0.5f) return 0f;
         return M.Clamp01(nation.ConsolidationAmbition) * M.Clamp01(theirs * 2f) * kinship * c.Defines.AiConsolidationAppetite;
+    }
+
+    /// <summary>Checks whether a nation is an emergent splinter, rebel shard, or micro-state.</summary>
+    public static bool IsSplinterOrShard(Campaign c, Nation n)
+    {
+        if (n is null || n.Population <= 0 || n.Movement is not null || n.IsSubject || c.Fallen.Contains(n.Id)) return false;
+        if (!c.HasOwnedLand(n)) return false;
+        if (n.Tag.StartsWith("R_") || n.Tag.StartsWith("M_")) return true;
+        var states = c.StatesOf(n);
+        return states.Length <= c.Defines.ShardMaxStates && n.Population <= c.Defines.ShardMaxPopulation;
+    }
+
+    /// <summary>Checks if nation a shares a direct land border with nation b.</summary>
+    public static bool ShareBorder(Campaign c, Nation a, Nation b)
+    {
+        if (c?.ProvinceMap is null || a is null || b is null || a.Id == b.Id) return false;
+        var map = c.ProvinceMap;
+        var bIdx = (ushort)b.MapIndex;
+        foreach (var state in c.StatesOf(a))
+        {
+            var provinces = PeaceConference.ProvincesOfState(map, state.MapIndex);
+            foreach (var p in provinces)
+            {
+                if (p <= 0 || p > map.ProvinceCount || map.ProvinceToNation[p] != a.MapIndex) continue;
+                var neighbors = map.Neighbors[p];
+                for (var i = 0; i < neighbors.Length; i++)
+                {
+                    var n = neighbors[i];
+                    if (n > 0 && n <= map.ProvinceCount && map.ProvinceToNation[n] == bIdx && !map.WaterByProvince[n])
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>Willingness of a kindred shard to unify into a coherent state.</summary>
+    public static float ShardWillingness(Campaign c, Nation founder, Nation partner)
+    {
+        var relation = CampaignDiplomacy.Peek(c, founder.Id, partner.Id);
+        var opinion = relation?.Opinion ?? 0f;
+        var culture = PeacefulFormation.CulturalAffinity(founder, partner);
+        var distance = PoliticsCore.IdeologicalDistance(founder, partner);
+        var allied = relation?.Stance == DiplomaticStance.Allied ? 20f : 0f;
+        var trade = relation?.TradeAgreement == true ? 15f : 0f;
+        var nonAggression = relation?.NonAggressionPact == true ? 10f : 0f;
+        var govMatch = founder.Government == partner.Government ? 10f : 0f;
+        var stability = (founder.Stability - 0.5f) * 20f;
+        var relativeSize = Math.Clamp((float)founder.Population / Math.Max(1, partner.Population), 0.5f, 3.0f);
+        var sizeBonus = (relativeSize - 1f) * 10f;
+
+        return M.Clamp(opinion * 0.40f + culture * 30f + allied + trade + nonAggression + govMatch + stability + sizeBonus - distance * 25f, 0f, 100f);
+    }
+
+    /// <summary>Reviews adjacent kindred splinters and initiates courting or organic unification.</summary>
+    public static void ReviewShardConsolidation(Campaign c, Nation founder)
+    {
+        if (c.ElapsedDays < c.Defines.ShardConsolidationEarliestDay) return;
+        if (!IsSplinterOrShard(c, founder)) return;
+        if (c.Wars.Any(w => !w.Ended && w.Involves(founder.Id))) return;
+
+        var neighbors = c.Nations.Where(other => other.Id != founder.Id &&
+            !c.Fallen.Contains(other.Id) && other.Movement is null && !other.IsSubject &&
+            IsSplinterOrShard(c, other) && !c.Wars.Any(w => !w.Ended && w.Involves(other.Id)) &&
+            PeacefulFormation.CulturalAffinity(founder, other) >= 0.5f &&
+            PoliticsCore.IdeologicalDistance(founder, other) <= 0.65f &&
+            ShareBorder(c, founder, other))
+            .OrderByDescending(other => ShardWillingness(c, founder, other))
+            .ToList();
+
+        if (neighbors.Count == 0) return;
+
+        var partner = neighbors[0];
+        // If partner is substantially larger than founder and not a rebel tag, let the larger one initiate
+        if (partner.Population > founder.Population * 1.5f && !partner.Tag.StartsWith("R_")) return;
+
+        var offerKey = "shard_offer/" + founder.Id + "/" + partner.Id;
+        if (partner.DecisionAvailableDay.GetValueOrDefault(offerKey) > c.ElapsedDays) return;
+
+        var willing = ShardWillingness(c, founder, partner);
+        if (willing >= c.Defines.ShardConsolidationAcceptance)
+        {
+            partner.DecisionAvailableDay[offerKey] = c.ElapsedDays + 60;
+            if (!partner.IsHuman)
+            {
+                ExecuteShardConsolidation(c, founder, partner);
+                return;
+            }
+
+            var id = c.PendingEvents.Count == 0 ? 1 : c.PendingEvents.Max(e => e.Id) + 1;
+            c.PendingEvents.Add(new PendingCampaignEvent
+            {
+                Id = id,
+                NationId = partner.Id,
+                CreatedDay = c.ElapsedDays,
+                ExpiresDay = c.ElapsedDays + 30,
+                Title = Loc.Format("Unification Proposal from {0}", founder.DisplayName),
+                Description = Loc.Format("{0} invites our kindred peoples to merge our lands, armed forces, and institutions into a single unified sovereign state.", founder.DisplayName),
+                Options = new[]
+                {
+                    new CampaignEventOption
+                    {
+                        Title = "Agree to national unification",
+                        Consequence = "Integrate our territory and army into the union.",
+                        ShardConsolidateFounderId = founder.Id
+                    },
+                    new CampaignEventOption
+                    {
+                        Title = "Remain an independent state",
+                        Consequence = "Decline the unification proposal."
+                    }
+                }
+            });
+            c.MarkStrategicChange();
+            return;
+        }
+
+        // Court them if willingness is not yet high enough
+        var relation = CampaignDiplomacy.Get(c, founder.Id, partner.Id);
+        if (relation is null || relation.Stance == DiplomaticStance.AtWar) return;
+
+        if (relation.Opinion < 35f)
+        {
+            new ImproveRelationsCommand { IssuerId = founder.Id, TargetId = partner.Id }.Apply(c);
+            return;
+        }
+        if (!relation.TradeAgreement)
+        {
+            new ProposeAgreementCommand { IssuerId = founder.Id, TargetId = partner.Id, Kind = AgreementKind.TradeAgreement }.Apply(c);
+            return;
+        }
+        if (relation.Stance != DiplomaticStance.Allied)
+        {
+            new ProposeAllianceCommand { IssuerId = founder.Id, TargetId = partner.Id }.Apply(c);
+            return;
+        }
+    }
+
+    /// <summary>Executes the diplomatic consolidation of two kindred splinter nations.</summary>
+    public static void ExecuteShardConsolidation(Campaign c, Nation founder, Nation partner)
+    {
+        if (c is null || founder is null || partner is null || founder.Id == partner.Id) return;
+        if (c.Fallen.Contains(founder.Id) || c.Fallen.Contains(partner.Id)) return;
+
+        // If founder is a generic rebel tag while partner is an established nation, let partner absorb founder
+        if (founder.Tag.StartsWith("R_") && !partner.Tag.StartsWith("R_"))
+        {
+            (founder, partner) = (partner, founder);
+        }
+
+        PeacefulFormation.IntegratePartner(c, founder, partner);
+        c.Chronicle.Record(c, "shard_consolidated", founder.Id, partner.Id, subject: partner.DisplayName);
+        c.MarkStrategicChange();
+    }
+}
+
+public sealed class ConsolidateSplintersCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int PartnerId { get; init; }
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        Consolidation.ExecuteShardConsolidation(campaign, campaign.NationById(IssuerId), campaign.NationById(PartnerId));
     }
 }

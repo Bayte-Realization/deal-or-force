@@ -1,16 +1,3 @@
-// Deal or Force - every country by its tag.
-//
-// `CountryNames.Resolve` asks for `country.<TAG>.name` before it asks for anything else,
-// so this is where a country's name lives and 20_countries.json is the fallback nobody
-// reaches any more. Three letters mean one country; an English sentence means whatever
-// else in the game happens to be spelled the same way, which is how the language picker
-// once offered the English PEOPLE as a language.
-//
-// Generated from common/countries. A country renamed there keeps its translation,
-// which is the whole point of keying by tag.
-//
-// A government- or ideology-specific name is a longer key and is authored by hand:
-//   country.RUS.government.republic.name, country.RUS.map, formable.<id>.name
 {
   "country.ABK.name": "Abkhazia",
   "country.ABW.name": "Aruba",
@@ -237,7 +224,7 @@
   "country.SAU.name": "Saudi Arabia",
   "country.SCR.name": "Scarborough Reef",
   "country.SCV.name": "Scottish independence campaign",
-  "country.SDF.name": "North and East Syria",
+  "country.SDF.name": "Syrian Democratic Forces",
   "country.SDN.name": "Sudan",
   "country.SEN.name": "Senegal",
   "country.SER.name": "Serranilla Bank",
@@ -314,7 +301,6 @@
   "country.ELN.name": "National Liberation Army",
   "country.TPN.name": "West Papua National Liberation Army",
   "country.CMA.name": "Coordination of Azawad Movements",
-  "country.SDF.name": "Syrian Democratic Forces",
   "country.HOU.name": "Ansar Allah",
   "country.HZB.name": "Hezbollah",
   "name.form.communism": "People's Republic of {0}",
@@ -325,5 +311,11 @@
   "name.form.holy_state": "Holy State of {0}",
   "name.form.federation": "Federation of {0}",
   "name.form.technate": "Technate of {0}",
-  "name.form.provisional": "Provisional Government of {0}"
+  "name.form.provisional": "Provisional Government of {0}",
+  "country.VAN.name": "Viv Ansanm",
+  "country.AIP.name": "Alaska",
+  "country.TNM.name": "Texas",
+  "country.YCA.name": "California",
+  "country.KAU.name": "Hawaii",
+  "country.RAS.name": "Silesia"
 }

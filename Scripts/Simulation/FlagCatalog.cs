@@ -375,7 +375,7 @@ public static partial class FlagCatalog
         {
             "ideology" => nation.Ideology,
             "government" => nation.Government,
-            "culture" => DemographyCatalog.PrimaryCulture(nation.Tag),
+            "culture" => !string.IsNullOrEmpty(nation.DeclaredCulture) ? nation.DeclaredCulture : DemographyCatalog.PrimaryCulture(nation.Tag),
             "continent" => nation.Continent,
             "tag" => nation.Tag,
             "focus" => nation.GovernmentFocus.ToString(),
@@ -428,12 +428,20 @@ public static partial class FlagCatalog
         var tag = Slug(nation.Tag);
         if (tag.Length == 0) return names;
 
+        if (!string.IsNullOrWhiteSpace(nation.CustomFlag))
+        {
+            var custom = Slug(nation.CustomFlag);
+            names.Add(custom.StartsWith("flag_", StringComparison.Ordinal) ? custom : "flag_" + custom);
+        }
+
         // A landless organisation's banner is its identity, not the hypothetical regime it
         // might establish. Procedural government/ideology variants must not replace it.
         // After taking territory or proclaiming a formable, ordinary dynamic rules resume.
         if (PreferMovementBase && nation.Movement is { Landless: true, Exile: false } &&
             string.IsNullOrEmpty(nation.FormedNationId))
+        {
             names.Add($"flag_{tag}");
+        }
 
         // A country brought back flies its own flag again, in the form its politics give it,
         // ahead of anything the country that restored it ever flew.
@@ -443,6 +451,16 @@ public static partial class FlagCatalog
             names.Add($"flag_{old}_{Slug(nation.Government)}");
             names.Add($"flag_{old}_{Slug(nation.Ideology)}");
             names.Add($"flag_{old}");
+        }
+        else if (nation.FoundNameKind is "tag" or "free_tag" && !string.IsNullOrWhiteSpace(nation.FoundNameId))
+        {
+            var old = Slug(nation.FoundNameId);
+            if (old.Length > 0 && old != tag)
+            {
+                names.Add($"flag_{old}_{Slug(nation.Government)}");
+                names.Add($"flag_{old}_{Slug(nation.Ideology)}");
+                names.Add($"flag_{old}");
+            }
         }
 
         // The qualifiers that have something to say about this country today, each as the

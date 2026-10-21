@@ -70,15 +70,27 @@ public static class MusicCatalog
             .OrderBy(track => track.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-    public static IReadOnlyList<Track> For(Moment moment, MusicMood mood, string region = "")
+    public static IReadOnlyList<Track> For(Moment moment, MusicMood mood, string region = "", string subRegion = "", string country = "")
     {
-        var all = For(moment);
-        var matched = all.Where(t => (t.Moods.Length == 0 || t.Moods.Contains(MusicMood.Any) || t.Moods.Contains(mood)) &&
-            (t.Regions.Length == 0 || t.Regions.Contains(region, StringComparer.OrdinalIgnoreCase))).ToArray();
+        region = RegionKey(region); subRegion = RegionKey(subRegion); country = RegionKey(country);
         // An explicitly incomplete playlist does not pull a contradictory mood out of the pool.
         // Legacy untagged tracks match any mood and provide a backwards-compatible fallback.
-        return matched;
+        var matched = For(moment).Where(t => t.Moods.Length == 0 || t.Moods.Contains(MusicMood.Any) || t.Moods.Contains(mood)).ToArray();
+        // Untagged tracks play anywhere. Of the regional ones only the most specific tag plays -
+        // a country's own tag ("irn"), then its sub-region, then its continent: Western Asia
+        // hears the Middle East's tracks rather than the continent's East Asian ones, and falls
+        // back to the continent's when its sub-region has none for the mood.
+        int Fit(Track t) => t.Regions.Length == 0 ? 0
+            : country.Length > 0 && t.Regions.Contains(country) ? 3
+            : subRegion.Length > 0 && t.Regions.Contains(subRegion) ? 2
+            : region.Length > 0 && t.Regions.Contains(region) ? 1 : -1;
+        var best = matched.Select(Fit).DefaultIfEmpty(0).Max();
+        return matched.Where(t => Fit(t) == 0 || best > 0 && Fit(t) == best).ToArray();
     }
+
+    /// <summary>"North America", "north-america" and "north_america" are one region tag.</summary>
+    public static string RegionKey(string name) => string.IsNullOrWhiteSpace(name) ? ""
+        : name.Trim().ToLowerInvariant().Replace(' ', '_').Replace('-', '_');
 
     /// <summary>Read the base game's own `music/` tree, replacing whatever was loaded.</summary>
     public static void Load()
@@ -190,7 +202,7 @@ public static class MusicCatalog
                 ? Math.Clamp(trim, -40, 6) : 0;
             var label = value.TryGetProperty("label", out var title) && title.ValueKind == JsonValueKind.String ? title.GetString() : name;
             var regions = value.TryGetProperty("regions", out var areas) && areas.ValueKind == JsonValueKind.Array
-                ? areas.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString().Trim().ToLowerInvariant())
+                ? areas.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => RegionKey(x.GetString()))
                     .Where(x => x.Length > 0).Distinct().Take(32).ToArray() : Array.Empty<string>();
             var loop = value.TryGetProperty("loop", out var repeat) && repeat.ValueKind == JsonValueKind.True;
 

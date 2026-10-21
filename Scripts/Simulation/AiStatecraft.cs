@@ -591,6 +591,10 @@ public static partial class AiStatecraft
             }
         }
 
+        // A partition agreed with allies is this week's business when it happens: the same
+        // government cannot go shopping for a private war on top of carving up a neighbour.
+        if (TryCoordinatePartition(campaign, nation)) return;
+
         // First, whatever we already decided to do about somebody. A country with a plan
         // spends its week on the plan rather than on shopping for a different war.
         PursueWarPlan(campaign, nation);
@@ -622,6 +626,11 @@ public static partial class AiStatecraft
             // because the price has to be able to win the argument outright - and under the
             // old multiplicative rule nothing ever could.
             var judgement = WarJudgement(campaign, nation, other);
+            // A small, kindred or simply helpless neighbour is worth more than the ordinary
+            // border arithmetic says. This is appetite, not a free cause: WarPrice still
+            // charges the notoriety and the restraint, and CasusBelli still has to name it.
+            var appetite = AnnexationAmbition.Appetite(campaign, nation, other);
+            if (appetite > 0f) judgement += defines.AiAnnexationTargetBonus * appetite;
             // And an ally is let past only when that sum cleared the nerve inside WarJudgement,
             // which is the one path that returns a positive number for one.
             if (allied && judgement <= 0f) { Count("blocked"); continue; }
@@ -645,10 +654,15 @@ public static partial class AiStatecraft
             return;
         }
 
+        // A country that can swallow this neighbour outright does not ask for one region
+        // first. The aim is the whole state, and the peace writer is told so by the same
+        // word the declaration carries.
+        var annexation = AnnexationAmbition.Aim(campaign, nation, target);
+
         // Deal or force: before a war it has no reason it could give for, a government asks
         // for what it wants. A neighbour that cannot face it hands the region over; one that
         // refuses has handed it the reason (Statecraft.CasusBelli, "ultimatum_refusal").
-        if (TryUltimatumFirst(campaign, nation, target))
+        if (annexation is null && TryUltimatumFirst(campaign, nation, target))
         {
             // Not a death - a different act on the same day. Counted so the funnel closes: a
             // nation that asked is a nation that has not yet been refused, and its war is still
@@ -661,7 +675,8 @@ public static partial class AiStatecraft
         // army a two-hundredth of its own and nobody behind it, and went in in the first year:
         // weakness counted for less without a cause, but never for nothing. Without one the war
         // stays a plan - built for, its friends worked on, an ultimatum put - until there is.
-        if (defines.AiNeedsCauseForWar && string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
+        if (annexation is null && defines.AiNeedsCauseForWar &&
+            string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
         {
             if (nation.WarPlanTargetId != target.Id)
             {
@@ -746,8 +761,13 @@ public static partial class AiStatecraft
         }
 
         var recovery = TerritorialClaims.RecoveryGoal(campaign, nation, target);
-        if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id,
-            recovery?.MapIndex ?? -1, recovery is null ? "" : "reconquest") is not null) Count("declared");
+        var cause = annexation?.Cause ?? (recovery is null ? "" : "reconquest");
+        var claimed = recovery?.MapIndex ?? annexation?.ClaimedState ?? -1;
+        // A union is about the whole state, so its capital is the objective even when an
+        // older recovery claim names one region. A border reconquest keeps its own goal.
+        if (annexation is { Reunification: true } union) claimed = union.ClaimedState;
+        if (CampaignDiplomacy.DeclareWar(campaign, nation.Id, target.Id, claimed, cause) is not null)
+            Count(annexation is null ? "declared" : "annexation_declared");
     }
 
 
@@ -765,9 +785,7 @@ public static partial class AiStatecraft
         if (!string.IsNullOrEmpty(cause) && cause is not ("irredentism" or "reconquest")) return false;
         var key = "ultimatum/" + target.Id;
         if (nation.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
-        var map = campaign.ProvinceMap;
-        if (map is null) return false;
-        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
+        if (campaign.ProvinceMap is null) return false;
 
         // Only for ground there is a case for: ours once, or our own people's. China asking
         // Mongolia for Dornod because Mongolia could not say no is not a demand anybody makes.
@@ -777,18 +795,13 @@ public static partial class AiStatecraft
 
         ScenarioState best = null;
         var bestScore = 0f;
-        foreach (var state in campaign.States)
+        foreach (var state in campaign.StatesOf(target))
         {
-            if (state.NationMapIndex != target.MapIndex || state.Population <= 0) continue;
+            if (state.Population <= 0) continue;
             if (!Ultimatum.CanDemand(campaign, target, state.MapIndex)) continue;
-            var touches = false;
-            for (var province = 1; province <= map.ProvinceCount && !touches; province++)
-            {
-                if (map.ProvinceToState[province] != state.MapIndex) continue;
-                foreach (var next in map.Neighbors[province])
-                    if (next < controllers.Length && controllers[next] == (ushort)nation.MapIndex) { touches = true; break; }
-            }
-            if (!touches) continue;
+            // Adjacency is a region-graph question, not a walk of all thirty-five thousand
+            // provinces for every region of every neighbour, once a week for every country.
+            if (!TerritorialCoherence.TouchesOwnedGround(campaign, nation, state.MapIndex)) continue;
             long ours = 0;
             foreach (var group in state.PopulationGroups)
                 if (DemographyCatalog.IsPrimary(nation.Tag, group.Culture)) ours += group.Size;
@@ -882,12 +895,19 @@ public static partial class AiStatecraft
         if (war.PendingOfferFromId >= 0) return;
 
         var ledger = new PeaceLedger(campaign, war, nation.Id);
-        if (ledger.Budget < defines.AiPeaceMinimumBudget)
+        if (ledger.Budget < WarAims.PeaceFloor(campaign, nation))
         {
             // A state that is ahead against its own breakaway does not offer to stop: the
             // ground is its own, and a white peace would hand back what it has retaken.
+            // Unless the war has dragged into an intractable multi-year stalemate, in which case
+            // both parties realistically accept freezing the line of contact (frozen conflict / status-quo).
             var ownScore = war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore;
-            if (ownScore > 0f && Reintegration.Reclaiming(campaign, war, nation.Id)) return;
+            var reclaiming = Reintegration.Reclaiming(campaign, war, nation.Id);
+            var duration = campaign.ElapsedDays - war.StartedDay;
+            var staleReclaim = reclaiming && (WarWeariness.TimeToStop(campaign, war, winning: false) ||
+                                              (war.Stalled && duration >= defines.AiStalemateDays) ||
+                                              (duration >= defines.AiWearyDays));
+            if (ownScore > 0f && reclaiming && !staleReclaim) return;
             // Not winning - which is not the same as wanting to stop. A country only walks
             // away from a war it started or is defending when the country itself has had
             // enough, and that takes years rather than a bad season. Otherwise the map
@@ -901,7 +921,7 @@ public static partial class AiStatecraft
                 // hand the ground back: it concedes the line, and the line is the de facto border.
                 PeaceOffers.Put(campaign, war, nation, opponent,
                     war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
-            else if (WarWeariness.TimeToStop(campaign, war, winning: false))
+            else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim)
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
             return;
         }
@@ -915,7 +935,7 @@ public static partial class AiStatecraft
         if (!decisive && Reintegration.Reclaiming(campaign, war, nation.Id)) return;
         if (!decisive)
         {
-            var treatyBudget = war.Justification is "irredentism" or "reconquest"
+            var treatyBudget = war.Justification is "irredentism" or "reconquest" or "hegemony" or "annexation" or "reunification" or "conquest" or "imperialism"
                 ? ledger.Budget : ledger.Budget * defines.AiPeaceBudgetShare;
             WriteDemand(campaign, nation, war, ledger, demand, treatyBudget);
             ConsiderSubjugation(campaign, nation, war, ledger, demand, treatyBudget);
@@ -981,6 +1001,8 @@ public static partial class AiStatecraft
     {
         var loser = campaign.NationById(war.EnemyLeaderOf(nation.Id));
         if (loser is null || loser.IsSubject) return;
+        // A civil war ends with one state, not with the government's own rebels as a client.
+        if (WarAims.IsRebel(nation) || AnnexationAmbition.IsCivilWarBetween(nation, loser)) return;
 
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
@@ -1315,4 +1337,169 @@ public static partial class AiStatecraft
         }
         return false;
     }
+
+    // ------------------------------------------------------- coordinated partition ------------
+
+    /// <summary>
+    /// What allied great powers did in every imperial age and what the post-UN world
+    /// outlawed: agree on a weak common neighbour and divide it by simultaneous demands,
+    /// each taking the slice that touches its own ground.
+    ///
+    /// No new instrument: every slice is the existing ultimatum path (Assess, then
+    /// Resolve), and "they cannot yield what they do not hold" makes the same-day demands
+    /// disjoint by themselves - what one taker received, the next cannot ask for. The
+    /// victim either yields to each demander in turn (a partition without a war, which is
+    /// what Poland got) or refuses each and hands them all a reason (a partition by war,
+    /// which is also what Poland got, a century earlier). Assess counts the demander alone
+    /// against the victim and its defenders, so what makes the demands land is the
+    /// coalition gate below, not a new arithmetic.
+    ///
+    /// Off in the shipped scenario, because a treaty partition of a sovereign is a pre-UN
+    /// norm and the base world is 2024: <see cref="Defines.AiMayCoordinatePartitions"/>.
+    /// A mod for an imperial age switches it on with one row of data, which is exactly the
+    /// room-for-modders rule this repository runs on.
+    /// </summary>
+    internal static bool TryCoordinatePartition(Campaign campaign, Nation nation)
+    {
+        var defines = campaign.Defines;
+        if (!defines.AiMayCoordinatePartitions) return false;
+        if (nation.IsHuman || nation.Movement is not null) return false;
+        if (nation.DecisionAvailableDay.GetValueOrDefault("partition") > campaign.ElapsedDays) return false;
+
+        // The coalition: ourselves and every allied government the computer plays. A human
+        // ally counts towards the weight of the agreement but is not handed a slice - a
+        // player's demands go through the player's own screen.
+        var coalition = new List<Nation> { nation };
+        foreach (var other in campaign.Nations)
+        {
+            if (other is null || other.Id == nation.Id || other.Movement is not null) continue;
+            if (CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is { Stance: DiplomaticStance.Allied })
+                coalition.Add(other);
+        }
+
+        var coalitionStrength = 0f;
+        foreach (var member in coalition) coalitionStrength += StrengthOf(campaign, member);
+
+        Nation victim = null;
+        var bestTakers = 0;
+        foreach (var candidate in campaign.Nations)
+        {
+            if (candidate is null || candidate.IsHuman || candidate.Movement is not null) continue;
+            var inCoalition = false;
+            foreach (var member in coalition) if (member.Id == candidate.Id) { inCoalition = true; break; }
+            if (inCoalition || !campaign.HasOwnedLand(candidate)) continue;
+
+            // Nobody in the coalition may be the victim's friend or already fighting it:
+            // an ally is not for dividing, and a war is conquest, not a partition.
+            var disqualified = false;
+            foreach (var member in coalition)
+            {
+                var bond = CampaignDiplomacy.Peek(campaign, member.Id, candidate.Id);
+                if (bond is { Stance: DiplomaticStance.Allied } or { Stance: DiplomaticStance.AtWar }) { disqualified = true; break; }
+            }
+            if (disqualified) continue;
+
+            // And nobody outside it may stand behind the victim - an ally or a guarantor
+            // turns a carve-up into a general war, which is not what was proposed.
+            foreach (var other in campaign.Nations)
+            {
+                if (other is null || other.Id == candidate.Id) continue;
+                var outside = true;
+                foreach (var member in coalition) if (member.Id == other.Id) { outside = false; break; }
+                if (!outside) continue;
+                var bond = CampaignDiplomacy.Peek(campaign, other.Id, candidate.Id);
+                if (bond is { Stance: DiplomaticStance.Allied } || (bond is not null && bond.GuaranteedBy(other.Id)))
+                { disqualified = true; break; }
+            }
+            if (disqualified) continue;
+
+            var takers = 0;
+            foreach (var member in coalition)
+                if (!member.IsHuman && CampaignDiplomacy.SharesLandBorder(campaign, member.MapIndex, candidate.MapIndex))
+                    takers++;
+            if (takers < M.Max(2, defines.AiPartitionMinimumDemanders)) continue;
+            if (coalitionStrength < StrengthOf(campaign, candidate) * M.Max(1f, defines.AiPartitionStrengthMultiple)) continue;
+            if (takers <= bestTakers) continue;
+            bestTakers = takers;
+            victim = candidate;
+        }
+        if (victim is null) return false;
+
+        // A government does not carve up a neighbour every time it could. The die is the
+        // campaign's own: same seed, same day, same answer on every machine.
+        nation.DecisionAvailableDay["partition"] = campaign.ElapsedDays + M.Max(7, defines.AiPartitionCadenceDays);
+        Count("partition_attempted");
+        if (Roll(campaign.Seed, nation.Id, campaign.ElapsedDays) >= M.Clamp(defines.AiPartitionAppetite, 0f, 1f))
+            return false;
+
+        var slices = 0;
+        foreach (var member in coalition)
+        {
+            if (member.IsHuman) continue;
+            if (!CampaignDiplomacy.SharesLandBorder(campaign, member.MapIndex, victim.MapIndex)) continue;
+            if (PartitionDemand(campaign, member, victim)) slices++;
+        }
+        if (slices < 2) return false;
+        Count("partition_coordinated");
+        DiagnosticLogs.Write("ai",
+            $"AI_PARTITION coalition={coalition.Count} slices={slices} victim={victim.Tag} day={campaign.ElapsedDays}");
+        return true;
+    }
+
+    /// <summary>
+    /// One taker's slice: the most populous of the victim's regions that touches the
+    /// taker's own ground and can still be demanded. No case is required - the agreement
+    /// is the case, and the notoriety of a demand nobody can justify is priced by the same
+    /// ultimatum path as any other.
+    /// </summary>
+    private static bool PartitionDemand(Campaign campaign, Nation member, Nation victim)
+    {
+        if (Ultimatum.PendingBetween(campaign, member.Id, victim.Id)) return false;
+        var key = "ultimatum/" + victim.Id;
+        if (member.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
+        if (campaign.ProvinceMap is null) return false;
+
+        ScenarioState best = null;
+        var bestPopulation = 0L;
+        foreach (var state in campaign.StatesOf(victim))
+        {
+            if (state.Population <= 0) continue;
+            if (!Ultimatum.CanDemand(campaign, victim, state.MapIndex)) continue;
+            if (!TerritorialCoherence.TouchesOwnedGround(campaign, member, state.MapIndex)) continue;
+            if (state.Population <= bestPopulation) continue;
+            bestPopulation = state.Population;
+            best = state;
+        }
+        if (best is null) return false;
+
+        var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
+        var assessment = Ultimatum.Assess(campaign, member, victim, demand);
+        if (!assessment.Valid) return false;
+        member.DecisionAvailableDay[key] = campaign.ElapsedDays + M.Max(30, campaign.Defines.AiUltimatumIntervalDays);
+        Ultimatum.Resolve(campaign, member, victim, demand, assessment.Response);
+        Count(assessment.Response == Ultimatum.Answer.Yield ? "partition_slice_yielded" : "partition_slice_refused");
+        return true;
+    }
+}
+
+public sealed partial class Defines
+{
+    /// <summary>
+    /// Whether allied powers may agree to divide a weak common neighbour by simultaneous
+    /// demands. The practice of every imperial age and outlawed by the post-UN world: off
+    /// in the shipped 2024 scenario, and one row of data for a mod of an older one.
+    /// </summary>
+    public bool AiMayCoordinatePartitions { get; set; } = false;
+
+    /// <summary>How many takers must be able to demand a slice before it is a partition and not acession.</summary>
+    public int AiPartitionMinimumDemanders { get; set; } = 2;
+
+    /// <summary>How overwhelmingly stronger the coalition must be than the victim before anybody proposes to divide it.</summary>
+    public float AiPartitionStrengthMultiple { get; set; } = 3f;
+
+    /// <summary>Days between one government's thoughts about partitioning anybody.</summary>
+    public int AiPartitionCadenceDays { get; set; } = 90;
+
+    /// <summary>The share of such thoughts that become a proposal. A government does not carve up a neighbour every time it could.</summary>
+    public float AiPartitionAppetite { get; set; } = 0.5f;
 }

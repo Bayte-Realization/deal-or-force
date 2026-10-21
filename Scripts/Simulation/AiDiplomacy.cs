@@ -106,10 +106,33 @@ public static partial class AiStatecraft
         if (relation.Stance == DiplomaticStance.Rival && opinion >= 35f &&
             campaign.ElapsedDays - relation.LastActionDay >= 14 && nation.Treasury >= 0.1f)
         {
-            new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = friend.Id }.Apply(campaign);
+            var reconcile = new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = friend.Id };
+            reconcile.Apply(campaign);
             if (relation.Stance == DiplomaticStance.Friendly)
             {
                 Count("rivalry_reconciled");
+                return true;
+            }
+            // With diplomatic missions the overture is a paid assignment and the rivalry ends at
+            // its first weekly payment (DiplomaticOutreach.Advance), not today. Sending it is
+            // still this call's one move: the caller must not go on to court somebody else.
+            if (reconcile.Changed)
+            {
+                Count("rivalry_mission_dispatched");
+                return true;
+            }
+        }
+
+        if (campaign.Defines.DiplomaticMissionsEnabled && nation.PoliticalPoints >= 18f && nation.Treasury >= 0.2f &&
+            opinion < allianceThreshold && DiplomaticOutreach.Of(relation, nation.Id) is null &&
+            DiplomaticOutreach.Refusal(campaign, nation.Id, friend.Id).Length == 0 &&
+            (nation.TradeDependenceOn(friend.Id) > 0.02f || CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, friend.MapIndex) || opinion >= 10f))
+        {
+            var command = new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = friend.Id, Active = true };
+            command.Apply(campaign);
+            if (command.Changed)
+            {
+                Count("diplomatic_mission_dispatched");
                 return true;
             }
         }

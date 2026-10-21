@@ -103,6 +103,10 @@ static class MapAndPeaceRegressionTests
             "overwhelming victory chooses an affordable complete annexation, not a thin partial strip");
         Check(ledger.Cost(complete) <= ledger.Budget && PeaceConference.BlockReason(c, war, complete).Length == 0,
             "full settlement obeys real cost and ownership validation");
+        // A winner holding the whole country annexes it whatever the bill
+        // (Reintegration.WantsFullConquestAnnexation). The dependent-state alternative is for a
+        // war that never sought the whole country: a border war.
+        war.Limited = true;
         c.Defines.PeaceCostPerProvince = 100;
         var dependent = new PeaceDemand { WarId = war.Id, ProposerId = rus.Id };
         Check(AiStatecraft.WriteDecisiveSettlement(c, rus, war, new PeaceLedger(c, war, rus.Id), dependent) &&

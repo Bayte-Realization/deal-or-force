@@ -91,8 +91,10 @@ static class RestorationTests
 
         Check(c.StatesOf(exile).Length > 0 && home.NationMapIndex == exile.MapIndex,
             "the homeland is the country's own again, through the ordinary border machinery");
-        Check(exile.Movement.Landless == false && exile.Population == 500000,
-            "the country stands on its own ground with the people who live on it");
+        // A movement holding its own ground is a country now: the movement rolls close,
+        // the tag, name, colour and government continue as the state's own.
+        Check(exile.Movement is null && exile.Population == 500000,
+            "the restored country stands on its own ground as a country, not as a movement");
         Check(exile.Tag == beforeTag && exile.Name == beforeName && exile.Color == beforeColour,
             "the restored country is the same country: its tag, name and colour were never given up");
         Check(exile.Government == beforeGovernment,

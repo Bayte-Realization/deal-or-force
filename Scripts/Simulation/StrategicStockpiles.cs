@@ -1,0 +1,426 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json.Serialization;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>
+/// How a batch of divisions or warship hulls is raised:
+///   - Standard (0): full training curriculum, standard procurement, 100% readiness on arrival.
+///   - RapidCallUp (1): accelerated 40% training schedule, +35% treasury & material draw, slightly lower initial organisation/experience.
+///   - TotalMobilisation (2): emergency 15% schedule (minimum 5 days for divisions, 21 days for ships),
+///     +75% treasury & material draw, immediate stability & regional workforce/radicalism strain,
+///     and dynamically unlocks massive single-order batch ceilings.
+/// </summary>
+public enum MobilisationMode
+{
+    Standard = 0,
+    RapidCallUp = 1,
+    TotalMobilisation = 2
+}
+
+public sealed partial class Defines
+{
+    public bool StrategicStockpilesEnabled { get; set; } = true;
+    public float StockpileInitialWeeks { get; set; } = 12f;
+    public float StockpileMaxWeeks { get; set; } = 36f;
+    public float StockpileSurplusCaptureShare { get; set; } = 0.65f;
+    public float StockpileMinimumTrickle { get; set; } = 0.25f;
+
+    public float StockpileDivisionDailyArms { get; set; } = 0.012f;
+    public float StockpileDivisionCombatDailyAmmunition { get; set; } = 0.085f;
+    public float StockpileDivisionCombatDailyArms { get; set; } = 0.035f;
+    public float StockpileDivisionMarchDailyFuel { get; set; } = 0.030f;
+    public float StockpileDivisionDailyRations { get; set; } = 0.015f;
+
+    public float StockpileHullAtSeaDailyFuel { get; set; } = 0.018f;
+    public float StockpileHullActionDailyAmmunition { get; set; } = 0.045f;
+    public float StockpileHullDailySteel { get; set; } = 0.006f;
+
+    public float RapidCallUpTimeFactor { get; set; } = 0.40f;
+    public float RapidCallUpCostFactor { get; set; } = 1.35f;
+    public float RapidCallUpMaterialFactor { get; set; } = 1.25f;
+    public float RapidCallUpStabilityPerDivision { get; set; } = 0.002f;
+
+    public float TotalMobilisationTimeFactor { get; set; } = 0.15f;
+    public float TotalMobilisationCostFactor { get; set; } = 1.75f;
+    public float TotalMobilisationMaterialFactor { get; set; } = 1.50f;
+    public float TotalMobilisationStabilityPerDivision { get; set; } = 0.0045f;
+}
+
+public sealed partial class Nation
+{
+    /// <summary>Physical strategic depot reserves by commodity ID (e.g. "Arms", "Ammunition", "Oil", "Steel", "Food", "Electronics").</summary>
+    public Dictionary<string, float> Stockpiles = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Last day's total consumption by commodity ID, for UI readouts and burn-rate warnings.</summary>
+    [JsonIgnore]
+    public readonly Dictionary<string, float> DailyStockpileBurn = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Last day's depot refill by commodity ID.</summary>
+    [JsonIgnore]
+    public readonly Dictionary<string, float> DailyStockpileGain = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool StockpilesSeeded;
+
+    [JsonIgnore]
+    public bool HasCustomStockpiles => StockpilesSeeded || Stockpiles.Count > 0;
+}
+
+public static class StrategicStockpiles
+{
+    public static readonly string[] TrackedGoods =
+    {
+        "Arms",
+        "Ammunition",
+        "Oil",
+        "Steel",
+        "MotorVehicles",
+        "Electronics",
+        "Food"
+    };
+
+    public static void EnsureSeeded(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.StockpilesSeeded) return;
+        nation.StockpilesSeeded = true;
+
+        var divisions = 0f;
+        foreach (var a in campaign.Armies)
+            if (a.NationId == nation.Id) divisions += a.Divisions;
+        var hulls = 0;
+        foreach (var f in campaign.Fleets)
+            if (f.NationId == nation.Id) hulls += f.Hulls;
+
+        var baseScale = MathF.Max(1.5f, divisions * 1.4f + hulls * 0.6f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 0.8f);
+        SetIfMissing(nation, "Arms", baseScale * 4.5f);
+        SetIfMissing(nation, "Ammunition", baseScale * 5.0f);
+        SetIfMissing(nation, "Oil", baseScale * 4.2f);
+        SetIfMissing(nation, "Steel", baseScale * 3.8f);
+        SetIfMissing(nation, "MotorVehicles", baseScale * 2.4f);
+        SetIfMissing(nation, "Electronics", baseScale * 1.8f);
+        SetIfMissing(nation, "Food", baseScale * 6.0f);
+    }
+
+    private static void SetIfMissing(Nation nation, string key, float amount)
+    {
+        if (!nation.Stockpiles.ContainsKey(key))
+            nation.Stockpiles[key] = MathF.Round(amount, 2);
+    }
+
+    public static float Get(Campaign campaign, Nation nation, string goodId)
+    {
+        if (nation is null || string.IsNullOrEmpty(goodId)) return 0f;
+        if (!nation.StockpilesSeeded && campaign is not null) EnsureSeeded(campaign, nation);
+        return MathF.Max(0f, nation.Stockpiles.GetValueOrDefault(goodId));
+    }
+
+    public static float Capacity(Campaign campaign, Nation nation, string goodId)
+    {
+        if (nation is null) return 10f;
+        var barracks = 0;
+        var ports = 0;
+        var infra = 0;
+        var armsPlants = 0;
+        if (campaign is not null)
+            foreach (var st in campaign.StatesOf(nation))
+            {
+                barracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
+                ports += st.Buildings.GetValueOrDefault(BuildingKind.Port) + st.Buildings.GetValueOrDefault(BuildingKind.Shipyard);
+                infra += st.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
+                armsPlants += st.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
+            }
+        var baseCap = 12f + barracks * 6f + armsPlants * 10f + ports * 4f + infra * 2.5f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 3.5f;
+        return goodId switch
+        {
+            "Ammunition" or "Food" => baseCap * 1.35f,
+            "Arms" or "Oil" or "Steel" => baseCap * 1.15f,
+            _ => baseCap * 0.85f
+        };
+    }
+
+    public static float FillRatio(Campaign campaign, Nation nation, string goodId)
+    {
+        var cap = MathF.Max(1f, Capacity(campaign, nation, goodId));
+        return M.Clamp01(Get(campaign, nation, goodId) / cap);
+    }
+
+    /// <summary>
+    /// Material cost per division of a template, by commodity ID.
+    /// Raising divisions immediately draws down physical stockpiles; if depots are lower than the
+    /// requirement, the remainder must be procured at an emergency import premium.
+    /// </summary>
+    public static Dictionary<string, float> DivisionMaterialBill(UnitTypeDefinition template, int count, MobilisationMode mode)
+    {
+        var bill = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        if (template is null || count <= 0) return bill;
+        var mult = mode switch
+        {
+            MobilisationMode.RapidCallUp => 1.25f,
+            MobilisationMode.TotalMobilisation => 1.50f,
+            _ => 1f
+        };
+        var id = template.Id.ToLowerInvariant();
+        var arms = 1.2f;
+        var ammo = 0.8f;
+        var steel = 0.4f;
+        var vehicles = 0f;
+        var oil = 0.2f;
+        var electronics = 0f;
+        var food = 0.8f;
+
+        if (id.Contains("armored") || template.Hardness >= 0.65f)
+        {
+            arms = 2.2f; ammo = 1.6f; steel = 2.8f; vehicles = 2.4f; oil = 1.8f; electronics = 1.2f;
+        }
+        else if (id.Contains("mechanized") || template.Hardness >= 0.35f)
+        {
+            arms = 1.9f; ammo = 1.4f; steel = 1.8f; vehicles = 1.9f; oil = 1.3f; electronics = 0.8f;
+        }
+        else if (id.Contains("motorized") || template.Speed >= 1.15f)
+        {
+            arms = 1.4f; ammo = 1.0f; steel = 0.9f; vehicles = 1.5f; oil = 1.0f; electronics = 0.3f;
+        }
+        else if (id.Contains("artillery") || template.SoftAttack >= 1.6f)
+        {
+            arms = 2.0f; ammo = 2.4f; steel = 1.5f; vehicles = 0.6f; oil = 0.5f; electronics = 0.4f;
+        }
+        else if (id.Contains("marine") || template.Amphibious >= 0.5f)
+        {
+            arms = 1.6f; ammo = 1.2f; steel = 0.7f; electronics = 0.5f;
+        }
+
+        void Add(string key, float perDiv)
+        {
+            var total = MathF.Round(perDiv * count * mult, 2);
+            if (total > 0f) bill[key] = total;
+        }
+        Add("Arms", arms);
+        Add("Ammunition", ammo);
+        Add("Steel", steel);
+        Add("MotorVehicles", vehicles);
+        Add("Oil", oil);
+        Add("Electronics", electronics);
+        Add("Food", food);
+        return bill;
+    }
+
+    public static Dictionary<string, float> HullMaterialBill(int hulls, MobilisationMode mode)
+    {
+        var bill = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        if (hulls <= 0) return bill;
+        var mult = mode switch
+        {
+            MobilisationMode.RapidCallUp => 1.25f,
+            MobilisationMode.TotalMobilisation => 1.50f,
+            _ => 1f
+        };
+        bill["Steel"] = MathF.Round(2.2f * hulls * mult, 2);
+        bill["Arms"] = MathF.Round(1.1f * hulls * mult, 2);
+        bill["Electronics"] = MathF.Round(0.95f * hulls * mult, 2);
+        bill["Oil"] = MathF.Round(0.85f * hulls * mult, 2);
+        bill["Ammunition"] = MathF.Round(0.75f * hulls * mult, 2);
+        return bill;
+    }
+
+    /// <summary>
+    /// Calculates the emergency import surcharge if physical stockpiles do not cover the full bill.
+    /// Allows the player to still mobilise by buying missing equipment on the emergency market at a steep price,
+    /// while draining whatever is in the depot to zero.
+    /// </summary>
+    public static float SurchargeForMissingStockpile(Campaign campaign, Nation nation, Dictionary<string, float> bill, out List<string> shortages)
+    {
+        shortages = new List<string>();
+        if (campaign is null || nation is null || bill is null) return 0f;
+        if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
+        var surcharge = 0f;
+        foreach (var (goodId, needed) in bill)
+        {
+            var have = Get(campaign, nation, goodId);
+            if (have >= needed) continue;
+            var missing = needed - have;
+            var price = CommodityCatalog.TryParse(goodId, out var comm) && nation.Market.TryGetValue(comm, out var quote) && quote.Price > 0f
+                ? quote.Price
+                : 0.06f;
+            // Emergency off-market procurement is expensive
+            surcharge += missing * price * 2.2f;
+            shortages.Add($"{Loc.Get(goodId)}: {have:0.#}/{needed:0.#}");
+        }
+        return MathF.Round(surcharge, 3);
+    }
+
+    public static void ConsumeBill(Campaign campaign, Nation nation, Dictionary<string, float> bill)
+    {
+        if (campaign is null || nation is null || bill is null) return;
+        if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
+        foreach (var (goodId, needed) in bill)
+        {
+            var have = Get(campaign, nation, goodId);
+            nation.Stockpiles[goodId] = MathF.Max(0f, MathF.Round(have - needed, 3));
+        }
+    }
+
+    /// <summary>
+    /// Daily stockpile refill from national production & imports, and daily draw by field armies,
+    /// active battles, marching motorized/armored columns, and fleets at sea.
+    /// When a depot runs dry, the nation's forces suffer real supply, organisation, speed and combat penalties!
+    /// </summary>
+    public static void TickDay(Campaign campaign)
+    {
+        if (campaign is null || !campaign.Defines.StrategicStockpilesEnabled) return;
+        var defines = campaign.Defines;
+
+        // Pre-tally per nation: total divisions, marching divisions, fighting divisions, hulls at sea, hulls in action
+        var totalDivs = new Dictionary<int, float>();
+        var marchingMobile = new Dictionary<int, float>();
+        var fightingDivs = new Dictionary<int, float>();
+        var seaHulls = new Dictionary<int, int>();
+        var actionHulls = new Dictionary<int, int>();
+
+        foreach (var army in campaign.Armies)
+        {
+            if (army.Divisions <= 0f) continue;
+            totalDivs[army.NationId] = totalDivs.GetValueOrDefault(army.NationId) + army.Divisions;
+            if (army.InBattle)
+                fightingDivs[army.NationId] = fightingDivs.GetValueOrDefault(army.NationId) + army.Divisions;
+            if (army.IsMoving)
+            {
+                var tmpl = UnitTypeCatalog.Get(army.TemplateId);
+                var fuelWeight = tmpl.Hardness > 0.1f || tmpl.Speed > 1.05f ? 1.8f : 0.45f;
+                marchingMobile[army.NationId] = marchingMobile.GetValueOrDefault(army.NationId) + army.Divisions * fuelWeight;
+            }
+        }
+
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.Hulls <= 0) continue;
+            if (!fleet.InPort)
+                seaHulls[fleet.NationId] = seaHulls.GetValueOrDefault(fleet.NationId) + fleet.Hulls;
+            if (fleet.InAction)
+                actionHulls[fleet.NationId] = actionHulls.GetValueOrDefault(fleet.NationId) + fleet.Hulls;
+        }
+
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Population <= 0 || nation.Movement is not null) continue;
+            if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
+            nation.DailyStockpileBurn.Clear();
+            nation.DailyStockpileGain.Clear();
+
+            var divs = totalDivs.GetValueOrDefault(nation.Id);
+            var fighting = fightingDivs.GetValueOrDefault(nation.Id);
+            var marching = marchingMobile.GetValueOrDefault(nation.Id);
+            var afloat = seaHulls.GetValueOrDefault(nation.Id);
+            var navalCombat = actionHulls.GetValueOrDefault(nation.Id);
+
+            // 1. Refill from national production and imports (1/7th of weekly output + war industry bonus)
+            var armsFacilities = 0;
+            var refineries = 0;
+            var smelters = 0;
+            var farms = 0;
+            var electronicsPlants = 0;
+            foreach (var st in campaign.StatesOf(nation))
+            {
+                armsFacilities += st.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
+                refineries += st.Buildings.GetValueOrDefault(BuildingKind.Refinery) + st.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry);
+                smelters += st.Buildings.GetValueOrDefault(BuildingKind.Smelter);
+                farms += st.Buildings.GetValueOrDefault(BuildingKind.Agriculture);
+                electronicsPlants += st.Buildings.GetValueOrDefault(BuildingKind.ElectronicsPlant);
+            }
+            var spendScale = M.Clamp(nation.MilitarySpending / MathF.Max(0.01f, defines.BaselineMilitarySpending), 0.35f, 2.5f);
+
+            foreach (var goodId in TrackedGoods)
+            {
+                var cap = Capacity(campaign, nation, goodId);
+                var current = Get(campaign, nation, goodId);
+                var gain = defines.StockpileMinimumTrickle * spendScale;
+
+                if (CommodityCatalog.TryParse(goodId, out var comm) && nation.Market.TryGetValue(comm, out var quote))
+                {
+                    var surplus = MathF.Max(0f, quote.Production + quote.Imports - quote.Demand * 0.72f);
+                    gain += (surplus / 7f) * defines.StockpileSurplusCaptureShare * quote.Satisfaction;
+                }
+
+                gain += goodId switch
+                {
+                    "Arms" => armsFacilities * 0.14f * spendScale,
+                    "Ammunition" => armsFacilities * 0.18f * spendScale,
+                    "Oil" => refineries * 0.08f * spendScale,
+                    "Steel" => smelters * 0.12f * spendScale,
+                    "Electronics" => electronicsPlants * 0.10f * spendScale,
+                    "Food" => farms * 0.09f,
+                    _ => armsFacilities * 0.05f * spendScale
+                };
+
+                // Burn calculation
+                var burn = goodId switch
+                {
+                    "Arms" => divs * defines.StockpileDivisionDailyArms + fighting * defines.StockpileDivisionCombatDailyArms,
+                    "Ammunition" => divs * 0.004f + fighting * defines.StockpileDivisionCombatDailyAmmunition + navalCombat * defines.StockpileHullActionDailyAmmunition,
+                    "Oil" => marching * defines.StockpileDivisionMarchDailyFuel + fighting * 0.025f + afloat * defines.StockpileHullAtSeaDailyFuel,
+                    "Steel" => fighting * 0.018f + afloat * defines.StockpileHullDailySteel + navalCombat * 0.025f,
+                    "MotorVehicles" => marching * 0.008f + fighting * 0.014f,
+                    "Electronics" => fighting * 0.010f + navalCombat * 0.015f,
+                    "Food" => divs * defines.StockpileDivisionDailyRations + afloat * 0.005f,
+                    _ => 0f
+                };
+
+                nation.DailyStockpileGain[goodId] = gain;
+                nation.DailyStockpileBurn[goodId] = burn;
+
+                var next = Math.Clamp(current + gain - burn, 0f, cap);
+                nation.Stockpiles[goodId] = MathF.Round(next, 3);
+            }
+
+            // 2. Apply real field consequences when strategic stockpiles are depleted!
+            var armsStock = Get(campaign, nation, "Arms");
+            var ammoStock = Get(campaign, nation, "Ammunition");
+            var oilStock = Get(campaign, nation, "Oil");
+            var foodStock = Get(campaign, nation, "Food");
+
+            if (divs > 0f && (armsStock <= 0.05f || ammoStock <= 0.05f || oilStock <= 0.05f || foodStock <= 0.05f))
+            {
+                foreach (var army in campaign.Armies)
+                {
+                    if (army.NationId != nation.Id) continue;
+                    if (armsStock <= 0.05f)
+                        army.Equipment = M.Clamp(army.Equipment - 0.006f, 0.20f, 1f);
+                    if (ammoStock <= 0.05f && army.InBattle)
+                        army.Organisation = M.Clamp01(army.Organisation - 0.035f);
+                    if (oilStock <= 0.05f && army.IsMoving)
+                        army.SupplyLevel = M.Clamp01(army.SupplyLevel - 0.025f);
+                    if (foodStock <= 0.05f)
+                    {
+                        army.Organisation = M.Clamp01(army.Organisation - 0.015f);
+                        army.Cohesion = M.Clamp01(army.Cohesion - 0.010f);
+                    }
+                }
+            }
+
+            if (afloat > 0 && (oilStock <= 0.05f || ammoStock <= 0.05f))
+            {
+                foreach (var fleet in campaign.Fleets)
+                {
+                    if (fleet.NationId != nation.Id || fleet.InPort) continue;
+                    if (oilStock <= 0.05f)
+                        fleet.Supply = M.Clamp01(fleet.Supply - 0.03f);
+                    if (ammoStock <= 0.05f && fleet.InAction)
+                        fleet.Organisation = M.Clamp01(fleet.Organisation - 0.04f);
+                }
+            }
+        }
+    }
+
+    /// <summary>Combat effectiveness multiplier from ammunition & arms stockpiles (0.55x when dry up to 1.05x when well-stocked).</summary>
+    public static float CombatMunitionsFactor(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || !campaign.Defines.StrategicStockpilesEnabled) return 1f;
+        if (!nation.StockpilesSeeded) return 1f;
+        var ammo = Get(campaign, nation, "Ammunition");
+        var arms = Get(campaign, nation, "Arms");
+        var ammoFactor = ammo <= 0.01f ? 0.60f : ammo < 1.0f ? 0.60f + 0.40f * ammo : 1f;
+        var armsFactor = arms <= 0.01f ? 0.75f : arms < 1.0f ? 0.75f + 0.25f * arms : 1f;
+        return ammoFactor * armsFactor;
+    }
+}

@@ -42,6 +42,11 @@ static class MobilisationTests
         c.Defines.HoursPerTick = 24;
         c.Defines.FrontStaffCallsUpIdle = false;
         c.SetFeature("militia", false);
+        // The emergency staff (WarEmergency) queues one formation a day for a line with an
+        // empty post - this fixture's exact shape - and would be counted as the batch below.
+        // It has its own suite (--war-emergency-only); these checks are about Attrition's
+        // establishment, so it is switched off like the front staff and the militia above.
+        c.Defines.WarEmergencyEnabled = false;
         for (var id = 0; id < 2; id++)
             c.Nations.Add(new Nation { Id = id, MapIndex = 500 + id, Tag = "MB" + id,
                 Name = "Country " + id, Population = 100_000_000, Gdp = 100, Treasury = 20 });

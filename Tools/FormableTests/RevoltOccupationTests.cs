@@ -95,3 +95,4 @@ static class RevoltOccupationTests
             "whole-region restorations and movement settlements cannot bypass the foreign occupation guard");
     }
 }
+

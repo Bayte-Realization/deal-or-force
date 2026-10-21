@@ -4,6 +4,12 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+public sealed partial class Defines
+{
+    /// <summary>A written peace may award its package to a surviving belligerent on the proposer's side.</summary>
+    public bool PeaceAlliedBenefits { get; set; } = true;
+}
+
 /// <summary>
 /// A peace a player writes, rather than one they pick off a menu.
 ///
@@ -26,8 +32,10 @@ public sealed class PeaceDemand
 {
     public int WarId = -1;
     public int ProposerId = -1;
+    /// <summary>One recipient for the whole package; -1 preserves legacy awards to the proposer.</summary>
+    public int BeneficiaryId = -1;
 
-    /// <summary>Provinces the proposer wants to keep, permanently.</summary>
+    /// <summary>Provinces the proposer wants the beneficiary to keep, permanently.</summary>
     public readonly HashSet<int> Provinces = new();
     /// <summary>Establish one independent country in these complete, connected regions instead of annexing them.</summary>
     public bool ReleaseRegions;
@@ -57,6 +65,14 @@ public sealed class PeaceDemand
     /// </summary>
     public string Subjugate = "";
 
+    /// <summary>
+    /// A settlement after a decisive victory, not a bargain: the winner has broken the
+    /// loser's army and holds enough of the country that the remaining ground capitulates
+    /// with it. Such a demand still has to name real enemy provinces, but it is not priced
+    /// against a war score the loser no longer has any say in.
+    /// </summary>
+    public bool Unconditional;
+
     public bool IsEmpty => Provinces.Count == 0 && !Reparations && !TradeConcessions &&
                            !Demilitarise && !Humiliate && !LongTruce && Subjugate.Length == 0;
 }
@@ -66,6 +82,45 @@ public static class PeaceConference
 {
     /// <summary>What one province costs to keep, and why it costs that.</summary>
     public readonly record struct ProvinceCost(int Province, float Cost, string Reason);
+
+    /// <summary>The named recipient, or the proposer for a legacy demand. Does not change campaign state.</summary>
+    public static Nation Beneficiary(Campaign campaign, PeaceDemand demand) => demand is null ? null :
+        campaign?.NationById(demand.BeneficiaryId == -1 ? demand.ProposerId : demand.BeneficiaryId);
+
+    /// <summary>Eligible recipients on this side, in stable nation-id order. Does not change the demand.</summary>
+    public static IReadOnlyList<Nation> Beneficiaries(Campaign campaign, StrategicWar war, int proposerId)
+    {
+        if (campaign is null || war is null || war.Ended || !war.Involves(proposerId))
+            return Array.Empty<Nation>();
+        return Array.AsReadOnly(war.Side(war.IsAttacking(proposerId)).Distinct().Select(campaign.NationById)
+            .Where(nation => EligibleBeneficiary(campaign, nation) && !war.Opposes(proposerId, nation.Id) &&
+                (campaign.Defines.PeaceAlliedBenefits || nation.Id == proposerId))
+            .OrderBy(nation => nation.Id).ToArray());
+    }
+
+    private static bool EligibleBeneficiary(Campaign campaign, Nation nation) =>
+        campaign.ProvinceMap is not null && nation is { Population: > 0, MapIndex: > 0 } &&
+        !nation.Landless && nation.Movement is not { Dissolved: true } &&
+        !campaign.Fallen.Contains(nation.Id) && campaign.HasOwnedLand(nation);
+
+    private static string BeneficiaryBlock(Campaign campaign, StrategicWar war, PeaceDemand demand)
+    {
+        // Missing recipient fields on old saves and old callers keep the original self-award semantics.
+        if (demand is null || demand.BeneficiaryId == -1) return "";
+        var beneficiary = Beneficiary(campaign, demand);
+        if (campaign is null || war is null || demand.BeneficiaryId < -1 || beneficiary is null)
+            return Loc.Get("Choose an existing country to receive the peace terms.");
+        if (!war.Involves(demand.ProposerId) || !war.Involves(beneficiary.Id) ||
+            war.Opposes(demand.ProposerId, beneficiary.Id))
+            return Loc.Get("The beneficiary must be a belligerent on your side of this war.");
+        if (!EligibleBeneficiary(campaign, beneficiary))
+            return Loc.Get("The beneficiary must be a surviving country with territory of its own.");
+        if (beneficiary.Id != demand.ProposerId && !campaign.Defines.PeaceAlliedBenefits)
+            return Loc.Get("Awarding peace terms to an ally is disabled in this campaign.");
+        if (demand.ReleaseRegions && beneficiary.Id != demand.ProposerId)
+            return Loc.Get("An independent country cannot be awarded to a peace beneficiary.");
+        return "";
+    }
 
     /// <summary>
     /// The war score a side may actually spend. A war nobody is winning buys nothing;
@@ -99,12 +154,12 @@ public static class PeaceConference
     }
 
     /// <summary>What one province costs. Builds a ledger; prefer a ledger for many.</summary>
-    public static ProvinceCost Price(Campaign campaign, StrategicWar war, int proposerId, int province) =>
-        new PeaceLedger(campaign, war, proposerId).Price(province);
+    public static ProvinceCost Price(Campaign campaign, StrategicWar war, int proposerId, int province,
+        int beneficiaryId = -1) => new PeaceLedger(campaign, war, proposerId, beneficiaryId).Price(province);
 
     /// <summary>The whole bill. Builds a ledger; prefer a ledger for repeated costing.</summary>
     public static float Cost(Campaign campaign, StrategicWar war, PeaceDemand demand) =>
-        demand is null || war is null ? 0f : new PeaceLedger(campaign, war, demand.ProposerId).Cost(demand);
+        demand is null || war is null ? 0f : new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId).Cost(demand);
 
     /// <summary>
     /// Why the other side will not sign this, in words a player can act on. An empty
@@ -119,6 +174,9 @@ public static class PeaceConference
         if (war is null || war.Ended) return Loc.Get("There is no war to end");
         if (demand is null || demand.IsEmpty) return Loc.Get("The demand is empty; offer a white peace instead");
         if (!war.Involves(demand.ProposerId)) return Loc.Get("You are not a belligerent in this war");
+        var beneficiaryBlock = BeneficiaryBlock(campaign, war, demand);
+        if (beneficiaryBlock.Length > 0) return beneficiaryBlock;
+        var beneficiary = Beneficiary(campaign, demand);
 
         var topology = campaign.ProvinceMap;
         if (topology is null) return Loc.Get("The map is not ready");
@@ -153,10 +211,14 @@ public static class PeaceConference
             if (!SubjectCatalog.Knows(demand.Subjugate))
                 return Loc.Format("There is no such arrangement as '{0}'", demand.Subjugate);
             if (loser is null) return Loc.Get("There is nobody left to answer to you");
-            if (loser.AnswersTo(demand.ProposerId))
-                return Loc.Format("{0} already answers to you", loser.DisplayName);
+            if (loser.AnswersTo(beneficiary?.Id ?? demand.ProposerId))
+                return beneficiary is not null && beneficiary.Id != demand.ProposerId
+                    ? Loc.Format("{0} already answers to {1}", loser.DisplayName, beneficiary.DisplayName)
+                    : Loc.Format("{0} already answers to you", loser.DisplayName);
             if (loser.IsSubject)
                 return Loc.Format("{0} answers to somebody else; that has to end first", loser.DisplayName);
+            if (beneficiary is not null && beneficiary.AnswersTo(loser.Id))
+                return Loc.Format("{0} already answers to {1}", beneficiary.DisplayName, loser.DisplayName);
             // A country you have taken entirely is not a country that can answer to you.
             // The demand has to leave something standing for the arrangement to be about.
             if (!Enumerable.Range(1, topology.ProvinceCount).Any(province =>
@@ -164,7 +226,7 @@ public static class PeaceConference
                 return Loc.Get("A country you are annexing whole cannot also answer to you");
         }
 
-        var ledger = new PeaceLedger(campaign, war, demand.ProposerId);
+        var ledger = new PeaceLedger(campaign, war, demand.ProposerId, demand.BeneficiaryId);
         var budget = ledger.Budget;
 
         // Priced as it will be SIGNED, not as it was drawn.
@@ -175,7 +237,7 @@ public static class PeaceConference
         // front of them was bigger than the thing that was priced. One rounding, used by
         // both.
         var cost = ledger.Cost(rounded);
-        if (cost > budget)
+        if (!demand.Unconditional && cost > budget)
             return Loc.Format("They will not sign: the demand is worth {0:0} and the war is worth {1:0}", cost, budget);
         return "";
     }
@@ -193,26 +255,31 @@ public static class PeaceConference
         {
             WarId = demand.WarId,
             ProposerId = demand.ProposerId,
+            BeneficiaryId = demand.BeneficiaryId,
             Subjugate = demand.Subjugate,
             ReleaseRegions = demand.ReleaseRegions,
             Reparations = demand.Reparations,
             LongTruce = demand.LongTruce,
             TradeConcessions = demand.TradeConcessions,
             Demilitarise = demand.Demilitarise,
-            Humiliate = demand.Humiliate
+            Humiliate = demand.Humiliate,
+            Unconditional = demand.Unconditional
         };
         var proposer = campaign?.NationById(demand.ProposerId);
-        if (demand.Provinces.Count == 0 || proposer is null)
+        var beneficiary = Beneficiary(campaign, demand);
+        if (demand.Provinces.Count == 0 || proposer is null || beneficiary is null)
         {
             foreach (var province in demand.Provinces) rounded.Provinces.Add(province);
             return rounded;
         }
-        var territory = Tidy(campaign, war, demand.Provinces, proposer.MapIndex);
+        var territory = Tidy(campaign, war, demand.Provinces, beneficiary.MapIndex);
         // AI drafts pass through the same shape gate at signature, not only while the
         // initial demand is being written. Liberation is not annexation: an independent
         // country need not border its sponsor. A player's explicit painted border stays theirs.
-        if (!proposer.IsHuman && !demand.ReleaseRegions && campaign.Defines.PeaceWholeRegions)
-            territory = PeaceShape.SettleProvinces(campaign, war, territory, proposer);
+        // A capitulation keeps every province it names: reshaping a broken country's last
+        // islands out of the treaty is how an annexation leaves a rump nobody asked for.
+        if (!proposer.IsHuman && !demand.ReleaseRegions && !demand.Unconditional && campaign.Defines.PeaceWholeRegions)
+            territory = PeaceShape.SettleProvinces(campaign, war, territory, beneficiary);
         foreach (var province in territory)
             rounded.Provinces.Add(province);
         return rounded;
@@ -235,6 +302,8 @@ public static class PeaceConference
     /// </summary>
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
+        // A forged or stale recipient must not change even negotiation metadata, let alone a border.
+        if (BeneficiaryBlock(campaign, war, demand).Length > 0) return false;
         // Validate before indexing provinces in Round, and leave a refused draft intact.
         var block = BlockReason(campaign, war, demand);
         if (war is null) return false;
@@ -250,8 +319,9 @@ public static class PeaceConference
         }
 
         var winner = campaign.NationById(demand.ProposerId);
+        var beneficiary = Beneficiary(campaign, demand);
         var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
-        if (winner is null || loser is null) return false;
+        if (winner is null || beneficiary is null || loser is null) return false;
 
         // Anything not being kept goes back to whoever held it when the war began.
         if (campaign.ProvinceController is not null)
@@ -270,7 +340,18 @@ public static class PeaceConference
             }
             else
             {
-                var created = StatePartition.Annex(campaign, demand.Provinces, winner);
+                // A union of one people, or a civil war ending under one flag, is not a
+                // foreign conquest and must not be recorded as one. The world still sees
+                // the border move; it does not see a conqueror to organise against.
+                var peacefulUnion = beneficiary.Id == winner.Id
+                    ? war.Justification == "reunification" || war.CivilConflict || WarAims.IsRebel(winner) ||
+                      AnnexationAmbition.IsCivilWarBetween(winner, loser) ||
+                      Reintegration.IsBreakawayOf(loser, winner) ||
+                      AnnexationAmbition.IsReunification(campaign, winner, loser)
+                    : AnnexationAmbition.IsCivilWarBetween(beneficiary, loser) ||
+                      Reintegration.ClaimsStateInCivilWar(campaign, war, beneficiary, loser) ||
+                      AnnexationAmbition.IsReunification(campaign, beneficiary, loser);
+                var created = StatePartition.Annex(campaign, demand.Provinces, beneficiary, asConquest: !peacefulUnion);
                 war.AnnexedProvinces = demand.Provinces.Count;
                 war.CreatedStates = created.Count;
             }
@@ -286,12 +367,12 @@ public static class PeaceConference
             var share = demand.Reparations ? 0.03f : 0.015f;
             var payment = MathF.Min(MathF.Max(0f, loser.Treasury), MathF.Max(0.10f, loser.Gdp * share));
             loser.Treasury -= payment;
-            winner.Treasury += payment;
+            beneficiary.Treasury += payment;
             war.Reparations = payment;
         }
 
         if (demand.TradeConcessions)
-            CampaignDiplomacy.Get(campaign, winner.Id, loser.Id).TradeAgreement = true;
+            CampaignDiplomacy.Get(campaign, beneficiary.Id, loser.Id).TradeAgreement = true;
 
         if (demand.Demilitarise)
             foreach (var division in campaign.Armies.Where(division => division.NationId == loser.Id))
@@ -305,19 +386,21 @@ public static class PeaceConference
         {
             loser.WarSupport = M.Clamp01(loser.WarSupport - 0.18f);
             loser.Stability = M.Clamp01(loser.Stability - 0.10f);
-            winner.WarSupport = M.Clamp01(winner.WarSupport + 0.08f);
+            beneficiary.WarSupport = M.Clamp01(beneficiary.WarSupport + 0.08f);
             ModifierSystem.Grant(campaign, loser, "humiliated", 365 * 3);
         }
 
         // Last, because it is the term that needs the loser to still exist: whatever was
         // being annexed has been annexed by now, and what is left is what will answer.
         if (demand.Subjugate.Length > 0)
-            SubjectSystem.Subjugate(campaign, winner, loser, demand.Subjugate, out _);
+            SubjectSystem.Subjugate(campaign, beneficiary, loser, demand.Subjugate, out _);
 
         war.Ended = true;
+        campaign.MarkWarsChanged();
         war.EndedDay = campaign.ElapsedDays;
         war.WinnerId = winner.Id;
-        war.PeaceSummary = Summary(campaign, war, demand, winner, loser);
+        Factions.SettleCivilWarSurvivors(campaign, war);
+        war.PeaceSummary = Summary(campaign, war, demand, winner, loser, beneficiary);
         campaign.Chronicle.Record(campaign, "peace_signed", winner.Id, loser.Id);
         Escalation.Settle(campaign, war);
         war.AttackerFront.Clear();
@@ -363,8 +446,7 @@ public static class PeaceConference
         }
         foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
         {
-            battle.Ended = true;
-            battle.Outcome = "Peace agreement";
+            Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
 
         campaign.MarkMapChanged();
@@ -521,7 +603,7 @@ public static class PeaceConference
     }
 
     private static string Summary(Campaign campaign, StrategicWar war, PeaceDemand demand,
-        Nation winner, Nation loser)
+        Nation winner, Nation loser, Nation beneficiary)
     {
         var parts = new List<string>();
         if (demand.Provinces.Count > 0)
@@ -535,17 +617,17 @@ public static class PeaceConference
                 .ToList();
             var named = states.Count == 0 ? Loc.Get("territory") : string.Join(", ", states.Select(Loc.Get));
             parts.Add(demand.ReleaseRegions ? Loc.Format("An independent country was established in {0}", named)
-                : Loc.Format("{0} took {1} provinces in {2}", winner.DisplayName, demand.Provinces.Count, named) +
+                : Loc.Format("{0} took {1} provinces in {2}", beneficiary.DisplayName, demand.Provinces.Count, named) +
                   (war.CreatedStates > 0 ? Loc.Format(", splitting {0} regions", war.CreatedStates) : ""));
         }
-        if (demand.Reparations) parts.Add(Loc.Format("{0} in reparations changed hands", Fmt.Money(war.Reparations)));
-        if (demand.TradeConcessions) parts.Add(Loc.Get("a trade agreement was imposed"));
+        if (demand.Reparations) parts.Add(Loc.Format("{0} received {1} in reparations", beneficiary.DisplayName, Fmt.Money(war.Reparations)));
+        if (demand.TradeConcessions) parts.Add(Loc.Format("a trade agreement was imposed between {0} and {1}", beneficiary.DisplayName, loser.DisplayName));
         if (demand.Demilitarise) parts.Add(Loc.Format("the {0} armed forces were partially demobilised", loser.DisplayName));
         if (demand.Humiliate) parts.Add(Loc.Format("{0} was publicly humbled", loser.DisplayName));
         if (demand.LongTruce) parts.Add(Loc.Get("a ten-year truce was signed"));
-        if (demand.Subjugate.Length > 0 && loser.AnswersTo(winner.Id))
+        if (demand.Subjugate.Length > 0 && loser.AnswersTo(beneficiary.Id))
             parts.Add(Loc.Format("{0} became a {1} of {2}", loser.DisplayName,
-                Loc.Get(SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate), winner.DisplayName));
+                Loc.Get(SubjectCatalog.Of(demand.Subjugate)?.Name ?? demand.Subjugate), beneficiary.DisplayName));
         return parts.Count == 0
             ? Loc.Format("{0} and {1} made peace on no terms at all.", winner.DisplayName, loser.DisplayName)
             : char.ToUpperInvariant(parts[0][0]) + parts[0][1..] +
@@ -567,6 +649,7 @@ public sealed class PeaceLedger
     private readonly Campaign _campaign;
     private readonly StrategicWar _war;
     private readonly Nation _proposer;
+    private readonly Nation _beneficiary;
     private readonly Nation _loser;
     private readonly Dictionary<int, int> _provincesPerState = new();
     private readonly Dictionary<int, long> _statePopulation = new();
@@ -574,11 +657,12 @@ public sealed class PeaceLedger
     private readonly HashSet<int> _capitalStates = new();
     private bool _surveyed;
 
-    public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId)
+    public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId, int beneficiaryId = -1)
     {
         _campaign = campaign;
         _war = war;
         _proposer = campaign.NationById(proposerId);
+        _beneficiary = campaign.NationById(beneficiaryId == -1 ? proposerId : beneficiaryId);
         _loser = war is null ? null : campaign.NationById(war.EnemyLeaderOf(proposerId));
         if (war is not null)
             foreach (var enemyId in war.EnemiesOf(proposerId))
@@ -641,10 +725,12 @@ public sealed class PeaceLedger
         }
     }
 
-    public PeaceConference.ProvinceCost Price(int province)
+    public PeaceConference.ProvinceCost Price(int province) => Price(province, _beneficiary);
+
+    private PeaceConference.ProvinceCost Price(int province, Nation beneficiary)
     {
         var topology = _campaign.ProvinceMap;
-        if (topology is null || _proposer is null || _loser is null ||
+        if (topology is null || _proposer is null || beneficiary is null || _loser is null ||
             province <= 0 || province > topology.ProvinceCount)
             return new PeaceConference.ProvinceCost(province, 0f, "not a province");
         if (!_enemies.ContainsKey(topology.ProvinceToNation[province]))
@@ -662,22 +748,32 @@ public sealed class PeaceLedger
         else if (held) { cost *= defines.PeaceCostHeldFactor; reason = "occupied but not secure"; }
         else { cost *= defines.PeaceCostUnheldFactor; reason = "never taken"; }
 
-        // Its own ground, held by the people who broke away with it: the state is not
-        // conquering anything, and a peace that writes it back is cheap.
+        // Its own ground, held by a breakaway or by the rival government in a civil war:
+        // the state is reuniting itself, and a peace that writes it back is cheap.
         if (_enemies.TryGetValue(topology.ProvinceToNation[province], out var holder) &&
-            Reintegration.IsBreakawayOf(holder, _proposer))
+            Reintegration.ClaimsStateInCivilWar(_campaign, _war, beneficiary, holder))
         {
             cost *= defines.PeaceCostReclaimFactor;
-            reason += ", our own land held by a breakaway";
+            reason += Reintegration.IsBreakawayOf(holder, beneficiary)
+                ? ", our own land held by a breakaway"
+                : ", national territory in a civil war";
         }
 
         var stateMapIndex = topology.ProvinceToState[province];
-        if (holder is not null && !Reintegration.IsBreakawayOf(holder, _proposer) &&
-            _campaign.States.Find(s => s.MapIndex == stateMapIndex) is { } titleRegion &&
-            TerritorialClaims.TitleOf(_campaign, _proposer, titleRegion) == TerritorialTitle.Homeland)
+        if (holder is not null && !Reintegration.ClaimsStateInCivilWar(_campaign, _war, beneficiary, holder) &&
+            _campaign.States.Find(s => s.MapIndex == stateMapIndex) is { } titleRegion)
         {
-            cost *= Math.Clamp(defines.PeaceCostHomelandFactor, .1f, 1f);
-            reason += ", remembered homeland";
+            if (TerritorialClaims.TitleOf(_campaign, beneficiary, titleRegion) == TerritorialTitle.Homeland)
+            {
+                cost *= Math.Clamp(defines.PeaceCostHomelandFactor, .1f, 1f);
+                reason += ", remembered homeland";
+            }
+            else if (Reintegration.IsKindredRegion(_campaign, beneficiary, titleRegion) ||
+                     Reintegration.IsReunificationTarget(_campaign, _war, beneficiary, holder))
+            {
+                cost *= Math.Clamp(defines.PeaceCostReunificationFactor, .1f, 1f);
+                reason += ", national reunification";
+            }
         }
         if (_war.ClaimedStateMapIndex >= 0 && stateMapIndex == _war.ClaimedStateMapIndex)
         {
@@ -705,16 +801,24 @@ public sealed class PeaceLedger
     public float Cost(PeaceDemand demand)
     {
         if (demand is null) return 0f;
+        var beneficiary = PeaceConference.Beneficiary(_campaign, demand);
         var defines = _campaign.Defines;
         var total = 0f;
-        foreach (var province in demand.Provinces) total += Price(province).Cost;
+        foreach (var province in demand.Provinces) total += Price(province, beneficiary).Cost;
+        if (total > Budget && demand.Provinces.Count > 0 && demand.Subjugate.Length == 0 && !demand.ReleaseRegions &&
+            _loser is not null && Reintegration.CanAnnexWhole(_campaign, _war, beneficiary, _loser))
+        {
+            var loserGround = Reintegration.Everything(_campaign, _loser);
+            if (loserGround.Count > 0 && loserGround.All(demand.Provinces.Contains))
+                total = MathF.Min(total, Budget);
+        }
         if (demand.Reparations) total += defines.PeaceCostReparations;
         if (demand.TradeConcessions) total += defines.PeaceCostTradeConcessions;
         if (demand.Demilitarise) total += defines.PeaceCostDemilitarise;
         if (demand.Humiliate) total += defines.PeaceCostHumiliate;
         if (demand.LongTruce) total += defines.PeaceCostLongTruce;
         if (demand.Subjugate.Length > 0)
-            total += PeaceConference.SubjugationCost(_campaign, _proposer, _loser, demand.Subjugate);
+            total += PeaceConference.SubjugationCost(_campaign, beneficiary, _loser, demand.Subjugate);
         return total;
     }
 }

@@ -103,12 +103,15 @@ public static class PoliticalPolicies
     public static void Tick(Campaign c)
     {
         NationalCourses.Tick(c);
+        var lawsEnabled = c.FeatureEnabled("laws");
+        var agendasEnabled = c.FeatureEnabled("political_agendas");
+        var reformDay = c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0;
         foreach (var n in c.Nations)
         {
-            n.LawsActive = c.FeatureEnabled("laws"); n.AgendasActive = c.FeatureEnabled("political_agendas");
+            n.LawsActive = lawsEnabled; n.AgendasActive = agendasEnabled;
             if (n.LastPolicyReviewDay == c.ElapsedDays) continue;
             n.LastPolicyReviewDay = c.ElapsedDays;
-            if (!n.IsHuman && !c.Fallen.Contains(n.Id) && c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0)
+            if (reformDay && !n.IsHuman && !c.Fallen.Contains(n.Id))
             {
                 var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
                     n.Stability < .50f ? "security_community" : n.Ideology == "liberalism" ? "rights_association" : "education_technical";

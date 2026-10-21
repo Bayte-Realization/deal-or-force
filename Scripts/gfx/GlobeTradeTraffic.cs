@@ -174,10 +174,15 @@ void fragment() {
             }
     }
 
+    private int[] _tradeModelCounts = Array.Empty<int>();
+    private double _lastTradeDrawnClock = -1.0;
+    private float _lastTradeDrawnZoom = -1f;
+    private bool _lastTradeDrawnFlat;
+
     private void UpdateTradeTraffic(double delta)
     {
         if (_tradeRoot is null || !IsInstanceValid(_tradeRoot) || _campaign?.ProvinceMap is null) return;
-        if (!_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0)
+        if (!QualityTradeTraffic || !_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0)
         {
             foreach (var model in _tradeModels) model.Layer.Multimesh.VisibleInstanceCount = 0;
             return;
@@ -187,7 +192,22 @@ void fragment() {
 
         // A few pixels at any distance: the size follows the camera out, and only a little in.
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);
-        var counts = new int[_tradeModels.Count];
+        if (Math.Abs(_tradeClock - _lastTradeDrawnClock) < 0.0001 &&
+            MathF.Abs(zoom - _lastTradeDrawnZoom) < 0.002f &&
+            _flatMap == _lastTradeDrawnFlat)
+        {
+            DrawTradeLanes(zoom);
+            return;
+        }
+        _lastTradeDrawnClock = _tradeClock;
+        _lastTradeDrawnZoom = zoom;
+        _lastTradeDrawnFlat = _flatMap;
+
+        if (_tradeModelCounts.Length < _tradeModels.Count)
+            _tradeModelCounts = new int[_tradeModels.Count];
+        else
+            Array.Clear(_tradeModelCounts, 0, _tradeModels.Count);
+        var counts = _tradeModelCounts;
         foreach (var lane in _tradeLanes)
         {
             if (lane.Length <= 0.01f) continue;

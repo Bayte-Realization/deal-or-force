@@ -12,6 +12,7 @@
 {
   "reconciliation_council": {
     "name": "National reconciliation council",
+    "resource_costs": {"political_points": 25},
     "description": "Sit down with the regions that have stopped listening, in public, and be seen to give something up.",
     "cooldown_days": 540,
     "gdp_cost_share": 0.0016,
@@ -22,6 +23,7 @@
   },
   "post_war_reconstruction": {
     "name": "Post-war reconstruction drive",
+    "resource_costs": {"political_points": 25},
     "description": "Turn the army's engineers and the returning men onto the ruins, before the ruins become politics.",
     "cooldown_days": 720,
     "gdp_cost_share": 0.0030,
@@ -32,6 +34,7 @@
   },
   "schooling_drive": {
     "name": "Schooling drive",
+    "resource_costs": {"political_points": 20},
     "description": "Teachers, buildings and a compulsory age: the slowest button in the game, and the one that pays for a century.",
     "cooldown_days": 730,
     "gdp_cost_share": 0.0022,
@@ -42,6 +45,7 @@
   },
   "research_endowment": {
     "name": "National research endowment",
+    "resource_costs": {"political_points": 15},
     "description": "Fund the laboratories for a decade rather than a budget cycle, so the people in them can plan a career.",
     "cooldown_days": 900,
     "gdp_cost_share": 0.0026,
@@ -52,6 +56,7 @@
   },
   "trade_mission": {
     "name": "Trade mission abroad",
+    "resource_costs": {"political_points": 8},
     "description": "Send the ministers and the industrialists out to sell something, and come back with contracts.",
     "cooldown_days": 365,
     "gdp_cost_share": 0.0010,
@@ -62,6 +67,7 @@
   },
   "war_footing": {
     "name": "Declare a war footing",
+    "resource_costs": {"political_points": 30},
     "description": "Put the factories and the railways on the general staff's timetable. It works while the war lasts, and it is remembered after.",
     "cooldown_days": 240,
     "gdp_cost_share": 0.0022,
@@ -72,6 +78,7 @@
   },
   "national_labour_service": {
     "name": "National labour service",
+    "resource_costs": {"political_points": 20},
     "description": "Put the unemployed to work on what the state wants built, and pay them in a wage rather than in a dole.",
     "cooldown_days": 400,
     "gdp_cost_share": 0.0018,
@@ -81,6 +88,7 @@
   },
   "civic_defence_works": {
     "name": "Civic defence works",
+    "resource_costs": {"political_points": 15},
     "description": "Shelters, trenches and fire posts built by the people who would have to use them.",
     "cooldown_days": 300,
     "gdp_cost_share": 0.0020,
@@ -90,6 +98,7 @@
   },
   "amnesty_for_the_weary": {
     "name": "Amnesty for the weary",
+    "resource_costs": {"political_points": 10},
     "description": "Let the deserters and the draft dodgers come home. The front gets thinner and the country gets quieter.",
     "cooldown_days": 500,
     "gdp_cost_share": 0.0008,
@@ -99,6 +108,7 @@
   },
   "release_the_reserve": {
     "name": "Release the sovereign reserve",
+    "resource_costs": {"political_points": 10, "army_experience": 10},
     "description": "Spend the last of what was put aside for exactly this, and admit that this is what it was for.",
     "cooldown_days": 600,
     "gdp_cost_share": 0.0,

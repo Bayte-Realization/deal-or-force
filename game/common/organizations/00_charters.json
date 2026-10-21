@@ -3,5 +3,27 @@
     "collective_defence": {"name":"Collective defence treaty", "description":"Members undertake to defend a member attacked from outside. Admission and grants require unanimity. Civil wars and members' own offensives are not covered.", "defence":true, "unanimity":true, "weekly_gdp_dues":0.00001, "vote_days":30},
     "development": {"name":"Development community", "description":"One country, one vote. Members fund a common treasury and vote on admitting partners and grants for members in need. It creates no automatic military obligation.", "unanimity":false, "weekly_gdp_dues":0.000025, "vote_days":21},
     "cooperation": {"name":"Cooperation council", "description":"A light voluntary council. Modest dues, majority voting and a common aid fund, without mutual defence or compulsory political alignment.", "unanimity":false, "weekly_gdp_dues":0.000005, "vote_days":14}
+  },
+  "doctrines": {
+    "sovereign_equality": {
+      "name": "Sovereign equality",
+      "description": "Every member governs its own path. The organization serves as a forum and common fund without imposing a single strategic alignment.",
+      "modifiers": { "stability_weekly": 0.0005 }
+    },
+    "common_market": {
+      "name": "Common market integration",
+      "description": "Shared commercial standards and customs corridors lower barriers across member borders and expand market reach.",
+      "modifiers": { "trade_reach": 0.06, "output": 0.02 }
+    },
+    "integrated_command": {
+      "name": "Integrated military command",
+      "description": "Joint logistics, shared staff planning and coordinated readiness bind members' armed forces into a single defensive shield.",
+      "modifiers": { "army_defense": 0.04, "supply": 0.04 }
+    },
+    "sanctions_coordination": {
+      "name": "Coordinated economic statecraft",
+      "description": "Members align financial clearing and credit resilience to weather embargoes and enforce collective sanctions.",
+      "modifiers": { "credit_capacity": 0.05, "tax_efficiency": 0.02 }
+    }
   }
 }

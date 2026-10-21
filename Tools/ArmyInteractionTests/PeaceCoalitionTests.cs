@@ -17,9 +17,13 @@ static class PeaceCoalitionTests
         const int width = 12, height = 5;
         var states = new ushort[width * height]; var owners = new ushort[states.Length];
         ushort[] regionOwners = { 0, 1, 2, 2, 3, 4, 5 };
+        // West to east: 4 | 1 | 2 | 3 | 5 | 6, so the enemy ally (region 4) borders the attacker.
+        // An AI treaty is shape-checked when signed (PeaceConference.Round -> PeaceShape):
+        // a region not joined to the winner's own ground is dropped from it, not signed.
+        int[] column = { 0, 2, 3, 4, 1, 5, 6 };
         for (var r = 1; r <= 6; r++)
         {
-            states[2 * width + r] = (ushort)r; owners[2 * width + r] = regionOwners[r];
+            states[2 * width + column[r]] = (ushort)r; owners[2 * width + column[r]] = regionOwners[r];
             c.States.Add(new ScenarioState { Id = "r" + r, MapIndex = r,
                 NationMapIndex = regionOwners[r], Population = 100000 });
         }
@@ -70,10 +74,15 @@ static class PeaceCoalitionTests
         try
         {
             map.ProvinceToState[neutralProvince] = 4;
+            // An AI draft is reshaped at signature and keeps only the enemy's ground of the region...
+            Check(!PeaceConference.Round(c, war, mixedRegionDemand).Provinces.Contains(neutralProvince),
+                "AI treaty keeps only enemy ground of a mixed-owner region");
+            // ...a drawn border is signed as drawn, so the conference itself must refuse it.
+            c.Nations[0].IsHuman = true;
             Check(PeaceConference.BlockReason(c, war, mixedRegionDemand).Length > 0,
                 "whole-region rounding cannot sweep in neutral provinces of a mixed-owner region");
         }
-        finally { map.ProvinceToState[neutralProvince] = 6; }
+        finally { map.ProvinceToState[neutralProvince] = 6; c.Nations[0].IsHuman = false; }
         var wholeLeader = Demand(2, 3); wholeLeader.Subjugate = "puppet";
         Check(PeaceConference.BlockReason(c, war, wholeLeader).Contains("annexing whole"),
             "enemy ally land cannot stand in for an annexed subject's own remaining territory");

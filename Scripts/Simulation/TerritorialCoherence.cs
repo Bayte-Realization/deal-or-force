@@ -19,11 +19,20 @@ public static class TerritorialCoherence
     private static Campaign _campaign;
     private static int _revision = -1;
     private static readonly Dictionary<int, Dictionary<int, int>> Neighbours = new();
+    private static readonly Dictionary<int, HashSet<int>> OwnedRegions = new();
 
     private static void Ensure(Campaign c)
     {
         if (ReferenceEquals(_campaign, c) && _revision == c.MapRevision) return;
         Neighbours.Clear(); _campaign = c; _revision = c.MapRevision;
+        OwnedRegions.Clear();
+        foreach (var state in c.States)
+        {
+            if (state.NationMapIndex <= 0) continue;
+            if (!OwnedRegions.TryGetValue(state.NationMapIndex, out var owned))
+                OwnedRegions[state.NationMapIndex] = owned = new HashSet<int>();
+            owned.Add(state.MapIndex);
+        }
         var map = c.ProvinceMap;
         for (var p = 1; p <= map.ProvinceCount; p++)
         {
@@ -43,7 +52,19 @@ public static class TerritorialCoherence
         if (c?.ProvinceMap is null || nation is null) return false;
         Ensure(c);
         if (!Neighbours.TryGetValue(region, out var next)) return false;
-        return c.States.Any(s => s.NationMapIndex == nation.MapIndex && next.ContainsKey(s.MapIndex));
+        if (!OwnedRegions.TryGetValue(nation.MapIndex, out var owned)) return false;
+        foreach (var neighbour in next.Keys)
+            if (owned.Contains(neighbour)) return true;
+        return false;
+    }
+
+    /// <summary>Read-only region adjacency, shared by administrative packages and treaties.</summary>
+    public static IEnumerable<int> AdjacentRegions(Campaign c, int region)
+    {
+        if (c?.ProvinceMap is null) return Array.Empty<int>();
+        Ensure(c);
+        return Neighbours.TryGetValue(region, out var next)
+            ? next.Keys.OrderBy(id => id) : Enumerable.Empty<int>();
     }
 
     /// <summary>Loss of utility from the complete territorial package, not a region-at-a-time preview.</summary>

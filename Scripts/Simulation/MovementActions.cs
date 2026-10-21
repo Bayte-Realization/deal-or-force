@@ -77,13 +77,11 @@ public static class MovementActions
     public static float Cost(Campaign campaign, Nation nation, string action, int stateMapIndex)
     {
         var defines = campaign.Defines;
-        var region = campaign.States.Find(state => state.MapIndex == stateMapIndex);
-        var size = region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
         return action switch
         {
             "move" => defines.MovementRelocationCost,
-            "campaign" => defines.MovementCampaignCost * size,
-            "services" => defines.MovementCampaignCost * size * 2f,
+            "campaign" => defines.MovementCampaignCost * SizeOf(campaign, stateMapIndex),
+            "services" => defines.MovementCampaignCost * SizeOf(campaign, stateMapIndex) * 2f,
             "recruit" => defines.MovementRecruitCostPerThousand * RecruitThousands(nation) *
                          (Movements.DefinitionOf(nation)?.Has("for_hire") == true ? 0.5f : 1f),
             "rise" => defines.MovementUprisingCost,
@@ -98,6 +96,13 @@ public static class MovementActions
             "march" => 0.05f,
             _ => 0f
         };
+    }
+
+    private static float SizeOf(Campaign campaign, int stateMapIndex)
+    {
+        if (stateMapIndex <= 0) return 1f;
+        var region = campaign.States.Find(state => state.MapIndex == stateMapIndex);
+        return region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
     }
 
     private static float RecruitThousands(Nation nation) => 2f;
@@ -177,7 +182,7 @@ public static class MovementActions
                 if (host is null) return Loc.Get("Nobody governs that ground.");
                 if (host.Movement is not null) return Loc.Get("Not in another movement's ground.");
                 if (CampaignDiplomacy.AtWar(campaign, host.Id, nation.Id)) return Loc.Format("It is at war with {0}.", host.DisplayName);
-                var opinion = CampaignDiplomacy.Get(campaign, host.Id, nation.Id).Opinion;
+                var opinion = CampaignDiplomacy.Peek(campaign, host.Id, nation.Id)?.Opinion ?? 0f;
                 if (state.DesignatedBy.Contains(host.Id)) return Loc.Format("{0} lists it as a terrorist organisation.", host.DisplayName);
                 if (opinion < -25f && !definition.Sponsors.ContainsKey(host.Tag) && !state.InvitedBy.Contains(host.Id))
                     return Loc.Format("{0} will not have it ({1:0} opinion).", host.DisplayName, opinion);
@@ -206,7 +211,7 @@ public static class MovementActions
                     var claimedRegion = Movements.StateById(campaign, claimed);
                     var holder = claimedRegion is null ? null : campaign.Nations.Find(n => n.MapIndex == claimedRegion.NationMapIndex);
                     if (holder is null || holder.Id == nation.Id) continue;
-                    if (holder.Id == target.Id || CampaignDiplomacy.Get(campaign, target.Id, holder.Id).Stance == DiplomaticStance.Allied)
+                    if (holder.Id == target.Id || CampaignDiplomacy.Peek(campaign, target.Id, holder.Id)?.Stance == DiplomaticStance.Allied)
                         return Loc.Format("{0} will not recognise a claim on {1}'s ground.", target.DisplayName, holder.DisplayName);
                 }
                 return "";

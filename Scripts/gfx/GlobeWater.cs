@@ -12,8 +12,10 @@ public sealed partial class GlobePresentation
         var water = TerrainCatalog.Water;
         _globeMaterial.SetShaderParameter("lake_surface", prepared?.Lake is { } lake
             ? ImageTexture.CreateFromImage(lake) : LoadWaterTile(water.LakeTexture, water.TileResolution));
+        prepared?.Lake?.Dispose();
         _globeMaterial.SetShaderParameter("river_surface", prepared?.River is { } river
             ? ImageTexture.CreateFromImage(river) : LoadWaterTile(water.RiverTexture, water.TileResolution));
+        prepared?.River?.Dispose();
         _globeMaterial.SetShaderParameter("river_inset", water.RiverInset);
         _globeMaterial.SetShaderParameter("river_near_opacity", water.RiverNearOpacity);
         _globeMaterial.SetShaderParameter("river_far_opacity", water.RiverFarOpacity);

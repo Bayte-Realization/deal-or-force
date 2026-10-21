@@ -18,3 +18,4 @@ static class IsolationTrace
         }
     }
 }
+

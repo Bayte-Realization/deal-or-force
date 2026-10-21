@@ -57,11 +57,15 @@ public static class AllianceMaintenance
         if (graph is not null && graph.Conflicts(c, a.Id, b.Id)) Term("Conflicting commitments", -0.25f);
         if (graph is null) foreach (var third in c.Nations)
         {
-            if (third.Id == a.Id || third.Id == b.Id) continue;
-            var ar = CampaignDiplomacy.Peek(c, a.Id, third.Id);
-            var br = CampaignDiplomacy.Peek(c, b.Id, third.Id);
-            if ((ar?.Stance == DiplomaticStance.Allied && (br?.Stance == DiplomaticStance.Rival || CampaignDiplomacy.AtWar(c, b.Id, third.Id))) ||
-                (br?.Stance == DiplomaticStance.Allied && (ar?.Stance == DiplomaticStance.Rival || CampaignDiplomacy.AtWar(c, a.Id, third.Id))))
+            var thirdId = third.Id;
+            if (thirdId == a.Id || thirdId == b.Id) continue;
+            var ar = CampaignDiplomacy.Peek(c, a.Id, thirdId);
+            var br = CampaignDiplomacy.Peek(c, b.Id, thirdId);
+            var aAllied = ar?.Stance == DiplomaticStance.Allied;
+            var bAllied = br?.Stance == DiplomaticStance.Allied;
+            if (!aAllied && !bAllied) continue;
+            if ((aAllied && (br?.Stance == DiplomaticStance.Rival || CampaignDiplomacy.AtWar(c, b.Id, thirdId))) ||
+                (bAllied && (ar?.Stance == DiplomaticStance.Rival || CampaignDiplomacy.AtWar(c, a.Id, thirdId))))
             { Term("Conflicting commitments", -0.25f); break; }
         }
         var result = M.Clamp(total, 0f, 0.98f);

@@ -14,7 +14,7 @@ public sealed partial class Defines
         ["navy"] = true, ["research"] = true, ["construction"] = true,
         ["recruitment"] = true, ["decisions"] = true, ["events"] = true,
         ["politics"] = true, ["movements"] = true, ["colonisation"] = true,
-        ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true,
+        ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true, ["culture_union"] = true,
         ["war_damage"] = true, ["war_weariness"] = true, ["militia"] = true,
         ["historical_norms"] = true, ["public_reputation"] = true, ["seasons"] = true, ["seasonal_water"] = true, ["seasonal_roads"] = true, ["weather"] = true, ["movement_lifecycle"] = true,
         ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true, ["deals"] = true,
@@ -29,7 +29,10 @@ public sealed partial class Defines
         // Intelligence networks and the world-order emergency on top: dormant content the
         // console `feature` command can turn on, and a save that predates them agrees with
         // what the shipped data declares because the data declares the same thing.
-        ["intelligence"] = true, ["world_order_emergency"] = false
+        ["intelligence"] = true, ["world_order_emergency"] = false,
+        // Who leads a country, and what happens to them. A ruler is a person with traits,
+        // and the traits feed the same modifier totals a national spirit does.
+        ["rulers"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -51,7 +54,7 @@ public sealed partial class Defines
         ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
         ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia",
         ["Escalation"] = "escalation", ["ProxyWars"] = "proxy_wars", ["Factions"] = "de_facto_factions", ["Coups"] = "coups",
-        ["ForeignAssistance"] = "foreign_assistance"
+        ["ForeignAssistance"] = "foreign_assistance", ["Rulers"] = "rulers"
     };
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -124,11 +127,11 @@ public static class MechanicFeatures
     {
         "long_range_forces", "aviation", "drones", "artillery", "air_defence", "navy",
         "research", "construction", "recruitment", "decisions", "events", "politics",
-        "movements", "colonisation", "subjects", "formable_nations", "secession",
+        "movements", "colonisation", "subjects", "formable_nations", "secession", "culture_union",
         "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasons", "seasonal_water", "seasonal_roads", "weather", "movement_lifecycle", "public_debt",
         "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
         "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
-        "government_promises", "strategic_goals", "state_identity", "intelligence", "world_order_emergency", "tactical_doctrines",
+        "government_promises", "strategic_goals", "state_identity", "rulers", "intelligence", "world_order_emergency", "tactical_doctrines",
         "strategic_doctrines", "union_cohesion", "demographic_cycle"
     };
 
@@ -137,7 +140,7 @@ public static class MechanicFeatures
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         void Bind(string flag, params string[] commands)
         { foreach (var command in commands) result[command] = flag; }
-        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand");
+        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "CommissionNewFleetCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand");
         Bind("research", "SetResearchCommand");
         Bind("construction", "QueueConstructionCommand", "DemolishBuildingCommand");
         Bind("recruitment", "RaiseArmyCommand");
@@ -146,7 +149,7 @@ public static class MechanicFeatures
         Bind("domestic_crises", "StartCrisisResponseCommand", "ConciliateRegionCommand");
         Bind("movements", "MovementActionCommand", "MovementDealingCommand");
         Bind("colonisation", "ColoniseCommand");
-        Bind("subjects", "OfferSubmissionCommand");
+        Bind("subjects", "OfferSubmissionCommand", "ConsolidateSubjectsCommand");
         Bind("formable_nations", "FormNationCommand", "InviteFormationCommand");
         Bind("war_damage", "RebuildRegionCommand");
         Bind("public_reputation", "StartPublicOutreachCommand");
@@ -181,8 +184,17 @@ public static class MechanicFeatures
         return false;
     }
 
-    public static bool ValidId(string id) => !string.IsNullOrWhiteSpace(id) && id.Length <= 80 &&
-        id.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+    public static bool ValidId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 80) return false;
+        if (BuiltIns.Contains(id)) return true;
+        for (var i = 0; i < id.Length; i++)
+        {
+            var c = id[i];
+            if (!char.IsAsciiLetterOrDigit(c) && c != '_') return false;
+        }
+        return true;
+    }
 
     public static string Of(SupportKind kind) => kind switch
     {

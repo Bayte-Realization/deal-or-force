@@ -98,11 +98,11 @@ public partial class DealOrForceGame
         head.AddChild(close);
 
         // ---- the facts.
-        var facts = new HFlowContainer();
+        var facts = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         facts.AddThemeConstantOverride("h_separation", 6);
         facts.AddThemeConstantOverride("v_separation", 4);
         rows.AddChild(facts);
-        void Fact(string text, string token) => facts.AddChild(Fixed(Title(text, 11, Ui.Colour(token))));
+        void Fact(string text, string token) => facts.AddChild(Title(text, 11, Ui.Colour(token)));
         if (controller.Id != owner.Id) Fact(Simulation.Loc.Format("held by {0}", controller.DisplayName), "state.warning");
         var other = controller.Id != player.Id ? controller : owner.Id != player.Id ? owner : null;
         if (other is not null && other.Movement is null)
