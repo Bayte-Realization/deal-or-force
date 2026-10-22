@@ -6,7 +6,7 @@
 
 > **[LanguageKit](LanguageKit/GUIDE_RU.md)** — языковой комплект Godot 4.8 Beta1: исходные интеграции
 > Luau, F#, Nim, Odin, Rust и Kotlin со сборочными рецептами, проверками и лабораторией
-> ([English](LanguageKit/README.md)).
+> ([English](LanguageKit/GUIDE.md)).
 
 Основная ветка разработки: **ReimAlpha**. [Контрольная точка 13 октября](docs/REIMALPHA_2026_10_13_RU.md).
 

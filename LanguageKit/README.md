@@ -97,5 +97,5 @@ artifacts, not committed game builds.
 - A successful weighted-sum probe demonstrates calling the language, not a game
   performance improvement. Use representative batch workloads before migrating.
 
-For Russian usage, integration status and migration notes see
-[GUIDE_RU.md](GUIDE_RU.md), which also travels with the installed kit.
+For usage, integration status and migration notes see [GUIDE.md](GUIDE.md)
+(in Russian: [GUIDE_RU.md](GUIDE_RU.md)); both travel with the installed kit.
