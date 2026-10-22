@@ -73,37 +73,49 @@ static class DemographyTests
             " -> " + DemographicCycle.WorkingShare(state).ToString("0.000"));
         Check(state.YoungShare < 0.10f, "and it runs out of young people: " + state.YoungShare.ToString("0.000"));
 
-        // A flood: the arrivals come as themselves, from the country they are coming from.
+        // A flood: the arrivals come as themselves, from the country they are coming from. Every
+        // move is made by InternalMigration.Move - inside a country and, for BrainDrain, across a
+        // border - so the people who arrive are the people who left.
         var sender = campaign.Nations.First(nation => nation.Id != china.Id && nation.Movement is null);
-        china.BrainGainSourceId = sender.Id;
         var senderCulture = DemographyCatalog.PrimaryCultures(sender.Tag)[0];
+        var origin = new ScenarioState { Id = "flood_origin", MapIndex = 65000, Population = 2_000_000_000 };
+        origin.PopulationGroups.Add(new PopulationGroup
+        {
+            Culture = senderCulture, Religion = DemographyCatalog.FaithOf(senderCulture)[0].Religion,
+            Profession = "labourers", Class = SocialClass.Lower, Sector = Sector.Industry, Size = origin.Population
+        });
         state.Population = Math.Max(state.Population, state.PopulationGroups.Sum(group => group.Size));
-        var before = state.PopulationGroups.Sum(group => group.Size);
+        var before = state.PopulationGroups.Sum(group => group.Size) + origin.Population;
         // A flood is what the threshold says it is: at least DemographyFloodShare of the population in
         // one review. Above a fortieth is a crisis, not a trickle.
         var flood = Math.Max(1000, state.Population / 40);
+        InternalMigration.Move(origin, state, flood, withinCountry: false);
         Review(campaign, state, 2000, 0, 0, flood);
         var arrived = state.PopulationGroups.FirstOrDefault(group =>
             string.Equals(group.Culture, senderCulture, StringComparison.OrdinalIgnoreCase));
         Check(arrived is not null && arrived.Size > 0,
             "a flood arrives as its own culture, not as somebody else's: " + senderCulture);
-        Check(state.PopulationGroups.Sum(group => group.Size) == before,
-            "and the region's total is untouched: migration already moved the people");
+        Check(state.PopulationGroups.Sum(group => group.Size) + origin.PopulationGroups.Sum(group => group.Size) == before &&
+              state.PopulationGroups.Sum(group => group.Size) == state.Population,
+            "and every person who arrived left somewhere: a move conserves people");
 
         // Over decades the arrivals can stop being a minority of one region. A review is a week.
         for (var week = 0; week < 60 * 52 && arrived.Size < state.PopulationGroups.Max(group => group.Size); week++)
+        {
+            InternalMigration.Move(origin, state, flood, withinCountry: false);
             Review(campaign, state, 3000 + week * 7, 0, 0, flood);
+        }
         Check(arrived.Size >= state.PopulationGroups.Max(group => group.Size),
             "a region flooded for decades can change whose region it is: " + arrived.Size);
 
-        // Assimilation: a minority nobody keeps adding to quietly becomes the country around it.
-        var fading = state.PopulationGroups.FirstOrDefault(group =>
-            !ReferenceEquals(group, arrived) && group.Size > 100000);
-        Check(fading is not null, "the region still holds a community to watch");
-        var size = fading.Size;
+        // Assimilation: once nobody keeps adding to them, the arrivals slowly adopt the culture of
+        // the country around them - slowly: a year takes well under a tenth of them, where the
+        // old weekly arithmetic took a quarter and left no minority anywhere after a decade.
+        var size = arrived.Size;
         for (var week = 0; week < 52; week++)
             Review(campaign, state, 20000 + week * 7, 0, 0, 0);
-        Check(fading.Size < size, "a minority nobody adds to fades: " + size + " -> " + fading.Size);
+        Check(arrived.Size < size, "a minority nobody adds to fades: " + size + " -> " + arrived.Size);
+        Check(arrived.Size > size * 0.9, "but slowly, not a quarter of it a year: " + size + " -> " + arrived.Size);
 
         // And the country's own shape is aggregated for everything that reads it.
         DemographicCycle.Aggregate(campaign);

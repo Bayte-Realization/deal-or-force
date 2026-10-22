@@ -288,6 +288,20 @@ public static class HistoryDataLoader
             if (value.TryGetProperty("primary_cultures", out var primary) && primary.ValueKind == JsonValueKind.Array)
                 DemographyCatalog.Declare(nation.Tag, primary.EnumerateArray()
                     .Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()));
+            // The laws in force when the bookmark opens, where they are not their category's
+            // default: one per category, a country-wide law only.
+            if (value.TryGetProperty("laws", out var laws) && laws.ValueKind == JsonValueKind.Array)
+                foreach (var item in laws.EnumerateArray())
+                {
+                    var id = item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : "";
+                    if (PoliticalPolicyCatalog.Find(id) is not { Scope: "nation" } law)
+                    {
+                        errors?.Add($"{entry.Name}: no country-wide law called '{id}'.");
+                        continue;
+                    }
+                    nation.Laws[PoliticalPolicies.Slot(law)] = new AdoptedLaw { Id = law.Id, AdoptedDay = 0 };
+                    NationalModifiers.Invalidate(nation);
+                }
             if (value.TryGetProperty("head_of_state", out var hos) && hos.ValueKind == JsonValueKind.String)
                 nation.HeadOfStateName = hos.GetString() ?? "";
             if (value.TryGetProperty("head_of_state_trait", out var hosTrait) && hosTrait.ValueKind == JsonValueKind.String)

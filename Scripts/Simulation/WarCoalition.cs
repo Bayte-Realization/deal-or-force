@@ -113,6 +113,14 @@ public static class WarCoalition
         return c.ProvinceMap.FindOperationalRoute(from, to, allowed, controllers);
     }
 
+    private static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)
+    {
+        if (war is null) return false;
+        foreach (var unit in c.Armies)
+            if (unit.ProvinceId == province && unit.Divisions >= .1f && war.Opposes(nationId, unit.NationId)) return true;
+        return false;
+    }
+
     /// <summary>Keep the old own-ground preference; an ally's refuge is better than surrender.</summary>
     internal static int RetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool lowestId = false)
     {
@@ -139,7 +147,7 @@ public static class WarCoalition
     /// Intelligently select a safe retreat province that spreads retreating units across
     /// the frontline rather than bunching them all into a single lowest-id tile.
     /// </summary>
-    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from)
+    internal static int SpreadRetreatProvince(Campaign c, StrategicWar war, Army army, int from, bool beaten = false)
     {
         var map = c.ProvinceMap;
         var controls = c.ProvinceController;
@@ -154,10 +162,18 @@ public static class WarCoalition
             if (map.IsWater(p)) continue;
             var isOwn = controls[p] == own.MapIndex;
             var isAllied = !isOwn && FriendlyController(c, war, army.NationId, controls[p]);
-            if ((!isOwn && !isAllied) || !SafeRetreatProvince(c, war, army.NationId, p)) continue;
+            if (!isOwn && !isAllied || EnemyStandsIn(c, war, army.NationId, p)) continue;
+            // A formation choosing to step out of a fight goes somewhere quiet. One that has just
+            // been beaten out of its province falls back onto its own side's line even where that
+            // line is under attack - a province with a battle in it is still held - and it used
+            // to be refused that too: on a front where every province was fighting, every beaten
+            // division surrendered whole, 1.6 million Ukrainian prisoners in eight months.
+            var safe = SafeRetreatProvince(c, war, army.NationId, p);
+            if (!safe && !beaten) continue;
 
-            // Score: own ground strongly preferred
+            // Score: own ground strongly preferred, quiet ground over a fight.
             var score = isOwn ? 100f : 50f;
+            if (!safe) score -= 40f;
 
             // Count friendly formations already in or heading to this province
             var crowding = 0;

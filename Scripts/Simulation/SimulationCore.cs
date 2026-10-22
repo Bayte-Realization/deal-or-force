@@ -835,6 +835,8 @@ public sealed partial class Campaign
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
+        // A pocket the computer is in is a pocket it tries to leave.
+        using (SimProfiler.Measure("pocket breakout")) PocketBreakout.Tick(this);
         // The ordinary staff is conservative by design. A war for existence is the one
         // exception: mend a hole with a reserve, take an empty enemy province, or queue an
         // emergency formation - all through the same commands and the same manpower/debt
@@ -872,6 +874,9 @@ public sealed partial class Campaign
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
+            // And inside each country: from the regions that are worse off to the ones that are
+            // better, and away from the fighting, carrying who they are.
+            using (SimProfiler.Measure("internal migration")) InternalMigration.Tick(this);
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
             if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)

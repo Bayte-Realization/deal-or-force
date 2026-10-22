@@ -19,8 +19,10 @@ static class PoliticalPolicyTests
         // posture). The number is asserted so a law file that stops loading is noticed, so it
         // moves when a law file is deliberately added - and a duplicate key in a new file would
         // show up here as a total that did not move, which is the other thing this catches.
-        Check(PoliticalPolicyCatalog.AllLaws.Count() == 67 && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 22,
-            "67 laws in 22 categories load");
+        // 71/23 since 22 October 2026: common/laws/30_nationalities.json, four answers to what a
+        // state does about its minorities.
+        Check(PoliticalPolicyCatalog.AllLaws.Count() == 71 && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 23,
+            "71 laws in 23 categories load");
         Check(PoliticalPolicyCatalog.AllAgendas.Count() == 6, "six agendas load");
         var c = Campaign.CreateBootstrap(701); var n = c.NationByTag("ITA"); c.ConfigureSinglePlayer(n.Id);
         n.Treasury = 100;

@@ -506,9 +506,6 @@ public sealed partial class Defines
 	/// <summary>Weekly radicalism growth in peripheral foreign provinces of an overstretched empire.</summary>
 	public float ImperialOverstretchRadicalismWeekly { get; set; } = 0.0025f;
 
-	/// <summary>Share of a minority that assimilates each week under ideal conditions.</summary>
-	public float AssimilationPerWeek { get; set; } = 0.0009f;
-
 	public float RadicalismGain { get; set; } = 0.05f;
 	public float RadicalismDecay { get; set; } = 0.03f;
 

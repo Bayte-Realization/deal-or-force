@@ -1072,74 +1072,22 @@ public static class EconomySystem
     /// is therefore expensive for years and eventually is not - which is the difference
     /// between a border that has moved and one that is still moving.
     /// </summary>
+    /// <summary>
+    /// The weekly tidy of a region's peoples: a group nobody belongs to any more is dropped.
+    /// This used to run a second assimilation of its own as well, at about five per cent of a
+    /// minority a year into the first group of the state's people it found; DemographicCycle's
+    /// assimilation is now the only one.
+    /// </summary>
     private static void MinorityPressure(Campaign campaign, Nation nation, ScenarioState state)
     {
-        var defines = campaign.Defines;
-        var foreign = ForeignShare(state, nation.Tag);
-        if (foreign <= 0.0001f) return;
-
-        // Minority grievances are counted once, alongside recovery, in RadicalismCore.
-
-        // Assimilation. Fast where people are schooled and comfortable, slow where they
-        // are angry, and never instant.
-        var rate = defines.AssimilationPerWeek *
-                   M.Clamp(state.Literacy + state.StandardOfLiving, 0.2f, 2f) *
-                   M.Clamp(1f - state.Radicalism, 0.05f, 1f);
-        if (rate <= 0f) return;
-
-        long moved = 0;
-        var primary = DemographyCatalog.PrimarySet(nation.Tag);
-        foreach (var group in state.PopulationGroups)
-        {
-            if (group.Size <= 0) continue;
-            if (IsOwn(primary, group)) continue;
-            var share = (long)MathF.Round(group.Size * rate);
-            if (share <= 0) continue;
-            group.Size -= share;
-            moved += share;
-        }
-        if (moved <= 0) return;
-
-        // They become the first of the peoples the state is for. Which one that is comes
-        // from the data, so assimilating into Switzerland does not turn everybody German.
-        var into = DemographyCatalog.PrimaryCulture(nation.Tag);
-        // By hand rather than by List.Find: the predicate would capture `into`, and a
-        // closure allocated once per region per week is a closure allocated a hundred
-        // thousand times a simulated year.
-        PopulationGroup host = null;
-        for (var index = 0; index < state.PopulationGroups.Count; index++)
-        {
-            var candidate = state.PopulationGroups[index];
-            if (!string.Equals(candidate.Culture, into, StringComparison.OrdinalIgnoreCase)) continue;
-            host = candidate;
-            break;
-        }
-        if (host is null)
-        {
-            host = new PopulationGroup
-            {
-                Class = SocialClass.Lower,
-                Sector = Sector.Industry,
-                Culture = into,
-                Religion = DemographyCatalog.FaithOf(into)[0].Religion,
-                Profession = "labourers",
-                Size = 0,
-                Employment = 0.90f,
-                Wealth = 0.38f,
-                StandardOfLiving = state.StandardOfLiving,
-                Radicalism = state.Radicalism
-            };
-            state.PopulationGroups.Add(host);
-        }
-        host.Size += moved;
-        // Compacted by hand, in order, for the reason above: RemoveAll's predicate captured
-        // `host`, and that closure was all the garbage this weekly pass made.
+        // Compacted by hand, in order: RemoveAll's predicate would allocate a closure per region
+        // per week.
         var groups = state.PopulationGroups;
         var kept = 0;
         for (var index = 0; index < groups.Count; index++)
         {
             var group = groups[index];
-            if (group.Size <= 0 && group != host) continue;
+            if (group.Size <= 0) continue;
             groups[kept++] = group;
         }
         if (kept < groups.Count) groups.RemoveRange(kept, groups.Count - kept);
@@ -1440,6 +1388,15 @@ public static class EconomySystem
         };
         state.PopulationGroups.Add(group);
         return group;
+    }
+
+    /// <summary>Bring a region's groups back to its population, in proportion, if they have drifted from it.</summary>
+    internal static void MatchGroups(ScenarioState state)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return;
+        long total = 0;
+        foreach (var group in state.PopulationGroups) total += group.Size;
+        if (total != state.Population) GrowGroups(state, 1);
     }
 
     private static void GrowGroups(ScenarioState state, long delta)

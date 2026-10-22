@@ -36,6 +36,13 @@ public sealed partial class Defines
     /// Germany, under one for Ukraine.
     /// </summary>
     public float StockpileIndustryPerRootGdp { get; set; } = 0.06f;
+    /// <summary>
+    /// Whether the army's fuel reaches the depot from the national market. The market already
+    /// carries and prices it (army_fuel_upkeep in common/production); without this the depot
+    /// burnt it a second time and saw only the surplus after civilian demand, so a country that
+    /// imports its fuel - Ukraine - ran dry in a peaceful market.
+    /// </summary>
+    public bool StockpileFuelFromMarket { get; set; } = true;
 
     public float StockpileDivisionDailyArms { get; set; } = 0.012f;
     public float StockpileDivisionCombatDailyAmmunition { get; set; } = 0.085f;
@@ -373,6 +380,12 @@ public static class StrategicStockpiles
                     _ => 0f
                 };
 
+                // The army's fuel is bought on the national market like everybody's: the share
+                // of it the market met arrives, and the depot is what covers a market that
+                // fails - a blockade, an embargo, a refinery on fire.
+                if (defines.StockpileFuelFromMarket && goodId == "Oil")
+                    gain += burn * MarketMet(nation, goodId);
+
                 nation.DailyStockpileGain[goodId] = gain;
                 nation.DailyStockpileBurn[goodId] = burn;
 
@@ -475,6 +488,12 @@ public static class StrategicStockpiles
         }
         return shipped;
     }
+
+    /// <summary>The share of a good's demand the national market met this week, 0 to 1.</summary>
+    private static float MarketMet(Nation nation, string goodId) =>
+        CommodityCatalog.TryParse(goodId, out var comm) && nation.Market.TryGetValue(comm, out var quote)
+            ? M.Clamp01(quote.Satisfaction)
+            : 0f;
 
     private readonly record struct Plants(int Arms, int Refineries, int Smelters, int Farms, int Electronics);
 

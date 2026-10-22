@@ -55,6 +55,24 @@ public static class PoliticalPolicies
             yield return (definition.Name, definition.Modifiers);
     }
 
+    /// <summary>
+    /// The nationalities law a government nobody plays moves to, or null to keep the one it has:
+    /// fascism settles; the liberal and social-democratic families give up settling and forcing
+    /// for civic integration; everybody else keeps what history or an earlier government left.
+    /// </summary>
+    private static PoliticalPolicy NationalitiesFor(Nation n)
+    {
+        var current = PoliticalPolicyCatalog.Find("nationalities_integration") is { } any ? Effective(n, any)?.Id ?? "" : "";
+        var wanted = n.Ideology switch
+        {
+            "fascism" => "nationalities_settlement",
+            "liberalism" or "social_democracy" or "libertarianism"
+                when current is "nationalities_settlement" or "nationalities_assimilation" => "nationalities_integration",
+            _ => null
+        };
+        return wanted is null ? null : PoliticalPolicyCatalog.Find(wanted);
+    }
+
     public static bool CanAdopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
     {
         reason = "";
@@ -116,6 +134,11 @@ public static class PoliticalPolicies
                 var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
                     n.Stability < .50f ? "security_community" : n.Ideology == "liberalism" ? "rights_association" : "education_technical";
                 Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
+                // What a state does about its minorities changes with what it believes, and
+                // only then: a fascist state settles, a liberal one stops settling and forcing.
+                if (NationalitiesFor(n) is { } nationalities &&
+                    !string.Equals(Effective(n, nationalities).Id, nationalities.Id, StringComparison.Ordinal))
+                    Adopt(c, n, nationalities);
                 if (n.AgendasActive && n.Agenda is not { Completed: false })
                 {
                     var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :

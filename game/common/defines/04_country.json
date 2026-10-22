@@ -96,7 +96,6 @@
 
   // Nationality: what a moved border leaves behind
   "MinorityRadicalismPerWeek": 0.0012,
-  "AssimilationPerWeek": 0.0009,
 
   // The capital. Moving it by choice costs CapitalMoveCostShare of GDP (never less than the
   // floor) and CapitalMoveStabilityCost of settledness, and the government cannot move again

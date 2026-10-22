@@ -41,6 +41,8 @@ public static class NationalModifiers
         new("credit_capacity", "Credit capacity", "Sustainable sovereign borrowing capacity."),
         new("borrowing_cost", "Borrowing cost", "Sovereign risk premium, not the central bank policy rate.", HigherIsBetter: false),
         new("movement_activity", "Civic mobilisation", "How readily regional grievances organise into civic movements."),
+        new("assimilation", "Assimilation", "How fast the country's minorities adopt the culture around them: its own, where its people live."),
+        new("settlement", "Settlement", "Settlers of the country's own people sent into its regions where they are few."),
         // The army.
         new("army_attack", "Division attack", "The fire a division puts down in an attack."),
         new("army_defense", "Division defence", "The fire a division puts down holding ground."),

@@ -260,8 +260,9 @@ public static class BrainDrain
                 moved = Math.Clamp(moved, 0L, st.Population / 50L);
                 if (moved <= 0) continue;
 
-                EconomySystem.AdjustStatePopulation(st, -moved);
-                EconomySystem.AdjustStatePopulation(destState, moved);
+                // The people themselves cross: who they are arrives with them.
+                moved = InternalMigration.Move(st, destState, moved, withinCountry: false);
+                if (moved <= 0) continue;
                 st.ReviewNetMigration -= moved;
                 destState.ReviewNetMigration += moved;
                 totalOutflow += moved;

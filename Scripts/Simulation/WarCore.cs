@@ -565,14 +565,13 @@ public static partial class FrontPlanner
             // counter-offensives actively contest lost ground when the army is intact.
             var territoryThreatened = war.DefenderOccupiedValue > 0.005f || score < -2f;
             var canPress = ours <= theirs * 2.5f && nation.WarSupport >= 0.20f;
-            if (ownGroundGone)
-            {
-                // A tenth of the country occupied is a war for existence: the counter-offensive
-                // becomes the majority posture, and the casualty list does not veto it.
-                pressing = true;
-                share = MathF.Max(share, canPress ? 0.55f : 0.45f);
-            }
-            else if (territoryThreatened && canPress)
+            // Lost ground is a reason to counter-attack, not an order to. A tenth of the country
+            // occupied used to make the counter-offensive the majority posture whatever the
+            // casualty list said: Ukraine threw more than half its army forward from the fourth
+            // month, lost five men for every Russian, and was gone by the end of the year on every
+            // seed. A defender presses while it can afford to and holds when it cannot - which is
+            // what defending a country is.
+            if (territoryThreatened && canPress)
             {
                 pressing = true;
                 share = MathF.Max(share, 0.45f);

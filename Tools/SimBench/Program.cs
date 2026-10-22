@@ -332,6 +332,10 @@ public static class Program
         // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
         // Half an hour of bench for a question about manpower was too long a loop.
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
+        // `--peoples` asks who lives where after the years have moved them: the world's share of
+        // people who are not of their region's majority, the mixed regions, the people who moved
+        // inside their own country, and the most mixed regions of the first day followed through.
+        if (Array.IndexOf(args, "--peoples") >= 0) return Peoples(campaign, days);
         if (Array.IndexOf(args, "--data-readers-only") >= 0)
             return Check("every folder of data is read by something", EveryFolderOfDataIsRead());
         if (Array.IndexOf(args, "--decisions-only") >= 0)
@@ -1762,6 +1766,69 @@ public static class Program
         return ~crc;
     }
 
+    private static int Peoples(Campaign campaign, int days)
+    {
+        static Dictionary<string, long> Mix(ScenarioState state)
+        {
+            var mix = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in state.PopulationGroups)
+                if (group.Size > 0) mix[group.Culture ?? ""] = mix.GetValueOrDefault(group.Culture ?? "") + group.Size;
+            return mix;
+        }
+        (double Minority, int Mixed) World()
+        {
+            long all = 0, minority = 0;
+            var mixed = 0;
+            foreach (var state in campaign.States)
+            {
+                if (state.Unclaimed || state.Population <= 0) continue;
+                var mix = Mix(state);
+                if (mix.Count == 0) continue;
+                var total = mix.Values.Sum();
+                var top = mix.Values.Max();
+                all += total;
+                minority += total - top;
+                if (top < total * 0.8) mixed++;
+            }
+            return (minority / (double)Math.Max(1, all), mixed);
+        }
+        string Describe(ScenarioState state)
+        {
+            var mix = Mix(state);
+            var total = Math.Max(1, mix.Values.Sum());
+            return string.Join(", ", mix.OrderByDescending(p => p.Value).Take(3)
+                .Select(p => $"{p.Key} {p.Value / (double)total:P0}"));
+        }
+        var watched = campaign.States.Where(state => !state.Unclaimed && state.Population >= 300_000)
+            .Select(state => (state, mix: Mix(state)))
+            .Where(item => item.mix.Count > 1)
+            .OrderBy(item => item.mix.Values.Max() / (double)Math.Max(1, item.mix.Values.Sum()))
+            .Take(8).Select(item => item.state).ToList();
+        // And the regions a reader asks about by id (DOF_PEOPLES_WATCH=cn_xj,ro_hr,...).
+        foreach (var id in (Environment.GetEnvironmentVariable("DOF_PEOPLES_WATCH") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (campaign.States.FirstOrDefault(state => string.Equals(state.Id, id.Trim(), StringComparison.OrdinalIgnoreCase)) is { } asked &&
+                !watched.Contains(asked)) watched.Add(asked);
+        var (startMinority, startMixed) = World();
+        Console.WriteLine($"  day 0: {startMinority:P1} of the world's people are not of their region's majority; {startMixed:N0} regions are mixed (largest people under 80 %).");
+        foreach (var state in watched) Console.WriteLine($"    {state.Id,-10} {Describe(state)}");
+        campaign.IsPaused = false;
+        long moved = 0;
+        for (var day = 1; day <= days; day++)
+        {
+            campaign.TickDay();
+            moved += InternalMigration.MovedToday;
+            if (day % 365 != 0 && day != days) continue;
+            var (minority, mixedNow) = World();
+            Console.WriteLine($"  day {day}: {minority:P1} minority, {mixedNow:N0} mixed regions, {Fmt.People(moved)} moved inside their own country so far.");
+        }
+        foreach (var state in watched) Console.WriteLine($"    {state.Id,-10} {Describe(state)}");
+        var (endMinority, _) = World();
+        return Check("minorities are not dissolved by the years alone",
+            endMinority >= startMinority * Math.Pow(0.97, days / 365.0)
+                ? ""
+                : $"the world's minority share fell from {startMinority:P1} to {endMinority:P1} in {days} day(s)");
+    }
+
     private static int Front(Campaign campaign, int days)
     {
         var before = new FrontSnapshot(campaign);
@@ -2484,9 +2551,16 @@ public static class Program
                    $"(ceiling {Fmt.People(nation.Population * campaign.Defines.MobilisationCeilingShare)}), " +
                    $"cap {Fmt.People(nation.ReinforcementCapacity)}/d, put back {Fmt.People(nation.ReinforcedLastWeek)}/wk, " +
                    $"{force.Count} div at {strength:P0}, overrun {WarWeariness.Overrun(campaign, nation)}, " +
-                   $"war support {nation.WarSupport:P0}";
+                   $"war support {nation.WarSupport:P0} | " +
+                   // How the force stands, not only how big it is: a front breaks when the line is
+                   // raw, tired or cut off long before it runs out of men.
+                   $"org {(force.Count == 0 ? 0f : force.Average(a => a.Organisation)):P0}, " +
+                   $"exp {(force.Count == 0 ? 0f : force.Average(a => a.Experience)):P0}, " +
+                   $"dug {(force.Count == 0 ? 0f : force.Average(a => a.Entrenchment)):P0}, " +
+                   $"{force.Count(a => a.CutOff)} cut off, {force.Count(a => a.InBattle)} in battle";
         }
-        Console.WriteLine($"  front d{day}: intensity {war.Intensity}, losses {war.AttackerLosses:N0}/{war.DefenderLosses:N0}, " +
+        Console.WriteLine($"  front d{day}: intensity {war.Intensity}, losses {war.AttackerLosses:N0}/{war.DefenderLosses:N0} " +
+                          $"(killed {war.AttackerKilled:N0}/{war.DefenderKilled:N0}, taken {war.AttackerCaptured:N0}/{war.DefenderCaptured:N0}), " +
                           $"occupied A {war.AttackerOccupiedValue:P1} D {war.DefenderOccupiedValue:P1}");
         Console.WriteLine($"      {Side(russia)}");
         Console.WriteLine($"      {Side(ukraine)}");

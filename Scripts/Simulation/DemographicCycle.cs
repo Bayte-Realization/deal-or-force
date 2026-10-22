@@ -35,8 +35,17 @@ public sealed partial class Defines
     /// <summary>Net migration as a share of the population that counts as a flood rather than a trickle.</summary>
     public float DemographyFloodShare { get; set; } = 0.012f;
 
-    /// <summary>Share of a minority who adopt the country's own culture in a year.</summary>
+    /// <summary>
+    /// Share of a minority who adopt the culture around them in a year, before kinship, size,
+    /// schooling, a kin state and the country's policy are weighed (DemographicCycle.Assimilate).
+    /// </summary>
     public float DemographyAssimilationAnnual { get; set; } = 0.006f;
+
+    /// <summary>
+    /// The share of a region the country's own people must be for minorities there to adopt the
+    /// country's culture rather than the region's majority's.
+    /// </summary>
+    public float DemographyAssimilationNationalShare { get; set; } = 0.10f;
 
     /// <summary>Where new fields start for a save written before this existed: nobody is old, nobody is young.</summary>
     public bool DemographyAgeStructureEnabled { get; set; } = true;
@@ -165,117 +174,127 @@ public static class DemographicCycle
     }
 
     /// <summary>
-    /// Who the newcomers are, and what happens to a people nobody adds to.
-    ///
-    /// A trickle joins whichever community is already there; a flood arrives as itself, from the
-    /// country the people are coming from, and can grow into the majority of a region over decades.
-    /// In the other direction a minority that nothing keeps adding to slowly adopts the country
-    /// around it, so a region's culture can move either way and neither way is the default.
-    ///
-    /// Nothing here changes a region's total: BrainDrain has already moved the people, and this only
-    /// decides which community they are counted under.
+    /// What happens to a people nobody adds to. Migrants no longer need sorting out here: they
+    /// arrive as the people they are, culture and faith and trade (InternalMigration.Move, used
+    /// across borders by BrainDrain too). They used to arrive as a copy of the region's own mix
+    /// and then be relabelled as its largest minority, so the refugees of South Sudan and Congo
+    /// became Ganda in Uganda and Ganda appeared all over Tanzania - five points a year.
     /// </summary>
     private static void MoveCultures(Campaign campaign, ScenarioState state)
     {
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
-        var dominant = groups[0];
-        for (var i = 1; i < groups.Count; i++)
-            if (groups[i].Size > dominant.Size) dominant = groups[i];
-        var net = state.ReviewNetMigration;
-        if (net > 0)
+        Assimilate(campaign, state, groups);
+    }
+
+    private static readonly Dictionary<string, long> PeopleHere = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<(int Owner, string Culture), bool> KinAlive = new();
+    private static Campaign _kinWorld;
+    private static int _kinDay = -1;
+
+    /// <summary>
+    /// Assimilation: a minority adopts the culture around it - the country's own where the
+    /// country's people are a real part of the region, the local majority's where they are not.
+    /// Its people keep their profession, their class and their faith: what changes is the
+    /// language they are counted under.
+    ///
+    /// The rate is a year's share of the minority, and it used to be applied at every weekly
+    /// review - twenty-seven per cent a year, so every minority on the map was gone inside a
+    /// decade and the regions that should stay contested (Russians in Latvia, Hungarians in
+    /// Transylvania, Albanians in North Macedonia) became one people. It is now scaled to the
+    /// review and weighed by what actually decides it:
+    ///   - kinship: a people of the same family shifts twice as readily, one of another faith
+    ///     at four tenths the rate;
+    ///   - size: a minority that is a large share of its region keeps its schools, its press and
+    ///     its marriages - half of a region shifts at half the rate, and none ever stops wholly;
+    ///   - schooling: literacy is where a state's language is taught, and anger is where it is
+    ///     refused (radicalism);
+    ///   - a living kin state keeps a people's own media and schools going;
+    ///   - and the country's policy, the modifier key "assimilation".
+    /// A people the country counts among its own (Belgium's Flemish and Walloons) is not
+    /// assimilated into another of them.
+    /// </summary>
+    private static void Assimilate(Campaign campaign, ScenarioState state, List<PopulationGroup> groups)
+    {
+        var defines = campaign.Defines;
+        var annual = defines.DemographyAssimilationAnnual;
+        if (annual <= 0f || groups.Count < 2) return;
+        var owner = campaign.NationsByMapIndex().GetValueOrDefault(state.NationMapIndex);
+        if (owner is null) return;
+        var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
+        var population = Math.Max(1L, state.Population);
+
+        PeopleHere.Clear();
+        foreach (var group in groups)
+            if (group.Size > 0 && !string.IsNullOrEmpty(group.Culture))
+                PeopleHere[group.Culture] = PeopleHere.GetValueOrDefault(group.Culture) + group.Size;
+        if (PeopleHere.Count < 2) return;
+        string majority = null;
+        foreach (var (culture, people) in PeopleHere)
+            if (majority is null || people > PeopleHere[majority] ||
+                people == PeopleHere[majority] && string.CompareOrdinal(culture, majority) < 0) majority = culture;
+        var national = DemographyCatalog.PrimaryCulture(owner.Tag);
+        var target = !string.IsNullOrEmpty(national) &&
+                     PeopleHere.GetValueOrDefault(national) >= population * defines.DemographyAssimilationNationalShare
+            ? national
+            : majority;
+        var targetFamily = DemographyCatalog.Culture(target)?.Group ?? "";
+        var targetFaiths = DemographyCatalog.FaithOf(target);
+        var schooling = Math.Clamp(0.5f + state.Literacy, 0.5f, 1.5f);
+        // Angry people do not take the language of the state they are angry with.
+        var calm = Math.Clamp(1f - state.Radicalism, 0.05f, 1f);
+        var policy = NationalModifiers.Factor(owner, "assimilation");
+
+        if (!ReferenceEquals(_kinWorld, campaign) || _kinDay != campaign.ElapsedDays)
         {
-            var share = net / (float)state.Population;
-            PopulationGroup host = null;
-            if (share >= campaign.Defines.DemographyFloodShare && Sender(campaign, state) is { Length: > 0 } culture)
-                host = Group(groups, culture, state);
-            if (host is null)
-            {
-                for (var i = 0; i < groups.Count; i++)
-                {
-                    var group = groups[i];
-                    if (string.Equals(group.Culture, dominant.Culture, StringComparison.OrdinalIgnoreCase)) continue;
-                    if (host is null || group.Size > host.Size) host = group;
-                }
-            }
-            if (host is not null)
-            {
-                var moved = Math.Min(net, Math.Max(0, dominant.Size - 1));
-                dominant.Size -= moved;
-                host.Size += moved;
-            }
+            KinAlive.Clear();
+            _kinWorld = campaign;
+            _kinDay = campaign.ElapsedDays;
         }
-        else if (net < 0)
-        {
-            // Emigration takes from everyone, and takes most where there are skills to sell.
-            var leaving = -net;
-            long total = 0;
-            WealthOrder.Clear();
-            for (var i = 0; i < groups.Count; i++)
-            {
-                var g = groups[i];
-                total += g.Size;
-                WealthOrder.Add(g);
-            }
-            total = Math.Max(1, total);
-            WealthOrder.Sort((a, b) => b.Wealth.CompareTo(a.Wealth));
-            for (var i = 0; i < WealthOrder.Count; i++)
-            {
-                if (leaving <= 0) break;
-                var group = WealthOrder[i];
-                var take = Math.Min(leaving, (long)Math.Round(leaving * group.Size / (double)total));
-                take = Math.Min(take, group.Size);
-                group.Size -= take;
-                leaving -= take;
-            }
-            if (leaving > 0) dominant.Size = Math.Max(0, dominant.Size - leaving);
-        }
-        // Assimilation: a minority nothing keeps adding to becomes the country around it, slowly.
-        var adopted = campaign.Defines.DemographyAssimilationAnnual;
-        if (adopted <= 0f) return;
+
         var count = groups.Count;
         for (var i = 0; i < count; i++)
         {
             var group = groups[i];
-            if (ReferenceEquals(group, dominant) || group.Size <= 0) continue;
-            var moved = (long)Math.Floor(group.Size * adopted);
+            if (group.Size <= 0 || string.IsNullOrEmpty(group.Culture) ||
+                string.Equals(group.Culture, target, StringComparison.OrdinalIgnoreCase) ||
+                DemographyCatalog.IsPrimary(owner.Tag, group.Culture)) continue;
+            var family = DemographyCatalog.Culture(group.Culture)?.Group ?? "";
+            var kin = family.Length > 0 && string.Equals(family, targetFamily, StringComparison.OrdinalIgnoreCase) ? 2f : 1f;
+            var faith = SharesFaith(group.Religion, targetFaiths) ? 1f : 0.4f;
+            var size = Math.Clamp(1f - PeopleHere.GetValueOrDefault(group.Culture) / (float)population, 0.2f, 1f);
+            var key = (owner.Id, group.Culture);
+            if (!KinAlive.TryGetValue(key, out var hasKin))
+                KinAlive[key] = hasKin = SecessionEvents.KinState(campaign, owner, group.Culture) is not null;
+            var rate = annual * interval * kin * faith * size * schooling * calm * (hasKin ? 0.6f : 1f) * policy;
+            var moved = Math.Min(group.Size, (long)Math.Round(group.Size * (double)rate));
             if (moved <= 0) continue;
             group.Size -= moved;
-            dominant.Size += moved;
+            Counterpart(groups, group, target).Size += moved;
         }
     }
 
-    /// <summary>The culture arriving in this region: the country's chief sender of migrants, if known.</summary>
-    private static string Sender(Campaign campaign, ScenarioState state)
+    private static bool SharesFaith(string religion, IReadOnlyList<(string Religion, float Share)> faiths)
     {
-        Nation owner = null;
-        for (var i = 0; i < campaign.Nations.Count; i++)
-            if (campaign.Nations[i].MapIndex == state.NationMapIndex) { owner = campaign.Nations[i]; break; }
-        if (owner is null || owner.BrainGainSourceId < 0) return "";
-        var source = campaign.NationById(owner.BrainGainSourceId);
-        if (source is null) return "";
-        var cultures = DemographyCatalog.PrimaryCultures(source.Tag);
-        return cultures.Count > 0 ? cultures[0] : "";
+        if (string.IsNullOrEmpty(religion) || faiths.Count == 0) return true;
+        foreach (var (each, _) in faiths)
+            if (string.Equals(each, religion, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
-    /// <summary>The group of that culture in this region, made room for if the region has none.</summary>
-    private static PopulationGroup Group(List<PopulationGroup> groups, string culture, ScenarioState state)
+    /// <summary>The group of the given culture doing what this one does, made if there is none.</summary>
+    private static PopulationGroup Counterpart(List<PopulationGroup> groups, PopulationGroup like, string culture)
     {
         foreach (var group in groups)
-            if (string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase)) return group;
-        var faiths = DemographyCatalog.FaithOf(culture);
+            if (string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(group.Religion, like.Religion, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(group.Profession, like.Profession, StringComparison.OrdinalIgnoreCase) &&
+                group.Class == like.Class && group.Sector == like.Sector) return group;
         var created = new PopulationGroup
         {
-            Class = SocialClass.Lower,
-            Sector = Sector.Industry,
-            Culture = culture,
-            Religion = faiths.Count > 0 ? faiths[0].Religion : "",
-            Profession = "labourers",
-            Size = 0,
-            Employment = 0.9f,
-            Wealth = 0.38f,
-            StandardOfLiving = state.StandardOfLiving,
-            Radicalism = state.Radicalism
+            Class = like.Class, Sector = like.Sector, Culture = culture, Religion = like.Religion,
+            Profession = like.Profession, Size = 0, Employment = like.Employment, Wealth = like.Wealth,
+            StandardOfLiving = like.StandardOfLiving, Radicalism = like.Radicalism
         };
         groups.Add(created);
         return created;

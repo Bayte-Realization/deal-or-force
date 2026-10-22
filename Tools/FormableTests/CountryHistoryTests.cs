@@ -104,6 +104,9 @@ static class CountryHistoryTests
             "military_spending", "literacy", "urbanisation", "agriculture", "standard_of_living",
             "stability", "war_support", "manpower", "trade_policy", "government", "ideology",
             "primary_cultures",
+            // The laws in force on the first morning where they are not their category's default
+            // (50_laws.json): what a state does about its minorities, among others.
+            "laws",
             // Who leads a country on its first morning. `ApplyCountries` does not read these -
             // `Rulers` does, from the same folder, from every file whose name says "rulers".
             // They are listed here so the contract says so out loud rather than the suite

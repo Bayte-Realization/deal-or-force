@@ -700,6 +700,8 @@ public static class CampaignFingerprint
                 foreach (var step in army.Route) Mix(step); Mix(-35);
             }
         }
+        foreach (var army in Ordered(campaign.Armies, a => a.Id))
+            if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
         foreach (var war in Ordered(campaign.Wars, war => war.Id))
         {
             Mix(war.Id);

@@ -123,7 +123,7 @@ public static partial class Warfare
         }
         foreach (var army in retreating)
         {
-            var retreat = WarCoalition.SpreadRetreatProvince(campaign, war, army, provinceId);
+            var retreat = WarCoalition.SpreadRetreatProvince(campaign, war, army, provinceId, beaten: true);
 
             // Nowhere to go. It was left standing in the province it had just lost, inside
             // ground the enemy now holds, and the code said as much in a diagnostic marked
