@@ -33,6 +33,21 @@ public sealed partial class Defines
     /// <summary>A people's young men and women coming of age, as a share of the population a year; the most a country can have in reserve.</summary>
     public float ManpowerGrowthPerYear { get; set; } = 0.0015f;
     public float MobilisationCeilingShare { get; set; } = 0.05f;
+
+    /// <summary>
+    /// Days of replacements - at the country's own daily capacity to send them forward - kept
+    /// back to refill the formations it has rather than spent raising new ones. Without it
+    /// Ukraine doubled its army to 116 divisions in five months, had nobody left to replace a
+    /// single loss, and collapsed in the sixth. Measured in its own replacements, not in its
+    /// people: a quarter of the mobilisation ceiling was 250,000 men for Ukraine, which no
+    /// reserve at war ever reached again, so it raised nothing after the first winter.
+    /// </summary>
+    public float ReplacementReserveDays { get; set; } = 60f;
+
+    /// <summary>Average organisation from which a force at war attacks in full (WarCore.Readiness).</summary>
+    public float AiOffensiveReadyOrganisation { get; set; } = 0.55f;
+    /// <summary>Average organisation at which it stops attacking until it has recovered.</summary>
+    public float AiOffensiveExhaustedOrganisation { get; set; } = 0.30f;
     /// <summary>How much faster men are called up by a country at war whose own ground is being taken.</summary>
     public float MobilisationMultiplier { get; set; } = 4f;
     /// <summary>How deep into debt a country being overrun goes to raise an army, as a share of its GDP.</summary>
@@ -157,6 +172,13 @@ public static class WarWeariness
             if (overrun.Contains(nation.Id)) grown *= defines.MobilisationMultiplier * MathF.Max(0.25f, nation.WarSupport);
             nation.ManpowerReserve = MathF.Min(ceiling, nation.ManpowerReserve + grown);
         }
+    }
+
+    /// <summary>Whether a country can raise one more formation and still keep its replacement reserve.</summary>
+    public static bool MayRaise(Campaign campaign, Nation nation)
+    {
+        var keep = MathF.Max(0f, nation.ReinforcementCapacity) * MathF.Max(0f, campaign.Defines.ReplacementReserveDays);
+        return nation.ManpowerReserve - MilitaryBootstrap.DivisionSize >= keep;
     }
 
     /// <summary>Whether this country is at war and has lost ground to the enemy - fighting for its life.</summary>

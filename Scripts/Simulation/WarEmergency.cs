@@ -98,8 +98,14 @@ public static class WarEmergency
         var capitalLost = nation.CapitalProvinceId > 0 &&
             nation.CapitalProvinceId < campaign.ProvinceController.Length &&
             campaign.ProvinceController[nation.CapitalProvinceId] != (ushort)nation.MapIndex;
-        if (!capitalLost && occupied < campaign.Defines.WarEmergencyCriticalShare &&
-            unheld == 0) return;
+        // An open post is an emergency for the side defending against the war, not for the
+        // one that started it: an attacker's long front always has empty posts, and reading
+        // them as a war for existence had Russia raising a division a day on credit and
+        // walking into every empty province from the first week. Lost ground and a lost
+        // capital are an emergency for anybody.
+        var threatened = capitalLost || occupied >= campaign.Defines.WarEmergencyCriticalShare ||
+                         unheld > 0 && war.IsDefending(nation.Id);
+        if (!threatened) return;
 
         if (unheld > 0)
             Reinforce(campaign, nation, war, Math.Max(0, campaign.Defines.WarEmergencyReinforcementsPerDay -
@@ -264,6 +270,8 @@ public static class WarEmergency
         for (var index = 0; index < budget; index++)
         {
             if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;
+            // An emergency raises the men a country can spare, not the ones that refill its line.
+            if (!WarWeariness.MayRaise(campaign, nation)) break;
             var command = new RaiseArmyCommand
             {
                 IssuerId = nation.Id, StateMapIndex = home, Divisions = 1f,

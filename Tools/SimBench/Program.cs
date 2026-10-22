@@ -2598,6 +2598,14 @@ public static class Program
                               $"{Fmt.People(nation.ReinforcedLastWeek)} put back this week, " +
                               $"average strength {force.Average(army => army.Strength):P0}, " +
                               $"{force.Count(army => army.InBattle):N0} of {force.Count:N0} locked in battle.");
+            // And the depots, which decide a long war as surely as the men do: a side whose
+            // ammunition has run dry fights with what arrived that day.
+            string Depot(string good) =>
+                $"{good.ToLowerInvariant()} {StrategicStockpiles.Get(campaign, nation, good):0.#} " +
+                $"(+{nation.DailyStockpileGain.GetValueOrDefault(good):0.##}/-{nation.DailyStockpileBurn.GetValueOrDefault(good):0.##} a day)";
+            Console.WriteLine($"  {nation.Tag} depots: {Depot("Ammunition")}, {Depot("Arms")}, {Depot("Oil")}, {Depot("Food")}, " +
+                              $"munitions {StrategicStockpiles.CombatMunitionsFactor(campaign, nation):P0}, " +
+                              $"{campaign.Sponsorships.Where(s => !s.Ended && s.ClientId == nation.Id).Sum(s => s.LastShipment):0.#} shipped in by backers at the last delivery.");
         }
         if (war.Ended) return "the war ended on its own with nobody playing";
         // Neither army may be ground out of existence. This is the one that mattered and

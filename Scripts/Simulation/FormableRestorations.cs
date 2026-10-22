@@ -179,7 +179,12 @@ public sealed partial class Defines
     /// <summary>What it costs, as a share of the founder's output.</summary>
     public float RestorationCostShare { get; set; } = 0.015f;
     /// <summary>The least share of a breakaway's people living on a vanished country's old ground for it to restore that country.</summary>
-    public float RestorationGroundShare { get; set; } = 0.40f;
+    public float RestorationGroundShare { get; set; } = 0.30f;
+    /// <summary>
+    /// How far a people's own state's capital may be from its ground in another country for that
+    /// ground to count as the state's lost land; beyond it the people may secede as a new nation.
+    /// </summary>
+    public float DiasporaReachKm { get; set; } = 2500f;
     /// <summary>The administrative dividend of being a recognised state again.</summary>
     public float RestorationGovernanceGain { get; set; } = 0.04f;
     public float RestorationProductivityGain { get; set; } = 0.01f;

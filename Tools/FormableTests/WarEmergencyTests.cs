@@ -57,7 +57,10 @@ static class WarEmergencyTests
         var gapArmy = Unit(gap, 0, 2);
         gapArmy.OrderKind = ArmyOrder.ReserveFront;
         gapArmy.AssignedWarId = -1;
-        gap.Wars[0].AttackerOccupiedValue = 0.1f;
+        gap.Wars[0].DefenderOccupiedValue = 0.1f;
+        // The empty province is the defender's own land under occupation: a defender that is
+        // not yet winning takes back its own before it invades (AiDefenderInvadesFromScore).
+        gap.States[2].CoreTags.Add("AAA");
         WarEmergency.Tick(gap);
         Check(gap.Armies.Any(army => army.DirectOrder || army.OrderProvinceId == 3 || army.Route.Contains(3)),
             "a reserve can occupy an undefended enemy province beside the front");
@@ -89,14 +92,14 @@ static class WarEmergencyTests
         twoWars.Defines.WarEmergencyReinforcementsPerDay = 1;
         Unit(twoWars, 0, 1);
         var spare = Unit(twoWars, 0, 1);
-        var second = new StrategicWar { Id = 2, AttackerId = 0, DefenderId = 1 };
-        second.AttackerFront.Add(3); second.DefenderFront.Add(4);
+        var second = new StrategicWar { Id = 2, AttackerId = 1, DefenderId = 0 };
+        second.DefenderFront.Add(3); second.AttackerFront.Add(4);
         twoWars.Wars.Add(second);
         WarEmergency.Tick(twoWars);
         Check(spare.AssignedWarId < 0, "the daily country reposting budget is shared across its wars");
 
         var engaged = Fixture(out _, out _);
-        engaged.Wars[0].AttackerFront.Clear(); engaged.Wars[0].AttackerFront.Add(2);
+        engaged.Wars[0].DefenderFront.Clear(); engaged.Wars[0].DefenderFront.Add(2);
         var fighting = Unit(engaged, 0, 2); fighting.BattleId = 99;
         WarEmergency.Tick(engaged);
         Check(engaged.Recruitment.All(order => order.NationId != 0),
@@ -119,6 +122,21 @@ static class WarEmergencyTests
         direct.Apply(exhausted);
         Check(direct.FailureReason == "Wartime recruitment credit limit reached.",
             "the authoritative recruitment command enforces the same credit ceiling");
+
+        // The side that started the war has open posts along any long front; that is not a
+        // war for existence, and it raises and reposts nothing until it loses ground.
+        var aggressor = Fixture(out var invader, out _);
+        aggressor.Wars[0].AttackerId = 0; aggressor.Wars[0].DefenderId = 1;
+        var own = aggressor.Wars[0].DefenderFront.ToArray();
+        var theirs = aggressor.Wars[0].AttackerFront.ToArray();
+        aggressor.Wars[0].AttackerFront.Clear(); aggressor.Wars[0].AttackerFront.UnionWith(own);
+        aggressor.Wars[0].DefenderFront.Clear(); aggressor.Wars[0].DefenderFront.UnionWith(theirs);
+        var invaderIdle = Unit(aggressor, 0, 1);
+        var invaderMen = invader.ManpowerReserve;
+        WarEmergency.Tick(aggressor);
+        Check(invaderIdle.AssignedWarId < 0 && aggressor.Recruitment.All(order => order.NationId != invader.Id) &&
+              invader.ManpowerReserve == invaderMen,
+            "an attacker's open posts are not a war for existence");
 
         var human = Fixture(out var humanNation, out _);
         human.ConfigureSinglePlayer(humanNation.Id);
@@ -179,13 +197,15 @@ static class WarEmergencyTests
             owners[width + x] = x < owned ? (ushort)501 : (ushort)502;
         }
         c.AttachProvinceTopology(ProvinceTopology.Build(cells, owners, width, height, _ => false));
+        // The country under test (AAA, "attacker" in the names above for the side whose line
+        // is short) is the one being attacked: an open post is an emergency for a defender.
         var war = new StrategicWar
         {
-            Id = 0, AttackerId = 0, DefenderId = 1, StartedDay = 0,
+            Id = 0, AttackerId = 1, DefenderId = 0, StartedDay = 0,
             ClaimedStateMapIndex = 1002, FrontDirty = false, LastFrontDay = 0
         };
-        war.AttackerFront.UnionWith(Enumerable.Range(1, owned));
-        war.DefenderFront.UnionWith(Enumerable.Range(owned + 1, total - owned));
+        war.DefenderFront.UnionWith(Enumerable.Range(1, owned));
+        war.AttackerFront.UnionWith(Enumerable.Range(owned + 1, total - owned));
         c.Wars.Add(war);
         CampaignDiplomacy.Get(c, 0, 1).Stance = DiplomaticStance.AtWar;
         c.Nations[0].CapitalProvinceId = 1;

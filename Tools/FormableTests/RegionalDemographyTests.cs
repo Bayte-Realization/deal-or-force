@@ -11,9 +11,25 @@ static class RegionalDemographyTests
     static void Check(bool condition, string label)
     { if (!condition) throw new Exception(label); Console.WriteLine("PASS regional demography: " + label); }
 
-    public static void Run()
+    // The base game writes every country's peoples as shares; a sourced census by region is a mod's
+    // tool, shipped as the template mods/_templates/regional_census (Belarus, 2019). The test reads
+    // that template's records the way a mod's would be read.
+    static readonly string Template = Path.Combine(GameDataLoader.DataFolder(), "..", "mods", "_templates",
+        "regional_census", "common", "regional_demography", "00_belarus_2019.json");
+
+    static void LoadTemplate()
     {
         RegionalDemography.ResetCatalog();
+        var errors = new List<string>();
+        using var document = JsonDocument.Parse(File.ReadAllText(Template),
+            new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        RegionalDemography.Merge(document.RootElement, errors);
+        if (errors.Count > 0) throw new Exception("regional census template: " + string.Join("; ", errors));
+    }
+
+    public static void Run()
+    {
+        LoadTemplate();
         var expected = new[] {
             ("by_br", 1348115L, 1171835L, 97936L, 14893L, 37648L),
             ("by_vi", 1135731L, 934925L, 138075L, 9806L, 17993L),
@@ -48,6 +64,11 @@ static class RegionalDemographyTests
             WorldMapSource.Width, WorldMapSource.Height, out var topology, out var mapError),
             "save fixture attaches production province geography: " + mapError);
         campaign.AttachProvinceTopology(topology);
+        // Seeded the way the template's own history file seeds them.
+        var seeding = new List<string>();
+        HistoryDataLoader.ApplyStates(campaign, "{" + string.Join(",", expected.Select(row =>
+            $"\"{row.Item1}\":{{\"culture_profile\":\"{row.Item1}\"}}")) + "}", seeding);
+        Check(seeding.Count == 0, "the template's profiles apply: " + string.Join("; ", seeding));
         foreach (var (id, _, _, _, _, _) in expected)
         {
             var state = campaign.States.First(item => item.Id == id);
@@ -110,7 +131,7 @@ static class RegionalDemographyTests
                 "largest-remainder apportionment loses nobody and creates no negative cells at population " + people);
         }
 
-        var path = Path.Combine(GameDataLoader.DataFolder(), "common", "regional_demography", "00_belarus_2019.json");
+        var path = Template;
         var original = JsonNode.Parse(File.ReadAllText(path))["by_hr"];
         void Reject(Action<JsonNode> change, string label)
         {
@@ -133,8 +154,13 @@ static class RegionalDemographyTests
         using (var replacement = JsonDocument.Parse(new JsonObject { ["fixture_region"] = original.DeepClone() }.ToJsonString()))
             RegionalDemography.Merge(replacement.RootElement, errors);
         Check(errors.Count == 0 && RegionalDemography.Find("fixture_region") is not null, "mods can add a complete new regional source");
+        // The base game ships no census of its own: a reload clears every mod's source, and the
+        // template's records come back only when the template is loaded again.
         RegionalDemography.ResetCatalog();
-        Check(RegionalDemography.Find("fixture_region") is null && RegionalDemography.Find("by_hr") is not null,
-            "catalog reload clears a disabled mod and restores base sources");
+        Check(RegionalDemography.Find("fixture_region") is null && RegionalDemography.Find("by_hr") is null,
+            "catalog reload clears a disabled mod and leaves the base game's standard shares");
+        LoadTemplate();
+        Check(RegionalDemography.Find("by_hr") is not null, "the template's census loads again like any mod's");
+        RegionalDemography.ResetCatalog();
     }
 }

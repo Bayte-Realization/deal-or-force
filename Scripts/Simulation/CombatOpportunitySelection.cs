@@ -9,6 +9,12 @@ public sealed partial class Defines
     /// <summary>Let a ready autonomous advance use a visible, unopposed opening
     /// without waiting for the preparation needed by a defended assault.</summary>
     public bool AiStartsUnopposedAdvance { get; set; } = true;
+
+    /// <summary>
+    /// The war score (for the defender) from which a defending country advances into the
+    /// attacker's own ground rather than only taking back its own.
+    /// </summary>
+    public float AiDefenderInvadesFromScore { get; set; } = 15f;
 }
 
 // Target selection and local cover share the same indexed army view as combat.
@@ -84,6 +90,23 @@ public static partial class Warfare
         foreach (var province in topology.Neighbors[army.ProvinceId])
             if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
         if (Candidates.Count == 0) return -1;
+        // A defender takes back its own before it invades. Until it is clearly winning, a
+        // country fighting off an attack advances only onto its own ground - occupied, or its
+        // own by right - and not into the attacker's: Ukraine sent half its army into Russia
+        // proper, out of its trenches, and lost the whole front to the first counter-blow.
+        if (!war.IsAttacking(army.NationId) && !army.DirectOrder &&
+            -war.WarScore < campaign.Defines.AiDefenderInvadesFromScore &&
+            campaign.NationById(army.NationId) is { } holder)
+        {
+            var kept = 0;
+            for (var index = 0; index < Candidates.Count; index++)
+            {
+                var province = Candidates[index];
+                if (OwnGround(campaign, topology, holder, province)) Candidates[kept++] = province;
+            }
+            Candidates.RemoveRange(kept, Candidates.Count - kept);
+            if (Candidates.Count == 0) return -1;
+        }
         Neighbours.Clear();
         Neighbours.AddRange(Candidates);
         var pinned = 0;
@@ -167,6 +190,24 @@ public static partial class Warfare
         }
         return target;
     }
+
+    /// <summary>Whether a province is a country's own ground: held on the map as its own, or its core.</summary>
+    private static bool OwnGround(Campaign campaign, ProvinceTopology topology, Nation nation, int province)
+    {
+        if (topology.ProvinceToNation[province] == nation.MapIndex) return true;
+        if (!ReferenceEquals(_regionsOf, campaign) || _regionsCount != campaign.States.Count || _regionsRevision != campaign.MapRevision)
+        {
+            RegionByIndex.Clear();
+            foreach (var each in campaign.States) RegionByIndex[each.MapIndex] = each;
+            _regionsOf = campaign; _regionsCount = campaign.States.Count; _regionsRevision = campaign.MapRevision;
+        }
+        return RegionByIndex.TryGetValue(topology.ProvinceToState[province], out var state) &&
+               state.CoreTags.Contains(nation.Tag, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static readonly Dictionary<int, ScenarioState> RegionByIndex = new();
+    private static Campaign _regionsOf;
+    private static int _regionsCount = -1, _regionsRevision = -1;
 
     /// <summary>
     /// The one refusal an autonomous advance meets: a province empty of defenders but so

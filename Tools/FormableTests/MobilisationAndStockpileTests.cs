@@ -72,10 +72,40 @@ static class MobilisationAndStockpileTests
         var wellStockedFactor = StrategicStockpiles.CombatMunitionsFactor(campaign, rus);
         Check(wellStockedFactor >= 0.95f, "well-stocked nation has full combat munitions efficiency");
 
-        rus.Stockpiles["Ammunition"] = 0f;
-        rus.Stockpiles["Arms"] = 0f;
+        // An empty depot is a ration: the guns fire the share of yesterday's need that the
+        // stock and the day's deliveries could meet, not nothing at all.
+        rus.StockpileCoverage["Ammunition"] = 0.5f;
+        rus.StockpileCoverage["Arms"] = 0.5f;
+        var rationedFactor = StrategicStockpiles.CombatMunitionsFactor(campaign, rus);
+        Check(rationedFactor < wellStockedFactor && rationedFactor > 0.60f,
+            "a nation rationed to half its munitions fights weaker, but not at the floor");
+        rus.StockpileCoverage["Ammunition"] = 0f;
+        rus.StockpileCoverage["Arms"] = 0f;
         var dryFactor = StrategicStockpiles.CombatMunitionsFactor(campaign, rus);
         Check(dryFactor < 0.70f, "nation out of ammunition and arms suffers severe combat penalties");
+
+        // A day in which nothing arrives and the depot is empty is recorded as a need unmet.
+        rus.Stockpiles["Ammunition"] = 0f;
+        var trickle = campaign.Defines.StockpileMinimumTrickle;
+        var industry = campaign.Defines.StockpileIndustryPerRootGdp;
+        var market = campaign.Defines.StockpileSurplusCaptureShare;
+        campaign.Defines.StockpileMinimumTrickle = 0f;
+        campaign.Defines.StockpileIndustryPerRootGdp = 0f;
+        campaign.Defines.StockpileSurplusCaptureShare = 0f;
+        var plantsWere = new Dictionary<ScenarioState, int>();
+        foreach (var state in campaign.StatesOf(rus))
+        {
+            plantsWere[state] = state.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry);
+            state.Buildings[BuildingKind.ArmsIndustry] = 0;
+        }
+        StrategicStockpiles.TickDay(campaign);
+        var burnt = rus.DailyStockpileBurn.GetValueOrDefault("Ammunition");
+        var met = StrategicStockpiles.Coverage(rus, "Ammunition");
+        foreach (var (state, plants) in plantsWere) state.Buildings[BuildingKind.ArmsIndustry] = plants;
+        campaign.Defines.StockpileMinimumTrickle = trickle;
+        campaign.Defines.StockpileIndustryPerRootGdp = industry;
+        campaign.Defines.StockpileSurplusCaptureShare = market;
+        Check(burnt <= 0f || met < 1f, "an empty depot with nothing arriving records the need it could not meet");
 
         // 5. Fleet slipway scaling under total mobilisation
         var normalSlips = Shipbuilding.Slipways(campaign, usa, MobilisationMode.Standard);

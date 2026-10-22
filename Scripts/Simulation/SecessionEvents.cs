@@ -242,12 +242,15 @@ public static class SecessionEvents
 
         foreach (var (people, states) in byCulture)
         {
-            // A people that already has a living state of its own does not found a second one:
-            // Ukrainians on ground Russia took are Ukraine's lost land (LostLands), not a "Republic
-            // of Ukraine" that seceded five times and was taken back five times.
-            if (KinState(campaign, owner, people) is not null) continue;
             foreach (var bloc in Contiguous(states))
             {
+                // A people whose own state is next door does not found a second one: Ukrainians
+                // on ground Russia took are Ukraine's lost land (LostLands), not a "Republic of
+                // Ukraine" that seceded five times and was taken back five times. A people far
+                // from it - a diaspora that has become the land's own majority - can: that is how
+                // new nations were made, from the Boers to the Americans, and it is named for its
+                // land rather than as a second copy of the old country (NationNaming.AvoidClash).
+                if (KinNear(campaign, owner, people, bloc)) continue;
                 long here = 0;
                 foreach (var state in bloc) here += state.Population;
                 if (best.Count > 0 && here <= bestPeople) continue;
@@ -445,6 +448,29 @@ public static class SecessionEvents
                 return nation;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Whether a people's own living state is near enough that its ground here is that state's
+    /// lost land rather than a new nation's: it borders the owner and its capital lies within
+    /// Defines.DiasporaReachKm of these regions.
+    /// </summary>
+    internal static bool KinNear(Campaign campaign, Nation owner, string culture, IReadOnlyList<ScenarioState> regions)
+    {
+        var kin = KinState(campaign, owner, culture);
+        if (kin is null) return false;
+        if (!CampaignDiplomacy.SharesLandBorder(campaign, owner.MapIndex, kin.MapIndex)) return false;
+        if (regions is null || regions.Count == 0) return true;
+        var seat = regions[0];
+        foreach (var region in regions) if (region.Population > seat.Population) seat = region;
+        var (latitude, longitude) = LandAtlas.CentreOf(campaign, seat.MapIndex);
+        const float radians = MathF.PI / 180f;
+        var dLat = (kin.CapitalLatitude - latitude) * radians;
+        var dLon = (kin.CapitalLongitude - longitude) * radians;
+        var h = MathF.Sin(dLat / 2f) * MathF.Sin(dLat / 2f) + MathF.Cos(latitude * radians) *
+                MathF.Cos(kin.CapitalLatitude * radians) * MathF.Sin(dLon / 2f) * MathF.Sin(dLon / 2f);
+        var km = 2f * 6371f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
+        return km <= campaign.Defines.DiasporaReachKm;
     }
 
     private static bool Touches(HashSet<int> taken, int region) =>

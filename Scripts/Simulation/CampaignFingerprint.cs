@@ -590,6 +590,12 @@ public static class CampaignFingerprint
                 foreach (var entry in nation.Stockpiles.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
                 { MixText(entry.Key.ToLowerInvariant()); MixFloat(entry.Value); }
             }
+            if (nation.StockpileCoverage.Count > 0)
+            {
+                MixText("stockpile_coverage");
+                foreach (var entry in nation.StockpileCoverage.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                { MixText(entry.Key.ToLowerInvariant()); MixFloat(entry.Value); }
+            }
             if (nation.Elections is { } elections)
             {
                 MixText("elections_v1"); MixText(elections.Government); MixFloat(elections.Control);

@@ -243,7 +243,7 @@ public static class LandAtlas
         _ => ""
     };
 
-    private static (float Latitude, float Longitude) CentreOf(Campaign campaign, int mapIndex)
+    internal static (float Latitude, float Longitude) CentreOf(Campaign campaign, int mapIndex)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null || mapIndex <= 0) return (0f, 0f);
@@ -264,6 +264,7 @@ public static class LandAtlas
     {
         var lands = new List<LandDefinition>();
         var byId = new Dictionary<string, LandDefinition>(StringComparer.OrdinalIgnoreCase);
+        // common/naming holds every land; "lands" is still read for mods written before the two were one.
         foreach (var category in new[] { "naming", "lands" })
             foreach (var document in GameDataLoader.DataDocuments("common", category))
                 using (document)

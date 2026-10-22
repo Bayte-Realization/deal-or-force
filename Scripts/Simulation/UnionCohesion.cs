@@ -179,7 +179,7 @@ public static class UnionCohesion
             var people = EconomySystem.Cultures(state).FirstOrDefault().Culture;
             // The union's own peoples are not someone else's lost land, whoever else is of them.
             if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
-                SecessionEvents.KinState(campaign, nation, people) is not null) continue;
+                SecessionEvents.KinNear(campaign, nation, people, new[] { state })) continue;
             var score = state.Radicalism;
             if (campaign.ProvinceMap is not null)
             {

@@ -362,6 +362,8 @@ public static class Attrition
             for (var raise = 0; raise < raises; raise++)
             {
                 if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;
+                // The reserve that refills the formations already in the field is not spent on new ones.
+                if (!WarWeariness.MayRaise(campaign, nation)) break;
                 if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) break;
                 new RaiseArmyCommand
                 {

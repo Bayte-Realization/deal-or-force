@@ -591,7 +591,33 @@ public static partial class FrontPlanner
             pressing = true;
             share = MathF.Max(share, 0.5f);
         }
+        // And an army has to be able to attack. Whatever the situation asks, an offensive by
+        // divisions at a quarter of their organisation is not an offensive: Ukraine kept half its
+        // army advancing into Russia at 24-43 % until one counter-blow broke the whole front in a
+        // month. Below the readiness line the share falls away - an operational pause, for either
+        // side - and comes back as the divisions recover.
+        share *= Readiness(c, war, nation);
         return share;
+    }
+
+    /// <summary>
+    /// How ready a country's force in a war is to attack, 0 to 1: full at AiOffensiveReadyOrganisation
+    /// of average organisation, nothing at AiOffensiveExhaustedOrganisation.
+    /// </summary>
+    internal static float Readiness(Campaign c, StrategicWar war, Nation nation)
+    {
+        float organisation = 0f;
+        var count = 0;
+        foreach (var army in c.Armies)
+        {
+            if (army.NationId != nation.Id || army.AssignedWarId != war.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
+            organisation += army.Organisation;
+            count++;
+        }
+        if (count == 0) return 1f;
+        var ready = c.Defines.AiOffensiveReadyOrganisation;
+        var spent = MathF.Min(ready - 0.01f, c.Defines.AiOffensiveExhaustedOrganisation);
+        return M.Clamp01((organisation / count - spent) / MathF.Max(0.01f, ready - spent));
     }
 
     private static int AdvanceCount(int count, float share, bool pressingOrAttacking) =>
