@@ -17,6 +17,12 @@ public sealed partial class Defines
 
     /// <summary>Emergency formations a country may queue in one day when its line is short.</summary>
     public int WarEmergencyRaisesPerDay { get; set; } = 1;
+
+    /// <summary>Whether a reserve with no other duty takes an empty enemy province beside a mended line.</summary>
+    public bool WarEmergencyRushesGaps { get; set; } = true;
+
+    /// <summary>Whether a threatened region's own militia is put on an open post.</summary>
+    public bool WarEmergencyRaisesMilitia { get; set; } = true;
 }
 
 /// <summary>
@@ -114,7 +120,7 @@ public static class WarEmergency
         // A hole can be closed by taking the empty ground on the other side of it. This is
         // deliberately after the line is mended: an army that leaves a hole to chase a farm
         // has not helped. Only formations with no other front duty are used.
-        if (unheld == 0)
+        if (unheld == 0 && campaign.Defines.WarEmergencyRushesGaps)
             Rushed += RushGap(campaign, nation, war);
         if (unheld > 0 || Posts.Count > CountField(campaign, nation))
             Raised += RaiseEmergency(campaign, nation);
@@ -122,7 +128,7 @@ public static class WarEmergency
         // put the people who live on the threatened ground under arms. This is the same
         // local militia the daily pass raises; it costs no manpower and is not a field
         // division, but it is a formation already standing where the hole is.
-        if (unheld > 0)
+        if (unheld > 0 && campaign.Defines.WarEmergencyRaisesMilitia)
             Raised += EmergencyMilitia(campaign, nation, war);
     }
 
@@ -193,42 +199,43 @@ public static class WarEmergency
         return 0;
     }
 
+    /// <summary>
+    /// The last resort: a country that cannot raise one more division puts the people of a
+    /// threatened region under arms on that region's own part of the line. Only then. Posted
+    /// whenever a post was open, a few thousand armed villagers made the post count as held, so
+    /// no division was sent there, the line broke where they stood and the break became a pocket:
+    /// Ukraine was gone inside a year on every seed with them and held on every seed without.
+    /// </summary>
     private static int EmergencyMilitia(Campaign campaign, Nation nation, StrategicWar war)
     {
         if (!campaign.FeatureEnabled("militia") || !MilitiaToday.Add(nation.Id)) return 0;
+        if (nation.ManpowerReserve >= MilitaryBootstrap.DivisionSize) return 0;
         var weights = MilitiaCore.Weights;
-        var post = Posts.FirstOrDefault(province => !Held.Contains(province));
-        if (post <= 0) return 0;
-        // Use a local guard that already exists before inventing another one. Its region
-        // keeps its remaining guards; this is the same detachment the staff makes when a
-        // country has no regular formation left.
-        var detached = campaign.Armies
-            .Where(army => army.NationId == nation.Id && army.TemplateId == MilitiaCore.TemplateId &&
-                army.ProvinceId > 0 && army.AssignedWarId < 0 && army.FrontLineId < 0 &&
-                !army.DirectOrder && !army.InBattle && army.OrderKind == ArmyOrder.Manual)
-            .OrderBy(army => Distance(campaign, army.ProvinceId, post))
-            .ThenBy(army => army.Id).FirstOrDefault();
-        if (detached is not null)
-        {
-            new SetArmyOrderCommand
-            {
-                IssuerId = nation.Id, ArmyId = detached.Id, WarId = war.Id,
-                Order = ArmyOrder.DefendFront, PreferredProvinceId = post
-            }.Apply(campaign);
-            return 1;
-        }
+        var topology = campaign.ProvinceMap;
         var standing = campaign.Armies.Count(army => army.NationId == nation.Id &&
             army.TemplateId == MilitiaCore.TemplateId);
-        if (standing >= Math.Max(1, weights.PerCountry)) return 0;
-        foreach (var state in campaign.StatesOf(nation))
+        foreach (var post in Posts)
         {
-            if (state.Population < Math.Max(1f, weights.PopulationPerFormation)) continue;
-            if (RecruitmentSystem.DeploymentProvince(campaign, nation.Id, state.MapIndex) <= 0) continue;
-            if (!StateTouchesEnemy(campaign, nation, state.MapIndex)) continue;
-            if (!MilitiaCore.Found(campaign, nation, state)) continue;
-            var local = campaign.Armies.LastOrDefault(army => army.NationId == nation.Id &&
-                army.TemplateId == MilitiaCore.TemplateId && army.ProvinceId > 0);
-            if (local is null) return 0;
+            if (post <= 0 || Held.Contains(post)) continue;
+            var region = topology.ProvinceToState[post];
+            // A guard of this region that is standing by.
+            var local = campaign.Armies
+                .Where(army => army.NationId == nation.Id && army.TemplateId == MilitiaCore.TemplateId &&
+                    army.ProvinceId > 0 && army.StateMapIndex == region && army.AssignedWarId < 0 &&
+                    army.FrontLineId < 0 && !army.DirectOrder && !army.InBattle && army.OrderKind == ArmyOrder.Manual)
+                .OrderBy(army => army.Id).FirstOrDefault();
+            if (local is null)
+            {
+                // Or one raised here, if the region has the people and the country the room.
+                if (standing >= Math.Max(1, weights.PerCountry)) continue;
+                var state = campaign.StatesOf(nation).FirstOrDefault(candidate => candidate.MapIndex == region);
+                if (state is null || state.Population < Math.Max(1f, weights.PopulationPerFormation) ||
+                    RecruitmentSystem.DeploymentProvince(campaign, nation.Id, state.MapIndex) <= 0 ||
+                    !MilitiaCore.Found(campaign, nation, state)) continue;
+                local = campaign.Armies.LastOrDefault(army => army.NationId == nation.Id &&
+                    army.TemplateId == MilitiaCore.TemplateId && army.ProvinceId > 0);
+                if (local is null) return 0;
+            }
             new SetArmyOrderCommand
             {
                 IssuerId = nation.Id, ArmyId = local.Id, WarId = war.Id,
@@ -237,26 +244,6 @@ public static class WarEmergency
             return 1;
         }
         return 0;
-    }
-
-    private static bool StateTouchesEnemy(Campaign campaign, Nation nation, int state)
-    {
-        var map = campaign.ProvinceMap;
-        var controllers = campaign.ProvinceController;
-        for (var province = 1; province <= map.ProvinceCount; province++)
-        {
-            if (map.ProvinceToState[province] != state ||
-                controllers[province] != (ushort)nation.MapIndex) continue;
-            foreach (var next in map.Neighbors[province])
-            {
-                if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
-                var other = campaign.Nations.FirstOrDefault(candidate =>
-                    candidate.MapIndex == controllers[next]);
-                if (other is not null && campaign.Wars.Any(war => !war.Ended &&
-                        war.Opposes(nation.Id, other.Id))) return true;
-            }
-        }
-        return false;
     }
 
     private static int RaiseEmergency(Campaign campaign, Nation nation)
