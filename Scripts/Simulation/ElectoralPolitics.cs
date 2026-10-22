@@ -16,6 +16,8 @@ public sealed partial class Defines
     public float ElectionResumePoliticalCost { get; set; } = 10;
     public float ElectionControlAdvantage { get; set; } = .22f;
     public float ElectionTermFatigue { get; set; } = .035f;
+    /// <summary>The most authoritarian creed (ideology authority) a democracy's winning opposition may govern with.</summary>
+    public float ElectionMaximumAuthority { get; set; } = .60f;
     public float ElectionDisputeRadicalism { get; set; } = .08f;
 }
 
@@ -48,7 +50,7 @@ public enum ElectionAction { AcceptResult, RefuseResult, Postpone, Suspend, Resu
 /// a defeat damages legitimacy. Action: hand over, dispute, postpone once, suspend or resume.
 /// Parliament elects the government; it never replaces a hereditary/lifetime head of state.
 /// </summary>
-public static class ElectoralPolitics
+public static partial class ElectoralPolitics
 {
     private static Dictionary<string, float> _initial;
     public static void ResetCatalog() => _initial = null;
@@ -253,8 +255,40 @@ public static class ElectoralPolitics
         }
         e.TransferOnDay = -1; e.IncumbentTerms = 0; e.IncumbentName = e.Winner;
         e.Result = "Peaceful transfer of power"; e.DisputedUntilDay = -1; e.Control = Math.Max(0, e.Control - .05f);
-        n.RulerGeneration++; NationalModifiers.Invalidate(n);
+        n.RulerGeneration++;
+        Alternate(c, n);
+        NationalModifiers.Invalidate(n);
         c.Chronicle.Record(c, "election_transfer", n.Id, place: e.Winner); c.MarkStrategicChange();
+    }
+}
+
+public static partial class ElectoralPolitics
+{
+    private static readonly HashSet<string> Democracies = new(StringComparer.OrdinalIgnoreCase)
+    { "parliamentary_republic", "presidential_republic", "federation", "constitutional_monarchy", "direct_democracy" };
+
+    /// <summary>
+    /// The opposition that wins a democracy governs with its own creed. The person used to change
+    /// and the governing ideology never did, so a democracy kept the agenda it had in 2024 for ever
+    /// and the only drift was the one-way slide of coups and crises. The incoming government takes
+    /// the creed most of the electorate now holds, other than the outgoing one's - and the mood
+    /// leans away from whoever wrote the laws, so the pendulum swings back in its turn. No price in
+    /// stability: this is what a democracy is for. The player's own country is left to the player.
+    /// </summary>
+    private static void Alternate(Campaign c, Nation n)
+    {
+        if (n.IsHuman || !Democracies.Contains(n.Government ?? "")) return;
+        foreach (var share in PoliticalMood.Shares(c, n))
+        {
+            if (share.Governing || string.Equals(share.Ideology, n.Ideology, StringComparison.OrdinalIgnoreCase)) continue;
+            // A ballot carries a creed a democracy can hold; the hard-authoritarian ones come by
+            // coup and crisis (GovernanceEvents), not by the next election.
+            if (IdeologyCatalog.Of(share.Ideology) is { } creed && creed.Authority > c.Defines.ElectionMaximumAuthority) continue;
+            if (PoliticsCore.Refusal(c, n, "", share.Ideology).Length > 0) continue;
+            n.Ideology = share.Ideology;
+            n.PoliticsChangedDay = c.ElapsedDays;
+            return;
+        }
     }
 }
 

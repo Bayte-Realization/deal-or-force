@@ -145,6 +145,12 @@
   "army_resolve": 0.22,
   "army_resolve_divisions": 24,
 
+  // Exhaustion: war weariness at its height adds this to letting a region go, and each war beyond
+  // the first adds `each_further_war`. A collapsing state that fights every region that leaves it
+  // stays collapsed; the Soviet Union let its republics go.
+  "exhaustion": 0.55,
+  "each_further_war": 0.15,
+
   // And how long before anybody else can leave the same country - counted from either side,
   // so a country three weeks old is not yet somewhere anybody secedes from either.
   //

@@ -53,7 +53,8 @@ public static class StatePartition
         var moved = 0;
         var peopleTaken = 0L;
         var takenFrom = asConquest ? new Dictionary<ushort, long>() : null;
-        var previousHolder = asConquest ? new Dictionary<int, ushort>() : null;
+        // Every road a region comes back by - conquest or a treaty - ends its breakaway's rising.
+        var previousHolder = new Dictionary<int, ushort>();
         foreach (var province in provinces)
         {
             if (province <= 0 || province > topology.ProvinceCount) continue;

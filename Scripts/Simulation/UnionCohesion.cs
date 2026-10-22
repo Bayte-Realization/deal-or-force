@@ -171,6 +171,15 @@ public static class UnionCohesion
         var highestScore = -1f;
         foreach (var state in states)
         {
+            // Not the capital - a "Republic of Moscow" leaving Russia is not a union coming apart -
+            // and not a region just taken back from a crushed breakaway (SecessionCore.CrushedPressure).
+            if (state.MapIndex == nation.CapitalStateMapIndex || state.SecessionPressure < 0f) continue;
+            // Nor ground whose people have a living state of their own: Ukrainians on land Russia
+            // took are Ukraine's lost land, not a "Ukrainian Republic" breaking from the union.
+            var people = EconomySystem.Cultures(state).FirstOrDefault().Culture;
+            // The union's own peoples are not someone else's lost land, whoever else is of them.
+            if (!string.IsNullOrEmpty(people) && !DemographyCatalog.IsPrimary(nation.Tag, people) &&
+                SecessionEvents.KinState(campaign, nation, people) is not null) continue;
             var score = state.Radicalism;
             if (campaign.ProvinceMap is not null)
             {

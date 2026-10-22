@@ -343,6 +343,11 @@ public static class Statecraft
             {
                 var definition = OpinionCatalog.Find(reason.Id);
                 if (definition is null || definition.Value.Opinion >= 0f) continue;
+                // A relation remembers the notoriety of whichever of the two is notorious, so the
+                // attacker's own bad name would read as its grievance: India, notorious, found a
+                // reason for war against Bhutan in it. Only the defender's notoriety is a reason.
+                if (string.Equals(reason.Id, "notoriety", StringComparison.OrdinalIgnoreCase) &&
+                    defender.Notoriety <= attacker.Notoriety) continue;
                 // Doing it twice is worse than doing it once, but the fifth time is not five
                 // times worse than the first: a grudge shared between clauses of the opinion
                 // panel should not quietly become a war aim by repetition alone.

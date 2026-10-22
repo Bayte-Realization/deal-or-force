@@ -107,6 +107,12 @@ public sealed class SecessionWeights
 
     public float ArmyResolveDivisions = 24f;
 
+    /// <summary>What war weariness, at its height, adds to a parent's willingness to let a region go.</summary>
+    public float Exhaustion = 0.55f;
+
+    /// <summary>What each war beyond the first adds to it.</summary>
+    public float EachFurtherWar = 0.15f;
+
     public int CooldownDays = 730;
 }
 
@@ -207,6 +213,8 @@ public static class SecessionCore
                 case "collapse": Weights.Collapse = value; break;
                 case "army_resolve": Weights.ArmyResolve = value; break;
                 case "army_resolve_divisions": Weights.ArmyResolveDivisions = value; break;
+                case "exhaustion": Weights.Exhaustion = value; break;
+                case "each_further_war": Weights.EachFurtherWar = value; break;
                 case "cooldown_days": Weights.CooldownDays = (int)MathF.Round(value); break;
                 default: errors?.Add($"common/secession: '{entry.Name}' is not something this game reads."); break;
             }
@@ -342,9 +350,16 @@ public static class SecessionCore
         var collapse = M.Clamp01(parent.Stability) / M.Max(0.01f, weights.CollapseBelow);
         if (collapse < 1f) accept += (1f - collapse) * weights.Collapse;
 
-        // Busy elsewhere.
+        // Busy elsewhere - and every war beyond the first is another reason to let one go.
+        var wars = 0;
         foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(parent.Id)) { accept += 0.20f; break; }
+            if (!war.Ended && war.Involves(parent.Id)) wars++;
+        if (wars > 0) accept += 0.20f + (wars - 1) * weights.EachFurtherWar;
+
+        // Exhaustion: a country tired of war lets a province go rather than open another front.
+        // Without it a collapsing Russia fought every region that left it for twenty-five years,
+        // and the wars kept it collapsing; the Soviet Union let its republics go.
+        accept += WarWeariness.NationalFatigue(campaign, parent) * weights.Exhaustion;
 
         // How much of the country is going. Losing a tenth is a province; losing half is
         // the country, and no state accepts that quietly.

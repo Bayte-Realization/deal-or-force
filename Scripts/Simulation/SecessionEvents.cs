@@ -435,7 +435,7 @@ public static class SecessionEvents
     }
 
     /// <summary>The living state, other than the owner, whose own people this is; null when there is none.</summary>
-    private static Nation KinState(Campaign campaign, Nation owner, string culture)
+    internal static Nation KinState(Campaign campaign, Nation owner, string culture)
     {
         foreach (var nation in campaign.Nations)
         {

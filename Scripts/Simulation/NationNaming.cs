@@ -1277,8 +1277,9 @@ public static class NationNaming
                         campaign.States.Find(s => s.MapIndex == state.ParentMapIndex) is { } whole &&
                         string.Equals(whole.Id, id, StringComparison.OrdinalIgnoreCase))
                         held += state.Population;
-                // A region names the state it is the seat of; a fifth of the people is a seat.
-                return M.Clamp01(held / (float)total * 2.5f);
+                // A region names the state it is the seat of, while a fifth of the people live in
+                // it. A "Military Command of Maharashtra" ruling 712 million is not Maharashtra's.
+                return M.Clamp01(held / (float)total * 1.5f);
             case "tag":
             case "free_tag":
                 foreach (var state in states)
