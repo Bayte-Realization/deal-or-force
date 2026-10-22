@@ -442,6 +442,7 @@ public static class CampaignFingerprint
             // stability is about to disagree too.
             MixFloat(nation.StabilityBias);
             MixFloat(nation.StabilityGovernance);
+            if (nation.TroublesDays > 0) { MixText("troubles"); Mix(nation.TroublesDays); }
             MixFloat(nation.WarSupport);
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.

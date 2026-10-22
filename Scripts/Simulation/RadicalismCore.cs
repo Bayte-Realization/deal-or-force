@@ -39,6 +39,11 @@ public static class RadicalismCore
         var rate = MathF.Max(0, d.RegionalRadicalismRecoveryPerWeek) +
                    M.Clamp01(state.StandardOfLiving) * MathF.Max(0, d.RegionalRadicalismLivingRecovery);
         if (atWar) rate *= M.Clamp01(d.RegionalRadicalismWarRecovery);
+        // A time of troubles exhausts itself: the longer a country has been at the bottom, the
+        // faster people tire of the radicals (Nation.TroublesDays). Without it a collapsed state
+        // stayed at the floor of its stability for twenty-five years, its regions at radicalism one.
+        if (nation is not null && nation.TroublesDays > 0)
+            rate *= 1f + M.Clamp(nation.TroublesDays / MathF.Max(1f, d.TroublesExhaustionDays), 0f, d.TroublesExhaustionCap);
         var recovery = -M.Clamp01(state.Radicalism) * M.Clamp01(rate);
         var raw = living + minority + occupation + inflation + overstretch + budgetPressure + policyPressure + recovery;
         var actual = M.Clamp01(state.Radicalism + raw) - state.Radicalism;

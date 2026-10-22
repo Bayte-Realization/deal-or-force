@@ -41,6 +41,14 @@ public sealed partial class Defines
     /// <summary>What full imperial overstretch takes from a year's growth.</summary>
     public float SecularOverstretchDrag { get; set; } = 0.012f;
 
+    /// <summary>Below this stability a country is in a time of troubles (Nation.TroublesDays).</summary>
+    public float TroublesStability { get; set; } = 0.20f;
+    /// <summary>At or above this the troubles are over and the count starts again.</summary>
+    public float TroublesOverStability { get; set; } = 0.40f;
+    /// <summary>Days of troubles that double how fast radicalism fades; capped at TroublesExhaustionCap more.</summary>
+    public float TroublesExhaustionDays { get; set; } = 730f;
+    public float TroublesExhaustionCap { get; set; } = 3f;
+
     /// <summary>A year's drift is held within these bounds.</summary>
     public float SecularFloor { get; set; } = -0.04f;
     public float SecularCeiling { get; set; } = 0.06f;
@@ -156,6 +164,10 @@ public static class SecularCycle
     /// <summary>A week of it, into the stock that turns what a country makes into what it is worth.</summary>
     public static void Week(Campaign campaign, Nation nation, bool atWar)
     {
+        // The count of a time of troubles: weeks at the bottom add up, a recovery ends it.
+        var defines = campaign.Defines;
+        if (nation.Stability < defines.TroublesStability) nation.TroublesDays += Math.Max(1, defines.EconomyTickDays);
+        else if (nation.Stability >= defines.TroublesOverStability) nation.TroublesDays = 0;
         var drift = AnnualDrift(campaign, nation, atWar);
         nation.SecularDrift = drift;
         if (drift == 0f || nation.OutputScale <= 0f) return;
@@ -165,6 +177,12 @@ public static class SecularCycle
 
 public sealed partial class Nation
 {
+    /// <summary>
+    /// Days the country has spent in a time of troubles - stability below TroublesStability -
+    /// since it last recovered. Saved. The longer it lasts, the faster radicalism fades.
+    /// </summary>
+    public int TroublesDays;
+
     /// <summary>This year's rate of rise or decline of the country's productivity (SecularCycle); derived, not saved.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public float SecularDrift;

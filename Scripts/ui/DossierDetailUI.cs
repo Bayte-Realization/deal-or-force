@@ -168,7 +168,7 @@ public partial class DealOrForceGame
 
         // ---- the money ---------------------------------------------------------------
         "Treasury" => "treasury",
-        "GDP" or "GDP per head" => "gdp",
+        "GDP" or "GDP per head" or "Rise and decline" => "gdp",
         // Money coming and going is the cash-flow mark; money the state takes is the scales
         // with coins on them - the two used to share the scales, which read as justice.
         "Balance" or "Expenses" or "Military spending" => "balance",
