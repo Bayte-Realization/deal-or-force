@@ -8,6 +8,23 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
+    // A paused order, host reply, country switch or save reload need not change the day.
+    // Compare the actual inputs used by both doctrine hosts, without fingerprinting the world.
+    private readonly record struct DoctrinePresentationState(
+        Nation Nation, string Language, string Book, string View,
+        string Branch, string Known, string LearningBranch, string LearningNode, int DoneDay,
+        string Strategy, float Army, float Air, float Navy, float Political, float RewriteCost,
+        int TacticalRevision, int StrategicRevision, bool TacticalEnabled, bool StrategicEnabled);
+
+    private DoctrinePresentationState DoctrinePresentation(Nation n) => new(
+        n, Loc.Language, _doctrineBook, _doctrineView,
+        n.TacticalDoctrine.Branch, string.Join(',', n.TacticalDoctrine.Known),
+        n.TacticalDoctrine.LearningBranch, n.TacticalDoctrine.LearningNode, n.TacticalDoctrine.LearningDoneDay,
+        n.StrategicDoctrine.Id, n.ArmyExperience, n.AirExperience, n.NavalExperience, n.PoliticalPoints,
+        _campaign.Defines.DoctrineRewritePoliticalCost, TacticalDoctrineCatalog.Revision,
+        StrategicDoctrineCatalog.Revision, _campaign.FeatureEnabled("tactical_doctrines"),
+        _campaign.FeatureEnabled("strategic_doctrines"));
+
     /// <summary>
     /// The page behind the Doctrines tab (Laws workspace): the country's book of war, the grand
     /// strategy above it, and the four currencies both are paid in.
@@ -146,8 +163,9 @@ public partial class DealOrForceGame
                     : Loc.Format("change course ({0})", Fmt.Number(course.PoliticalCost)),
                 () =>
                 {
+                    if (_campaign?.Player is not { } player) return;
                     ApplyDoctrineCommand(new AdoptStrategicDoctrineCommand
-                        { IssuerId = n.Id, DoctrineId = course.Id });
+                        { IssuerId = player.Id, DoctrineId = course.Id });
                 }, 0, 30, false, "res://game/gfx/interface/icons/icon_agenda.png");
             button.Name = "AdoptStrategy_" + course.Id;
             button.Disabled = inForce || refusal.Length > 0;

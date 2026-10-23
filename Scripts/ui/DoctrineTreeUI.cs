@@ -41,6 +41,7 @@ public partial class DealOrForceGame
     private TabContainer _armyCommandTabs;
     private int _armyDoctrineTab = -1;
     private int _armyDoctrineDay = -1;
+    private DoctrinePresentationState? _armyDoctrineState;
     private readonly Dictionary<string, Control> _doctrineCards = new(StringComparer.Ordinal);
     private OptionButton _doctrineBookSelect;
     private readonly List<string> _doctrineBookIds = new();
@@ -242,7 +243,7 @@ public partial class DealOrForceGame
         {
             if (!_doctrineCards.TryGetValue(node.Id, out var card))
             {
-                card = DoctrineNodeCard(n, branch, node);
+                card = DoctrineNodeCard(branch, node);
                 _doctrineTree.AddChild(card);
                 _doctrineCards[node.Id] = card;
             }
@@ -405,7 +406,7 @@ public partial class DealOrForceGame
     /// and the two doors. Everything a player needs to decide stands on the card, because a tree
     /// read from tooltips is a tree read one node at a time.
     /// </summary>
-    private Control DoctrineNodeCard(Nation n, DoctrineBranch branch, DoctrineNode node)
+    private Control DoctrineNodeCard(DoctrineBranch branch, DoctrineNode node)
     {
         var card = new PanelContainer { Name = "DoctrineNode_" + node.Id };
         card.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10));
@@ -462,7 +463,7 @@ public partial class DealOrForceGame
         var buttons = new HBoxContainer { Name = "Buttons_" + node.Id };
         buttons.AddThemeConstantOverride("separation", 6);
         body.AddChild(buttons);
-        var study = ActionButton("", () => StudyArticle(n, branch, node, false), 0, 28, false,
+        var study = ActionButton("", () => StudyArticle(branch.Id, node.Id, false), 0, 28, false,
             "res://game/gfx/interface/icons/icon_research.png");
         study.Name = "StudyArticle_" + node.Id;
         study.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -472,7 +473,7 @@ public partial class DealOrForceGame
         study.ExpandIcon = false;
         study.AddThemeConstantOverride("icon_max_width", 18);
         buttons.AddChild(study);
-        var rush = ActionButton("", () => StudyArticle(n, branch, node, true), 0, 28, false,
+        var rush = ActionButton("", () => StudyArticle(branch.Id, node.Id, true), 0, 28, false,
             "res://game/gfx/interface/icons/icon_war.png");
         rush.Name = "RushArticle_" + node.Id;
         rush.SizeFlagsHorizontal = SizeFlags.ExpandFill;
@@ -490,10 +491,13 @@ public partial class DealOrForceGame
             value >= 0f ? "+" : "−", Fmt.Percent(Math.Abs(value)));
 
     /// <summary>One order, through the one door: the command checks the refusal this page showed.</summary>
-    private void StudyArticle(Nation n, DoctrineBranch branch, DoctrineNode node, bool rush)
+    private void StudyArticle(string branchId, string nodeId, bool rush)
     {
+        // Cards survive country/campaign switches. Resolve the issuer when clicked,
+        // not from the country for which this retained control was first constructed.
+        if (_campaign?.Player is not { } player) return;
         ApplyDoctrineCommand(new StudyDoctrineCommand
-            { IssuerId = n.Id, BranchId = branch.Id, NodeId = node.Id, Rush = rush });
+            { IssuerId = player.Id, BranchId = branchId, NodeId = nodeId, Rush = rush });
     }
 
     /// <summary>

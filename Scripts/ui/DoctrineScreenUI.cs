@@ -34,6 +34,7 @@ public partial class DealOrForceGame
     private Button _doctrineTacticalView, _doctrineCourseView;
     private string _doctrineView = "tactical";
     private int _doctrineScreenDay = -1;
+    private DoctrinePresentationState? _doctrineScreenState;
 
     private void BuildDoctrineScreen()
     {
@@ -157,8 +158,8 @@ public partial class DealOrForceGame
 
     /// <summary>
     /// What the wide screen says today: the summary line every frame, and the heavy parts - the
-    /// book list, the currencies, the tree, the side column - once a campaign day, because the
-    /// canvas must keep its zoom and its scroll across those redraws.
+    /// book list, currencies, tree and side column - when their state changes, even on pause.
+    /// The retained canvas keeps its zoom and scroll across those redraws.
     /// </summary>
     private void RefreshDoctrineScreen()
     {
@@ -181,12 +182,14 @@ public partial class DealOrForceGame
         StyleButton(_doctrineTacticalView, _doctrineView == "tactical");
         StyleButton(_doctrineCourseView, _doctrineView == "course");
         UpdateDoctrineZoomLabel();
-        if (_doctrineScreenDay == _campaign.ElapsedDays) return;
-        _doctrineScreenDay = _campaign.ElapsedDays;
         if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
             _doctrineBook = n.TacticalDoctrine.Branch.Length > 0
                 ? n.TacticalDoctrine.Branch
                 : TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
+        var state = DoctrinePresentation(n);
+        if (_doctrineScreenDay == _campaign.ElapsedDays && _doctrineScreenState == state) return;
+        _doctrineScreenDay = _campaign.ElapsedDays;
+        _doctrineScreenState = state;
 
         ClearPolicyRows(_doctrineScreenCurrencies);
         // Three services while a tactical book is open, and political credit added the moment the

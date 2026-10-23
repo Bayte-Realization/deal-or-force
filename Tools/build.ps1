@@ -313,7 +313,12 @@ Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 foreach ($notice in @('LICENSE', 'LICENSE-EXCEPTIONS.md', 'README.md', 'README.ru.md')) {
     Copy-Item -LiteralPath (Join-Path $project $notice) -Destination $out
 }
-Copy-PlayerTree (Join-Path $project 'docs') (Join-Path $out 'docs') @('LAUNCHER_RU.md')
+# Ship redistribution notices, not the development documentation tree. Keeping this
+# register one directory below the root also preserves its ../README and ../game links.
+$licenseDirectory = Join-Path $out 'licenses'
+New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $project 'docs/THIRD_PARTY_MEDIA.md') -Destination $licenseDirectory
+Copy-PlayerTree (Join-Path $project 'docs/art_sources') (Join-Path $licenseDirectory 'art_sources')
 
 # Where the game will look: its own folder, then up to seven parents. Anything below the
 # build folder counts, because that is what ships.
@@ -328,7 +333,8 @@ $needed = @(
     "game\map_data\default.map",
     "LICENSE",
     "LICENSE-EXCEPTIONS.md",
-    "docs\THIRD_PARTY_MEDIA.md",
+    "licenses\THIRD_PARTY_MEDIA.md",
+    "licenses\art_sources",
     "README.md",
     "README.ru.md",
     "mods"
@@ -338,6 +344,7 @@ $needed = @(
 # - the game shows an empty world - but a file that should not have shipped is silent, which
 # is why it needs asking about explicitly rather than being left to whoever reads the folder.
 $forbidden = @(
+    @{ Path = "docs"; Why = "development documentation does not belong in the player package" },
     @{ Path = "dlc"; Why = "unreleased content pack and its entitlement switch" },
     @{ Path = "LAUNCHER_RU.md"; Why = "internal documentation, and Russian-only at that" },
     @{ Path = ".kilo"; Why = "private nested source checkouts" },
@@ -402,6 +409,9 @@ Write-Host "  nothing in the build that should not be there" -ForegroundColor Gr
 # asked directly, and the folder is asked as well.
 $pck = Join-Path $out 'Deal or Force.pck'
 if (Test-Path -LiteralPath $pck) {
+    if ((Get-PackSize -Path $pck -Filter 'docs/*').Count -gt 0) {
+        throw "Development documentation must not be packed in the player archive."
+    }
     $packedMap = Get-PackSize -Path $pck -Filter 'game/map_data/*'
     if ($packedMap.Count -gt 0) {
         Write-Host ""

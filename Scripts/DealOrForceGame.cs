@@ -1297,7 +1297,7 @@ public partial class DealOrForceGame : Control
         if (_productionLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_productionLayer)) RefreshProductionScreen();
         if (_supportLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_supportLayer)) RefreshSupportScreen();
         if (_researchLayer is { Visible: true }) RefreshResearchScreen();
-        if (_selectedArmy is not null && _armyPanel is { Visible: true }) RefreshArmyPanel();
+        if (_armyPanel is { Visible: true }) RefreshArmyPanel();
         else if (_sidePanel.Visible && _openScreen is "Wars" or "Military" or "Economy" or "Nation" or "Decisions" or "Laws" &&
                  SideScreenDue())
         {

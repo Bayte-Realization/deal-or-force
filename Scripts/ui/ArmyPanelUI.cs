@@ -463,11 +463,13 @@ public partial class DealOrForceGame
 
         SetArmyPanelVisible(true);
 
-        // The book of war, redrawn once a campaign day. Its tree keeps its zoom and its scroll
-        // across those redraws: the canvas is held and updated, never rebuilt (DoctrineTreeUI).
-        if (_armyDoctrineRows is not null && _armyDoctrineDay != _campaign.ElapsedDays)
+        // Commands can change a country's doctrines and currencies on pause as well.
+        var doctrineState = DoctrinePresentation(_campaign.Player);
+        if (_armyDoctrineRows is not null &&
+            (_armyDoctrineDay != _campaign.ElapsedDays || _armyDoctrineState != doctrineState))
         {
             _armyDoctrineDay = _campaign.ElapsedDays;
+            _armyDoctrineState = doctrineState;
             ClearPolicyRows(_armyDoctrineRows);
             ShowDoctrineWorkspace(_campaign.Player, _armyDoctrineRows);
         }
