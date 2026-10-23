@@ -32,6 +32,9 @@ public static class PeacefulFormation
     private static bool AtPeace(Campaign campaign, Nation nation) =>
         !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
 
+    private static bool HumanControlled(Campaign campaign, Nation nation) =>
+        nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id);
+
     public static bool Consented(Campaign campaign, Nation founder, Nation partner, FormableNation definition) =>
         definition.PeacefulAccession && partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until)
         && until > campaign.ElapsedDays;
@@ -39,10 +42,11 @@ public static class PeacefulFormation
     public static bool Participates(Campaign campaign, Nation founder, Nation partner, FormableNation definition)
     {
         if (partner is null || partner.Id == founder.Id) return partner?.Id == founder.Id;
-        if (!AtPeace(campaign, partner) || partner.Movement is not null) return false;
+        if (!AtPeace(campaign, partner) || !FormableProclamationAi.EstablishedCountry(partner) || partner.Landless) return false;
         // No foreign dependencies can be signed away by their nominal government.
         if (partner.IsSubject && !partner.AnswersTo(founder.Id)) return false;
-        if (partner.IsHuman && campaign.HumanSeats.Count > 1) return false;
+        if (HumanControlled(campaign, partner))
+            return campaign.HumanSeats.Count <= 1 && Consented(campaign, founder, partner, definition);
         return Consented(campaign, founder, partner, definition) ||
             (definition.SubjectIntegration && partner.AnswersTo(founder.Id) && partner.LibertyDesire <= campaign.Defines.UnionMaximumSubjectLiberty);
     }
@@ -74,13 +78,13 @@ public static class PeacefulFormation
     {
         if (campaign is null || founder is null || partner is null || definition is null) return "Choose a founding country and a partner.";
         if (!definition.PeacefulAccession) return "This proclamation has no peaceful accession route.";
-        if (!FormableNations.Eligible(founder, definition) || founder.Id == partner.Id || founder.IsSubject ||
+        if (!FormableNations.Eligible(campaign, founder, definition) || founder.Id == partner.Id || founder.IsSubject ||
             !FormableNations.CompatibleProclamation(founder, definition)) return "This country cannot lead the foundation.";
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return "Territorial map ready";
         if (!AtPeace(campaign, founder) || !AtPeace(campaign, partner)) return "Both countries must be at peace.";
-        if (partner.Movement is not null || (partner.IsSubject && !partner.AnswersTo(founder.Id)))
+        if (!FormableProclamationAi.EstablishedCountry(partner) || partner.Landless || (partner.IsSubject && !partner.AnswersTo(founder.Id)))
             return "The partner must control its own foreign policy.";
-        if (partner.IsHuman && campaign.HumanSeats.Count > 1) return "Human-controlled countries cannot merge in multiplayer.";
+        if (HumanControlled(campaign, partner) && campaign.HumanSeats.Count > 1) return "Human-controlled countries cannot merge in multiplayer.";
         if (founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability)
             return "Both governments need a stable mandate.";
         if (!FormableNations.ReligionMandate(campaign, founder, definition))
@@ -102,7 +106,7 @@ public static class PeacefulFormation
     {
         if (Refusal(campaign, founder, partner, definition).Length > 0) return false;
         partner.DecisionAvailableDay[OfferKey(founder.Id, definition.Id)] = campaign.ElapsedDays + Math.Max(1, campaign.Defines.UnionInvitationCooldownDays);
-        if (!partner.IsHuman)
+        if (!HumanControlled(campaign, partner))
         {
             if (Willingness(campaign, founder, partner) >= campaign.Defines.UnionAiAcceptance) return Accept(campaign, founder, partner, definition);
             campaign.Chronicle.Record(campaign, "accession_declined", partner.Id, founder.Id, subject: definition.Name);
@@ -129,12 +133,12 @@ public static class PeacefulFormation
     {
         // Recheck irreversible facts when an old, saved invitation is answered.
         if (founder is null || partner is null || definition is null || !definition.PeacefulAccession ||
-            !FormableNations.Eligible(founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
+            !FormableNations.Eligible(campaign, founder, definition) || founder.IsSubject || founder.Id == partner.Id || !FormableNations.CompatibleProclamation(founder, definition) ||
             founder.Stability < definition.MinimumStability || partner.Stability < campaign.Defines.UnionMinimumPartnerStability ||
             !FormableNations.ReligionMandate(campaign, founder, definition) ||
             !AtPeace(campaign, founder) || !AtPeace(campaign, partner) ||
-            (partner.IsSubject && !partner.AnswersTo(founder.Id)) || partner.Movement is not null ||
-            (partner.IsHuman && campaign.HumanSeats.Count > 1)) return false;
+            (partner.IsSubject && !partner.AnswersTo(founder.Id)) || !FormableProclamationAi.EstablishedCountry(partner) || partner.Landless ||
+            (HumanControlled(campaign, partner) && campaign.HumanSeats.Count > 1)) return false;
         if (campaign.ProvinceMap is null || !Territory(campaign, definition).Any(p => p > 0 && p <= campaign.ProvinceMap.ProvinceCount &&
             campaign.ProvinceMap.ProvinceToNation[p] == partner.MapIndex)) return false;
         partner.DecisionAvailableDay[ConsentKey(founder.Id, definition.Id)] = campaign.ElapsedDays + Math.Max(1, campaign.Defines.UnionConsentDays);
@@ -146,8 +150,14 @@ public static class PeacefulFormation
     public static void Integrate(Campaign campaign, Nation founder, FormableNation definition)
     {
         var map = campaign.ProvinceMap;
+        // Some restorations need only half of their historical homeland. Proclaiming one
+        // is not permission to acquire the remainder from an unconsenting neighbour.
+        var participating = campaign.Nations.Where(n => n.Id != founder.Id && Participates(campaign, founder, n, definition))
+            .Select(n => n.MapIndex).ToHashSet();
         var provinces = Territory(campaign, definition).Where(p => p > 0 && p <= map.ProvinceCount &&
-            map.ProvinceToNation[p] != founder.MapIndex && !map.WaterByProvince[p]).ToArray();
+            p < campaign.ProvinceController.Length && participating.Contains(map.ProvinceToNation[p]) &&
+            campaign.ProvinceController[p] == map.ProvinceToNation[p] &&
+            !map.WaterByProvince[p]).ToArray();
         if (provinces.Length == 0) return;
         var partners = provinces.Select(p => map.ProvinceToNation[p]).Distinct()
             .Select(index => campaign.Nations.Find(n => n.MapIndex == index)).Where(n => n is not null).ToArray();
@@ -169,6 +179,10 @@ public static class PeacefulFormation
             partner.Population = remaining;
             if (campaign.StatesOf(partner).Length > 0) continue;
             // Joining is not defeat. Keep people, savings, equipment, training and research.
+            // The former government signed its accession, rather than fleeing a conquest.
+            // Retain its homeland titles for future organic separatism, but do not create
+            // a government in exile on the very next MovementFall pass.
+            campaign.Fallen.Add(partner.Id);
             SovereignFinance.MergeAccounts(campaign, founder, partner);
             founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;
             founder.ConvertedCivilianUnits = (int)Math.Min(int.MaxValue, (long)founder.ConvertedCivilianUnits + partner.ConvertedCivilianUnits);
@@ -198,14 +212,85 @@ public static class PeacefulFormation
             foreach (var child in campaign.Nations.Where(n => n.AnswersTo(partner.Id))) child.OverlordId = founder.Id;
             SubjectSystem.Release(campaign, partner);
             partner.CapitalStateMapIndex = 0; partner.CapitalProvinceId = 0;
-            if (partner.IsHuman) campaign.ConfigureSinglePlayer(founder.Id);
+            partner.GovernmentSeatProvinceId = 0;
+            if (HumanControlled(campaign, partner)) campaign.ConfigureSinglePlayer(founder.Id);
         }
         founder.Population = campaign.StatesOf(founder).Sum(s => s.Population);
         if (founder.FoundedCultures.Count > 0) DemographyCatalog.Declare(founder.Tag, founder.FoundedCultures);
         if (rawAnnual > .0001f) founder.OutputScale = founder.Gdp / rawAnnual;
         var allocation = ProductionProgramme.Allocate(campaign, founder);
         founder.ArmsFocus = allocation.RawCivilian == 0 ? 0 : allocation.Converted / (float)allocation.RawCivilian;
-        campaign.LocateCapitals();
+        campaign.LocateCapitals(preserveExisting: true);
+        SupportCore.IndexReach(campaign);
+        campaign.MarkStrategicChange();
+    }
+
+    /// <summary>Direct bilateral integration of a partner state (e.g. cultural shard or consented merger).</summary>
+    public static void IntegratePartner(Campaign campaign, Nation founder, Nation partner)
+    {
+        if (campaign is null || founder is null || partner is null || founder.Id == partner.Id) return;
+        var map = campaign.ProvinceMap;
+        if (map is not null)
+        {
+            var provinces = new List<int>();
+            for (var p = 1; p <= map.ProvinceCount; p++)
+            {
+                if (map.ProvinceToNation[p] == partner.MapIndex && !map.WaterByProvince[p])
+                    provinces.Add(p);
+            }
+            if (provinces.Count > 0)
+                StatePartition.Annex(campaign, provinces, founder, asConquest: false);
+        }
+
+        ProductionProgramme.MigrateLegacy(founder, ProductionProgramme.Allocate(campaign, founder));
+        ProductionProgramme.MigrateLegacy(partner, ProductionProgramme.Allocate(campaign, partner));
+
+        var rawAnnual = founder.Gdp / MathF.Max(.0001f, founder.OutputScale);
+        var gdp = partner.Gdp;
+        rawAnnual += gdp / MathF.Max(.0001f, partner.OutputScale);
+        founder.Gdp += gdp;
+        partner.Gdp = 0;
+        partner.Population = 0;
+
+        campaign.Fallen.Add(partner.Id);
+        SovereignFinance.MergeAccounts(campaign, founder, partner);
+        founder.ManpowerReserve += partner.ManpowerReserve; partner.ManpowerReserve = 0;
+        founder.ConvertedCivilianUnits = (int)Math.Min(int.MaxValue, (long)founder.ConvertedCivilianUnits + partner.ConvertedCivilianUnits);
+        foreach (var line in partner.ProductionLines.Where(l => l is not null))
+        {
+            var existing = founder.ProductionLines.Find(l => l is not null && l.Good == line.Good);
+            if (existing is null) founder.ProductionLines.Add(new ProductionLine { Good = line.Good, Units = line.Units });
+            else existing.Units = (int)Math.Min(int.MaxValue, (long)existing.Units + line.Units);
+        }
+        partner.ProductionLines.Clear(); partner.ConvertedCivilianUnits = 0;
+        foreach (var culture in DemographyCatalog.PrimaryCultures(founder.Tag).Concat(partner.FoundedCultures)
+                     .Concat(DemographyCatalog.PrimaryCultures(partner.Tag)))
+            if (!founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) founder.FoundedCultures.Add(culture);
+        foreach (var technology in partner.Technologies)
+            if (!founder.Technologies.Contains(technology)) founder.Technologies.Add(technology);
+        foreach (var progress in partner.ResearchProgress)
+            founder.ResearchProgress[progress.Key] = Math.Max(founder.ResearchProgress.GetValueOrDefault(progress.Key), progress.Value);
+        foreach (var army in campaign.Armies.Where(a => a.NationId == partner.Id)) army.NationId = founder.Id;
+        foreach (var group in campaign.ArmyGroups.Where(a => a.NationId == partner.Id)) group.NationId = founder.Id;
+        foreach (var line in campaign.FrontLines.Where(a => a.NationId == partner.Id))
+        { line.NationId = founder.Id; line.BorderRevision = int.MinValue; line.PostsDay = int.MinValue; }
+        foreach (var fleet in campaign.Fleets.Where(a => a.NationId == partner.Id)) fleet.NationId = founder.Id;
+        foreach (var unit in campaign.SupportFormations.Where(a => a.NationId == partner.Id)) unit.NationId = founder.Id;
+        foreach (var order in campaign.SupportOrders.Where(a => a.NationId == partner.Id)) order.NationId = founder.Id;
+        foreach (var order in campaign.Recruitment.Where(a => a.NationId == partner.Id)) order.NationId = founder.Id;
+        foreach (var project in campaign.Construction.Where(a => a.NationId == partner.Id)) project.NationId = founder.Id;
+        foreach (var child in campaign.Nations.Where(n => n.AnswersTo(partner.Id))) child.OverlordId = founder.Id;
+        SubjectSystem.Release(campaign, partner);
+        partner.CapitalStateMapIndex = 0; partner.CapitalProvinceId = 0;
+        partner.GovernmentSeatProvinceId = 0;
+        if (partner.IsHuman) campaign.ConfigureSinglePlayer(founder.Id);
+
+        founder.Population = campaign.StatesOf(founder).Sum(s => s.Population);
+        if (founder.FoundedCultures.Count > 0) DemographyCatalog.Declare(founder.Tag, founder.FoundedCultures);
+        if (rawAnnual > .0001f) founder.OutputScale = founder.Gdp / rawAnnual;
+        var allocation = ProductionProgramme.Allocate(campaign, founder);
+        founder.ArmsFocus = allocation.RawCivilian == 0 ? 0 : allocation.Converted / (float)allocation.RawCivilian;
+        campaign.LocateCapitals(preserveExisting: true);
         SupportCore.IndexReach(campaign);
         campaign.MarkStrategicChange();
     }

@@ -76,6 +76,15 @@ public sealed partial class Defines
 	public bool SaveTextFormat { get; set; } = false;
 
 	/// <summary>
+	/// Walk every object in a save with reflection before writing it. The weekly
+	/// <see cref="NumericIntegrity.FirstLiveIssue"/> check is the default gate: it covers the
+	/// numbers that drive the simulation and costs milliseconds, while the full walk costs
+	/// more than serialisation itself and allocates a snapshot-sized graph of boxed floats.
+	/// Turn this on for a diagnostics build, not for a campaign.
+	/// </summary>
+	public bool SaveDeepIntegrity { get; set; } = false;
+
+	/// <summary>
 	/// Real seconds per in-game day at speed 1.
 	///
 	/// Five, so the slowest speed is one a player can watch hour by hour: a little under five
@@ -398,6 +407,25 @@ public sealed partial class Defines
 	/// <summary>Stability lost by a government that refuses to honour its own alliance.</summary>
 	public float BrokenPromiseStabilityCost { get; set; } = 0.08f;
 
+	/// <summary>
+	/// How many public promises a government may be held to at once.
+	///
+	/// A promise is a pledge with a date on it, and the point of the cap is that a government
+	/// cannot promise everything to everybody: at two, making a third means one of the other two
+	/// has to run out first. common/defines/75_government_promises already carried the figure -
+	/// the data was written before this property was, so the key was loaded, found nowhere to go,
+	/// and left the mechanic with a limit of nothing. This is the compiled half of the pair.
+	/// </summary>
+	public int MaxConcurrentPromises { get; set; } = 2;
+
+	/// <summary>
+	/// How often, per its own week, a government that is not the player's promises something
+	/// in public, before its character bends the number. Read by AiPromises; the player's own
+	/// government decides for itself. common/defines/75_government_promises carries the same
+	/// figure, and SimBench holds the two to each other.
+	/// </summary>
+	public float AiPromiseAppetite { get; set; } = 0.03f;
+
 	// --- market ---
 
 	/// <summary>How fast prices chase their target. 0 freezes them, 1 snaps instantly.</summary>
@@ -472,8 +500,11 @@ public sealed partial class Defines
 	/// <summary>Radicalism a fully foreign-populated region gains each week.</summary>
 	public float MinorityRadicalismPerWeek { get; set; } = 0.0012f;
 
-	/// <summary>Share of a minority that assimilates each week under ideal conditions.</summary>
-	public float AssimilationPerWeek { get; set; } = 0.0009f;
+	/// <summary>Number of non-homeland foreign regions a state can hold before imperial overstretch sets in.</summary>
+	public int BaseImperialCapacity { get; set; } = 4;
+
+	/// <summary>Weekly radicalism growth in peripheral foreign provinces of an overstretched empire.</summary>
+	public float ImperialOverstretchRadicalismWeekly { get; set; } = 0.0025f;
 
 	public float RadicalismGain { get; set; } = 0.05f;
 	public float RadicalismDecay { get; set; } = 0.03f;
@@ -482,6 +513,27 @@ public sealed partial class Defines
 
 	public float StartingTreasury { get; set; } = 5_000_000_000f;
 	public float DefaultTaxRate { get; set; } = 0.21f;
+
+	/// <summary>
+	/// What a country that history/countries does not describe opens with, as a share of what it
+	/// earns in a year.
+	///
+	/// A fallback, not a rule: a country whose opening balance is written down keeps that, and
+	/// the base game's Korea writes one down. This is what a country nobody described gets, and
+	/// it is here rather than in the scenario builder because it is a balance decision.
+	/// </summary>
+	public float BaseTreasuryGdpShare { get; set; } = 0.10f;
+
+	/// <summary>
+	/// What a country whose income the source table does not publish is assumed to earn per head.
+	///
+	/// The table carries -99 for the Vatican, Antarctica and two dozen dependencies. That is a
+	/// sentinel meaning "no figure", not an amount, and read literally it handed those entries a
+	/// negative economy, then negative treasuries and nonsense ledger lines. Derived from the
+	/// population instead they get a plausible figure: wrong in detail, right in order of
+	/// magnitude, and never negative.
+	/// </summary>
+	public float MicrostateGdpPerHead { get; set; } = 15f;
 
 	/// <summary>Pounds of upkeep per building level per economic tick.</summary>
 	public float BuildingUpkeep { get; set; } = 18000f;
@@ -522,7 +574,7 @@ public sealed partial class Defines
 	public float NavalResponse { get; set; } = 1f;
 
 	/// <summary>Multiplier on the defender's combat power. Attacking is harder.</summary>
-	public float DefenderAdvantage { get; set; } = 2.30f;
+	public float DefenderAdvantage { get; set; } = 2.50f;
 
 	/// <summary>
 	/// Frontage one province gives an attack, before extra directions widen it. This is
@@ -535,7 +587,7 @@ public sealed partial class Defines
 	public float EntrenchmentBonus { get; set; } = 1.80f;
 
 	/// <summary>Entrenchment a division digs per day while it holds ground.</summary>
-	public float EntrenchmentPerDay { get; set; } = 0.030f;
+	public float EntrenchmentPerDay { get; set; } = 0.045f;
 
 	/// <summary>Entrenchment divisions already hold when a campaign opens mid-war.</summary>
 	public float EntrenchmentAtScenarioStart { get; set; } = 0.85f;
@@ -1011,13 +1063,21 @@ public sealed partial class Defines
 	/// its army still has formations on the map.</summary>
 	public float WarSupportForCapitulation { get; set; } = 0.18f;
 
-	/// <summary>Chance per day that an AI country with a claim starts a war over it.</summary>
 	/// <summary>
-	/// Daily chance a country that wants a war actually starts one, multiplied by how
-	/// badly it wants it. Small on purpose: the point is that wars happen, not that the
-	/// map lurches every time a balance of power tips.
+	/// Chance per check that a country that wants a war actually starts one, multiplied by how
+	/// badly it wants it. Small on purpose: the point is that wars happen, not that the map
+	/// lurches every time a balance of power tips.
+	///
+	/// Raised from 0.012, which measured as a system that did not do what it says. Five years of
+	/// the world gave eighty-eight wars worth having - a hundred and sixty once casus belli read
+	/// the grievances the game already remembered - and ONE declaration, with plans formed, targets
+	/// chosen and preparation begun all along the way: the pipeline was alive and the last gate was
+	/// shut. At 0.05 that same world declares four times and fights sixteen wars, fourteen of which
+	/// end. At 0.15 the world is byte-for-byte identical to 0.05 - the same declarations, the same
+	/// wars, the same every count - so this is the knee of the curve and there is nothing above it
+	/// to buy. What remains is upstream: how many countries want a war at all.
 	/// </summary>
-	public float AiWarChance { get; set; } = 0.012f;
+	public float AiWarChance { get; set; } = 0.05f;
 
 	/// <summary>Whether countries start wars of their own at all.</summary>
 	public bool AiMayDeclareWar { get; set; } = true;
@@ -1117,6 +1177,13 @@ public sealed partial class Defines
 	public float AiHostilityAppetite { get; set; } = 1.2f;
 	public float AiRivalryAppetite { get; set; } = 0.8f;
 	public float AiOpportunismAppetite { get; set; } = 1.1f;
+	public float AiUnfinishedGoalAppetite { get; set; } = 0.90f;
+	public float AiTargetExhaustionWarSupport { get; set; } = 0.45f;
+	public float AiTargetExhaustionStability { get; set; } = 0.50f;
+	public float AiTargetExhaustionMultiplier { get; set; } = 0.85f;
+
+	/// <summary>How much a target's financial distress (debt default, insolvency, restructuring) or acute domestic crisis invites opportunists.</summary>
+	public float AiTargetDistressMultiplier { get; set; } = 0.75f;
 	public float AiWarDesireThreshold { get; set; } = 0.55f;
 
 	// --- what a war is worth, and what it costs before a shot is fired ---
@@ -1157,6 +1224,12 @@ public sealed partial class Defines
 
 	/// <summary>The restraint of an empty treasury.</summary>
 	public float AiPovertyCaution { get; set; } = 0.55f;
+
+	/// <summary>How much sovereign default or acute debt distress restrains a government from attacking.</summary>
+	public float AiInsolvencyCaution { get; set; } = 1.20f;
+
+	/// <summary>How much imminent coup danger or domestic rebellion restrains an attacker.</summary>
+	public float AiDomesticCrisisCaution { get; set; } = 1.10f;
 
 	/// <summary>Subtracted from the case for a war that has to be carried across water.</summary>
 	public float AiOverseasCaution { get; set; } = 1.35f;

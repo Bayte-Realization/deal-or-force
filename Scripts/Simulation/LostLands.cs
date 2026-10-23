@@ -14,6 +14,8 @@ public sealed partial class Defines
     public float LostLandStrengthRatio { get; set; } = 1.3f;
     /// <summary>What the AI's judgement of a war makes of its own lost homeland on the other side, per its weight (see LostLands.Weight).</summary>
     public float AiRevancheAppetite { get; set; } = 0.6f;
+    public float AiRevancheRelativeWeight { get; set; } = 1.2f;
+    public float AiRevancheOpportunityWeight { get; set; } = 0.5f;
 }
 
 public sealed partial class Nation
@@ -75,7 +77,16 @@ public static class LostLands
             else if (title == TerritorialTitle.Claim) people += region.Population * Math.Clamp(campaign.Defines.TerritorialClaimWeight, 0, 1);
         }
         if (people <= 0 || other.AnswersTo(nation.Id) || nation.AnswersTo(other.Id)) return 0f;
-        return M.Clamp((float)(people / 12_000_000), 0f, 2.5f);
+        // Losing a third of a small country is not negligible next to losing the same
+        // headcount from a giant one. Claims count fractionally as above; renunciation
+        // removes the title. This is motive, not permission to break a treaty or a
+        // substitute for the war judgement's independent readiness/deterrence gates.
+        var relative = people / (Math.Max(1, nation.Population) + people);
+        var memory = people / 12_000_000 + relative * Math.Max(0, campaign.Defines.AiRevancheRelativeWeight);
+        var distractions = campaign.Wars.Count(w => !w.Ended && w.Involves(other.Id) && !w.Involves(nation.Id));
+        var distress = M.Clamp01((.55f - other.Stability) / .55f);
+        var opening = Math.Min(1f, distractions * .25f + distress * .75f);
+        return M.Clamp((float)(memory * (1 + opening * Math.Max(0, campaign.Defines.AiRevancheOpportunityWeight))), 0f, 2.5f);
     }
 
     /// <summary>Once a day: each human country on its own day of the cycle.</summary>

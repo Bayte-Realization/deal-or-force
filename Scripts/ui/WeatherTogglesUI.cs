@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;

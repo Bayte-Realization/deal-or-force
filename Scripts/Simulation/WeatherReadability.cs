@@ -12,6 +12,9 @@ public readonly record struct WeatherReadability(float CloudOpacity, float MistO
         return new(Sane(d?.CloudOpacity, .50f, 0, 1), Sane(d?.MistOpacity, .22f, 0, 1),
             Sane(d?.CloudEdgeSoftness, .20f, .02f, .40f), Sane(d?.CloudDetailStrength, .08f, 0, .30f));
     }
+
+    /// <summary>Clouds and mist draw unless this campaign's defines turn <c>weather</c> off. A null campaign is the menu globe.</summary>
+    public static bool LayersAllowed(Campaign campaign) => campaign is null || campaign.FeatureEnabled("weather");
 }
 
 public sealed partial class Defines

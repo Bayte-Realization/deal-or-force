@@ -1,7 +1,15 @@
-// Intelligence networks abroad and air reconnaissance (IntelNetworks.cs, AirReconnaissance.cs).
+// Intelligence networks abroad, the covert operations they run, and air reconnaissance
+// (IntelNetworks.cs, CovertOperations.cs, AirReconnaissance.cs).
 // "intelligence": false switches off networks for a scenario or a mod; the reconnaissance mission
 // is part of common/support and goes with the formations that fly it.
 {"Features":{"intelligence":true}, "FeatureCommands":{"IntelNetworkCommand":"intelligence"},
  "IntelNetworkCostShare":0.0008, "IntelNetworkMinimumCost":0.05, "IntelNetworkGrowth":0.012, "IntelNetworkCeiling":0.9,
  "IntelNetworkExposure":0.004, "IntelInspectStrength":0.35, "IntelNetworkLimit":4, "IntelExposureGrievance":10,
- "ReconFullSight":6, "ReconMinimumSight":0.2, "ReconExposureShare":0.6}
+ "ReconFullSight":6, "ReconMinimumSight":0.2, "ReconExposureShare":0.6,
+ "CovertOperationLimit":2, "CovertBaseSuccess":0.30, "CovertStrengthSuccess":0.70, "CovertCounterSuccess":0.35,
+ "CovertExposedOnSuccess":0.06, "CovertExposedOnSuccessCounter":0.14, "CovertExposedOnFailure":0.35, "CovertExposedOnFailureCounter":0.45,
+ "CovertExposureGrievance":16, "CovertExposureNetworkKept":0.5, "CovertQuietDays":90, "CovertQuietAfterExposureDays":365,
+ "CovertSabotageDamage":0.04, "CovertSabotageDamagePerStrength":0.05,
+ "CovertUnrestRadicalism":0.05, "CovertUnrestRadicalismPerStrength":0.08,
+ "CovertOppositionStability":0.02, "CovertOppositionStabilityPerStrength":0.03, "CovertOppositionRadicalism":0.03, "CovertOppositionFunding":0.5, "CovertOppositionFundingCap":0.002,
+ "CovertTheftShare":0.25, "CovertTheftSharePerStrength":0.35, "CovertAiReviewDays":28, "CovertAiChance":0.15}

@@ -1,0 +1,49 @@
+{
+  "dutch": {
+    "inherits": "afrikaner", "countries": ["NLD","BEL","SUR"], "cultures": ["dutch","flemish"],
+    "male": ["Arjen","Bart","Bram","Daan","Dirk","Erik","Frank","Gert","Hans","Hendrik","Jan","Jeroen","Joost","Kees","Koen","Lars","Maarten","Mark","Niels","Pieter","Rob","Sander","Thijs","Willem"],
+    "female": ["Anke","Anne","Anouk","Britt","Daphne","Eline","Els","Femke","Floor","Ilse","Iris","Janneke","Judith","Kim","Laura","Lieke","Linda","Lotte","Marieke","Nienke","Noor","Roos","Sanne","Saskia"],
+    "family": ["de Jong","Jansen","de Vries","van den Berg","van Dijk","Bakker","Janssen","Visser","Smit","Meijer","de Boer","Mulder","de Groot","Bos","Vos","Peters","Hendriks","van Leeuwen","Dekker","Brouwer","de Wit","Dijkstra","Vermeer","van der Meer"]
+  },
+  "danish": {
+    "inherits": "scandinavian", "countries": ["DNK"], "cultures": ["danish"],
+    "family": ["Nielsen","Jensen","Hansen","Pedersen","Andersen","Christensen","Larsen","Sørensen","Rasmussen","Jørgensen","Petersen","Madsen","Kristensen","Olsen","Thomsen","Christiansen","Poulsen","Johansen","Møller","Mortensen","Knudsen","Jakobsen","Jacobsen","Mikkelsen"]
+  },
+  "swedish": {
+    "inherits": "scandinavian", "countries": ["SWE"], "cultures": ["swedish"],
+    "family": ["Andersson","Johansson","Karlsson","Nilsson","Eriksson","Larsson","Olsson","Persson","Svensson","Gustafsson","Pettersson","Jonsson","Jansson","Hansson","Bengtsson","Jönsson","Lindberg","Jakobsson","Magnusson","Olofsson","Lindström","Lindqvist","Lindgren","Berg"]
+  },
+  "norwegian": {
+    "inherits": "scandinavian", "countries": ["NOR"], "cultures": ["norwegian"],
+    "family": ["Hansen","Johansen","Olsen","Larsen","Andersen","Pedersen","Nilsen","Kristiansen","Jensen","Karlsen","Johnsen","Pettersen","Eriksen","Berg","Haugen","Hagen","Johannessen","Andreassen","Jacobsen","Dahl","Jørgensen","Halvorsen","Lund","Strand"]
+  },
+  "macedonian": {
+    "inherits": "serbo_croatian", "countries": ["MKD"], "cultures": ["macedonian"],
+    "family": ["Stojanovski","Nikolovski","Petrovski","Trajkovski","Jovanovski","Georgievski","Kostovski","Milevski","Ristevski","Velkovski","Ilievski","Ivanovski","Mitrevski","Popovski","Dimitrievski","Atanasovski","Todorovski","Spasovski","Naumovski","Andonovski","Lazarevski","Mladenovski","Markovski","Bojkovski"],
+    "female_family": ["Stojanovska","Nikolovska","Petrovska","Trajkovska","Jovanovska","Georgievska","Kostovska","Milevska","Ristevska","Velkovska","Ilievska","Ivanovska","Mitrevska","Popovska","Dimitrievska","Atanasovska","Todorovska","Spasovska","Naumovska","Andonovska","Lazarevska","Mladenovska","Markovska","Bojkovska"]
+  },
+  "azerbaijani": {
+    "inherits": "turkish", "countries": ["AZE"], "cultures": ["azerbaijani"],
+    "male": ["Adil","Ali","Anar","Araz","Arif","Asif","Aydin","Elchin","Eldar","Elman","Elvin","Farid","Fikrat","Fuad","Ilgar","Kamran","Murad","Namik","Orkhan","Rashad","Rauf","Samir","Tural","Vugar"],
+    "female": ["Aida","Aygun","Aysel","Aynur","Dilara","Elnara","Farida","Fidan","Gunel","Gunay","Ilhama","Lala","Leyla","Mehriban","Narmin","Nigar","Nilufer","Sabina","Sevda","Sevil","Shahla","Tarana","Ulkar","Zarifa"],
+    "family": ["Aliyev","Mammadov","Huseynov","Hasanov","Abbasov","Jafarov","Ismayilov","Guliyev","Karimov","Mammadli","Musayev","Orujov","Rasulov","Rzayev","Safarov","Suleymanov","Talibov","Valiyev","Zeynalov","Bayramov","Ahmadov","Asgarov","Mahmudov","Nabiyev"],
+    "female_family": ["Aliyeva","Mammadova","Huseynova","Hasanova","Abbasova","Jafarova","Ismayilova","Guliyeva","Karimova","Mammadli","Musayeva","Orujova","Rasulova","Rzayeva","Safarova","Suleymanova","Talibova","Valiyeva","Zeynalova","Bayramova","Ahmadova","Asgarova","Mahmudova","Nabiyeva"]
+  },
+  "kyrgyz": {
+    "inherits": "kazakh", "countries": ["KGZ"], "cultures": ["kyrgyz"],
+    "male": ["Adilet","Akylbek","Almaz","Asan","Askar","Azamat","Bakyt","Bekbolot","Bolot","Daniyar","Dastan","Erlan","Ermek","Kanat","Kubanych","Marat","Mirlan","Nurlan","Ruslan","Samat","Taalai","Tilek","Ulan","Zamir"],
+    "female": ["Aichurok","Aigul","Ainura","Aiperi","Altynai","Anara","Asel","Bermet","Cholpon","Dinara","Gulbara","Gulnara","Jamila","Jyldyz","Kalipa","Kunduz","Meerim","Nazgul","Nurzat","Rahat","Roza","Salamat","Saikal","Zamira"]
+  },
+  "catalan": {
+    "inherits": "spanish", "cultures": ["catalan"],
+    "male": ["Adrià","Albert","Andreu","Antoni","Arnau","Carles","David","Enric","Francesc","Gerard","Guillem","Jaume","Joan","Jordi","Josep","Lluís","Marc","Miquel","Oriol","Pau","Pere","Ramon","Roger","Xavier"],
+    "female": ["Alba","Anna","Ariadna","Carme","Clara","Dolors","Elisenda","Estel","Eva","Gemma","Helena","Irene","Joana","Júlia","Laia","Laura","Marta","Mercè","Mireia","Montserrat","Núria","Rosa","Sílvia","Teresa"],
+    "family": ["Soler","Vila","Serra","Ferrer","Puig","Font","Riera","Vidal","Pons","Martí","Casas","Costa","Roca","Sala","Vives","Dalmau","Mas","Prat","Ribas","Rius","Bosch","Badia","Esteve","Miró"]
+  },
+  "basque": {
+    "inherits": "spanish", "cultures": ["basque"],
+    "male": ["Aitor","Ander","Antton","Asier","Beñat","Eneko","Gari","Gorka","Iban","Iker","Iñaki","Iñigo","Jokin","Jon","Joseba","Julen","Kepa","Mikel","Oier","Patxi","Unai","Xabier","Xanti","Xuban"],
+    "female": ["Ainara","Ainhoa","Aintzane","Alaia","Amaia","Ane","Arantxa","Edurne","Eider","Eli","Esti","Garazi","Idoia","Irati","Itziar","Izaskun","Jone","Leire","Maialen","Miren","Nagore","Nerea","Oihana","Uxue"],
+    "family": ["Agirre","Altuna","Aranburu","Arrieta","Arregi","Azkarate","Etxeberria","Etxeita","Etxeondo","Garai","Goikoetxea","Ibarra","Irizar","Larrañaga","Lasa","Mendizabal","Odriozola","Olaizola","Ortiz","Otxoa","Salaberria","Ugalde","Uribe","Zubizarreta"]
+  }
+}

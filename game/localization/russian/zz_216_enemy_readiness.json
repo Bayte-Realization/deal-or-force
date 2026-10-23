@@ -1,0 +1,13 @@
+{
+  "Observed combat readiness": "Наблюдаемая боеготовность",
+  "Organisation is spent": "Организация исчерпана",
+  "Short of supply": "Не хватает снабжения",
+  "No formations currently observed.": "Сейчас нет наблюдаемых соединений.",
+  "Division-weighted average of observed formations.": "Среднее по наблюдаемым соединениям с учётом числа дивизий.",
+  "Observed formations only; unseen reinforcements are not included.": "Только наблюдаемые соединения; скрытые подкрепления не учитываются.",
+  "Observed organisation": "Наблюдаемая организация",
+  "Observed equipment": "Наблюдаемая оснащённость",
+  "Division-weighted average of the foreign formations you can see here. Hidden reserves are not counted and no order or route is revealed.": "Среднее по видимым здесь чужим соединениям с учётом числа дивизий. Скрытые резервы не учитываются, приказы и маршруты не раскрываются.",
+  "Organisation {0:P0} · equipment {1:P0} · supply {2:P0}": "Организация {0:P0} · оснащённость {1:P0} · снабжение {2:P0}",
+  "{0:0.0} div · org {1:P0} · eq {2:P0}": "{0:0.0} див · орг {1:P0} · осн {2:P0}"
+}

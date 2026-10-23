@@ -261,14 +261,7 @@ public partial class DealOrForceGame
         _openScreen = "Support";
         _sidePanel.Visible = false;
         HideMapSelection(true);
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
-        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
-        _supportLayer.Visible = true;
-        _supportLayer.MoveToFront();
+        RaiseWorkspaceLayer(_supportLayer);
         _globe.SupportOverlay = true;
         _globe.SupportCommandMode = true;
         _globe.SelectSupportFormations(_supportSelected);
@@ -460,7 +453,7 @@ public partial class DealOrForceGame
             FocusMode = FocusModeEnum.None,
             ClipText = true
         };
-        section.Caption.AddThemeFontSizeOverride("font_size", 12);
+        section.Caption.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
         section.Caption.Pressed += () => FocusSupportBase(stateMapIndex);
         section.Caption.TooltipText = Ui.Tip("Show this base on the map.");
         header.AddChild(section.Caption);
@@ -945,7 +938,7 @@ public partial class DealOrForceGame
                 button.ToggleMode = true;
                 button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 button.ClipText = true;
-                button.AddThemeFontSizeOverride("font_size", 11);
+                button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 11));
                 button.ExpandIcon = false;
                 button.AddThemeConstantOverride("icon_max_width", 22);
                 _supportTypeGrid.AddChild(button);

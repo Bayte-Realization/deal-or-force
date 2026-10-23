@@ -1,0 +1,41 @@
+// What an alliance remembers about a programme it finished together.
+//
+// A programme is months of money and cooperation between two countries, and until this existed it
+// ended in a chronicle line and nothing else: the cohesion it bought was already spent, and the
+// relation kept no trace of the thing itself. These are that trace. Both sides hold the same
+// memory, because a joint undertaking is something that happened to the pair.
+//
+// Deliberately smaller than economic_aid (+16): a programme is cooperation rather than a transfer,
+// and the money in it is the sponsor's own recurring budget, not a package handed over. They last
+// longer than an aid package, because what is remembered is the standing arrangement - a liaison
+// that existed, a fund that ran to the end - and not a single payment.
+{
+  // Twelve weeks of a standing diplomatic presence. The cheapest and the quietest of the three.
+  "alliance_liaison_stood_up": {
+    "name": "Kept a permanent liaison with us",
+    "opinion": 6,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // Sixteen weeks of joint defence work. Worth more than a liaison: it is the alliance's own
+  // subject, and it says the partner will actually turn up.
+  "alliance_exercises_held": {
+    "name": "Ran a defence programme with us",
+    "opinion": 9,
+    "days": 1460,
+    "decays": true,
+    "max_stacks": 2
+  },
+
+  // Money spent on our reconstruction, seen through to the end. Held longest, because a fund that
+  // finished is harder to argue with than a fund that was announced.
+  "alliance_fund_finished": {
+    "name": "Financed our reconstruction to the end",
+    "opinion": 12,
+    "days": 1825,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

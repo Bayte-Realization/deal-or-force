@@ -52,8 +52,8 @@ static class IdentityResearchTests
         var soviet = FormableNations.Find("soviet_union");
         var republics = new[] { "RUS", "BLR", "UKR", "KAZ", "UZB", "TKM", "TJK", "KGZ", "ARM", "AZE", "GEO", "MDA", "LVA", "LTU", "EST" };
         Check(soviet.EligibleTags.OrderBy(t => t).SequenceEqual(republics.OrderBy(t => t)), "all fifteen republics may lead the Soviet foundation, including Belarus");
-        Check(soviet.RequiredTags.OrderBy(t => t).SequenceEqual(republics.OrderBy(t => t)) && soviet.RequiredIdeology.SequenceEqual(new[] { "communism", "socialism" }) && soviet.MinimumStability == .76f,
-            "broader access does not relax land, ideology or stability conditions");
+        Check(soviet.RequiredTags.OrderBy(t => t).SequenceEqual(republics.OrderBy(t => t)) && soviet.RequiredIdeology.Length == 0 && soviet.MinimumStability == .76f,
+            "a successor republic keeps the land and the stability, and the government of the day does not close the Union");
         var successor = new Nation { Tag = "NEW" }; successor.FoundedCultures.Add("belarusian");
         Check(FormableNations.Eligible(successor, soviet), "a Belarusian-founded successor keeps a cultural union route after its tag changes");
         successor.FormedNationId = "union_state";

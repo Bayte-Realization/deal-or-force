@@ -13,7 +13,12 @@
 {
 
   // Statecraft: how a country governs itself and reads its neighbours
-  "AiWarChance": 0.012,
+  // Raised from 0.012, which measured as a system that did not do what it says: five years of the
+  // world gave 160 wars worth having and ONE declaration. At 0.05 it declares four times and fights
+  // sixteen wars, fourteen of which end - and at 0.15 the world is identical to 0.05, so this is
+  // the knee of the curve. Keep this in step with Defines.AiWarChance; SimBench holds the two to
+  // each other, and a stale file here silently undid a whole rebalance once.
+  "AiWarChance": 0.05,
   "AiMayDeclareWar": true,
   "AiBorderFriction": -6,
   "AiTradeWarmth": 28,
@@ -71,6 +76,10 @@
   "AiHostilityAppetite": 1.2,
   "AiRivalryAppetite": 0.8,
   "AiOpportunismAppetite": 1.1,
+  "AiUnfinishedGoalAppetite": 0.90,
+  "AiTargetExhaustionWarSupport": 0.45,
+  "AiTargetExhaustionStability": 0.50,
+  "AiTargetExhaustionMultiplier": 0.85,
   "AiWarDesireThreshold": 0.55,
   "AiWarSupportFloor": 0.45,
   "AiWarStabilityFloor": 0.35,
@@ -81,5 +90,10 @@
   "AiPeaceIndemnityBudget": 55,
   "AiCapitulationWarSupport": 0.30,
   "AiPeaceBudgetShare": 0.85,
-  "AiMayAttackPlayer": true
+  "AiMayAttackPlayer": true,
+
+  // An ally or a guarantor may put cash on the deal table when a client's institutions
+  // are failing. A player still signs. Off spends that week on ordinary courtship.
+  "AiCrisisGrants": true,
+  "AiCrisisGrantRetryDays": 360
 }

@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2022 census (Vojvodina, Sandzak, Presevo valley).
 {
   // Belgrade
   "rs_00": {
     "population": 3132765,
     "urbanization": 0.75,
-    "cultures": { "serbian": 0.8497, "hungarian": 0.0316, "russian": 0.0309, "romani": 0.0214, "bosniak": 0.0204, "albanian": 0.0082, "croatian": 0.0082, "slovak": 0.0082, "montenegrin": 0.0061, "romanian": 0.0051, "bulgarian": 0.0031, "macedonian": 0.0031, "aromanian": 0.002, "rusyn": 0.002 },
+    "cultures": { "serbian": 0.9038, "russian": 0.0329, "romani": 0.0177, "croatian": 0.0087, "slovak": 0.0087, "montenegrin": 0.0065, "romanian": 0.0054, "albanian": 0.0039, "bulgarian": 0.0033, "macedonian": 0.0033, "aromanian": 0.0021, "rusyn": 0.0021, "bosniak": 0.0016 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.973, "Coal": 0.116, "Oil": 0.365, "IronOre": 0.197, "RareEarths": 0.06, "NaturalGas": 0.38, "Timber": 1.699, "Bauxite": 0.066, "Uranium": 0.004 }
   },
@@ -23,7 +24,7 @@
   "rs_06": {
     "population": 1935840,
     "urbanization": 0.42,
-    "cultures": { "serbian": 0.8497, "hungarian": 0.0316, "russian": 0.0309, "romani": 0.0214, "bosniak": 0.0204, "albanian": 0.0082, "croatian": 0.0082, "slovak": 0.0082, "montenegrin": 0.0061, "romanian": 0.0051, "bulgarian": 0.0031, "macedonian": 0.0031, "aromanian": 0.002, "rusyn": 0.002 },
+    "cultures": { "serbian": 0.8112, "hungarian": 0.1, "russian": 0.0295, "romani": 0.0177, "croatian": 0.0078, "slovak": 0.0078, "montenegrin": 0.0058, "romanian": 0.0049, "albanian": 0.0039, "bulgarian": 0.003, "macedonian": 0.003, "aromanian": 0.0019, "rusyn": 0.0019, "bosniak": 0.0016 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.367, "Coal": 0.551, "Oil": 0.939, "IronOre": 0.417, "RareEarths": 0.129, "NaturalGas": 0.487, "Timber": 1.459, "Bauxite": 0.184, "Uranium": 0.018 }
   },
@@ -31,7 +32,7 @@
   "rs_15": {
     "population": 1144427,
     "urbanization": 0.42,
-    "cultures": { "serbian": 0.8497, "hungarian": 0.0316, "russian": 0.0309, "romani": 0.0214, "bosniak": 0.0204, "albanian": 0.0082, "croatian": 0.0082, "slovak": 0.0082, "montenegrin": 0.0061, "romanian": 0.0051, "bulgarian": 0.0031, "macedonian": 0.0031, "aromanian": 0.002, "rusyn": 0.002 },
+    "cultures": { "serbian": 0.846, "romani": 0.04, "russian": 0.0308, "albanian": 0.03, "hungarian": 0.0138, "croatian": 0.0082, "slovak": 0.0082, "montenegrin": 0.0061, "romanian": 0.0051, "bulgarian": 0.0031, "macedonian": 0.0031, "aromanian": 0.002, "rusyn": 0.002, "bosniak": 0.0016 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 0.929, "Coal": 0.142, "Oil": 0.281, "IronOre": 0.137, "RareEarths": 0.056, "NaturalGas": 0.466, "Timber": 2.081, "Bauxite": 0.042, "Uranium": 0.007 }
   },
@@ -39,7 +40,7 @@
   "rs_16": {
     "population": 731943,
     "urbanization": 0.44,
-    "cultures": { "serbian": 0.8497, "hungarian": 0.0316, "russian": 0.0309, "romani": 0.0214, "bosniak": 0.0204, "albanian": 0.0082, "croatian": 0.0082, "slovak": 0.0082, "montenegrin": 0.0061, "romanian": 0.0051, "bulgarian": 0.0031, "macedonian": 0.0031, "aromanian": 0.002, "rusyn": 0.002 },
+    "cultures": { "serbian": 0.726, "bosniak": 0.18, "russian": 0.0264, "romani": 0.0177, "hungarian": 0.0138, "croatian": 0.007, "slovak": 0.007, "montenegrin": 0.0052, "romanian": 0.0044, "albanian": 0.0039, "bulgarian": 0.0026, "macedonian": 0.0026, "aromanian": 0.0017, "rusyn": 0.0017 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.251, "Coal": 0.236, "Oil": 0.361, "IronOre": 0.118, "RareEarths": 0.065, "NaturalGas": 0.469, "Timber": 1.516, "Bauxite": 0.047, "Uranium": 0.009 }
   }

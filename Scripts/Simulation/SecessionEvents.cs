@@ -10,6 +10,12 @@ public enum SecessionCause
     /// <summary>It is their country. The people whose grievance this whole thing is.</summary>
     Nationality,
 
+    /// <summary>
+    /// It is the same people, and it has stopped being the same politics. A federal region
+    /// leaving a centre it no longer accepts.
+    /// </summary>
+    Federal,
+
     /// <summary>It went with them. Angry, ungoverned, and on the wrong side of the new line.</summary>
     Discontent
 }
@@ -123,10 +129,17 @@ public static class SecessionEvents
     {
         var weights = SecessionCore.Weights;
         var owned = campaign.StatesOf(parent.MapIndex);
+        if (owned.Length < 2) return null;
         BuildAdjacency(campaign, owned);
 
         var core = Core(campaign, parent, ripe, out var culture);
         core = Cap(parent, core);
+        if (core.Count >= owned.Length)
+        {
+            var keep = core.FirstOrDefault(s => s.MapIndex == parent.CapitalStateMapIndex)
+                ?? core.OrderByDescending(s => s.Population).First();
+            core.Remove(keep);
+        }
         if (core.Count < weights.MinimumRegions) return null;
 
         var leaving = new List<SecessionPiece>();
@@ -140,14 +153,23 @@ public static class SecessionEvents
             {
                 MapIndex = state.MapIndex,
                 Name = state.Name,
-                Cause = SecessionCause.Nationality,
+                Cause = SecessionCore.IsFederalBreak(campaign, parent, state)
+                    ? SecessionCause.Federal
+                    : SecessionCause.Nationality,
                 Population = state.Population
             });
         }
         if (people < weights.MinimumPopulation) return null;
 
-        Accrete(campaign, parent, owned, taken, leaving, ref people);
+        Accrete(campaign, parent, owned, taken, leaving, culture, ref people);
         Trim(parent, leaving, ref people);
+        while (leaving.Count >= owned.Length && leaving.Count > 0)
+        {
+            var drop = leaving.FirstOrDefault(p => p.MapIndex == parent.CapitalStateMapIndex)
+                ?? leaving.Last();
+            leaving.Remove(drop);
+            people -= drop.Population;
+        }
         if (leaving.Count == 0 || people < weights.MinimumPopulation) return null;
 
         return Secede(campaign, parent, leaving, culture, people);
@@ -185,8 +207,8 @@ public static class SecessionEvents
     }
 
     /// <summary>
-    /// The grievance the whole thing is about: the biggest contiguous group of ripe regions
-    /// that share a people the state is not for.
+    /// The grievance the whole thing is about: a contiguous minority homeland, or a bloc
+    /// whose own people meet every condition of the separate federal road.
     /// </summary>
     private static List<ScenarioState> Core(Campaign campaign, Nation owner,
         List<ScenarioState> ripe, out string culture)
@@ -196,12 +218,22 @@ public static class SecessionEvents
         long bestPeople = 0;
 
         var byCulture = new Dictionary<string, List<ScenarioState>>(StringComparer.OrdinalIgnoreCase);
+        var federal = new List<ScenarioState>();
         foreach (var state in ripe)
         {
+            // The parent's national capital cannot secede away from the rest of the nation.
+            if (state.MapIndex == owner.CapitalStateMapIndex) continue;
+            // A political break does not need a fabricated foreign population. Recheck
+            // the current conditions: old pressure alone cannot make a healthy or
+            // unreviewed region leave, nor bypass either mechanic's switch.
+            if (SecessionCore.IsFederalBreak(campaign, owner, state))
+            {
+                federal.Add(state);
+                continue;
+            }
             var largest = EconomySystem.Cultures(state).FirstOrDefault();
             if (largest.Culture is null || largest.Size <= 0) continue;
-            // Only a people the state is not for. A region full of the country's own people
-            // that has had enough is a revolution, and that is a different mechanic.
+            // The existing ethnic road still needs a people the state is not for.
             if (DemographyCatalog.IsPrimary(owner.Tag, largest.Culture)) continue;
             if (!byCulture.TryGetValue(largest.Culture, out var list))
                 byCulture[largest.Culture] = list = new List<ScenarioState>();
@@ -209,8 +241,16 @@ public static class SecessionEvents
         }
 
         foreach (var (people, states) in byCulture)
+        {
             foreach (var bloc in Contiguous(states))
             {
+                // A people whose own state is next door does not found a second one: Ukrainians
+                // on ground Russia took are Ukraine's lost land (LostLands), not a "Republic of
+                // Ukraine" that seceded five times and was taken back five times. A people far
+                // from it - a diaspora that has become the land's own majority - can: that is how
+                // new nations were made, from the Boers to the Americans, and it is named for its
+                // land rather than as a second copy of the old country (NationNaming.AvoidClash).
+                if (KinNear(campaign, owner, people, bloc)) continue;
                 long here = 0;
                 foreach (var state in bloc) here += state.Population;
                 if (best.Count > 0 && here <= bestPeople) continue;
@@ -218,6 +258,20 @@ public static class SecessionEvents
                 bestPeople = here;
                 culture = people;
             }
+        }
+        // Federal regions share their political rejection, not necessarily one language.
+        // Keep them separate from an ethnic bloc and apply the same connectivity and
+        // subsequent population cap as every other secession.
+        foreach (var bloc in Contiguous(federal))
+        {
+            var here = bloc.Sum(state => state.Population);
+            if (best.Count > 0 && here <= bestPeople) continue;
+            best = bloc;
+            bestPeople = here;
+            var seat = bloc.OrderByDescending(state => state.Population).First();
+            culture = EconomySystem.Cultures(seat).FirstOrDefault().Culture
+                ?? DemographyCatalog.PrimaryCulture(owner.Tag);
+        }
         return best;
     }
 
@@ -312,11 +366,19 @@ public static class SecessionEvents
     /// lose. Nationality is not consulted here at all - this is the ground that was next to
     /// the thing that happened, and a border does not ask.
     /// </summary>
+    /// <remarks>
+    /// Only the core's own neighbours, and only ground that is plausibly theirs: a region where
+    /// the seceding people are a real share, or one breaking for the same federal reasons, and
+    /// never another country's core. Growing from whatever had already joined walked a secession
+    /// off in a line through the angriest regions next door - a Dagestani republic reaching
+    /// Kharkiv through Kalmykia, Rostov and Voronezh.
+    /// </remarks>
     private static void Accrete(Campaign campaign, Nation parent, ScenarioState[] owned,
-        HashSet<int> taken, List<SecessionPiece> leaving, ref long people)
+        HashSet<int> taken, List<SecessionPiece> leaving, string culture, ref long people)
     {
         var weights = SecessionCore.Weights;
         if (weights.JoinLimit <= 0) return;
+        var core = new HashSet<int>(taken);
 
         var joined = 0;
         var growing = true;
@@ -330,8 +392,11 @@ public static class SecessionEvents
             var strongest = 0f;
             foreach (var state in owned)
             {
+                // The national capital cannot be accreted into a peripheral border secession.
+                if (state.MapIndex == parent.CapitalStateMapIndex) continue;
                 if (taken.Contains(state.MapIndex)) continue;
-                if (!Touches(taken, state.MapIndex)) continue;
+                if (!Touches(core, state.MapIndex)) continue;
+                if (!Belongs(campaign, parent, state, culture, weights.JoinPeopleShare)) continue;
 
                 var willing = MathF.Max(
                     state.SecessionPressure >= weights.JoinPressure ? state.SecessionPressure : 0f,
@@ -356,6 +421,56 @@ public static class SecessionEvents
             joined++;
             growing = true;
         }
+    }
+
+    /// <summary>Whether a region next to a secession's core is ground that could plausibly go with it.</summary>
+    private static bool Belongs(Campaign campaign, Nation parent, ScenarioState state, string culture, float share)
+    {
+        // Somebody else's core - land the parent conquered - is not the secession's to take.
+        if (state.CoreTags.Count > 0 && !state.CoreTags.Contains(parent.Tag, StringComparer.OrdinalIgnoreCase))
+            return false;
+        if (SecessionCore.IsFederalBreak(campaign, parent, state)) return true;
+        if (string.IsNullOrWhiteSpace(culture) || state.Population <= 0) return true;
+        long theirs = 0;
+        foreach (var (people, size) in EconomySystem.Cultures(state))
+            if (string.Equals(people, culture, StringComparison.OrdinalIgnoreCase)) theirs += size;
+        return theirs >= state.Population * (double)share;
+    }
+
+    /// <summary>The living state, other than the owner, whose own people this is; null when there is none.</summary>
+    internal static Nation KinState(Campaign campaign, Nation owner, string culture)
+    {
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == owner.Id || nation.Population <= 0 || nation.Movement is not null ||
+                campaign.Fallen.Contains(nation.Id) || !campaign.HasOwnedLand(nation)) continue;
+            if (string.Equals(DemographyCatalog.PrimaryCulture(nation.Tag), culture, StringComparison.OrdinalIgnoreCase))
+                return nation;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Whether a people's own living state is near enough that its ground here is that state's
+    /// lost land rather than a new nation's: it borders the owner and its capital lies within
+    /// Defines.DiasporaReachKm of these regions.
+    /// </summary>
+    internal static bool KinNear(Campaign campaign, Nation owner, string culture, IReadOnlyList<ScenarioState> regions)
+    {
+        var kin = KinState(campaign, owner, culture);
+        if (kin is null) return false;
+        if (!CampaignDiplomacy.SharesLandBorder(campaign, owner.MapIndex, kin.MapIndex)) return false;
+        if (regions is null || regions.Count == 0) return true;
+        var seat = regions[0];
+        foreach (var region in regions) if (region.Population > seat.Population) seat = region;
+        var (latitude, longitude) = LandAtlas.CentreOf(campaign, seat.MapIndex);
+        const float radians = MathF.PI / 180f;
+        var dLat = (kin.CapitalLatitude - latitude) * radians;
+        var dLon = (kin.CapitalLongitude - longitude) * radians;
+        var h = MathF.Sin(dLat / 2f) * MathF.Sin(dLat / 2f) + MathF.Cos(latitude * radians) *
+                MathF.Cos(kin.CapitalLatitude * radians) * MathF.Sin(dLon / 2f) * MathF.Sin(dLon / 2f);
+        var km = 2f * 6371f * MathF.Asin(MathF.Min(1f, MathF.Sqrt(h)));
+        return km <= campaign.Defines.DiasporaReachKm;
     }
 
     private static bool Touches(HashSet<int> taken, int region) =>
@@ -401,9 +516,13 @@ public static class SecessionEvents
     private static string RevoltKind(Nation parent, IReadOnlyList<SecessionPiece> leaving,
         string culture, long people)
     {
-        long national = 0;
+        long national = 0, federal = 0;
         foreach (var piece in leaving)
+        {
             if (piece.Cause == SecessionCause.Nationality) national += piece.Population;
+            else if (piece.Cause == SecessionCause.Federal) federal += piece.Population;
+        }
+        if (people > 0 && federal / (double)people >= 0.5) return "federal";
         if (people <= 0 || national / (double)people < 0.5) return "discontent";
 
         // Faith, not language, is what separates the remaining two - and the first draft of
@@ -485,7 +604,8 @@ public static class SecessionEvents
     /// scripted event - a secession somebody wants to happen rather than one that has built
     /// up. The people who found it are the region's own largest, unless a mod names others.
     /// </summary>
-    public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null)
+    public static SecessionReport Force(Campaign campaign, ScenarioState state, string culture = null,
+        SecessionCause cause = SecessionCause.Nationality)
     {
         if (campaign?.ProvinceMap is null || state is null || LakeRegions.IsWaterState(state)) return null;
         var parent = campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
@@ -500,7 +620,7 @@ public static class SecessionEvents
         var piece = new SecessionPiece
         {
             MapIndex = state.MapIndex, Name = state.Name,
-            Cause = SecessionCause.Nationality, Population = state.Population
+            Cause = cause, Population = state.Population
         };
         return Secede(campaign, parent, new List<SecessionPiece> { piece }, culture, state.Population);
     }
@@ -529,29 +649,86 @@ public static class SecessionEvents
         List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false)
     {
         if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
+        // Political succession cannot repaint a third party's military occupation.
+        // Do this before creating a tag, transferring accounts, or drawing a response.
+        var provinces = RevoltTerritory.Select(campaign, parent, ref leaving);
+        if (provinces.Count == 0 || leaving.Count == 0) return null;
+        people = leaving.Sum(piece => piece.Population);
+        if (people <= 0) return null;
+        var residentTotal = campaign.StatesOf(parent).Sum(state => (double)state.Population);
         var was = parent.Population;
         var revolt = RevoltKind(parent, leaving, culture, people);
-        var born = Found(campaign, parent, leaving, culture, people);
-        if (born is null) return null;
-        born.FoundedInRevolt = revolt;
-        born.SecededFromId = parent.Id;
+        var matchingMovement = FindMatchingMovement(campaign, leaving);
+        Nation born;
+        if (matchingMovement is not null)
+        {
+            born = matchingMovement;
+            born.FoundedInRevolt = revolt;
+            born.SecededFromId = parent.Id;
+            var movementStateName = MovementCatalog.Of(matchingMovement.Movement?.Id)?.StateName;
+            if (!string.IsNullOrEmpty(movementStateName)) born.Name = movementStateName;
+            var share = parent.Population <= 0 ? 0f : M.Clamp01(people / (float)parent.Population);
+            born.Population = people;
+            born.Gdp = parent.Gdp * share;
+            born.Treasury = MathF.Max(born.Treasury, parent.Treasury * share);
+            born.ManpowerReserve = parent.ManpowerReserve * share;
+            born.OutputScale = parent.OutputScale;
+            born.StandardOfLiving = parent.StandardOfLiving;
+            born.Literacy = parent.Literacy;
+            born.LiteracyOffset = parent.LiteracyOffset;
+            born.Productivity = parent.Productivity;
+            born.Urbanisation = parent.Urbanisation;
+            born.AgricultureShare = parent.AgricultureShare;
+            born.TaxRate = parent.TaxRate;
+            born.WelfareSpending = parent.WelfareSpending;
+            born.EducationSpending = parent.EducationSpending;
+            born.Stability = SecessionCore.Weights.Stability;
+            born.WarSupport = SecessionCore.Weights.WarSupport;
+            born.Government = "provisional_government";
+            born.PoliticsChangedDay = campaign.ElapsedDays;
+            MovementRules.GraduateToStatehood(campaign, born);
+        }
+        else
+        {
+            born = Found(campaign, parent, leaving, culture, people, revolt);
+            if (born is null) return null;
+            born.FoundedInRevolt = revolt;
+            born.SecededFromId = parent.Id;
+        }
+        // The land that left is the new country's homeland from its first minute: without
+        // this seed the fall flow (MovementFall.Decide) never sees a secession-born country
+        // that later loses everything, and it lingers for ever as a stateless ghost with an
+        // economy, a militia and no ground.
+        //
+        // The core, not everything that came along, and added to rather than replaced: a homeland
+        // rewritten with whatever left each time drifted across the map with every fall and rise.
+        var homeland = leaving.Where(piece => piece.Cause != SecessionCause.Discontent).Select(piece => piece.MapIndex).ToList();
+        if (homeland.Count == 0) homeland = leaving.Select(piece => piece.MapIndex).ToList();
+        if (campaign.Homelands.TryGetValue(born.Id, out var earlier) && earlier is { Count: > 0 })
+            homeland = earlier.Concat(homeland).Distinct().ToList();
+        campaign.Homelands[born.Id] = homeland;
+        var coreRegions = homeland.ToHashSet();
         shape?.Invoke(born);
 
-        var going = new HashSet<int>();
-        foreach (var piece in leaving) going.Add(piece.MapIndex);
-        var departedStates = campaign.States.Where(state => going.Contains(state.MapIndex)).ToArray();
-        var share = Dismantlement.Share(campaign, parent, going.ToArray());
-        RegionalResourcePartition.Transfer(parent, born, share);
-
-        var topology = campaign.ProvinceMap;
-        var provinces = new List<int>();
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-            if (going.Contains(topology.ProvinceToState[province])) provinces.Add(province);
-
+        // Partition productive capacity BEFORE changing the parent's resident count:
+        // ProductionCapacity already scales its reference by the population still present.
+        RegionalResourcePartition.Transfer(parent, born,
+            (float)Math.Clamp(people / Math.Max(1d, residentTotal), 0d, 1d));
         // Not a conquest. It is standing on the ground it already lived on, and a state born
         // an international pariah for that would be the wrong answer twice over.
         StatePartition.Annex(campaign, provinces, born, asConquest: false);
         RegionalResourcePartition.RecountResidents(campaign, parent, born);
+        var departedStates = campaign.StatesOf(born);
+        // For a region cut by an occupation, inherit only the residents actually leaving,
+        // not the entire region's money, debt, research or production capacity.
+        var causes = leaving.ToDictionary(piece => piece.MapIndex, piece => piece.Cause);
+        leaving = departedStates.Select(state => new SecessionPiece
+        {
+            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
+            Cause = causes.GetValueOrDefault(state.MapIndex,
+                causes.GetValueOrDefault(state.ParentMapIndex, SecessionCause.Discontent))
+        }).ToList();
+        people = born.Population;
         CampaignDiplomacy.ForgetBorders();
         SecessionResearch.Inherit(campaign, parent, born, departedStates, was);
 
@@ -561,7 +738,20 @@ public static class SecessionEvents
 
         parent.LastSecessionDay = campaign.ElapsedDays;
         born.LastSecessionDay = campaign.ElapsedDays;
-        campaign.LocateCapitals();
+        // The capital stands in the core - the people's own ground - not in whichever region that
+        // came along is the most populous: a Dagestani state does not govern from Rostov.
+        var seat = campaign.StatesOf(born).Where(s => coreRegions.Contains(s.MapIndex) || coreRegions.Contains(s.ParentMapIndex))
+                       .OrderByDescending(s => s.Population).FirstOrDefault()
+                   ?? campaign.StatesOf(born).OrderByDescending(s => s.Population).FirstOrDefault();
+        if (seat is not null)
+        {
+            CapitalCore.Establish(campaign, born, seat);
+            born.CapitalName = seat.Name;
+        }
+        campaign.LocateCapitals(preserveExisting: true);
+        // A revived movement keeps the name it fell with only while that name still describes
+        // the ground it has come back on.
+        if (matchingMovement is not null) NationNaming.Refit(campaign, born, "revived");
 
         // Its baseline is its own. A country that has never been this country before has no
         // institutions to take credit for, so what the formula explains is all there is -
@@ -602,6 +792,16 @@ public static class SecessionEvents
                     DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
                 }
             }
+        }
+        if (outcome == SecessionOutcome.Accepted)
+        {
+            // A negotiated independence still divides the garrison standing on the ground.
+            // The new state is not born with only a militia because the parent signed a paper.
+            var defected = Reintegration.Defect(campaign, parent, born, provinces.ToHashSet(),
+                campaign.Defines.PeacefulSecessionDefectionShare);
+            if (defected > 0)
+                DiagnosticLogs.Write("simulation",
+                    $"SECESSION_PEACEFUL_DEFECTION born={born.Tag} formations={defected}");
         }
         if (outcome == SecessionOutcome.Accepted)
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
@@ -645,10 +845,14 @@ public static class SecessionEvents
 
     internal static Nation FoundSettlement(Campaign c, Nation parent, IReadOnlyList<ScenarioState> regions, string culture) =>
         Found(c, parent, regions.Select(s => new SecessionPiece { MapIndex = s.MapIndex, Name = s.Name,
-            Population = s.Population, Cause = SecessionCause.Nationality }).ToList(), culture, regions.Sum(s => s.Population));
+            Population = s.Population, Cause = SecessionCause.Nationality }).ToList(), culture,
+            regions.Sum(s => s.Population), "national");
+
+    internal static Nation FoundReleased(Campaign c, Nation parent, List<SecessionPiece> leaving, string culture, long people) =>
+        Found(c, parent, leaving, culture, people);
 
     private static Nation Found(Campaign campaign, Nation parent, List<SecessionPiece> leaving,
-        string culture, long people)
+        string culture, long people, string revolt = "")
     {
         var tag = FreeTag(campaign, culture, parent.Tag);
         if (tag.Length == 0) return null;
@@ -660,7 +864,7 @@ public static class SecessionEvents
 
         SecessionPiece seat = null;
         foreach (var piece in leaving)
-            if (piece.Cause == SecessionCause.Nationality &&
+            if (piece.Cause is SecessionCause.Nationality or SecessionCause.Federal &&
                 (seat is null || piece.Population > seat.Population)) seat = piece;
         seat ??= leaving[0];
         var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
@@ -673,7 +877,8 @@ public static class SecessionEvents
             Name = NameFor(campaign, theirs ? culture : "", seatState?.Id ?? "", seat.Name, parent),
             Continent = parent.Continent,
             Region = parent.Region,
-            Color = ColourFor(theirs ? culture : "", parent),
+            Color = SecessionColours.Choose(campaign, parent, tag, leaving.Select(p => p.MapIndex),
+                theirs ? DemographyCatalog.Culture(culture)?.Colour ?? "" : ""),
             MapIndex = mapIndex,
             CapitalName = seat.Name,
             Population = people,
@@ -701,8 +906,12 @@ public static class SecessionEvents
             WarSupport = weights.WarSupport,
             Government = "provisional_government",
             Ideology = "nationalism",
+            DeclaredCulture = culture ?? "",
             PoliticsChangedDay = campaign.ElapsedDays
         });
+
+        if (!string.IsNullOrEmpty(culture) && !born.FoundedCultures.Contains(culture))
+            born.FoundedCultures.Add(culture);
 
         // The capital is a place, not a coordinate the parent had. Put it in the seat region
         // and let LocateCapitals work the rest out from the ground.
@@ -711,6 +920,11 @@ public static class SecessionEvents
         born.CapitalLongitude = capital.Longitude;
 
         DeclarePeoples(campaign, born, culture, leaving);
+        // The circumstances of the birth decide part of the name: a rising calls itself free,
+        // a treaty release does not. Set before naming, because naming reads it.
+        if (!string.IsNullOrWhiteSpace(revolt)) born.FoundedInRevolt = revolt;
+        NationNaming.ApplyTo(campaign, born, parent,
+            leaving.Select(piece => piece.MapIndex).ToArray(), "auto", culture);
         return born;
     }
 
@@ -783,6 +997,7 @@ public static class SecessionEvents
     /// </summary>
     public static bool NamedForItsPeople(Campaign campaign, string culture, IReadOnlyList<SecessionPiece> leaving) =>
         !string.IsNullOrWhiteSpace(culture) &&
+        !leaving.Any(piece => piece.Cause == SecessionCause.Federal) &&
         (!leaving.Any(piece => piece.Cause == SecessionCause.Discontent) || LeadsTheGround(campaign, culture, leaving));
 
     /// <summary>Whether this people is the largest on the ground that is leaving, counted region by region.</summary>
@@ -838,48 +1053,81 @@ public static class SecessionEvents
     {
         var definition = DemographyCatalog.Culture(culture);
         var country = definition?.Country;
-        var homeland = definition is not null && (definition.CountryRegions.Count == 0 ||
-            definition.CountryRegions.Any(prefix => regionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)));
-        if (!string.IsNullOrWhiteSpace(country) && homeland &&
-            !campaign.Nations.Any(n => string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
-                campaign.StatesOf(n).Length > 0)) return country;
-        if (!string.IsNullOrWhiteSpace(seat)) return seat;
-        // The English name, which is a key: the reader's own language is applied on screen, and a
-        // country named in Russian would stay Russian in an English game loaded from the save.
+        if (!string.IsNullOrWhiteSpace(country))
+        {
+            var homeland = definition.CountryRegions.Count == 0 ||
+                definition.CountryRegions.Any(prefix => regionId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+            var exists = campaign.Nations.Any(n =>
+                n != parent &&
+                string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
+                campaign.StatesOf(n).Length > 0);
+            if (!homeland || exists)
+                return StripAdministrativeSuffix(seat);
+        }
+        var state = campaign.States.Find(candidate =>
+            string.Equals(candidate.Id, regionId, StringComparison.OrdinalIgnoreCase));
+        var regions = state is null ? Array.Empty<int>() : new[] { state.MapIndex };
+        var (kind, id) = NationNaming.BaseFor(campaign, parent, regions, culture, "auto");
+        var composed = new Nation
+        {
+            Name = parent?.Name ?? "",
+            FoundNameKind = kind,
+            FoundNameId = id,
+            FoundNameBase = StripAdministrativeSuffix(seat),
+            FoundNameForm = NationNaming.FormFor("provisional_government", "nationalism", "")
+        };
+        var name = NationNaming.Render(campaign, composed, false);
+        if (!string.IsNullOrWhiteSpace(name)) return name;
+        if (!string.IsNullOrWhiteSpace(seat)) return StripAdministrativeSuffix(seat);
         var people = DemographyCatalog.CultureKey(culture);
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
     }
 
-    /// <summary>
-    /// A colour that is not the colour it left. The people's own where the catalogue has
-    /// one - which is the map a player can read at a glance - and the parent's, shifted far
-    /// enough to be a different country, where it does not.
-    /// </summary>
-    private static string ColourFor(string culture, Nation parent)
+    internal static string StripAdministrativeSuffix(string name)
     {
-        var definition = DemographyCatalog.Culture(culture);
-        if (definition is not null && !string.IsNullOrWhiteSpace(definition.Colour) &&
-            !string.Equals(definition.Colour, parent.Color, StringComparison.OrdinalIgnoreCase))
-            return definition.Colour;
-
-        var packed = Hex(parent.Color);
-        var red = (packed >> 16) & 0xFF;
-        var green = (packed >> 8) & 0xFF;
-        var blue = packed & 0xFF;
-        // Rotate the channels and lift it. Cheap, deterministic, and reliably a colour
-        // nobody mistakes for the one next to it.
-        var shifted = (Math.Min(255, blue + 40) << 16) | (Math.Min(255, red + 20) << 8) | green;
-        return $"#{shifted:x6}";
+        if (string.IsNullOrWhiteSpace(name)) return "";
+        var trimmed = name.Trim();
+        foreach (var suffix in new[]
+        {
+            " Governorate", " Oblast", " Krai", " Province", " Prefecture",
+            " Department", " Region", " District", " Voivodeship", " County"
+        })
+        {
+            if (trimmed.Length > suffix.Length + 2 &&
+                trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return trimmed[..^suffix.Length].Trim();
+        }
+        return trimmed;
     }
 
-    private static int Hex(string colour)
+    private static Nation FindMatchingMovement(Campaign campaign, IReadOnlyList<SecessionPiece> leaving)
     {
-        var text = (colour ?? "").TrimStart('#');
-        return text.Length >= 6 && int.TryParse(text[..6],
-            System.Globalization.NumberStyles.HexNumber,
-            System.Globalization.CultureInfo.InvariantCulture, out var value)
-            ? value
-            : 0x6E7B8B;
+        if (campaign?.ProvinceMap is null || leaving is null || leaving.Count == 0) return null;
+        var leavingIndices = leaving.Select(p => p.MapIndex).ToHashSet();
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Movement is not { Landless: true }) continue;
+            // Only match a movement if the seceding ground actually overlaps the movement's defined authentic homeland.
+            // A temporary exile office / headquarters outside the homeland must NEVER confer ownership of a foreign region!
+            var def = Movements.DefinitionOf(nation);
+            if (def?.Homeland is null || def.Homeland.Count == 0) continue;
+            var homelandIndices = def.Homeland
+                .Select(id => Movements.StateById(campaign, id)?.MapIndex)
+                .Where(idx => idx.HasValue && idx.Value > 0)
+                .Select(idx => idx.Value)
+                .ToHashSet();
+            // And a real overlap: half the people leaving live in its homeland. One shared region
+            // let an exile Dagestani state come back as the ruler of Rostov and Voronezh.
+            long inside = 0, all = 0;
+            foreach (var piece in leaving)
+            {
+                all += Math.Max(0, piece.Population);
+                if (homelandIndices.Contains(piece.MapIndex)) inside += Math.Max(0, piece.Population);
+            }
+            if (inside > 0 && inside * 2 >= all)
+                return nation;
+        }
+        return null;
     }
 
     /// <summary>

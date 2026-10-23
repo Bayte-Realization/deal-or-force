@@ -16,5 +16,17 @@
   "held_talks": { "name": "Held talks with us", "opinion": 8, "days": 365, "decays": true },
   "armed_us": { "name": "Arms us in our war", "opinion": 25, "days": 1825, "decays": true },
   "armed_our_enemy": { "name": "Arms our enemy", "opinion": -30, "days": 1825, "decays": true },
-  "seized_power_by_coup": { "name": "Took power in a coup", "opinion": -20, "days": 1825, "decays": true }
+  "seized_power_by_coup": { "name": "Took power in a coup", "opinion": -20, "days": 1825, "decays": true },
+  "fishing_boat_seized": { "name": "Seized our fishing boat", "opinion": -3, "days": 365, "decays": true, "max_stacks": 2 },
+  "border_marker_removed": { "name": "Moved the border markers", "opinion": -6, "days": 540, "decays": true, "max_stacks": 2 },
+  "damaged_cable": { "name": "Cut our cables", "opinion": -7, "days": 540, "decays": true, "max_stacks": 2 },
+  "submarine_incident": { "name": "Hunted our submarines", "opinion": -6, "days": 540, "decays": true, "max_stacks": 2 },
+  "energy_cutoff": { "name": "Cut our energy supply", "opinion": -12, "days": 1095, "decays": true, "max_stacks": 2 },
+  "trade_embargo": { "name": "Embargoed our trade", "opinion": -15, "days": 1095, "decays": true, "max_stacks": 2 },
+  "refugee_flood": { "name": "Pushed refugees at our border", "opinion": -10, "days": 730, "decays": true, "max_stacks": 2 },
+  "proxy_battle": { "name": "Fights us by proxy", "opinion": -12, "days": 1095, "decays": true, "max_stacks": 3 },
+  "mass_mobilisation": { "name": "Mobilised on our border", "opinion": -18, "days": 730, "decays": true, "max_stacks": 2 },
+  "summit_held": { "name": "Held a summit with us", "opinion": 10, "days": 730, "decays": true },
+  "arms_control_signed": { "name": "Signed arms control with us", "opinion": 14, "days": 1460, "decays": true },
+  "mediated_ceasefire": { "name": "Brokered a ceasefire for us", "opinion": 12, "days": 1095, "decays": true }
 }

@@ -51,7 +51,8 @@ public partial class DealOrForceGame
             Fmt.MoneyExact(principal), Fmt.MoneyExact(nation.DebtArrears), Fmt.MoneyExact(nation.PaymentArrears),
             Tr(SovereignBalanceSheet.ConditionName(nation.DebtCondition)));
         WriteStat(_publicDebt, Fmt.Money(principal), explanation, caption,
-            overdue > .000001f || nation.DebtCondition >= DebtCondition.Default ? -1 : 0);
+            overdue > .000001f || nation.DebtCondition >= DebtCondition.Default ? -1 : 0,
+            overdue > .000001f ? Tr("hud.footer.overdue") : caption);
         _publicDebt.Box.TooltipText = Ui.Tip(explanation);
         _publicDebt.Value.MouseFilter = MouseFilterEnum.Pass;
         _publicDebt.Delta.MouseFilter = MouseFilterEnum.Pass;
@@ -136,7 +137,7 @@ public partial class DealOrForceGame
         FinanceRow(balance, "Debt / GDP", "ratio", "Debt relative to annual output. A high ratio alone is not a default.");
         FinanceRow(balance, "Debt arrears", "interest_arrears", "Unpaid debt interest; persistent missed payments cause default.");
         FinanceRow(balance, "Public payment arrears", "spending_arrears", "Unpaid primary spending. Distinct from contractual debt default.");
-        FinanceRow(balance, "Total obligations", "obligations", "Principal plus both arrears ledgers. Do not add this total to principal a second time.");
+        FinanceRow(balance, "Total obligations", "obligations", "Principal and all arrears.");
         FinanceRow(balance, "Debt service", "interest", "Interest under the current budget and sovereign risk premium, per economic week.");
         FinanceRow(balance, "Interest / revenue", "service", "The share of current government revenue required by debt interest, not a share of GDP.");
         FinanceGauge(balance, "Credit confidence", "confidence");
@@ -149,7 +150,7 @@ public partial class DealOrForceGame
         FinanceRow(flow, "Cash runway", "runway", "Weeks of cash at the current deficit, before new borrowing. Policy, war, construction and prices can change it.");
         FinanceRow(flow, "Total credit capacity", "capacity", "An aggregate lending ceiling based on output, confidence and national modifiers.");
         FinanceRow(flow, "Available new credit", "credit", "The smaller of remaining debt capacity and the shared issuance allowance for this economic week.");
-        FinanceRow(flow, "Issued this week", "issued", "All automatic and manual issues share this allowance; opening a screen never resets it.");
+        FinanceRow(flow, "Issued this week", "issued", "Bonds issued this week, automatically or by you. Both count against the weekly limit.");
         FinanceRow(flow, "Funding gap at current limits", "gap", "Current deficit minus cash and remaining credit. This is an estimate, not a guaranteed future settlement.");
         var note = WrappedUltimatumText("Cash is spent first. New borrowing is limited. Unfunded interest becomes debt arrears; other unfunded spending becomes public bills. A surplus services arrears before it builds cash.", 12);
         flow.AddChild(note);
@@ -167,28 +168,37 @@ public partial class DealOrForceGame
             var button = ActionButton(caption, () => ReviewFinanceAction(captured), 0, 36);
             button.Name = "FinanceAction_" + id;
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.AddThemeFontSizeOverride("font_size", 13);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 13));
             actions.AddChild(button); _financeActions[id] = button;
         }
         _financePreview = WrappedUltimatumText("", 12); _financePreview.Name = "FinanceActionPreview"; actions.AddChild(_financePreview);
         FinanceRow(actions, "Negotiation progress", "restructuring", "Progress pauses without funding or sufficient improvement in the primary budget.");
-        actions.AddChild(WrappedUltimatumText("Repaying principal does not clear overdue bills. Debt status is reviewed at the economic settlement, not each time you open this screen.", 12));
+        actions.AddChild(WrappedUltimatumText("Repaying principal does not pay overdue bills.", 12));
         _financeFeedback = WrappedUltimatumText("", 12); _financeFeedback.Name = "FinanceFeedback"; rows.AddChild(_financeFeedback);
     }
 
     private Label FinanceMetric(HBoxContainer parent, string caption, string name, string description)
     {
         var panel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        panel.AddThemeStyleboxOverride("panel", ShellRowStyle(false)); parent.AddChild(panel);
+        panel.SetMeta("atlas_section_ground", "surface.raised");
+        panel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.raised"));
+        AtlasSurfaceSkin.Attach(panel, AtlasSurfaceSkin.Level.Raised, "surface.raised");
+        parent.AddChild(panel);
         var rows = PanelRows(panel, 9, 7, 3);
         rows.AddChild(Title(caption, 12, Ui.Colour("text.caption")));
-        var value = Title("—", 23, Ui.Colour("text.bright")); value.Name = name; rows.AddChild(value);
+        var value = Title("—", 23, Ui.Colour("text.bright"));
+        value.Name = name;
+        value.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        rows.AddChild(value);
         rows.AddChild(WrappedUltimatumText(description, 11)); return value;
     }
 
     private VBoxContainer FinanceColumn(Control parent, string name, float ratio)
     {
-        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = ratio };
+        var column = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = ratio };
+        column.SetMeta("atlas_section_ground", "surface.inset");
+        column.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(column, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         parent.AddChild(column); return PolicyColumn(column, name, true);
     }
 
@@ -200,8 +210,12 @@ public partial class DealOrForceGame
         panel.TooltipText = Ui.Tip(Tr(tip)); parent.AddChild(panel);
         var rows = PanelRows(panel, 7, 4, 2);
         rows.AddChild(WrappedUltimatumText(caption, 11));
-        var value = Title("—", 15, Ui.Colour("text.bright")); value.Name = "FinanceValue_" + key;
-        value.AutowrapMode = TextServer.AutowrapMode.Off; rows.AddChild(value); _financeValues[key] = value;
+        var value = Title("—", 15, Ui.Colour("text.bright"));
+        value.Name = "FinanceValue_" + key;
+        value.AutowrapMode = TextServer.AutowrapMode.Off;
+        value.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        rows.AddChild(value);
+        _financeValues[key] = value;
     }
 
     private void FinanceGauge(VBoxContainer parent, string caption, string key)
@@ -254,7 +268,7 @@ public partial class DealOrForceGame
             button.Disabled = reason.Length > 0;
             button.Text = Tr(id switch { "borrow" => "Issue bonds", "repay" => "Repay debt", "arrears" => "Pay overdue bills", _ => "Negotiate restructuring" });
             if (_financePendingAction == id) button.Text = Tr("Confirm") + " · " + button.Text;
-            button.TooltipText = Ui.Tip(reason.Length > 0 ? Tr(reason) : Tr("First click reviews the result. Second click confirms the operation."));
+            button.TooltipText = Ui.Tip(reason.Length > 0 ? Tr(reason) : "");
             StyleButton(button, _financePendingAction == id);
         }
         var borrowing = MathF.Min(amount, s.NewCredit);
@@ -280,7 +294,7 @@ public partial class DealOrForceGame
             if (_campaign.ElapsedDays - n.DebtRestructuringLastDay < 365) return "The restructuring cooldown has not expired.";
             return "";
         }
-        if (!float.IsFinite(amount) || amount <= 0) return "Enter a positive finite amount.";
+        if (!float.IsFinite(amount) || amount <= 0) return "Enter an amount above zero.";
         if (action == "borrow" && sheet.NewCredit < amount) return "Requested issue exceeds available credit. Reduce the amount; the weekly allowance is shared.";
         if (action == "repay" && (sheet.Cash < amount || sheet.Principal < amount)) return "Principal repayment must fit both available cash and outstanding principal.";
         if (action == "arrears" && (sheet.Cash < amount || sheet.Arrears < amount)) return "Overdue payment must fit both available cash and unpaid bills.";
@@ -293,7 +307,13 @@ public partial class DealOrForceGame
         var sheet = SovereignBalanceSheet.Read(_campaign, n);
         var amount = (float)_financeAmount.Value;
         var refusal = FinanceActionRefusal(n, sheet, action, amount);
-        if (refusal.Length > 0) { _financeFeedback.Text = Tr(refusal); _financePendingAction = ""; return; }
+        if (refusal.Length > 0)
+        {
+            _financeFeedback.Text = Tr(refusal);
+            _financePendingAction = "";
+            PlayStrategicCue("action_denied");
+            return;
+        }
         var now = new FinanceConfirmation(n.Id, _campaign.ElapsedDays, amount, sheet.Cash, sheet.Principal,
             sheet.Arrears, sheet.NewCredit, n.DebtCondition);
         if (_financePendingAction != action || now != _financeConfirmation)
@@ -301,7 +321,7 @@ public partial class DealOrForceGame
             _financePendingAction = action; _financeConfirmation = now;
             _financeFeedback.Text = action == "restructure" ? Loc.Format(
                 "Review: at least {0} funded economic weeks, fees and a lasting confidence penalty. No cash grant. Click again to begin negotiations.", _campaign.Defines.DebtRestructuringWeeks)
-                : Loc.Format("Review {0}: {1}. The figures above show the result. Click the highlighted action again to confirm.", Tr(action switch
+                : Loc.Format("{0}: {1}. Press again to confirm.", Tr(action switch
                     { "borrow" => "Issue bonds", "repay" => "Repay debt", _ => "Pay overdue bills" }), Fmt.Money(amount));
             RefreshSovereignFinanceWorkspace(); return;
         }
@@ -309,6 +329,7 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         _financePendingAction = "";
         EconomySystem.Explain(_campaign);
+        PlayStrategicCue("save_complete");
         _financeFeedback.Text = Tr("Financial operation completed. Budget balance excludes bond proceeds and principal repayments.");
         RefreshSovereignFinanceWorkspace(); Refresh();
     }

@@ -163,12 +163,16 @@ static class SaveAndSeedTests
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
             campaign.Defines.SaveTextFormat = false;
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
-            Check(Directory.GetFiles(folder, "format_switch.*").Length == 1 &&
+            // SaveSystem.AtomicWrite keeps the outgoing version as <slot>.bdfsave.bak (PERF-04).
+            // That one-generation backup is not a second save, and List() never shows it.
+            Check(Directory.GetFiles(folder, "format_switch.*")
+                      .Count(path => !path.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) == 1 &&
                   SaveSystem.Load(folder, "format_switch", "test-mod").Success,
                 "changing format keeps one .bdfsave without losing the campaign");
             campaign.Defines.SaveTextFormat = true;
             SaveSystem.Save(folder, "format_switch", campaign, "test-mod");
-            Check(Directory.GetFiles(folder, "format_switch.*").Length == 1 &&
+            Check(Directory.GetFiles(folder, "format_switch.*")
+                      .Count(path => !path.EndsWith(".bak", StringComparison.OrdinalIgnoreCase)) == 1 &&
                   File.ReadAllText(Path.Combine(folder, "format_switch.bdfsave")).TrimStart().StartsWith('{') &&
                   SaveSystem.Load(folder, "format_switch", "test-mod").Success,
                 "switching back makes the same .bdfsave editable again");

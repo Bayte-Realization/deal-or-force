@@ -1,0 +1,12 @@
+{
+  "ElectionsEnabled": true,
+  "ElectionHandoverDays": 30,
+  "ElectionPostponeDays": 180,
+  "ElectionPostponePoliticalCost": 20,
+  "ElectionSuspendPoliticalCost": 50,
+  "ElectionRefusePoliticalCost": 40,
+  "ElectionResumePoliticalCost": 10,
+  "ElectionControlAdvantage": 0.22,
+  "ElectionTermFatigue": 0.035,
+  "ElectionDisputeRadicalism": 0.08
+}

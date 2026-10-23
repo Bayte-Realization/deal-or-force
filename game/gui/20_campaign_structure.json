@@ -1,6 +1,6 @@
 {
   "campaign": {
-    "top_stats":["TREASURY","DEBT","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER"],
+    "top_stats":["TREASURY","DEBT","BALANCE","GDP","INFLATION","POPULATION","STABILITY","MANPOWER","ARMY XP","AIR XP","NAVY XP","POLITICAL CAPITAL"],
     "outliner_order":["FIRST STEPS","WORLD","WARS","BATTLES","NAVY","WATCHLIST","MARKET","CONSTRUCTION"],
     "hidden_outliner":[],
     "navigation": [
@@ -15,6 +15,7 @@
       {"screen": "Research", "label": "Technologies", "short": "Science", "group": "ECONOMY", "icon": "research", "help": "Technology tree, prerequisites and research progress."},
       {"screen": "Military", "short": "Army", "group": "FORCES", "icon": "military", "help": "Recruitment, readiness and supply."},
       {"screen": "Support", "label": "Long-range forces", "short": "Long-range", "group": "FORCES", "icon": "artillery", "help": "Artillery, aviation, drones and air defence: bases, training and missions."},
+      {"screen": "Doctrines", "label": "Doctrines tab", "short": "Doctrines", "group": "FORCES", "icon": "laws", "help": "The book an army fights by, and the course a state means to win by. Both are paid for in experience and political credit."},
       {"screen": "Wars", "short": "Wars", "group": "FORCES", "icon": "wars", "help": "Wars and peace negotiations."},
       {"screen": "Diplomacy", "short": "Diplomacy", "group": "WORLD", "icon": "diplomacy", "help": "Relations with the selected country."},
       {"screen": "Conflicts", "short": "Conflicts", "group": "WORLD", "icon": "unrest", "help": "Standoffs and crises between countries, every war and the countries backing each side."},
@@ -30,6 +31,10 @@
       "Region": {"tabs":[{"id":"Overview"},{"id":"Population"},{"id":"Province"}],"links":[]},
       "Decisions": {"tabs":[{"id":"Decisions"},{"id":"Formables","label":"Formable nations"}],"links":[]},
       "Military": {"links":[{"label":"Every war","action":"wars"}]},
+      // Declared here, in the same file and above its own navigation row: a screen the navigation
+      // names but the catalogue has not met yet is a row the builder drops, and the file order is
+      // what decides whether it has met it.
+      "Doctrines": {"tabs":[],"links":[]},
       "Diplomacy": {"links":[{"label":"Compare them","action":"ledger","context":"foreign"}]}
     }
   },

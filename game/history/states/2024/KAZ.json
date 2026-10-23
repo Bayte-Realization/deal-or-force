@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2021 census by region.
 {
   // Akmola
   "kz_akm": {
     "population": 2293696,
     "urbanization": 0.37,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.7274, "russian": 0.17, "uzbek": 0.0191, "ukrainian": 0.0146, "tatar": 0.0115, "german": 0.0094, "uyghur": 0.0092, "azerbaijani": 0.0063, "korean": 0.0063, "turkish": 0.0063, "hui": 0.0042, "belarusian": 0.0031, "armenian": 0.0021, "bashkir": 0.0021, "chechen": 0.0021, "chuvash": 0.0021, "kurdish": 0.0021, "polish": 0.0021 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.475, "Coal": 0.02, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.082, "NaturalGas": 0.456, "Timber": 0.934, "Bauxite": 0.2, "Uranium": 0.893 }
   },
@@ -23,7 +24,7 @@
   "kz_akt": {
     "population": 621535,
     "urbanization": 0.89,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.8365, "russian": 0.05, "uzbek": 0.0191, "ukrainian": 0.0168, "tatar": 0.0132, "german": 0.0108, "uyghur": 0.0092, "azerbaijani": 0.0072, "korean": 0.0072, "turkish": 0.0072, "hui": 0.0048, "belarusian": 0.0036, "armenian": 0.0024, "bashkir": 0.0024, "chechen": 0.0024, "chuvash": 0.0024, "kurdish": 0.0024, "polish": 0.0024 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.793, "Coal": 0.02, "Oil": 5.381, "IronOre": 1.798, "RareEarths": 0.094, "NaturalGas": 0.464, "Timber": 3.038, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -31,7 +32,7 @@
   "kz_ala": {
     "population": 2622100,
     "urbanization": 0.8,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.7361, "russian": 0.12, "uyghur": 0.05, "uzbek": 0.0191, "ukrainian": 0.0148, "tatar": 0.0116, "german": 0.0095, "azerbaijani": 0.0063, "korean": 0.0063, "turkish": 0.0063, "hui": 0.0042, "belarusian": 0.0032, "armenian": 0.0021, "bashkir": 0.0021, "chechen": 0.0021, "chuvash": 0.0021, "kurdish": 0.0021, "polish": 0.0021 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.017, "Coal": 0.02, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.131, "NaturalGas": 1.06, "Timber": 1.453, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -39,7 +40,7 @@
   "kz_aty": {
     "population": 361215,
     "urbanization": 0.93,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.8552, "russian": 0.03, "uzbek": 0.0191, "ukrainian": 0.0171, "tatar": 0.0135, "german": 0.011, "uyghur": 0.0092, "azerbaijani": 0.0073, "korean": 0.0073, "turkish": 0.0073, "hui": 0.0049, "belarusian": 0.0037, "armenian": 0.0024, "bashkir": 0.0024, "chechen": 0.0024, "chuvash": 0.0024, "kurdish": 0.0024, "polish": 0.0024 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 2.162, "Coal": 0.02, "Oil": 55.429, "IronOre": 0.126, "RareEarths": 0.061, "NaturalGas": 0.267, "Timber": 2.776, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -47,7 +48,7 @@
   "kz_vos": {
     "population": 2230981,
     "urbanization": 0.53,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.6551, "russian": 0.25, "uzbek": 0.0191, "ukrainian": 0.0131, "tatar": 0.0103, "uyghur": 0.0092, "german": 0.0084, "azerbaijani": 0.0056, "korean": 0.0056, "turkish": 0.0056, "hui": 0.0038, "belarusian": 0.0028, "armenian": 0.0019, "bashkir": 0.0019, "chechen": 0.0019, "chuvash": 0.0019, "kurdish": 0.0019, "polish": 0.0019 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.32, "Coal": 0.29, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.085, "NaturalGas": 0.512, "Timber": 3.065, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -55,7 +56,7 @@
   "kz_zha": {
     "population": 1261179,
     "urbanization": 0.53,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.8188, "russian": 0.07, "uzbek": 0.0191, "ukrainian": 0.0164, "tatar": 0.0129, "german": 0.0106, "uyghur": 0.0092, "azerbaijani": 0.007, "korean": 0.007, "turkish": 0.007, "hui": 0.0047, "belarusian": 0.0035, "armenian": 0.0023, "bashkir": 0.0023, "chechen": 0.0023, "chuvash": 0.0023, "kurdish": 0.0023, "polish": 0.0023 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.143, "Coal": 0.02, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.1, "NaturalGas": 0.982, "Timber": 1.313, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -63,7 +64,7 @@
   "kz_kar": {
     "population": 1449603,
     "urbanization": 0.84,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.6551, "russian": 0.25, "uzbek": 0.0191, "ukrainian": 0.0131, "tatar": 0.0103, "uyghur": 0.0092, "german": 0.0084, "azerbaijani": 0.0056, "korean": 0.0056, "turkish": 0.0056, "hui": 0.0038, "belarusian": 0.0028, "armenian": 0.0019, "bashkir": 0.0019, "chechen": 0.0019, "chuvash": 0.0019, "kurdish": 0.0019, "polish": 0.0019 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.531, "Coal": 2.448, "Oil": 0.376, "IronOre": 3.471, "RareEarths": 0.07, "NaturalGas": 0.331, "Timber": 1.447, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -71,7 +72,7 @@
   "kz_kus": {
     "population": 1837504,
     "urbanization": 0.37,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.6101, "russian": 0.3, "uzbek": 0.0191, "ukrainian": 0.0122, "tatar": 0.0096, "uyghur": 0.0092, "german": 0.0079, "azerbaijani": 0.0052, "korean": 0.0052, "turkish": 0.0052, "hui": 0.0035, "belarusian": 0.0026, "armenian": 0.0017, "bashkir": 0.0017, "chechen": 0.0017, "chuvash": 0.0017, "kurdish": 0.0017, "polish": 0.0017 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.83, "Coal": 0.02, "Oil": 0.376, "IronOre": 28.562, "RareEarths": 0.073, "NaturalGas": 0.501, "Timber": 2.464, "Bauxite": 48.155, "Uranium": 0.032 }
   },
@@ -79,7 +80,7 @@
   "kz_kzy": {
     "population": 560301,
     "urbanization": 0.97,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.8638, "russian": 0.02, "uzbek": 0.0191, "ukrainian": 0.0173, "tatar": 0.0136, "german": 0.0111, "uyghur": 0.0092, "azerbaijani": 0.0074, "korean": 0.0074, "turkish": 0.0074, "hui": 0.005, "belarusian": 0.0037, "armenian": 0.0025, "bashkir": 0.0025, "chechen": 0.0025, "chuvash": 0.0025, "kurdish": 0.0025, "polish": 0.0025 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.998, "Coal": 0.02, "Oil": 5.381, "IronOre": 0.126, "RareEarths": 0.076, "NaturalGas": 0.986, "Timber": 1.782, "Bauxite": 0.2, "Uranium": 3.473 }
   },
@@ -87,7 +88,7 @@
   "kz_man": {
     "population": 271190,
     "urbanization": 0.97,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.8552, "russian": 0.03, "uzbek": 0.0191, "ukrainian": 0.0171, "tatar": 0.0135, "german": 0.011, "uyghur": 0.0092, "azerbaijani": 0.0073, "korean": 0.0073, "turkish": 0.0073, "hui": 0.0049, "belarusian": 0.0037, "armenian": 0.0024, "bashkir": 0.0024, "chechen": 0.0024, "chuvash": 0.0024, "kurdish": 0.0024, "polish": 0.0024 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.803, "Coal": 0.02, "Oil": 20.396, "IronOre": 0.126, "RareEarths": 0.06, "NaturalGas": 0.255, "Timber": 2.87, "Bauxite": 0.2, "Uranium": 0.032 }
   },
@@ -95,7 +96,7 @@
   "kz_sev": {
     "population": 1275888,
     "urbanization": 0.28,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.5187, "russian": 0.4, "uzbek": 0.0191, "ukrainian": 0.0104, "uyghur": 0.0092, "tatar": 0.0082, "german": 0.0067, "azerbaijani": 0.0045, "korean": 0.0045, "turkish": 0.0045, "hui": 0.003, "belarusian": 0.0022, "armenian": 0.0015, "bashkir": 0.0015, "chechen": 0.0015, "chuvash": 0.0015, "kurdish": 0.0015, "polish": 0.0015 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.354, "Coal": 0.02, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.093, "NaturalGas": 0.607, "Timber": 2.753, "Bauxite": 0.2, "Uranium": 0.462 }
   },
@@ -103,7 +104,7 @@
   "kz_pav": {
     "population": 1523070,
     "urbanization": 0.43,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.6101, "russian": 0.3, "uzbek": 0.0191, "ukrainian": 0.0122, "tatar": 0.0096, "uyghur": 0.0092, "german": 0.0079, "azerbaijani": 0.0052, "korean": 0.0052, "turkish": 0.0052, "hui": 0.0035, "belarusian": 0.0026, "armenian": 0.0017, "bashkir": 0.0017, "chechen": 0.0017, "chuvash": 0.0017, "kurdish": 0.0017, "polish": 0.0017 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.925, "Coal": 2.717, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.064, "NaturalGas": 0.607, "Timber": 3.125, "Bauxite": 5.529, "Uranium": 0.032 }
   },
@@ -111,7 +112,7 @@
   "kz_yuz": {
     "population": 1567182,
     "urbanization": 0.61,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.7174, "uzbek": 0.17, "russian": 0.03, "ukrainian": 0.0144, "tatar": 0.0113, "german": 0.0093, "uyghur": 0.0092, "azerbaijani": 0.0062, "korean": 0.0062, "turkish": 0.0062, "hui": 0.0041, "belarusian": 0.0031, "armenian": 0.0021, "bashkir": 0.0021, "chechen": 0.0021, "chuvash": 0.0021, "kurdish": 0.0021, "polish": 0.0021 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.499, "Coal": 0.02, "Oil": 0.376, "IronOre": 0.126, "RareEarths": 0.062, "NaturalGas": 0.579, "Timber": 1.088, "Bauxite": 0.2, "Uranium": 3.903 }
   },
@@ -119,7 +120,7 @@
   "kz_zap": {
     "population": 638486,
     "urbanization": 0.56,
-    "cultures": { "kazakh": 0.6978, "russian": 0.1845, "uzbek": 0.0319, "uyghur": 0.015, "ukrainian": 0.014, "tatar": 0.011, "german": 0.009, "azerbaijani": 0.006, "korean": 0.006, "turkish": 0.006, "hui": 0.004, "belarusian": 0.003, "armenian": 0.002, "bashkir": 0.002, "chechen": 0.002, "chuvash": 0.002, "kurdish": 0.002, "polish": 0.002 },
+    "cultures": { "kazakh": 0.746, "russian": 0.15, "uzbek": 0.0191, "ukrainian": 0.015, "tatar": 0.0118, "german": 0.0096, "uyghur": 0.0092, "azerbaijani": 0.0064, "korean": 0.0064, "turkish": 0.0064, "hui": 0.0043, "belarusian": 0.0032, "armenian": 0.0021, "bashkir": 0.0021, "chechen": 0.0021, "chuvash": 0.0021, "kurdish": 0.0021, "polish": 0.0021 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.433, "Coal": 0.02, "Oil": 15.391, "IronOre": 0.126, "RareEarths": 0.041, "NaturalGas": 0.537, "Timber": 2.155, "Bauxite": 0.2, "Uranium": 0.032 }
   }

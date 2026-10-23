@@ -59,7 +59,8 @@ public partial class DealOrForceGame
         }
         var hash = HashCode.Combine(battle.Id, battle.Rounds.Count, battle.Ended,
             battle.AttackerLosses, battle.DefenderLosses, _campaign.ElapsedDays, Loc.Language);
-        hash = HashCode.Combine(hash, battle.Attackers.Count, battle.Defenders.Count);
+        hash = HashCode.Combine(hash, battle.Attackers.Count, battle.Defenders.Count,
+            _campaign.ElapsedHours, _campaign.Player.Id, _campaign.Player.IsHuman);
         if (hash == _battleDossierFingerprint) return;
         _battleDossierFingerprint = hash;
         foreach (var child in _battleDetailControls.GetChildren())
@@ -79,6 +80,15 @@ public partial class DealOrForceGame
             _battleDetailControls.AddChild(BattleText(Loc.Format("{0} vs {1}",
                 attacker?.DisplayName ?? "?", defender?.DisplayName ?? "?"), 15));
             _battleDetailControls.AddChild(BattleText(Tr("Observed battle between foreign countries. Detailed combat reports unavailable.")));
+            if (!battle.Ended)
+            {
+                var observed = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                observed.AddThemeConstantOverride("separation", 12);
+                _battleDetailControls.AddChild(observed);
+                var byId = _campaign.Armies.ToDictionary(army => army.Id);
+                AddObservedBattleSide(observed, true, attacker, ResolveBattleSide(battle.Attackers, byId));
+                AddObservedBattleSide(observed, false, defender, ResolveBattleSide(battle.Defenders, byId));
+            }
             AddBattleNavigation(battle);
             return;
         }
@@ -87,8 +97,18 @@ public partial class DealOrForceGame
         var share = assessment.ShareFor(playerAttacks);
         var tone = !assessment.Known ? "text.muted" : share > .55f ? "state.positive" :
             share < .45f ? "state.negative" : "state.warning";
+        var heroPanel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        heroPanel.SetMeta("atlas_section_ground", "surface.inset");
+        heroPanel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(heroPanel, AtlasSurfaceSkin.Level.Raised, "surface.inset");
+        _battleDetailControls.AddChild(heroPanel);
+
+        var heroBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        heroBox.AddThemeConstantOverride("separation", 4);
+        heroPanel.AddChild(heroBox);
+
         var hero = new HBoxContainer();
-        _battleDetailControls.AddChild(hero);
+        heroBox.AddChild(hero);
         var icon = Symbol("battle", 26, tone);
         if (icon is not null) hero.AddChild(icon);
         var headline = BattleText(battle.Ended ? Loc.Format("Winner: {0}",
@@ -105,10 +125,10 @@ public partial class DealOrForceGame
             caption.Name = "BattleAssessment";
             caption.TooltipText = Ui.Tip(Tr(BattleBalanceExplanation));
             caption.MouseFilter = MouseFilterEnum.Stop;
-            _battleDetailControls.AddChild(caption);
+            heroBox.AddChild(caption);
             var balance = BattleGauge(assessment.Known ? share : .5f, tone, "BattleEndurance");
             balance.TooltipText = caption.TooltipText;
-            _battleDetailControls.AddChild(balance);
+            heroBox.AddChild(balance);
         }
         var sideRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         sideRow.AddThemeConstantOverride("separation", 12);
@@ -164,10 +184,20 @@ public partial class DealOrForceGame
 
     private void AddBattleSide(HBoxContainer parent, LandBattle battle, bool attacking, Nation nation, List<Army> armies)
     {
-        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1,
-            CustomMinimumSize = Vector2.Zero };
+        var sidePanel = new PanelContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1,
+            CustomMinimumSize = Vector2.Zero
+        };
+        sidePanel.SetMeta("atlas_section_ground", "surface.inset");
+        sidePanel.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(sidePanel, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        parent.AddChild(sidePanel);
+
+        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         column.AddThemeConstantOverride("separation", 5);
-        parent.AddChild(column);
+        sidePanel.AddChild(column);
         column.AddChild(BattleText(Tr(attacking ? "ATTACKER" : "DEFENDER"), 11, "text.caption"));
         var name = BattleText(nation?.DisplayName ?? "?", 15, "text.accent");
         column.AddChild(name);
@@ -192,11 +222,41 @@ public partial class DealOrForceGame
         foreach (var army in armies.Take(limit))
         {
             var card = new VBoxContainer();
+            var header = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             var caption = BattleText(army.Name, 11);
             caption.MaxLinesVisible = 2;
-            caption.TooltipText = Ui.Tip(DivisionTooltip(army));
+            caption.TooltipText = Ui.Tip(CanInspectNation(army.NationId) ? DivisionTooltip(army) :
+                Loc.Format("Organisation {0:P0} · equipment {1:P0}",
+                    BattleReadout.Unit(army.Organisation), BattleReadout.Unit(army.Equipment)) + "\n" +
+                Tr("Foreign formation — orders and route are not available."));
             caption.MouseFilter = MouseFilterEnum.Stop;
-            card.AddChild(caption);
+            caption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            header.AddChild(caption);
+            card.AddChild(header);
+            if (!battle.Ended && army.NationId == _campaign.Player.Id && _campaign.Player.IsHuman)
+            {
+                // Stack actions beneath the caption: two long localized buttons in the
+                // roster header otherwise squeeze the opposing side to half its width.
+                var actions = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+                card.AddChild(actions);
+                var armyId = army.Id;
+                var withdrawBtn = ActionButton(Tr("Retreat"), () =>
+                {
+                    WithdrawBattleFormation(armyId, 1f);
+                }, 0, 20);
+                withdrawBtn.Name = "WithdrawFormation_" + army.Id;
+                withdrawBtn.TooltipText = Ui.Tip(Tr("Withdraw only this formation from the battle to a friendly province."));
+                withdrawBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                actions.AddChild(withdrawBtn);
+                if (army.Divisions >= 2f)
+                {
+                    var half = ActionButton("Withdraw half", () => WithdrawBattleFormation(armyId, .5f), 0, 20);
+                    half.Name = "WithdrawHalf_" + army.Id;
+                    half.TooltipText = Ui.Tip(Tr("Split off half the divisions to friendly ground; the rest keep fighting. No healing or free equipment."));
+                    half.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                    actions.AddChild(half);
+                }
+            }
             var bars = new HBoxContainer();
             bars.AddThemeConstantOverride("separation", 3);
             card.AddChild(bars);
@@ -204,12 +264,66 @@ public partial class DealOrForceGame
             bars.AddChild(BattleGauge(army.Equipment, "combat.equipment"));
             bars.TooltipText = Ui.Tip(Loc.Format("Organisation {0:P0} · equipment {1:P0}", army.Organisation, army.Equipment));
             bars.MouseFilter = MouseFilterEnum.Stop;
+            // Bars are for scanning; the actual percentages must also be readable
+            // without hovering two narrow, previously unlabelled strips.
+            var numbers = BattleText(Loc.Format("Organisation {0:P0} · equipment {1:P0}",
+                BattleReadout.Unit(army.Organisation), BattleReadout.Unit(army.Equipment)), 11, "text.body_soft");
+            numbers.Name = "FormationReadiness_" + army.Id;
+            card.AddChild(numbers);
             column.AddChild(card);
             if (army.CutOff || army.SupplyLevel < .45f || army.Organisation < .35f)
                 column.AddChild(BattleText(Tr(army.CutOff ? "CUT OFF" : army.Organisation < .35f ?
                     "Organisation is spent" : "Short of supply"), 10, "state.negative"));
         }
         if (armies.Count > limit) column.AddChild(BattleText(Loc.Format("…and {0:N0} more", armies.Count - limit), 11));
+    }
+
+    private void AddObservedBattleSide(HBoxContainer parent, bool attacking, Nation nation, List<Army> armies)
+    {
+        var column = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsStretchRatio = 1, CustomMinimumSize = Vector2.Zero };
+        column.AddThemeConstantOverride("separation", 5);
+        parent.AddChild(column);
+        column.AddChild(BattleText(Tr(attacking ? "ATTACKER" : "DEFENDER"), 11, "text.caption"));
+        column.AddChild(BattleText(nation?.DisplayName ?? "?", 15, "text.accent"));
+        var condition = MilitaryConditionReadout.ForPlayer(_campaign, armies);
+        if (!condition.Known)
+        {
+            column.AddChild(BattleText(Tr("No formations currently observed."), 12, "text.muted"));
+            return;
+        }
+        column.AddChild(BattleText(Tr("Observed combat readiness"), 11, "text.caption"));
+        AddBattleMeter(column, "Organisation", condition.Organisation, "combat.organisation", "organisation");
+        AddBattleMeter(column, "Equipment", condition.Equipment, "combat.equipment", "equipment");
+        column.AddChild(BattleText(Tr("Observed formations only; unseen reinforcements are not included."),
+            11, "text.muted"));
+        var limit = Math.Clamp((int)InterfaceSkin.Metric("combat.roster_rows", 6), 1, 30);
+        var shown = 0;
+        foreach (var army in armies)
+        {
+            if (!MilitaryConditionReadout.CanRead(_campaign, _campaign.Player.Id, army)) continue;
+            if (shown++ >= limit) continue;
+            column.AddChild(BattleText(army.Name, 11));
+            var numbers = BattleText(Loc.Format("Organisation {0:P0} · equipment {1:P0}",
+                BattleReadout.Unit(army.Organisation), BattleReadout.Unit(army.Equipment)), 11, "text.body_soft");
+            numbers.Name = "ObservedFormationReadiness_" + army.Id;
+            column.AddChild(numbers);
+        }
+        if (shown > limit) column.AddChild(BattleText(Loc.Format("…and {0:N0} more", shown - limit), 11));
+    }
+
+    private void WithdrawBattleFormation(int armyId, float share)
+    {
+        var army = _campaign.Armies.Find(a => a.Id == armyId);
+        if (army is null) return;
+        var command = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = armyId, Share = share };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+        _battleWithdrawalFeedback = !command.Applied ? Tr("Order sent to the host. Awaiting confirmation.") :
+            command.Withdrawn ? Loc.Format("Withdrawn: {0}", army.Name) :
+            Loc.Format("Cannot retreat: {0}", Tr(command.Result));
+        _battleDossierFingerprint = int.MinValue;
+        RefreshBattleDossier();
     }
 
     private void AddBattleMeter(VBoxContainer parent, string title, float value, string tone, string iconName)
@@ -220,7 +334,12 @@ public partial class DealOrForceGame
         var label = BattleText(Tr(title), 11, "text.body_soft");
         label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         row.AddChild(label);
-        row.AddChild(BattleText($"{BattleReadout.Unit(value):P0}", 11));
+        var amount = BattleText($"{BattleReadout.Unit(value):P0}", 11);
+        // The value needs its natural width, not half of the row: the latter
+        // split Russian captions into single trailing letters even at 1080p.
+        amount.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+        amount.AutowrapMode = TextServer.AutowrapMode.Off;
+        row.AddChild(amount);
         parent.AddChild(row);
         parent.AddChild(BattleGauge(value, tone));
     }
@@ -256,8 +375,10 @@ public partial class DealOrForceGame
                     { IssuerId = _campaign.Player.Id, ArmyId = id }).ToArray();
                 foreach (var command in commands) _campaign.Commands.Enqueue(command);
                 _campaign.Commands.ApplyAll(_campaign);
-                _battleWithdrawalFeedback = Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}",
-                    commands.Count(command => command.Withdrawn), 0, commands.Count(command => !command.Withdrawn));
+                _battleWithdrawalFeedback = commands.Any(command => !command.Applied)
+                    ? Tr("Order sent to the host. Awaiting confirmation.")
+                    : Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}",
+                        commands.Count(command => command.Withdrawn), 0, commands.Count(command => !command.Withdrawn));
                 _battleDossierFingerprint = int.MinValue;
                 RefreshBattleDossier();
             }, 160, 32);

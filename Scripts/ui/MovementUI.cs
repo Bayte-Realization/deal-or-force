@@ -29,12 +29,52 @@ public partial class DealOrForceGame
 {
     private PanelContainer _movementPanel;
     private VBoxContainer _movementRows;
+    private ScrollContainer _movementScroll;
+    private Campaign _movementViewCampaign;
+    private readonly Dictionary<int, HashSet<string>> _movementExpanded = new();
+    private readonly Dictionary<int, int> _movementScrollPositions = new();
+    private int _movementViewNation = -1;
+    private int _movementViewRevision;
+    private bool _movementScrollRestorePending;
     private Nation _movementShown;
     private double _movementRefresh;
     private Simulation.Campaign _movementOpenedFor;
     /// <summary>What the panel was last built from; it is rebuilt only when this changes, so a
     /// button is never pulled out from under a click that is half made.</summary>
     private string _movementBuiltFrom = "";
+
+    /// <summary>
+    /// Put the panel away, whether the × was clicked or Escape was pressed. One exit for
+    /// both keys means a later fix cannot teach one of them something the other forgets.
+    /// </summary>
+    private void CloseMovementPanel()
+    {
+        if (_movementPanel is null) return;
+        _movementPanel.Visible = false;
+    }
+
+    /// <summary>
+    /// Whether Escape should be answered by the movement card rather than by a window above
+    /// it. The card is a HUD dock, not a full-screen page: a dialog opened over it owns Escape
+    /// first, and the map's own selection owns it while a country or region card is standing.
+    /// </summary>
+    private bool MovementPanelOwnsEscape()
+    {
+        // `Visible` is the node's own flag; a hidden parent leaves it true. `IsVisibleInTree`
+        // is the question that matters here, because most of these screens are built once and
+        // then hidden by a layer above them.
+        static bool Shown(Control control) => control is not null && control.IsVisibleInTree();
+        if (!Shown(_movementPanel) || _hudLayer is not { Visible: true }) return false;
+        if (Shown(_sidePanel) || Shown(_armyPanel) || Shown(_countryCard)) return false;
+        return !Shown(_pauseMenuLayer) && !Shown(_settingsLayer) && !Shown(_saveLoadLayer) &&
+               !Shown(_networkLayer) && !Shown(_handbookLayer) && !Shown(_peaceLayer) &&
+               !Shown(_stateAffairsLayer) && !Shown(_sovereignFinanceLayer) &&
+               !Shown(_ledgerLayer) && !Shown(_warLedgerLayer) && !Shown(_diplomacyLayer) &&
+               !Shown(_conflictsLayer) && !Shown(_policyLayer) && !Shown(_tradeScreenLayer) &&
+               !Shown(_productionLayer) && !Shown(_researchLayer) && !Shown(_doctrineLayer) &&
+               !Shown(_supportLayer) && !Shown(_situationLayer) && !Shown(_recruitmentLayer) &&
+               !Shown(_eventLayer) && !Shown(_handoverLayer);
+    }
 
     /// <summary>Built once with the rest of the interface.</summary>
     private void BuildMovementPanel()
@@ -44,8 +84,9 @@ public partial class DealOrForceGame
         _movementPanel.Visible = false;
         Ui.Place(_movementPanel, InterfaceSkin.HasLayout("hud.movement") ? "hud.movement" : "hud.side_panel");
         var outer = PanelRows(_movementPanel, 16, 12, 6);
-        var scroll = new ScrollContainer
+        var scroll = _movementScroll = new ScrollContainer
         {
+            Name = "MovementScroll",
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
@@ -66,6 +107,7 @@ public partial class DealOrForceGame
     private void ShowMovement(Nation nation)
     {
         if (nation?.Movement is null || _movementPanel is null) return;
+        RememberMovementViewport();
         // On the picker, choose the movement rather than opening the hidden campaign HUD.
         if (_pickerLayer is { Visible: true })
         {
@@ -73,11 +115,12 @@ public partial class DealOrForceGame
             return;
         }
         // It takes the place of whatever stood there.
-        if (_sidePanel is { Visible: true }) CloseSidePanel();
+        if (_sidePanel is { Visible: true }) CloseSidePanel(dropRegionSelection: false);
         if (_armyPanel is { Visible: true }) SetArmyPanelVisible(false);
         if (_countryCard is { Visible: true }) HideMapSelection(false);
         _movementSideSeen = false;
         _movementShown = nation;
+        ShiftHudDock(_movementPanel);
         _movementPanel.Visible = true;
         _movementBuiltFrom = "";
         RefreshMovementPanel();
@@ -100,11 +143,11 @@ public partial class DealOrForceGame
         var sideOpen = _sidePanel is { Visible: true } || _armyPanel is { Visible: true };
         if (_movementPanel.Visible)
         {
-            if (sideOpen && !_movementSideSeen) _movementPanel.Visible = false;
+            if (sideOpen && !_movementSideSeen) CloseMovementPanel();
             else if (_countryCard is { Visible: true })
             {
                 if (_movementShown == player) _countryCard.Visible = false;
-                else _movementPanel.Visible = false;
+                else CloseMovementPanel();
             }
         }
         _movementSideSeen = sideOpen;
@@ -113,7 +156,7 @@ public partial class DealOrForceGame
     private void ToggleMovementPanel()
     {
         if (_movementPanel is null) return;
-        if (_movementPanel.Visible) { _movementPanel.Visible = false; return; }
+        if (_movementPanel.Visible) { CloseMovementPanel(); return; }
         var own = _campaign?.Player;
         ShowMovement(own?.Movement is not null ? own : _movementShown ?? Movements.Of(_campaign).FirstOrDefault());
     }
@@ -135,10 +178,12 @@ public partial class DealOrForceGame
     {
         var nation = _movementShown;
         if (_movementRows is null || nation?.Movement is null || _campaign is null) return;
+        RememberMovementViewport();
         var snapshot = MovementSnapshot(nation);
         if (snapshot == _movementBuiltFrom) return;
         _movementBuiltFrom = snapshot;
         ClearChildren(_movementRows);
+        RestoreMovementViewport(nation.Id);
 
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
@@ -185,7 +230,7 @@ public partial class DealOrForceGame
             seat.AddChild(Ellipsed(Simulation.Loc.Format("{0} region(s) since day {1}",
                 _campaign.StatesOf(nation).Length, state.StatehoodDay), 12, "text.muted", true));
         }
-        var close = ActionButton("×", () => _movementPanel.Visible = false, 30, 28);
+        var close = ActionButton("×", CloseMovementPanel, 30, 28);
         close.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         header.AddChild(close);
 
@@ -271,6 +316,12 @@ public partial class DealOrForceGame
 
         _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Standing"), state.Legitimacy, -1f, "text.accent",
             standingHelp));
+        // What it has grown into: the strike, the march and its own administration open as it rises (MovementPower).
+        var momentum = MovementPower.Momentum(_campaign, nation);
+        _movementRows.AddChild(MovementGauge("movement_legitimacy", Tr("Momentum"), momentum, -1f,
+            momentum >= defines.MovementMarchMomentum ? "state.warning" : "text.accent",
+            Simulation.Loc.Format("How much of its people follows it, its standing, its recognitions, its organisers and its money, together. From {0} it can call a general strike, from {1} it governs the regions that follow it, from {2} it can march on a capital.",
+                Fmt.Percent(defines.MovementStrikeMomentum), Fmt.Percent(defines.MovementParallelMomentum), Fmt.Percent(defines.MovementMarchMomentum))));
         // How far it will go, and which way it is moving (MovementMethods).
         var stage = MovementMethods.StageOf(_campaign, nation);
         var methodsToken = stage switch
@@ -284,6 +335,9 @@ public partial class DealOrForceGame
                 Math.Abs(leaning) < 0.05f ? "" : leaning > 0f ? Tr(" · hardening") : Tr(" · softening")),
             MovementMethods.Of(nation), defines.MovementArmedAt, methodsToken,
             Tr("How far the movement will go: a peaceful campaign, militant activism, armed struggle or terror. Its followers' radicalism, crackdowns and backers' weapons push it towards violence; standing in the world and ground it governs pull it back. Past the mark it can rise in arms.")));
+        var pressure = MovementMethods.LoudestPressure(_campaign, nation);
+        if (pressure.Length > 0)
+            _movementRows.AddChild(Title(pressure, 13, Ui.Colour(leaning > 0.05f ? "state.warning" : "text.body_soft")));
         var heatToken = state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative"
             : state.Heat >= defines.MovementExpelHeat * 0.45f ? "state.warning" : "state.info";
         if (state.Landless)
@@ -292,6 +346,9 @@ public partial class DealOrForceGame
                 defines.MovementExpelHeat, heatToken,
                 Simulation.Loc.Format("Everything it does on the host's ground warms the host's temper, and it cools by itself. At {0} the host expels the headquarters.",
                     Fmt.Percent(defines.MovementExpelHeat))));
+        var patience = MovementRules.Patience(_campaign, nation);
+        if (patience.Length > 0)
+            _movementRows.AddChild(Title(patience, 13, Ui.Colour(state.Heat >= defines.MovementExpelHeat * 0.75f ? "state.negative" : "state.warning")));
 
         // ---- its following ------------------------------------------------------------
         _movementRows.AddChild(MovementHeading("ITS FOLLOWING"));
@@ -551,7 +608,7 @@ public partial class DealOrForceGame
             button.Icon = FlagTexture(nation.Tag) ?? (ResourceLoader.Exists(flagPath) ? GD.Load<Texture2D>(flagPath) : null);
             button.ExpandIcon = false;
             button.AddThemeConstantOverride("icon_max_width", 20);
-            button.AddThemeFontSizeOverride("font_size", 12);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(nation)?.Description ?? "") + "\n" +
                 Simulation.Loc.Format("Local following: {0} of all residents. Recognition is not political support.",
                     Fmt.Percent(MovementReach.ResidentSupport(_campaign, nation, region))));
@@ -617,7 +674,7 @@ public partial class DealOrForceGame
         heading.SetMeta(LocSourceMeta, source);
         heading.SetMeta(LocAppliedMeta, heading.Text);
         heading.AddThemeColorOverride("font_color", Ui.Colour("text.accent_dim"));
-        heading.AddThemeFontSizeOverride("font_size", 12);
+        heading.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.heading_small", 12));
         return heading;
     }
 
@@ -770,7 +827,7 @@ public partial class DealOrForceGame
         {
             var ready = _campaign.States.Count(r => CivilIndependence.Refusal(_campaign, player, r).Length == 0);
             TopBarAs(_manpower, "movement_legitimacy", Tr("A majority of all residents, public standing and the parent's consent are required."));
-            _manpower.Caption.Text = Tr("Vote readiness");
+            SetHudCaption(_manpower, "Vote readiness");
             WriteStat(_manpower, ready.ToString("N0"), Tr("regions ready for a vote"), "", ready > 0 ? 1 : 0);
         }
         else
@@ -792,7 +849,7 @@ public partial class DealOrForceGame
         box.Explain = null;
         box.Plain = "";
         box.TooltipText = Ui.Tip(tooltip);
-        stat.Caption.Text = Tr(icon switch
+        SetHudCaption(stat, icon switch
         {
             "income" => "Income",
             "movement_cadres" => "Cadres",
@@ -816,7 +873,7 @@ public partial class DealOrForceGame
             box.Explain = country.Explain;
             box.Plain = country.Plain;
             box.TooltipText = country.Tooltip;
-            stat.Caption.Text = Tr(stat.CountryCaption);
+            SetHudCaption(stat, stat.CountryCaption);
             if (stat.Glyph is { } glyph && country.Icon is not null) glyph.Texture = country.Icon;
         }
         _topBarAsCountry.Clear();

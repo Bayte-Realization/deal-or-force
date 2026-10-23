@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2021 census by district (Hungarians along the southern border).
 {
   // Banská Bystrica
   "sk_bc": {
     "population": 647964,
     "urbanization": 0.55,
-    "cultures": { "slovak": 0.818, "hungarian": 0.0822, "romani": 0.044, "ukrainian": 0.0264, "czech": 0.0108, "rusyn": 0.0108, "german": 0.002, "polish": 0.002, "serbian": 0.002, "vietnamese": 0.002 },
+    "cultures": { "slovak": 0.8154, "hungarian": 0.1, "romani": 0.0287, "ukrainian": 0.0263, "czech": 0.0108, "rusyn": 0.0108, "german": 0.002, "polish": 0.002, "serbian": 0.002, "vietnamese": 0.002 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.625, "Coal": 0.307, "Oil": 0.55, "IronOre": 0.241, "RareEarths": 0.106, "NaturalGas": 0.446, "Timber": 1.997, "Bauxite": 0.161, "Uranium": 0.02 }
   },
@@ -23,7 +24,7 @@
   "sk_pv": {
     "population": 1359934,
     "urbanization": 0.69,
-    "cultures": { "slovak": 0.818, "hungarian": 0.0822, "romani": 0.044, "ukrainian": 0.0264, "czech": 0.0108, "rusyn": 0.0108, "german": 0.002, "polish": 0.002, "serbian": 0.002, "vietnamese": 0.002 },
+    "cultures": { "slovak": 0.7957, "romani": 0.09, "hungarian": 0.06, "ukrainian": 0.0257, "czech": 0.0105, "rusyn": 0.0105, "german": 0.0019, "polish": 0.0019, "serbian": 0.0019, "vietnamese": 0.0019 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.912, "Coal": 0.337, "Oil": 0.622, "IronOre": 0.275, "RareEarths": 0.111, "NaturalGas": 0.512, "Timber": 1.387, "Bauxite": 0.151, "Uranium": 0.014 }
   },
@@ -31,7 +32,7 @@
   "sk_ta": {
     "population": 2822744,
     "urbanization": 0.5,
-    "cultures": { "slovak": 0.818, "hungarian": 0.0822, "romani": 0.044, "ukrainian": 0.0264, "czech": 0.0108, "rusyn": 0.0108, "german": 0.002, "polish": 0.002, "serbian": 0.002, "vietnamese": 0.002 },
+    "cultures": { "slovak": 0.797, "hungarian": 0.12, "romani": 0.0287, "ukrainian": 0.0257, "czech": 0.0105, "rusyn": 0.0105, "german": 0.0019, "polish": 0.0019, "serbian": 0.0019, "vietnamese": 0.0019 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.311, "Coal": 0.19, "Oil": 0.295, "IronOre": 0.147, "RareEarths": 0.041, "NaturalGas": 0.327, "Timber": 2.751, "Bauxite": 0.06, "Uranium": 0.004 }
   },
@@ -39,7 +40,7 @@
   "sk_zi": {
     "population": 623431,
     "urbanization": 0.4,
-    "cultures": { "slovak": 0.818, "hungarian": 0.0822, "romani": 0.044, "ukrainian": 0.0264, "czech": 0.0108, "rusyn": 0.0108, "german": 0.002, "polish": 0.002, "serbian": 0.002, "vietnamese": 0.002 },
+    "cultures": { "slovak": 0.9092, "ukrainian": 0.0293, "romani": 0.0287, "czech": 0.012, "rusyn": 0.012, "german": 0.0022, "polish": 0.0022, "serbian": 0.0022, "vietnamese": 0.0022 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.479, "Coal": 0.398, "Oil": 0.412, "IronOre": 0.163, "RareEarths": 0.07, "NaturalGas": 0.377, "Timber": 2.464, "Bauxite": 0.074, "Uranium": 0.015 }
   }

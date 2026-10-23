@@ -47,10 +47,36 @@ public partial class DealOrForceGame
         {
             cards.AddChild(Title(Simulation.Loc.Format("Proclaimed: {0} · campaign day {1}", nation.DisplayName,
                 nation.FormedNationDay), 18, Ui.Colour("text.accent")));
-            cards.AddChild(Title("Compatible foundations may progress to a broader state. Previous proclamations cannot be repeated for rewards.", 13, Ui.Colour("text.body_soft")));
+            cards.AddChild(Title("Your state can later grow into a larger one.", 13, Ui.Colour("text.body_soft")));
+            // How well it holds together. A proclaimed state is not a fact of nature - it is a thing
+            // a government does every week - and this is the number to watch to keep it
+            // (UnionCohesion). Shown only for a country that has proclaimed something, which is the
+            // only country the number means anything for.
+            var cohesion = nation.UnionCohesion;
+            var floor = _campaign.Defines.UnionCohesionFloor;
+            var mood = cohesion >= 0.6f ? "The union is holding"
+                : cohesion >= floor ? "The union is cracking"
+                : "The union is coming apart";
+            var caption = Title(Simulation.Loc.Format("{0} · {1}", Simulation.Loc.Get(mood), Fmt.Percent(cohesion)),
+                13, Ui.Colour(cohesion >= 0.6f ? "state.positive" : "state.warning"));
+            caption.Name = "UnionCohesionCaption";
+            caption.TooltipText = Ui.Tip(Simulation.Loc.Get(
+                "War, instability and radicalism wear a union down; a quiet, stable year puts it back together. Below the floor a region leaves, and the rest of the claim stays yours to pick up again."));
+            cards.AddChild(caption);
+            var bar = new ProgressBar
+            {
+                Name = "UnionCohesionBar", MinValue = 0, MaxValue = 100, Value = cohesion * 100,
+                ShowPercentage = false, CustomMinimumSize = new Vector2(0, 6)
+            };
+            bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.overlay") });
+            bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(cohesion >= 0.6f ? "state.positive" : "state.warning")
+            });
+            cards.AddChild(bar);
         }
         var term = _formationSearch.Trim();
-        var definitions = FormableNations.All.Where(d => (_showAllFormables || FormableNations.Eligible(nation, d)) &&
+        var definitions = FormableNations.AvailableIn(_campaign).Where(d => (_showAllFormables || FormableNations.Eligible(_campaign, nation, d)) &&
             (!_peacefulFormablesOnly || d.PeacefulAccession) &&
             (term.Length == 0 || Simulation.Loc.Get(d.Name).Contains(term, System.StringComparison.OrdinalIgnoreCase) ||
              d.Id.Contains(term, System.StringComparison.OrdinalIgnoreCase) || d.RequiredTags.Any(t => t.Contains(term, System.StringComparison.OrdinalIgnoreCase))))
@@ -77,6 +103,18 @@ public partial class DealOrForceGame
             heading.AddChild(Title(status.CanForm ? "Ready to proclaim" : d.PeacefulAccession ? "Treaty or territorial route" : "Territorial route",
                 12, Ui.Colour(status.CanForm ? "state.positive" : "text.body_soft")));
             future.AddChild(heading);
+            var statusBadge = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ShrinkEnd, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+            var badgeStyle = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.card", status.CanForm ? 0.22f : 0.6f),
+                BorderColor = Ui.Colour(status.CanForm ? "state.positive" : "surface.line_faint"),
+            };
+            badgeStyle.SetBorderWidthAll(1);
+            badgeStyle.SetCornerRadiusAll(4);
+            badgeStyle.SetContentMarginAll(6);
+            statusBadge.AddThemeStyleboxOverride("panel", badgeStyle);
+            statusBadge.AddChild(Title(status.CanForm ? Tr("Ready").ToUpperInvariant() : $"{status.Owned}/{status.Total}", 11, Ui.Colour(status.CanForm ? "state.positive" : "text.accent")));
+            future.AddChild(statusBadge);
             Tip(future, futureSprite.Length == 0 ? "No flag available" : "Flag after formation");
             card.AddChild(future);
             card.AddChild(Title(d.Description, 13, Ui.Colour("text.body_soft")));
@@ -88,11 +126,18 @@ public partial class DealOrForceGame
                 members.AddChild(flag);
             }
             card.AddChild(members);
-            card.AddChild(new ProgressBar
+            var pbar = new ProgressBar
             {
                 Name = "FormationTerritory_" + d.Id, MaxValue = System.Math.Max(1, status.Total), Value = status.Owned,
                 CustomMinimumSize = new Vector2(0, Ui.Metric("formation.progress_height", 10)), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore
-            });
+            };
+            var track = new StyleBoxFlat { BgColor = Ui.Colour("surface.inset") };
+            track.SetCornerRadiusAll(3);
+            var fill = new StyleBoxFlat { BgColor = Ui.Colour(status.CanForm ? "state.positive" : "text.accent") };
+            fill.SetCornerRadiusAll(3);
+            pbar.AddThemeStyleboxOverride("background", track);
+            pbar.AddThemeStyleboxOverride("fill", fill);
+            card.AddChild(pbar);
             card.AddChild(Title(Simulation.Loc.Format("Foundation territory secured: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
             if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && FormableNations.CompatibleProclamation(nation, d))
                 AddFormationPartners(card, nation, d);

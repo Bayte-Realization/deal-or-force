@@ -1,0 +1,5 @@
+# A unified-diff context marker is a mandatory space before upstream indentation.
+# It is patch syntax, not malformed indentation in the patched source file.
+*.patch text eol=lf -whitespace
+# Preserve upstream legal notices verbatim, including their original whitespace.
+upstream-LICENSE.txt -whitespace

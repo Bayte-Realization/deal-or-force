@@ -1,0 +1,47 @@
+// What a country is called once its politics have changed.
+//
+// The machinery lives in CountryNames: the exact key
+// `country.<TAG>.<government|ideology>.<value>.name` is asked first, then the general
+// `name.form.*` template, then the country's plain name. Only the cases where the name is
+// genuinely different are written here - the ones where the template would produce
+// "People's Republic of France".
+{
+  "country.RUS.ideology.communism.name": "Russian Soviet Republic",
+  "country.RUS.government.absolute_monarchy.name": "Russian Empire",
+  "country.RUS.government.constitutional_monarchy.name": "Russian Empire",
+  "country.CHN.ideology.communism.name": "Chinese People's Republic",
+  "country.CHN.government.absolute_monarchy.name": "Empire of China",
+  "country.USA.ideology.communism.name": "Socialist States of America",
+  "country.USA.ideology.fascism.name": "American National State",
+  "country.FRA.ideology.communism.name": "French Soviet Republic",
+  "country.FRA.government.absolute_monarchy.name": "Kingdom of France",
+  "country.FRA.government.constitutional_monarchy.name": "Kingdom of France",
+  "country.DEU.ideology.communism.name": "German Socialist Republic",
+  "country.DEU.government.absolute_monarchy.name": "German Empire",
+  "country.DEU.government.constitutional_monarchy.name": "German Empire",
+  "country.GBR.ideology.communism.name": "Union of Britain",
+  "country.GBR.government.parliamentary_republic.name": "Commonwealth of Britain",
+  "country.GBR.government.presidential_republic.name": "Commonwealth of Britain",
+  "country.ITA.ideology.communism.name": "Italian People's Republic",
+  "country.ITA.government.constitutional_monarchy.name": "Kingdom of Italy",
+  "country.ITA.government.absolute_monarchy.name": "Kingdom of Italy",
+  "country.ESP.government.parliamentary_republic.name": "Spanish Republic",
+  "country.ESP.government.presidential_republic.name": "Spanish Republic",
+  "country.ESP.ideology.communism.name": "Spanish People's Republic",
+  "country.POL.ideology.communism.name": "Polish People's Republic",
+  "country.UKR.ideology.communism.name": "Ukrainian Soviet Republic",
+  "country.BRA.ideology.communism.name": "Brazilian People's Republic",
+  "country.BRA.government.absolute_monarchy.name": "Empire of Brazil",
+  "country.BRA.government.constitutional_monarchy.name": "Empire of Brazil",
+  "country.JPN.government.absolute_monarchy.name": "Imperial Japan",
+  "country.JPN.ideology.communism.name": "Japanese People's Republic",
+  "country.JPN.government.parliamentary_republic.name": "Republic of Japan",
+  "country.IRN.ideology.theocratic_rule.name": "Islamic Republic of Iran",
+  "country.IRN.government.constitutional_monarchy.name": "Imperial State of Iran",
+  "country.IRN.government.absolute_monarchy.name": "Imperial State of Iran",
+  "country.IRN.government.parliamentary_republic.name": "Republic of Iran",
+  "country.IND.government.one_party_state.name": "Republic of India",
+  "country.TUR.government.one_party_state.name": "Turkish Republic",
+  "country.TUR.government.absolute_monarchy.name": "Sublime Ottoman State",
+  "country.EGY.government.one_party_state.name": "Arab Republic of Egypt"
+}

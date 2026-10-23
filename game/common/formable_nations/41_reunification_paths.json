@@ -10,5 +10,10 @@
   "sudan_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
   "palestine_united": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
   "serbia_montenegro": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
-  "united_albania": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true}
+  "united_albania": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "mali_federation": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "samoa_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "panama_reunited": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "polish_lithuanian": {"peaceful_accession": true, "subject_integration": true, "ai_foundation": true},
+  "congo_reunited": {"peaceful_accession": false, "subject_integration": false, "ai_foundation": true}
 }

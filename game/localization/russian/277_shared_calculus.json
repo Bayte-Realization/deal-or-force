@@ -1,0 +1,16 @@
+{
+  "Brakes: {0}": "Сдерживающие факторы: {0}",
+  "Casus belli against us: {0} · war value {1:0.00} vs price {2:0.00}": "Повод к войне против нас: {0} · выгода войны {1:0.00}, цена {2:0.00}",
+  "Fiscal posture: {0} · discretionary reserve {1}": "Бюджетное положение: {0} · свободный резерв {1}",
+  "Motives: {0}": "Мотивы: {0}",
+  "STRATEGIC CALCULUS": "СТРАТЕГИЧЕСКИЙ РАСЧЁТ",
+  "constrained": "ограничен",
+  "in default / workout": "дефолт / урегулирование долга",
+  "name.land.urals": "Урал",
+  "name.land.urals.adj": "Уральский",
+  "net +{0:0.00} · war calculus positive": "чистый итог +{0:0.00} · расчёт в пользу войны",
+  "net {0:0.00} · deterred": "чистый итог {0:0.00} · сдерживание",
+  "overdue bills": "просроченные платежи",
+  "short cash runway": "короткий запас ликвидности",
+  "solvent runway": "достаточный платёжный резерв"
+}

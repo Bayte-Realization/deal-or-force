@@ -37,7 +37,11 @@ public static class OffensivePlanning
         if (departure.Count == 0) return;
         // Reject unreachable islands/neutral corridors without changing existing orders.
         var seed = departure.OrderBy(x => x).First();
-        if (map.FindOperationalRoute(seed, goals[0], (ushort)own.MapIndex, (ushort)enemy.MapIndex, control).Length == 0) return;
+        var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
+        var corridor = war is null
+            ? map.FindOperationalRoute(seed, goals[0], (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
+            : WarCoalition.OperationalRoute(c, war, own.Id, seed, goals[0], control);
+        if (corridor.Length == 0) return;
         var line = new DrawnFrontLine { Id = existing?.Id ?? c.NextFrontLineId++, NationId = own.Id,
             Kind = FrontLineKind.Offensive, BorderNationId = enemy.Id, WholeBorder = source.WholeBorder,
             StartLatitude = source.StartLatitude, StartLongitude = source.StartLongitude,
@@ -83,7 +87,7 @@ public static class OffensivePlanning
         var map = c.ProvinceMap; var own = c.NationById(army.NationId); var enemy = c.NationById(line.BorderNationId);
         if (map is null || own is null || enemy is null) return;
         var control = c.ProvinceController ?? map.ProvinceToNation;
-        var war = c.Wars.Find(w => !w.Ended && w.Involves(own.Id) && w.Involves(enemy.Id));
+        var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
         army.AssignedWarId = war?.Id ?? -1;
         army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0;
         var goal = line.Objectives.GetValueOrDefault(army.Id, -1);
@@ -103,12 +107,12 @@ public static class OffensivePlanning
             if (target <= 0) return;
         }
         var route = army.PlanActive && war is not null
-            ? map.FindOperationalRoute(army.ProvinceId, target, (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
+            ? WarCoalition.OperationalRoute(c, war, army.NationId, army.ProvinceId, target, control)
             : map.FindRoute(army.ProvinceId, target, (ushort)own.MapIndex, control);
         army.OrderProvinceId = target; army.OrderStateMapIndex = map.ProvinceToState[target];
         army.OrderIssuedDay = c.ElapsedDays;
         army.PlannedRoute.AddRange(route);
-        army.Route.AddRange(route.TakeWhile(p => control[p] == own.MapIndex));
+        army.Route.AddRange(route.TakeWhile(p => WarCoalition.FriendlyController(c, war, army.NationId, control[p])));
         army.OrderRouteSteps = route.Length; army.OrderStepsCompleted = 0;
     }
 

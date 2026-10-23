@@ -1,0 +1,40 @@
+// The laws a country had in force on 1 January 2024, where they are not the default of their
+// category (common/laws). Every country is listed the same way; a category not named here is at
+// its default.
+//
+// Nationalities policy:
+//   settlement   - China: the Han migration into Xinjiang and Tibet, boarding schools, the
+//                  "bilingual" education that is Mandarin education.
+//   assimilation - Russia (the 2018 law that made minority languages optional in school),
+//                  Turkey (no Kurdish-medium public schooling), Iran, Myanmar, Thailand (Thai
+//                  in every school, the southern Malay provinces), France (no regional
+//                  language has official standing), Algeria (Arabisation).
+//   pluralism    - federal or consociational states with minority-language schooling and
+//                  institutions: Switzerland, Belgium, Spain, Canada, India (linguistic
+//                  states), Finland, Bosnia and Herzegovina, North Macedonia (Ohrid),
+//                  Ethiopia (ethnic federalism), South Africa, Bolivia, New Zealand, Iraq
+//                  (Kurdistan Region), the United Kingdom (devolution).
+{
+  "CHN": { "laws": ["nationalities_settlement"] },
+  "RUS": { "laws": ["nationalities_assimilation"] },
+  "TUR": { "laws": ["nationalities_assimilation"] },
+  "IRN": { "laws": ["nationalities_assimilation"] },
+  "MMR": { "laws": ["nationalities_assimilation"] },
+  "THA": { "laws": ["nationalities_assimilation"] },
+  "FRA": { "laws": ["nationalities_assimilation"] },
+  "DZA": { "laws": ["nationalities_assimilation"] },
+  "CHE": { "laws": ["nationalities_pluralism"] },
+  "BEL": { "laws": ["nationalities_pluralism"] },
+  "ESP": { "laws": ["nationalities_pluralism"] },
+  "CAN": { "laws": ["nationalities_pluralism"] },
+  "IND": { "laws": ["nationalities_pluralism"] },
+  "FIN": { "laws": ["nationalities_pluralism"] },
+  "BIH": { "laws": ["nationalities_pluralism"] },
+  "MKD": { "laws": ["nationalities_pluralism"] },
+  "ETH": { "laws": ["nationalities_pluralism"] },
+  "ZAF": { "laws": ["nationalities_pluralism"] },
+  "BOL": { "laws": ["nationalities_pluralism"] },
+  "NZL": { "laws": ["nationalities_pluralism"] },
+  "IRQ": { "laws": ["nationalities_pluralism"] },
+  "GBR": { "laws": ["nationalities_pluralism"] }
+}

@@ -68,34 +68,78 @@ public static class RegionalFlagWorkshop {
 }
 '@
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
-$families = @()
+# Restore protected, already-authored regional artwork before filling genuinely empty slots.
+# This keeps a missing tag PNG from silently becoming another workshop sun or mountain.
+$bannerManifest = Join-Path $PSScriptRoot 'Source/movement-banners.json'
+if (Test-Path -LiteralPath $bannerManifest) {
+    $banners = (Get-Content -LiteralPath $bannerManifest -Raw | ConvertFrom-Json).banners
+    foreach ($banner in $banners.PSObject.Properties) {
+        $destination = Join-Path $OutputDirectory ($banner.Name + '.png')
+        if (Test-Path -LiteralPath $destination) { continue }
+        $source = Join-Path 'game/gfx/flags' ($banner.Value + '.png')
+        if (-not (Test-Path -LiteralPath $source)) { throw "Missing authored movement banner source: $source" }
+        Copy-Item -LiteralPath $source -Destination $destination
+    }
+}
 function Read-WorkshopJson([string]$Path) {
     # These three authored sources use only whole-line // comments, not a general JSON5 parser.
     (Get-Content -LiteralPath $Path | Where-Object { $_ -notmatch '^\s*//' }) -join "`n" | ConvertFrom-Json
 }
-$movementData = Read-WorkshopJson 'game/common/movements/30_regional_voices.json'
-$cultureData = Read-WorkshopJson 'game/common/cultures/96_regional_identities.json'
-$formableData = Read-WorkshopJson 'game/common/formable_nations/30_regional_projects.json'
-foreach ($entry in $movementData.PSObject.Properties) {
-    if ($entry.Name.StartsWith('//')) { continue }
-    $families += @{ name = 'flag_' + $entry.Value.tag.ToLowerInvariant(); colour = $entry.Value.colour }
+# The catalogues have outgrown their single founding files, so every file of each folder is
+# read, the way the game itself reads them. Families whose plain flag already exists are
+# skipped rather than refused: the guard still means no existing PNG is ever touched, and a
+# rerun after new content fills only the gaps.
+$families = @()
+foreach ($path in (Get-ChildItem 'game/common/movements' -Filter '*.json' | Sort-Object Name)) {
+    $movementData = Read-WorkshopJson $path.FullName
+    foreach ($entry in $movementData.PSObject.Properties) {
+        if ($entry.Name.StartsWith('//')) { continue }
+        if ($null -eq $entry.Value.tag) { continue }
+        # Preserve the organisation's own banner; no automatic ideological lookalikes.
+        $families += @{ name = 'flag_' + $entry.Value.tag.ToLowerInvariant(); colour = $entry.Value.colour; movement = $true }
+    }
 }
-foreach ($entry in $cultureData.PSObject.Properties) {
-    if ($entry.Name.StartsWith('//')) { continue }
-    $families += @{ name = 'flag_culture_' + $entry.Name; colour = $entry.Value.colour }
+foreach ($path in (Get-ChildItem 'game/common/cultures' -Filter '*.json' | Sort-Object Name)) {
+    $cultureData = Read-WorkshopJson $path.FullName
+    foreach ($entry in $cultureData.PSObject.Properties) {
+        if ($entry.Name.StartsWith('//')) { continue }
+        if ($null -eq $entry.Value.colour) { continue }
+        # A people's flag follows their politics too: a fascistic or theocratic turn under
+        # any culture's name flies a cloth of its own, same as the movements do.
+        $families += @{ name = 'flag_culture_' + $entry.Name; colour = $entry.Value.colour; deep = $true }
+    }
 }
-foreach ($entry in $formableData.PSObject.Properties) {
-    if ($entry.Name.StartsWith('//')) { continue }
-    $families += @{ name = 'flag_formable_' + $entry.Name; colour = $entry.Value.colour }
+foreach ($path in (Get-ChildItem 'game/common/formable_nations' -Filter '*.json' | Sort-Object Name)) {
+    $formableData = Read-WorkshopJson $path.FullName
+    foreach ($entry in $formableData.PSObject.Properties) {
+        if ($entry.Name.StartsWith('//')) { continue }
+        # A cultural overlay without its own colour inherits the base family's flag; only
+        # standalone paths with a declared colour draw a flag of their own.
+        if ($null -eq $entry.Value.colour) { continue }
+        $families += @{ name = 'flag_formable_' + $entry.Name; colour = $entry.Value.colour; deep = $true }
+    }
 }
+# The variants the flag catalog composes from qualifiers (common/flags): the plain flag,
+# two ideologies and one form of government for every family, and for the political families
+# two ideologies more. Variant 0 is the plain cloth; the rest are the qualifier cloths, so a
+# country flipping communism, fascism, theocracy or crown changes what it flies.
 $suffixes = @('', '_communism', '_absolute_monarchy')
+$deepSuffixes = @('', '_communism', '_fascism', '_theocracy', '_absolute_monarchy')
 $count = 0
+$skipped = 0
 for ($index = 0; $index -lt $families.Count; $index++) {
-    for ($variant = 0; $variant -lt 3; $variant++) {
-        $flagPath = Join-Path $OutputDirectory ($families[$index].name + $suffixes[$variant] + '.png')
-        if (Test-Path -LiteralPath $flagPath) { throw "Refusing to overwrite existing flag $flagPath" }
-        [RegionalFlagWorkshop]::Save($flagPath, $families[$index].colour, $index % 5, [int]($index / 5) % 6, $variant)
+    $family = $families[$index]
+    # No synthetic political variants for named movements: their own banner identifies the
+    # organisation. A mod/artist can still author an actual variant explicitly.
+    $variants = if ($family.movement) { @('') } elseif ($family.deep) { $deepSuffixes } else { $suffixes }
+    foreach ($suffix in $variants) {
+        $flagPath = Join-Path $OutputDirectory ($family.name + $suffix + '.png')
+        if (Test-Path -LiteralPath $flagPath) { $skipped++; continue }
+        $variantNumber = [array]::IndexOf($variants, $suffix)
+        [RegionalFlagWorkshop]::Save($flagPath, $family.colour, $index % 5, [int]($index / 5) % 6, $variantNumber)
         $count++
     }
 }
-Write-Output "Created $count new PNGs in $($families.Count) fictional regional/formable flag families."
+$politicalCount = 0
+foreach ($family in $families) { if ($family.deep) { $politicalCount++ } }
+Write-Output "Created $count new PNGs across $($families.Count) families ($politicalCount political); skipped $skipped files that already existed."

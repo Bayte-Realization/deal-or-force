@@ -16,13 +16,19 @@ public sealed partial class Defines
     /// The least real time between two autosaves, in seconds, whatever the calendar says.
     ///
     /// An autosave came due every thirty campaign days, and at the top speed thirty days is a
-    /// second and a half. Thirty-six years in, a save costs a third of a second on the frame
-    /// and half a gigabyte of garbage, so the fastest speed was a stutter every second and a
-    /// half - the single largest stall in the running game. An autosave is insurance against
-    /// losing real time, so it is paced by real time: at the slow speeds the month still
-    /// decides, at the fast ones this does.
+    /// second and a half. Thirty-six years in, a save costs a third of a second on the frame,
+    /// and the snapshot it serialises is still a visible allocation - the single largest stall
+    /// in the running game. An autosave is insurance against losing real time, so it is paced
+    /// by real time: at the slow speeds the month still decides, at the fast ones this does.
     /// </summary>
     public float AutosaveMinimumSeconds { get; set; } = 120f;
+
+    /// <summary>
+    /// Use the slowest Brotli setting for a manual save. Off by default: it reaches about
+    /// two thirds of the default file size but can take tens of seconds on a century-old
+    /// campaign, so a mod that values disk space over the wait can turn it on.
+    /// </summary>
+    public bool SaveCompressionThorough { get; set; }
 }
 
 public sealed class SaveMetadata
@@ -58,7 +64,7 @@ public readonly record struct SaveLoadResult(Campaign Campaign, SaveMetadata Met
 public static class SaveSystem
 {
     public const int FormatVersion = 2;
-    public const string GameVersion = "0.4-migration";
+    public const string GameVersion = "0.8.1";
     // Bumped whenever provinces.png is recut: a save's province ids mean nothing on another cut.
     public const string MapDataVersion = "2024.10.06-a";
     public const string QuickSlot = "quicksave";
@@ -69,6 +75,10 @@ public static class SaveSystem
         IncludeFields = true,
         PropertyNameCaseInsensitive = true,
         WriteIndented = false,
+        // The campaign is thirteen megabytes of JSON even on a young world. The default
+        // sixteen-kilobyte writer buffer grows through many copies; a larger starting buffer
+        // is returned to the pool and cuts those copies on every autosave.
+        DefaultBufferSize = 64 * 1024,
         PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
         // Members still at a fresh object's value are not written (SaveDefaults).
@@ -102,18 +112,22 @@ public static class SaveSystem
         options.Converters.Add(new CompactArrayConverter<ushort>());
         options.Converters.Add(new CompactArrayConverter<float>());
         options.Converters.Add(new CompactArrayConverter<int>());
-        // Population groups are already self-describing through their region and the
-        // documented ten-column row. Keep one row per line, not ten lines per row.
-        options.Converters.Add(new CompactPopulationGroupConverter());
+        // Population groups and compact rows are already self-describing through their
+        // parent container and documented columns. Keep one row per line in text saves.
+        options.Converters.Add(new CompactRowConverter<PopulationGroup>());
+        options.Converters.Add(new CompactRowConverter<PublicImage>());
+        options.Converters.Add(new CompactRowConverter<MarketQuote>());
+        options.Converters.Add(new CompactRowConverter<OpinionReason>());
+        options.Converters.Add(new CompactRowConverter<ChronicleEntry>());
         return options;
     }
 
-    private sealed class CompactPopulationGroupConverter : JsonConverter<PopulationGroup>
+    private sealed class CompactRowConverter<T> : JsonConverter<T>
     {
-        public override PopulationGroup Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
-            JsonSerializer.Deserialize<PopulationGroup>(ref reader, JsonOptions);
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            JsonSerializer.Deserialize<T>(ref reader, JsonOptions);
 
-        public override void Write(Utf8JsonWriter writer, PopulationGroup value, JsonSerializerOptions options) =>
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
             writer.WriteRawValue(JsonSerializer.SerializeToUtf8Bytes(value, JsonOptions), skipInputValidation: true);
     }
 
@@ -131,6 +145,7 @@ public static class SaveSystem
     {
         if (campaign.ProvinceMap is null) throw new InvalidOperationException("Wait for the map to finish loading.");
         var payload = CampaignSave.Capture(campaign, "");
+        SaveStringTable.Use(payload.StringTable);
         payload.ScenarioId = scenarioId;
         payload.ScenarioRules = campaign.Defines;
         // Keep the clock origin: orders, cooldowns and event dates refer to elapsed days.
@@ -139,13 +154,23 @@ public static class SaveSystem
         payload.Chronicle.Clear();
         payload.ScenarioTerritories = campaign.Nations.ToDictionary(n => n.Tag, n =>
             Enumerable.Range(1, campaign.ProvinceMap.ProvinceCount).Where(p => payload.ProvinceOwner[p] == n.MapIndex).ToArray());
-        return JsonSerializer.Serialize(payload, ScenarioOptions);
+        // A scenario is an editable document, so its people keep their names rather than
+        // the compact save-row indices.
+        var interned = SaveStringTable.InternIds;
+        SaveStringTable.InternIds = false;
+        try
+        {
+            return JsonSerializer.Serialize(payload, ScenarioOptions);
+        }
+        finally { SaveStringTable.InternIds = interned; }
     }
 
     public static Campaign ImportScenarioJson(string json, string scenarioId, int expectedProvinceCount = 0,
         int? seedOverride = null)
     {
-        var payload = JsonSerializer.Deserialize<CampaignSave>(json, JsonOptions) ?? throw new InvalidDataException("Empty scenario.");
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        SaveStringTable.Use(ScanStringTable(bytes));
+        var payload = JsonSerializer.Deserialize<CampaignSave>(bytes.AsSpan(), JsonOptions) ?? throw new InvalidDataException("Empty scenario.");
         if (payload.FormatVersion != FormatVersion || payload.MapDataVersion != MapDataVersion || payload.ProvinceCount <= 0 ||
             (expectedProvinceCount > 0 && payload.ProvinceCount != expectedProvinceCount) ||
             payload.ProvinceOwner.Length != payload.ProvinceCount + 1 ||
@@ -213,8 +238,19 @@ public static class SaveSystem
         // The format is the campaign's own define, so every caller - the save screen, the
         // console, the autosave - writes the same way without each having to be told.
         var text = campaign.Defines.SaveTextFormat;
-        var payload = CampaignSave.Capture(campaign, modFingerprint);
-        var issues = NumericIntegrity.Inspect(payload);
+        CampaignSave payload;
+        using (SimProfiler.Measure("  save:capture"))
+            payload = CampaignSave.Capture(campaign, modFingerprint);
+        SaveStringTable.Use(payload.StringTable);
+        var issues = new List<string>();
+        string live;
+        using (SimProfiler.Measure("  save:live"))
+            live = NumericIntegrity.FirstLiveIssue(campaign);
+        if (!string.IsNullOrEmpty(live)) issues.Add(live);
+        if (campaign.Defines.SaveDeepIntegrity)
+            using (SimProfiler.Measure("  save:integrity"))
+                foreach (var issue in NumericIntegrity.Inspect(payload))
+                    if (!issues.Contains(issue)) issues.Add(issue);
         if (campaign.SimulationFault.Length > 0) issues.Insert(0, campaign.SimulationFault);
         if (issues.Count > 0)
         {
@@ -246,16 +282,40 @@ public static class SaveSystem
         var history = payload.History;
         payload.History = new Dictionary<int, List<NationHistorySample>>();
         var options = text ? TextOptions : JsonOptions;
-        var json = JsonSerializer.SerializeToUtf8Bytes(payload, options);
-        if (!json.AsSpan().EndsWith(text ? TextHistoryTail : EmptyHistoryTail))
+        var interned = SaveStringTable.InternIds;
+        if (text) SaveStringTable.InternIds = false;
+        byte[] json;
+        try
         {
-            // Not where it should be - somebody has reordered the save. Write it here, as it
-            // always was, rather than splice it into the wrong place.
-            payload.History = history;
-            history = null;
-            json = JsonSerializer.SerializeToUtf8Bytes(payload, options);
+            using (SimProfiler.Measure("  save:serialize"))
+                json = JsonSerializer.SerializeToUtf8Bytes(payload, options);
+            if (!json.AsSpan().EndsWith(text ? TextHistoryTail : EmptyHistoryTail))
+            {
+                // Not where it should be - somebody has reordered the save. Write it here, as it
+                // always was, rather than splice it into the wrong place.
+                payload.History = history;
+                history = null;
+                using (SimProfiler.Measure("  save:serialize_again"))
+                    json = JsonSerializer.SerializeToUtf8Bytes(payload, options);
+            }
         }
-        return new PreparedSave(root, slot, json, history, metadata, text);
+        catch (Exception exception) when (exception is ArgumentException or JsonException)
+        {
+            // The cheap live gate does not walk the history table. If the serializer refuses a
+            // named number, find it now - this is the rare path, and the player is about to be
+            // shown a diagnostic rather than a stack trace.
+            if (history is not null) payload.History = history;
+            var deep = NumericIntegrity.Inspect(payload);
+            foreach (var issue in deep)
+                if (!issues.Contains(issue)) issues.Add(issue);
+            campaign.IsPaused = true;
+            var diagnostic = TryWriteDiagnostic(root, payload, issues);
+            var message = issues.Count > 0 ? string.Join("; ", issues) : exception.Message;
+            throw new CampaignIntegrityException(message, diagnostic);
+        }
+        finally { SaveStringTable.InternIds = interned; }
+        return new PreparedSave(root, slot, json, history, metadata, text,
+            campaign.Defines.SaveCompressionThorough);
     }
 
     /// <summary>Never a loadable save and never an overwrite of the last good slot.</summary>
@@ -308,17 +368,20 @@ public static class SaveSystem
         private readonly Dictionary<int, List<NationHistorySample>> _history;
 
         internal PreparedSave(string root, string slot, byte[] json,
-            Dictionary<int, List<NationHistorySample>> history, SaveMetadata metadata, bool text)
+            Dictionary<int, List<NationHistorySample>> history, SaveMetadata metadata, bool text,
+            bool thorough = false)
         {
             _root = root;
             _slot = slot;
             _json = json;
             _history = history;
             _text = text;
+            _thorough = thorough;
             Metadata = metadata;
         }
 
         private readonly bool _text;
+        private readonly bool _thorough;
 
         /// <summary>
         /// The file whole: the frame's JSON with the history written into the empty table it
@@ -331,24 +394,27 @@ public static class SaveSystem
             // campaign, it is nothing but numbers, and indenting it multiplies the size of
             // the file for no gain a reader can see.
             var history = JsonSerializer.SerializeToUtf8Bytes(_history, JsonOptions);
-            if (_text)
+            using (SimProfiler.Measure("  save:splice"))
             {
-                // ..."History": {} then the file's closing brace  ->  ..."History": <table> then it
-                var head = _json.Length - TextHistoryTail.Length;
-                var whole = new byte[head + history.Length + 2];
-                _json.AsSpan(0, head).CopyTo(whole);
-                history.CopyTo(whole.AsSpan(head));
-                whole[^2] = (byte)'\n';
-                whole[^1] = (byte)'}';
-                return whole;
+                if (_text)
+                {
+                    // ..."History": {} then the file's closing brace  ->  ..."History": <table> then it
+                    var head = _json.Length - TextHistoryTail.Length;
+                    var whole = new byte[head + history.Length + 2];
+                    _json.AsSpan(0, head).CopyTo(whole);
+                    history.CopyTo(whole.AsSpan(head));
+                    whole[^2] = (byte)'\n';
+                    whole[^1] = (byte)'}';
+                    return whole;
+                }
+                // ...,"History":{}}  ->  ...,"History":<table>}
+                var compactHead = _json.Length - 3;
+                var file = new byte[compactHead + history.Length + 1];
+                _json.AsSpan(0, compactHead).CopyTo(file);
+                history.CopyTo(file.AsSpan(compactHead));
+                file[^1] = (byte)'}';
+                return file;
             }
-            // ...,"History":{}}  ->  ...,"History":<table>}
-            var compactHead = _json.Length - 3;
-            var file = new byte[compactHead + history.Length + 1];
-            _json.AsSpan(0, compactHead).CopyTo(file);
-            history.CopyTo(file.AsSpan(compactHead));
-            file[^1] = (byte)'}';
-            return file;
         }
 
         public SaveMetadata Metadata { get; }
@@ -362,10 +428,7 @@ public static class SaveSystem
         public SaveMetadata Commit()
         {
             Directory.CreateDirectory(_root);
-            // A text save is laid out for a person reading it: small things on a line each,
-            // large things broken into lines (SaveTextLayout) - half the size of the
-            // serializer's own indentation, and still ordinary JSON.
-            var json = _text ? SaveTextLayout.Relayout(Whole()) : Whole();
+            var json = Whole();
             if (_text)
             {
                 // Readable and deliberately unguarded. The point of a text save is that a
@@ -382,15 +445,22 @@ public static class SaveSystem
                 DiagnosticLogs.Write("system", $"SAVE_END slot={_slot} text=true bytes={json.LongLength} format={FormatVersion} map={MapDataVersion}");
                 return Metadata;
             }
+            // Brotli under a four-byte magic: on save-shaped JSON it lands far below what
+            // gzip at its maximum ever reached, which is the whole difference between a
+            // century-old campaign fitting on a floppy-worth of space and not. The magic
+            // keeps the loader honest - gzip opens 1f 8b, editable JSON opens a brace, and
+            // anything written by this game now declares itself in its first four bytes.
+            // Gzip at its smallest remains what network snapshots use and what old saves carry.
+            const string brotliMagic = "BDF2";
             byte[] compressed;
             using (var memory = new MemoryStream())
             {
-                using (var gzip = new GZipStream(memory,
-                           Metadata.IsAutosave ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
-                    gzip.Write(json);
+                memory.Write(System.Text.Encoding.ASCII.GetBytes(brotliMagic));
+                using (var brotli = new BrotliStream(memory,
+                           Metadata.IsAutosave && !_thorough ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
+                    brotli.Write(json);
                 compressed = memory.ToArray();
             }
-            // Gzip has its own CRC. There is no separate checksum file in the one-file format.
             Metadata.Checksum = "";
             Metadata.CompressedBytes = compressed.LongLength;
             AtomicWrite(DataPath(_root, _slot), compressed);
@@ -416,8 +486,11 @@ public static class SaveSystem
         if (campaign?.Player is null || campaign.ProvinceMap is null || campaign.ProvinceController is null ||
             campaign.ProvinceOccupation is null) return Array.Empty<byte>();
         var payload = CampaignSave.Capture(campaign, modFingerprint ?? "");
+        SaveStringTable.Use(payload.StringTable);
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
         using var memory = new MemoryStream();
+        // Network snapshots keep the original gzip framing: peers exchange this on a
+        // latency budget and the save file's Brotli choice is not part of that contract.
         using (var gzip = new GZipStream(memory, CompressionLevel.Fastest, true)) gzip.Write(json);
         return memory.ToArray();
     }
@@ -428,9 +501,9 @@ public static class SaveSystem
             return new SaveLoadResult(null, null, "The host sent an empty campaign snapshot.");
         try
         {
-            using var input = new MemoryStream(compressed);
-            using var gzip = new GZipStream(input, CompressionMode.Decompress);
-            var payload = JsonSerializer.Deserialize<CampaignSave>(gzip, JsonOptions);
+            var json = DecodeJson(compressed);
+            SaveStringTable.Use(ScanStringTable(json));
+            var payload = JsonSerializer.Deserialize<CampaignSave>(json.AsSpan(), JsonOptions);
             if (payload is null || payload.FormatVersion != FormatVersion ||
                 !string.Equals(payload.MapDataVersion, MapDataVersion, StringComparison.Ordinal) ||
                 payload.ProvinceCount <= 0 || payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
@@ -452,14 +525,20 @@ public static class SaveSystem
         slot = SafeSlot(slot);
         var dataPath = ExistingDataPath(root, slot);
         if (!File.Exists(dataPath)) return new SaveLoadResult(null, null, "Save slot is empty.");
-        var stored = File.ReadAllBytes(dataPath);
+        using var file = new FileStream(dataPath, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete,
+            64 * 1024, FileOptions.SequentialScan);
+        var storedLength = file.Length;
+        var first = file.ReadByte();
+        var second = file.ReadByte();
+        file.Position = 0;
         var metadata = ReadMetadata(root, slot);
         // Text saves carry no checksum on purpose: they are meant to be edited, and a guard
         // that fires on every edit is a guard against the feature itself. Compressed saves
         // keep theirs - they cannot be repaired by hand, so a mismatch is worth refusing.
-        if (IsGzip(stored) && metadata is not null && metadata.Checksum.Length > 0)
+        if (first == 0x1f && second == 0x8b && metadata is not null && metadata.Checksum.Length > 0)
         {
-            var checksum = Convert.ToHexString(SHA256.HashData(stored));
+            var checksum = Convert.ToHexString(SHA256.HashData(file));
+            file.Position = 0;
             if (!string.Equals(metadata.Checksum, checksum, StringComparison.OrdinalIgnoreCase) &&
                 ReadEmbeddedMetadata(dataPath) is null)
                 return new SaveLoadResult(null, metadata, "Save checksum mismatch; the file may be incomplete or corrupted.");
@@ -468,11 +547,18 @@ public static class SaveSystem
         CampaignSave payload;
         try
         {
-            // Gzip files open with 1f 8b; JSON opens with a brace or a space of it. Anything
-            // written by this game declares itself in its first two bytes.
-            payload = !IsGzip(stored)
-                ? JsonSerializer.Deserialize<CampaignSave>(stored, JsonOptions)
-                : ReadCompressed(stored);
+            // Every generation of save still loads: Brotli under a "BDF2" header,
+            // gzip under 1f 8b, and editable JSON under a brace. The string table
+            // travels at the front of the file, so it is read before the rows that
+            // refer to it.
+            // Scan the ID table, then deserialize from the same open file. No full
+            // compressed buffer, expanded MemoryStream or second expanded byte array.
+            var scan = OpenPayloadStream(file, leaveOpen: true);
+            try { SaveStringTable.Use(SaveStringTableScanner.Read(scan)); }
+            finally { if (!ReferenceEquals(scan, file)) scan.Dispose(); }
+            file.Position = 0;
+            using var source = OpenPayloadStream(file);
+            payload = JsonSerializer.Deserialize<CampaignSave>(source, JsonOptions);
         }
         catch (Exception exception)
         {
@@ -493,7 +579,7 @@ public static class SaveSystem
                 "The save contains an incomplete province-control snapshot.");
 
         metadata = payload.EmbeddedMetadata ?? metadata;
-        if (metadata is not null) metadata.CompressedBytes = stored.LongLength;
+        if (metadata is not null) metadata.CompressedBytes = storedLength;
 
         try
         {
@@ -501,6 +587,18 @@ public static class SaveSystem
             var warning = string.Equals(payload.ModFingerprint ?? "", activeModFingerprint ?? "", StringComparison.Ordinal)
                 ? ""
                 : "Loaded with a different mod set; unknown content may use base definitions.";
+            // Local visual migration is authoritative on the loading host. ImportNetworkSnapshot
+            // must keep the colours that host actually sent, not run its own migration.
+            SecessionColours.MigrateLegacy(campaign);
+            NationNaming.MigrateLegacy(campaign);
+            // The payload has no live topology yet. Repair historical minor-state
+            // renamings once its saved owners/controllers are attached, on the loading
+            // host only. Joining peers keep the authoritative identity the host sends.
+            campaign.RepairDiminishedRestorationsAfterAttach = true;
+            foreach (var n in campaign.Nations)
+                if (n.Movement is not null && campaign.HasOwnedLand(n))
+                    MovementRules.SynchroniseTerritory(campaign, n);
+            Factions.SettleDefenselessRebelRemnants(campaign);
             return new SaveLoadResult(campaign, metadata, warning);
         }
         catch (Exception exception)
@@ -580,6 +678,59 @@ public static class SaveSystem
         catch { return null; }
     }
 
+    /// <summary>The JSON behind whichever framing a save or snapshot arrived in.</summary>
+    private static byte[] DecodeJson(byte[] stored)
+    {
+        if (IsBrotli(stored))
+        {
+            using var input = new MemoryStream(stored, 4, stored.Length - 4);
+            using var brotli = new BrotliStream(input, CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            brotli.CopyTo(output);
+            return output.ToArray();
+        }
+        if (IsGzip(stored))
+        {
+            using var input = new MemoryStream(stored);
+            using var gzip = new GZipStream(input, CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            gzip.CopyTo(output);
+            return output.ToArray();
+        }
+        return stored;
+    }
+
+    /// <summary>
+    /// The string table at the front of a save, read before the rows that refer to it.
+    /// A save without one - every save written before rows carried ids by number - simply
+    /// leaves the table empty and its rows keep their literal text.
+    /// </summary>
+    private static string[] ScanStringTable(ReadOnlySpan<byte> json)
+    {
+        try
+        {
+            var reader = new Utf8JsonReader(json, isFinalBlock: true, state: default);
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return Array.Empty<string>();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            {
+                if (reader.TokenType != JsonTokenType.PropertyName) { reader.Skip(); continue; }
+                var name = reader.GetString();
+                if (!string.Equals(name, "StringTable", StringComparison.Ordinal))
+                {
+                    reader.Skip();
+                    continue;
+                }
+                if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray) return Array.Empty<string>();
+                var values = new List<string>();
+                while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                    if (reader.TokenType == JsonTokenType.String) values.Add(reader.GetString() ?? "");
+                return values.ToArray();
+            }
+        }
+        catch { }
+        return Array.Empty<string>();
+    }
+
     private static CampaignSave ReadCompressed(byte[] stored)
     {
         using var input = new MemoryStream(stored);
@@ -590,13 +741,35 @@ public static class SaveSystem
     private static bool IsGzip(byte[] stored) =>
         stored is { Length: >= 2 } && stored[0] == 0x1f && stored[1] == 0x8b;
 
+    private const string BrotliMagic = "BDF2";
+
+    private static bool IsBrotli(byte[] stored) =>
+        stored is { Length: >= 4 } && System.Text.Encoding.ASCII.GetString(stored, 0, 4) == BrotliMagic;
+
+    private static CampaignSave ReadBrotli(byte[] stored)
+    {
+        using var input = new MemoryStream(stored, 4, stored.Length - 4);
+        using var brotli = new BrotliStream(input, CompressionMode.Decompress);
+        return JsonSerializer.Deserialize<CampaignSave>(brotli, JsonOptions);
+    }
+
     /// <summary>Both editable JSON and optional gzip use the same .bdfsave extension.
     /// Legacy .bdfsave.json files also work; sniff contents instead of trusting the name.</summary>
-    private static Stream OpenPayloadStream(FileStream file)
+    private static Stream OpenPayloadStream(FileStream file, bool leaveOpen = false)
     {
-        var gzip = file.ReadByte() == 0x1f && file.ReadByte() == 0x8b;
+        var first = file.ReadByte();
+        var second = file.ReadByte();
+        var third = file.ReadByte();
+        var fourth = file.ReadByte();
         file.Position = 0;
-        return gzip ? new GZipStream(file, CompressionMode.Decompress) : file;
+        if (first == 0x1f && second == 0x8b)
+            return new GZipStream(file, CompressionMode.Decompress, leaveOpen);
+        if (first == (byte)'B' && second == (byte)'D' && third == (byte)'F' && fourth == (byte)'2')
+        {
+            file.Position = 4;
+            return new BrotliStream(file, CompressionMode.Decompress, leaveOpen);
+        }
+        return file;
     }
 
     public static bool Delete(string root, string slot)
@@ -616,11 +789,30 @@ public static class SaveSystem
         catch { return null; }
     }
 
+    /// <summary>
+    /// Commit save data so a crash cannot leave a slot holding half a campaign.
+    ///
+    /// Two separate hazards, and the old code covered only the first. Writing a temporary file
+    /// and renaming it means the visible file is always a complete one - but a rename can reach
+    /// the disk before the bytes it points at do, so a power loss could still leave a slot whose
+    /// "complete" file is empty or stale; hence the flush to hardware before the swap. And with
+    /// no previous copy kept, a slot that goes bad - or that the player overwrites by hand - is
+    /// simply gone; File.Replace keeps the outgoing version as .bak in the same atomic step, the
+    /// way ContentWorkbench already saves authored scenario files.
+    ///
+    /// The backup is one generation deep, so a slot costs twice its size on disk and no more.
+    /// List() filters on the .bdfsave suffix, so the .bak never appears as a save.
+    /// </summary>
     private static void AtomicWrite(string target, byte[] data)
     {
         var temporary = target + ".tmp";
-        File.WriteAllBytes(temporary, data);
-        File.Move(temporary, target, true);
+        using (var file = new FileStream(temporary, FileMode.Create, FileAccess.Write))
+        {
+            file.Write(data);
+            file.Flush(true);
+        }
+        if (File.Exists(target)) File.Replace(temporary, target, target + ".bak");
+        else File.Move(temporary, target);
     }
 
     private static string SafeSlot(string slot)
@@ -663,6 +855,16 @@ public static class SaveSystem
         /// still receive the percentage-to-units migration.</summary>
         public bool ProductionUnitsSaved;
         public string ScenarioId = "2024";
+        /// <summary>
+        /// The culture, religion and profession ids used by this save's population rows.
+        ///
+        /// A long campaign holds tens of thousands of people-groups and each one names the
+        /// same three catalogue ids; written as text they were the largest single part of a
+        /// save. A row now carries the index into this table, and the table travels with the
+        /// file so a mod's own ids are read back exactly.
+        /// </summary>
+        [JsonPropertyOrder(-20)]
+        public string[] StringTable = Array.Empty<string>();
         public Defines ScenarioRules;
         public Dictionary<string, bool> FeatureDefaults;
         public Dictionary<string, string> FeatureUnlocks;
@@ -676,6 +878,15 @@ public static class SaveSystem
 
         /// <summary>Whether the campaign was being watched rather than played.</summary>
         public bool ObserverMode;
+
+        /// <summary>The console curse the world is under (WorldCurses); absent in an ordinary save.</summary>
+        public string Curse;
+        public int CurseDay = -1;
+        public int CurseDrowned;
+        // Derived authority, separate from the cinematic/no-popups ObserverMode.
+        // Console observation has no human seats; that must not become a human country
+        // on reload. Absent in legacy saves, where the historical fallback is retained.
+        public bool NoHumanAuthority;
 
         /// <summary>The campaign's own options: its step, how often it saves. Absent in older saves.</summary>
         public Dictionary<string, string> Settings = new();
@@ -706,6 +917,8 @@ public static class SaveSystem
         public List<InternationalOrganization> Organizations = new();
         public List<DealOffer> DealOffers = new();
         public int NextDealOfferId = 1;
+        public List<UltimatumPaper> UltimatumPapers = new();
+        public int NextUltimatumId = 1;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -756,12 +969,20 @@ public static class SaveSystem
         public List<PendingCampaignEvent> PendingEvents = new();
         public List<ChronicleEntry> Chronicle = new();
         public Dictionary<long, DiplomaticRelation> Relations = new();
+        // The AI reads last week's supplier attribution before the next market pass.
+        // Legacy files have no attribution; never invent it from today's diplomacy.
+        public int TradeRoutesDay = -1;
+        public List<TradeRoute> TradeRoutes = new();
         /// <summary>
         /// Written last in the file, so that it can be written last in time: see
         /// <see cref="SaveSystem.Prepare"/>. Reading does not care where it is.
         /// </summary>
         [JsonPropertyOrder(1)]
         public Dictionary<int, List<NationHistorySample>> History = new();
+        public HashSet<int> DestroyedProvinces = new();
+        public HashSet<long> CrossoverScars = new();
+        public List<CrossoverWork> CrossoverWorks = new();
+        public List<CrossoverImpact> CrossoverImpacts = new();
         public ushort[] ProvinceController = Array.Empty<ushort>();
         public float[] ProvinceOccupation = Array.Empty<float>();
 
@@ -779,11 +1000,17 @@ public static class SaveSystem
             Seed = campaign.Seed,
             ProductionUnitsSaved = true,
             ScenarioId = campaign.ScenarioId,
+            StringTable = SaveStringTable.Build(campaign.States.SelectMany(state => state.PopulationGroups)
+                .SelectMany(group => new[] { group.Culture, group.Religion, group.Profession })),
             ScenarioRules = campaign.ScenarioId != "2024" ? campaign.Defines : null,
             ScenarioTerritories = new Dictionary<string, int[]>(campaign.ScenarioTerritories),
             Date = campaign.Date,
             ElapsedDays = campaign.ElapsedDays,
             ObserverMode = campaign.ObserverMode,
+            Curse = campaign.Curse.Length > 0 ? campaign.Curse : null,
+            CurseDay = campaign.CurseDay,
+            CurseDrowned = campaign.CurseDrowned,
+            NoHumanAuthority = campaign.HumanSeats.Count == 0 && campaign.Nations.All(n => !n.IsHuman),
             Settings = new Dictionary<string, string>(campaign.Settings),
             FeatureDefaults = new Dictionary<string, bool>(campaign.Defines.Features),
             FeatureUnlocks = new Dictionary<string, string>(campaign.Defines.FeatureUnlocks),
@@ -815,6 +1042,8 @@ public static class SaveSystem
             Organizations = new List<InternationalOrganization>(campaign.Organizations),
             DealOffers = campaign.DealOffers.Select(DealNegotiations.Copy).ToList(),
             NextDealOfferId = campaign.NextDealOfferId,
+            UltimatumPapers = campaign.UltimatumPapers.Select(Ultimatum.Copy).ToList(),
+            NextUltimatumId = campaign.NextUltimatumId,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -831,11 +1060,23 @@ public static class SaveSystem
             PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents),
             Chronicle = new List<ChronicleEntry>(campaign.Chronicle.Entries),
             Relations = new Dictionary<long, DiplomaticRelation>(campaign.Relations),
+            TradeRoutesDay = campaign.TradeRoutesDay,
+            // Market passes reuse route records. Keep the captured week independent,
+            // in its original order (exposure totals sum floating point volumes).
+            TradeRoutes = campaign.TradeRoutes.Select(route => new TradeRoute
+            {
+                SellerId = route.SellerId, BuyerId = route.BuyerId,
+                Commodity = route.Commodity, Volume = route.Volume, Value = route.Value
+            }).ToList(),
             History = campaign.History.Export(),
             GoodIds = CommodityIdTable(),
             BuildingIds = BuildingIdTable(),
             ProvinceController = campaign.ProvinceController is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceController.Clone(),
             ProvinceOccupation = campaign.ProvinceOccupation is null ? Array.Empty<float>() : (float[])campaign.ProvinceOccupation.Clone(),
+            DestroyedProvinces = new HashSet<int>(campaign.DestroyedProvinces),
+            CrossoverScars = new HashSet<long>(campaign.CrossoverScars),
+            CrossoverWorks = campaign.CrossoverWorks.Select(w => w.Copy()).ToList(),
+            CrossoverImpacts = new List<CrossoverImpact>(campaign.CrossoverImpacts),
             ProvinceOwner = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToNation.Clone(),
             ProvinceState = campaign.ProvinceMap is null ? Array.Empty<ushort>() : (ushort[])campaign.ProvinceMap.ProvinceToState.Clone()
         };
@@ -872,6 +1113,7 @@ public static class SaveSystem
             Replace(campaign.Sponsorships, Sponsorships);
             Replace(campaign.Organizations, Organizations ?? new());
             DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId);
+            Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();
@@ -891,12 +1133,21 @@ public static class SaveSystem
             campaign.Chronicle.Restore(Chronicle);
             campaign.Relations.Clear();
             foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
+            campaign.TradeRoutesDay = TradeRoutesDay;
+            Replace(campaign.TradeRoutes, TradeRoutes);
             campaign.History.Restore(History);
             campaign.ObserverMode = ObserverMode;
+            campaign.Curse = Curse ?? "";
+            campaign.CurseDay = CurseDay;
+            campaign.CurseDrowned = CurseDrowned;
             foreach (var (id, value) in Settings) campaign.Settings[id] = value;
+            campaign.DestroyedProvinces.UnionWith(DestroyedProvinces ?? new HashSet<int>());
+            campaign.CrossoverScars.UnionWith(CrossoverScars ?? new());
+            campaign.CrossoverWorks.AddRange((CrossoverWorks ?? new()).Select(w => w.Copy()));
+            campaign.CrossoverImpacts.AddRange(CrossoverImpacts ?? new());
             campaign.RestoreRuntimeState(Date, ElapsedDays, IsPaused, RandomState, PlayerId,
                 HumanSeats, ActiveSeat, NextBattleId, MapRevision, InitialDeploymentCompleted,
-                ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState);
+                ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState, NoHumanAuthority);
             ForeignAssistance.Restore(campaign, AssistanceRequests, AssistanceCooldowns,
                 NextAssistanceRequestId, AssistanceLastTickDay);
             campaign.CivilWarBudget = CivilWarBudget?.Copy(campaign.ElapsedDays) ??
@@ -918,6 +1169,8 @@ public static class SaveSystem
             // And any country this campaign founded rather than loaded says again who it is
             // for. The demography catalogue is read from files and has never heard of it.
             campaign.DeclareFoundedPeoples();
+            foreach (var relation in campaign.Relations.Values)
+                OpinionSystem.Explain(campaign, relation, updateOpinion: false);
 
             // Before anything reads a good or a building out of the restored campaign.
             RemapContent(campaign);

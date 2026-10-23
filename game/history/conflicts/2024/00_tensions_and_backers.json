@@ -53,8 +53,9 @@
     { "between": ["GRC", "TUR"], "structural": 20, "tension": 25 },
     { "between": ["CYP", "TUR"], "structural": 35, "tension": 40, "grievance": [20, 0] },
     { "between": ["TUR", "SYR"], "structural": 30, "tension": 50 },
-    // Venezuela voted in December 2023 to annex most of Guyana.
-    { "between": ["VEN", "GUY"], "structural": 35, "tension": 65 },
+    // Venezuela voted in December 2023 to annex most of Guyana, and sent ships towards the
+    // disputed Essequibo in the new year. The two armies are not in contact; the claim is.
+    { "between": ["VEN", "GUY"], "structural": 45, "tension": 78, "grievance": [40, 0] },
     { "between": ["ETH", "ERI"], "structural": 30, "tension": 45, "grievance": [25, 25] },
     // On 1 January 2024 Ethiopia signed a port deal with Somaliland.
     { "between": ["ETH", "SOM"], "structural": 20, "tension": 52, "grievance": [0, 15] },
@@ -77,7 +78,17 @@
     { "between": ["BFA", "FRA"], "structural": 20, "tension": 40 },
     { "between": ["USA", "CUB"], "structural": 25, "tension": 35 },
     { "between": ["USA", "VEN"], "structural": 25, "tension": 45 },
-    { "between": ["THA", "KHM"], "structural": 10, "tension": 20 }
+    { "between": ["THA", "KHM"], "structural": 10, "tension": 20 },
+
+    // Cox's Bazar: about a million Rohingya shelter in Bangladesh after the 2017 drive,
+    // shelling has crossed the Naf river, and every repatriation attempt goes nowhere.
+    { "between": ["MMR", "BGD"], "structural": 30, "tension": 42 },
+    // The canal on the Masacre river that Haiti dug in 2023, a border closed over it since,
+    // and deportations from the Dominican Republic into a country that cannot feed them.
+    { "between": ["DOM", "HTI"], "structural": 35, "tension": 40 },
+    // The Helmand water dispute, the border clashes of 2023-2024, and millions of Afghan
+    // refugees Tehran is driving back over the frontier.
+    { "between": ["AFG", "IRN"], "structural": 25, "tension": 40 }
   ],
 
   // Who was arming whom in the war being fought. Levels: 1 advisers and money, 2 weapons,
@@ -99,6 +110,17 @@
     { "sponsor": "JPN", "client": "UKR", "war": ["RUS", "UKR"], "level": 1 },
     { "sponsor": "IRN", "client": "RUS", "war": ["RUS", "UKR"], "level": 2 },
     { "sponsor": "PRK", "client": "RUS", "war": ["RUS", "UKR"], "level": 1 },
-    { "sponsor": "BLR", "client": "RUS", "war": ["RUS", "UKR"], "level": 1 }
+    { "sponsor": "BLR", "client": "RUS", "war": ["RUS", "UKR"], "level": 1 },
+
+    // Syria. Russian aircraft and Iranian money are what keep Damascus standing, while the
+    // opposition and Kurdish forces receive foreign arms and backing.
+    { "sponsor": "RUS", "client": "SYR", "war": ["SYR", "HTS"], "level": 3, "held_days": 60 },
+    { "sponsor": "IRN", "client": "SYR", "war": ["SYR", "HTS"], "level": 2 },
+    { "sponsor": "RUS", "client": "SYR", "war": ["SYR", "SDF"], "level": 2 },
+    { "sponsor": "IRN", "client": "SYR", "war": ["SYR", "SDF"], "level": 1 },
+    { "sponsor": "USA", "client": "SDF", "war": ["SYR", "SDF"], "level": 2 },
+    { "sponsor": "TUR", "client": "SIG", "war": ["SYR", "SIG"], "level": 2 },
+    { "sponsor": "QAT", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 },
+    { "sponsor": "TUR", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 }
   ]
 }

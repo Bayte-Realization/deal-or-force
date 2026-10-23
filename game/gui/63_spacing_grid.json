@@ -15,7 +15,7 @@
     "spacing.lg": 16,
     "spacing.xl": 24,
     "panel.gutter": 12,
-    "panel.pad": 10,
+    "panel.pad": 12,
     "hud.density": 1
   }
 }

@@ -39,7 +39,6 @@ public partial class DealOrForceGame
         leave.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."));
         rows.AddChild(leave);
         rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
-        rows.AddChild(Title("Esc closes this menu", 12, Ui.Colour("text.hint")));
     }
 
     private void ShowPauseMenu()

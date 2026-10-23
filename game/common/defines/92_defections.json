@@ -1,0 +1,15 @@
+// Deal or Force - troops changing sides (Defections.cs, Reintegration.Defect).
+//
+// A civil war or a rising sees formations cross over; an interstate war sees it only when
+// the enemy already holds the ground and the country's war support has collapsed. These are
+// monthly chances per eligible formation, not a second combat bonus. A mod can set both
+// chances to zero to keep every army loyal without touching the code.
+{
+  "WartimeDefectionChanceCivil": 0.12,
+  "WartimeDefectionChanceInterstate": 0.015,
+  "DefectionCohesion": 0.30,
+  "DefectionSupply": 0.35,
+  "DefectionWarSupport": 0.25,
+  "DefectionStrength": 0.60,
+  "PeacefulSecessionDefectionShare": 0.35
+}

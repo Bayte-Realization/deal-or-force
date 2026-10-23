@@ -1,0 +1,10 @@
+{
+  "A neighbour is shut inside the border": "A neighbour is shut inside the border",
+  "{0} holds {1} province(s) with no way out except across us.": "{0} holds {1} province(s) with no way out except across us.",
+  "It is not a corridor to somewhere else. It is a dot in the line. Buying it asks for that region whole, and only when the region is the dot.": "It is not a corridor to somewhere else. It is a dot in the line. Buying it asks for that region whole, and only when the region is the dot.",
+  "Asking spends nothing until they accept. Their capital is never the dot.": "Asking spends nothing until they accept. Their capital is never the dot.",
+  "Inside the border": "Inside the border",
+  "Held by": "Held by",
+  "Ask to buy it out": "Ask to buy it out",
+  "Nothing foreign is shut inside this border.": "Nothing foreign is shut inside this border."
+}

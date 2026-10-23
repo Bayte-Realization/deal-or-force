@@ -1,0 +1,23 @@
+{
+  "All matching initiatives": "All matching initiatives",
+  "Cabinet": "Cabinet",
+  "RISING POLITICIANS & CANDIDATE POOL": "RISING POLITICIANS & CANDIDATE POOL",
+  "Scout new candidates": "Scout new candidates",
+  "Appoint to cabinet": "Appoint to cabinet",
+  "Install as leader": "Install as leader",
+  "Scouted a new slate of rising politicians.": "Scouted a new slate of rising politicians.",
+  "Generate a fresh set of politician candidates from your country's cultural name pool.": "Generate a fresh set of politician candidates from your country's cultural name pool.",
+  "Appointment order submitted.": "Appointment order submitted.",
+  "Appointment cost: {0}": "Appointment cost: {0}",
+  "Insufficient treasury for this appointment.": "Insufficient treasury for this appointment.",
+  "chronicle.minister_died": "A cabinet post in {0} is vacant after the death of {3}.",
+  "chronicle.government_head_died": "The head of government of {0} has died; {3} has assumed office.",
+  "{0} initiatives · {1} ready": "{0} initiatives · {1} ready",
+  "No active diplomatic ties.": "No active diplomatic ties.",
+  "Subject status": "Subject status",
+  "Comparison": "Comparison",
+  "Relations": "Relations",
+  "Actions": "Actions",
+  "Liberty desire": "Liberty desire",
+  "{0} initiatives · scroll to browse": "{0} initiatives · scroll to browse"
+}

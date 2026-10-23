@@ -90,6 +90,7 @@ public static class OpinionCatalog
 }
 
 /// <summary>One reason, as this pair of countries currently holds it.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(OpinionReasonConverter))]
 public sealed class OpinionReason
 {
     public string Id = "";
@@ -127,14 +128,20 @@ public static class OpinionSystem
         foreach (var reason in relation.Reasons)
             if (string.Equals(reason.Id, id, StringComparison.OrdinalIgnoreCase)) { held = reason; break; }
 
-        if (held is null)
+        // Whether this is the first time it has been held - asked of the list, not of the day.
+        // The old test was `GrantedDay == 0`, which is also exactly what "never granted" looks
+        // like, so a reason first remembered on the opening day of the campaign carried a
+        // GrantedDay of zero and its first repetition was silently swallowed. Forgetting a reason
+        // and remembering it again is a first time as well, which is what makes a pact broken,
+        // forgiven and broken again count as twice.
+        var fresh = held is null;
+        if (fresh)
         {
             held = new OpinionReason { Id = item.Id };
             relation.Reasons.Add(held);
         }
-        // A standing condition is refreshed, not repeated: a border shared for ten years
-        // is one border. Only reasons that can happen again count up.
-        var fresh = held.GrantedDay == 0 && held.Stacks <= 1;
+        // A standing condition is refreshed, not repeated: a border shared for ten years is one
+        // border. Only reasons the declaration says can happen again count up at all.
         held.GrantedDay = campaign.ElapsedDays;
         held.ExpiresDay = item.Days > 0 ? campaign.ElapsedDays + item.Days : 0;
         held.Scale = scale;
@@ -162,6 +169,16 @@ public static class OpinionSystem
         if (removed) Settle(campaign, relation);
     }
 
+    /// <summary>Whether a relation currently holds a specific opinion modifier reason.</summary>
+    public static bool Has(DiplomaticRelation relation, string id)
+    {
+        if (relation?.Reasons is null) return false;
+        for (var index = 0; index < relation.Reasons.Count; index++)
+            if (string.Equals(relation.Reasons[index].Id, id, StringComparison.OrdinalIgnoreCase))
+                return true;
+        return false;
+    }
+
     /// <summary>What one reason is worth today, having faded for as long as it has been held.</summary>
     public static float Weight(Campaign campaign, OpinionReason reason)
     {
@@ -186,17 +203,18 @@ public static class OpinionSystem
     public static void Settle(Campaign campaign, DiplomaticRelation relation)
     {
         if (relation is null) return;
-        // By hand, for the same reason as the sweep above: RemoveAll's predicate closes
-        // over `campaign`, and this runs every time any country remembers or forgets
-        // anything about anyone - a closure and a delegate for a list that is almost
-        // always already correct.
         for (var index = relation.Reasons.Count - 1; index >= 0; index--)
         {
             var reason = relation.Reasons[index];
             if (reason.ExpiresDay > 0 && reason.ExpiresDay <= campaign.ElapsedDays)
                 relation.Reasons.RemoveAt(index);
         }
+        Explain(campaign, relation, updateOpinion: true);
+    }
 
+    public static void Explain(Campaign campaign, DiplomaticRelation relation, bool updateOpinion = false)
+    {
+        if (relation is null) return;
         relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
         foreach (var reason in relation.Reasons)
@@ -223,13 +241,23 @@ public static class OpinionSystem
                 Loc.Get(affinity >= 0f ? "Politics we recognise" : "Politics we do not share"), affinity);
         }
 
+        // What the two states say they are, over what their peoples are: one declared faith
+        // or one declared people, read from both countries as they stand. Continuous, like
+        // the politics above - a declaration made yesterday is already in today's number.
+        var identity = StateIdentity.Affinity(campaign, relation.A, relation.B);
+        if (identity >= 0.05f)
+        {
+            total += identity;
+            relation.OpinionDrivers.Add(Loc.Get("The same church, the same people"), identity);
+        }
+
         var memory = SocialMemory.OpinionEffect(campaign, relation);
         if (MathF.Abs(memory) >= 0.05f)
         {
             total += memory;
             relation.OpinionDrivers.Add(Loc.Get("Accumulated public reputation"), memory);
         }
-        relation.Opinion = M.Clamp(total, -100f, 100f);
+        if (updateOpinion) relation.Opinion = M.Clamp(total, -100f, 100f);
         relation.OpinionDrivers.Settle(relation.Opinion, "clamped");
     }
 
@@ -246,6 +274,10 @@ public static class OpinionSystem
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
         foreach (var relation in campaign.Relations.Values)
-            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0) Settle(campaign, relation);
+        {
+            if (relation.MissionByA is not null || relation.MissionByB is not null) DiplomaticOutreach.Tick(campaign, relation);
+            if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0)
+                Settle(campaign, relation);
+        }
     }
 }

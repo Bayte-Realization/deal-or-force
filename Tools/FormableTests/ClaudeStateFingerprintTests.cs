@@ -19,8 +19,84 @@ public static class ClaudeStateFingerprintTests
     public static void Run()
     {
         // Captured before adding the new fingerprint blocks, not from the repaired code.
-        Check(CampaignFingerprint.Of(Fixture()) == 0xE7C481E45B745B52UL,
-            "new fields at their legacy defaults retain the pre-fix golden fingerprint");
+        //
+        // Re-recorded on 15 October 2026 against HEAD (839678e) because the committed value
+        // had already drifted: the pristine snapshot produced DD12216E69034C1F while this
+        // constant still said E7C481E45B745B52, so every run of the suite failed here before
+        // reaching anything else. The value is the one the shipped world produces with every
+        // new field at its legacy default; it was confirmed identical with the full working
+        // tree of local changes applied, so those changes emit no bytes of their own.
+        // If this fails again, the world or a new authoritative field changed - find out
+        // which before recording a new number.
+        //
+        // Re-recorded again on 15 October 2026, when the merged tree registered seven more
+        // built-in mechanics that the fingerprint deliberately carries - seasons,
+        // seasonal_roads, weather, political_cohorts, federal_fracture, intelligence and
+        // world_order_emergency. The feature id list is mixed into the hash on purpose, so
+        // declaring one more toggle moves the number even though the fixture world itself is
+        // byte for byte the one above; that is the intended behaviour, not a divergence.
+        //
+        // Re-recorded a third time on 16 October 2026 (0x545E835F82EA7E2A -> 0xF995DBA34AD954EA).
+        // Cause established, not assumed: the working tree grew an eighth built-in mechanic
+        // (`government_promises`) plus four more feature->command bindings (`MakePromiseCommand`,
+        // `IntelNetworkCommand`, `AskForCorridorCommand`, `ConciliateRegionCommand`), and
+        // CampaignFingerprint mixes both tables in. Dropping only `government_promises` from all
+        // three of its places moved the hash again (to 0x09040E08F3BC01E9), so the table is what
+        // drives it - the fixture world did not change underneath. All 36 substantive checks in
+        // this suite pass at the recorded value, so no new authoritative field is leaking bytes
+        // at its default. The check names the value it got, because "the golden fingerprint
+        // moved" without the new number costs a full rebuild-and-guess cycle every time.
+        // Re-recorded a fourth time on 16 October 2026 (0x57181CDC7D5534CB -> 0x16558C9D826EDCE7).
+        // Cause established, not assumed: the working tree grew a ninth built-in mechanic
+        // (`tactical_doctrines`) together with its command binding (`StudyDoctrineCommand`), and those two
+        // tables are mixed into the hash on purpose - the fixture world itself is unchanged. The
+        // new authoritative fields the same slice added (the war-Doctrine memory, the three services'
+        // experience, a formation's training flag) are mixed only when they differ from their
+        // defaults, which is exactly what the substantive checks below confirm: nothing leaks bytes
+        // at its default, and a real change in any of them moves the hash. The check names the value
+        // it got, because "the golden fingerprint moved" without the new number costs a full
+        // rebuild-and-guess cycle every time.
+        // Re-recorded a fifth time on 16 October 2026 (0x16558C9D826EDCE7 -> 0x5212233DF81EBA6C).
+        // Cause established by reading the mixing code, not assumed: CampaignFingerprint mixes the
+        // enabled feature ids and MechanicFeatures.BuiltIns (line 167) and the feature-to-command
+        // tables (line 173) into the hash on purpose. This slice renamed one built-in mechanic
+        // (`war_charter` -> `tactical_doctrines`), declared a second (`strategic_doctrines`) and
+        // bound one more command (`AdoptStrategicDoctrineCommand`), so the two tables moved the
+        // number while the fixture world itself is byte for byte the one above. The authoritative
+        // fields the same slice added (the grand-strategy memory and the day it last changed) are
+        // mixed only when they differ from their defaults, which the substantive checks below
+        // confirm: nothing leaks bytes at its default, and a real change moves the hash. The check
+        // names the value it got, because "the golden fingerprint moved" without the new number
+        // Re-recorded a seventh time on 16 October 2026 (0xA59805E352DD0319 -> 0x3E980D973FE069C3).
+        // Re-recorded an eighth time on 17 October 2026 (0x3E980D973FE069C3 -> 0x72AC94DB733B784D).
+        // Cause established by reading the mixing code, not assumed: the working tree declared a
+        // tenth built-in mechanic (`demographic_cycle`), and CampaignFingerprint mixes the enabled
+        // feature ids and MechanicFeatures.BuiltIns into the hash on purpose, so the fixture world
+        // itself is byte for byte the one above. The authoritative fields the same slice added - a
+        // region's young and old shares, which decide its own births, its own deaths, and which
+        // community migration counts the newcomers under - are mixed only when they differ from
+        // their defaults. This fixture carries no regions at all (it is a small authored world of
+        // nations, armies and wars), so those two fields are covered by the demonstration stand's
+        // own divergence checks rather than by the two lists below. The check names the value it
+        // got, because "the golden fingerprint moved" without the new number costs a full
+        // rebuild-and-guess cycle every time.
+        // Re-recorded an eighth time on 17 October 2026 (0x3E980D973FE069C3 -> 0x72AC94DB733B784D -> 0xDA7C6F9772777A1D).
+        // Cause established by reading the mixing code: BuiltIns and FeatureSystems added the
+        // eleventh built-in mechanic (`rulers`), which CampaignFingerprint mixes into the hash on
+        // purpose; all new nation fields remain guarded by HasCustomLeadership / HasCustomSubjectState.
+        // Re-recorded 21 October 2026 (0x8A569EFA7BB8A70D -> 0xE51AA42BB91EDE15).
+        // The current compiled catalogue adds culture_union to Defines.Features and BuiltIns.
+        // Removing only those two entries restores 0x8A569EFA7BB8A70D exactly; also removing
+        // CommissionNewFleetCommand and ConsolidateSubjectsCommand restores 0xDA7C6F9772777A1D.
+        // The 20 October probe assembly reproduces both older values with the same frozen data.
+        // Current and HEAD fingerprint code mix identical inputs on this default fixture, and
+        // bypassing catalogue loading still produces the new value. Keep one strict golden.
+        // Re-recorded again 21 October 2026 (0xE51AA42BB91EDE15 -> 0x0BEDBA3316932DC6): the system
+        // table maps the new FormableProclamationAi to formable_nations, and the fingerprint mixes
+        // that table on purpose. Removing only that one entry restores 0xE51AA42BB91EDE15 exactly.
+        var fixture = CampaignFingerprint.Of(Fixture());
+        Check(fixture == 0x0BEDBA3316932DC6UL,
+            $"new fields at their legacy defaults retain the pre-fix golden fingerprint (got 0x{fixture:X16})");
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();
         DictionaryOrderIsNotAuthoritative();
@@ -41,7 +117,13 @@ public static class ClaudeStateFingerprintTests
             ("existing promise due date", c => c.Nations[0].AddressPromiseDueDay = 180, c => c.Nations[0].AddressPromiseDueDay = 181),
             ("existing promise comparison mark", c => c.Nations[0].AddressPromiseMark = 100f, c => c.Nations[0].AddressPromiseMark = 101f),
             ("existing contractor expiration", c => c.Armies[0].ContractUntilDay = 182, c => c.Armies[0].ContractUntilDay = 183),
-            ("existing world-war recognition date", c => c.Wars[0].WorldWarDay = 12, c => c.Wars[0].WorldWarDay = 13)
+            ("existing world-war recognition date", c => c.Wars[0].WorldWarDay = 12, c => c.Wars[0].WorldWarDay = 13),
+            ("existing covert operation due date", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "sabotage", TargetId = 1, DueDay = 30 }),
+                c => c.Nations[0].CovertOperations[0].DueDay = 31),
+            ("existing covert operation region", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "unrest", TargetId = 1, RegionMapIndex = 4 }),
+                c => c.Nations[0].CovertOperations[0].RegionMapIndex = 5),
+            ("existing lying-low date", c => c.Nations[0].CovertQuietUntil[1] = 90, c => c.Nations[0].CovertQuietUntil[1] = 91),
+            ("existing imperial overstretch", c => c.Nations[0].ImperialOverstretch = .45f, c => c.Nations[0].ImperialOverstretch = .55f)
         };
         foreach (var (label, start, change) in changes)
         {
@@ -67,7 +149,14 @@ public static class ClaudeStateFingerprintTests
             ("address promise due on day zero", c => c.Nations[0].AddressPromiseDueDay = 0),
             ("address promise comparison mark", c => c.Nations[0].AddressPromiseMark = 100f),
             ("contract expiration on day zero", c => c.Armies[0].ContractUntilDay = 0),
-            ("world-war recognition on day zero", c => c.Wars[0].WorldWarDay = 0)
+            ("world-war recognition on day zero", c => c.Wars[0].WorldWarDay = 0),
+            ("covert operation under way", c => c.Nations[0].CovertOperations.Add(new CovertOperation { Kind = "theft", TargetId = 0 })),
+            ("network lying low until day zero", c => c.Nations[0].CovertQuietUntil[0] = 0),
+            ("war doctrine article", c => c.Nations[0].TacticalDoctrine.Known.Add("manoeuvre_march")),
+            ("army experience", c => c.Nations[0].ArmyExperience = 3f),
+            ("political points", c => c.Nations[0].PoliticalPoints = 5f),
+            ("a drilling formation", c => c.Armies[0].Training = true),
+            ("imperial overstretch", c => c.Nations[0].ImperialOverstretch = .45f)
         };
         var failures = new List<string>();
         foreach (var (label, change) in changes)
@@ -119,6 +208,8 @@ public static class ClaudeStateFingerprintTests
         n.LastAddressDay = 0; n.AddressWeariness = 2.5f; n.AddressPromise = "order";
         n.AddressPromiseDueDay = 180; n.AddressPromiseMark = .65f;
         c.Armies[0].ContractUntilDay = 182; c.Wars[0].WorldWarDay = 0;
+        n.CovertOperations.Add(new CovertOperation { Kind = "opposition", TargetId = 0, RegionMapIndex = -1, StartedDay = 0, DueDay = 42, Spent = .3f });
+        n.CovertQuietUntil[1] = 0;
         var options = new JsonSerializerOptions
         {
             IncludeFields = true,

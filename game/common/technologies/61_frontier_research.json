@@ -1,0 +1,178 @@
+// The tier above the expansion set: what a country that has already built the obvious things
+// goes on to build. Every line here is an existing, observable modifier rather than a
+// research-only statistic - output, construction, taxes, trade, supply, the army, the fleet -
+// and every prerequisite is a technology the game already ships, so nothing here needs a
+// second tree to make sense.
+//
+// Two rules hold, as everywhere in this folder:
+//
+//   * a `requires` entry must name a technology that exists, or the catalogue reports a
+//     broken dependency rather than silently never offering the project;
+//   * an `effects` key must be one of the modifier keys the simulation actually reads
+//     (see Scripts/Simulation/NationalModifiers.cs). A typo is an error with the list
+//     beside it, not a bonus that quietly does nothing.
+{
+  // ---------------------------------------------------------------- industry
+  "grid_scale_storage": {
+    "name": "Grid-scale storage",
+    "description": "Batteries and pumped reservoirs big enough that a still night is a scheduling problem, not a blackout.",
+    "category": "industry", "cost": 420, "requires": ["superconducting_grids"], "icon": "icon_building_powerplant",
+    "effects": { "output": 0.015, "construction_speed": 0.01 }
+  },
+  "industrial_biotechnology": {
+    "name": "Industrial biotechnology",
+    "description": "Enzymes and fermentation doing the work of a chemical plant, with a fraction of the waste and the heat.",
+    "category": "industry", "cost": 460, "requires": ["genomic_medicine", "industrial_metrology"], "icon": "icon_building_chemicalplant",
+    "effects": { "output": 0.02, "research_speed": 0.02 }
+  },
+  "quantum_sensing": {
+    "name": "Quantum sensing",
+    "description": "Clocks, gravimeters and magnetometers an order of magnitude finer than anything mechanical.",
+    "category": "industry", "cost": 520, "requires": ["advanced_semiconductors"], "icon": "icon_research",
+    "effects": { "research_speed": 0.05, "output": 0.01 }
+  },
+  "circular_materials_markets": {
+    "name": "Circular materials markets",
+    "description": "Scrap, alloy and component become commodities with prices, so rebuilding starts from a warehouse instead of a mine.",
+    "category": "industry", "cost": 430, "requires": ["circular_manufacturing"], "icon": "icon_building_smelter",
+    "effects": { "output": 0.015, "construction_cost": -0.012 }
+  },
+  "orbital_logistics": {
+    "name": "Orbital logistics",
+    "description": "Launch, recovery and orbital transfer cheap enough to be a link in the supply chain rather than a demonstration.",
+    "category": "industry", "cost": 640, "requires": ["fusion_power", "autonomous_convoys"], "icon": "icon_world",
+    "effects": { "output": 0.03, "supply": 0.02 }
+  },
+  "deep_sea_extraction": {
+    "name": "Deep-sea extraction",
+    "description": "Working the shelf and the abyssal plain for the metals a country cannot buy at a price it likes.",
+    "category": "industry", "cost": 480, "requires": ["resilient_power_control"], "icon": "icon_building_extractionindustry",
+    "effects": { "output": 0.02, "trade_reach": 0.01 }
+  },
+
+  // ---------------------------------------------------------------- society
+  "lifelong_learning_platforms": {
+    "name": "Lifelong learning platforms",
+    "description": "Retraining that reaches a person at forty as easily as at eighteen, so a closed plant is not a closed career.",
+    "category": "society", "cost": 380, "requires": ["digital_education", "open_science"], "icon": "icon_building_university",
+    "effects": { "research_speed": 0.07 }
+  },
+  "public_health_networks": {
+    "name": "Public health networks",
+    "description": "Clinics, laboratories and records that talk to each other, so an outbreak is a statistic before it is a funeral.",
+    "category": "society", "cost": 400, "requires": ["health_informatics"], "icon": "icon_building_hospital",
+    "effects": { "output": 0.015, "stability_weekly": 0.05 }
+  },
+  "civic_data_trusts": {
+    "name": "Civic data trusts",
+    "description": "Public statistics held where the public can check them, which is the cheapest honesty a government can buy.",
+    "category": "society", "cost": 420, "requires": ["public_data_reproducibility", "civilian_cyber_resilience"], "icon": "icon_laws",
+    "effects": { "tax_efficiency": 0.015, "stability_weekly": 0.04 }
+  },
+  "regional_university_clusters": {
+    "name": "Regional university clusters",
+    "description": "Universities spread to the provinces instead of hoarding the country's talent in one capital.",
+    "category": "society", "cost": 450, "requires": ["science_teaching_networks"], "icon": "icon_building_university",
+    "effects": { "research_speed": 0.06, "living_weekly": 0.06 }
+  },
+  "social_insurance_reform": {
+    "name": "Social insurance reform",
+    "description": "Sickness, unemployment and old age pooled across the whole country rather than across whoever is left.",
+    "category": "society", "cost": 470, "requires": ["municipal_bond_markets"], "icon": "icon_welfare",
+    "effects": { "stability_weekly": 0.08, "living_weekly": 0.08 }
+  },
+  "civic_resilience_education": {
+    "name": "Civic resilience education",
+    "description": "Teaching people what to do in a flood, a raid or a blackout, so the answer does not have to be improvised.",
+    "category": "society", "cost": 360, "requires": ["civil_emergency_coordination"], "icon": "icon_alert_event",
+    "effects": { "stability_weekly": 0.06, "militia_readiness": 0.03 }
+  },
+
+  // ---------------------------------------------------------------- military
+  "integrated_air_defence_command": {
+    "name": "Integrated air-defence command",
+    "description": "Guns, missiles and jammers answering to one picture, so the third layer does not shoot at the first one's target.",
+    "category": "military", "cost": 520, "requires": ["distributed_air_defence", "counter_drone_systems"], "icon": "icon_sam",
+    "effects": { "army_defense": 0.03, "support_losses": -0.02 }
+  },
+  "electronic_warfare_dominance": {
+    "name": "Electronic warfare dominance",
+    "description": "Blinding a headquarters before it has to be stormed: jamming, spoofing and deception as a first move.",
+    "category": "military", "cost": 540, "requires": ["electronic_warfare_suites", "secure_tactical_comms"], "icon": "icon_equipment",
+    "effects": { "army_attack": 0.03, "army_defense": 0.02 }
+  },
+  "expeditionary_sustainment": {
+    "name": "Expeditionary sustainment",
+    "description": "Feeding and fuelling a division a thousand kilometres from the nearest depot and still moving it.",
+    "category": "military", "cost": 500, "requires": ["reserve_fuel_networks", "integrated_logistics_control"], "icon": "icon_supply",
+    "effects": { "supply": 0.03, "army_speed": 0.03 }
+  },
+  "precision_strike_network": {
+    "name": "Precision strike network",
+    "description": "A target found by one arm and finished by another, with the interval measured in minutes.",
+    "category": "military", "cost": 560, "requires": ["joint_fires_network", "uncrewed_reconnaissance"], "icon": "icon_artillery",
+    "effects": { "army_attack": 0.04 }
+  },
+  "rapid_force_projection": {
+    "name": "Rapid force projection",
+    "description": "Loading, flying and unloading a brigade inside a week without it arriving exhausted.",
+    "category": "military", "cost": 530, "requires": ["rapid_sortie_regeneration"], "icon": "icon_air",
+    "effects": { "army_speed": 0.04, "reinforcement_rate": 0.03 }
+  },
+  "hardened_command_networks": {
+    "name": "Hardened command networks",
+    "description": "Headquarters that survive being found: buried, dispersed, and able to keep giving orders while they are hit.",
+    "category": "military", "cost": 480, "requires": ["distributed_command"], "icon": "icon_hq_whole",
+    "effects": { "army_defense": 0.02, "organisation_recovery": 0.03 }
+  },
+  "autonomous_resupply_columns": {
+    "name": "Autonomous resupply columns",
+    "description": "Driverless trucks and cargo drones that run the last fifty kilometres so no driver has to.",
+    "category": "military", "cost": 510, "requires": ["drone_warfare", "autonomous_convoys"], "icon": "icon_drone",
+    "effects": { "supply": 0.03, "support_recovery": 0.02 }
+  },
+
+  // ---------------------------------------------------------------- logistics
+  "port_automation_networks": {
+    "name": "Port automation networks",
+    "description": "Cranes, gates and rail sidings that agree with each other, so a berth turns around in hours.",
+    "category": "logistics", "cost": 490, "requires": ["port_throughput_control", "autonomous_port_logistics"], "icon": "icon_port",
+    "effects": { "trade_reach": 0.02, "construction_speed": 0.01 }
+  },
+  "continental_freight_corridors": {
+    "name": "Continental freight corridors",
+    "description": "One gauge, one customs form and one schedule from the factory to a port two countries away.",
+    "category": "logistics", "cost": 520, "requires": ["intermodal_freight", "rail_electrification_programme"], "icon": "icon_rail",
+    "effects": { "trade_reach": 0.025, "supply": 0.015 }
+  },
+  "distributed_warehouse_grid": {
+    "name": "Distributed warehouse grid",
+    "description": "Stock held in many places and tracked in one, so losing a depot is an inconvenience rather than a shortage.",
+    "category": "logistics", "cost": 440, "requires": ["smart_warehouses"], "icon": "icon_building_warehouse",
+    "effects": { "supply": 0.03 }
+  },
+  "strategic_airlift": {
+    "name": "Strategic airlift",
+    "description": "Heavy aircraft and the airfields to take them, which is how a country answers a crisis on another continent.",
+    "category": "logistics", "cost": 500, "requires": ["dispersed_airbases"], "icon": "icon_air",
+    "effects": { "supply": 0.02, "army_speed": 0.03 }
+  },
+  "resilient_water_logistics": {
+    "name": "Resilient water logistics",
+    "description": "Treatment, storage and distribution with enough redundancy that a drought is a ration, not a migration.",
+    "category": "logistics", "cost": 410, "requires": ["modular_water_treatment"], "icon": "icon_building_watertower",
+    "effects": { "living_weekly": 0.08, "reconstruction_speed": 0.02 }
+  },
+  "civil_reconstruction_corps": {
+    "name": "Civil reconstruction corps",
+    "description": "A standing service that rebuilds bridges, clinics and power lines as soon as the guns move on.",
+    "category": "logistics", "cost": 460, "requires": ["civil_military_reconstruction", "low_waste_reconstruction"], "icon": "icon_building_infrastructure",
+    "effects": { "reconstruction_speed": 0.04, "living_weekly": 0.06 }
+  },
+  "maritime_security_network": {
+    "name": "Maritime security network",
+    "description": "Patrols, escorts and a shared picture of the sea, so trade keeps moving through a contested strait.",
+    "category": "logistics", "cost": 480, "requires": ["coastal_shipping_resilience"], "icon": "icon_navy",
+    "effects": { "trade_reach": 0.02, "naval_speed": 0.03 }
+  }
+}

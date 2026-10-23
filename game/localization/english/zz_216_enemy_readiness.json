@@ -1,0 +1,13 @@
+{
+  "Observed combat readiness": "Observed combat readiness",
+  "Organisation is spent": "Organisation is spent",
+  "Short of supply": "Short of supply",
+  "No formations currently observed.": "No formations currently observed.",
+  "Division-weighted average of observed formations.": "Division-weighted average of observed formations.",
+  "Observed formations only; unseen reinforcements are not included.": "Observed formations only; unseen reinforcements are not included.",
+  "Observed organisation": "Observed organisation",
+  "Observed equipment": "Observed equipment",
+  "Division-weighted average of the foreign formations you can see here. Hidden reserves are not counted and no order or route is revealed.": "Division-weighted average of the foreign formations you can see here. Hidden reserves are not counted and no order or route is revealed.",
+  "Organisation {0:P0} · equipment {1:P0} · supply {2:P0}": "Organisation {0:P0} · equipment {1:P0} · supply {2:P0}",
+  "{0:0.0} div · org {1:P0} · eq {2:P0}": "{0:0.0} div · org {1:P0} · eq {2:P0}"
+}

@@ -49,7 +49,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
 }
 
 function Invoke-Build {
@@ -61,13 +61,49 @@ function Invoke-Build {
     Write-Host '  game and test stand compile' -ForegroundColor Green
 }
 
+function Find-MatchingGodot {
+    $candidate = Find-Godot
+    if (-not (Test-Path -LiteralPath $candidate)) {
+        throw "No Godot executable at $candidate"
+    }
+    # A stale .mcp.json can point at another 4.x build. The game's own export check
+    # already refuses a mismatched engine; play and import must do the same, or a wrong
+    # editor is started and its MCP bridge hangs before the game ever reports readiness.
+    $version = (& $candidate --version | Select-Object -Last 1).Trim()
+    $sdk = ([xml](Get-Content (Join-Path $project 'DealOrForce.csproj') -Raw)).Project.Sdk
+    if ($sdk -match '/(?<major>\d+)\.(?<minor>\d+)') {
+        $wanted = "$($Matches.major).$($Matches.minor)."
+        if (-not $version.StartsWith($wanted, [StringComparison]::Ordinal)) {
+            $fallback = 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
+            if (-not (Test-Path -LiteralPath $fallback)) {
+                throw "Godot $version does not match the project's $wanted SDK, and no matching fallback exists."
+            }
+            Write-Host "  engine $version does not match $wanted; using $fallback" -ForegroundColor Yellow
+            $candidate = $fallback
+        }
+    }
+    return $candidate
+}
+
+function Invoke-LoggedNative([string]$Executable, [string[]]$Arguments, [string]$LogPath) {
+    # Windows PowerShell turns native stderr into ErrorRecords. Keep it in the log
+    # and inspect the exit code below, instead of losing the report to Stop first.
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & $Executable @Arguments *> $LogPath
+        return $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousErrorAction }
+}
+
 function Invoke-Tests {
     Write-Host '== test stand ==' -ForegroundColor Cyan
     $log = Join-Path ([IO.Path]::GetTempPath()) ('dof-tests-' + [Guid]::NewGuid().ToString('N') + '.log')
-    $arguments = @('run', '--project', (Join-Path $project 'Tools\FormableTests'), '--no-build', '--')
+    # Incremental compilation is required here: otherwise a new --suite-only flag
+    # can silently run an older assembly's entire stand and report a false pass.
+    $arguments = @('run', '--project', (Join-Path $project 'Tools\FormableTests'), '--')
     if ($TestArgs) { $arguments += $TestArgs.Split(' ', [StringSplitOptions]::RemoveEmptyEntries) }
-    & dotnet @arguments *> $log
-    $exit = $LASTEXITCODE
+    $exit = Invoke-LoggedNative 'dotnet' $arguments $log
     $pass = (Select-String -Path $log -Pattern '^PASS ' -ErrorAction SilentlyContinue).Count
     $failure = Select-String -Path $log -Pattern '^FAIL |Exception|Unhandled' -ErrorAction SilentlyContinue |
         Where-Object { $_.Line -notmatch 'PASS ' } | Select-Object -First 5
@@ -82,7 +118,9 @@ function Invoke-Tests {
 
 function Invoke-Import {
     Write-Host '== importing assets ==' -ForegroundColor Cyan
-    & (Find-Godot) --headless --path $project --import | Out-Null
+    $log = Join-Path ([IO.Path]::GetTempPath()) ('dof-import-' + [Guid]::NewGuid().ToString('N') + '.log')
+    $exit = Invoke-LoggedNative (Find-MatchingGodot) @('--headless', '--path', $project, '--import') $log
+    if ($exit -ne 0) { throw "the Godot asset import failed (exit $exit); log: $log" }
     $count = (Get-ChildItem (Join-Path $project '.godot\imported') -ErrorAction SilentlyContinue | Measure-Object).Count
     Write-Host "  $count imported resources" -ForegroundColor Green
 }
@@ -93,9 +131,9 @@ function Invoke-Game {
     New-Item -ItemType Directory -Force -Path $captures | Out-Null
     $arguments = @('--path', $project)
     if ($Headless) { $arguments = @('--headless') + $arguments }
-    $arguments += @('--', '--verify-build', '--verify-build-output', $captures)
+    $arguments += @('--', '--verify-build', '--verify-development', '--verify-build-output', $captures)
     $log = Join-Path $captures 'run.log'
-    & (Find-Godot) @arguments *> $log
+    $exit = Invoke-LoggedNative (Find-MatchingGodot) $arguments $log
     $result = Select-String -Path $log -Pattern 'EXPORT_VERIFY failures=(\d+)' | Select-Object -Last 1
     $shots = (Get-ChildItem $captures -Filter *.png -ErrorAction SilentlyContinue | Measure-Object).Count
     if (-not $result) {
@@ -105,7 +143,7 @@ function Invoke-Game {
     $failures = [int]$result.Matches[0].Groups[1].Value
     Write-Host "  $result" -ForegroundColor ($(if ($failures -eq 0) { 'Green' } else { 'Red' }))
     Write-Host "  screenshots: $shots in $captures" -ForegroundColor Green
-    if ($failures -ne 0) { throw 'the game failed its own verification' }
+    if ($failures -ne 0 -or $exit -ne 0) { throw "the game failed its own verification (exit $exit); log: $log" }
 }
 
 if ($All) { $Build = $true; $Test = $true; $Game = $true }

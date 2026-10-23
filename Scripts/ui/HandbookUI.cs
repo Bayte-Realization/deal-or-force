@@ -151,7 +151,7 @@ public partial class DealOrForceGame
                     Text = (topic?.Name ?? article.Topic).ToUpperInvariant(),
                     AutowrapMode = TextServer.AutowrapMode.WordSmart
                 };
-                caption.AddThemeFontSizeOverride("font_size", 11);
+                caption.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.caption", 11));
                 caption.AddThemeColorOverride("font_color", Ui.Colour("text.caption"));
                 _handbookList.AddChild(caption);
             }
@@ -164,7 +164,7 @@ public partial class DealOrForceGame
                 ClipText = true
             };
             StyleButton(button, id == _handbookArticle);
-            button.AddThemeFontSizeOverride("font_size", 13);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.button", 13));
             button.Pressed += () => { PlayStrategicCue("ui_select"); ShowHandbookArticle(id); RebuildHandbookList(); };
             button.Name = "Handbook_" + id;
             _handbookList.AddChild(button);
@@ -180,7 +180,7 @@ public partial class DealOrForceGame
         ClearRuntimeChildren(_handbookPage);
 
         var heading = new Label { Text = article.Title, AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        heading.AddThemeFontSizeOverride("font_size", 24);
+        heading.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.heading", 24));
         heading.AddThemeColorOverride("font_color", Ui.Colour("text.bright"));
         _handbookPage.AddChild(heading);
 
@@ -191,7 +191,7 @@ public partial class DealOrForceGame
             if (text.StartsWith("## ", StringComparison.Ordinal))
             {
                 var sub = new Label { Text = text[3..].Trim().ToUpperInvariant(), AutowrapMode = TextServer.AutowrapMode.WordSmart };
-                sub.AddThemeFontSizeOverride("font_size", 13);
+                sub.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.sub", 13));
                 sub.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
                 _handbookPage.AddChild(sub);
                 continue;
@@ -209,7 +209,7 @@ public partial class DealOrForceGame
                         AutowrapMode = TextServer.AutowrapMode.WordSmart,
                         SizeFlagsHorizontal = SizeFlags.ExpandFill
                     };
-                    point.AddThemeFontSizeOverride("font_size", 15);
+                    point.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.point", 15));
                     point.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
                     list.AddChild(point);
                 }
@@ -222,7 +222,7 @@ public partial class DealOrForceGame
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
             };
-            paragraph.AddThemeFontSizeOverride("font_size", 15);
+            paragraph.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.paragraph", 15));
             paragraph.AddThemeColorOverride("font_color", Ui.Colour("text.body"));
             _handbookPage.AddChild(paragraph);
         }
@@ -244,7 +244,7 @@ public partial class DealOrForceGame
             var captured = relatedId;
             var link = new Button { Text = "→ " + related.Title, CustomMinimumSize = new Vector2(0, 34) };
             StyleButton(link, false);
-            link.AddThemeFontSizeOverride("font_size", 13);
+            link.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.link", 13));
             link.Pressed += () => { PlayStrategicCue("ui_select"); ShowHandbookArticle(captured); RebuildHandbookList(); };
             actions.AddChild(link);
         }
@@ -325,7 +325,7 @@ public partial class DealOrForceGame
             {
                 row.Name = "FirstStep_" + id;
                 row.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-                row.AddThemeFontSizeOverride("font_size", 12);
+                row.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.handbook.row", 12));
                 if (finished) row.AddThemeColorOverride("font_color", Ui.Colour("text.caption"));
             }
         }

@@ -1,0 +1,7 @@
+{
+  "OrganicOrganizationReachEnabled": true,
+  "AiOrganizationExpansionLimit": 64,
+  "AiOrganizationGlobalGdp": 1000,
+  "AiOrganizationFoundingPoliticalCost": 30,
+  "OrganizationLeaderRiftPenalty": 0.24
+}

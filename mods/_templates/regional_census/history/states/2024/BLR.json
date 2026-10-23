@@ -1,0 +1,12 @@
+// How a mod seeds regions from a published census rather than from shares: common/regional_demography
+// holds the source head-counts (here Belstat's 2019 census, table 6.2), and a region names the record it
+// is seeded from with "culture_profile". The base game writes every country's peoples as "cultures"
+// shares in history/states; this template shows the denser, sourced path for a mod that has the counts.
+{
+  "by_br": { "culture_profile": "by_br" },
+  "by_ho": { "culture_profile": "by_ho" },
+  "by_hr": { "culture_profile": "by_hr" },
+  "by_ma": { "culture_profile": "by_ma" },
+  "by_mi": { "culture_profile": "by_mi" },
+  "by_vi": { "culture_profile": "by_vi" }
+}

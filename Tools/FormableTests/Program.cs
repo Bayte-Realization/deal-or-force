@@ -10,14 +10,162 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--inspect-save")) { InspectSave(args); return; }
+        if (args.Contains("--paused-doctrines-only")) { PausedDoctrineTests.Run(); return; }
+        if (args.Length == 0) PausedDoctrineTests.Run();
+        if (args.Contains("--geopolitical-dynamics-only")) { GeopoliticalDynamicsTests.Run(); return; }
+        if (args.Length == 0) GeopoliticalDynamicsTests.Run();
+        if (args.Contains("--formable-proclamation-ai-only")) { FormableProclamationAiTests.Run(); return; }
+        if (args.Length == 0) FormableProclamationAiTests.Run();
+        if (args.Contains("--smaller-polity-only")) { SmallerPolityTests.Run(); return; }
+        if (args.Length == 0) SmallerPolityTests.Run();
+        if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
+        if (args.Length == 0) OrganicBlocTests.Run();
+        if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }
+        if (args.Length == 0) DiplomaticMissionTests.Run();
+        if (args.Contains("--campaign-alerts-only")) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); return; }
+        if (args.Length == 0) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); }
+        if (args.Contains("--elections-only")) { ElectionTests.Run(); return; }
+        if (args.Length == 0) ElectionTests.Run();
+        if (args.Contains("--regional-administration-only")) { RegionalAdministrationTests.Run(); return; }
+        if (args.Length == 0) RegionalAdministrationTests.Run();
+        if (args.Contains("--political-identity-only")) { PoliticalIdentityTests.Run(); return; }
+        if (args.Length == 0) PoliticalIdentityTests.Run();
+        if (args.Contains("--person-names-only")) { PersonNameCatalogTests.Run(); return; }
+        if (args.Length == 0) PersonNameCatalogTests.Run();
+        if (args.Contains("--performance-regressions-only")) { PerformanceRegressionTests.Run(); return; }
+        if (args.Length == 0) PerformanceRegressionTests.Run();
+        if (args.Contains("--decision-resources-only")) { DecisionResourceTests.Run(); return; }
+        if (args.Length == 0) DecisionResourceTests.Run();
+        if (args.Contains("--service-exercises-only")) { ServiceExerciseTests.Run(); return; }
+        if (args.Length == 0) ServiceExerciseTests.Run();
+        if (args.Contains("--order-observation-only")) { ArmyOrderObservationTests.Run(); return; }
+        if (args.Length == 0) ArmyOrderObservationTests.Run();
+        if (args.Contains("--shard-consolidation-only")) { ShardConsolidationTests.Run(); return; }
+        if (args.Length == 0) ShardConsolidationTests.Run();
+        if (args.Contains("--audit-movement-flags")) { FlagArtworkTests.AuditMovementBanners(); return; }
+        if (args.Contains("--audit-content-identities")) { ContentIdentityAudit.Run(); return; }
+        if (args.Contains("--catalogue-identity-only")) { CatalogIdentityTests.Run(); return; }
+        if (args.Contains("--observer-authority-only")) { ObserverAuthorityTests.Run(); return; }
+        if (args.Length == 0) { CatalogIdentityTests.Run(); ObserverAuthorityTests.Run(); }
+        if (args.Contains("--ownership-kernel-only")) { OwnershipComponentTests.Run(); return; }
+        if (args.Contains("--core-refactor-only")) { CoreRefactorTests.Run(); return; }
+        if (args.Contains("--agenda-only")) { AgendaWorkspaceTests.Run(); return; }
+        if (args.Contains("--extinction-only")) { DemographicExtinctionTests.Run(); return; }
+        if (args.Contains("--deterrence-only")) { DeterrenceTests.Run(); return; }
+        if (args.Contains("--resistance-only")) { OccupationResistanceTests.Run(); return; }
+        if (args.Contains("--partition-only")) { PartitionTests.Run(); return; }
+        if (args.Contains("--dynasty-only")) { DynastyTests.Run(); return; }
+        if (args.Contains("--rulers-subjects-only")) { RulersAndSubjectsTests.Run(); return; }
+        if (args.Contains("--macao-only")) { MacaoProbe.Run(); return; }
+        if (args.Contains("--dependencies-only")) { DependencyPlausibilityTests.Run(); return; }
+        if (args.Contains("--curses-only")) { WorldCurseTests.Run(); return; }
+        if (args.Contains("--subject-growth-only")) { SubjectGrowthProbe.Run(); return; }
+        if (args.Contains("--micro-enclave-only")) { MicroEnclaveGrowthTests.Run(); return; }
+        if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
+        if (args.Contains("--founding-names-only")) { FoundingNameTests.Run(); return; }
+        if (args.Contains("--flag-survey-only")) { FlagSurvey.Run(); return; }
+        if (args.Contains("--tick-bench-only")) { TickBench.Run(); return; }
+        if (args.Contains("--name-survey-only")) { FoundingNameSurvey.Run(); return; }
+        if (args.Contains("--diaspora-only")) { DiasporaProbe.Run(); return; }
+        if (args.Contains("--hot-wars-names-only")) { HotWarAndNamePoolTests.Run(); return; }
+        if (args.Contains("--annexation-only")) { AnnexationTests.Run(); return; }
+        if (args.Contains("--mobilisation-only")) { MobilisationAndStockpileTests.RunAll(); return; }
+        if (args.Length == 0) { RulersAndSubjectsTests.Run(); MobilisationAndStockpileTests.RunAll(); }
+        if (args.Length == 0) DependencyPlausibilityTests.Run();
+        if (args.Length == 0) WorldCurseTests.Run();
+        if (args.Contains("--ownership-native-only")) { OwnershipComponentTests.Run(true); return; }
+        if (args.Contains("--ownership-fallback-only")) { OwnershipComponentTests.Run(false); return; }
+        if (args.Contains("--ownership-kernel-fixtures")) { OwnershipComponentTests.RunFixtures(args.Last()); return; }
+        if (args.Length == 0) OwnershipComponentTests.Run();
+        if (args.Length == 0) CoreRefactorTests.Run();
+        if (args.Length == 0) AgendaWorkspaceTests.Run();
+        if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
+        if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
+        if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }
+        if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
+        if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
+        if (args.Contains("--war-aims-only")) { WarAimsTests.Run(); CombatTempoTests.Run(); return; }
+        if (args.Contains("--combat-tempo-only")) { CombatTempoTests.Run(); return; }
+        if (args.Contains("--defections-only")) { DefectionsTests.Run(); return; }
+        if (args.Contains("--participant-objective-only")) { ParticipantWarObjectiveTests.Run(); return; }
+        if (args.Length == 0) ParticipantWarObjectiveTests.Run();
+        if (args.Contains("--war-aim-resolve-only")) { WarAimResolveTests.Run(); return; }
+        if (args.Length == 0) WarAimResolveTests.Run();
         if (args.Contains("--worker-fixture")) { WorkerBackendTests.Fixture(args.Last()); return; }
+        if (args.Contains("--campaign-toggles-only")) { CampaignToggleTests.Run(); return; }
+        if (args.Contains("--conciliation-only")) { ConciliationTests.Run(); return; }
+        if (args.Contains("--corridor-report-only")) { CorridorReportTests.Run(); return; }
+        if (args.Contains("--movement-voice-only")) { MovementVoiceTests.Run(); return; }
+        if (args.Contains("--host-patience-only")) { HostPatienceTests.Run(); return; }
+        if (args.Contains("--peace-compact-only")) { PeaceCompactTests.Run(); return; }
+        if (args.Contains("--army-standdown-only")) { ArmyStandDownTests.Run(); return; }
+        if (args.Contains("--held-conquest-peace-only")) { HeldConquestPeaceTests.Run(); return; }
+        if (args.Contains("--border-tidy-only")) { BorderTidyTests.Run(); return; }
+        if (args.Contains("--delegated-front-only")) { DelegatedFrontTests.Run(); return; }
+        if (args.Contains("--kindred-only")) { KindredLandTests.Run(); return; }
+        if (args.Contains("--player-ultimatum-only")) { PlayerUltimatumTests.Run(); return; }
+        if (args.Contains("--ultimatum-only")) { UltimatumTests.Run(); return; }
+        if (args.Contains("--enclave-swap-only")) { EnclaveSwapTests.Run(); return; }
         if (args.Contains("--integrity-only")) { CampaignIntegrityTests.Run(); return; }
+        if (args.Contains("--conflict-preview-only")) { ConflictReadOnlyTests.Run(); return; }
         if (args.Contains("--living-world-fingerprint-only")) { ClaudeStateFingerprintTests.Run(); return; }
-        if (args.Contains("--deals-only")) { DealTests.Run(); return; }
+        if (args.Contains("--staged-boundary-only")) { StagedStepBoundaryTests.Run(); return; }
+        if (args.Contains("--mod-frontend-only")) { ModFrontendActionTests.Run(); return; }
+        if (args.Contains("--assistance-presentation-only")) { ForeignAssistancePresentationTests.Run(); return; }
+        if (args.Contains("--assault-presentation-only")) { ArmyAssaultPresentationTests.Run(); return; }
+        if (args.Contains("--assault-rules-only")) { AssaultRulesBackendTests.Run(); return; }
+        if (args.Contains("--garrison-only")) { GarrisonPlannerTests.Run(); return; }
+        if (args.Contains("--historical-only")) { HistoricalTimelineTests.Run(); return; }
+        if (args.Contains("--war-emergency-only")) { WarEmergencyTests.Run(); return; }
+        if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
+        if (args.Contains("--deals-only")) { DealTests.Run(); TerritorialDealProtectionTests.Run(); return; }
+        if (args.Contains("--territorial-recovery-only")) { TerritorialRecoveryTests.Run(); return; }
+        if (args.Length == 0) TerritorialRecoveryTests.Run();
+        if (args.Contains("--secession-colours-only")) { SecessionColourTests.Run(); return; }
+        if (args.Length == 0) SecessionColourTests.Run();
+        if (args.Contains("--occupied-uprising-only")) { RevoltOccupationTests.Run(); return; }
+        if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
+        if (args.Length == 0) TerritorialFrontTests.Run();
+        if (args.Length == 0) RevoltOccupationTests.Run();
+        if (args.Length == 0) TerritorialDealProtectionTests.Run();
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
+        if (args.Contains("--crisis-grant-only")) { CrisisGrantTests.Run(); return; }
+        if (args.Contains("--war-score-index-only")) { WarScoreIndexTests.Run(); return; }
+        if (args.Contains("--supply-hedge-only")) { SupplyHedgeTests.Run(); return; }
+        if (args.Contains("--exposure-only")) { StrategicReportsTests.Run(); SupplyStressTests.Run(); return; }
+        if (args.Length == 0) { CrisisGrantTests.Run(); WarScoreIndexTests.Run(); SupplyHedgeTests.Run(); }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
+        if (args.Contains("--music-transition-only")) { MusicTransitionTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }
+        if (args.Contains("--political-only")) { PoliticalCohortTests.Run(); return; }
+        if (args.Contains("--promises-only")) { GovernmentPromiseTests.Run(); return; }
+        if (args.Contains("--goals-only")) { StrategicGoalTests.Run(); return; }
+        if (args.Contains("--state-identity-only")) { StateIdentityTests.Run(); return; }
+        if (args.Contains("--rulers-only")) { RulerNamesTests.Run(); return; }
+        if (args.Contains("--ruler-ages-only")) { RulerAgeTests.Run(); return; }
+        if (args.Contains("--quality-profiles-only")) { QualityProfileTests.Run(); return; }
+        if (args.Contains("--counter-cards-only")) { CounterCardTests.Run(); return; }
+        if (args.Contains("--ai-promises-only")) { AiPromiseTests.Run(); return; }
+        if (args.Contains("--doctrine-only")) { TacticalDoctrineTests.Run(); return; }
+        if (args.Contains("--strategy-only")) { StrategicDoctrineTests.Run(); return; }
+        if (args.Contains("--names-only")) { CountryNameTests.Run(); return; }
+        if (args.Contains("--naming-only")) { NamingTests.Run(); return; }
+        if (args.Contains("--tautology-only")) { TautologyNameProbe.Run(); return; }
+        if (args.Contains("--name-probe")) { NameProbe.Run(); return; }
+
+        if (args.Contains("--ruler-names-only")) { RulerNameTests.Run(); return; }
+
+
+        if (args.Contains("--federal-outcome-only")) { FederalFractureOutcomeTests.Run(); return; }
+        if (args.Contains("--movement-power-state-only")) { MovementPowerStateTests.Run(); return; }
+        if (args.Contains("--movement-staging-only")) { MovementPowerStagingTests.Run(); return; }
+        if (args.Contains("--campaign-isolation-only")) { CampaignIsolationTests.Run(); return; }
+        if (args.Length == 0) CampaignIsolationTests.Run();
+        if (args.Length == 0) MovementPowerStagingTests.Run();
+        if (args.Contains("--movement-power-fingerprint-only")) { MovementPowerFingerprintTests.Run(); return; }
+        if (args.Contains("--feed-only")) { NewsFeedTests.Run(); return; }
         if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
         if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
         if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
@@ -26,42 +174,81 @@ static class Program
         if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
         if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
         if (args.Contains("--snapshot-delivery-only")) { NetworkSnapshotDeliveryTests.Run(); return; }
-        if (args.Contains("--staged-boundary-only")) { StagedStepBoundaryTests.Run(); return; }
-        if (args.Contains("--mod-frontend-only")) { ModFrontendActionTests.Run(); return; }
-        if (args.Contains("--assistance-presentation-only")) { ForeignAssistancePresentationTests.Run(); return; }
-        if (args.Contains("--foreign-assistance-only")) { ForeignAssistanceTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
+        if (args.Contains("--brain-drain-only")) { BrainDrainTests.Run(); return; }
         if (args.Contains("--release-only")) { DismantlementTests.Run(); return; }
         if (args.Contains("--deals-bench")) { DealTests.Benchmark(); return; }
         if (args.Contains("--social-only")) { SocialMemoryTests.Run(); return; }
         if (args.Contains("--crises-only")) { DomesticCrisesTests.Run(); return; }
         if (args.Contains("--ui-icons-only")) { InterfaceIconTests.Run(); return; }
         if (args.Contains("--worker-only")) { WorkerBackendTests.Run(); return; }
+        if (args.Contains("--movement-zone-only")) { MovementZoneTests.Run(); return; }
         if (args.Contains("--civic-only")) { CivicCampaignTests.Run(); return; }
         if (args.Contains("--alliances-only")) { DynamicAllianceTests.Run(); return; }
         if (args.Contains("--finance-only")) { SovereignFinanceTests.Run(); return; }
+        if (args.Contains("--ai-fiscal-only")) { AiFiscalPolicyTests.Run(); return; }
+        if (args.Contains("--construction-funding-only")) { ConstructionFundingTests.Run(); return; }
         if (args.Contains("--methods-only")) { MovementMethodsTests.Run(); return; }
         if (args.Contains("--policies-only")) { PoliticalPolicyTests.Run(); return; }
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
-        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); return; }
+        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); FlagArtworkTests.Run(); return; }
+        if (args.Contains("--names-only")) { CountryNameTests.Run(); return; }
+        if (args.Contains("--union-mutation-only")) { UnionCohesionMutationTests.Run(); return; }
+        if (args.Contains("--union-only")) { UnionCohesionTests.Run(); return; }
+        if (args.Contains("--union-map-only")) { UnionCohesionTests.RunOnMap(); return; }
+        if (args.Contains("--demography-only")) { DemographyTests.Run(); return; }
+        if (args.Contains("--ai-doctrine-only")) { AiDoctrineTests.Run(); return; }
+        if (args.Contains("--ai-temperament-only")) { AiTemperamentTests.Run(); return; }
+        if (args.Contains("--casus-belli-only")) { CasusBelliTests.Run(); return; }
+        if (args.Contains("--scenario-manifest-only")) { ScenarioManifestTests.Run(); return; }
+        if (args.Contains("--country-history-only")) { CountryHistoryTests.Run(); return; }
+        if (args.Contains("--country-definition-only")) { CountryDefinitionTests.Run(); return; }
+        if (args.Contains("--alliance-program-only")) { AllianceProgramOutcomeTests.Run(); return; }
+        if (args.Contains("--movement-catalog-only")) { MovementCatalogTests.Run(); return; }
+        if (args.Contains("--movement-representation-only")) { MovementRepresentationTests.Run(); return; }
+        if (args.Contains("--war-stalemate-only")) { WarStalemateTests.Run(); return; }
+        RegionalDemographyTests.Run();
         DynamicAllianceTests.Run();
+        ConflictReadOnlyTests.Run();
+        AiDoctrineTests.Run();
+        AiTemperamentTests.Run();
+        CasusBelliTests.Run();
+        ScenarioManifestTests.Run();
+        CountryHistoryTests.Run();
+        CountryDefinitionTests.Run();
+        AllianceProgramOutcomeTests.Run();
         ClaudeStateFingerprintTests.Run();
         CampaignIntegrityTests.Run();
         TerritorialClaimsTests.Run();
         OrganizationTests.Run();
         HouseholdTests.Run();
+        BrainDrainTests.Run();
+        DemographicExtinctionTests.Run();
+        DeterrenceTests.Run();
+        OccupationResistanceTests.Run();
+        PartitionTests.Run();
+        DynastyTests.Run();
         DismantlementTests.Run();
         DomesticCrisesTests.Run();
+        FederalFractureOutcomeTests.Run();
         SovereignFinanceTests.Run();
+        AiFiscalPolicyTests.Run();
+        ConstructionFundingTests.Run();
         MovementMethodsTests.Run();
+        MovementCatalogTests.Run();
+        MovementRepresentationTests.Run();
+        WarStalemateTests.Run();
+        MovementPowerStateTests.Run();
+        MovementPowerFingerprintTests.Run();
         PoliticalPolicyTests.Run();
         NationalCourseTests.Run();
         RegionalContentTests.Run();
         SocialMemoryTests.Run();
         CivicCampaignTests.Run();
+        MovementZoneTests.Run();
         WorkerBackendTests.Run();
         if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
@@ -82,6 +269,14 @@ static class Program
             return;
         }
         FlagModdingTests.Run();
+        FlagArtworkTests.Run();
+        CountryNameTests.Run();
+        UnionCohesionTests.Run();
+        UnionCohesionMutationTests.Run();
+        // The ground change itself, on the campaign the game plays: slower, and the only place the
+        // end of the union chain is checked at all.
+        UnionCohesionTests.RunOnMap();
+        DemographyTests.Run();
         StructuredDataTests.Run();
         EventCadenceTests.Run();
         PresentationReloadTests.Run();
@@ -89,12 +284,21 @@ static class Program
         DealTests.Run();
         DealNegotiationTests.Run();
         SituationReportTests.Run();
+        GovernmentPromiseTests.Run();
+        AiPromiseTests.Run();
+        TacticalDoctrineTests.Run();
+        StrategicDoctrineTests.Run();
         MusicSituationTests.Run();
+        MusicTransitionTests.Run();
         WeatherReadabilityTests.Run();
         MediaLibraryTests.Run();
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
         RestorationTests.Run();
+        PeaceIntentTests.Run();
+        WarAimsTests.Run();
+        CombatTempoTests.Run();
+        DefectionsTests.Run();
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();
@@ -102,6 +306,11 @@ static class Program
         StagedStepBoundaryTests.Run();
         ModFrontendActionTests.Run();
         ForeignAssistancePresentationTests.Run();
+        ArmyAssaultPresentationTests.Run();
+        AssaultRulesBackendTests.Run();
+        GarrisonPlannerTests.Run();
+        HistoricalTimelineTests.Run();
+        WarEmergencyTests.Run();
         ForeignAssistanceTests.Run();
         NewsFeedTests.Run();
         TerrainCatalog.ResetCatalog();
@@ -125,9 +334,16 @@ static class Program
         StrategicReportsTests.Run();
         SupplyStressTests.Run();
         TechnologyTreeTests.Run();
+        ResearchWorkspaceTests.Run();
+        AtlasSurfaceTests.Run();
+        DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();
         InterfaceIconTests.Run();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         ScenarioMapDraftTests.Run();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         using var navigationDocument = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
             "gui", "20_campaign_structure.json")), GameDataLoader.ForgivingJson);
         var declaredNavigation = navigationDocument.RootElement.GetProperty("campaign").GetProperty("navigation")
@@ -262,5 +478,46 @@ static class Program
         Check(rus.DisplayName == "Россия" && rus.MapName == "Россия", "Russian identity and map names use stable keys");
         Loc.Language = "english";
         Check(rus.DisplayName == "Russia", "missing localized stable key falls back to country name");
+    }
+
+    private static void InspectSave(string[] args)
+    {
+        var folder = args.Length > 1 && !args[1].StartsWith("--") ? args[1] : @"C:\Users\User\Documents\Deal or Force\save games";
+        var slot = args.Length > 2 && !args[2].StartsWith("--") ? args[2] : "campaign_20261021_215222";
+        Console.WriteLine($"Loading save: {folder} / {slot} ...");
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var result = SaveSystem.Load(folder, slot, "");
+        sw.Stop();
+        Console.WriteLine($"Save loaded in {sw.ElapsedMilliseconds} ms. Success: {result.Success}, Warning: {result.Warning}");
+        if (result.Campaign is null) return;
+        var c = result.Campaign;
+        Console.WriteLine($"Campaign Day: {c.ElapsedDays}, Date: {c.Date:yyyy-MM-dd}");
+        Console.WriteLine($"Player: {c.Player?.Tag} ({c.Player?.DisplayName}), Treasury: {c.Player?.Treasury}");
+        Console.WriteLine($"Nations: {c.Nations.Count} (Alive: {c.Nations.Count(n => c.HasOwnedLand(n))}, Fallen: {c.Fallen.Count}, Landless: {c.Nations.Count(n => n.Landless)})");
+        Console.WriteLine($"States: {c.States.Count}, Armies: {c.Armies.Count}, Wars: {c.Wars.Count}, Battles: {c.Battles.Count}");
+        Console.WriteLine($"FrontLines: {c.FrontLines.Count}, Organizations: {c.Organizations.Count}, PendingEvents: {c.PendingEvents.Count}");
+        Console.WriteLine($"Chronicle entries: {c.Chronicle.Entries.Count}");
+        Console.WriteLine($"Armies in battle: {c.Armies.Count(a => a.InBattle)}, Armies with route: {c.Armies.Count(a => a.Route.Count > 0)}");
+
+        var totalArmies = c.Armies.Count;
+        var totalPersonnel = c.Armies.Sum(a => (long)a.Personnel);
+        Console.WriteLine($"Total Armies: {totalArmies}, Total Personnel: {totalPersonnel:N0}");
+
+        SimProfiler.Reset();
+        c.IsPaused = false;
+        Console.WriteLine("\n--- Ticking 5 days and measuring profile ---");
+        for (int i = 0; i < 5; i++)
+        {
+            sw.Restart();
+            c.TickDay();
+            sw.Stop();
+            Console.WriteLine($"Day {c.ElapsedDays} ({c.Date:yyyy-MM-dd}) ticked in {sw.ElapsedMilliseconds} ms ({sw.ElapsedTicks} ticks)");
+        }
+
+        Console.WriteLine("\n--- SimProfiler Timings (top 30) ---");
+        foreach (var entry in SimProfiler.All.OrderByDescending(p => p.TotalMilliseconds).Take(30))
+        {
+            Console.WriteLine($"  {entry.Name,-45}: {entry.TotalMilliseconds:0.00} ms total (runs: {entry.Runs}, mean: {entry.MeanMilliseconds:0.00} ms, alloc: {entry.AllocatedBytes / 1024} KB)");
+        }
     }
 }

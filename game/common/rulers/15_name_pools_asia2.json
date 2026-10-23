@@ -1,0 +1,36 @@
+{
+  "names": {
+    "indo_aryan": {
+      "given": ["Aarav", "Abhay", "Aditya", "Ajay", "Akash", "Amit", "Anand", "Anil", "Arjun", "Arun", "Ashok", "Balram", "Bhavesh", "Chetan", "Deepak", "Dev", "Dhruv", "Gaurav", "Harish", "Harsh", "Jagdish", "Karan", "Krishna", "Lakshman", "Mahesh", "Manoj", "Mohan", "Naresh", "Nikhil", "Pankaj", "Prakash", "Pranav", "Rajesh", "Rakesh", "Ramesh", "Rohan", "Rohit", "Sanjay", "Suresh", "Vijay", "Vikram", "Vinod", "Vishal", "Aditi", "Ananya", "Anjali", "Divya", "Kavita", "Meera", "Priya", "Radha", "Sneha", "Sunita"],
+      "family": ["Agarwal", "Ahuja", "Bhat", "Chandra", "Chaudhary", "Chopra", "Das", "Desai", "Dubey", "Gandhi", "Gill", "Gupta", "Jain", "Joshi", "Kapoor", "Kaur", "Khan", "Kumar", "Malhotra", "Mehta", "Mishra", "Nair", "Patel", "Pillai", "Rao", "Reddy", "Sethi", "Sharma", "Singh", "Sinha", "Soni", "Tiwari", "Tripathi", "Varma", "Verma", "Yadav"]
+    },
+    "dravidian": {
+      "given": ["Aravind", "Arul", "Ashwin", "Balaji", "Chandran", "Dhanush", "Ganesh", "Gopal", "Hari", "Ilango", "Jayaram", "Karthik", "Kumar", "Mani", "Mohan", "Murugan", "Naveen", "Prakash", "Raghavan", "Rajan", "Ravi", "Sekar", "Selvam", "Senthil", "Shankar", "Srinivas", "Subramanian", "Suresh", "Thirumal", "Velu", "Vijayan", "Anitha", "Deepa", "Kavitha", "Lakshmi", "Meenakshi", "Nandini", "Priya", "Revathi", "Saranya"],
+      "family": ["Aiyar", "Chettiar", "Gounder", "Iyer", "Krishnan", "Menon", "Mudaliar", "Nadar", "Nair", "Naidu", "Pillai", "Raj", "Raju", "Rao", "Reddy", "Sastri", "Sethuraman", "Shanmugam", "Srinivasan", "Subramaniam", "Swamy", "Thevar", "Varma", "Venkatesh"]
+    },
+    "austroasiatic": {
+      "given": ["Anh", "Bao", "Binh", "Canh", "Chinh", "Cuong", "Duc", "Dung", "Giang", "Hai", "Hieu", "Hoang", "Hung", "Huy", "Khanh", "Kien", "Linh", "Long", "Minh", "Nam", "Nghia", "Ngoc", "Phong", "Phuc", "Quan", "Quang", "Son", "Tam", "Thanh", "Thang", "Trung", "Tuan", "Viet", "Vinh", "Hoa", "Lan", "Mai", "Thu", "Trang", "Yen"],
+      "family": ["Bui", "Cao", "Dang", "Dao", "Do", "Duong", "Dinh", "Ha", "Ho", "Huynh", "Le", "Luong", "Ly", "Mai", "Ngo", "Nguyen", "Pham", "Phan", "Quach", "Ta", "Thai", "Tran", "Truong", "Vu", "Vo"]
+    },
+    "austronesian": {
+      "given": ["Adi", "Agus", "Ahmad", "Andi", "Arif", "Bagus", "Bambang", "Bayu", "Budi", "Dedi", "Dimas", "Eko", "Fajar", "Gunawan", "Hadi", "Hendra", "Iwan", "Joko", "Krisna", "Lukman", "Made", "Nanda", "Putra", "Rizki", "Samsul", "Slamet", "Surya", "Taufik", "Wawan", "Yudi", "Ayu", "Dewi", "Fitri", "Indah", "Kartika", "Lestari", "Maya", "Novi", "Sari", "Wulan"],
+      "family": ["Abdullah", "Anwar", "Cahyono", "Firmansyah", "Gunawan", "Hakim", "Hartono", "Hidayat", "Kusuma", "Lestari", "Nugroho", "Permadi", "Pratama", "Putra", "Rahman", "Santoso", "Saputra", "Setiawan", "Siregar", "Suharto", "Sukarno", "Sumadi", "Susilo", "Utomo", "Wibowo", "Wijaya", "Yusuf"]
+    },
+    "tai_kadai": {
+      "given": ["Anan", "Anucha", "Arthit", "Bancha", "Chai", "Chalerm", "Chao", "Charnchai", "Chatchai", "Chinnawat", "Decha", "Kittisak", "Kriang", "Manop", "Narong", "Nattapong", "Phanom", "Pongsak", "Prasert", "Prayut", "Rattanakorn", "Somchai", "Somsak", "Somsri", "Suchart", "Suthep", "Thanom", "Wichai", "Worawut", "Achara", "Aree", "Duangjai", "Kanya", "Malinee", "Nok", "Pim", "Siriporn", "Sunee", "Ubon", "Wilai"],
+      "family": ["Boonsri", "Chaiyaporn", "Chantarasiri", "Intharaphan", "Kaewkla", "Khamla", "Lertchai", "Mekhala", "Nakhon", "Phanich", "Prasertsuk", "Rattanaporn", "Saengthong", "Srisai", "Suwannarat", "Thongchai", "Wattana", "Wongsawat", "Yodmani"]
+    },
+    "tibeto_burman": {
+      "given": ["Aung", "Bogyoke", "Chit", "Hla", "Htun", "Kyaw", "Lwin", "Maung", "Min", "Myint", "Naing", "Nay", "Nyein", "Phyo", "Soe", "Thant", "Thein", "Thura", "Tun", "Win", "Ye", "Zaw", "Zeya", "Aye", "Ei", "Khin", "Mi", "Myat", "Nilar", "Su", "Thandar", "Thiri", "Wai"],
+      "family": ["Aung", "Hlaing", "Htun", "Kyaw", "Lwin", "Maung", "Min", "Myint", "Naing", "Oo", "Phyo", "Soe", "Thein", "Tun", "Win", "Zaw"]
+    },
+    "papuan": {
+      "given": ["Arua", "Benny", "Dika", "Elis", "Frans", "Gideon", "Habel", "Immanuel", "Jokob", "Kaleb", "Lukas", "Markus", "Niko", "Obeth", "Paskalis", "Ruben", "Simon", "Timotius", "Yakob", "Yonas", "Yosua", "Agata", "Debora", "Ester", "Maria", "Martha", "Naomi", "Ruth", "Sara"],
+      "family": ["Aitembai", "Bauw", "Deda", "Gai", "Kambu", "Kogoya", "Mote", "Nari", "Ondi", "Rumbiak", "Sani", "Tabuni", "Wenda", "Wanimbo", "Yikwa", "Yogia"]
+    },
+    "polynesian": {
+      "given": ["Afa", "Akamu", "Aleki", "Anaru", "Hemi", "Iakopo", "Ioane", "Kaleo", "Kanoa", "Kealoha", "Makoa", "Manaia", "Mateo", "Noa", "Pita", "Rangi", "Sione", "Tama", "Tane", "Te Ariki", "Tui", "Vaka", "Ana", "Aroha", "Hina", "Kiri", "Leilani", "Mahina", "Moana", "Ngaire", "Sina", "Tui"],
+      "family": ["Aiono", "Ariki", "Faleolo", "Havili", "Kahele", "Kealoha", "Mahu", "Malosi", "Nakoa", "Pule", "Rangi", "Taufa", "Te Rangi", "Tui", "Vaea", "Vaka"]
+    }
+  }
+}

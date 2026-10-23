@@ -15,6 +15,22 @@
 выключение авиации само по себе не выключает дроны или ПВО. Для ранней эпохи выключите
 их отдельно или отключите `long_range_forces` целиком.
 
+Погода и календарь выключаются отдельно, тем же словарём `Features`:
+
+```json
+{ "Features": { "weather": false, "seasons": false } }
+```
+
+`weather` убирает облака, тени облаков и декоративный туман. Скрытие провинций и войск остаётся. `seasons` разом возвращает переправы, озёра и зимние дороги к обычной пропускной способности. Части живут сами по себе: `seasonal_water` и `seasonal_roads`. Ноль в `RiverSeasonalAmplitude`, `LakeWinterLogisticsLoss` или `RoadSeasonAmplitude` гасит только соответствующую силу, не выключатель.
+
+Политическое мнение регионов и федеральный раскол выключаются так же:
+
+```json
+{ "Features": { "political_cohorts": false, "federal_fracture": false } }
+```
+
+`political_cohorts` перестаёт двигать принятие законов, принятие правительства и расхождение с центром. `federal_fracture` один убирает дорогу, по которой регион своих же людей может отойти при отвержении власти, слабом центре и уже идущем экономическом кризисе. Этнический сепаратизм от этого не включается и не выключается. Ноль в `FederalPressureScale` оставляет мнение и гасит только накопление давления.
+
 Также подключены `navy`, `research`, `construction`, `recruitment`, `decisions`,
 `events`, `politics`, `movements`, `colonisation`, `subjects`, `formable_nations`,
 `secession`, `militia`, `war_damage`, `war_weariness`. Они блокируют соответствующие новые

@@ -7,16 +7,16 @@ namespace DealOrForce.Simulation;
 public sealed partial class Defines
 {
     /// <summary>A war this old starts to weigh on both governments: every year after it adds this much to what they will accept, up to the cap.</summary>
-    public int PeaceWearinessAfterDays { get; set; } = 730;
-    public float PeaceWearinessPerYear { get; set; } = 12f;
-    public float PeaceWearinessCap { get; set; } = 40f;
+    public int PeaceWearinessAfterDays { get; set; } = 450;
+    public float PeaceWearinessPerYear { get; set; } = 15f;
+    public float PeaceWearinessCap { get; set; } = 45f;
     /// <summary>A war whose score has moved less than this over half a year is standing still.</summary>
-    public float WarStalledScore { get; set; } = 8f;
+    public float WarStalledScore { get; set; } = 6f;
     /// <summary>After this long a side that is not winning a war that stands still asks for a white peace, and after the second, anyone does.</summary>
-    public int AiStalemateDays { get; set; } = 730;
-    public int AiWearyDays { get; set; } = 1460;
-    /// <summary>A war with nobody's player in it ends of exhaustion at this age: each side keeps what it holds securely.</summary>
-    public int PeaceForcedEndDays { get; set; } = 2920;
+    public int AiStalemateDays { get; set; } = 450;
+    public int AiWearyDays { get; set; } = 900;
+    /// <summary>A war with nobody's player in it ends of exhaustion at this age: each side keeps the enemy ground it holds.</summary>
+    public int PeaceForcedEndDays { get; set; } = 1825;
     /// <summary>An AI war with no battle and no province ever contested ends in white peace after this many days. Zero disables it.</summary>
     public int AiNoContactPeaceDays { get; set; } = 365;
     /// <summary>Earlier white peace for an AI war with no front and no land or naval route on either side. Zero disables the early check.</summary>
@@ -33,6 +33,21 @@ public sealed partial class Defines
     /// <summary>A people's young men and women coming of age, as a share of the population a year; the most a country can have in reserve.</summary>
     public float ManpowerGrowthPerYear { get; set; } = 0.0015f;
     public float MobilisationCeilingShare { get; set; } = 0.05f;
+
+    /// <summary>
+    /// Days of replacements - at the country's own daily capacity to send them forward - kept
+    /// back to refill the formations it has rather than spent raising new ones. Without it
+    /// Ukraine doubled its army to 116 divisions in five months, had nobody left to replace a
+    /// single loss, and collapsed in the sixth. Measured in its own replacements, not in its
+    /// people: a quarter of the mobilisation ceiling was 250,000 men for Ukraine, which no
+    /// reserve at war ever reached again, so it raised nothing after the first winter.
+    /// </summary>
+    public float ReplacementReserveDays { get; set; } = 60f;
+
+    /// <summary>Average organisation from which a force at war attacks in full (WarCore.Readiness).</summary>
+    public float AiOffensiveReadyOrganisation { get; set; } = 0.55f;
+    /// <summary>Average organisation at which it stops attacking until it has recovered.</summary>
+    public float AiOffensiveExhaustedOrganisation { get; set; } = 0.30f;
     /// <summary>How much faster men are called up by a country at war whose own ground is being taken.</summary>
     public float MobilisationMultiplier { get; set; } = 4f;
     /// <summary>How deep into debt a country being overrun goes to raise an army, as a share of its GDP.</summary>
@@ -66,6 +81,14 @@ public sealed partial class StrategicWar
 /// </summary>
 public static class WarWeariness
 {
+    /// <summary>Derived fatigue, not a second stored meter. Only a belligerent can be
+    /// weary of its current war; support is the existing national willingness to fight.</summary>
+    public static float NationalFatigue(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+            if (!war.Ended && war.Involves(nation.Id)) return M.Clamp01(1f - nation.WarSupport);
+        return 0f;
+    }
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) return;
@@ -151,6 +174,13 @@ public static class WarWeariness
         }
     }
 
+    /// <summary>Whether a country can raise one more formation and still keep its replacement reserve.</summary>
+    public static bool MayRaise(Campaign campaign, Nation nation)
+    {
+        var keep = MathF.Max(0f, nation.ReinforcementCapacity) * MathF.Max(0f, campaign.Defines.ReplacementReserveDays);
+        return nation.ManpowerReserve - MilitaryBootstrap.DivisionSize >= keep;
+    }
+
     /// <summary>Whether this country is at war and has lost ground to the enemy - fighting for its life.</summary>
     public static bool Overrun(Campaign campaign, Nation nation)
     {
@@ -211,15 +241,16 @@ public static class WarWeariness
 
     /// <summary>
     /// The peace a deadlock ends in: the status quo when either side holds some of the other's
-    /// ground securely - the line becomes the border - and a white peace when nobody holds anything.
+    /// ground - the line becomes the border - and a white peace when nobody holds anything.
+    /// Holding is control. A province the army has taken is not handed back because its
+    /// occupation meter has not yet crossed the secure line.
     /// </summary>
     public static PeaceTerms StalemateTerms(Campaign campaign, StrategicWar war)
     {
-        var occupation = campaign.ProvinceOccupation;
         var controllers = campaign.ProvinceController;
-        if (occupation is null || controllers is null) return PeaceTerms.WhitePeace;
+        if (controllers is null) return PeaceTerms.WhitePeace;
         foreach (var pair in war.OriginalController)
-            if (controllers[pair.Key] != pair.Value && occupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold)
+            if (pair.Key > 0 && pair.Key < controllers.Length && controllers[pair.Key] != pair.Value)
                 return PeaceTerms.StatusQuo;
         return PeaceTerms.WhitePeace;
     }

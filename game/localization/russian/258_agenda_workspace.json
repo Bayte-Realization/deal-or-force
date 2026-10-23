@@ -1,0 +1,20 @@
+{
+  "Review initiatives without changing the world. Only the action button issues an order.": "Просмотр не меняет мир. Только кнопка действия отдаёт приказ.",
+  "Agenda section": "Раздел повестки",
+  "Agenda status filter": "Фильтр состояния повестки",
+  "Agenda search": "Поиск в повестке",
+  "Find an initiative or ID...": "Найти инициативу или ID…",
+  "National agenda · treasury {0}": "Повестка страны · казна {0}",
+  "{0} entries · page {1}/{2}": "Найдено: {0} · страница {1}/{2}",
+  "Nothing matches these filters.": "По этим условиям ничего не найдено.",
+  "No initiative selected": "Инициатива не выбрана",
+  "Change the search or status filter to see other initiatives.": "Измените поиск или фильтр, чтобы увидеть другие инициативы.",
+  "Active promise": "Действующее обещание",
+  "All statuses": "Любой статус",
+  "Promises": "Обещания",
+  "Goals": "Цели",
+  "Agenda status: Ready": "Доступно",
+  "Agenda status: Blocked": "Недоступно",
+  "Agenda status: Active": "Действует",
+  "Agenda status: Completed": "Завершено"
+}

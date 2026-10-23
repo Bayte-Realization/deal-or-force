@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -55,6 +56,7 @@ public sealed class CampaignEventOption
     public string RenouncesClaimRegion { get; init; } = "";
     public int UnionFounderId { get; init; }
     public string UnionFormableId { get; init; } = "";
+    public int ShardConsolidateFounderId { get; init; } = -1;
 
     /// <summary>Falls back to a generated summary when content shipped no prose.</summary>
     public string ConsequenceText => string.IsNullOrWhiteSpace(Consequence) ? Effect.Describe() : Consequence;
@@ -73,6 +75,45 @@ public sealed class CampaignEventDefinition
 
     /// <summary>Relative selection weight once the trigger passes.</summary>
     public float Weight { get; init; } = 1f;
+
+    /// <summary>The picture its window shows, as <see cref="EventPictures"/> names one; "" defers to that table.</summary>
+    public string Picture { get; init; } = "";
+
+    /// <summary>
+    /// A dated event from `common/historical_events`, or null for an ambient event. Dated
+    /// events are not dealt from the ambient pool; <see cref="HistoricalTimeline"/> reads
+    /// them on their date and applies them to every matching country.
+    /// </summary>
+    public HistoricalDate? HistoricalDate { get; init; }
+
+    /// <summary>How many days after the date a missed event may still fire. Zero is that day only.</summary>
+    public int WindowDays { get; init; } = 30;
+
+    /// <summary>
+    /// Zero means once per country. A positive value repeats the event every that many days
+    /// from its anchor date, inside the same window - a yearly congress, not a one-shot.
+    /// </summary>
+    public int RepeatDays { get; init; }
+
+    /// <summary>Deterministic chance in [0,1] once the date and trigger pass; 1 always fires.</summary>
+    public float Chance { get; init; } = 1f;
+
+    /// <summary>Effects applied when the event has no options. Options own their own effects.</summary>
+    public ScriptedEffects.Effect Effects { get; init; } = new();
+
+    /// <summary>Whether a successful firing writes a line to the world chronicle.</summary>
+    public bool Record { get; init; } = true;
+
+    /// <summary>The chronicle kind a firing writes; defaults to the generic historical line.</summary>
+    public string ChronicleKind { get; init; } = "historical_event";
+
+    /// <summary>Option an AI picks when a dated event has a choice; the player gets the card.</summary>
+    public int AiOption { get; init; }
+
+    /// <summary>Overrides how many days a dated event waits for the player; zero uses the common rule.</summary>
+    public int DecisionDays { get; init; }
+
+    public bool Historical => HistoricalDate.HasValue;
 
     /// <summary>
     /// Who it can happen to: "countries" (the default), "movements" - a movement with no
@@ -338,14 +379,43 @@ public static class EventCatalog
         foreach (var entry in document.RootElement.EnumerateObject())
         {
             var value = entry.Value;
-            if (!value.TryGetProperty("title", out var title) || !value.TryGetProperty("description", out var description) ||
-                !value.TryGetProperty("options", out var optionsElement) || optionsElement.ValueKind != JsonValueKind.Array)
+            if (!value.TryGetProperty("title", out var title) || !value.TryGetProperty("description", out var description))
             {
-                errors?.Add($"Event '{entry.Name}' requires title, description and options.");
+                errors?.Add($"Event '{entry.Name}' requires title and description.");
+                continue;
+            }
+            var hasOptions = value.TryGetProperty("options", out var optionsElement) &&
+                             optionsElement.ValueKind == JsonValueKind.Array;
+            var hasEffects = value.TryGetProperty("effects", out var rootEffects);
+            if (!hasOptions && !hasEffects)
+            {
+                errors?.Add($"Event '{entry.Name}' needs options or a root effects block.");
                 continue;
             }
 
+            HistoricalDate? historicalDate = null;
+            var dateText = value.TryGetProperty("date", out var dateElement) && dateElement.ValueKind == JsonValueKind.String
+                ? dateElement.GetString()
+                : null;
+            if (!string.IsNullOrWhiteSpace(dateText))
+            {
+                if (HistoricalDate.TryParse(dateText, out var parsedDate))
+                    historicalDate = parsedDate;
+                else
+                    errors?.Add($"Event '{entry.Name}': date must be YYYY-MM-DD, or -YYYY-MM-DD for BCE, not '{dateText}'.");
+            }
+            else if (value.TryGetProperty("year", out var yearElement) && yearElement.TryGetInt32(out var year))
+            {
+                var month = value.TryGetProperty("month", out var monthElement) && monthElement.TryGetInt32(out var parsedMonth)
+                    ? Math.Clamp(parsedMonth, 1, 12) : 1;
+                var day = value.TryGetProperty("day", out var dayElement) && dayElement.TryGetInt32(out var parsedDay)
+                    ? Math.Clamp(parsedDay, 1, 31) : 1;
+                if (HistoricalDate.TryCreate(year, month, day, out var created)) historicalDate = created;
+                else errors?.Add($"Event '{entry.Name}': year/month/day is not a civil date.");
+            }
+
             var options = new List<CampaignEventOption>();
+            if (hasOptions)
             foreach (var option in optionsElement.EnumerateArray())
             {
                 var context = $"Event '{entry.Name}'";
@@ -383,9 +453,9 @@ public static class EventCatalog
                 });
             }
 
-            if (options.Count == 0)
+            if (options.Count == 0 && !hasEffects)
             {
-                errors?.Add($"Event '{entry.Name}' has no usable options.");
+                errors?.Add($"Event '{entry.Name}' has no usable options or effects.");
                 continue;
             }
 
@@ -401,12 +471,39 @@ public static class EventCatalog
                 Weight = value.TryGetProperty("weight", out var weight) && weight.TryGetSingle(out var parsedWeight)
                     ? MathF.Max(0f, parsedWeight)
                     : 1f,
+                Picture = value.TryGetProperty("picture", out var picture) && picture.ValueKind == JsonValueKind.String
+                    ? (picture.GetString() ?? "").Trim() : "",
                 For = value.TryGetProperty("for", out var audience) && audience.ValueKind == JsonValueKind.String
                     ? (audience.GetString() ?? "countries").Trim().ToLowerInvariant()
-                    : "countries"
+                    : "countries",
+                HistoricalDate = historicalDate,
+                WindowDays = value.TryGetProperty("window_days", out var windowElement) && windowElement.TryGetInt32(out var window)
+                    ? Math.Max(0, window) : 30,
+                RepeatDays = value.TryGetProperty("repeat_days", out var repeatElement) && repeatElement.TryGetInt32(out var repeat)
+                    ? Math.Max(0, repeat) : 0,
+                Chance = value.TryGetProperty("chance", out var chanceElement) && chanceElement.TryGetSingle(out var chance)
+                    ? Math.Clamp(chance, 0f, 1f) : 1f,
+                Effects = hasEffects ? ScriptedEffects.Parse(rootEffects, $"Event '{entry.Name}'", errors) : new ScriptedEffects.Effect(),
+                Record = !value.TryGetProperty("record", out var recordElement) || recordElement.ValueKind != JsonValueKind.False,
+                ChronicleKind = value.TryGetProperty("chronicle", out var chronicleElement) && chronicleElement.ValueKind == JsonValueKind.String
+                    ? chronicleElement.GetString() ?? "historical_event" : "historical_event",
+                AiOption = value.TryGetProperty("ai_option", out var aiElement) && aiElement.TryGetInt32(out var aiOption)
+                    ? Math.Max(0, aiOption) : 0,
+                DecisionDays = value.TryGetProperty("decision_days", out var decisionElement) && decisionElement.TryGetInt32(out var decision)
+                    ? Math.Max(1, decision) : 0
             };
             if (definition.For is not ("countries" or "movements" or "all"))
                 errors?.Add($"Event '{entry.Name}': \"for\" is \"countries\", \"movements\" or \"all\", not \"{definition.For}\".");
+            if (!definition.Historical && definition.Options.Length == 0)
+            {
+                errors?.Add($"Event '{entry.Name}': an ambient event needs options; only a dated event may be effects-only.");
+                continue;
+            }
+            if (definition.Historical && definition.Options.Length == 0 && definition.Effects.IsEmpty)
+            {
+                errors?.Add($"Event '{entry.Name}': a dated event needs options or a root effects block.");
+                continue;
+            }
 
             var index = Definitions.FindIndex(item => string.Equals(item.Id, entry.Name, StringComparison.OrdinalIgnoreCase));
             if (index >= 0) Definitions[index] = definition;
@@ -469,6 +566,12 @@ public static class EventSystem
         if (!string.IsNullOrEmpty(option.UnionFormableId) && item.ExpiresDay > campaign.ElapsedDays)
             PeacefulFormation.Accept(campaign, campaign.NationById(option.UnionFounderId), nation,
                 FormableNations.Find(option.UnionFormableId));
+        if (option.ShardConsolidateFounderId > 0 && item.ExpiresDay > campaign.ElapsedDays && nation is not null)
+        {
+            var founder = campaign.NationById(option.ShardConsolidateFounderId);
+            if (founder is not null)
+                Consolidation.ExecuteShardConsolidation(campaign, founder, nation);
+        }
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
         // By the country itself rather than by an id that means "nobody" at zero: nation 0 is
@@ -502,11 +605,6 @@ public static class EventSystem
     }
 
     /// <summary>
-    /// Weighted pick among the events whose trigger the nation actually satisfies. The
-    /// draw is seeded from campaign state rather than a live RNG call, so replaying the
-    /// same seed deals the same card on the same day.
-    /// </summary>
-    /// <summary>
     /// Raise one now, for whoever asks. The developer console uses it, and so does anything
     /// else that needs an event to exist rather than to wait for one - a test of the event
     /// window being the obvious case.
@@ -519,13 +617,19 @@ public static class EventSystem
         return created;
     }
 
+    /// <summary>
+    /// Weighted pick among the events whose trigger the nation actually satisfies. The
+    /// draw is seeded from campaign state rather than a live RNG call, so replaying the
+    /// same seed deals the same card on the same day.
+    /// </summary>
     private static PendingCampaignEvent Create(Campaign campaign, int nationId)
     {
         var nation = campaign.NationById(nationId);
         if (nation is null) return null;
 
         var eligible = EventCatalog.All
-            .Where(definition => definition.Weight > 0f && definition.Suits(nation) && definition.Trigger.Matches(campaign, nation))
+            .Where(definition => !definition.Historical && definition.Weight > 0f && definition.Suits(nation) &&
+                                 definition.Trigger.Matches(campaign, nation))
             .ToArray();
         if (eligible.Length == 0) return null;
 

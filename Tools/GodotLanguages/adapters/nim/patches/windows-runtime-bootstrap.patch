@@ -1,0 +1,24 @@
+diff --git a/src/gdext.nim b/src/gdext.nim
+index 4611eb0..1d91c50 100644
+--- a/src/gdext.nim
++++ b/src/gdext.nim
+@@ -107 +107,3 @@ template GDExtension_EntryPoint*: untyped =
+-  {.emit: "N_LIB_EXPORT N_CDECL(void, NimMain)(void);".}
++  # DoF Windows adapter: initialize Nim's allocator before entering Nim callbacks.
++  # Keep user top-level execution at the original editor initialization phase.
++  {.emit: "N_LIB_PRIVATE void PreMain(void); N_LIB_PRIVATE N_CDECL(void, NimMainInner)(void);".}
+@@ -124 +126 @@ template GDExtension_EntryPoint*: untyped =
+-      {.emit: "NimMain();".}
++      {.emit: "NimMainInner();".}
+@@ -142 +144 @@ template GDExtension_EntryPoint*: untyped =
+-  proc entryPoint(p_get_proc_address: InterfaceGetProcAddress; p_library: ClassLibraryPtr; r_initialization: ptr Initialization): Bool {.gdcall, exportc: Extension.entrySymbol, dynlib.} = once:
++  proc entryPoint(p_get_proc_address: InterfaceGetProcAddress; p_library: ClassLibraryPtr; r_initialization: ptr Initialization): Bool {.gdcall, exportc: Extension.entrySymbol & "_nim", dynlib.} = once:
+@@ -188,0 +191,8 @@ template GDExtension_EntryPoint*: untyped =
++  {.emit: """
++N_LIB_EXPORT N_STDCALL(GDExtensionBool, """ & Extension.entrySymbol & """)(GDExtensionInterfaceGetProcAddress get_proc, GDExtensionClassLibraryPtr library, GDExtensionInitialization *initialization) {
++  static int dof_nim_runtime_initialized = 0;
++  if (!dof_nim_runtime_initialized) { PreMain(); dof_nim_runtime_initialized = 1; }
++  return """ & Extension.entrySymbol & """_nim(get_proc, library, initialization);
++}
++""".}
++

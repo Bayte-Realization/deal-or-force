@@ -62,5 +62,20 @@ static class NewsFeedTests
                 "translation leaves historical chronicle data unchanged");
         }
         finally { Loc.Language = language; }
+
+        NewsFeed.ResetCatalog();
+        Check(NewsFeed.Importance("world_war_began") >= NewsFeed.RailMinimum
+              && NewsFeed.Importance("organization_dissolved") >= NewsFeed.RailMinimum
+              && NewsFeed.Importance("political_scandal") >= NewsFeed.RailMinimum,
+            "a world war, a dead alliance and a political scandal reach the map rail");
+        Check(NewsFeed.Importance("aid_sent") < NewsFeed.RailMinimum,
+            "routine aid stays in the reports and off the rail");
+        var usa = c.NationByTag("USA");
+        var chn = c.NationByTag("CHN");
+        c.Chronicle.Record(c, "world_war_began", usa.Id, chn.Id, subject: "The Pacific War");
+        c.Chronicle.Record(c, "aid_sent", usa.Id, chn.Id);
+        var headlines = NewsFeed.Headlines(c, 8).Select(line => line.Kind).ToArray();
+        Check(headlines.Contains("world_war_began") && !headlines.Contains("aid_sent"),
+            "the rail shows the war between two other powers and skips the aid");
     }
 }

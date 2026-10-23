@@ -1,0 +1,20 @@
+{
+  "flag_context": {
+    "flag_culture_indian_diaspora": {
+      "requires": { "overlord": "GBR" }, "otherwise": "flag_culture_hindustani"
+    },
+    "flag_culture_indian_diaspora_communism": {
+      "requires": { "overlord": "GBR" }, "otherwise": "flag_culture_hindustani_communism"
+    },
+    "flag_culture_indian_diaspora_absolute_monarchy": {
+      "requires": { "overlord": "GBR" }, "otherwise": "flag_culture_hindustani_absolute_monarchy"
+    },
+    "flag_lka_dominion": {
+      "requires": { "overlord": "GBR" }, "otherwise": "flag_lka"
+    },
+    "flag_syr": {
+      "requires": { "ideology": ["socialism", "nationalism", "authoritarian_democracy", "despotism", "communist_rule"] },
+      "otherwise": "flag_syr_independence"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "names": {
+    "shona": {
+      "given": ["Farai", "Kudakwashe", "Munyaradzi", "Tafadzwa", "Takudzwa", "Tendai", "Tinashe", "Tonderai", "Blessing", "Gift", "Tapiwa", "Nyasha", "Rudo", "Chipo", "Fadzai", "Rutendo"],
+      "family": ["Chigumba", "Chiwenga", "Mangwende", "Mnangagwa", "Moyo", "Mudenda", "Mugabe", "Mutasa", "Nkomo", "Zvobgo"]
+    },
+    "swahili": {
+      "given": ["Ali", "Amani", "Baraka", "Hamisi", "Juma", "Kassim", "Moussa", "Omari", "Rashid", "Salim", "Said", "Yusuf", "Zuberi", "Asha", "Fatuma", "Halima", "Mwanaisha", "Rehema", "Zainabu"],
+      "family": ["Abdalla", "Bakari", "Hamisi", "Juma", "Kassim", "Mwinyi", "Omar", "Salim", "Said", "Shein"]
+    },
+    "georgian": {
+      "given": ["Aleksandre", "Archil", "Bidzina", "Davit", "Giorgi", "Givi", "Irakli", "Kakha", "Levan", "Mikheil", "Nika", "Otar", "Paata", "Soso", "Tengiz", "Vakhtang", "Zurab", "Nino", "Tamar", "Nana", "Ketevan", "Marina"],
+      "family": ["Abashidze", "Bagapsh", "Beridze", "Dadiani", "Gelashvili", "Ioseliani", "Khetagurov", "Orbeliani", "Pataridze", "Saakashvili", "Shevardnadze", "Tsiklauri", "Zurabishvili"]
+    },
+    "armenian": {
+      "given": ["Aram", "Armen", "Artashes", "Ashot", "Gagik", "Hovhannes", "Karen", "Levon", "Narek", "Raffi", "Robert", "Samvel", "Serzh", "Tigran", "Vahan", "Vazgen", "Anahit", "Gohar", "Lilit", "Narine", "Siranush"],
+      "family": ["Abrahamyan", "Ghazaryan", "Harutyunyan", "Hovhannisyan", "Karapetyan", "Kocharyan", "Margaryan", "Petrosyan", "Sargsyan", "Ter-Petrosyan", "Vardanyan"]
+    },
+    "romanian": {
+      "given": ["Adrian", "Alexandru", "Bogdan", "Constantin", "Corneliu", "Cristian", "Dan", "Doru", "Emil", "Florin", "Gabriel", "Gheorghe", "Ion", "Ioan", "Liviu", "Lucian", "Mihai", "Mircea", "Nicolae", "Petre", "Radu", "Sorin", "Traian", "Vasile", "Victor", "Ana", "Elena", "Ioana", "Maria", "Mihaela"],
+      "family": ["Băsescu", "Ceausescu", "Constantinescu", "Dăncilă", "Dragnea", "Georgescu", "Iliescu", "Iohannis", "Maniu", "Popescu", "Stoica", "Văcăroiu"]
+    },
+    "albanian": {
+      "given": ["Adem", "Agim", "Alban", "Arben", "Bardhyl", "Bujar", "Dritan", "Edi", "Fatmir", "Gjergj", "Ilir", "Luan", "Ramiz", "Sali", "Skënder", "Vangjel", "Arta", "Elira", "Mirela", "Teuta"],
+      "family": ["Berisha", "Blerim", "Buzhala", "Haradinaj", "Hoxha", "Krasniqi", "Meta", "Nano", "Rama", "Rugova", "Thaçi"]
+    },
+    "greek": {
+      "given": ["Alexios", "Andreas", "Antonios", "Christos", "Dimitrios", "Georgios", "Ioannis", "Konstantinos", "Kostas", "Leonidas", "Nikolaos", "Panagiotis", "Petros", "Spyridon", "Stavros", "Theodoros", "Vasileios", "Aikaterini", "Anastasia", "Eleni", "Maria", "Sofia"],
+      "family": ["Alexopoulos", "Antoniou", "Christodoulou", "Dimitriou", "Economou", "Georgiou", "Ioannidis", "Karagiannis", "Konstantinidis", "Papadopoulos", "Petridis", "Sarris", "Stavrou", "Vasileiou", "Vlachos"]
+    },
+    "kurdish": {
+      "given": ["Abdullah", "Ahmed", "Azad", "Baran", "Bawer", "Bilal", "Cemal", "Dersim", "Diyar", "Firat", "Hawar", "Hemin", "Huseyin", "Idris", "Jalal", "Kawa", "Mazlum", "Mehmet", "Murat", "Nechirvan", "Roj", "Selahattin", "Serhat", "Sherko", "Soran", "Zana", "Avin", "Berfin", "Dilan", "Havin", "Rojin", "Zozan"],
+      "family": ["Agha", "Barzani", "Botani", "Cizre", "Dersimi", "Hakkari", "Kaya", "Kurdistan", "Mahabad", "PKK", "Qasim", "Soran", "Talebani", "Yazidi", "Zaza"]
+    },
+    "persian": {
+      "given": ["Abbas", "Ali", "Amir", "Arash", "Ardeshir", "Bahram", "Behrouz", "Cyrus", "Dariush", "Ebrahim", "Farhad", "Fereydoun", "Hamid", "Hassan", "Hossein", "Iraj", "Javad", "Kamran", "Kaveh", "Khosrow", "Mahmoud", "Majid", "Mehdi", "Mohammad", "Nader", "Nasser", "Omid", "Parviz", "Reza", "Rostam", "Saeed", "Shahram", "Sohrab", "Vahid", "Anahita", "Azadeh", "Fatemeh", "Golnar", "Leila", "Maryam", "Neda", "Parisa", "Shirin", "Zahra"],
+      "family": ["Ahmadi", "Akbari", "Alavi", "Amiri", "Ansari", "Azizi", "Bagheri", "Bahrami", "Ebrahimi", "Farhadi", "Ghasemi", "Hashemi", "Hosseini", "Jafari", "Karimi", "Kazemi", "Khorasani", "Mahmoudi", "Mousavi", "Najafi", "Nouri", "Rahimi", "Rezaei", "Sadeghi", "Salehi", "Shirazi", "Tabatabai", "Tehrani", "Yazdi", "Zare"]
+    }
+  }
+}

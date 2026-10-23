@@ -1,9 +1,17 @@
-<Project Sdk="Godot.NET.Sdk/4.8.0-dev.7">
+<Project Sdk="Godot.NET.Sdk/4.8.0-beta.1">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>DealOrForce</RootNamespace>
     <AssemblyName>DealOrForce</AssemblyName>
+    <!--
+      Every source file here is UTF-8 without a byte-order mark, and several carry Cyrillic
+      literals ("Северная " in the legacy name migration, for one). Without this the compiler
+      falls back to the system ANSI code page and those literals reach the assembly as
+      mojibake, so a name repaired on a Russian machine never matches the Russian it was
+      meant to match.
+    -->
+    <CodePage>65001</CodePage>
     <!--
       `build/` is the exported game, and the exported game now carries the mod templates -
       which are C# - so the SDK's `**/*.cs` glob found them and tried to compile the build
@@ -11,8 +19,18 @@
       is the honest fix; a `Compile Remove` would leave Content and None still pointing at
       several hundred megabytes of output.
     -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;**\.kilo\**;**\.fennara\**;**\.git\**</DefaultItemExcludes>
+    <!-- The portable language kit contains independent examples and build/test hosts.
+         Like Tools, it must not be globbed into the game's C# assembly or content. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;LanguageKit\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
   </PropertyGroup>
+  <ItemGroup>
+    <!--
+      The first non-C# game rule: the pure assault-eligibility predicate. It is managed
+      .NET, compiled into the same export, and the C# path remains the fallback. See
+      Scripts/Rules/AssaultRules.fs and docs/LANGUAGE_KERNEL_EVALUATION_2026_10_16_RU.md.
+    -->
+    <ProjectReference Include="Scripts\Rules\DealOrForce.Rules.fsproj" />
+  </ItemGroup>
   <!--
     The editor plays the Debug build, and Debug means the optimiser is switched off. For a
     game whose main loop is a simulation of a hundred and forty wars across thirty-eight
@@ -27,12 +45,25 @@
     <Optimize>true</Optimize>
     <DebugType>portable</DebugType>
     <TieredPGO>true</TieredPGO>
+    <!--
+      Play from the editor was sitting on "Building C# project" with no end.
+      The shared Roslyn server keeps one pipe for every Godot, and a second
+      game left running makes the next build wait on that pipe forever.
+      Analyzers were also walking every gameplay file on that same press of Play.
+    -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
   </PropertyGroup>
   <Import Project="Scripts/Simulation/StructuredData.Dependencies.props" />
-  <!-- Mod source projects live below mods but are compiled into their own DLLs. -->
+  <!-- Mod source projects live below mods and Tools live below Tools; both are excluded via DefaultItemExcludes. -->
   <ItemGroup>
     <Compile Remove="mods\**\*.cs" />
     <Compile Remove="Tools\**\*.cs" />
+    <!-- Scratch copies of sources (mojibake repair backups and the like) must never be
+         compiled as part of the game: they are snapshots, and a snapshot that compiles is
+         a duplicate-definition error waiting for the next build. -->
+    <Compile Remove="tmp\**\*.cs" />
+    <Compile Remove="tmp_playtest\**\*.cs" />
     <!--
       One deliberate exception to the line above: the export-verification probe is game code,
       not a tool. It is compiled into this assembly and runs inside the shipped executable

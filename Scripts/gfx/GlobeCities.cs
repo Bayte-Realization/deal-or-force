@@ -153,7 +153,7 @@ public sealed partial class GlobePresentation
             _starNamesBuilt = (-1, -1, 0);
             InvalidateCities();
         }
-        var wanted = CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
+        var wanted = QualityCityLabels && CityLabelsEnabled && _mapApplied && _cities.Count > 0 &&
                      ViewDistance <= CityTierDistance(0);
         _cityRoot.Visible = wanted;
         if (!wanted)
@@ -282,6 +282,7 @@ public sealed partial class GlobePresentation
 
                 var pin = CityPinAt(used++);
                 if (pin.City != -2 - star || pin.Name.Text != name) SetUpStarPin(pin, star, marker, name, font, fontSize);
+                pin.Name.Modulate = Ui.Colour("globe.city_capital");
                 pin.Node.Position = _cityRoot.ToLocal(marker.GlobalPosition);
                 var pixel = _flatMap ? 1f : fixedPixel;
                 pin.Node.Scale = _flatMap ? Vector3.One * flatPixel : Vector3.One;
@@ -321,6 +322,8 @@ public sealed partial class GlobePresentation
         {
             room = default;
             var city = _cities[index];
+            var anchorAt = _cityAnchors[index];
+            if (TerrainGone(anchorAt.Latitude, anchorAt.Longitude)) return false;
             Vector3 local;
             if (_flatMap)
             {
@@ -354,6 +357,8 @@ public sealed partial class GlobePresentation
             if (side != 0) SetLabelSide(pin, side, dot, fontSize, tierPixels);
             pin.Dot.PixelSize = pixel * dot / 32f;
             pin.Dot.Visible = !(city.IsNationalCapital && NearCapitalMarker(index)) && !StarStandsOn(index);
+            pin.Name.Modulate = city.IsNationalCapital ? Ui.Colour("globe.city_capital") : Ui.Colour("globe.city");
+            pin.Dot.Modulate = Colors.White;
             pin.Node.Visible = true;
             // A crowded name may be omitted, but its geographical point must remain.
             return side != 0;
@@ -552,8 +557,9 @@ public sealed partial class GlobePresentation
         var capitals = new List<(Nation Nation, Vector3 Normal)>();
         if (_campaign is not null)
             foreach (var nation in _campaign.Nations)
-                if (!string.IsNullOrWhiteSpace(nation.CapitalName))
-                    capitals.Add((nation, SurfacePoint(nation.CapitalLatitude, nation.CapitalLongitude, 1f).Normalized()));
+                if (CapitalCore.HasSeat(_campaign, nation))
+                    capitals.Add((nation, SurfacePoint(CapitalCore.EffectiveLatitude(_campaign, nation),
+                        CapitalCore.EffectiveLongitude(_campaign, nation), 1f).Normalized()));
         foreach (var (marker, normal) in _capitalMarkers)
         {
             if (!IsInstanceValid(marker)) continue;
@@ -584,9 +590,9 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>What the country calls its capital, as the country picker says it.</summary>
-    private static string StarCapitalName(Nation nation)
+    private string StarCapitalName(Nation nation)
     {
-        return CountryNames.Capital(nation);
+        return nation is null ? "" : CountryNames.Capital(nation, _campaign);
     }
 
     /// <summary>Whether a drawn capital star stands on this city, which then needs no dot of its own.</summary>

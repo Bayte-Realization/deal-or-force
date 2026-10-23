@@ -72,7 +72,7 @@ public static class CivilIndependence
         if (owner is null || owner.Id == movement.Id || c.ProvinceMap is null) return Loc.Get("There is no parent state to negotiate with.");
         if (!float.IsFinite(ResidentSupport(movement, region)) || !float.IsFinite(movement.Movement.Legitimacy) ||
             !float.IsFinite(region.Stability) || !float.IsFinite(owner.Stability) || !float.IsFinite(movement.Treasury))
-            return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
+            return Loc.Get("The campaign data is damaged, so this cannot be done.");
         if (CampaignDiplomacy.AtWar(c, movement.Id, owner.Id) || owner.IsSubject)
             return Loc.Get("Not during war or without a sovereign parent.");
         var held = c.StatesOf(owner);
@@ -90,12 +90,20 @@ public static class CivilIndependence
         if (Refusal(c, movement, region).Length != 0) return false;
         var owner = c.Nations.First(n => n.MapIndex == region.NationMapIndex);
         var place = region.DisplayName;
-        if (!MovementRules.TakeRegion(c, movement, region, owner, peacefully: true)) return false;
+        // A question that carried once is not re-asked county by county for a decade: the
+        // rest of the movement's homeland this same government controls votes with it, and
+        // every region whose own majority carried comes along. Regions below the majority
+        // stay put - the map stays honest about who actually voted for this.
+        var taken = MovementRules.TakeZone(c, movement, region, owner, peacefully: true);
+        if (taken == 0) return false;
         var relation = CampaignDiplomacy.Get(c, owner.Id, movement.Id);
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + Math.Max(1, c.Defines.CivilReferendumTruceDays);
         relation.NonAggressionPact = true;
-        movement.Movement.LastReport = Loc.Format("A negotiated vote in {0} established peaceful independence.", place);
+        if (movement.Movement is not null)
+            movement.Movement.LastReport = taken > 1
+                ? Loc.Format("A negotiated vote in {0} carried: {1} region(s) are independent.", place, taken)
+                : Loc.Format("A negotiated vote in {0} established peaceful independence.", place);
         c.Chronicle.Record(c, "peaceful_independence", movement.Id, owner.Id, place);
         c.MarkMapChanged();
         return true;

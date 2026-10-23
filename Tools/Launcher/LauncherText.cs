@@ -112,7 +112,11 @@ public static partial class L
         ["Strike a deal. Or force one."] = "Договорись. Или заставь.",
         ["Prepare your version of the world: choose the expansions, set up your mods and begin a campaign."] =
             "Подготовьте свою версию мира: выберите дополнения, настройте моды и начните кампанию.",
-        ["Base game → DLC → mods\nDependencies load first."] = "Базовая игра → DLC → моды\nЗависимости загружаются первыми.",
+        ["Base game → DLC → mods. Dependencies load first."] = "Базовая игра → DLC → моды. Зависимости загружаются первыми.",
+        ["BASE GAME"] = "ОСНОВА",
+        ["EXPANSIONS"] = "ДОПОЛНЕНИЯ",
+        ["MODS"] = "МОДЫ",
+        ["code"] = "код",
         ["Game content"] = "Состав игры",
         ["Refresh"] = "Обновить",
         ["Look for mods and DLC again. Changes are saved first."] = "Повторно найти моды и DLC. Изменения сначала сохраняются.",
@@ -142,7 +146,8 @@ public static partial class L
             "Дополнения не найдены.\n\nДобавьте папку дополнения с dlc.json в dlc и нажмите «Обновить».",
         ["No mods installed yet.\n\nAdd a mod folder with a manifest.json to mods, then press \"Refresh\".\n\n_templates holds examples for authors; they are not active mods."] =
             "Моды пока не установлены.\n\nДобавьте папку мода с manifest.json в mods и нажмите «Обновить».\n\n_templates — примеры для авторов, не активные моды.",
-        ["READY TO LAUNCH\n{0} expansions  ·  {1} mods"] = "К ЗАПУСКУ\n{0} дополнений  ·  {1} модов",
+        ["Ready to launch."] = "Всё готово к запуску.",
+        ["{0} enabled items cannot load: see the list."] = "Включённых элементов, которые не загрузятся: {0}. См. список.",
         ["Settings error. Open the profile folder; the backup is the .bak file."] =
             "Ошибка настроек. Откройте папку профиля; резервная копия — .bak.",
         ["Discovery warnings: {0}. Details are in the log."] = "Предупреждения обнаружения: {0}. Подробности — в журнале.",

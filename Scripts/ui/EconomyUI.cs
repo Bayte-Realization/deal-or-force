@@ -78,6 +78,7 @@ public partial class DealOrForceGame
 
         if (_dossierTab == "Finance")
         {
+            RefreshEconomyDesk();
             ShowSovereignFinance(player);
             ApplyDossierTab();
             return;
@@ -115,6 +116,12 @@ public partial class DealOrForceGame
             "and what the world market pays for it.");
         DetailRow("Productivity", Fmt.Number(player.Productivity),
             "How much each worker makes. Literacy raises it; shortages, war and heavy taxation lower it.");
+        DetailRow("Rise and decline", settled ? Simulation.Loc.Format("{0} a year", (player.SecularDrift >= 0f ? "+" : "−") + Fmt.Percent(MathF.Abs(player.SecularDrift))) : "—",
+            "How fast what your country's work is worth is changing against the world, year on year. A country behind " +
+            "the leading economies catches up when it is schooled, stable and at peace; a leader slowly gives its lead " +
+            "back; every country rides a long wave of its own; and war and overstretch cost growth, not only a year.",
+            player.SecularDrift >= 0f ? "state.positive" : "state.warning",
+            () => Simulation.SecularCycle.Explain(_campaign, player));
         DetailRow("Market access", Fmt.Percent(player.MarketAccess),
             "How much of the world market you can actually reach. Blockade and distance cut it.");
         DetailRow("Trade balance", settled ? SignedMoney(player.WeeklyTradeBalance) : "—",

@@ -273,11 +273,51 @@ public static class HistoryDataLoader
                 if (IdeologyCatalog.Knows(id)) nation.Ideology = id;
                 else errors?.Add($"{entry.Name}: no ideology called '{id}'.");
             }
+            // A country's own colour, for the ones whose colour is a fact about them rather than a
+            // shade off the map's palette. The scenario builder gives everybody a palette colour
+            // first, so a country that says nothing here keeps the one it was dealt - and a mod
+            // wanting to recolour a continent writes one more file in this folder rather than
+            // editing the table that ships.
+            // Names, the map's colours and capitals are NOT read here. A country's name, the colour
+            // it is painted and the city its government sits in are what it IS, and they live in
+            // common/countries/ - CountryDefinitions.Apply reads them, and it has already run by
+            // the time this does. What this file is for is what a country HAD in the year the
+            // bookmark opens, which is a different question asked by a different person.
             // Whose state it is. The base game's are read with the catalogue of peoples, which
             // has to know them before any campaign exists; this is for a mod that says it again.
             if (value.TryGetProperty("primary_cultures", out var primary) && primary.ValueKind == JsonValueKind.Array)
                 DemographyCatalog.Declare(nation.Tag, primary.EnumerateArray()
                     .Where(item => item.ValueKind == JsonValueKind.String).Select(item => item.GetString()));
+            // The laws in force when the bookmark opens, where they are not their category's
+            // default: one per category, a country-wide law only.
+            if (value.TryGetProperty("laws", out var laws) && laws.ValueKind == JsonValueKind.Array)
+                foreach (var item in laws.EnumerateArray())
+                {
+                    var id = item.ValueKind == JsonValueKind.String ? item.GetString() ?? "" : "";
+                    if (PoliticalPolicyCatalog.Find(id) is not { Scope: "nation" } law)
+                    {
+                        errors?.Add($"{entry.Name}: no country-wide law called '{id}'.");
+                        continue;
+                    }
+                    nation.Laws[PoliticalPolicies.Slot(law)] = new AdoptedLaw { Id = law.Id, AdoptedDay = 0 };
+                    NationalModifiers.Invalidate(nation);
+                }
+            if (value.TryGetProperty("head_of_state", out var hos) && hos.ValueKind == JsonValueKind.String)
+                nation.HeadOfStateName = hos.GetString() ?? "";
+            if (value.TryGetProperty("head_of_state_trait", out var hosTrait) && hosTrait.ValueKind == JsonValueKind.String)
+                nation.HeadOfStateTrait = hosTrait.GetString() ?? "";
+            if (value.TryGetProperty("head_of_state_birth_year", out var hosBirth) && hosBirth.TryGetInt32(out var hosBy))
+                nation.HeadOfStateBirthYear = hosBy;
+            if (value.TryGetProperty("head_of_government", out var hog) && hog.ValueKind == JsonValueKind.String)
+                nation.HeadOfGovernmentName = hog.GetString() ?? "";
+            if (value.TryGetProperty("head_of_government_trait", out var hogTrait) && hogTrait.ValueKind == JsonValueKind.String)
+                nation.HeadOfGovernmentTrait = hogTrait.GetString() ?? "";
+            if (value.TryGetProperty("head_of_government_birth_year", out var hogBirth) && hogBirth.TryGetInt32(out var hogBy))
+                nation.HeadOfGovernmentBirthYear = hogBy;
+            if (value.TryGetProperty("cabinet", out var cab) && cab.ValueKind == JsonValueKind.Object)
+                foreach (var kv in cab.EnumerateObject())
+                    if (kv.Value.ValueKind == JsonValueKind.String && kv.Value.GetString() is { Length: > 0 } optId)
+                        nation.Cabinet[kv.Name] = optId;
         }
     }
 
@@ -342,16 +382,8 @@ public static class HistoryDataLoader
                     if (value.TryGetProperty("urbanization", out var urbanisation) &&
                         urbanisation.ValueKind == JsonValueKind.Number && urbanisation.TryGetSingle(out var share))
                         figures.Urbanisation = M.Clamp01(share);
-                    if (value.TryGetProperty("cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Object)
-                    {
-                        var mix = new List<(string Culture, float Share)>();
-                        foreach (var culture in cultures.EnumerateObject())
-                            if (!culture.Name.StartsWith("//", StringComparison.Ordinal) &&
-                                culture.Value.ValueKind == JsonValueKind.Number &&
-                                culture.Value.TryGetSingle(out var part) && part > 0f)
-                                mix.Add((CultureId(culture.Name), part));
-                        if (mix.Count > 0) figures.Cultures = mix;
-                    }
+                    var cultureMix = ReadCultureMix(value, null, state.Id);
+                    if (cultureMix is { Count: > 0 }) figures.Cultures = cultureMix;
                     if (value.TryGetProperty("buildings", out var buildings) && buildings.ValueKind == JsonValueKind.Object)
                     {
                         figures.Buildings ??= new Dictionary<BuildingKind, int>();
@@ -479,13 +511,15 @@ public static class HistoryDataLoader
                     else errors?.Add($"Invalid resource '{resource.Name}' in state '{entry.Name}'.");
             // The deal already crossed this very list with the region's trades; doing it again
             // would only spread every people over every trade evenly and undo the farm towns.
-            if (value.TryGetProperty("cultures", out var cultures) && cultures.ValueKind == JsonValueKind.Object)
-            {
-                if (state.DealtCultures is null || state.DealtCultures != MixSignature(cultures))
-                    ApplyCultureMix(state, cultures, errors);
-            }
-            else if (value.TryGetProperty("nationalities", out var nationalities) && nationalities.ValueKind == JsonValueKind.Object)
-                ApplyCultureMix(state, nationalities, errors);
+            var cultureMix = ReadCultureMix(value, errors, state.Id);
+            // The sparse startup deal drops tiny trade/culture cells into its largest group.
+            // A sourced profile restores those minorities after the deal, retaining the region's
+            // occupation totals. Only explicitly selected profiles take this denser path.
+            var sourced = value.TryGetProperty("culture_profile", out _) &&
+                !value.TryGetProperty("cultures", out _) && !value.TryGetProperty("nationalities", out _);
+            if (cultureMix is { Count: > 0 } &&
+                (sourced || state.DealtCultures is null || state.DealtCultures != MixSignature(cultureMix)))
+                ApplyCultureMix(state, cultureMix);
         }
 
         if (ownersChanged) campaign.InvalidateStateIndex();
@@ -517,14 +551,30 @@ public static class HistoryDataLoader
                 .ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)));
     }
 
-    private static string MixSignature(JsonElement cultures)
+    /// <summary>Explicit mixes win over references, including in a mod overlay.</summary>
+    private static List<(string Culture, float Share)> ReadCultureMix(JsonElement value, List<string> errors, string stateId)
     {
-        var mix = new List<(string, float)>();
-        foreach (var entry in cultures.EnumerateObject())
-            if (!entry.Name.StartsWith("//", StringComparison.Ordinal) && entry.Value.ValueKind == JsonValueKind.Number &&
-                entry.Value.TryGetSingle(out var share) && share > 0f)
-                mix.Add((CultureId(entry.Name), share));
-        return MixSignature(mix);
+        if (value.TryGetProperty("cultures", out var cultures) || value.TryGetProperty("nationalities", out cultures))
+        {
+            if (cultures.ValueKind != JsonValueKind.Object)
+            { errors?.Add($"Invalid culture mix in state '{stateId}'."); return null; }
+            var mix = new List<(string Culture, float Share)>();
+            foreach (var entry in cultures.EnumerateObject())
+            {
+                if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (entry.Value.ValueKind == JsonValueKind.Number && entry.Value.TryGetSingle(out var share) &&
+                    float.IsFinite(share) && share > 0f) mix.Add((CultureId(entry.Name), share));
+                else errors?.Add($"Invalid culture share '{entry.Name}' in state '{stateId}'.");
+            }
+            if (!float.IsFinite(mix.Sum(item => item.Share)))
+            { errors?.Add($"Culture mix overflow in state '{stateId}'."); return null; }
+            return mix;
+        }
+        if (!value.TryGetProperty("culture_profile", out var profile)) return null;
+        if (profile.ValueKind == JsonValueKind.String && RegionalDemography.Find(profile.GetString()) is { } reference)
+            return reference.CultureMix.ToList();
+        errors?.Add($"Unknown culture_profile in state '{stateId}'.");
+        return null;
     }
 
     /// <summary>
@@ -539,19 +589,8 @@ public static class HistoryDataLoader
     /// Keys are culture ids. A nation tag is accepted too and resolves to that country's
     /// own people, because scenarios written before there were cultures said "IND".
     /// </summary>
-    private static void ApplyCultureMix(ScenarioState state, JsonElement cultures, List<string> errors)
+    private static void ApplyCultureMix(ScenarioState state, List<(string Culture, float Share)> shares)
     {
-        var shares = new List<(string Culture, float Share)>();
-        foreach (var entry in cultures.EnumerateObject())
-        {
-            if (entry.Name.StartsWith("//", StringComparison.Ordinal)) continue;
-            if (!entry.Value.TryGetSingle(out var share) || share <= 0f)
-            {
-                errors?.Add($"Invalid culture share '{entry.Name}' in state '{state.Id}'.");
-                continue;
-            }
-            shares.Add((CultureId(entry.Name), share));
-        }
         var total = shares.Sum(item => item.Share);
         if (total <= 0f) return;
 
@@ -568,33 +607,50 @@ public static class HistoryDataLoader
             trades.Add(("labourers", SocialClass.Lower, Sector.Industry, 1.0, 0.9f, 0.38f));
 
         state.PopulationGroups.Clear();
-        long assigned = 0;
+        if (state.Population <= 0) return;
+        var cells = new List<(PopulationGroup Group, double Weight)>();
         foreach (var (culture, share) in shares)
         {
             var faith = DemographyCatalog.FaithOf(culture);
             foreach (var trade in trades)
             foreach (var (religion, faithShare) in faith)
             {
-                var size = (long)Math.Round(state.Population * (share / total) * trade.Weight * faithShare);
-                if (size <= 0) continue;
-                assigned += size;
-                state.PopulationGroups.Add(new PopulationGroup
+                var weight = (share / (double)total) * trade.Weight * faithShare;
+                if (weight <= 0) continue;
+                cells.Add((new PopulationGroup
                 {
                     Culture = culture,
                     Religion = religion,
                     Profession = trade.Profession,
                     Class = trade.Class,
                     Sector = trade.Sector,
-                    Size = size,
                     Employment = trade.Employment,
                     Wealth = trade.Wealth,
                     StandardOfLiving = state.StandardOfLiving,
                     Radicalism = state.Radicalism
-                });
+                }, weight));
             }
         }
-        if (state.PopulationGroups.Count > 0)
-            state.PopulationGroups[^1].Size += state.Population - assigned;
+        // Largest remainder rather than charging all rounding error to the final tiny group.
+        // The old correction could make that group's size negative, or lose a one-person region.
+        var weightTotal = cells.Sum(cell => cell.Weight);
+        long assigned = 0;
+        var remainders = new List<(int Index, double Fraction)>();
+        for (var index = 0; index < cells.Count; index++)
+        {
+            var exact = state.Population * (cells[index].Weight / weightTotal);
+            var size = (long)Math.Floor(exact);
+            cells[index].Group.Size = size;
+            assigned += size;
+            remainders.Add((index, exact - size));
+        }
+        foreach (var remainder in remainders.OrderByDescending(item => item.Fraction).ThenBy(item => item.Index))
+        {
+            if (assigned >= state.Population) break;
+            cells[remainder.Index].Group.Size++;
+            assigned++;
+        }
+        state.PopulationGroups.AddRange(cells.Where(cell => cell.Group.Size > 0).Select(cell => cell.Group));
     }
 
     private static JsonDocument Parse(string json) => JsonDocument.Parse(json, new JsonDocumentOptions

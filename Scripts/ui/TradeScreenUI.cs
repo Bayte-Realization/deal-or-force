@@ -251,13 +251,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Trade";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
-        _tradeScreenLayer.Visible = true;
-        _tradeScreenLayer.MoveToFront();
+        RaiseWorkspaceLayer(_tradeScreenLayer);
         RefreshTradeScreen();
         UpdateScreenButtons();
     }
@@ -329,14 +323,20 @@ public partial class DealOrForceGame
             row.Net.Text = (quote.Net >= 0 ? "+" : "") + quote.Net.ToString("0.0");
             row.Net.AddThemeColorOverride("font_color",
                 quote.Net >= 0 ? Ui.Colour("state.positive") : Ui.Colour("state.negative"));
-            row.Price.Text = settled ? Fmt.Money(quote.Price) : "—";
+            // The opening price is a real quote - the instructions beside the table read it -
+            // so before the first week clears it is shown dimmed, not as a dash that made the
+            // table contradict the panel next to it.
+            row.Price.Text = Fmt.Money(quote.Price);
+            row.Price.Modulate = settled ? Colors.White : new Color(1, 1, 1, .55f);
             var supplied = quote.Demand <= 0.001f ? 1f : quote.Satisfaction;
             row.SupplyFill.AnchorRight = supplied;
             row.SupplyFill.Color = Ui.Colour(
                 supplied > 0.985f ? "state.positive" :
                 supplied > 0.8f ? "state.warning" : "state.negative");
             row.Supply.Text = supplied.ToString("P0");
-            row.Select.TooltipText = Ui.Tip(Simulation.Loc.Get(definition.Description));
+            var description = Simulation.Loc.Get(definition.Description);
+            var cause = EconomicExposure.Cause(_campaign, player, row.Good);
+            row.Select.TooltipText = Ui.Tip(cause.Length == 0 ? description : description + "\n" + cause);
             // Highlight the row background, not every descendant (including commodity art).
             row.Select.Modulate = Colors.White;
             row.Select.SelfModulate = supplied < 0.985f
@@ -451,12 +451,12 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null) return;
         var player = _campaign.Player;
 
-        // What flowed each way with each partner, from this week's named routes. Routes
-        // are not saved - they are a consequence of the week, worked out again here.
+        // What flowed each way with each partner. The market week already filed this
+        // country's routes; the page reads that list instead of every route in the world.
         var soldTo = new Dictionary<int, float>();
         var boughtFrom = new Dictionary<int, float>();
         var byGood = new Dictionary<int, List<TradeRoute>>();
-        foreach (var route in _campaign.TradeRoutes)
+        foreach (var route in TradeNetwork.RoutesTouching(_campaign, player.Id))
         {
             if (route.SellerId == player.Id)
             {

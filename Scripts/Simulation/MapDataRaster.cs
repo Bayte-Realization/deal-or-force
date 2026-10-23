@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace DealOrForce.Simulation;
 
@@ -71,20 +72,47 @@ public static class DataMapPng
             var filter = zlib.ReadByte();
             if (filter < 0) throw new EndOfStreamException("PNG pixel stream ended before the final row.");
             zlib.ReadExactly(encoded);
-            for (var x = 0; x < stride; x++)
+            // The filter is one value for the whole row, so the branch belongs outside the loop
+            // rather than inside it. Each raster is upwards of fifty million bytes and there are
+            // half a dozen rasters on a map, so a switch evaluated per byte is hundreds of millions
+            // of branches for an answer that was decided at the start of the row. Each filter gets
+            // its own tight loop, and None - which is a stored row - is a copy.
+            //
+            // The arithmetic is the same expression per filter as it was; what changed is how many
+            // times the answer to "which filter" is asked for. SourceMapGrid round-trips every id
+            // and fingerprints the grid, so a decode that quietly stopped matching its file would
+            // be caught rather than shipped.
+            switch (filter)
             {
-                var left = x >= channels ? row[x - channels] : 0;
-                var up = previous[x];
-                var upperLeft = x >= channels ? previous[x - channels] : 0;
-                row[x] = filter switch
-                {
-                    0 => encoded[x],
-                    1 => unchecked((byte)(encoded[x] + left)),
-                    2 => unchecked((byte)(encoded[x] + up)),
-                    3 => unchecked((byte)(encoded[x] + ((left + up) >> 1))),
-                    4 => unchecked((byte)(encoded[x] + Paeth(left, up, upperLeft))),
-                    _ => throw new InvalidDataException($"Unsupported PNG filter {filter}.")
-                };
+                case 0:
+                    encoded.AsSpan().CopyTo(row);
+                    break;
+                case 1:
+                    for (var x = 0; x < stride; x++)
+                        row[x] = unchecked((byte)(encoded[x] + (x >= channels ? row[x - channels] : 0)));
+                    break;
+                case 2:
+                    for (var x = 0; x < stride; x++)
+                        row[x] = unchecked((byte)(encoded[x] + previous[x]));
+                    break;
+                case 3:
+                    for (var x = 0; x < stride; x++)
+                    {
+                        var left = x >= channels ? row[x - channels] : 0;
+                        row[x] = unchecked((byte)(encoded[x] + ((left + previous[x]) >> 1)));
+                    }
+                    break;
+                case 4:
+                    for (var x = 0; x < stride; x++)
+                    {
+                        var left = x >= channels ? row[x - channels] : 0;
+                        var up = previous[x];
+                        var upperLeft = x >= channels ? previous[x - channels] : 0;
+                        row[x] = unchecked((byte)(encoded[x] + Paeth(left, up, upperLeft)));
+                    }
+                    break;
+                default:
+                    throw new InvalidDataException($"Unsupported PNG filter {filter}.");
             }
             for (var x = 0; x < width; x++)
             {
@@ -369,10 +397,13 @@ public static class MapRasterCatalog
         }
         try
         {
+            // The ground picture is read on another core while the provinces' is: neither
+            // needs the other until the terrain is counted province by province.
+            var ground = Task.Run(TerrainCatalog.LoadTerrainMap);
             var raster = DataMapPng.LoadRgb(ProvincePath);
             var definitions = LoadDefinitions(DefinitionPath);
             topology = ProvinceTopology.FromColorRaster(states, control, width, height, raster, definitions);
-            topology.AttachTerrain();
+            topology.AttachTerrain(ground.GetAwaiter().GetResult());
             message = $"{Path.GetFileName(ProvincePath)} + {Path.GetFileName(DefinitionPath)}";
             return true;
         }

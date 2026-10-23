@@ -1,0 +1,90 @@
+// Обещание правительства: публичное обязательство с проверяемым результатом и сроком.
+//
+// Схема одна у всех:
+//   name / description   то, что читает игрок (английский текст — сам себе ключ);
+//   duration_days        срок, на который даётся обещание;
+//   trigger              когда обещание вообще можно дать (пусто — всегда);
+//   unavailable          почему нельзя, когда trigger отказал;
+//   check                проверяемый результат — тем же словарём, каким читается триггер;
+//   effects              что даёт исполнение; failure_effects — что стоит провал.
+//
+// Результат меряется непрерывно: день, когда он верен, — день исполнения, досрочно или нет;
+// после срока невыполненное обещание считается нарушенным, каким бы ни был тренд.
+{
+  "mend_the_war_scars": {
+    "name": "Mend the war scars",
+    "description": "Promise in public that the ruined regions will be rebuilt within two years. The promise is kept the day no region is badly damaged any more.",
+    "duration_days": 730,
+    "trigger": { "use": ["at_peace", "war_torn"] },
+    "unavailable": "Nothing is ruined badly enough to promise its repair",
+    "check": { "max_worst_war_damage": 0.05 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "settle_the_schools": {
+    "name": "Settle the schools",
+    "description": "Promise in public that within three years the country will not be counted among the poorly schooled any more.",
+    "duration_days": 1095,
+    "trigger": { "use": ["poorly_schooled"] },
+    "unavailable": "Literacy is not low enough for this promise to mean anything",
+    "check": { "min_literacy": 0.755 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "raise_the_floor": {
+    "name": "Raise the floor",
+    "description": "Promise in public that within two years the standard of living will clear the line under which a country counts as hungry for work.",
+    "duration_days": 730,
+    "trigger": { "use": ["hungry_for_work"] },
+    "unavailable": "Living standards are not low enough for this promise to mean anything",
+    "check": { "min_standard_of_living": 0.465 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "refill_the_treasury": {
+    "name": "Refill the treasury",
+    "description": "Promise in public that within eighteen months the treasury will be solvent again.",
+    "duration_days": 540,
+    "trigger": { "use": ["empty_coffers"] },
+    "unavailable": "The treasury is not empty enough to make this a promise",
+    "check": { "use": ["solvent"] },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "curb_inflation": {
+    "name": "Curb runaway inflation",
+    "description": "Promise in public to bring annual inflation back under 4% within eighteen months.",
+    "duration_days": 540,
+    "trigger": { "min_inflation": 0.08 },
+    "unavailable": "Inflation is not high enough to make bringing it down a public pledge",
+    "check": { "max_inflation": 0.04 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "stem_brain_drain": {
+    "name": "Stem the brain drain",
+    "description": "Promise in public that the flight of talent and educated youth will be halted within two years.",
+    "duration_days": 730,
+    "trigger": { "max_brain_drain": -0.15 },
+    "unavailable": "The country is not losing skilled citizens at an alarming rate",
+    "check": { "min_brain_drain": 0.0 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  },
+
+  "restore_order": {
+    "name": "Restore domestic order",
+    "description": "Promise in public to pacify social agitation and bring national stability above 65% within eighteen months.",
+    "duration_days": 540,
+    "trigger": { "use": ["restive"] },
+    "unavailable": "Domestic order is not fractured enough for this to be a public pledge",
+    "check": { "min_stability": 0.55 },
+    "effects": { "add_modifier": { "public_trust": 0 } },
+    "failure_effects": { "add_modifier": { "broken_promise": 0 } }
+  }
+}

@@ -22,6 +22,39 @@ public sealed class MovementDefinition
     public readonly List<string> Peoples = new();
     /// <summary>Faiths whose believers lend it a little support even when they are not its peoples.</summary>
     public readonly List<string> Faiths = new();
+    private HashSet<string> _peopleLookup;
+    private HashSet<string> _faithLookup;
+    private string[] _distinctPeoples;
+    private string[] _distinctFaiths;
+
+    // The catalogue can spell a people twice. Deduplicate once for the day's regional sums
+    // rather than once for every movement's week.
+    internal IReadOnlyList<string> DistinctPeoples =>
+        _distinctPeoples ??= Peoples.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    internal IReadOnlyList<string> DistinctFaiths =>
+        _distinctFaiths ??= Faiths.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+    /// <summary>
+    /// O(1) membership for the walk over every population group in the world.
+    ///
+    /// The lists are short, so a linear scan is not a problem once; it is a problem when it
+    /// is asked for every group of eighteen hundred regions, which is how a movement's
+    /// weekly support drift used to spend its time. The sets are built lazily and dropped
+    /// whenever the lists change.
+    /// </summary>
+    internal bool HasPeople(string name) =>
+        name is not null && (_peopleLookup ??= new HashSet<string>(Peoples, StringComparer.OrdinalIgnoreCase)).Contains(name);
+
+    internal bool HasFaith(string name) =>
+        name is not null && (_faithLookup ??= new HashSet<string>(Faiths, StringComparer.OrdinalIgnoreCase)).Contains(name);
+
+    internal void ForgetLookups()
+    {
+        _peopleLookup = null;
+        _faithLookup = null;
+        _distinctPeoples = null;
+        _distinctFaiths = null;
+    }
     /// <summary>The region its headquarters stands in on the first day.</summary>
     public string Headquarters = "";
     /// <summary>Territorial homeland. Offices, sponsorship and diaspora presence do not extend it.</summary>
@@ -40,6 +73,8 @@ public sealed class MovementDefinition
     public string Ideology = "nationalism";
     /// <summary>What it calls the country it founds, if not itself.</summary>
     public string StateName = "";
+    /// <summary>Optional history/factions id of the same organisation's territorial administration.</summary>
+    public string TerritorialFaction = "";
     public bool Playable = true;
     /// <summary>
     /// Not founded with the world: the pattern a country that falls and goes into exile is made
@@ -133,6 +168,7 @@ public static class MovementCatalog
             definition.Government = Text("government", definition.Government);
             definition.Ideology = Text("ideology", definition.Ideology);
             definition.StateName = Text("state_name", definition.StateName);
+            definition.TerritorialFaction = Text("territorial_faction", definition.TerritorialFaction);
             definition.Treasury = Number("treasury", definition.Treasury);
             definition.Cadres = Number("cadres", definition.Cadres);
             definition.Legitimacy = M.Clamp01(Number("legitimacy", definition.Legitimacy));
@@ -150,6 +186,7 @@ public static class MovementCatalog
             definition.DiasporaReachKm = M.Clamp(Number("diaspora_reach_km", definition.DiasporaReachKm), 50f, 20000f);
             Strings("peoples", definition.Peoples);
             Strings("faiths", definition.Faiths);
+            definition.ForgetLookups();
             Strings("homeland", definition.Homeland);
             Strings("traits", definition.Traits);
             Strings("recognised_by", definition.RecognisedBy);
@@ -325,6 +362,7 @@ public static partial class Movements
         foreach (var definition in definitions)
         {
             if (string.IsNullOrWhiteSpace(definition.Tag) || definition.Template) continue;
+            if (TerritorialActor(campaign, definition) is not null) continue;
             var existing = campaign.Nations.FirstOrDefault(nation => nation.Movement?.Id == definition.Id ||
                                                string.Equals(nation.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase));
             if (existing is not null && (existing.Movement is not { Dissolved: true } || existing.IsHuman || campaign.StatesOf(existing).Length > 0))
@@ -425,13 +463,13 @@ public static partial class Movements
         campaign.MovementRevision++;
     }
 
-    /// <summary>Every movement in the world, landless or not, dissolved or not.</summary>
+    /// <summary>Every movement in the world, landless or not, dissolved or not. An exile that has returned home and holds sovereign land is governed as a state, not an active movement.</summary>
     public static IEnumerable<Nation> Of(Campaign campaign) =>
-        campaign.Nations.Where(nation => nation.Movement is not null);
+        campaign.Nations.Where(nation => nation.Movement is not null && !(nation.Movement.Exile && !nation.Movement.Landless));
 
     /// <summary>The movements that still exist.</summary>
     public static IEnumerable<Nation> Active(Campaign campaign) =>
-        campaign.Nations.Where(nation => nation.Movement is { Dissolved: false });
+        campaign.Nations.Where(nation => nation.Movement is { Dissolved: false } && !(nation.Movement.Exile && !nation.Movement.Landless));
 
     public static MovementDefinition DefinitionOf(Nation nation)
     {
@@ -448,12 +486,15 @@ public static partial class Movements
         var state = nation.Movement;
         if (Exiles.TryGetValue(state, out var cached) && cached.Item1 == MovementCatalog.Version) return cached.Item2;
         var template = MovementCatalog.Of(MovementCatalog.ExileTemplate);
+        var description = template?.Description ?? "";
+        if (!state.Landless)
+            description = Loc.Format("The legal government of {0} has returned to its homeland and resumed governance over its people.", nation.Name);
         var definition = new MovementDefinition
         {
             Id = state.Id,
             Tag = nation.Tag,
             Name = nation.Name,
-            Description = template?.Description ?? "",
+            Description = description,
             Colour = nation.Color,
             Government = nation.Government,
             Ideology = nation.Ideology,
@@ -464,6 +505,7 @@ public static partial class Movements
         definition.Homeland.AddRange(state.Homeland);
         definition.Traits.AddRange(template is null ? new[] { "government_in_exile" } : template.Traits);
         if (template is not null) definition.Faiths.AddRange(template.Faiths);
+        definition.ForgetLookups();
         Exiles.AddOrUpdate(state, Tuple.Create(MovementCatalog.Version, definition));
         return definition;
     }

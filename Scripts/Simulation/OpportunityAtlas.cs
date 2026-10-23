@@ -17,7 +17,7 @@ public static class OpportunityAtlas
         if (campaign is null || nation is null) return new(Array.Empty<Formation>(), Array.Empty<Decision>(), Array.Empty<Shortage>());
         shortageThreshold = float.IsFinite(shortageThreshold) ? Math.Clamp(shortageThreshold, 0, .985f) : .985f;
         var formations = string.IsNullOrEmpty(nation.FormedNationId)
-            ? FormableNations.All.Where(d => FormableNations.Eligible(nation, d))
+            ? FormableNations.AvailableIn(campaign).Where(d => FormableNations.Eligible(campaign, nation, d))
                 .Select(d => new Formation(d, FormableNations.Evaluate(campaign, nation, d)))
                 .OrderByDescending(r => r.Status.CanForm)
                 .ThenByDescending(r => r.Status.Total > 0 ? (double)r.Status.Owned / r.Status.Total : 0)

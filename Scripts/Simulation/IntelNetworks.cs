@@ -175,11 +175,13 @@ public static class IntelNetworks
         foreach (var (targetId, strength) in viewer.IntelNetworks)
             if (strength > 0.01f && c.NationById(targetId) is { } target) shares[target.MapIndex] = (targetId, M.Clamp01(strength));
         if (shares.Count == 0) return;
-        for (var p = 1; p < reach.Length && p < controllers.Length; p++)
-        {
-            if (reach[p] > 0 || !shares.TryGetValue(controllers[p], out var seen)) continue;
-            if (Pattern(c.Seed, viewerId, seen.Id, p) < seen.Share) reach[p] = 1;
-        }
+        // Only the targets' own provinces (CampaignIntel.ProvincesHeldBy), not the whole map.
+        foreach (var (mapIndex, seen) in shares)
+            foreach (var p in CampaignIntel.ProvincesHeldBy(c, controllers, mapIndex))
+            {
+                if (p >= reach.Length || reach[p] > 0) continue;
+                if (Pattern(c.Seed, viewerId, seen.Id, p) < seen.Share) reach[p] = 1;
+            }
     }
 
     private static float Pattern(int seed, int viewer, int target, int province)

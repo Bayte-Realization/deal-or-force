@@ -1,0 +1,7 @@
+{
+  "MigrateLegacySecessionColoursOnLoad": true,
+  "SecessionColourPalette": [
+    "#C57857", "#4F94C0", "#BA87B5", "#8BA654", "#D5AD57", "#4CA894",
+    "#B35F80", "#8B8ACB", "#C9854B", "#65A9B6", "#A9A168", "#6685B7"
+  ]
+}

@@ -21,7 +21,7 @@
     "war_ledger.card_height": 76,
     // The war score at which the front line reaches the end of the bar, and the same for
     // one part of the score.
-    "war_ledger.bar_scale": 40,
+    "war_ledger.bar_scale": 100,
     "war_ledger.part_scale": 20,
     // How much deeper than its map colour a country's side of the bar is drawn (0 to 1).
     "war_ledger.colour_depth": 0.12,

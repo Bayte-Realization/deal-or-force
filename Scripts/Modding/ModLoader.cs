@@ -59,6 +59,7 @@ public sealed class ModLoader
 
     private readonly List<ModPackage> _packages = new();
     private readonly ModFrontendActionCatalog _frontendActions = new();
+    private readonly List<ModPackage> _availableMods = new();
     private readonly List<(IGlobalityMod Instance, ModContext Context)> _csharp = new();
     private readonly List<(GodotObject Instance, string ModId)> _gdscript = new();
     private readonly List<(RefCounted Instance, string ModId, Godot.Collections.Dictionary Api)> _engineScripts = new();
@@ -78,10 +79,9 @@ public sealed class ModLoader
     public DlcLoader Dlc { get; } = new();
 
     public IReadOnlyList<ModPackage> Packages => _packages;
-    /// <summary>Metadata only, from enabled dependency-resolved mods, never content packs.</summary>
     public IReadOnlyList<ModFrontendActionDescriptor> FrontendActions() => _frontendActions.Actions;
-    /// <summary>Explicit UI action; handlers exist only after StartCode, not on discovery.</summary>
     public bool TryRunFrontendAction(string fullActionId, out string note) => _frontendActions.TryRun(fullActionId, out note);
+    public IReadOnlyList<ModPackage> AvailableMods => _availableMods;
     public IReadOnlyList<string> Log => _log;
     public int EnabledCount => _packages.Count(package => !package.IsContentPack);
     public int ContentPackCount => _packages.Count(package => package.IsContentPack);
@@ -105,6 +105,7 @@ public sealed class ModLoader
     {
         _frontendActions.ResetDeclarations(Array.Empty<(string, IEnumerable<ModFrontendActionDeclaration>)>());
         _packages.Clear();
+        _availableMods.Clear();
         _log.Clear();
 
         // Development mods ship beside the project. Installed/user mods with the same
@@ -123,7 +124,8 @@ public sealed class ModLoader
         var orderedMods = candidates.Values
             .OrderBy(p => selection.Order(p.Manifest.Id, p.Manifest.LoadOrder))
             .ThenBy(p => p.Manifest.Id, StringComparer.OrdinalIgnoreCase);
-        var enabledIds = ContentDependencies.Resolve(orderedMods.Select(p => new ContentRequirement(
+        _availableMods.AddRange(orderedMods);
+        var enabledIds = ContentDependencies.Resolve(_availableMods.Select(p => new ContentRequirement(
             p.Manifest.Id, selection.IsEnabled(p.Manifest.Id, false, p.Manifest.Enabled),
             p.Manifest.Dependencies ?? new())), out var dependencyErrors);
         foreach (var error in dependencyErrors) Write($"Mod {error.Key} skipped: {error.Value}");
@@ -161,6 +163,14 @@ public sealed class ModLoader
     {
         // Reset mutable catalogues before every campaign so disabling a mod cannot
         // leak its map overrides into the next session in the same process.
+        //
+        // The map's own tables come first, because everything below reads their indices and
+        // because they were the one set of overridable map data missing from this list: a mod
+        // that changed a country row, a region row or the map's colour families took effect on the
+        // first campaign of a session and was silently ignored on the second, the rows having been
+        // read once and kept. The catalogue itself reparses its file, so the cost is one read of
+        // two hundred kilobytes per campaign.
+        WorldMapTables.ResetCatalog();
         TerritorialTopology.ResetCatalog();
         HydrologyCatalog.ResetCatalog();
         MapRasterCatalog.ResetCatalog();
@@ -188,9 +198,12 @@ public sealed class ModLoader
         CentralBank.ResetCatalog();
         foreach (var (_, reset, _) in Tunables) reset();
         GovernmentCatalog.ResetCatalog();
+        RulerTraits.ResetCatalog();
         IdeologyCatalog.ResetCatalog();
         ScriptLibrary.ResetCatalog();
         DecisionCatalog.ResetCatalog();
+        PromiseCatalog.ResetCatalog();
+        GoalCatalog.ResetCatalog();
         EventCatalog.ResetCatalog();
         ModifierCatalog.ResetCatalog();
         InternationalOrganizations.ResetCatalog();
@@ -210,6 +223,8 @@ public sealed class ModLoader
             ApplyBudget(package);
             ApplyPolicies(package);
             ApplyDecisions(package);
+            ApplyPromises(package);
+            ApplyGoals(package);
             ApplyEvents(package);
             ApplyModifiers(package);
             ApplyOpinionModifiers(package);
@@ -302,6 +317,30 @@ public sealed class ModLoader
         catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
     }
 
+    private void ApplyPromises(ModPackage package)
+    {
+        foreach (var path in DataFiles(package, "common", "promises"))
+        try
+        {
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            foreach (var entry in document.RootElement.EnumerateObject())
+                PromiseCatalog.Apply(entry.Name, entry.Value, package.Errors);
+        }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+    }
+
+    private void ApplyGoals(ModPackage package)
+    {
+        foreach (var path in DataFiles(package, "common", "goals"))
+        try
+        {
+            using var document = JsonDocument.Parse(StructuredData.ReadJson(path), new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            foreach (var entry in document.RootElement.EnumerateObject())
+                GoalCatalog.Apply(entry.Name, entry.Value, package.Errors);
+        }
+        catch (Exception exception) { package.Errors.Add($"{Path.GetFileName(path)}: {exception.Message}"); }
+    }
+
     /// <summary>
     /// The catalogues that are a folder of numbers rather than a folder of things.
     ///
@@ -333,12 +372,16 @@ public sealed class ModLoader
         ("laws", () => PoliticalPolicyCatalog.ResetCatalog(), PoliticalPolicyCatalog.MergeLaws),
         ("agendas", () => { }, PoliticalPolicyCatalog.MergeAgendas),
         ("national_courses", () => NationalCourseCatalog.ResetCatalog(), NationalCourseCatalog.Merge),
+        ("formable_ai", () => FormableProclamationAi.ResetCatalog(), FormableProclamationAi.Merge),
+        ("regional_demography", () => RegionalDemography.ResetCatalog(), RegionalDemography.Merge),
         ("news", () => NewsFeed.ResetCatalog(), NewsFeed.Merge),
         ("handbook", () => HandbookCatalog.ResetCatalog(), HandbookCatalog.Merge),
         ("escalation", () => IncidentCatalog.ResetCatalog(), (root, errors) => IncidentCatalog.Merge(root.GetRawText(), errors)),
         ("factions", () => Factions.ResetCatalog(), Factions.Merge),
         ("coups", () => Coups.ResetCatalog(), Coups.Merge),
-        ("addresses", () => AddressToNation.ResetCatalog(), AddressToNation.Merge)
+        ("addresses", () => AddressToNation.ResetCatalog(), AddressToNation.Merge),
+        ("covert_operations", () => CovertOperations.ResetCatalog(), CovertOperations.Merge),
+        ("rulers", () => Rulers.ResetCatalog(), Rulers.MergeCommon)
     };
 
     /// <summary>One mod's copy of each of those folders, layered over what is loaded.</summary>
@@ -559,6 +602,7 @@ public sealed class ModLoader
     public void StopCode()
     {
         _frontendActions.StopRuntime();
+        // A managed mod may own a local bridge or worker; release it before unloading its assembly.
         foreach (var plugin in _csharp)
         {
             plugin.Context.FrontendActions?.Dispose();
@@ -585,13 +629,31 @@ public sealed class ModLoader
         _api = api;
         _api.Bind(campaign);
         _frontendActions.BeginRuntime();
-
         foreach (var package in _packages)
         {
             LoadCsharp(package, campaign);
             LoadGdscript(package, campaign);
             LoadEngineScript(package, campaign);
             LoadWorker(package, campaign);
+        }
+    }
+
+    public Func<byte[]> CaptureCrossoverSurface { get; set; }
+    public Func<byte[]> CaptureCrossoverHydrology { get; set; }
+    public Action<CrossoverVoxel[]> PresentCrossoverVoxels { get; set; }
+    public Action<CrossoverWork[]> PresentCrossoverWorks { get; set; }
+    public Action<bool> SetCrossoverPresentation { get; set; }
+
+    public void OnFrame(Campaign campaign, double delta)
+    {
+        foreach (var plugin in _csharp)
+        {
+            plugin.Context.Campaign = campaign;
+            plugin.Context.CaptureSurface = CaptureCrossoverSurface;
+            plugin.Context.CaptureHydrology = CaptureCrossoverHydrology;
+            plugin.Context.PresentVoxels = PresentCrossoverVoxels;
+            plugin.Context.PresentWorks = PresentCrossoverWorks;
+            Try(plugin.Context.ModId, () => plugin.Instance.OnFrame(plugin.Context, delta));
         }
     }
 
@@ -879,7 +941,11 @@ public sealed class ModLoader
             {
                 if (Activator.CreateInstance(type) is not IGlobalityMod instance) continue;
                 var context = new ModContext(package.Manifest.Id, message => Write($"[{package.Manifest.Id}] {message}"))
-                { Campaign = campaign, FrontendActions = _frontendActions.RegisterFor(package.Manifest.Id) };
+                {
+                    Campaign = campaign,
+                    FrontendActions = _frontendActions.RegisterFor(package.Manifest.Id),
+                    SetCrossoverPresentation = SetCrossoverPresentation
+                };
                 var retained = false;
                 try
                 {

@@ -1,0 +1,8 @@
+{
+  "PeaceCapitulationRecoversHomeland": true,
+  "AiRevancheRelativeWeight": 1.2,
+  "AiRevancheOpportunityWeight": 0.5,
+  "MovementAiUseHomelandOpenings": true,
+  "MovementAiHomelandOpeningChance": 0.8,
+  "MovementAiHomelandOpeningAppetite": 0.45
+}

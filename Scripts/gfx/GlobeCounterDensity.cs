@@ -9,18 +9,26 @@ public sealed partial class GlobePresentation
     private void UpdateSurfaceCounterDensity()
     {
         if (_flatMap || !IsInstanceValid(_armyRoot)) return;
+        if (!_counterDensityDirty) return;
         var now = Time.GetTicksMsec();
-        if (!_counterDensityDirty && now < _nextSurfaceDensityMs) return;
+        if (now < _nextSurfaceDensityMs) return;
         _nextSurfaceDensityMs = now + 100;
         _counterDensityDirty = false;
         // The province centre wins over screen-space crowding. Never combine
         // neighbouring provinces or retain a collision-avoidance surface slot.
         foreach (var marker in _armyStacks.Values)
         {
-            marker.Node.Position = ArmyMarkerPosition(marker);
-            OrientSurfaceArmyCard(marker);
-            SizeSurfaceArmyCounter(marker);
-            RefreshProvinceCounterDisplay(marker, false);
+            var pos = ArmyMarkerPosition(marker);
+            if (marker.TargetPosition != pos)
+            {
+                marker.TargetPosition = pos;
+                OrientSurfaceArmyCard(marker);
+            }
+            if (marker.Node.Visible)
+            {
+                SizeSurfaceArmyCounter(marker);
+                RefreshProvinceCounterDisplay(marker, false);
+            }
         }
     }
 }

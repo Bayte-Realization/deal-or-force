@@ -94,7 +94,8 @@ public static class LogisticsSystem
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null || territory is null || territory.Count == 0)
         {
-            foreach (var army in armies) SetStranded(army);
+            foreach (var army in armies)
+                if (!ProvisionVisitor(campaign, nation, army)) SetStranded(army);
             return;
         }
 
@@ -164,6 +165,7 @@ public static class LogisticsSystem
 
         foreach (var army in armies)
         {
+            if (ProvisionVisitor(campaign, nation, army)) continue;
             // A formation at sea is supplied by the ship it is on, not by the province
             // network. Marking it cut off would starve an invasion before it landed.
             if (army.EmbarkedFleetId >= 0)
@@ -187,9 +189,12 @@ public static class LogisticsSystem
             // A modern state moves its army on railways and roads, not on the three
             // divisions' worth of throughput a bare province used to allow. Infrastructure
             // is what a player builds to widen this, so it carries the most weight.
-            var capacity = campaign.Defines.BaseStateSupplyThroughput +
+            // Winter narrows the same road. It does not invent a second supply network.
+            var centre = topology.CenterOf(province);
+            var capacity = (campaign.Defines.BaseStateSupplyThroughput +
                            infrastructure * campaign.Defines.SupplyPerInfrastructure +
-                           barracks * campaign.Defines.SupplyPerBarracks;
+                           barracks * campaign.Defines.SupplyPerBarracks) *
+                          WaterConditions.RoadThroughput(campaign, centre.Latitude);
             var demand = MathF.Max(0.01f, DemandBySource.GetValueOrDefault(sourceState));
             var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
             var traceRange = Math.Max(1, campaign.Defines.SupplyTraceRange);
@@ -199,7 +204,6 @@ public static class LogisticsSystem
             // A fleet sitting off the coast takes what arrives by sea. This is the one
             // thing a navy does that a land player feels immediately: an army on a
             // blockaded shore stops being supplied, and stops being able to attack.
-            var centre = topology.CenterOf(province);
             var blockade = NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude);
             var blockadeFactor = 1f - blockade * campaign.Defines.FleetBlockadeSupplyPenalty;
             var target = M.Clamp01(congestion * distanceFactor * lakeMultiplier * blockadeFactor *
@@ -288,5 +292,18 @@ public static class LogisticsSystem
         army.SupplySourceStateMapIndex = -1;
         army.SupplyCongestion = 0f;
         army.SupplyLevel = M.Lerp(army.SupplyLevel, 0.06f, 0.38f);
+    }
+
+    private static bool ProvisionVisitor(Campaign c, Nation nation, Army army)
+    {
+        var at = army.ProvinceId;
+        if (army.EmbarkedFleetId >= 0 || at <= 0 || at >= c.ProvinceController.Length) return false;
+        var controller = c.ProvinceController[at];
+        if (controller == nation.MapIndex || controller == 0 ||
+            !c.NationsByMapIndex().TryGetValue(controller, out var host) || MilitaryAccess.Hostile(c, nation.Id, host.Id)) return false;
+        // The host provisions an authorised visitor or an interned column awaiting return;
+        // this is not a friendly land trace into an enemy pocket.
+        MilitaryAccess.Provision(army);
+        return true;
     }
 }

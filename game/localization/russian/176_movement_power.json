@@ -1,0 +1,25 @@
+// Движения как сила: забастовки, марши, своё управление (MovementPower.cs).
+{
+  "chronicle.general_strike": "{0} объявляет всеобщую забастовку: страна {1} встала.",
+  "chronicle.march_failed": "Правительство страны {1} разгоняет марш движения {0} на столицу ({2}).",
+  "chronicle.march_toppled": "Марш движения {0} на столицу ({2}) свергает правительство страны {1}.",
+  "chronicle.march_concessions": "Марш движения {0} на столицу ({2}) заставил правительство страны {1} выслушать его.",
+  "General strike": "Всеобщая забастовка",
+  "March on the capital": "Марш на столицу",
+  "Call the whole following out of work in the country where most of it lives: six weeks in which its economy produces less and its government loses standing. A government of the people tends to give ground after it; a hard one cracks down.": "Вывести всех сторонников из цехов и контор в стране, где их больше всего: шесть недель её экономика производит меньше, а правительство теряет авторитет. Народное правительство после этого обычно уступает, жёсткое — давит.",
+  "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.": "Заполнить улицы столицы, чей регион на стороне движения. Слабое правительство падает: политическое движение берёт власть, национальное добивается того, чтобы его услышали. Сильное разгоняет марш, и движение теряет организаторов.",
+  "Momentum": "Размах",
+  "How much of its people follows it, its standing, its recognitions, its organisers and its money, together. From {0} it can call a general strike, from {1} it governs the regions that follow it, from {2} it can march on a capital.": "Сколько его народа идёт за ним, его авторитет, признание, организаторы и деньги вместе. С {0} оно может объявить всеобщую забастовку, с {1} — управлять поддерживающими его регионами, с {2} — идти маршем на столицу.",
+  "A company for hire does not lead a people.": "Наёмная компания не ведёт за собой народ.",
+  "Momentum is {0}; a general strike takes {1}.": "Размах {0}, а для всеобщей забастовки нужно {1}.",
+  "No country holds enough of its following to stop.": "Ни в одной стране у него нет столько сторонников, чтобы её остановить.",
+  "A movement does not strike against itself.": "Движение не бастует против самого себя.",
+  "Momentum is {0}; a march on the capital takes {1}.": "Размах {0}, а для марша на столицу нужно {1}.",
+  "No capital would follow it into the streets.": "Ни одна столица не выйдет за ним на улицы.",
+  "Support in {0} is {1}; a march takes {2}.": "Поддержка в регионе {0} — {1}, а для марша нужно {2}.",
+  "It is at war with that government: the streets are not where this is decided.": "Оно воюет с этим правительством: на улицах это уже не решить.",
+  "A general strike brings {0} to a standstill.": "Всеобщая забастовка остановила страну {0}.",
+  "The march on {0} was broken up.": "Марш на столицу ({0}) разогнан.",
+  "The government in {0} has fallen to the street.": "Правительство пало под натиском улицы ({0}).",
+  "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts.": "Заводы, порты и конторы стоят. Страна производит меньше, налоги не собираются, а авторитет правительства падает с каждой неделей забастовки."
+}

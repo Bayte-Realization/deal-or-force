@@ -112,8 +112,10 @@ public partial class DealOrForceGame
                     _campaign.Defines.SaveTextFormat = SettingsCatalog.Chosen("save_format") != "false";
                 break;
             case "civil_wars_players":
+                // A toggle is stored as a JSON boolean. Chosen only reads strings, so the
+                // menu could show On while every new campaign still forbade the outbreak.
                 if (_campaign is not null)
-                    _campaign.Defines.CivilWarStrikesPlayers = SettingsCatalog.Chosen("civil_wars_players") == "true";
+                    _campaign.Defines.CivilWarStrikesPlayers = SettingsCatalog.Flag("civil_wars_players");
                 break;
 
             case "hours_per_tick":
@@ -197,6 +199,14 @@ public partial class DealOrForceGame
                 RefreshMapVisualToggles();
                 break;
 
+            case "map_trade_traffic":
+                if (_globe is not null) _globe.TradeTrafficShown = SettingsCatalog.Flag("map_trade_traffic");
+                break;
+
+            case "map_event_pulses":
+                if (_globe is not null) _globe.EventPulsesShown = SettingsCatalog.Flag("map_event_pulses");
+                break;
+
             case "map_smoothing":
                 if (_globe is not null && _globe.MapSmoothing != SettingsCatalog.Flag("map_smoothing"))
                     ToggleMapSmoothing();
@@ -215,10 +225,14 @@ public partial class DealOrForceGame
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));
                 break;
 
+            case "graphics_quality":
+                // Automatic is the governor's to move; a named tier is the player's and stops it.
+                RebuildQualityProfile();
+                break;
+
             case "render_scale":
-                if (_globe is not null &&
-                    float.TryParse(SettingsCatalog.Chosen("render_scale"), NumberStyles.Float, CultureInfo.InvariantCulture, out var share))
-                    _globe.RenderScale = share;
+                // The profile owns the tier's share; this is the player's own multiplier on top.
+                if (_globe is not null) _globe.ApplyQuality(_globe.Quality);
                 break;
 
             case "vsync":

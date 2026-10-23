@@ -1,0 +1,172 @@
+{
+  "chinese": {
+    "countries": ["CHN","TWN","HKG","MAC","SGP"], "cultures": ["han","han_chinese","chinese","cantonese","hokkien","hakka","taiwanese"], "pattern": "{family} {given}",
+    "male": ["Jian","Wei","Ming","Hao","Jun","Lei","Qiang","Tao","Yong","Cheng","Bin","Feng","Guang","Guoqiang","Haoran","Jianhua","Jianguo","Jie","Peng","Sheng","Weidong","Wenhao","Xiaoming","Yufeng"],
+    "female": ["Ai","Fang","Hong","Hui","Jing","Juan","Lan","Li","Ling","Mei","Na","Ning","Ping","Qian","Qing","Rong","Shan","Ting","Xia","Xiaohong","Xinyi","Yan","Ying","Yue"],
+    "family": ["Wang","Li","Zhang","Liu","Chen","Yang","Huang","Zhao","Wu","Zhou","Xu","Sun","Ma","Zhu","Hu","Guo","He","Gao","Lin","Luo","Zheng","Liang","Xie","Song"]
+  },
+  "japanese": {
+    "countries": ["JPN"], "cultures": ["japanese","ryukyuan"], "pattern": "{family} {given}",
+    "male": ["Akira","Daichi","Daisuke","Haruki","Hiroaki","Hiroshi","Ichiro","Jun","Kazuhiro","Kenichi","Kenji","Koichi","Makoto","Masahiro","Naoki","Noboru","Ryota","Satoshi","Shigeru","Shinji","Takashi","Takeshi","Taro","Yasuo"],
+    "female": ["Akiko","Ayako","Chie","Emiko","Haruka","Hiroko","Kaori","Kazuko","Keiko","Kumiko","Kyoko","Mai","Mariko","Mayumi","Michiko","Naoko","Noriko","Rie","Sachiko","Satomi","Takako","Tomoko","Yoko","Yukiko"],
+    "family": ["Sato","Suzuki","Takahashi","Tanaka","Watanabe","Ito","Yamamoto","Nakamura","Kobayashi","Kato","Yoshida","Yamada","Sasaki","Yamaguchi","Matsumoto","Inoue","Kimura","Hayashi","Saito","Shimizu","Yamazaki","Mori","Abe","Ikeda"]
+  },
+  "korean": {
+    "countries": ["KOR","PRK"], "cultures": ["korean"], "pattern": "{family} {given}",
+    "male": ["Min-jun","Ji-hoon","Seong-ho","Young-soo","Hyun-woo","Jae-ho","Jin-woo","Jun-ho","Sang-hoon","Dong-hyun","Seung-hyun","Tae-ho","Jong-su","Chul-soo","Young-chul","Jae-hyun","Sung-min","Jin-ho","Hyun-seok","Min-su","Byung-ho","Dae-jung","Kyung-soo","Woo-jin"],
+    "female": ["Seo-yeon","Ji-woo","Min-seo","Seo-yun","Ji-young","Soo-jin","Eun-jung","Hye-jin","Mi-young","Sun-hee","Young-hee","Hyun-jung","Ji-hyun","Eun-ji","Soo-yeon","Yun-hee","Min-jung","Hye-won","Ye-jin","Ha-eun","Bo-ra","Na-young","Seung-hee","Jung-hee"],
+    "family": ["Kim","Lee","Park","Choi","Jung","Kang","Cho","Yoon","Jang","Lim","Han","Oh","Seo","Shin","Kwon","Hwang","Ahn","Song","Ryu","Hong","Jeon","Ko","Moon","Yang"]
+  },
+  "vietnamese": {
+    "countries": ["VNM"], "cultures": ["vietnamese","kinh"], "pattern": "{family} {given}",
+    "male": ["Anh Tuấn","Đức Anh","Đức Huy","Duy Khánh","Hoàng Anh","Hùng Cường","Hữu Phước","Minh Đức","Minh Quân","Minh Tuấn","Ngọc Hải","Quang Huy","Quang Minh","Quốc Bảo","Quốc Hùng","Thanh Bình","Thanh Sơn","Thành Công","Thiện Minh","Trung Kiên","Tuấn Anh","Văn Hùng","Việt Dũng","Xuân Trường"],
+    "female": ["Ánh Dương","Bảo Châu","Bích Ngọc","Diệu Linh","Hải Yến","Hoài An","Hồng Nhung","Khánh Linh","Kim Anh","Lan Anh","Mai Anh","Minh Châu","Mỹ Linh","Ngọc Anh","Ngọc Lan","Phương Anh","Quỳnh Anh","Thanh Hà","Thanh Hương","Thu Hà","Thu Hương","Thùy Linh","Trúc Mai","Vân Anh"],
+    "family": ["Nguyễn","Trần","Lê","Phạm","Hoàng","Huỳnh","Phan","Vũ","Võ","Đặng","Bùi","Đỗ","Hồ","Ngô","Dương","Lý","Đinh","Trương","Đoàn","Mai","Tạ","Đào","Cao","Lâm"]
+  },
+  "thai": {
+    "countries": ["THA"], "cultures": ["thai","central_thai","isan"],
+    "male": ["Anan","Apichat","Arthit","Chaiwat","Chatchai","Chawalit","Kittipong","Kriangsak","Manop","Narong","Nattapong","Paitoon","Pichai","Pongpat","Prasert","Prasit","Somchai","Somsak","Sompong","Suchart","Surasak","Thanakorn","Thaworn","Wichai"],
+    "female": ["Amporn","Anong","Arunee","Benjawan","Chalita","Darunee","Duangjai","Kanda","Kanokwan","Ladda","Mali","Nanthana","Naree","Orathai","Pimchanok","Piyaporn","Ratchanee","Siriporn","Somsri","Sudarat","Supaporn","Thidarat","Urai","Wanwisa"],
+    "family": ["Saetang","Saelim","Saelee","Saengsri","Srisuk","Srisuwan","Wongchai","Wongsa","Thongdee","Thongchai","Boonmee","Boonma","Kaewmanee","Kaewprasert","Suksai","Sukprasert","Sukhum","Chaiyaporn","Chaiyapruk","Deesuk","Intharat","Promsri","Rattanakul","Wattanakul"]
+  },
+  "khmer": {
+    "countries": ["KHM"], "cultures": ["khmer"], "pattern": "{family} {given}",
+    "male": ["Borey","Chai","Chann","Chetra","Dara","Kosal","Makara","Narin","Nimol","Panha","Piseth","Rithy","Sambath","Samnang","Sarith","Sokha","Sophal","Sopheak","Sovann","Tharith","Theara","Vanna","Veasna","Visal"],
+    "female": ["Bopha","Chanda","Chenda","Davy","Kanika","Kunthea","Leakena","Lina","Maly","Mony","Nary","Nimol","Pich","Rachana","Rany","Sokun","Sophea","Sopheap","Sreymom","Sreyneang","Sreyoun","Sreyroth","Sreypov","Vannary"],
+    "family": ["Sok","Chan","Chea","Lim","Kim","Seng","Soeun","Heng","Phan","Yin","Kong","San","Keo","Khim","Mao","Nhem","Oum","Pov","Ros","Sam","Tep","Touch","Vong","Yem"]
+  },
+  "lao": {
+    "countries": ["LAO"], "cultures": ["lao"],
+    "male": ["Bounchan","Bounmy","Bounnhang","Bounthong","Chanthone","Khamla","Khampheng","Khamphong","Khamsay","Manivong","Pheng","Phonsavan","Phouvieng","Sengchan","Sengdeuan","Somchan","Somphone","Somphou","Somvang","Souk","Souphan","Thavone","Thongchan","Vieng"],
+    "female": ["Bounmy","Chanthala","Chanthavong","Dalaphone","Dokmai","Khamphanh","Khamphiou","Keomany","Ketsana","Latsamy","Malavanh","Manivanh","Noy","Phonethip","Phouvieng","Sengmany","Sengsouk","Somchit","Souksavanh","Souphaphone","Thipphavanh","Viengkham","Vilay","Vixay"],
+    "family": ["Phommasane","Phommalath","Phommakhot","Phanthavong","Phanthasouk","Sihavong","Sengsavang","Souvannavong","Souvannasouk","Souksavath","Sisavath","Chanthavong","Keovongsa","Keomany","Khamphoui","Vongsa","Vongphachanh","Vongsavanh","Inthavong","Inthasane","Manivong","Phetsavong","Singsavath","Thammavong"]
+  },
+  "burmese": {
+    "countries": ["MMR"], "cultures": ["burmese","bamar"],
+    "male": ["Aung","Hla","Hlaing","Htun","Khin","Ko","Kyaw","Kyaw Zaw","Maung","Min","Myint","Myo","Nay","Nyi","Sai","Soe","Than","Thant","Thein","Tin","Tun","Win","Ye","Zaw"],
+    "female": ["Aye","Aye Aye","Cho","Ei","Hnin","Hnin Ei","Htet","Khin","Khin Mar","May","Moe","Mya","Myat","Nandar","Nilar","Nu","Phyu","San","Su","Thandar","Thet","Thida","Wai","Yin"],
+    "family": ["Aung","Hlaing","Htay","Htun","Htwe","Khine","Kyaw","Lwin","Maung","Min","Moe","Myint","Naing","Oo","San","Soe","Than","Thant","Thein","Tin","Tun","Win","Wint","Zaw"]
+  },
+  "malay": {
+    "countries": ["MYS","BRN"], "cultures": ["malay"], "pattern": "{given} bin {family}", "female_pattern": "{given} binti {family}",
+    "male": ["Ahmad","Azhar","Azlan","Azman","Farid","Fauzi","Hafiz","Hakim","Hamdan","Hassan","Idris","Irfan","Ismail","Kamal","Khairul","Luqman","Nizam","Rahman","Razak","Ridzuan","Roslan","Saiful","Shahrul","Zainal"],
+    "female": ["Aisyah","Aminah","Aqilah","Azizah","Farah","Fatimah","Hafizah","Haslina","Intan","Khairunnisa","Liyana","Maisarah","Mariam","Nadia","Noraini","Nurul","Raihan","Ramlah","Rohani","Salmah","Siti","Suraya","Zainab","Zulaikha"],
+    "family": ["Abdullah","Ahmad","Ali","Aziz","Bakar","Daud","Hamid","Harun","Hassan","Hussein","Ibrahim","Idris","Ismail","Jamal","Kassim","Latif","Mahmud","Mansor","Musa","Osman","Rahman","Salleh","Yahya","Yusof"]
+  },
+  "indonesian": {
+    "countries": ["IDN","TLS"], "cultures": ["javanese","sundanese","balinese","madurese","indonesian"],
+    "male": ["Agus","Ahmad","Andi","Arief","Bambang","Bayu","Budi","Darma","Dedi","Dewanto","Edi","Eko","Fajar","Hadi","Hendro","Irfan","Joko","Rizal","Rudi","Surya","Taufik","Teguh","Wahyu","Yudi"],
+    "female": ["Ayu","Dewi","Dian","Dina","Dwi","Endah","Fitri","Indah","Intan","Kartika","Lestari","Maya","Melati","Ningsih","Nurul","Putri","Ratna","Rina","Sari","Sinta","Sri","Tri","Wulan","Yuni"],
+    "family": ["Santoso","Wijaya","Saputra","Pratama","Setiawan","Hidayat","Nugroho","Wibowo","Utomo","Purnomo","Kurniawan","Susanto","Sutanto","Firmansyah","Gunawan","Hermawan","Kusuma","Mahendra","Permana","Prakoso","Prasetyo","Ramadhan","Suharto","Yulianto"]
+  },
+  "filipino": {
+    "countries": ["PHL"], "cultures": ["filipino","tagalog","cebuano","ilocano","visayan"],
+    "male": ["Alfredo","Antonio","Arturo","Benigno","Carlos","Danilo","Eduardo","Emilio","Enrique","Ernesto","Fernando","Francisco","Gregorio","Jaime","Jose","Juan","Julio","Manuel","Mario","Miguel","Ramon","Raul","Ricardo","Roberto"],
+    "female": ["Adela","Alicia","Amelia","Ana","Angela","Aurora","Carmen","Cecilia","Corazon","Cristina","Dolores","Elena","Emilia","Estrella","Gloria","Imelda","Isabel","Josefina","Lourdes","Lucia","Maria","Marilou","Rosario","Teresa"],
+    "family": ["Santos","Reyes","Cruz","Bautista","Garcia","Mendoza","Ramos","Torres","Dela Cruz","Flores","Rivera","Gonzales","Aquino","Lopez","Perez","Villanueva","Fernandez","Castillo","Santiago","Domingo","Valdez","Mercado","Aguilar","Navarro"]
+  },
+  "hindi": {
+    "countries": ["IND"], "cultures": ["hindi","hindustani","punjabi","gujarati","marathi","rajasthani","bihari"],
+    "male": ["Aakash","Abhay","Ajay","Amit","Anand","Anil","Arjun","Ashok","Deepak","Dinesh","Gaurav","Manoj","Mohan","Nitin","Prakash","Rajesh","Ravi","Rohit","Sandeep","Sanjay","Suresh","Vijay","Vikram","Vinod"],
+    "female": ["Aarti","Anita","Anjali","Anu","Archana","Deepa","Divya","Geeta","Kavita","Kiran","Lakshmi","Madhuri","Meena","Neha","Pooja","Pratibha","Priya","Radha","Rekha","Ritu","Savita","Seema","Shalini","Sunita"],
+    "family": ["Sharma","Verma","Gupta","Agarwal","Srivastava","Mishra","Pandey","Tiwari","Shukla","Tripathi","Saxena","Singh","Yadav","Chauhan","Thakur","Patel","Desai","Shah","Joshi","Kulkarni","Patil","Deshmukh","Mehta","Trivedi"]
+  },
+  "tamil": {
+    "cultures": ["tamil"],
+    "male": ["Anand","Aravind","Arun","Ashwin","Balaji","Dinesh","Ganesh","Gopal","Hari","Kannan","Karthik","Kumar","Mani","Mohan","Murali","Natarajan","Prakash","Rajan","Ramesh","Ravi","Saravanan","Senthil","Sivakumar","Suresh"],
+    "female": ["Anitha","Bhavani","Chitra","Deepa","Devi","Divya","Geetha","Indira","Janaki","Kavitha","Lakshmi","Lalitha","Malathi","Meena","Nandhini","Padma","Priya","Radha","Ramya","Revathi","Sangeetha","Shanthi","Sudha","Vasanthi"],
+    "family": ["Arumugam","Balasubramanian","Chandrasekaran","Ganapathy","Govindarajan","Krishnan","Manoharan","Murugan","Natarajan","Palaniappan","Paramasivam","Raghavan","Rajendran","Ramakrishnan","Raman","Ramasamy","Ravi","Selvaraj","Shanmugam","Sivakumar","Subramanian","Sundaram","Venkataraman","Viswanathan"]
+  },
+  "bengali": {
+    "countries": ["BGD"], "cultures": ["bengali"],
+    "male": ["Abdul","Abul","Anis","Anwar","Arif","Ashraf","Farid","Habib","Hasan","Iqbal","Jamal","Kamal","Mahmud","Mansur","Masud","Nasir","Rafiq","Rashid","Reza","Saiful","Shafiq","Shahid","Shamsul","Tariq"],
+    "female": ["Afsana","Amina","Anwara","Farhana","Fatema","Ferdousi","Hasina","Hosneara","Jahanara","Khaleda","Laila","Mahmuda","Nasima","Nusrat","Parveen","Rabeya","Razia","Rehana","Rokeya","Rumana","Sabina","Salma","Shahana","Tahmina"],
+    "family": ["Ahmed","Alam","Ali","Azad","Bashar","Chowdhury","Faruque","Haque","Hasan","Hossain","Islam","Kabir","Karim","Khan","Mahmud","Majumder","Miah","Molla","Rahman","Rashid","Sarkar","Shah","Sikder","Talukder"]
+  },
+  "urdu": {
+    "countries": ["PAK"], "cultures": ["urdu","muhajir","sindhi","saraiki"],
+    "male": ["Adil","Ahmed","Akbar","Ali","Amir","Arif","Asad","Asif","Azhar","Bilal","Danish","Faisal","Farhan","Hamid","Imran","Irfan","Javed","Kamal","Khalid","Nadeem","Nasir","Rashid","Salman","Tariq"],
+    "female": ["Aisha","Amna","Asma","Ayesha","Farah","Farzana","Fatima","Hina","Iqra","Kiran","Madiha","Mariam","Nadia","Naila","Nargis","Nazia","Rabia","Razia","Sadia","Saima","Salma","Samina","Shabana","Uzma"],
+    "family": ["Abbasi","Ahmed","Ali","Ansari","Aziz","Bukhari","Butt","Chaudhry","Dar","Farooqi","Hashmi","Hussain","Iqbal","Jafri","Khan","Malik","Mirza","Qureshi","Rana","Rashid","Rizvi","Shah","Sheikh","Siddiqui"]
+  },
+  "sinhala": {
+    "countries": ["LKA"], "cultures": ["sinhalese","sinhala"],
+    "male": ["Ajith","Ananda","Anil","Arjuna","Asanka","Bandula","Chamara","Chandana","Dinesh","Gamini","Jagath","Kasun","Lalith","Mahesh","Manjula","Nalin","Nimal","Pradeep","Prasanna","Ranjith","Saman","Sanath","Sunil","Upul"],
+    "female": ["Anoma","Anusha","Chamini","Chandrika","Damayanthi","Deepani","Dilani","Disna","Geethani","Himali","Indika","Iresha","Kumari","Lakmali","Malini","Nadeesha","Nayani","Nilanthi","Nirosha","Pavithra","Renuka","Shanthi","Shyamali","Sujatha"],
+    "family": ["Perera","Fernando","Silva","Peiris","de Silva","de Alwis","Jayasuriya","Jayawardena","Gunasekara","Gunawardena","Wickramasinghe","Senanayake","Bandara","Dissanayake","Ranasinghe","Wijesinghe","Rathnayake","Abeysekera","Amarasinghe","Karunaratne","Samarasinghe","Weerasinghe","Ekanayake","Hettiarachchi"]
+  },
+  "nepali": {
+    "countries": ["NPL"], "cultures": ["nepali","pahari","khas"],
+    "male": ["Anil","Arjun","Ashok","Bikash","Bimal","Bishal","Deepak","Dinesh","Gopal","Hari","Kamal","Krishna","Madan","Manoj","Narayan","Prakash","Pramod","Rajan","Rajendra","Ram","Ramesh","Shyam","Suman","Suraj"],
+    "female": ["Anita","Anju","Asha","Bimala","Deepa","Durga","Geeta","Indira","Kamala","Kavita","Laxmi","Mina","Nirmala","Parbati","Pramila","Pratima","Radha","Rekha","Rita","Sabita","Sarita","Shanti","Sita","Sunita"],
+    "family": ["Adhikari","Aryal","Acharya","Basnet","Bhandari","Bhatta","Bhattarai","Dahal","Devkota","Gautam","Ghimire","Gurung","Karki","Khadka","Koirala","Lama","Nepal","Pandey","Poudel","Rai","Sharma","Shrestha","Subedi","Thapa"]
+  },
+  "persian": {
+    "countries": ["IRN","TJK"], "cultures": ["persian","tajik","hazara","dari"],
+    "male": ["Ali","Amir","Arash","Bahram","Dariush","Ehsan","Farhad","Farid","Hamid","Hassan","Hossein","Javad","Kamran","Kaveh","Majid","Mehdi","Mohammad","Nader","Navid","Omid","Parviz","Reza","Saeed","Shahin"],
+    "female": ["Anahita","Azadeh","Bahareh","Farah","Fariba","Farzaneh","Fatemeh","Forough","Homa","Laleh","Leila","Mahsa","Maryam","Mina","Mitra","Nasrin","Neda","Parisa","Roya","Sahar","Samira","Shirin","Soraya","Zahra"],
+    "family": ["Ahmadi","Akbari","Alavi","Amiri","Azadi","Bahrami","Daryaei","Ebrahimi","Farahani","Farhadi","Ghaffari","Habibi","Hosseini","Jafari","Karimi","Kazemi","Mahdavi","Mohammadi","Moradi","Naderi","Rahimi","Rezaei","Shahidi","Yazdani"]
+  },
+  "pashtun": {
+    "countries": ["AFG"], "cultures": ["pashtun","pakhtun","baloch"],
+    "male": ["Abdul Rahman","Abdul Wahid","Abdullah","Ahmad","Akbar","Amir","Asadullah","Bashir","Daud","Farid","Ghulam Nabi","Habibullah","Hamid","Ismail","Jamal","Khalil","Mahmud","Mirwais","Mohammad","Naim","Nasir","Rahmatullah","Shah Mahmood","Zahir"],
+    "female": ["Amina","Anahita","Ariana","Aziza","Basira","Farida","Fatima","Fawzia","Freshta","Habiba","Hamida","Jamila","Laila","Latifa","Malalai","Marzia","Nadia","Nasima","Parwana","Razia","Roya","Shabnam","Soraya","Zarmina"],
+    "family": ["Ahmadzai","Alizai","Barakzai","Durrani","Ghilzai","Hotak","Ishaqzai","Kakar","Karimzai","Khan","Khattak","Kuchi","Lodin","Mohammadzai","Momand","Noorzai","Popalzai","Rasuli","Safai","Safar","Safi","Shinwari","Wardak","Yousafzai"]
+  },
+  "turkish": {
+    "countries": ["TUR","AZE"], "cultures": ["turkish","turkish_cypriot","azerbaijani"],
+    "male": ["Ahmet","Ali","Arda","Barış","Burak","Cem","Cengiz","Emre","Eren","Fatih","Hakan","Halil","Hasan","Kemal","Mehmet","Murat","Mustafa","Orhan","Osman","Ömer","Selim","Serkan","Uğur","Yusuf"],
+    "female": ["Aylin","Ayşe","Bahar","Banu","Başak","Berna","Ceren","Deniz","Derya","Dilek","Ebru","Elif","Emine","Esra","Fatma","Gül","Hande","Hatice","İpek","Leyla","Merve","Özlem","Selin","Zeynep"],
+    "family": ["Yılmaz","Kaya","Demir","Çelik","Şahin","Yıldız","Yıldırım","Öztürk","Aydın","Özdemir","Arslan","Doğan","Kılıç","Aslan","Çetin","Kara","Koç","Kurt","Özkan","Şimşek","Polat","Özcan","Korkmaz","Tekin"]
+  },
+  "kazakh": {
+    "countries": ["KAZ","KGZ"], "cultures": ["kazakh","kyrgyz","karakalpak"],
+    "male": ["Aidar","Aidos","Alikhan","Arman","Askar","Azamat","Bauyrzhan","Bekzat","Bolat","Daniyar","Daulet","Dauren","Dias","Erbol","Erkin","Kanat","Marat","Murat","Nurlan","Ruslan","Samat","Serik","Timur","Yerlan"],
+    "female": ["Aidana","Aigerim","Ainur","Aliya","Altynai","Anara","Asel","Asem","Bayan","Dana","Dinara","Gaukhar","Gulnara","Gulzira","Indira","Kamila","Kuralai","Laura","Madina","Malika","Nazira","Sabina","Saltanat","Zarina"],
+    "family": ["Akhmetov","Aliev","Amanov","Askarov","Baibekov","Baimukhanov","Beketov","Dauletov","Dosov","Duisenov","Ermekov","Iskakov","Kairatov","Karimov","Kassymov","Kenzhebayev","Muratov","Nurgaliev","Omarov","Ospanov","Saduakasov","Saparov","Serikov","Tulegenov"],
+    "female_family": ["Akhmetova","Alieva","Amanova","Askarova","Baibekova","Baimukhanova","Beketova","Dauletova","Dosova","Duisenova","Ermekova","Iskakova","Kairatova","Karimova","Kassymova","Kenzhebayeva","Muratova","Nurgalieva","Omarova","Ospanova","Saduakasova","Saparova","Serikova","Tulegenova"]
+  },
+  "uzbek": {
+    "countries": ["UZB","TKM"], "cultures": ["uzbek","turkmen","uyghur"],
+    "male": ["Abdullo","Akmal","Alisher","Anvar","Aziz","Bahodir","Bekzod","Davron","Dilshod","Erkin","Farhod","Farrukh","Ilhom","Islom","Jahongir","Jamshid","Jasur","Mansur","Murod","Nodir","Otabek","Rustam","Shavkat","Ulugbek"],
+    "female": ["Aziza","Dilorom","Dilfuza","Dilnoza","Feruza","Gulbahor","Gulnora","Gulrukh","Iroda","Kamola","Lola","Madina","Malika","Mavluda","Munira","Nasiba","Nigora","Nodira","Nozima","Ozoda","Rano","Saida","Shahnoza","Zulfiya"],
+    "family": ["Abdullayev","Akramov","Alimov","Azimov","Bahromov","Davlatov","Ergashev","Fayziyev","Gafurov","Hakimov","Ibragimov","Ismailov","Jalilov","Karimov","Mahmudov","Nazarov","Rakhimov","Rasulov","Saidov","Sharipov","Tursunov","Usmanov","Yuldashev","Yusupov"],
+    "female_family": ["Abdullayeva","Akramova","Alimova","Azimova","Bahromova","Davlatova","Ergasheva","Fayziyeva","Gafurova","Hakimova","Ibragimova","Ismailova","Jalilova","Karimova","Mahmudova","Nazarova","Rakhimova","Rasulova","Saidova","Sharipova","Tursunova","Usmanova","Yuldasheva","Yusupova"]
+  },
+  "armenian": {
+    "countries": ["ARM"], "cultures": ["armenian"],
+    "male": ["Aram","Aren","Armen","Artak","Artur","Ashot","Davit","Gagik","Gevorg","Gor","Grigor","Hakob","Hayk","Hovhannes","Karen","Levon","Mher","Narek","Ruben","Sargis","Tigran","Vahe","Vardan","Vazgen"],
+    "female": ["Anahit","Ani","Anna","Arevik","Armenuhi","Gayane","Gohar","Hasmik","Heghine","Hripsime","Karine","Lilit","Lusine","Mane","Mariam","Nairi","Nare","Narine","Nune","Ruzanna","Satenik","Shushanik","Sona","Tatevik"],
+    "family": ["Harutyunyan","Sargsyan","Hovhannisyan","Grigoryan","Khachatryan","Hakobyan","Petrosyan","Vardanyan","Gevorgyan","Karapetyan","Mkrtchyan","Manukyan","Avetisyan","Martirosyan","Baghdasaryan","Margaryan","Davityan","Poghosyan","Arakelyan","Asatryan","Melikyan","Minasyan","Sahakyan","Stepanyan"]
+  },
+  "georgian": {
+    "countries": ["GEO"], "cultures": ["georgian","mingrelian","svan"],
+    "male": ["Akaki","Aleksandre","Archil","Avtandil","Beka","Davit","Demetre","Gela","Giorgi","Givi","Guram"," Irakli","Ivane","Kakha","Lasha","Levan","Mamuka","Merab","Mikheil","Nikoloz","Shalva","Shota","Temur","Zurab"],
+    "female": ["Ana","Eka","Ekaterine","Elene","Irina","Ketevan","Lali","Lia","Lika","Maia","Maka","Manana","Mariam","Marika","Nana","Natia","Nato","Nino","Nona","Salome","Tamara","Tamar","Teona","Tinatin"],
+    "family": ["Beridze","Kapanadze","Gelashvili","Maisuradze","Giorgadze","Lomidze","Tsiklauri","Kvaratskhelia","Iashvili","Mchedlidze","Kiknadze","Dolidze","Abashidze","Chikhladze","Kobakhidze","Shengelia","Tsereteli","Avaliani","Bagrationi","Davitashvili","Japaridze","Khurtsidze","Oniani","Papashvili"]
+  },
+  "arabic": {
+    "countries": ["SAU","IRQ","SYR","JOR","LBN","YEM","HTH","STC","OMN","ARE","QAT","KWT","BHR","EGY","LBY","LNA","TUN","DZA","MAR","SDN","RSF","PSE","HMS","MRT"], "cultures": ["arab_egyptian","arab_gulf","arab_iraqi","arab_levantine","arab_maghrebi","arab_saudi","arab_sudanese","arab_yemeni","arab"],
+    "male": ["Adel","Ahmad","Ali","Ammar","Anwar","Bashir","Fadi","Faisal","Farid","Hassan","Hussein","Ibrahim","Jamal","Karim","Khalid","Mahmoud","Mansour","Mohammad","Nabil","Nasser","Omar","Rashid","Samir","Yusuf"],
+    "female": ["Aisha","Amal","Amina","Asma","Aziza","Dalia","Fatima","Hala","Hanan","Iman","Jamila","Khadija","Laila","Lina","Maha","Mariam","Mouna","Nadia","Najwa","Noura","Rania","Salma","Samira","Zainab"],
+    "family": ["al-Hakim","al-Hamdan","al-Hariri","al-Hashimi","al-Khatib","al-Mansouri","al-Masri","al-Najjar","al-Qadi","al-Rashid","al-Salem","al-Sayed","al-Sharif","al-Tamimi","al-Zahrani","Darwish","Farhat","Haddad","Hamad","Harb","Khoury","Mansour","Nassar","Saleh"]
+  },
+  "hebrew": {
+    "countries": ["ISR"], "cultures": ["israeli","jewish","ashkenazi","sephardi","mizrahi"],
+    "male": ["Aharon","Amir","Ariel","Avi","Avraham","Boaz","Dan","Daniel","David","Eitan","Eli","Gideon","Haim","Ilan","Itamar","Moshe","Nadav","Noam","Ofer","Rafael","Ronen","Shai","Uri","Yosef"],
+    "female": ["Adina","Alona","Anat","Avigail","Avital","Dalia","Dana","Dina","Einat","Esther","Hadas","Ilana","Leah","Liat","Michal","Miriam","Naomi","Noga","Rachel","Rina","Rivka","Tamar","Talia","Yael"],
+    "family": ["Cohen","Levi","Mizrahi","Peretz","Biton","Dahan","Agmon","Azoulay","Barak","Ben-Ami","Ben-David","Dayan","Golan","Harari","Katz","Levin","Malka","Mor","Peleg","Rosen","Shalev","Shapira","Tal","Zohar"]
+  },
+  "kurdish": {
+    "cultures": ["kurdish","kurmanji","sorani","zaza"],
+    "male": ["Aram","Azad","Bahoz","Baran","Berzan","Botan","Ciwan","Dara","Dilan","Diyar","Firat","Hawar","Heval","Kawa","Mazlum","Memo","Reber","Rojhat","Serdar","Soran","Welat","Xebat","Yilmaz","Zana"],
+    "female": ["Arjin","Avin","Berfin","Berivan","Ceylan","Dilan","Evin","Gulistan","Havin","Helin","Jiyan","Kejal","Lorin","Narin","Newroz","Nujin","Rojda","Rojin","Ronahi","Ruken","Sevin","Shilan","Viyan","Zilan"],
+    "family": ["Abdullah","Ahmed","Ali","Amin","Aziz","Bakir","Barwari","Darwish","Hamad","Hassan","Hussein","Ibrahim","Ismail","Kader","Karim","Mahmud","Mohammed","Mustafa","Omar","Qadir","Rashid","Saeed","Salih","Yusuf"]
+  },
+  "mongolian": {
+    "countries": ["MNG"], "cultures": ["mongol","mongolian","buryat","kalmyk"], "pattern": "{family} {given}",
+    "male": ["Altan","Altangerel","Amar","Amarbayar","Batbayar","Baterdene","Batjargal","Bayar","Bold","Boldbaatar","Chinbat","Dorj","Enkhbayar","Enkhbold","Erdene","Ganbaatar","Ganbold","Munkhbayar","Munkhbat","Otgonbayar","Temuulen","Tseren","Tsogt","Tumur"],
+    "female": ["Altansarnai","Ariunaa","Ariuntsetseg","Bolor","Bolormaa","Buyankhishig","Chimeg","Enkhjargal","Enkhtuya","Erdenetsetseg","Gerel","Khishigjargal","Munkhtsetseg","Naran","Narangerel","Narantsetseg","Nomin","Odgerel","Odonchimeg","Oyungerel","Oyuntsetseg","Sarangerel","Sarnai","Tungalag"],
+    "family": ["Batbayar","Baterdene","Batjargal","Bold","Boldbaatar","Chuluun","Davaajav","Dorj","Dulamsuren","Enkhbayar","Erdene","Ganbaatar","Ganbold","Gankhuyag","Jargal","Lkhagva","Munkhbat","Namsrai","Nyam","Otgonbayar","Purev","Sukhbaatar","Tseren","Tumur"]
+  }
+}

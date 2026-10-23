@@ -1,0 +1,95 @@
+// Decisions of the war doctrines (TacticalDoctrines, StrategicDoctrines, MilitaryExperience).
+//
+// The four currencies the doctrines are paid in are fields like any other now, so a decision can
+// grant them ("the exercise taught the army something") or gate on them ("without the credit,
+// the reform is not pushed through"). The political entry is the interesting one: it spends
+// political credit to make the staff learn faster, which is the same credit a rewrite needs -
+// a government can only spend its authority once.
+{
+  "grand_manoeuvres": {
+    "name": "Grand manoeuvres",
+    "description": "Take the whole army to the field for a season: a rehearsal of the campaign that will not be fought, at the price of the campaign that might.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "Divisions cannot rehearse a campaign while they are fighting one",
+    "trigger": { "at_war": false },
+    "ai_will_do": "ai_grand_manoeuvres",
+    "effects": { "army_experience": 10 }
+  },
+
+  "flight_school": {
+    "name": "Expand the flight school",
+    "description": "Buy hours for the wings: navigation, night flying, and the kind of weather that cannot be chosen.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "This exercise needs funding and an operational air formation at a controlled base",
+    "trigger": { "min_available_air_formations": 1 },
+    "ai_will_do": "ai_flight_school",
+    "effects": { "air_experience": 6 }
+  },
+
+  "fleet_review": {
+    "name": "Fleet review and long cruise",
+    "description": "Send the squadrons to sea on a schedule: gunnery, station-keeping, and the long passages that make a fleet a fleet.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "This exercise needs funding and serviceable ships not in combat or carrying troops",
+    "trigger": { "min_available_fleet_hulls": 1 },
+    "ai_will_do": "ai_fleet_review",
+    "effects": { "naval_experience": 6 }
+  },
+
+  "push_the_reform": {
+    "name": "Push the reform through",
+    "description": "Spend the government's credit on the staff: the new articles are forced through the schools and the depots before the argument is finished.",
+    "cooldown_days": 270,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The government does not have the credit to force it through",
+    "trigger": { "min_political_points": 8 },
+    "resource_costs": { "political_points": 8 },
+    "ai_resource_reserve": { "political_points": 15 },
+    "ai_will_do": "ai_push_the_reform",
+    "effects": { "army_experience": 6 }
+  },
+
+  // Опыт тратится не только на статьи устава: его можно положить в курс, который делает армию
+  // сильнее здесь и сейчас, ценой того, что на устав его потом не хватит. Это и есть выбор.
+  "intensive_field_course": {
+    "name": "Intensive field course",
+    "description": "Put the army's experience back into the army: a course under canvas that drills what it learned into the men who will use it.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0009,
+    "unavailable": "The army has not earned the experience this course spends",
+    "trigger": { "min_army_experience": 25 },
+    "resource_costs": { "army_experience": 25 },
+    "ai_resource_reserve": { "army_experience": 30 },
+    "ai_will_do": "ai_intensive_field_course",
+    "effects": { "add_modifier": { "intensive_field_course": 240 } }
+  },
+
+  "airmanship_week": {
+    "name": "Airmanship week",
+    "description": "Spend what the wings have learned in the air on a week that teaches it on purpose: instruments, cloud, and the long way home.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The air service has not earned the hours this week spends",
+    "trigger": { "min_air_experience": 18 },
+    "resource_costs": { "air_experience": 18 },
+    "ai_resource_reserve": { "air_experience": 20 },
+    "ai_will_do": "ai_airmanship_week",
+    "effects": { "add_modifier": { "airmanship_week": 180 } }
+  },
+
+  "the_long_cruise": {
+    "name": "The long cruise",
+    "description": "Send the fleet out for a season at sea rather than an afternoon at anchor, paid for in the experience the sea has already given it.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0006,
+    "unavailable": "The fleet has not earned the hours this cruise spends",
+    "trigger": { "min_naval_experience": 18 },
+    "resource_costs": { "naval_experience": 18 },
+    "ai_resource_reserve": { "naval_experience": 20 },
+    "ai_will_do": "ai_the_long_cruise",
+    "effects": { "add_modifier": { "long_cruise": 180 } }
+  }
+}

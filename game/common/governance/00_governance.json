@@ -76,9 +76,8 @@
     "consolidation": {
       "name": "The revolution consolidates",
       "government": "one_party_state",
-      "ideology": "communism",
       "from_government": ["provisional_government"],
-      "from_ideology": ["socialism", "communism"],
+      "from_ideology": ["socialism", "communism", "nationalism", "conservatism", "traditionalism"],
       "stability_below": 0.55,
       "weight": 2.0
     },
@@ -90,9 +89,10 @@
       "government": "parliamentary_republic",
       "ideology": "liberalism",
       "from_government": ["provisional_government", "military_junta"],
-      "stability_above": 0.55,
-      "literacy_above": 0.70,
-      "weight": 1.5
+      "stability_above": 0.42,
+      "literacy_above": 0.50,
+      "at_war": false,
+      "weight": 1.8
     },
 
     // --------------------------------------------------------------- the right reacts --

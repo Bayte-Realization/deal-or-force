@@ -33,5 +33,13 @@
   "AiAidFriendshipThreshold": 50,
   "AiAidReserveOfGdp": 0.06,
   "AiAidCrisisTreasuryOfGdp": 0.015,
-  "AiEmbargoReconcileOpinion": 0
+  "AiEmbargoReconcileOpinion": 0,
+
+  // A scarce good that comes mostly from one partner: the computer asks someone else for
+  // an ordinary trade agreement. The share and the satisfaction are the same numbers the
+  // situation room uses when it names that partner. A player who is asked still signs.
+  "AiSupplyHedges": true,
+  "AiSupplyHedgeShare": 0.75,
+  "AiSupplyHedgeSatisfaction": 0.875,
+  "AiSupplyHedgeRetryDays": 180
 }

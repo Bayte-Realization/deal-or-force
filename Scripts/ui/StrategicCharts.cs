@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using DealOrForce.Simulation;
 using Godot;
 
 namespace DealOrForce;
@@ -63,7 +64,21 @@ public sealed partial class StrategicLineChart : Control
         DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
         DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, Ui.Colour("text.caption"));
 
-        _plot = new Rect2(54, 56, MathF.Max(40, Size.X - 70), MathF.Max(50, Size.Y - 88));
+        var legendFont = 12;
+        var legendLine = 18f;
+        var names = new List<(string Name, Color Color, float Width)>();
+        foreach (var series in _series)
+            names.Add((series.Name, series.Color, font.GetStringSize(series.Name, HorizontalAlignment.Left, -1, legendFont).X + 28f));
+        var rows = 1;
+        var used = 0f;
+        var room = MathF.Max(80f, Size.X - 24f);
+        foreach (var name in names)
+        {
+            if (used > 0f && used + name.Width > room) { rows++; used = 0f; }
+            used += name.Width;
+        }
+        var legendHeight = rows * legendLine + 8f;
+        _plot = new Rect2(58, 56, MathF.Max(40, Size.X - 74), MathF.Max(36, Size.Y - 64f - legendHeight));
         if (_days.Count == 0 || _series.Count == 0 || _series.All(series => series.Values.Count == 0))
         {
             DrawString(font, _plot.GetCenter(), "History will appear after the first simulation week.",
@@ -88,13 +103,20 @@ public sealed partial class StrategicLineChart : Control
             maximum += padding;
         }
 
+        // The axis a reader can actually read: the range rounded out to a step of 1, 2, 2.5 or 5
+        // times a power of ten. Every label is then a round number with the same number of
+        // decimals, instead of five independent roundings of whatever the data happened to be.
+        var (axisLow, axisHigh, decimals) = ChartScale.Axis(minimum, maximum);
+        minimum = axisLow;
+        maximum = axisHigh;
+
         for (var row = 0; row <= 4; row++)
         {
             var ratio = row / 4f;
             var y = _plot.Position.Y + _plot.Size.Y * ratio;
             DrawLine(new Vector2(_plot.Position.X, y), new Vector2(_plot.End.X, y), Ui.Colour("surface.line_faint"), 1f);
             var value = Mathf.Lerp(maximum, minimum, ratio);
-            DrawString(font, new Vector2(5, y + 4), Format(value, _format), HorizontalAlignment.Right, 44, 10,
+            DrawString(font, new Vector2(5, y + 4), Format(value, _format, decimals), HorizontalAlignment.Right, 44, 10,
                 Ui.Colour("text.caption"));
         }
 
@@ -107,17 +129,34 @@ public sealed partial class StrategicLineChart : Control
                 var after = Point(index, count, series.Values[index], minimum, maximum);
                 DrawLine(before, after, series.Color, 2.2f, true);
             }
+            // One reading is not an empty chart. A three-pixel dot in a field this size reads as
+            // nothing at all, so a lone value is drawn as what it is: a marker big enough to see,
+            // a faint line tying it to its own axis label, and the figure written beside it.
             if (count == 1)
-                DrawCircle(Point(0, 1, series.Values[0], minimum, maximum), 3f, series.Color);
+            {
+                var point = Point(0, 1, series.Values[0], minimum, maximum);
+                DrawLine(new Vector2(_plot.Position.X, point.Y), new Vector2(point.X, point.Y),
+                    Ui.Colour("surface.line_faint"), 1f);
+                DrawCircle(point, 6f, Ui.Colour("surface.overlay"));
+                DrawCircle(point, 4f, series.Color);
+                DrawString(font, new Vector2(point.X + 12, point.Y + 4),
+                    Format(series.Values[0], _format, decimals), HorizontalAlignment.Left, -1, 11, series.Color);
+            }
         }
 
-        var legendX = _plot.Position.X;
-        foreach (var series in _series)
+        var legendX = 12f;
+        var legendY = Size.Y - legendHeight + 14f;
+        foreach (var name in names)
         {
-            DrawRect(new Rect2(legendX, Size.Y - 25, 10, 4), series.Color, true);
-            DrawString(font, new Vector2(legendX + 15, Size.Y - 18), series.Name,
-                HorizontalAlignment.Left, -1, 10, Ui.Colour("text.body_soft"));
-            legendX += 20 + font.GetStringSize(series.Name, HorizontalAlignment.Left, -1, 10).X;
+            if (legendX > 12f && legendX + name.Width > Size.X - 8f)
+            {
+                legendX = 12f;
+                legendY += legendLine;
+            }
+            DrawRect(new Rect2(legendX, legendY - 8, 12, 5), name.Color, true);
+            DrawString(font, new Vector2(legendX + 16, legendY), name.Name,
+                HorizontalAlignment.Left, -1, legendFont, Ui.Colour("text.body"));
+            legendX += name.Width;
         }
 
         DrawString(font, new Vector2(_plot.Position.X, _plot.End.Y + 15), $"day {_days[0]:N0}",
@@ -145,6 +184,17 @@ public sealed partial class StrategicLineChart : Control
     private static float ValueAt(StrategicChartSeries series, int index) =>
         series.Values.Count == 0 ? 0f : series.Values[Math.Min(index, series.Values.Count - 1)];
 
+    /// <summary>One value in the chart's own units. `decimals` below zero keeps the short form.</summary>
+    internal static string Format(float value, StrategicChartFormat format, int decimals) => decimals < 0
+        ? Format(value, format)
+        : format switch
+        {
+            StrategicChartFormat.MoneyBillions => $"{(value < 0f ? "−" : "")}${MathF.Abs(value).ToString("F" + decimals)}B",
+            StrategicChartFormat.Millions => value.ToString("F" + decimals) + "M",
+            StrategicChartFormat.Percent => (value * 100f).ToString("F" + decimals) + "%",
+            _ => value.ToString("F" + decimals)
+        };
+
     internal static string Format(float value, StrategicChartFormat format) => format switch
     {
         // A debt reads −$0.34B, as it does everywhere else (Fmt.Money), not $-0.34B.
@@ -164,7 +214,10 @@ public sealed partial class StrategicBarChart : Control
     private IReadOnlyList<StrategicBarEntry> _entries = Array.Empty<StrategicBarEntry>();
     private StrategicChartFormat _format;
     private int _hover = -1;
+    private float _scroll;
     private readonly List<Rect2> _barRects = new();
+    private const float PlotTop = 56f;
+    private const float RowHeight = 26f;
 
     public StrategicBarChart()
     {
@@ -184,11 +237,24 @@ public sealed partial class StrategicBarChart : Control
         _format = format;
         TooltipText = Ui.Tip(subtitle);
         _hover = -1;
+        _scroll = 0f;
         QueueRedraw();
     }
 
+    private float MaxScroll => MathF.Max(0f, _entries.Count * RowHeight - MathF.Max(40f, Size.Y - PlotTop - 10f));
+
     public override void _GuiInput(InputEvent inputEvent)
     {
+        if (inputEvent is InputEventMouseButton wheel && wheel.Pressed &&
+            wheel.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
+        {
+            var step = wheel.ButtonIndex == MouseButton.WheelUp ? -RowHeight : RowHeight;
+            _scroll = Mathf.Clamp(_scroll + step, 0f, MaxScroll);
+            _hover = -1;
+            AcceptEvent();
+            QueueRedraw();
+            return;
+        }
         if (inputEvent is not InputEventMouseMotion motion) return;
         _hover = _barRects.FindIndex(rect => rect.HasPoint(motion.Position));
         if (_hover >= 0 && _hover < _entries.Count)
@@ -207,29 +273,30 @@ public sealed partial class StrategicBarChart : Control
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
         DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
-        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, Ui.Colour("text.caption"));
+        DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, MathF.Max(40f, Size.X - 180f), 12, Ui.Colour("text.caption"));
+        if (MaxScroll > 1f)
+            DrawString(font, new Vector2(Size.X - 158, 24), "Wheel for the rest", HorizontalAlignment.Right, 146, 12, Ui.Colour("text.hint"));
         _barRects.Clear();
         if (_entries.Count == 0) return;
 
         var maximum = MathF.Max(0.0001f, _entries.Max(entry => MathF.Abs(entry.Value)));
-        var available = MathF.Max(80f, Size.Y - 64f);
-        var rowHeight = MathF.Min(28f, available / _entries.Count);
-        var labelWidth = MathF.Min(150f, Size.X * 0.34f);
-        var barWidth = MathF.Max(40f, Size.X - labelWidth - 90f);
+        var labelWidth = Mathf.Clamp(Size.X * 0.38f, 128f, 210f);
+        var barWidth = MathF.Max(40f, Size.X - labelWidth - 78f);
         for (var index = 0; index < _entries.Count; index++)
         {
+            var y = PlotTop - _scroll + index * RowHeight;
+            if (y + RowHeight < PlotTop || y > Size.Y - 6f) continue;
             var entry = _entries[index];
-            var y = 57f + index * rowHeight;
-            DrawString(font, new Vector2(14, y + 15), entry.Name, HorizontalAlignment.Left, labelWidth - 16, 11,
-                index == _hover ? Ui.Colour("chart.row_hover") : Ui.Colour("text.body_soft"));
-            var background = new Rect2(labelWidth, y + 4, barWidth, MathF.Max(8f, rowHeight - 9));
+            DrawString(font, new Vector2(14, y + 17), entry.Name, HorizontalAlignment.Left, labelWidth - 18, 14,
+                index == _hover ? Ui.Colour("chart.row_hover") : Ui.Colour("text.body"));
+            var background = new Rect2(labelWidth, y + 5, barWidth, 16);
             DrawRect(background, Ui.Colour("surface.inset"), true);
             var fill = new Rect2(background.Position, new Vector2(background.Size.X * MathF.Abs(entry.Value) / maximum,
                 background.Size.Y));
             DrawRect(fill, index == _hover ? entry.Color.Lightened(0.16f) : entry.Color, true);
-            DrawString(font, new Vector2(background.End.X + 7, y + 15), StrategicLineChart.Format(entry.Value, _format),
-                HorizontalAlignment.Left, 72, 10, Ui.Colour("text.muted"));
-            _barRects.Add(new Rect2(8, y, Size.X - 16, rowHeight));
+            DrawString(font, new Vector2(background.End.X + 8, y + 17), StrategicLineChart.Format(entry.Value, _format),
+                HorizontalAlignment.Left, 68, 13, Ui.Colour("text.body_soft"));
+            _barRects.Add(new Rect2(8, y, Size.X - 16, RowHeight));
         }
     }
 }

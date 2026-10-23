@@ -9,6 +9,9 @@ public sealed partial class Defines
     public int UltimatumMaxRegions { get; set; } = 8;
     public float UltimatumMaxTreasuryShare { get; set; } = .5f;
     public int UltimatumRefusalTruceDays { get; set; } = 3;
+    /// <summary>Days a player has to answer an ultimatum. Silence refuses it. Nothing is handed over.</summary>
+    public int UltimatumAnswerDays { get; set; } = 21;
+    public int UltimatumHistoryLimit { get; set; } = 32;
 }
 
 public static partial class Ultimatum
@@ -49,12 +52,19 @@ public static partial class Ultimatum
     }
 
     public static bool Validate(Campaign c, Nation demander, Nation target, Demand demand, out string reason)
+        => ValidateCore(c, demander, target, demand, out reason, allowHuman: false);
+
+    /// <summary>The package itself, including one addressed to a player. A player is not answered here.</summary>
+    internal static bool ValidateTerms(Campaign c, Nation demander, Nation target, Demand demand, out string reason)
+        => ValidateCore(c, demander, target, demand, out reason, allowHuman: true);
+
+    private static bool ValidateCore(Campaign c, Nation demander, Nation target, Demand demand, out string reason, bool allowHuman)
     {
         reason = "";
         if (c?.ProvinceMap is null || demander is null || target is null || demander.Id == target.Id || demand is null)
         { reason = "Invalid target."; return false; }
         if (!CampaignDiplomacy.CanDeclareWar(c, demander.Id, target.Id, out reason)) return false;
-        if (target.IsHuman) return Rejected("Human-controlled countries cannot be forced to answer automatically.", out reason);
+        if (!allowHuman && target.IsHuman) return Rejected("Human-controlled countries cannot be forced to answer automatically.", out reason);
         var ids = RegionIds(demand).ToHashSet();
         if (ids.Count > Math.Clamp(c.Defines.UltimatumMaxRegions, 1, 100)) return Rejected("Too many regions in this demand.", out reason);
         if (!float.IsFinite(demand.Reparations) || demand.Reparations < 0 || demand.Reparations >
@@ -98,10 +108,17 @@ public static partial class Ultimatum
     }
 
     public static Outcome Resolve(Campaign c, Nation demander, Nation target, Demand demand, Answer answer)
+        => ResolveCore(c, demander, target, demand, answer, allowHuman: false);
+
+    /// <summary>The addressed player has answered. The same package, and still no automatic guess.</summary>
+    internal static Outcome ResolveAnswered(Campaign c, Nation demander, Nation target, Demand demand, Answer answer)
+        => ResolveCore(c, demander, target, demand, answer, allowHuman: true);
+
+    private static Outcome ResolveCore(Campaign c, Nation demander, Nation target, Demand demand, Answer answer, bool allowHuman)
     {
         // All terms are validated before the first mutation. An invalid second region
         // must not leave a half-applied settlement or take a partial cash payment.
-        if (!Validate(c, demander, target, demand, out var reason)) return new(false, reason);
+        if (!ValidateCore(c, demander, target, demand, out var reason, allowHuman)) return new(false, reason);
         var summary = Summary(c, demand);
         var relation = CampaignDiplomacy.Get(c, demander.Id, target.Id);
         if (answer == Answer.Yield)

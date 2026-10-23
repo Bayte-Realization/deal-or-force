@@ -1,0 +1,131 @@
+// More ways a state stops being what it was.
+//
+// The nine transitions in 00_governance.json covered the two great twentieth-century routes
+// - the army acts, the street acts - and the comfortable one. They left real, common and
+// well-documented outcomes with no route at all, and the worst of those was the junta: a
+// country that had a coup could leave a military government only by becoming a settled,
+// literate democracy at peace (restored_republic), and a junta that could not reach that was
+// permanent. Nothing else in the world was permanent. A junta with a bad economy and no war
+// to win simply sat there for a century.
+//
+// Everything here is a route that actually happened, somewhere, more than once, and each one
+// states the condition that made it possible. None of them is a coin flip on a timer: they
+// compete by weight with the ones above and the whole week is still scaled by how hard the
+// country is actually being pushed.
+{
+  "transitions": {
+    // ---------------------------------------------------------------- the clergy act --
+    //
+    // Iran in 1979 and Afghanistan twice: a modernising state, a literate population that has
+    // learned to organise, a radicalised street and a clergy that is the only institution
+    // still standing. The literacy floor is the part that matters - this is not a route out
+    // of a country that cannot read, which is why it is here and not folded into `revolution`.
+    "theocratic_revolution": {
+      "name": "The clergy take the state",
+      "government": "theocracy",
+      "ideology": "traditionalism",
+      "stability_below": 0.35,
+      "radicalism_above": 0.25,
+      "literacy_above": 0.35,
+      "weight": 1.4
+    },
+
+    // ------------------------------------------------------- the experts are sent for --
+    //
+    // The other answer to a state that has failed at governing: hand it to people who are not
+    // politicians. A junta that cannot run an economy, a republic that cannot pass a budget -
+    // Greece's technocrats, Italy's, Chile's Chicago Boys, and every "government of national
+    // salvation" that was really a government of accountants. It needs a literate country to
+    // staff itself from, and it needs the war to be over, because experts are not a war
+    // cabinet.
+    "technocratic_takeover": {
+      "name": "Government by experts",
+      "government": "technocracy",
+      "ideology": "liberalism",
+      "from_government": ["military_junta", "parliamentary_republic", "presidential_republic",
+                          "provisional_government", "one_party_state"],
+      "stability_below": 0.42,
+      "literacy_above": 0.55,
+      "at_war": false,
+      "weight": 1.0
+    },
+
+    // --------------------------------------------------------- the centre gives ground --
+    //
+    // The peaceful answer to separatism, and the one the game most needed, because until now
+    // a country facing a region that wanted out had exactly two options: hold it or lose it.
+    // Ethiopia's 1995 constitution, Spain's 1978 one, Belgium's repeated ones - a centralised
+    // state facing a region that has stopped accepting the centre devolves, and survives.
+    //
+    // This is deliberately the cheapest route here in stability terms: a government does this
+    // *before* it is at the floor, while it still has something to give away. It is not
+    // available to a federation, which has already given.
+    "federal_compromise": {
+      "name": "The centre devolves",
+      "government": "federation",
+      "from_government": ["one_party_state", "absolute_monarchy", "military_junta",
+                          "presidential_republic", "theocracy", "technocracy"],
+      "stability_below": 0.45,
+      "radicalism_above": 0.15,
+      "weight": 1.2
+    },
+
+    // ------------------------------------------------------------ the councils, instead --
+    //
+    // A provisional government does not have to consolidate into a party. It can go the other
+    // way: the committees that made the revolution keep governing it. The Paris Commune, the
+    // soviets before the Bolsheviks took them, Rojava, the factory councils of Turin. Rare,
+    // and it requires a population far more radicalised than the one that merely wants a new
+    // government - which is exactly what the weight says.
+    "council_republic": {
+      "name": "The councils take over",
+      "government": "direct_democracy",
+      "ideology": "socialism",
+      "from_government": ["provisional_government"],
+      "radicalism_above": 0.30,
+      "stability_below": 0.45,
+      "weight": 1.0
+    },
+
+    // ------------------------------------------------------------ and the junta stays --
+    //
+    // The exit from a military government that most of them actually took: not a return to
+    // the barracks, but a decision to govern permanently with a party attached. Nasser's
+    // Egypt, Franco's Spain, Park's Korea, half of Latin America in the seventies. The
+    // officers stop being officers and start being a party.
+    //
+    // No stability gate, on purpose. The general roll is already scaled by instability, so a
+    // junta that has settled down will very rarely reach this - and one that has not is
+    // exactly the one that decides to make its rule permanent.
+    "one_party_from_junta": {
+      "name": "The junta stays",
+      "government": "one_party_state",
+      "ideology": "nationalism",
+      "from_government": ["military_junta"],
+      "weight": 1.3
+    },
+
+    // ----------------------------------------------------- the strongman crowns himself --
+    //
+    // The remaining exit from a junta, and the oldest one: the man at the top stops answering
+    // to the officers who put him there. Napoleon from the Consulate, Franco's regency,
+    // Bokassa, Duvalier, the Kims - a strongman with an army and a country that has stopped
+    // expecting anything else crowns himself and the form of government changes to match.
+    //
+    // It needs a country that is at least being governed: a junta that has not managed that
+    // is taken by one_party_from_junta or by the next coup instead. The low weight is the
+    // honest part - most strongmen never bother with the crown.
+    "strongman_crowns_himself": {
+      "name": "The strongman crowns himself",
+      "government": "absolute_monarchy",
+      "ideology": "nationalism",
+      // Only from a junta. A settled presidential republic does not crown anybody: open to it,
+      // this made the United States an absolute monarchy for eleven years of one 25-year run at
+      // 0.92 stability. A republic reaches a strongman through a coup or a reaction first.
+      "from_government": ["military_junta"],
+      "stability_above": 0.45,
+      "at_war": false,
+      "weight": 0.7
+    }
+  }
+}

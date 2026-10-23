@@ -1,0 +1,23 @@
+{
+  "War of manoeuvre": "Война манёвра",
+  "The war is won by arriving first: columns, fuel and the open flank, not the fortified line.": "Побеждает тот, кто приходит первым: колонны, горючее и открытый фланг, а не укреплённая линия.",
+  "War of attrition": "Война на истощение",
+  "The war is a bill presented to the other side until it cannot pay: replacements, shells and patience.": "Война — это счёт, предъявленный другой стороне, пока она не сможет платить: пополнения, снаряды и терпение.",
+  "Defence of the homeland": "Оборона родной земли",
+  "The war is fought where the soldiers live: the line holds, the districts arm themselves, and the enemy spends.": "Война идёт там, где живут солдаты: линия держится, уезды вооружаются, а платит противник.",
+  "Professional cadre": "Кадровая армия",
+  "Few divisions, all of them good, and a peace-time budget that keeps them so: what the army knows before the first shot.": "Немного дивизий, и все хорошие, а мирный бюджет держит их такими: то, что армия знает до первого выстрела.",
+  "Universal levy": "Всеобщее ополчение",
+  "The nation itself is the reserve: every district forms its company, and the replacements are already standing in them.": "Сама страна и есть резерв: каждый уезд формирует свою роту, и пополнения уже стоят в ней.",
+  "Command of the air": "Господство в воздухе",
+  "The war is decided overhead: whoever holds the sky spends less blood for the same ground.": "Война решается сверху: кто держит небо, тот платит меньше крови за ту же землю.",
+  "Command of the sea": "Господство на море",
+  "The war is decided in the water: trade arrives or does not, and nothing on land outlasts a closed sea.": "Война решается на воде: торговля приходит или не приходит, и ничто на суше не переживёт закрытого моря.",
+
+  "chronicle.strategy_adopted": "{0} объявляет свою стратегию: {2}.",
+  "chronicle.strategy_changed": "{0} меняет стратегический курс: {2}.",
+
+  "No such strategy is written.": "Такой стратегии не написано.",
+  "This is already the country's strategy.": "Это уже стратегия страны.",
+  "Changing the grand strategy costs {0} political points.": "Смена курса стоит {0} политических очков."
+}

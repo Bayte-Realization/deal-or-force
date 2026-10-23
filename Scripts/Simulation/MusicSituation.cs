@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace DealOrForce.Simulation;
 
 public enum MusicMood { Any, Calm, Uneasy, Crisis, War, Recovery, SystemicCrisis }
-public sealed record MusicReadout(MusicMood Mood, string Reason, float WorldWarExposure = 0, string Region = "");
+public sealed record MusicReadout(MusicMood Mood, string Reason, float WorldWarExposure = 0, string Region = "", string SubRegion = "", string Country = "");
 
 /// <summary>Presentation policy, layered through music/*.json rather than saved as gameplay rules.</summary>
 public sealed class MusicPolicy
@@ -71,7 +71,9 @@ public static class MusicSituation
         }
         var exposure = total > 0 ? (float)Math.Clamp(fighting / total, 0, 1) : 0;
         var paletteNation = observer && region is not null ? c.Nations.FirstOrDefault(x => x.MapIndex == region.NationMapIndex) ?? n : n;
-        MusicReadout Result(MusicMood mood, string reason) => new(mood, reason, exposure, paletteNation.Continent?.ToLowerInvariant() ?? "");
+        MusicReadout Result(MusicMood mood, string reason) => new(mood, reason, exposure,
+            MusicCatalog.RegionKey(paletteNation.Continent), MusicCatalog.RegionKey(paletteNation.Region),
+            MusicCatalog.RegionKey(paletteNation.Tag));
         // Unknown feature IDs default to enabled elsewhere; this deliberate extension signal
         // must be explicitly present, otherwise an old campaign would sound an emergency.
         var declaredEmergency = c.FeatureOverrides.TryGetValue(policy.EmergencyFeature, out var emergency)

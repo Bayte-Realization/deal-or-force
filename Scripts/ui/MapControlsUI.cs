@@ -50,8 +50,11 @@ public partial class DealOrForceGame
         _mapLayerSelector.Name = "MapLayerSelector"; _mapLayerSelector.ClipText = true;
         _mapLayerSelector.TooltipText = Ui.Tip(Tr("Choose a map layer. The active layer is named here; every layer is available in the drawer."));
         row.AddChild(_mapLayerSelector);
+
+        // The weather, one press each: a map being read for its borders is better without it.
         row.AddChild(MapVisualToggle("map_clouds", "CLOUDS", "Clouds over the world, seen from far away. Press to hide or show them.", 74));
         row.AddChild(MapVisualToggle("map_mist", "FOG", "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.", 54));
+        row.AddChild(MapVisualToggle("map_event_pulses", "EVENTS", "Rings on the map where a war, a split or a new country has just happened. Press to hide them.", 78));
 
         _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, 54, 34);
         _showcasePanButton.Name = "ShowcasePan";
@@ -176,6 +179,7 @@ public partial class DealOrForceGame
         var height = Mathf.Max(44, _mapControlsFlow.GetCombinedMinimumSize().Y + 10);
         var bounds = ResponsiveHudLayout.Fit(new(left, bottom - height, Mathf.Max(180, right - left), height), Size.X, Size.Y);
         PlaceHudBounds(_mapControlsPanel, bounds);
+        LayoutMapSelectionCards();
         if (_mapModeDrawerPanel is not null)
         {
             var drawerWidth = Mathf.Clamp(Ui.Metric("map_controls.drawer_width", 480), 200, 720);
@@ -214,7 +218,9 @@ public partial class DealOrForceGame
         _mapVisualToggleButtons.RemoveAll(entry => !IsInstanceValid(entry.Button));
         foreach (var (setting, button) in _mapVisualToggleButtons)
         {
-            button.Visible = SettingsCatalog.Of(setting) is not null;
+            var atmosphere = setting is "map_clouds" or "map_mist" or "map_weather";
+            button.Visible = SettingsCatalog.Of(setting) is not null
+                && (!atmosphere || Simulation.WeatherReadability.LayersAllowed(_campaign));
             var enabled = SettingsCatalog.Flag(setting);
             if (button.ButtonPressed == enabled && button.HasMeta("map_visual_styled")) continue;
             button.SetPressedNoSignal(enabled); StyleButton(button, enabled); button.SetMeta("map_visual_styled", true);
@@ -273,7 +279,7 @@ public partial class DealOrForceGame
         StrategicMapMode.Terrain => "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.",
         StrategicMapMode.Resources => "Regional resource potential. Choose a raw material and locate its deposits.",
         StrategicMapMode.Stability => "Every region's stability: green holds, amber wavers, red is coming apart. A capital in the red is how coups and civil wars start.",
-        StrategicMapMode.Unrest => "Radicalism and the pull to leave, region by region: grey is quiet, amber restless, red close to rising or declaring independence.",
+        StrategicMapMode.Unrest => "Radicalism, the pull to leave, and a region that has stopped accepting its government: grey is quiet, amber restless, red close to rising, breaking, or declaring independence.",
         StrategicMapMode.Tension => "How close each country is to shooting with this one: amber is friction and crisis, red is armed clashes, dark red is war. Talks in the Conflicts screen cool it.",
         _ => "Height and shade, from the moddable relief layer."
     };

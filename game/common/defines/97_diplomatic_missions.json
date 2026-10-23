@@ -1,0 +1,11 @@
+{
+  "DiplomaticMissionsEnabled": true,
+  "DiplomaticMissionPoliticalCost": 8,
+  "DiplomaticMissionWeeklyPoliticalCost": 1.5,
+  "DiplomaticMissionStartCash": 0.1,
+  "DiplomaticMissionWeeklyCash": 0.01,
+  "DiplomaticMissionDays": 180,
+  "DiplomaticMissionLimit": 3,
+  "DiplomaticMissionWeeklyOpinion": 1.2,
+  "DiplomaticMissionOpinionCap": 24
+}

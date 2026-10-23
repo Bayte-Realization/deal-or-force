@@ -25,6 +25,22 @@ internal static class PresentationFonts
         }
     }
 
+    public static Font Tabular(string role = "ui.default")
+    {
+        var key = role + ":tnum";
+        lock (Faces)
+        {
+            if (Faces.TryGetValue(key, out var cached) && GodotObject.IsInstanceValid(cached)) return cached;
+            var baseFont = For(role);
+            var variation = new FontVariation
+            {
+                BaseFont = baseFont,
+                OpentypeFeatures = new Godot.Collections.Dictionary { { "tnum", 1 } }
+            };
+            return Faces[key] = variation;
+        }
+    }
+
     private static Font Load(string role)
     {
         var file = FontCatalog.FileOf(role);

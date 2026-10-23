@@ -1,0 +1,20 @@
+{
+  "id": "quiet_current",
+  "model": "music/lyria-3.5",
+  "job_id": "b7bed5a5-4a2b-4698-8b49-c8c67475e18f",
+  "asset_id": "d8976243-41fc-4ee6-ac17-d20126d78f5c",
+  "source_url": "https://cdn.creativeclaw.co/u/c8554121/audio/b1b7506c-56ad-41d1-a104-0a889713c505.mp3",
+  "target_duration_seconds": 105,
+  "source_container_seconds": 105.874208,
+  "delivered_container_seconds": 105.9,
+  "delivered_path": "game/music/audio/quiet_current.ogg",
+  "sha256_delivered": "A034288CFAD4558C73D7458386651DFAE677A6CF251D6B1B07F72A0986145C74",
+  "encoding": "FFmpeg loudnorm=I=-20:TP=-2:LRA=9, stereo 44100Hz libvorbis q5",
+  "measured_delivered_lufs": -20.12,
+  "measured_delivered_true_peak_db": -4.8,
+  "instrumental_requested": true,
+  "loop": false,
+  "credits_reported": 16,
+  "brief": "81BPM intimate postmodern lo-fi; dry crooked broken beat, muted analog bass, slow low-mid synth and organ fragments. No bells, chimes, mallets, glassy pings, metallic melodic tails, piano or plucked lead, including intro and ending. Understated drama, no epic climax or voices.",
+  "acceptance": "Decoded and measured; artistic acceptance and exact absence of bell-like timbres require listening. This is a new composition, not stem removal from an earlier recording. Earlier universal tracks remain on disk and in the listening library. Regional Asian calm tracks are unchanged."
+}

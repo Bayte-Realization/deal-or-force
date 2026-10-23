@@ -1,0 +1,30 @@
+// Передовой рубеж: названия и описания из common/technologies/62_deep_frontier.json.
+{
+  "Modular reactor programme": "Программа модульных реакторов",
+  "Small reactors built in series rather than cathedrals built one at a time, for a grid that has to survive losing a province.": "Малые реакторы, строящиеся серийно, а не соборами по одному: для сети, которая должна пережить потерю области.",
+  "Additive manufacturing at scale": "Аддитивное производство в промышленных масштабах",
+  "Printing a spare part where the machine broke, instead of shipping it across a continent and waiting.": "Запчасть печатается там, где сломался станок, а не везётся через континент и ожидается неделями.",
+  "Materials recovery networks": "Сети возврата материалов",
+  "Every city sorted and every alloy traced, so a wrecked factory is a stockpile rather than a loss.": "Сортировка в каждом городе и учёт каждого сплава: разрушенный завод становится запасом, а не убытком.",
+  "Autonomous mining fleets": "Автономные добывающие комплексы",
+  "Driverless haulage and survey drones working a deposit nobody wants to live on.": "Беспилотная вывозка и дроны-разведчики работают на месторождении, где никто не хочет жить.",
+
+  "Civic mediation service": "Служба гражданского посредничества",
+  "A standing corps that talks to an angry region before the army has to, and is cheaper than either.": "Постоянный корпус, который говорит с разгневанным регионом раньше, чем это сделает армия, и стоит дешевле любого из них.",
+  "Open statistics office": "Открытое статистическое управление",
+  "Numbers published on a schedule nobody in the government can move, which is what makes them worth reading.": "Цифры публикуются по графику, который не может сдвинуть никто в правительстве, — именно поэтому им стоит верить.",
+  "Pandemic readiness corps": "Корпус готовности к эпидемиям",
+  "Reservists, stockpiles and drills kept current in the years when nothing is happening.": "Резервисты, запасы и учения поддерживаются в те годы, когда ничего не происходит.",
+
+  "Layered air-defence network": "Эшелонированная сеть ПВО",
+  "Short, medium and long reach answering to one command, so a strike has to beat all three to arrive.": "Ближний, средний и дальний рубежи под единым командованием: удару приходится преодолеть все три.",
+  "Distributed munitions production": "Распределённое производство боеприпасов",
+  "Shells made in a hundred workshops instead of three arsenals, which is what keeps a front fed in a long war.": "Снаряды делают в сотне мастерских, а не на трёх арсеналах, — именно это кормит фронт в долгой войне.",
+  "Deep-strike reconnaissance": "Разведка для ударов в глубину",
+  "Finding the depot, the bridge and the headquarters behind the line, and keeping them under watch.": "Найти склад, мост и штаб за линией фронта и держать их под наблюдением.",
+
+  "Continental rail resilience": "Устойчивость континентальных железных дорог",
+  "Double track, alternate gauges and repair trains, so one cut line is a delay rather than a stoppage.": "Вторые пути, запасные колеи и ремонтные поезда: перерезанная линия — задержка, а не остановка.",
+  "Resilient port network": "Устойчивая портовая сеть",
+  "Every port able to take what the biggest one takes, so closing one is a reroute and not an embargo.": "Каждый порт способен принять то же, что и крупнейший: закрытие одного — объезд, а не эмбарго."
+}

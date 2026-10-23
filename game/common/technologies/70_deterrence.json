@@ -1,0 +1,20 @@
+// Deal or Force - the door through which a deterrent is acquired in play (Deterrence.cs).
+//
+// The holders of 2024 are authored in common/deterrence; this is how everybody else joins
+// the club, which is how proliferation arrives as a consequence rather than a script. The
+// effect is a tier, not a share: one point of `deterrence` is tier 1, mutual assured
+// destruction, and the war judgement prices a direct war between two holders out of the
+// arithmetic from the day it is researched.
+//
+// A mod for an era before the bomb ships no such technology and an empty holders row, and
+// the mechanic never speaks. A mod that wants a different rung - chemical, biological, a
+// defence that survives a first strike - names its own technology with its own cost and
+// the same effect key.
+{
+  "nuclear_deterrence": {
+    "name": "Nuclear deterrence",
+    "description": "A deterrent of our own design and our own keeping: nobody attacks us directly again, and we do not attack them.",
+    "category": "military", "cost": 400,
+    "effects": { "deterrence": 1 }
+  }
+}

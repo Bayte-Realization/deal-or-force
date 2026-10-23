@@ -13,8 +13,8 @@
   // How fast the first day's standing stops protecting a membership, as a half-life in years.
   "OrganizationBaselineHalfLifeYears": 10,
   // Below this cohesion an organisation can be wound up, at this weekly chance.
-  "OrganizationDissolveCohesion": 0.14,
-  "OrganizationDissolveChance": 0.03,
+  "OrganizationDissolveCohesion": 0.24,
+  "OrganizationDissolveChance": 0.05,
   // Two estranged members who think this well of each other leave together and found their own.
   "OrganizationSchismOpinion": 35,
   // Pacts against a great power its neighbours all fear: the monthly chance, the opinion of the

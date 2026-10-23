@@ -37,6 +37,32 @@
       "cooldown_ms": 12000,
       "volume_db": -6,
       "yields_to_anything_playing": true
+    },
+    "world_event": {
+      "file": "audio/world_event.wav",
+      "channel": "strategic",
+      "cooldown_ms": 4000,
+      "volume_db": -4,
+      "yields_to_anything_playing": true
+    },
+    "promise_seal": {
+      "file": "audio/atlas/promise_seal.wav",
+      "channel": "interface",
+      "cooldown_ms": 500,
+      "volume_db": 0
+    },
+    "goal_pinned": {
+      "file": "audio/atlas/goal_pinned.wav",
+      "channel": "interface",
+      "cooldown_ms": 400,
+      "volume_db": -1
+    },
+    "goal_complete": {
+      "file": "audio/atlas/goal_complete.wav",
+      "channel": "strategic",
+      "cooldown_ms": 6000,
+      "volume_db": -3,
+      "yields_to_anything_playing": true
     }
   }
 }

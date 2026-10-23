@@ -1,0 +1,138 @@
+// Strategic statecraft decisions (DecisionCore / TakeDecisionCommand).
+//
+// Extends the national decisions deck with core geopolitical instruments:
+// grain reserves, defense industrial consolidation, infrastructure hardening, and war bonds.
+{
+  "strategic_food_reserve": {
+    "name": "Strategic food reserve",
+    "resource_costs": {"political_points": 15},
+    "description": "Store surplus grain in state silos to buffer the population against global price shocks and wartime blockades.",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0015,
+    "unavailable": "Requires peacetime conditions and sufficient treasury funds to stock the silos",
+    "trigger": { "use": [ "at_peace", "solvent" ] },
+    "effects": { "stability": 0.015, "standard_of_living": 0.008 },
+    "ai_will_do": "ai_grain_reserve"
+  },
+  "defence_industry_consolidation": {
+    "name": "Consolidate defence production",
+    "resource_costs": {"political_points": 35},
+    "description": "Integrate state arsenals and establish priority supply chains to accelerate equipment and materiel replenishment.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0028,
+    "unavailable": "Defence production consolidation requires an active wartime footing",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "military_spending": 0.012, "war_support": 0.025, "stability": -0.008 },
+    "ai_will_do": "ai_defence_consolidation"
+  },
+  "critical_infrastructure_hardening": {
+    "name": "Harden critical infrastructure",
+    "resource_costs": {"political_points": 20},
+    "description": "Reinforce power grids, communications networks, and transport arteries against sabotage and precision strikes.",
+    "cooldown_days": 600,
+    "gdp_cost_share": 0.0024,
+    "unavailable": "Requires adequate treasury reserves to fund structural engineering works",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.012, "state.infrastructure": 0.008 },
+    "ai_will_do": "ai_infrastructure_drive"
+  },
+  "emergency_war_bonds": {
+    "name": "Issue sovereign war bonds",
+    "resource_costs": {"political_points": 20},
+    "description": "Appeal to patriotic citizens to fund the armed forces in a protracted struggle, raising immediate treasury liquidity.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0,
+    "unavailable": "War bonds may only be issued during an active armed conflict",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "treasury_percent": 0.025, "war_support": 0.015, "stability": -0.010 },
+    "ai_will_do": "ai_war_bonds"
+  },
+  "red_sea_maritime_security": {
+    "name": "Red Sea maritime escort",
+    "resource_costs": {"political_points": 25, "naval_experience": 15},
+    "description": "Deploy naval escorts and reroute merchant shipping away from missile danger corridors around Bab-el-Mandeb, securing international trade flow.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "Requires adequate treasury liquidity to maintain naval patrols and convoy routing",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.010, "state.infrastructure": 0.006 },
+    "ai_will_do": "ai_maritime_escort"
+  },
+  "semiconductor_supply_shield": {
+    "name": "Microelectronics sovereign initiative",
+    "resource_costs": {"political_points": 30},
+    "description": "Subsidise advanced semiconductor fabrication and stockpile rare earth inputs to defend industrial autonomy against supply-chain disruption.",
+    "cooldown_days": 500,
+    "gdp_cost_share": 0.0032,
+    "unavailable": "Requires sufficient industrial capacity and treasury reserves",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "productivity": 0.012, "stability": 0.008 },
+    "ai_will_do": "ai_chip_initiative"
+  },
+  "provincial_autonomy_charter": {
+    "name": "Grant provincial autonomy charters",
+    "resource_costs": {"political_points": 40},
+    "description": "Devolve local tax collection and regional assemblies to outlying provinces to relieve imperial overstretch before separatist movements harden.",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0020,
+    "unavailable": "Provincial autonomy charters are only needed when governing overstretched outlying territories",
+    "trigger": { "min_imperial_overstretch": 0.10, "use": [ "solvent" ] },
+    "effects": { "imperial_overstretch": -0.06, "stability": 0.018, "state.radicalism": -0.015 },
+    "ai_will_do": "ai_provincial_autonomy"
+  },
+  "diplomatic_detente_summit": {
+    "name": "Convene diplomatic detente summit",
+    "resource_costs": {"political_points": 20},
+    "description": "Host neutral mediators and offer binding border assurances to cool international notoriety and forestall a hostile coalition.",
+    "cooldown_days": 420,
+    "gdp_cost_share": 0.0016,
+    "unavailable": "Requires peacetime and elevated international notoriety that warrants a summit",
+    "trigger": { "use": [ "at_peace", "solvent" ], "min_notoriety": 15.0 },
+    "effects": { "notoriety": -8.0, "stability": 0.010, "political_points": 6 },
+    "ai_will_do": "ai_detente_summit"
+  },
+  "anti_corruption_campaign": {
+    "name": "Civil service anti-corruption drive",
+    "resource_costs": {"political_points": 45},
+    "description": "Launch comprehensive anti-corruption audits across government ministries and state procurement channels to eliminate bureaucratic waste and bolster public trust.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0015,
+    "unavailable": "Requires sufficient government political credit to overcome bureaucratic resistance",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.035, "state.radicalism": -0.025 },
+    "ai_will_do": "ai_anti_corruption"
+  },
+  "national_unity_initiative": {
+    "name": "Civic cohesion and national unity initiative",
+    "resource_costs": {"political_points": 35},
+    "description": "Sponsor civic cohesion forums and public discourse to heal domestic divisions and reinforce public commitment to the state.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0010,
+    "unavailable": "Requires political credit to coordinate national civic councils",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "stability": 0.025, "war_support": 0.020 },
+    "ai_will_do": "ai_national_unity"
+  },
+  "general_staff_academy_expansion": {
+    "name": "General staff officer corps academy",
+    "resource_costs": {"army_experience": 35, "political_points": 10},
+    "description": "Institutionalize the latest tactical lessons learned from modern conflicts into the military academies and staff colleges, elevating operational command competence.",
+    "cooldown_days": 360,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "Requires accumulated battlefield combat experience and political authorization",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "war_support": 0.020, "military_spending": 0.005 },
+    "ai_will_do": "ai_staff_academy"
+  },
+  "armament_modernization_field_refit": {
+    "name": "Armament modernization field refit",
+    "resource_costs": {"army_experience": 30},
+    "description": "Implement division-level field upgrades, integrating counter-drone jamming and modular reactive armor kits across frontline units.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0020,
+    "unavailable": "Requires combat experience to refine equipment retrofit packages",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "military_spending": 0.008, "war_support": 0.015 },
+    "ai_will_do": "ai_armament_refit"
+  }
+}

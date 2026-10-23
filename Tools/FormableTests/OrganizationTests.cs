@@ -67,9 +67,64 @@ static class OrganizationTests
         new OrganizationCommand { IssuerId=2,OrganizationId=defence.Id,Action="vote",MotionId=defenceMotion.Id,Yes=false }.Apply(c);
         DomesticCrisesTests.Day(c,defenceMotion.EndsDay); InternationalOrganizations.Tick(c);
         Check(!defence.Invitations.Contains(3) && defence.LastOutcome=="admission_rejected", "one explicit veto defeats an otherwise supported unanimity motion");
+        // Leadership & challenger calculation:
+        c.NationById(0).Gdp = 500; c.NationById(1).Gdp = 320; c.NationById(2).Gdp = 80;
+        Check(InternationalOrganizations.Leader(c, defence)?.Id == 0 && InternationalOrganizations.Challenger(c, defence)?.Id == 1,
+            "leading power and challenger are derived from member weight");
+        // Doctrine proposal and adoption:
+        var docCmd = new OrganizationCommand { IssuerId = 0, OrganizationId = o.Id, Action = "propose", Kind = "doctrine", Subject = "common_market" };
+        docCmd.Apply(c);
+        Check(o.Motion is not null && o.Motion.Kind == "doctrine" && o.Motion.Subject == "common_market",
+            "a member can propose a bloc doctrine");
+        new OrganizationCommand { IssuerId = 1, OrganizationId = o.Id, Action = "vote", MotionId = o.Motion.Id, Yes = true }.Apply(c);
+        var beforeDocHash = CampaignFingerprint.Of(c);
+        DomesticCrisesTests.Day(c, o.Motion.EndsDay); InternationalOrganizations.Tick(c);
+        Check(o.DoctrineId == "common_market" && o.LastOutcome == "doctrine_passed" && CampaignFingerprint.Of(c) != beforeDocHash,
+            "approved bloc doctrine takes effect and moves the campaign fingerprint");
+        Check(InternationalOrganizations.Refusal(c, new OrganizationCommand { IssuerId = 0, OrganizationId = o.Id, Action = "propose", Kind = "doctrine", Subject = "common_market" }).Length > 0,
+            "cannot propose a doctrine already in force");
+        // Multilateral sanctions resolution:
+        Check(InternationalOrganizations.Refusal(c, new OrganizationCommand { IssuerId = 0, OrganizationId = o.Id, Action = "propose", Kind = "sanction", TargetId = 1 }).Length > 0,
+            "an organization cannot vote collective sanctions against its own member");
+        var sanctionCmd = new OrganizationCommand { IssuerId = 0, OrganizationId = o.Id, Action = "propose", Kind = "sanction", TargetId = 3 };
+        sanctionCmd.Apply(c);
+        new OrganizationCommand { IssuerId = 1, OrganizationId = o.Id, Action = "vote", MotionId = o.Motion.Id, Yes = true }.Apply(c);
+        DomesticCrisesTests.Day(c, o.Motion.EndsDay); InternationalOrganizations.Tick(c);
+        Check(o.LastOutcome == "sanction_passed" &&
+              o.Members.All(m => CampaignDiplomacy.Peek(c, m, 3)?.EmbargoBy(m) == true),
+            "passed multilateral sanctions resolution imposes an embargo from every member onto the target");
+        var liftCmd = new OrganizationCommand { IssuerId = 0, OrganizationId = o.Id, Action = "propose", Kind = "lift_sanction", TargetId = 3 };
+        liftCmd.Apply(c);
+        new OrganizationCommand { IssuerId = 1, OrganizationId = o.Id, Action = "vote", MotionId = o.Motion.Id, Yes = true }.Apply(c);
+        DomesticCrisesTests.Day(c, o.Motion.EndsDay); InternationalOrganizations.Tick(c);
+        Check(o.LastOutcome == "lift_sanction_passed" &&
+              o.Members.All(m => CampaignDiplomacy.Peek(c, m, 3)?.EmbargoBy(m) != true),
+            "passed lift-sanctions resolution lifts members' embargoes on the target");
         new OrganizationCommand { IssuerId = 1, OrganizationId = defence.Id, Action = "leave" }.Apply(c);
         Check(!InternationalOrganizations.DefencePartners(c,0).Contains(1) && CampaignDiplomacy.Peek(c,0,1).TruceUntil > c.ElapsedDays,
             "leaving actually removes the obligation and creates a cooling-off truce");
+        // Collective sanctions: the assembly's embargo is every member's own embargo switch
+        // thrown together by a vote - Article 16 as a motion rather than as a script.
+        var council = InternationalOrganizations.Seed(c, "Sanctions council", "cooperation", new[] { 0, 1, 2 });
+        var againstMember = new OrganizationCommand { IssuerId = 0, OrganizationId = council.Id, Action = "propose", Kind = "sanction", TargetId = 1 };
+        Check(InternationalOrganizations.Refusal(c, againstMember).Length > 0, "sanctions cannot name a member of the assembly");
+        var noEmbargoLift = new OrganizationCommand { IssuerId = 0, OrganizationId = council.Id, Action = "propose", Kind = "lift_sanction", TargetId = 3 };
+        Check(InternationalOrganizations.Refusal(c, noEmbargoLift).Length > 0, "lifting needs an embargo actually in force");
+        var sanction = new OrganizationCommand { IssuerId = 0, OrganizationId = council.Id, Action = "propose", Kind = "sanction", TargetId = 3 };
+        sanction.Apply(c); var sanctionMotion = council.Motion;
+        Check(sanctionMotion is { Kind: "sanction" }, "a member can table a collective-sanctions vote");
+        new OrganizationCommand { IssuerId = 1, OrganizationId = council.Id, Action = "vote", MotionId = sanctionMotion.Id, Yes = true }.Apply(c);
+        DomesticCrisesTests.Day(c, sanctionMotion.EndsDay); InternationalOrganizations.Tick(c);
+        Check(council.LastOutcome == "sanction_passed", "two of three members carry a sanctions resolution");
+        Check(new[] { 0, 1, 2 }.All(id => CampaignDiplomacy.Peek(c, id, 3)?.EmbargoBy(id) == true),
+            "every member's embargo follows the resolution, including the abstaining one");
+        var lift = new OrganizationCommand { IssuerId = 2, OrganizationId = council.Id, Action = "propose", Kind = "lift_sanction", TargetId = 3 };
+        lift.Apply(c); var liftMotion = council.Motion;
+        new OrganizationCommand { IssuerId = 0, OrganizationId = council.Id, Action = "vote", MotionId = liftMotion.Id, Yes = true }.Apply(c);
+        new OrganizationCommand { IssuerId = 1, OrganizationId = council.Id, Action = "vote", MotionId = liftMotion.Id, Yes = true }.Apply(c);
+        DomesticCrisesTests.Day(c, liftMotion.EndsDay); InternationalOrganizations.Tick(c);
+        Check(council.LastOutcome == "lift_sanction_passed" && new[] { 0, 1, 2 }.All(id => CampaignDiplomacy.Peek(c, id, 3)?.EmbargoBy(id) == false),
+            "the same assembly can lift what it imposed");
         c.FeatureOverrides["organizations"] = false;
         var before = CampaignFingerprint.Of(c); InternationalOrganizations.Tick(c);
         new OrganizationCommand { IssuerId = 3, Action = "create", Name = "Disabled", CharterId = "cooperation" }.Apply(c);

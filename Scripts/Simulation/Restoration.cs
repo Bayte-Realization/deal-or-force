@@ -10,7 +10,7 @@ public sealed partial class Defines
     public int RestorationCooldownDays { get; set; } = 180;
     /// <summary>What the proclamation itself costs, in billions - offices, documents, the move home.</summary>
     public float RestorationCost { get; set; } = 0.02f;
-    /// <summary>How warmly the country holding the homeland must think of the exiled government to hand it back.</summary>
+    /// <summary>Legacy opinion setting retained for mod/save compatibility; friendship is not territorial consent.</summary>
     public float RestorationConsentOpinion { get; set; } = 35f;
 }
 
@@ -27,8 +27,8 @@ public sealed partial class Defines
 ///
 /// Two ways home, and both are a real transfer rather than a renaming:
 /// a military return, when the government already stands on the region's ground, and a
-/// negotiated return, when the country holding it thinks well enough of the exile to give it
-/// back. Either way the region changes owner through the same <see cref="StatePartition"/> and
+/// negotiated return, explicitly authorised by the country holding it. Friendship alone never
+/// transfers territory. Either way the region changes owner through the same <see cref="StatePartition"/> and
 /// resource accounting every other border change uses, so its people, its output and its debts
 /// are counted once and under one flag - never duplicated, never conjured.
 ///
@@ -43,27 +43,39 @@ public static class Restoration
         campaign is not null && nation is not null && region is not null && !region.Unclaimed &&
         TerritorialClaims.TitleOf(campaign, nation, region) == TerritorialTitle.Homeland;
 
-    /// <summary>Whether the exiled government actually stands on the region's ground.</summary>
+    /// <summary>Whether the exiled government controls all of the region's land, not one foothold.</summary>
     public static bool Controls(Campaign campaign, Nation nation, ScenarioState region)
     {
         var topology = campaign?.ProvinceMap;
         var control = campaign?.ProvinceController;
         if (topology is null || control is null || nation is null || region is null) return false;
-        for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
-            if (topology.ProvinceToState[province] == (ushort)region.MapIndex &&
-                control[province] == (ushort)nation.MapIndex) return true;
-        return false;
+        var any = false;
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+        {
+            if (topology.ProvinceToState[province] != (ushort)region.MapIndex || topology.WaterByProvince[province]) continue;
+            any = true;
+            if (province >= control.Length || control[province] != (ushort)nation.MapIndex) return false;
+        }
+        return any;
     }
 
     /// <summary>The country that governs the region now, if a real one does.</summary>
     public static Nation Holder(Campaign campaign, ScenarioState region) =>
         region is null ? null : campaign.Nations.Find(n => n.MapIndex == region.NationMapIndex);
 
-    /// <summary>Whether the holder would give the region back: a friend, at peace, not the exile itself.</summary>
+    public static string ConsentKey(int holderId) => "restoration_consent:" + holderId;
+
+    /// <summary>Only the holder may authorise a hand-back. The saved permission is single-use.</summary>
     public static bool Consents(Campaign campaign, Nation nation, Nation holder) =>
         campaign is not null && nation is not null && holder is not null && holder.Id != nation.Id &&
-        holder.Movement is null && !CampaignDiplomacy.AtWar(campaign, nation.Id, holder.Id) &&
-        CampaignDiplomacy.Get(campaign, holder.Id, nation.Id).Opinion >= campaign.Defines.RestorationConsentOpinion;
+        nation.Movement is { Exile: true, Landless: true, Dissolved: false } state &&
+        holder.Movement is null && !holder.IsSubject && !CampaignDiplomacy.AtWar(campaign, nation.Id, holder.Id) &&
+        !state.DesignatedBy.Contains(holder.Id) &&
+        state.ReadyOnDay.TryGetValue(ConsentKey(holder.Id), out var until) && until > campaign.ElapsedDays;
+
+    public static bool HoldsHomeland(Campaign campaign, Nation nation, Nation holder) =>
+        campaign is not null && nation?.Movement is { Exile: true, Landless: true, Dissolved: false } &&
+        holder is not null && campaign.StatesOf(holder).Any(region => IsHomeland(campaign, nation, region));
 
     /// <summary>Why the country cannot be restored to this region now; empty when it can.</summary>
     public static string Refusal(Campaign campaign, Nation nation, ScenarioState region)
@@ -116,14 +128,39 @@ public static class Restoration
         var holder = Holder(campaign, region);
         // A return the exile does not already stand on is one the holder agreed to.
         var negotiated = !Controls(campaign, nation, region);
-        if (!MovementRules.TakeRegion(campaign, nation, region, holder, restoration: true)) return false;
-        nation.Movement.LastReport = Loc.Format("The government has returned to {0}: {1} stands again.",
-            region.DisplayName, nation.Name);
+        // A return is not a doorstep: the whole homeland the same holder still governs comes
+        // home with the first region, through the ordinary accounting, in one act.
+        if (MovementRules.TakeZone(campaign, nation, region, holder, restoration: true) == 0) return false;
+        if (holder is not null && nation.Movement is not null) nation.Movement.ReadyOnDay.Remove(ConsentKey(holder.Id));
         campaign.Chronicle.Record(campaign, "restoration", nation.Id, holder?.Id ?? -1, place: region.DisplayName);
         if (negotiated && holder is not null)
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, holder.Id, nation.Id), "restored_us");
-        campaign.MarkStrategicChange();
-        campaign.MarkMapChanged();
+        RestoreExiledNation(campaign, nation);
         return true;
+    }
+
+    /// <summary>
+    /// When an exiled government returns home and holds land of its own again, it ceases
+    /// to be an exile abroad and resumes full sovereign governance as a regular nation.
+    /// </summary>
+    public static void RestoreExiledNation(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation?.Movement is null) return;
+        var state = nation.Movement;
+        if (!state.Landless && !campaign.Fallen.Contains(nation.Id) && state.DesignatedBy.Count == 0) return;
+        state.Landless = false;
+        state.DesignatedBy.Clear();
+        state.RecognisedBy.Clear();
+        campaign.Fallen.Remove(nation.Id);
+        var held = campaign.StatesOf(nation);
+        var seat = held.OrderByDescending(s => s.Population).FirstOrDefault();
+        if (seat is not null)
+        {
+            CapitalCore.Establish(campaign, nation, seat);
+        }
+        campaign.LocateCapitals(preserveExisting: true);
+        campaign.MovementRevision++;
+        campaign.MarkStrategicChange();
+        DiagnosticLogs.Write("simulation", $"NATION_RESTORED nation={nation.Tag} name={nation.Name} regions={held.Length}");
     }
 }

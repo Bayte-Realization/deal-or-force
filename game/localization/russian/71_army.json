@@ -16,7 +16,7 @@
   "{0} · province #{1:N0}": "{0} · провинция №{1:N0}",
   "Order: {0} · posture: {1}": "Приказ: {0} · тактика: {1}",
   "Engaged in battle #{0}": "Участвует в сражении №{0}",
-  "Route interrupted: territorial control changed and no legal corridor remains. Issue a new destination.": "Маршрут прерван: контроль над территорией сменился, законного коридора не осталось. Задайте новую цель.",
+  "The route is cut. Choose a new destination.": "Путь перекрыт. Задайте новую цель.",
   "{0} · {1} · {2:N0} men": "{0} · {1} · {2:N0} чел.",
   "unmapped": "вне карты",
   "{0:N0} division of {1} selected.": "Выбрана {0:N0} дивизия типа «{1}».",

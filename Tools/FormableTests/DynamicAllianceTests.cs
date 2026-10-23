@@ -56,5 +56,26 @@ static class DynamicAllianceTests
         Check(!AlliancePrograms.Active(r) && r.AllianceCohesion < trust + .03f,
             "missed payment ends the promise with a bounded trust penalty");
         Check(c.Chronicle.Entries.Any(e => e.Kind == "alliance_program_lapsed"), "a lapsed programme is visible news");
+
+        // The diplomacy screen opens on somebody else. It used to open on the player's own
+        // country, where every panel is a comparison with itself and reads as a screen of zeroes.
+        var player = c.NationByTag("FRA") ?? c.Nations.First(n => n.Population > 0);
+        var partner = CampaignDiplomacy.DefaultPartner(c, player);
+        Check(partner is not null && partner.Id != player.Id,
+            "diplomacy opens on somebody else, never on the player's own country");
+        Check(CampaignDiplomacy.DefaultPartner(c, player).Id == partner.Id,
+            "the opening choice is the same every time it is asked");
+        Check(CampaignDiplomacy.DefaultPartner(c, null) is null && CampaignDiplomacy.DefaultPartner(null, player) is null,
+            "asking about no player answers nothing rather than guessing");
+        var neighbours = c.Nations.Where(n => n.Id != player.Id && n.Population > 0 && n.Movement is null &&
+            CampaignDiplomacy.SharesLandBorder(c, player.MapIndex, n.MapIndex)).ToList();
+        if (neighbours.Count > 0)
+        {
+            Check(neighbours.Any(n => n.Id == partner.Id),
+                "the opening choice is one of the player's own neighbours");
+            var worstOpinion = neighbours.Min(n => CampaignDiplomacy.Peek(c, player.Id, n.Id)?.Opinion ?? 0f);
+            Check((CampaignDiplomacy.Peek(c, player.Id, partner.Id)?.Opinion ?? 0f) <= worstOpinion + 0.0001f,
+                "it opens on the neighbour the player is on worst terms with");
+        }
     }
 }

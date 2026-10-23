@@ -92,6 +92,7 @@ public sealed partial class DiplomaticRelation
     public readonly List<OpinionReason> Reasons = new();
 
     /// <summary>The same sum, named part by name, for the screen that shows it.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public Breakdown OpinionDrivers = new();
 
     public int Other(int nationId) => nationId == A ? B : A;
@@ -130,12 +131,53 @@ public static class CampaignDiplomacy
             : null;
     }
 
+    /// <summary>
+    /// Read an existing relation or an unrecorded neutral baseline for a preview.
+    /// Never registers the fallback in the campaign. Call Get before writing a decision;
+    /// the existing object returned here is borrowed for reading, not a detached copy.
+    /// </summary>
+    public static DiplomaticRelation ReadOrNeutral(Campaign campaign, int a, int b) =>
+        a == b || a < 0 || b < 0 ? null : Peek(campaign, a, b)
+            ?? new DiplomaticRelation { A = Math.Min(a, b), B = Math.Max(a, b) };
+
+    private static readonly List<StrategicWar> ActiveWars = new();
+    private static Campaign _activeWarsFor;
+    private static int _activeWarsStamp;
+
+    /// <summary>
+    /// Active wars, rebuilt when the war list's stamp changes, read everywhere. Called from
+    /// pair/third-country loops that run O(countries) times a day over O(wars) each: the
+    /// snapshot costs one filtered copy per war-list change, and each ask stops walking the
+    /// full war list with side-set tests. The stamp is the list's count against the
+    /// campaign's war revision, so a war declared and another ended between two asks still
+    /// reads as a change. Two campaigns in one process each keep their own snapshot.
+    /// </summary>
+    private static List<StrategicWar> ActiveWarsOf(Campaign campaign)
+    {
+        var stamp = campaign.Wars.Count * 1000003 + campaign.WarRevision;
+        if (!ReferenceEquals(_activeWarsFor, campaign) || stamp != _activeWarsStamp || !AllStillActive(ActiveWars))
+        {
+            ActiveWars.Clear();
+            foreach (var war in campaign.Wars)
+                if (!war.Ended) ActiveWars.Add(war);
+            _activeWarsFor = campaign;
+            _activeWarsStamp = stamp;
+        }
+        return ActiveWars;
+    }
+
+    private static bool AllStillActive(List<StrategicWar> wars)
+    {
+        for (var i = 0; i < wars.Count; i++)
+            if (wars[i].Ended) return false;
+        return true;
+    }
+
     public static bool AtWar(Campaign campaign, int a, int b)
     {
-        // Called inside many diplomatic pair/third-country loops. Avoid allocating
-        // a captured predicate for every query; preserve list order and exact rules.
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Opposes(a, b)) return true;
+        var wars = ActiveWarsOf(campaign);
+        for (var index = 0; index < wars.Count; index++)
+            if (!wars[index].Ended && wars[index].Opposes(a, b)) return true;
         return false;
     }
 
@@ -192,7 +234,12 @@ public static class CampaignDiplomacy
                 return false;
             }
         }
-        if (!SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
+        // An armed rising is already a domestic war, even if an existing foreign
+        // occupation separates the two administrations. This does NOT grant transit
+        // through that occupier or let ordinary declarations bypass military reach.
+        var newbornUprising = !onOwnInitiative && defender.SecededFromId == attacker.Id &&
+            defender.LastSecessionDay == campaign.ElapsedDays;
+        if (!newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
             // Force can be projected across water by a country that has ships to project it
             // with. This used to be a flat refusal, which made every island in the world
@@ -210,15 +257,16 @@ public static class CampaignDiplomacy
     }
 
     /// <summary>
-    /// Declare a war, and pay for it with everybody who is not in it.
-    ///
-    /// The justification is what the attacker tells the world. Passing null means "work it
-    /// out", which is what any caller that is not deliberately staging something wants:
-    /// <see cref="Statecraft.CasusBelli"/> answers it out of state the game already keeps -
-    /// land taken from us and not forgotten, our own people living on the other side of the
-    /// border, a friend already being attacked. An empty answer is a war nobody accepts a
-    /// reason for, and that is where notoriety comes from.
+    /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
+    /// one that answers to it. Everybody else backs a side instead (ProxyWars).
     /// </summary>
+    public static bool MayJoinCivilWar(Campaign campaign, StrategicWar war, Nation joiner, bool defending)
+    {
+        var leader = campaign.NationById(defending ? war.DefenderId : war.AttackerId);
+        if (leader is null || joiner is null) return false;
+        return leader.AnswersTo(joiner.Id) || joiner.AnswersTo(leader.Id);
+    }
+
     /// <summary>
     /// Bring a country into a war that is already being fought.
     ///
@@ -231,17 +279,6 @@ public static class CampaignDiplomacy
     /// Everybody it is now fighting learns about it, because a stance is a fact between two
     /// countries and the war is only where the fighting is organised.
     /// </summary>
-    /// <summary>
-    /// Who may fight in a civil war besides the two sides: a state that the side answers to, or
-    /// one that answers to it. Everybody else backs a side instead (ProxyWars).
-    /// </summary>
-    public static bool MayJoinCivilWar(Campaign campaign, StrategicWar war, Nation joiner, bool defending)
-    {
-        var leader = campaign.NationById(defending ? war.DefenderId : war.AttackerId);
-        if (leader is null || joiner is null) return false;
-        return leader.AnswersTo(joiner.Id) || joiner.AnswersTo(leader.Id);
-    }
-
     public static bool JoinWar(Campaign campaign, StrategicWar war, int nationId, bool defending,
         string opinionNote = null)
     {
@@ -268,6 +305,16 @@ public static class CampaignDiplomacy
         return true;
     }
 
+    /// <summary>
+    /// Declare a war, and pay for it with everybody who is not in it.
+    ///
+    /// The justification is what the attacker tells the world. Passing null means "work it
+    /// out", which is what any caller that is not deliberately staging something wants:
+    /// <see cref="Statecraft.CasusBelli"/> answers it out of state the game already keeps -
+    /// land taken from us and not forgotten, our own people living on the other side of the
+    /// border, a friend already being attacked. An empty answer is a war nobody accepts a
+    /// reason for, and that is where notoriety comes from.
+    /// </summary>
     public static StrategicWar DeclareWar(Campaign campaign, int attackerId, int defenderId,
         int claimedStateMapIndex = -1, string justification = null, bool onOwnInitiative = true,
         bool limited = false)
@@ -287,16 +334,23 @@ public static class CampaignDiplomacy
             AttackerId = attackerId,
             DefenderId = defenderId,
             StartedDay = campaign.ElapsedDays,
-            CivilConflict = justification is "secession" or "uprising",
+            CivilConflict = justification is "secession" or "uprising" or "civil_war" or "revolution" ||
+                Reintegration.IsBreakawayOf(attacker, defender) || Reintegration.IsBreakawayOf(defender, attacker),
             AiNegotiationUnlockDay = justification is "secession" or "uprising"
                 ? campaign.ElapsedDays + Math.Max(0, campaign.Defines.CivilWarNegotiationDays) : 0,
             ClaimedStateMapIndex = ResolveWarGoal(campaign, defender.MapIndex, claimedStateMapIndex),
             Limited = limited
         };
         campaign.Wars.Add(war);
+        campaign.MarkWarsChanged();
         campaign.Chronicle.Record(campaign, "war_started", attackerId, defenderId);
-        Statecraft.RecordDeclaration(campaign, attacker, defender,
-            justification ?? Statecraft.CasusBelli(campaign, attacker, defender));
+        // Worked out once, at the declaration, and kept on the war. It is what the attacker's
+        // standing is charged for, and it is what the player is owed when they ask why the map
+        // moved - the same string answers both, so the ledger cannot say one thing and the
+        // notoriety have been paid for another.
+        var cause = justification ?? Statecraft.CasusBelli(campaign, attacker, defender);
+        war.Justification = cause;
+        Statecraft.RecordDeclaration(campaign, attacker, defender, cause);
         Warfare.RebuildFronts(campaign);
         FrontPlanner.ReassignAi(campaign, war);
         campaign.MarkStrategicChange();
@@ -323,6 +377,7 @@ public static class CampaignDiplomacy
     // ruinous when an AI asks it twelve thousand times a year. It is built once per change
     // to the map and read from there.
     private static Dictionary<int, HashSet<int>> _borders;
+    private static readonly Dictionary<int, HashSet<int>> UnmappedBorders = new();
     private static int _borderRevision = -1;
     private static int _borderDay = -1;
 
@@ -347,6 +402,43 @@ public static class CampaignDiplomacy
         Borders(campaign).TryGetValue(mapIndex, out var set)
             ? set
             : (IReadOnlyCollection<int>)Array.Empty<int>();
+
+    /// <summary>
+    /// Who a diplomacy screen should open on when the player has chosen nobody: the land
+    /// neighbour they are on worst terms with, and the largest country in the world if they
+    /// have no land neighbour at all.
+    ///
+    /// Never the player's own country. Every panel on that screen is a comparison, and a
+    /// country compared with itself is a screen of zeroes - which is what it used to open on.
+    /// Ties go to the larger country, and then to the lower id, so the answer is the same on
+    /// every machine that runs the same world.
+    /// </summary>
+    public static Nation DefaultPartner(Campaign campaign, Nation player)
+    {
+        if (campaign is null || player is null) return null;
+        Nation worst = null;
+        var worstOpinion = float.MaxValue;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
+            if (!SharesLandBorder(campaign, player.MapIndex, nation.MapIndex)) continue;
+            var opinion = Peek(campaign, player.Id, nation.Id)?.Opinion ?? 0f;
+            if (worst is not null &&
+                (opinion > worstOpinion ||
+                 (opinion == worstOpinion && (nation.Population < worst.Population ||
+                  (nation.Population == worst.Population && nation.Id > worst.Id))))) continue;
+            worst = nation;
+            worstOpinion = opinion;
+        }
+        if (worst is not null) return worst;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation.Id == player.Id || nation.Population <= 0 || nation.Movement is not null) continue;
+            if (worst is null || nation.Population > worst.Population ||
+                (nation.Population == worst.Population && nation.Id < worst.Id)) worst = nation;
+        }
+        return worst;
+    }
 
     /// <summary>How many times the border table has been rebuilt. Diagnostic only.</summary>
     public static int Rebuilds;
@@ -395,7 +487,9 @@ public static class CampaignDiplomacy
         // Nothing to build from. Do not stamp the cache - a campaign whose map has not been
         // attached yet would otherwise be told for the rest of the day that it has no
         // neighbours at all, which is exactly the sort of answer nobody thinks to doubt.
-        if (topology is null || controllers is null) return _borders ??= new Dictionary<int, HashSet<int>>();
+        // Bootstrap markets may ask before their world has a map. Never lend them
+        // the previous world's real borders; that changes their starting suppliers.
+        if (topology is null || controllers is null) return UnmappedBorders;
 
         Rebuilds++;
         _borders ??= new Dictionary<int, HashSet<int>>();
@@ -424,15 +518,24 @@ public sealed class ImproveRelationsCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
+    public bool Active { get; init; } = true;
+    public bool Changed { get; private set; }
+    public string Refusal { get; private set; } = "";
     public void Apply(Campaign campaign)
     {
+        Changed = false; Refusal = "";
         if (!MechanicFeatures.Allows(campaign, this)) return;
+        Refusal = DiplomaticOutreach.Refusal(campaign, IssuerId, TargetId, Active);
+        if (Refusal.Length != 0) return;
+        if (campaign.Defines.DiplomaticMissionsEnabled || !Active)
+        { Changed = DiplomaticOutreach.Set(campaign, IssuerId, TargetId, Active); return; }
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
         var nation = campaign.NationById(IssuerId);
         if (relation is null || nation is null || campaign.ElapsedDays - relation.LastActionDay < 14 || nation.Treasury < 0.1f) return;
         nation.Treasury -= 0.1f;
         OpinionSystem.Remember(campaign, relation, "improved_relations");
         relation.LastActionDay = campaign.ElapsedDays;
+        Changed = true;
         if (relation.Opinion >= 35f &&
             relation.Stance is (DiplomaticStance.Neutral or DiplomaticStance.Rival))
             relation.Stance = DiplomaticStance.Friendly;

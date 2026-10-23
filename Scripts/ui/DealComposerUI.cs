@@ -76,6 +76,7 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || target is null || target.Id == _campaign.Player.Id) return;
         CloseDealComposer();
         CloseUltimatumComposer();
+        PlayStrategicCue("diplomacy_page");
         _dealReturnFocus = GetViewport().GuiGetFocusOwner();
         _dealTarget = target.Id;
         _dealComposer = FullLayer("DealComposer");
@@ -352,6 +353,8 @@ public partial class DealOrForceGame
         };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
+        if (command.Outcome.Accepted) PlayStrategicCue("deal_concluded");
+        else if (command.Outcome.PendingOfferId > 0 || _networkConnected && !_networkIsHost) PlayStrategicCue("deal_sent");
         ForceDiplomacyRefresh();
         RefreshCountryViews("Diplomacy");
         Refresh();

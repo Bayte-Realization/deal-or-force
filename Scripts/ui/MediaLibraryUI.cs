@@ -105,7 +105,9 @@ public partial class DealOrForceGame
         _mediaStop = ActionButton("Stop preview", StopMediaPreview, 0, 36); _mediaStop.Name = "StopMediaPreview";
         _mediaPause = ActionButton("Pause preview", PauseMediaPreview, 0, 36); _mediaPause.Name = "PauseMediaPreview";
         _mediaLoop = new CheckBox { Name = "LoopMediaPreview", Text = Tr("Repeat recording"), ButtonPressed = false };
-        _mediaLoop.TooltipText = Tr("Off by default. Repeat only the recording you selected, not the campaign.");
+        _mediaLoop.SetMeta(LocSourceMeta, "Repeat recording");
+        _mediaLoop.SetMeta(LocAppliedMeta, _mediaLoop.Text);
+        Tip(_mediaLoop, "Off by default. Repeat only the recording you selected, not the campaign.");
         actions.AddChild(_mediaPlay); actions.AddChild(_mediaPause); actions.AddChild(_mediaStop); actions.AddChild(_mediaLoop);
         _mediaAudio = new AudioStreamPlayer { Name = "MediaAudition", ProcessMode = ProcessModeEnum.Always }; AddChild(_mediaAudio);
         _mediaAudio.Finished += FinishMediaPreview; _mediaVideo.Finished += FinishMediaPreview;
@@ -270,7 +272,8 @@ public partial class DealOrForceGame
     {
         var gain = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number(
             _mediaSelected?.Kind == LibraryMediaKind.Music ? "volume_music" : "volume_effects"), 0, 1);
-        if (_mediaAudio is not null) _mediaAudio.VolumeDb = gain <= .0005f ? -80 : Mathf.LinearToDb(gain) - 4;
+        if (_mediaAudio is not null) _mediaAudio.VolumeDb = gain <= .0005f ? -80 :
+            Mathf.LinearToDb(gain) - 4 + (_mediaSelected?.VolumeDb ?? 0);
         if (_mediaVideo is not null) _mediaVideo.VolumeDb = gain <= .0005f ? -80 : Mathf.LinearToDb(gain) - 10;
     }
     private void RefreshMediaPreview()

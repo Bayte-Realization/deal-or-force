@@ -1,0 +1,103 @@
+// Which picture an event window shows above its title.
+//
+// A picture is a name from gfx/events ("finance" is gfx/events/event_finance.jpg) or a path
+// under gfx/ ("leaders/x.png"). An event may name its own with a "picture" field in its
+// definition, which wins over this table; an event in neither shows no picture. The base game's pictures
+// were generated with Creative Claw (Nano Banana 2) on 20-21 October, in one ink-and-lamplight
+// style, and cropped of their paper borders.
+{
+  "events": {
+    "industrial_bottlenecks": "industry",
+    "housing_pressure": "city",
+    "labour_dispute": "protest",
+    "war_weariness": "home_front",
+    "budget_crisis": "finance",
+    "national_holiday": "celebration",
+    "sporting_triumph": "celebration",
+    "cultural_export": "celebration",
+    "scientific_prize": "laboratory",
+
+    "resource_find": "energy",
+    "energy_shortfall": "energy",
+    "currency_pressure": "finance",
+    "foreign_investment": "city",
+    "harvest_failure": "drought",
+    "brain_drain": "home_front",
+    "shipping_disruption": "sea_lanes",
+    "infrastructure_failure": "disaster",
+    "technological_leap": "laboratory",
+    "volunteers_at_the_gates": "home_front",
+    "mutiny_in_a_sector": "battlefield",
+    "atrocity_reported": "occupation",
+    "prisoner_exchange": "ceasefire",
+    "war_profiteering": "finance",
+    "coalition_collapse": "election",
+    "corruption_scandal": "espionage",
+    "mass_demonstrations": "protest",
+    "constitutional_crisis": "coup",
+    "epidemic": "epidemic",
+    "natural_disaster": "disaster",
+    "refugees_arrive": "refugees",
+    "a_generation_grown": "celebration",
+    "a_famous_death": "mourning",
+    "border_incident": "border",
+    "espionage_exposed": "espionage",
+    "international_summit": "diplomacy",
+    "sanctions_threatened": "diplomacy",
+    "an_old_claim": "empire",
+    "rally_round_the_flag": "home_front",
+    "war_weariness_sets_in": "mourning",
+    "sanctions_bite": "finance",
+
+    "city_in_ruins": "air_raid",
+    "refugees_come_home": "refugees",
+
+    "movement_split": "movement",
+    "movement_donors": "movement",
+    "movement_host_names": "espionage",
+    "movement_viral": "digital",
+    "movement_defector": "espionage",
+    "movement_accounts_frozen": "finance",
+    "movement_volunteers": "movement",
+    "movement_mediator": "diplomacy",
+
+    "imperial_overstretch_crisis": "empire",
+    "hegemonic_complacency": "empire",
+    "revanchist_generation": "protest",
+    "sovereign_debt_reckoning": "finance",
+    "demographic_winter_alarm": "city",
+    "baby_boom_generation": "celebration",
+
+    "railway_timetable_recovery": "home_front",
+    "emergency_maintenance_reserve": "industry",
+
+    "year_of_elections_2024": "election",
+    "french_revolution_1789": "protest",
+    "vienna_congress_1815": "diplomacy",
+    "springtime_of_nations_1848": "protest",
+    "july_crisis_1914": "battlefield",
+    "russian_revolution_1917": "coup",
+    "great_depression_1929": "finance",
+    "united_nations_1945": "diplomacy",
+    "year_of_africa_1960": "celebration",
+    "oil_shock_1973": "energy",
+    "berlin_wall_1989": "turning_point",
+    "ussr_dissolution_1991": "turning_point",
+    "financial_crisis_2008": "finance",
+    "pandemic_2020": "epidemic",
+    "ukraine_war_2022": "battlefield",
+
+    "treaty_of_paris_1783": "diplomacy",
+    "crimean_war_1853": "naval",
+    "meiji_restoration_1868": "industry",
+    "berlin_conference_1884": "empire",
+    "treaty_of_versailles_1919": "ceasefire",
+    "bretton_woods_1944": "finance",
+    "bandung_conference_1955": "diplomacy",
+    "cuban_missile_crisis_1962": "nuclear_brink",
+    "nixon_shock_1971": "finance",
+    "dotcom_and_digital_2000": "digital",
+    "arab_spring_2011": "protest",
+    "supply_chain_nearshoring_2021": "industry"
+  }
+}

@@ -32,10 +32,10 @@ static class RestorationTests
         far.PopulationGroups.Add(new PopulationGroup { Culture = "russian", Religion = "orthodox", Size = 500000 });
         c.States.Add(home); c.States.Add(far);
 
-        var states = new ushort[24]; var owners = new ushort[24];
-        for (var y = 0; y < 4; y++) for (var x = 0; x < 6; x++)
-        { states[y * 6 + x] = (ushort)(x < 3 ? 3001 : 3002); owners[y * 6 + x] = 502; }
-        c.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 6, 4, _ => false));
+        var states = new ushort[128 * 64]; var owners = new ushort[128 * 64];
+        for (var y = 0; y < 64; y++) for (var x = 0; x < 128; x++)
+        { states[y * 128 + x] = (ushort)(x < 64 ? 3001 : 3002); owners[y * 128 + x] = 502; }
+        c.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 128, 64, _ => false));
 
         // The ground it held when the world first saw it, and the country it still is.
         c.Homelands[exile.Id] = new List<int> { 3001 };
@@ -57,15 +57,31 @@ static class RestorationTests
         DemographyCatalog.ResetCatalog(); Loc.ResetCatalog(); OpinionCatalog.ResetCatalog();
         MovementCatalog.ResetCatalog();
 
-        // ---- the way home: a friend hands the homeland back -------------------------------
+        // Friendship is not a land-transfer mandate, including when the holder is a player.
+        var (guard, claimant, friendly, claimed, _) = Fixture();
+        var fingerprint = CampaignFingerprint.Of(guard);
+        Check(!Restoration.CanRestore(guard, claimant, claimed) && Restoration.BestRegion(guard, claimant) is null,
+            "a friendly annexer does not automatically give the homeland back");
+        Check(CampaignFingerprint.Of(guard) == fingerprint, "restoration previews do not create relations or mutate the campaign");
+        friendly.IsHuman = false;
+        Check(!Restoration.CanRestore(guard, claimant, claimed), "AI friendship is not automatic consent either");
+        guard.Relations.Clear();
+        fingerprint = CampaignFingerprint.Of(guard);
+        Check(!Restoration.Consents(guard, claimant, friendly) && CampaignFingerprint.Of(guard) == fingerprint,
+            "inspecting a missing diplomatic pair creates no relation");
+
+        // ---- the way home: the holder explicitly authorises the return -------------------
         var (c, exile, holder, home, far) = Fixture();
+        new MovementDealingCommand { IssuerId = holder.Id, MovementId = exile.Id, Action = "authorise_restoration" }.Apply(c);
         Check(Restoration.Refusal(c, exile, home) == "" && Restoration.CanRestore(c, exile, home),
             "a government in exile can be restored to its own homeland when the holder will give it back");
         Check(Restoration.Refusal(c, exile, far) != "",
             "a region that is not its homeland cannot be a restoration");
         Check(Restoration.BestRegion(c, exile)?.MapIndex == home.MapIndex,
             "the AI's restoration target is the homeland it may actually return to");
-        Check(Restoration.Consents(c, exile, holder), "a friendly holder consents to the hand-back");
+        Check(Restoration.Consents(c, exile, holder), "the holder explicitly consents to the hand-back");
+        exile.CapitalName = "Tampa";
+        exile.CapitalLatitude = 28f; exile.CapitalLongitude = -82f;
 
         var beforeTag = exile.Tag; var beforeName = exile.Name; var beforeColour = exile.Color;
         var beforeGovernment = exile.Government;
@@ -75,12 +91,18 @@ static class RestorationTests
 
         Check(c.StatesOf(exile).Length > 0 && home.NationMapIndex == exile.MapIndex,
             "the homeland is the country's own again, through the ordinary border machinery");
-        Check(exile.Movement.Landless == false && exile.Population == 500000,
-            "the country stands on its own ground with the people who live on it");
+        // A movement holding its own ground is a country now: the movement rolls close,
+        // the tag, name, colour and government continue as the state's own.
+        Check(exile.Movement is null && exile.Population == 500000,
+            "the restored country stands on its own ground as a country, not as a movement");
         Check(exile.Tag == beforeTag && exile.Name == beforeName && exile.Color == beforeColour,
             "the restored country is the same country: its tag, name and colour were never given up");
         Check(exile.Government == beforeGovernment,
             "the government it had when it fell returns, rather than a new provisional one being founded");
+        Check(exile.CapitalName == home.Name && exile.CapitalStateMapIndex == home.MapIndex &&
+              c.ProvinceMap.ProvinceToNation[exile.CapitalProvinceId] == exile.MapIndex,
+            "the restored capital is its home region, not the former foreign headquarters in Tampa");
+        Check(!Restoration.Consents(c, exile, holder), "a return consumes its one-use permission");
         Check(Math.Abs(exile.Gdp - 500f) < 1f && float.IsFinite(exile.Gdp) &&
               float.IsFinite(exile.Treasury) && float.IsFinite(exile.PublicDebt),
             "the region's output moves to the country and every account stays finite");
@@ -98,6 +120,11 @@ static class RestorationTests
         CampaignDiplomacy.Get(c2, holder2.Id, exile2.Id).Opinion = -50f;
         Check(Restoration.Refusal(c2, exile2, home2) != "",
             "a hostile holder that still owns the ground does not hand it back");
+        var first = Enumerable.Range(1, c2.ProvinceMap.ProvinceCount)
+            .First(p => c2.ProvinceMap.ProvinceToState[p] == home2.MapIndex);
+        c2.SetProvinceController(first, (ushort)exile2.MapIndex);
+        Check(!Restoration.Controls(c2, exile2, home2) && !Restoration.CanRestore(c2, exile2, home2),
+            "holding one province does not confiscate the rest of its region");
         for (var province = 1; province <= c2.ProvinceMap.ProvinceCount; province++)
             if (c2.ProvinceMap.ProvinceToState[province] == (ushort)home2.MapIndex)
                 c2.SetProvinceController(province, (ushort)exile2.MapIndex);
@@ -105,6 +132,24 @@ static class RestorationTests
             "a government that already stands on its own homeland returns without the holder's leave");
         Check(Restoration.Return(c2, exile2, home2) && c2.StatesOf(exile2).Length > 0,
             "the military return makes the ground its own through the same accounting");
+
+        var (revoked, revokedExile, revoker, revokedHome, _) = Fixture();
+        new MovementDealingCommand { IssuerId = revoker.Id, MovementId = revokedExile.Id, Action = "authorise_restoration" }.Apply(revoked);
+        var permissionSnapshot = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(revoked, "restoration"), "restoration");
+        Check(permissionSnapshot.Success && Restoration.Consents(permissionSnapshot.Campaign,
+                permissionSnapshot.Campaign.NationById(revokedExile.Id), permissionSnapshot.Campaign.NationById(revoker.Id)),
+            "explicit permission survives a real campaign snapshot");
+        new MovementDealingCommand { IssuerId = revoker.Id, MovementId = revokedExile.Id, Action = "revoke_restoration" }.Apply(revoked);
+        Check(!Restoration.CanRestore(revoked, revokedExile, revokedHome), "revoked permission cannot transfer a region");
+        new MovementDealingCommand { IssuerId = revoker.Id, MovementId = revokedExile.Id, Action = "authorise_restoration" }.Apply(revoked);
+        var key = Restoration.ConsentKey(revoker.Id);
+        revokedExile.Movement.ReadyOnDay[key] = revoked.ElapsedDays;
+        Check(!Restoration.CanRestore(revoked, revokedExile, revokedHome), "permission expires exactly on its deadline");
+        new MovementDealingCommand { IssuerId = revoker.Id, MovementId = revokedExile.Id, Action = "authorise_restoration" }.Apply(revoked);
+        revoked.Wars.Add(new StrategicWar { Id = 1, AttackerId = revoker.Id, DefenderId = revokedExile.Id });
+        Check(!Restoration.CanRestore(revoked, revokedExile, revokedHome), "war invalidates diplomatic permission");
+
+        VerifyAccessionDoesNotFlee();
 
         // ---- what is not a restoration ----------------------------------------------------
         var (c3, exile3, _, home3, _) = Fixture();
@@ -123,5 +168,38 @@ static class RestorationTests
             "the restoration report keeps every formatting argument in both languages");
         Check(MovementActions.Kinds.Any(kind => kind.Id == "restore" && kind.Trait == "government_in_exile"),
             "the restore action is offered only to governments in exile");
+    }
+
+    static void VerifyAccessionDoesNotFlee()
+    {
+        var (c, partner, founder, home, _) = Fixture();
+        partner.Movement = null;
+        var ground = Enumerable.Range(1, c.ProvinceMap.ProvinceCount)
+            .Where(p => c.ProvinceMap.ProvinceToState[p] == home.MapIndex).ToArray();
+        StatePartition.Annex(c, ground, partner, asConquest: false);
+        partner.Population = home.Population;
+        // A third country gives a defeated government somewhere to flee. Force the roll
+        // to succeed: without the accession guard this fixture always creates an exile.
+        var host = c.AddNation(new Nation { Tag = "QRC", MapIndex = 503, Name = "Host", Gdp = 100,
+            Population = 500000, Stability = .8f });
+        var far = c.States.First(s => s.MapIndex != home.MapIndex);
+        StatePartition.Annex(c, Enumerable.Range(1, c.ProvinceMap.ProvinceCount)
+            .Where(p => c.ProvinceMap.ProvinceToState[p] == far.MapIndex).ToArray(), host, false);
+        c.Defines.MovementExileBase = 2f;
+        var definition = new FormableNation("test_union", "Union", "", new[] { founder.Tag },
+            Array.Empty<string>(), ground, 0, 0, 0, 0, Array.Empty<string>(), Array.Empty<string>(), "#123456")
+            { PeacefulAccession = true };
+        // A partner led by a player signs the treaty; accession is never a neighbour's decree.
+        partner.DecisionAvailableDay[PeacefulFormation.ConsentKey(founder.Id, definition.Id)] =
+            c.ElapsedDays + 365;
+        PeacefulFormation.Integrate(c, founder, definition);
+        Check(c.Fallen.Contains(partner.Id) && !c.HasOwnedLand(partner),
+            "a fully acceded country retires its government instead of treating union as defeat");
+        MovementFall.Decide(c);
+        Check(partner.Movement is null && c.Homelands.ContainsKey(partner.Id),
+            "the next fall pass creates no exile, while historical homeland titles remain");
+        c.Fallen.Remove(partner.Id);
+        MovementFall.Decide(c);
+        Check(partner.Movement is { Exile: true }, "the control case still creates an exile after a genuine defeat");
     }
 }

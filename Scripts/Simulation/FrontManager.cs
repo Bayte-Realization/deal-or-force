@@ -70,7 +70,8 @@ public sealed partial class Defines
 /// It works for every country and every kind of front: the AI's war fronts, the posts of a
 /// player's divisions ordered to defend or advance on a front, and the lines a player draws.
 /// Spearheads are left where they are - concentrating is what a spearhead is for - and so are
-/// divisions in a battle, on a player's own direct order, or at sea.
+/// direct orders and embarked formations. A pinned surplus may release a covering
+/// reserve through FrontDisengagement after free reserves have been exhausted.
 /// </summary>
 public static class FrontManager
 {
@@ -78,6 +79,7 @@ public static class FrontManager
     private static readonly Dictionary<int, List<Army>> Allocated = new();
     private static readonly Stack<List<Army>> Spare = new();
     private static readonly List<Army> Loose = new();
+    private static readonly List<Army> BattleCandidates = new();
     private static readonly List<int> Posts = new();
     private static readonly HashSet<int> PostSet = new();
     private static readonly Dictionary<int, float> Need = new();
@@ -101,7 +103,7 @@ public static class FrontManager
         }
         foreach (var line in campaign.FrontLines)
         {
-            if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence) BalanceLine(campaign, line);
+            if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
             else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
         }
     }
@@ -138,7 +140,9 @@ public static class FrontManager
         foreach (var army in Idle)
         {
             var nation = campaign.NationById(army.NationId);
-            if (nation is null || nation.IsHuman) continue;
+            // A player's divisions stay where they were put, unless the general staff in the
+            // field was handed over. Then the same call-up every other country gets applies.
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             var atWar = false;
             foreach (var war in campaign.Wars)
                 if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
@@ -190,8 +194,9 @@ public static class FrontManager
     private static void BalanceLine(Campaign campaign, DrawnFrontLine line)
     {
         var nation = campaign.NationById(line.NationId);
-        if (nation is null || line.IsEmpty) return;
-        var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id));
+        if (nation is null || line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
+        var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id) &&
+            (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)));
         EnemyPower.Clear();
         foreach (var army in campaign.Armies)
         {
@@ -200,17 +205,31 @@ public static class FrontManager
             EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
         }
         Posts.Clear();
-        foreach (var province in BattlePlanning.Sequence(campaign, line))
+        IEnumerable<int> sources = line.Kind == FrontLineKind.Offensive ? line.SourceProvinces : BattlePlanning.Sequence(campaign, line);
+        foreach (var province in sources)
             if (province > 0 && province < campaign.ProvinceController.Length &&
                 campaign.ProvinceController[province] == (ushort)nation.MapIndex) Posts.Add(province);
+        Posts.Sort();
         Arrange(campaign, nation, war, line);
     }
 
-    private static bool Holds(Army army, Nation nation, StrategicWar war, DrawnFrontLine line, bool advances)
+    private static bool Holds(Campaign campaign, Army army, Nation nation, StrategicWar war, DrawnFrontLine line, bool advances)
     {
-        if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) return false;
+        if (army.NationId != nation.Id) return false;
         if (army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.DirectOrder) return false;
-        var duty = army.OrderKind == ArmyOrder.DefendFront || (advances && army.OrderKind == ArmyOrder.AdvanceFront);
+        if (army.TemplateId == MilitiaCore.TemplateId && army.OrderKind == ArmyOrder.Manual && army.AssignedWarId < 0)
+        {
+            // Local guards may plug gaps inside their own region without being marked as
+            // detached expeditionary militia (EmergencyFieldArmy). No player commandeering.
+            if (line is not null || war is null || army.FrontLineId >= 0 ||
+                nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return false;
+            var region = campaign.ProvinceMap.ProvinceToState[army.ProvinceId];
+            foreach (var post in Posts)
+                if (campaign.ProvinceMap.ProvinceToState[post] == region) return true;
+            return false;
+        }
+        var duty = army.OrderKind == ArmyOrder.DefendFront ||
+                   (advances && army.OrderKind == ArmyOrder.AdvanceFront);
         if (!duty) return false;
         if (line is not null) return army.FrontLineId == line.Id;
         return army.FrontLineId < 0 && war is not null && army.AssignedWarId == war.Id;
@@ -218,6 +237,7 @@ public static class FrontManager
 
     private static void Arrange(Campaign campaign, Nation nation, StrategicWar war, DrawnFrontLine line)
     {
+        using var measured = SimProfiler.Measure("    staff:arrange");
         if (Posts.Count == 0) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -230,6 +250,7 @@ public static class FrontManager
         foreach (var list in Allocated.Values) { list.Clear(); Spare.Push(list); }
         Allocated.Clear();
         Loose.Clear();
+        BattleCandidates.Clear();
         DonorComponents.Clear();
 
         // Who is holding what: a division counts for the post it is going to, or the post it
@@ -239,7 +260,8 @@ public static class FrontManager
         var power = 0f;
         foreach (var army in campaign.Armies)
         {
-            if (!Holds(army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
+            if (FrontDisengagement.Eligible(campaign, nation, war, line, army)) BattleCandidates.Add(army);
+            if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
             holders++;
             power += army.Power;
             var post = PostSet.Contains(army.OrderProvinceId) ? army.OrderProvinceId
@@ -254,13 +276,14 @@ public static class FrontManager
         var referenceCount = holders;
         if (holders == 0)
         {
-            if (!mayBorrow) return;
+            if (!mayBorrow && BattleCandidates.Count == 0) return;
             // An empty line is precisely when a ready reserve is needed. There may be no
             // defender yet from which to estimate a division's power, so use the available
             // field formations, without counting them as holders until actually posted.
             foreach (var army in campaign.Armies)
             {
-                if (!ReadyReserve(campaign, army, nation, war, today, advancesToo: true)) continue;
+                if (!ReadyReserve(campaign, army, nation, war, today, advancesToo: true) &&
+                    !FrontDisengagement.Eligible(campaign, nation, war, line, army)) continue;
                 referenceCount++;
                 power += army.Power;
             }
@@ -291,6 +314,9 @@ public static class FrontManager
             var order = Need[right].CompareTo(Need[left]);
             return order != 0 ? order : left.CompareTo(right);
         });
+        FrontDisengagement.SelectionContext disengagement = null;
+        try
+        {
         foreach (var hole in Posts)
         {
             if (budget <= 0) break;
@@ -331,7 +357,7 @@ public static class FrontManager
                     if (reserve is null) break;
                     var duty = reserve.OrderKind;
                     reserve.OrderKind = ArmyOrder.DefendFront;
-                    if (Repost(campaign, nation, reserve, hole)) { budget--; holders++; break; }
+                    if (Repost(campaign, nation, reserve, hole)) { budget--; holders++; filled = true; break; }
                     reserve.OrderKind = duty;
                     Refused.Add(reserve.Id);
                     if (!connectivityChecked)
@@ -340,7 +366,21 @@ public static class FrontManager
                         connectivityChecked = true;
                     }
                 }
+            if (!filled && war is not null && BattleCandidates.Count > 0)
+            {
+                if (FrontDisengagement.TryCoverHole(campaign, nation, war, line, hole, out var detached, ref disengagement, BattleCandidates))
+                {
+                    var alreadyCounted = false;
+                    foreach (var units in Allocated.Values) alreadyCounted |= units.Remove(detached);
+                    if (!Allocated.TryGetValue(hole, out var there)) Allocated[hole] = there = Take();
+                    there.Add(detached);
+                    budget--; Reposts++; if (!alreadyCounted) holders++; filled = true;
+                }
+            }
         }
+
+        }
+        finally { disengagement?.Dispose(); }
 
         // Then the weight of the line. Each post's share of the divisions is its share of the
         // pressure - a post with an enemy corps next to it wants more than one facing an empty
@@ -534,6 +574,8 @@ public static class FrontManager
     /// </summary>
     private static bool MayRepost(Campaign campaign, Army army, int post)
     {
+        if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0 &&
+            campaign.ProvinceMap.ProvinceToState[army.ProvinceId] != campaign.ProvinceMap.ProvinceToState[post]) return false;
         if (army.Route.Count == 0 || army.OrderProvinceId <= 0 || army.ProvinceId == army.OrderProvinceId) return true;
         var map = campaign.ProvinceMap;
         var going = map.CenterOf(army.OrderProvinceId);
@@ -551,12 +593,18 @@ public static class FrontManager
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         int[] route = Array.Empty<int>();
+        // Battle withdrawals require a preflight and covering force; they use
+        // FrontDisengagement, not this ordinary marching path.
+        if (army.InBattle) return false;
         if (army.ProvinceId != post)
         {
             route = topology.FindRoute(army.ProvinceId, post, (ushort)nation.MapIndex, controllers);
             // Ground no road of ours reaches - an exclave, an island - is not a post this
             // division can take.
             if (route.Length == 0) return false;
+            if (army.TemplateId == MilitiaCore.TemplateId && army.AssignedWarId < 0)
+                foreach (var step in route)
+                    if (topology.ProvinceToState[step] != topology.ProvinceToState[army.ProvinceId]) return false;
         }
 
         var sameWay = army.Route.Count > 0 && route.Length > 0 && army.Route[0] == route[0];

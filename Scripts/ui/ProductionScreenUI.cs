@@ -189,6 +189,7 @@ public partial class DealOrForceGame
         var colour = pool == ProductionPool.Civilian ? "production.civilian" : "production.military";
         var plate = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         plate.AddThemeStyleboxOverride("panel", ProductionStyle("production.card", "production.border", 10));
+        AtlasSurfaceSkin.Attach(plate, AtlasSurfaceSkin.Level.Raised, "production.card");
         parent.AddChild(plate);
         var rows = new VBoxContainer();
         plate.AddChild(rows);
@@ -219,13 +220,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Production";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_diplomacyLayer is not null) _diplomacyLayer.Visible = false;
-        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
-        _productionLayer.Visible = true;
-        _productionLayer.MoveToFront();
+        RaiseWorkspaceLayer(_productionLayer);
         RefreshProductionScreen();
         UpdateScreenButtons();
     }
@@ -292,6 +287,7 @@ public partial class DealOrForceGame
         var line = new ProductionLineRow();
         line.Root = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         line.Root.AddThemeStyleboxOverride("panel", ProductionStyle("production.card", "production.border", 10));
+        AtlasSurfaceSkin.Attach(line.Root, AtlasSurfaceSkin.Level.Inset, "production.card");
         _productionLineRows.AddChild(line.Root);
         var rows = new VBoxContainer();
         rows.AddThemeConstantOverride("separation", 8);
@@ -361,7 +357,7 @@ public partial class DealOrForceGame
         page.AddChild(line.Range);
         page.AddChild(ProductionLabel("Page", 10, "text.caption"));
         line.PagePicker = new SpinBox { Name = "CapacityPage", MinValue = 1, MaxValue = 1, Step = 1, CustomMinimumSize = new Vector2(62, 24) };
-        line.PagePicker.AddThemeFontSizeOverride("font_size", 11);
+        line.PagePicker.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 11));
         line.PagePicker.ValueChanged += value => { if (!line.Updating) { line.Page = (int)value - 1; RefreshProductionLines(); } };
         page.AddChild(line.PagePicker);
         var controlRows = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };

@@ -1,0 +1,11 @@
+{
+  "This exercise needs funding and an operational air formation at a controlled base": "This exercise needs funding and an operational air formation at a controlled base",
+  "This exercise needs funding and serviceable ships not in combat or carrying troops": "This exercise needs funding and serviceable ships not in combat or carrying troops",
+  "Select a valid country.": "Select a valid country.",
+  "Insufficient army experience: need 25, available {0:0.#}.": "Insufficient army experience: need 25, available {0:0.#}.",
+  "Insufficient treasury to organize field maneuvers.": "Insufficient treasury to organize field maneuvers.",
+  "Select a friendly army.": "Select a friendly army.",
+  "Formations in battle cannot be retrained.": "Formations in battle cannot be retrained.",
+  "Insufficient army experience: need {0:0}, available {1:0.#}.": "Insufficient army experience: need {0:0}, available {1:0.#}.",
+  "chronicle.military_exercises_conducted": "{0} conducts extensive army field maneuvers."
+}

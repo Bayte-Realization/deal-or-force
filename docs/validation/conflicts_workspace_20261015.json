@@ -1,0 +1,744 @@
+{
+  "date": "2026-10-15",
+  "source_base": "2fb213b89507e968bc0d970d0a63c0de36897b28",
+  "method": "Native Godot 4.8-dev7 Debug Optimize=true, D3D12 Forward+, RTX 3060; Singleplayer -> default 2024 scenario -> Poland, paused day zero, 1920x1080. Stopwatch around RefreshConflictsScreen(true). One first build plus five warm samples per tab. Not FPS or input-to-first-paint.",
+  "metrics": [
+    {
+      "tab": 0,
+      "before_first_ms": 76.8198,
+      "after_first_ms": 29.4241,
+      "before_warm_median_ms": 43.1983,
+      "after_warm_median_ms": 4.6676,
+      "before_nodes": 860,
+      "after_nodes": 255
+    },
+    {
+      "tab": 1,
+      "before_first_ms": 22.7276,
+      "after_first_ms": 25.696,
+      "before_warm_median_ms": 5.724,
+      "after_warm_median_ms": 3.6828,
+      "before_nodes": 96,
+      "after_nodes": 147
+    },
+    {
+      "tab": 2,
+      "before_first_ms": 4.9119,
+      "after_first_ms": 5.0945,
+      "before_warm_median_ms": 4.1742,
+      "after_warm_median_ms": 3.5418,
+      "before_nodes": 56,
+      "after_nodes": 75
+    },
+    {
+      "tab": 3,
+      "before_first_ms": 20.3675,
+      "after_first_ms": 22.8665,
+      "before_warm_median_ms": 7.9791,
+      "after_warm_median_ms": 8.5512,
+      "before_nodes": 33,
+      "after_nodes": 41
+    },
+    {
+      "tab": 4,
+      "before_first_ms": 41.8861,
+      "after_first_ms": 35.9304,
+      "before_warm_median_ms": 34.9144,
+      "after_warm_median_ms": 15.8,
+      "before_nodes": 544,
+      "after_nodes": 428
+    },
+    {
+      "tab": 5,
+      "before_first_ms": 17.4752,
+      "after_first_ms": 20.9596,
+      "before_warm_median_ms": 9.3342,
+      "after_warm_median_ms": 3.3193,
+      "before_nodes": 200,
+      "after_nodes": 222
+    }
+  ],
+  "raw_before": [
+    {
+      "tab": 0,
+      "ms": 76.8198,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": false
+    },
+    {
+      "tab": 0,
+      "ms": 46.5197,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 44.285,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 39.5297,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 43.1983,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 36.0883,
+      "nodes": 860,
+      "rows": 76,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 22.7276,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 5.7046,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 6.5163,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 5.8373,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 5.724,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 5.6299,
+      "nodes": 96,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 4.9119,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 4.1742,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.8724,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 4.4382,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 4.609,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 4.1255,
+      "nodes": 56,
+      "rows": 5,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 20.3675,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 7.9791,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 7.9439,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 8.1462,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 7.771,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 8.157,
+      "nodes": 33,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 41.8861,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 34.9144,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 33.7833,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 35.3441,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 37.0256,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 33.9531,
+      "nodes": 544,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 17.4752,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": false
+    },
+    {
+      "tab": 5,
+      "ms": 8.4951,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 9.3918,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 10.033,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 9.3342,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 9.1941,
+      "nodes": 200,
+      "rows": 16,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    }
+  ],
+  "raw_after": [
+    {
+      "tab": 0,
+      "ms": 29.4241,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 4.6614,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 4.5962,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 5.8772,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 4.6676,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 0,
+      "ms": 5.4855,
+      "nodes": 255,
+      "rows": 18,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 25.696,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 3.7467,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 3.5172,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 3.5686,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 3.6828,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 1,
+      "ms": 3.9679,
+      "nodes": 147,
+      "rows": 9,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 5.0945,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.5418,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.4412,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.9155,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.7192,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 2,
+      "ms": 3.3355,
+      "nodes": 75,
+      "rows": 3,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 22.8665,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 8.8967,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 7.798,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 9.3089,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 8.0111,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 3,
+      "ms": 8.5512,
+      "nodes": 41,
+      "rows": 8,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 35.9304,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 26.9325,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 15.7256,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 15.8,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 16.3081,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 4,
+      "ms": 15.7865,
+      "nodes": 428,
+      "rows": 35,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 20.9596,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 3.2908,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 3.3193,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 3.5406,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 3.6254,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    },
+    {
+      "tab": 5,
+      "ms": 3.194,
+      "nodes": 222,
+      "rows": 15,
+      "day": 0,
+      "player": "POL",
+      "unchanged": true
+    }
+  ],
+  "verification": {
+    "formable_tests": 2629,
+    "conflict_read_only_tests": 15,
+    "included_in_formable": true,
+    "original_focused_tests": 15,
+    "native_gui_checks": 35,
+    "native_gui_failures": 0,
+    "headless_export_verify_pass": 82,
+    "headless_export_verify_failures": 0,
+    "localization_audit": {
+      "absent_english": 0,
+      "absent_russian": 0
+    },
+    "fennara": {
+      "scanned_files": 850,
+      "csharp_compile": "success",
+      "external_luau_test_errors": 2,
+      "existing_boot_integer_division_warnings": 2
+    },
+    "known_global_integrity_failure": "Shipped Features and FeatureCommands dictionaries differ from compiled defaults. MechanicFeatures.cs remains byte-identical to source_base; attempted synchronization was reverted because legacy golden fingerprints changed."
+  },
+  "limitations": [
+    "First-open wars/world/territory timings did not improve consistently.",
+    "Territorial disputes remain unpaged and have partially untranslated generated region names.",
+    "No century-long or multi-machine multiplayer run this pass.",
+    "35 GUI checks cover territorial list opening, not a clicked territorial detail; other sections' first details were opened.",
+    "Long row captions intentionally ellipsize and have full-name tooltips.",
+    "Godot exit still reports 260 ObjectDB instances."
+  ],
+  "private_probe": ".fennara/scripts/runtime/conflicts_baseline.gd",
+  "private_bridge": ".fennara/scripts/runtime/conflicts_workspace_bridge.cs.txt"
+}

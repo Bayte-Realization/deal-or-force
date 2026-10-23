@@ -187,11 +187,32 @@ public static class Coups
     {
         var since = c.ElapsedDays - Math.Max(0, c.Defines.CoupContagionDays);
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(c, nation.MapIndex))
-        {
-            foreach (var other in c.Nations)
-                if (other.MapIndex == mapIndex && other.LastCoupDay >= since) return true;
-        }
+            if (NationAt(c, mapIndex) is { LastCoupDay: var day } && day >= since) return true;
         return false;
+    }
+
+    private static Campaign _mapCampaign;
+    private static int _mapDay = int.MinValue;
+    private static int _mapCount = -1;
+    private static readonly Dictionary<int, Nation> NationByMap = new();
+
+    /// <summary>
+    /// The daily map index for a neighbour. The old loop asked every nation in the world
+    /// whether its map index matched, for every neighbour of every country, on every coup
+    /// review; that is a quadratic scan hiding in a fifteen-millisecond step.
+    /// </summary>
+    private static Nation NationAt(Campaign c, int mapIndex)
+    {
+        if (!ReferenceEquals(_mapCampaign, c) || _mapDay != c.ElapsedDays || _mapCount != c.Nations.Count)
+        {
+            _mapCampaign = c;
+            _mapDay = c.ElapsedDays;
+            _mapCount = c.Nations.Count;
+            NationByMap.Clear();
+            foreach (var nation in c.Nations)
+                if (nation.MapIndex >= 0) NationByMap[nation.MapIndex] = nation;
+        }
+        return NationByMap.GetValueOrDefault(mapIndex);
     }
 
     /// <summary>The army takes power.</summary>
@@ -235,6 +256,7 @@ public static class Coups
             Math.Max(0, Math.Max(c.Defines.CoupGraceDays, c.Defines.CoupAftermathCooldownDays)));
         memory.DaysAboveThreshold = 0;
         memory.CoupPressure *= .35f;
+        Rulers.ReplaceHeadOfState(c, nation, "");
         NationalModifiers.Invalidate(nation);
     }
 }

@@ -1,0 +1,23 @@
+{
+  "War sup. {0}": "Подд. {0}",
+  "Next: {0}": "Далее: {0}",
+  "hud.footer.no_article": "Нет статьи",
+  "hud.footer.overdue": "Просрочено",
+  "hud.footer.prices_falling": "Цены ниже",
+  "hud.footer.above_comfort": "Выше нормы",
+  "hud.footer.comfortable": "В норме",
+  "hud.stat.short.TREASURY": "КАЗНА",
+  "hud.stat.short.DEBT": "ДОЛГ",
+  "hud.stat.short.BALANCE": "БАЛАНС",
+  "hud.stat.short.GDP": "ВВП",
+  "hud.stat.short.INFLATION": "ИНФЛЯЦИЯ",
+  "hud.stat.short.POPULATION": "НАСЕЛ.",
+  "hud.stat.short.STABILITY": "СТАБИЛЬН.",
+  "hud.stat.short.MANPOWER": "РЕЗЕРВ",
+  "hud.stat.short.ARMY XP": "ОПЫТ АРМ.",
+  "hud.stat.short.AIR XP": "ОПЫТ ВВС",
+  "hud.stat.short.NAVY XP": "ОПЫТ ВМФ",
+  "hud.stat.short.POLITICAL CAPITAL": "ПОЛИТ. КАП.",
+  "hud.stat.short.Host's temper": "Реакция",
+  "hud.stat.short.Vote readiness": "К голосов."
+}

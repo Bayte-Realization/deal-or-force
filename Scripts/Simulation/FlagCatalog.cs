@@ -65,10 +65,11 @@ public sealed class FlagQualifier
 /// after it and never will, and falling back to the flag of the people who founded it is a
 /// better answer than a grey rectangle.
 /// </summary>
-public static class FlagCatalog
+public static partial class FlagCatalog
 {
     private static readonly List<FlagQualifier> Qualifiers = new();
     private static readonly List<string> Fallbacks = new();
+    private static bool PreferMovementBase = true;
     private static readonly Dictionary<string, string[]> GenericCultures = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string[]> GenericTags = new(StringComparer.OrdinalIgnoreCase);
 
@@ -154,8 +155,10 @@ public static class FlagCatalog
     {
         Qualifiers.Clear();
         Fallbacks.Clear();
+        PreferMovementBase = true;
         GenericCultures.Clear();
         GenericTags.Clear();
+        ContextRules.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -176,6 +179,10 @@ public static class FlagCatalog
     public static void Merge(JsonElement root, List<string> errors = null)
     {
         if (root.ValueKind != JsonValueKind.Object) return;
+        MergeContextRules(root, errors);
+        if (root.TryGetProperty("prefer_movement_base", out var movementBase) &&
+            movementBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            PreferMovementBase = movementBase.GetBoolean();
 
         if (root.TryGetProperty("qualifiers", out var qualifiers) &&
             qualifiers.ValueKind == JsonValueKind.Object)
@@ -353,7 +360,7 @@ public static class FlagCatalog
     public static bool IsKnownSource(string source) => source switch
     {
         "ideology" or "government" or "culture" or "continent" or
-        "war" or "tag" or "focus" or "formable" or "revolt" or "subject" => true,
+        "war" or "tag" or "focus" or "formable" or "revolt" or "subject" or "overlord" => true,
         _ => false
     };
 
@@ -368,7 +375,7 @@ public static class FlagCatalog
         {
             "ideology" => nation.Ideology,
             "government" => nation.Government,
-            "culture" => DemographyCatalog.PrimaryCulture(nation.Tag),
+            "culture" => !string.IsNullOrEmpty(nation.DeclaredCulture) ? nation.DeclaredCulture : DemographyCatalog.PrimaryCulture(nation.Tag),
             "continent" => nation.Continent,
             "tag" => nation.Tag,
             "focus" => nation.GovernmentFocus.ToString(),
@@ -385,6 +392,7 @@ public static class FlagCatalog
             // other government installed from outside belongs: not a thing the country
             // believes, and not how it is arranged, but who it is arranged BY.
             "subject" => nation.IsSubject ? nation.SubjectType : "",
+            "overlord" => nation.IsSubject ? campaign?.NationById(nation.OverlordId)?.Tag ?? "" : "",
             _ => ""
         };
         return Slug(value);
@@ -404,6 +412,13 @@ public static class FlagCatalog
     /// The caller asks the art whether each one exists and takes the first that does, so
     /// this never needs to know what has actually been drawn - which is what lets a mod add
     /// a flag by adding a file.
+    ///
+    /// "Best" is the total number of steps taken away from what the country actually is,
+    /// across every mixture of the chosen qualifiers' chains, so
+    /// `flag_rus_communism_one_party_state` is asked for before
+    /// `flag_rus_socialism_one_party_state`, and both before anything two steps out.
+    /// Ordering by distance rather than by enumeration order is what stops an alias beating
+    /// the real thing.
     /// </summary>
     public static List<string> Candidates(Campaign campaign, Nation nation)
     {
@@ -412,6 +427,41 @@ public static class FlagCatalog
 
         var tag = Slug(nation.Tag);
         if (tag.Length == 0) return names;
+
+        if (!string.IsNullOrWhiteSpace(nation.CustomFlag))
+        {
+            var custom = Slug(nation.CustomFlag);
+            names.Add(custom.StartsWith("flag_", StringComparison.Ordinal) ? custom : "flag_" + custom);
+        }
+
+        // A landless organisation's banner is its identity, not the hypothetical regime it
+        // might establish. Procedural government/ideology variants must not replace it.
+        // After taking territory or proclaiming a formable, ordinary dynamic rules resume.
+        if (PreferMovementBase && nation.Movement is { Landless: true, Exile: false } &&
+            string.IsNullOrEmpty(nation.FormedNationId))
+        {
+            names.Add($"flag_{tag}");
+        }
+
+        // A country brought back flies its own flag again, in the form its politics give it,
+        // ahead of anything the country that restored it ever flew.
+        if (FormableRestorations.RestoredTag(nation.FormedNationId) is { } restored)
+        {
+            var old = Slug(restored);
+            names.Add($"flag_{old}_{Slug(nation.Government)}");
+            names.Add($"flag_{old}_{Slug(nation.Ideology)}");
+            names.Add($"flag_{old}");
+        }
+        else if (nation.FoundNameKind is "tag" or "free_tag" && !string.IsNullOrWhiteSpace(nation.FoundNameId))
+        {
+            var old = Slug(nation.FoundNameId);
+            if (old.Length > 0 && old != tag)
+            {
+                names.Add($"flag_{old}_{Slug(nation.Government)}");
+                names.Add($"flag_{old}_{Slug(nation.Ideology)}");
+                names.Add($"flag_{old}");
+            }
+        }
 
         // The qualifiers that have something to say about this country today, each as the
         // chain of values it will answer to: what it actually is, then whatever that value
@@ -499,7 +549,28 @@ public static class FlagCatalog
         // Kurdish monarchy, and a mechanic that produces new countries constantly is
         // exactly where that variety is worth having. `flag_culture_kurdish_communism`
         // beats `flag_culture_kurdish`, which beats nothing.
-        foreach (var source in Fallbacks) Family(names, source, campaign, nation, live, combined);
+        // A nationwide opposition challenges its parent government, not the national
+        // identity of whichever occupied/minority region happened to seed the rising.
+        // Explicit artwork for the new tag still wins. Existing saves carry the parent
+        // in their language-independent rising name, so this repairs their flags too.
+        var civilParent = CivilWarParentTag(nation);
+        if (civilParent.Length > 0)
+        {
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 1; mask < 1 << combined; mask++)
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) == size)
+                        Spread(names, "flag_" + civilParent + "_civil_war", live, combined, mask, 0, 0);
+            names.Add($"flag_{civilParent}_civil_war_{Slug(nation.Ideology)}");
+            names.Add($"flag_{civilParent}_civil_war");
+            for (var size = combined; size >= 1; size--)
+                for (var mask = 1; mask < 1 << combined; mask++)
+                    if (System.Numerics.BitOperations.PopCount((uint)mask) == size)
+                        Spread(names, "flag_" + civilParent, live, combined, mask, 0, 0);
+            if (Fits(campaign, nation, civilParent)) names.Add("flag_" + civilParent);
+            else if (Otherwise.TryGetValue(civilParent, out var alternative)) names.Add(alternative);
+        }
+        foreach (var source in Fallbacks)
+            if (civilParent.Length == 0 || source != "culture") Family(names, source, campaign, nation, live, combined);
 
         // Last of all, for a country whose own flag no longer fits and which nothing else
         // answered for: better the wrong flag than a grey rectangle, and a player can see
@@ -511,7 +582,15 @@ public static class FlagCatalog
             !accepted.Contains(culture, StringComparer.OrdinalIgnoreCase));
         names.RemoveAll(name => GenericTags.TryGetValue(name, out var accepted) && accepted.Length > 0 &&
             !accepted.Contains(tag, StringComparer.OrdinalIgnoreCase));
-        return names;
+        return ApplyContextRules(campaign, nation, names);
+    }
+
+    public static string CivilWarParentTag(Nation nation)
+    {
+        if (nation is null || !string.IsNullOrEmpty(nation.FormedNationId) ||
+            !nation.Name.StartsWith("rising:", StringComparison.Ordinal)) return "";
+        var parts = nation.Name.Split(':', 4);
+        return parts.Length >= 3 ? Slug(parts[2]) : "";
     }
 
     /// <summary>
@@ -561,15 +640,6 @@ public static class FlagCatalog
             if (!chain.Contains(alias, StringComparer.OrdinalIgnoreCase)) chain.Add(alias);
         return chain;
     }
-
-    /// <summary>
-    /// Every mixture of the chosen qualifiers' chains, nearest first.
-    ///
-    /// "Nearest" is the total number of steps taken away from what the country actually is,
-    /// so `flag_rus_communism_one_party_state` is asked for before `flag_rus_socialism_one_party_state`,
-    /// and both before anything two steps out. Ordering by distance rather than by
-    /// enumeration order is what stops an alias beating the real thing.
-    /// </summary>
 
     /// <summary>
     /// The names one family answers to: `flag_&lt;source&gt;_&lt;value&gt;`, and that stem

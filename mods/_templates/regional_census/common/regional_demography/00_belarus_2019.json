@@ -1,0 +1,240 @@
+{
+  "//": "Table 6.2, 2019 column, both sexes. Unmapped counts: census category Arabs (no one-to-one game culture). Unlisted = total minus all twenty published categories. Only mapped counts are normalised for the culture model; these are not measured faith or language shares.",
+  "by_br": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Brest oblast",
+        "page": 237,
+        "population": 1348115,
+        "counts": {
+          "belarusian": 1171835,
+          "russian": 97936,
+          "polish": 14893,
+          "ukrainian": 37648,
+          "jewish": 943,
+          "armenian": 1017,
+          "tatar": 773,
+          "romani": 904,
+          "azerbaijani": 538,
+          "lithuanian": 450,
+          "turkmen": 254,
+          "german": 591,
+          "georgian": 206,
+          "moldovan": 338,
+          "chinese_diaspora": 19,
+          "latvian": 122,
+          "uzbek": 156,
+          "kazakh": 127,
+          "tajik": 59
+        },
+        "unmapped": 30
+      }
+    ]
+  },
+  "by_vi": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Vitebsk oblast",
+        "page": 240,
+        "population": 1135731,
+        "counts": {
+          "belarusian": 934925,
+          "russian": 138075,
+          "polish": 9806,
+          "ukrainian": 17993,
+          "jewish": 1561,
+          "armenian": 940,
+          "tatar": 1033,
+          "romani": 1231,
+          "azerbaijani": 599,
+          "lithuanian": 944,
+          "turkmen": 1178,
+          "german": 291,
+          "georgian": 235,
+          "moldovan": 306,
+          "chinese_diaspora": 156,
+          "latvian": 388,
+          "uzbek": 205,
+          "kazakh": 117,
+          "tajik": 133
+        },
+        "unmapped": 198
+      }
+    ]
+  },
+  "by_ho": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Gomel oblast",
+        "page": 243,
+        "population": 1388512,
+        "counts": {
+          "belarusian": 1211234,
+          "russian": 108712,
+          "polish": 2572,
+          "ukrainian": 25085,
+          "jewish": 1962,
+          "armenian": 966,
+          "tatar": 1030,
+          "romani": 1748,
+          "azerbaijani": 671,
+          "lithuanian": 388,
+          "turkmen": 1253,
+          "german": 450,
+          "georgian": 307,
+          "moldovan": 574,
+          "chinese_diaspora": 39,
+          "latvian": 100,
+          "uzbek": 224,
+          "kazakh": 181,
+          "tajik": 154
+        },
+        "unmapped": 133
+      }
+    ]
+  },
+  "by_hr": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Grodno oblast",
+        "page": 246,
+        "population": 1026816,
+        "counts": {
+          "belarusian": 701190,
+          "russian": 65550,
+          "polish": 223119,
+          "ukrainian": 10767,
+          "jewish": 905,
+          "armenian": 1088,
+          "tatar": 1385,
+          "romani": 512,
+          "azerbaijani": 722,
+          "lithuanian": 2174,
+          "turkmen": 515,
+          "german": 517,
+          "georgian": 220,
+          "moldovan": 245,
+          "chinese_diaspora": 39,
+          "latvian": 327,
+          "uzbek": 122,
+          "kazakh": 113,
+          "tajik": 53
+        },
+        "unmapped": 98
+      }
+    ]
+  },
+  "by_mi": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Minsk city",
+        "page": 249,
+        "population": 2018281,
+        "counts": {
+          "belarusian": 1753122,
+          "russian": 148079,
+          "polish": 19397,
+          "ukrainian": 34662,
+          "jewish": 5699,
+          "armenian": 2509,
+          "tatar": 2240,
+          "romani": 1601,
+          "azerbaijani": 1865,
+          "lithuanian": 669,
+          "turkmen": 1580,
+          "german": 372,
+          "georgian": 980,
+          "moldovan": 290,
+          "chinese_diaspora": 1429,
+          "latvian": 299,
+          "uzbek": 312,
+          "kazakh": 228,
+          "tajik": 289
+        },
+        "unmapped": 481
+      },
+      {
+        "name": "Minsk oblast",
+        "page": 252,
+        "population": 1471240,
+        "counts": {
+          "belarusian": 1302780,
+          "russian": 86408,
+          "polish": 15785,
+          "ukrainian": 21273,
+          "jewish": 1452,
+          "armenian": 1895,
+          "tatar": 1201,
+          "romani": 573,
+          "azerbaijani": 1038,
+          "lithuanian": 462,
+          "turkmen": 100,
+          "german": 586,
+          "georgian": 449,
+          "moldovan": 365,
+          "chinese_diaspora": 45,
+          "latvian": 202,
+          "uzbek": 281,
+          "kazakh": 209,
+          "tajik": 199
+        },
+        "unmapped": 71
+      }
+    ]
+  },
+  "by_ma": {
+    "date": "2019-10-04",
+    "source": "Belstat · 2019 census, volume 2 (2021)",
+    "url": "https://www.belstat.gov.by/upload/iblock/e2c/jpupn3rl7trtmxepj6vmh07qy6u5o09i.pdf",
+    "table": "6.2",
+    "areas": [
+      {
+        "name": "Mogilev oblast",
+        "page": 255,
+        "population": 1024751,
+        "counts": {
+          "belarusian": 915633,
+          "russian": 62232,
+          "polish": 2121,
+          "ukrainian": 12228,
+          "jewish": 1183,
+          "armenian": 977,
+          "tatar": 783,
+          "romani": 279,
+          "azerbaijani": 568,
+          "lithuanian": 200,
+          "turkmen": 351,
+          "german": 251,
+          "georgian": 333,
+          "moldovan": 289,
+          "chinese_diaspora": 61,
+          "latvian": 96,
+          "uzbek": 141,
+          "kazakh": 93,
+          "tajik": 126
+        },
+        "unmapped": 26
+      }
+    ]
+  }
+}

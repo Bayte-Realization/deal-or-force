@@ -1,0 +1,28 @@
+// Nationalities policy: what a state does about the peoples inside it who are not its own.
+//
+// Four answers, each a trade. The keys `assimilation` and `settlement` are read by
+// DemographicCycle (how fast minorities adopt the culture around them) and InternalMigration
+// (settlers of the country's own people sent where they are few); the rest are the price.
+// Which country had which in 2024 is history: history/countries/2024/50_laws.json.
+{
+  "nationalities_integration": {
+    "name": "Civic integration", "category": "Nationalities policy", "default": true, "icon": "population",
+    "description": "One citizenship and the state's language in every school, with the minorities' own beside it.",
+    "modifiers": {}
+  },
+  "nationalities_pluralism": {
+    "name": "Minority rights", "category": "Nationalities policy", "icon": "population",
+    "description": "Schools, courts and press in the minorities' own languages: they stay who they are, feel at home, and organise freely.",
+    "modifiers": { "assimilation": -0.6, "radicalism_weekly": -0.0002, "movement_activity": 0.06, "tax_efficiency": -0.01 }
+  },
+  "nationalities_assimilation": {
+    "name": "Assimilation", "category": "Nationalities policy", "icon": "population",
+    "description": "One language in school, office and court. A generation later the minorities speak it at home - and the ones who refuse remember why.",
+    "modifiers": { "assimilation": 1.0, "radicalism_weekly": 0.0003 }
+  },
+  "nationalities_settlement": {
+    "name": "Settlement", "category": "Nationalities policy", "icon": "population",
+    "description": "Settlers of the country's own people sent, housed and paid to live where they are few, and the language taught to everybody else. It changes whose land a region is, and the people it is done to never forgive it.",
+    "modifiers": { "settlement": 1.0, "assimilation": 0.6, "radicalism_weekly": 0.0006, "stability_weekly": -0.0002, "construction_cost": 0.04 }
+  }
+}

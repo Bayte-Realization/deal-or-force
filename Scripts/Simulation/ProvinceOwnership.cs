@@ -31,6 +31,8 @@ public static class ProvinceOwnership
     public readonly record struct Entry(int Province, string Owner, string Controller);
 
     private static readonly Dictionary<int, Entry> Entries = new();
+    private static Dictionary<string, int[]> _byOwner;
+    private static Dictionary<string, HashSet<int>> _setByOwner;
 
     // Load on first use, the way every other catalogue does. Waiting for the mod loader
     // meant the headless bench - which has no mod loader - ran on a political map that had
@@ -42,10 +44,42 @@ public static class ProvinceOwnership
 
     public static int Count => Entries.Count;
 
+    private static void EnsureOwnerIndex()
+    {
+        if (_byOwner is not null) return;
+        var lists = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var e in Entries.Values)
+        {
+            if (string.IsNullOrEmpty(e.Owner)) continue;
+            if (!lists.TryGetValue(e.Owner, out var list)) lists[e.Owner] = list = new List<int>();
+            list.Add(e.Province);
+        }
+        var arrays = new Dictionary<string, int[]>(lists.Count, StringComparer.OrdinalIgnoreCase);
+        var sets = new Dictionary<string, HashSet<int>>(lists.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var (owner, list) in lists)
+        {
+            list.Sort();
+            arrays[owner] = list.ToArray();
+            sets[owner] = new HashSet<int>(list);
+        }
+        _byOwner = arrays;
+        _setByOwner = sets;
+    }
+
+    private static readonly HashSet<int> EmptyProvinceSet = new();
+
     /// <summary>Bookmark territory, including mod overrides; live conquests do not change it.</summary>
-    public static int[] ProvincesOf(string tag) => Entries.Values
-        .Where(e => string.Equals(e.Owner, tag, StringComparison.OrdinalIgnoreCase))
-        .Select(e => e.Province).OrderBy(p => p).ToArray();
+    public static int[] ProvincesOf(string tag)
+    {
+        EnsureOwnerIndex();
+        return tag is not null && _byOwner.TryGetValue(tag, out var found) ? found : Array.Empty<int>();
+    }
+
+    public static IReadOnlySet<int> ProvinceSetOf(string tag)
+    {
+        EnsureOwnerIndex();
+        return tag is not null && _setByOwner.TryGetValue(tag, out var found) ? found : EmptyProvinceSet;
+    }
 
     /// <summary>
     /// Forget the political map entirely.
@@ -63,6 +97,8 @@ public static class ProvinceOwnership
     {
         Entries.Clear();
         PointEntries.Clear();
+        _byOwner = null;
+        _setByOwner = null;
     }
 
     /// <summary>
@@ -78,6 +114,8 @@ public static class ProvinceOwnership
     {
         Entries.Clear();
         PointEntries.Clear();
+        _byOwner = null;
+        _setByOwner = null;
         var directory = FindDirectory();
         if (directory is not null) LoadDirectory(directory, null);
     }
@@ -102,6 +140,8 @@ public static class ProvinceOwnership
     public static void Merge(string text, string context, List<string> errors)
     {
         if (string.IsNullOrEmpty(text)) return;
+        _byOwner = null;
+        _setByOwner = null;
         var line = 0;
         foreach (var raw in text.Split('\n'))
         {

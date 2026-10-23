@@ -1,0 +1,38 @@
+diff --git a/doc_classes/LuaTable.xml b/doc_classes/LuaTable.xml
+index 6ada812..4ae693d 100644
+--- a/doc_classes/LuaTable.xml
++++ b/doc_classes/LuaTable.xml
+@@ -15,7 +15,7 @@
+ 				Removes all elements from the table.
+ 			</description>
+ 		</method>
+-		<method name="get" qualifiers="const">
++		<method name="get_value" qualifiers="const">
+ 			<return type="Variant" />
+ 			<param index="0" name="key" type="Variant" />
+ 			<param index="1" name="default" type="Variant" default="null" />
+@@ -85,7 +85,7 @@
+ 				Sets the value for the given key without invoking metatable's [code]__newindex[/code] method.
+ 			</description>
+ 		</method>
+-		<method name="set">
++		<method name="set_value">
+ 			<return type="void" />
+ 			<param index="0" name="key" type="Variant" />
+ 			<param index="1" name="value" type="Variant" />
+diff --git a/src/LuaTable.cpp b/src/LuaTable.cpp
+index f2ce4dd..ea3152a 100644
+--- a/src/LuaTable.cpp
++++ b/src/LuaTable.cpp
+@@ -175,8 +175,9 @@ const sol::table& LuaTable::get_table() const {
+ }
+ 
+ void LuaTable::_bind_methods() {
+-	ClassDB::bind_method(D_METHOD("get", "key", "default"), &LuaTable::get, DEFVAL(Variant()));
+-	ClassDB::bind_method(D_METHOD("set", "key", "value"), &LuaTable::set);
++	// Godot 4.8 rejects shadowing Object.get/set with incompatible signatures.
++	ClassDB::bind_method(D_METHOD("get_value", "key", "default"), &LuaTable::get, DEFVAL(Variant()));
++	ClassDB::bind_method(D_METHOD("set_value", "key", "value"), &LuaTable::set);
+ 	ClassDB::bind_method(D_METHOD("rawget", "key", "default"), &LuaTable::rawget, DEFVAL(Variant()));
+ 	ClassDB::bind_method(D_METHOD("rawset", "key", "value"), &LuaTable::rawset);
+ 	ClassDB::bind_method(D_METHOD("clear"), &LuaTable::clear);

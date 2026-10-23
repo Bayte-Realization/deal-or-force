@@ -1,0 +1,21 @@
+{
+  "Request military access": "Запросить право прохода",
+  "Grant military access": "Предоставить право прохода",
+  "Revoke military access": "Отозвать право прохода",
+  "Renounce military access": "Отказаться от права прохода",
+  "Military access is already available.": "Право прохода уже действует.",
+  "A military access request awaits a reply.": "Запрос права прохода ожидает ответа.",
+  "Wait before requesting military access again.": "Нужно подождать перед повторным запросом права прохода.",
+  "Military access request sent.": "Запрос права прохода отправлен.",
+  "Military access refused.": "В праве прохода отказано.",
+  "Military access granted.": "Право прохода предоставлено.",
+  "Military access ended.": "Право прохода прекращено.",
+  "Military access permits transit, not occupation or an alliance. A human government must explicitly approve a request.": "Право прохода разрешает перемещение войск, но не оккупацию и не создаёт союз. Правительство под управлением игрока должно явно одобрить запрос.",
+  "Let their troops cross your land. Revocation sends unauthorised visitors home safely; it does not destroy them.": "Разрешить их войскам проход через ваши земли. После отзыва разрешения чужие войска безопасно возвращаются домой, а не уничтожаются.",
+  "Your access: {0} · Their access: {1}": "Ваш проход: {0} · Их проход: {1}",
+  "Passage allowed": "Разрешён",
+  "Passage unavailable": "Нет",
+  "{0} requests military access.": "{0} запрашивает право прохода войск.",
+  "Interned on neutral ground; awaiting a safe return home.": "Интернированы на нейтральной земле; ожидают безопасного возвращения домой.",
+  "Regrouping: {0} day(s) before combat readiness.": "Перегруппировка: до боеготовности {0} дн."
+}

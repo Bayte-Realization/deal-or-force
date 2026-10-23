@@ -92,7 +92,8 @@ public partial class DealOrForceGame
         _pause.Text = Tr("▶");
         _peaceOfferTitle.Text = Simulation.Loc.Format("{0} OFFER TERMS",
             proposer?.Name?.ToUpperInvariant() ?? Tr("THEY"));
-        _peaceOfferBody.Text = PeaceOffers.Describe(_campaign, war);
+        _peaceOfferBody.Text = Tr("The border shown on the map is a proposal. Nothing changes ownership until you sign it.") +
+            "\n\n" + PeaceOffers.Describe(_campaign, war);
 
         var days = war.PendingOfferExpiresDay - _campaign.ElapsedDays;
         _peaceOfferDeadline.Text = waiting.Count > 1

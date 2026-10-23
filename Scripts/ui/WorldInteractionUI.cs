@@ -15,29 +15,25 @@ public partial class DealOrForceGame
     private VBoxContainer _subjectActions = null!;
     private Button _integrateButton = null!;
     private Button _allianceButton = null!;
+    private Button _countryImproveButton = null!;
     private Button _guaranteeButton = null!;
     private int _pendingWarTarget = -1;
 
     private void BuildCountryActionControls(VBoxContainer parent)
     {
         _countryActions = new VBoxContainer { Name = "CountryActions", Visible = false, SizeFlagsVertical = Control.SizeFlags.ExpandFill };
-        _countryActions.AddThemeConstantOverride("separation", 6);
+        _countryActions.AddThemeConstantOverride("separation", 8);
         parent.AddChild(_countryActions);
         _countryActions.AddChild(Title("DIPLOMATIC ACTIONS", 12, Ui.Colour("text.caption")));
-        var scroll = new ScrollContainer { Name = "DiplomaticActionScroll",
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill,
-            CustomMinimumSize = new Vector2(0, System.Math.Clamp(InterfaceSkin.Metric("diplomacy.actions_min_height", 220), 120, 480)),
-            MouseForcePassScrollEvents = false, FollowFocus = true };
-        _countryActions.AddChild(scroll);
         var list = new VBoxContainer { Name = "DiplomaticActionList", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        list.AddThemeConstantOverride("separation", 6); scroll.AddChild(list);
+        list.AddThemeConstantOverride("separation", 6);
+        _countryActions.AddChild(list);
         var row = new VBoxContainer { Name = "RelationsActions" };
         row.AddThemeConstantOverride("separation", 5);
         list.AddChild(Title("Relations and treaties", 12, Ui.Colour("text.caption")));
         list.AddChild(row);
-        row.AddChild(ActionButton("Improve", ImproveSelectedRelations, 96, 32, true));
+        _countryImproveButton = ActionButton("Improve", ImproveSelectedRelations, 96, 32, true);
+        row.AddChild(_countryImproveButton);
         row.AddChild(ActionButton("Denounce", DenounceSelected, 96, 32));
         row.AddChild(ActionButton("Capital", FocusSelectedCapital, 96, 32));
         var pacts = new VBoxContainer();
@@ -242,7 +238,7 @@ public partial class DealOrForceGame
     private void RefreshPactButtons(Nation nation)
     {
         if (nation == _campaign.Player) return;
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, _campaign.Player.Id, nation.Id);
         var offered = AllianceSystem.OfferedTo(_campaign, _campaign.Player);
 
         if (relation.Stance == DiplomaticStance.Allied)
@@ -260,13 +256,13 @@ public partial class DealOrForceGame
         else
         {
             _allianceButton.Text = Tr("Propose alliance");
-            var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal);
+            var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal, preview: true);
             _allianceButton.Disabled = !can;
             if (!can) _allianceButton.TooltipText = Ui.Tip(refusal);
             else
             {
                 var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why);
+                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why, refreshAssessment: false);
                 var needed = _campaign.Defines.AllianceWillingness;
                 var parts = why.Entries
                     .OrderByDescending(entry => System.Math.Abs(entry.Value))
@@ -336,7 +332,7 @@ public partial class DealOrForceGame
             !candidate.Ended && candidate.Involves(_campaign.Player.Id) && candidate.Involves(nation.Id));
         _sideBody.Text = Tr(location);
         DetailHeading("COUNTRY");
-        DetailRow("Capital", CountryNames.Capital(nation));
+        DetailRow(CountryNames.CapitalTitle(_campaign, nation), CountryNames.Capital(nation, _campaign));
         DetailRow("Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name));
         if (CanInspectNation(nation.Id))
         {
@@ -381,6 +377,7 @@ public partial class DealOrForceGame
                 : why);
         }
         if (!_countryActions.Visible) return;
+        RefreshOutreachButton(_countryImproveButton, nation);
         RefreshDiplomaticPeaceButton(_negotiatePeaceButton, nation);
         _declareWarButton.Visible = !_negotiatePeaceButton.Visible;
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, nation.Id, out var reason);
@@ -403,14 +400,9 @@ public partial class DealOrForceGame
     private void ImproveSelectedRelations()
     {
         if (!ValidForeignSelection()) return;
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, _selectedNation.Id);
-        var before = relation.Opinion;
-        _campaign.Commands.Enqueue(new ImproveRelationsCommand { IssuerId = _campaign.Player.Id, TargetId = _selectedNation.Id });
-        _campaign.Commands.ApplyAll(_campaign);
+        var feedback = SendOrRecallDiplomaticMission(_selectedNation);
         _pendingWarTarget = -1;
-        _countryActionFeedback.Text = relation.Opinion > before
-            ? $"Diplomatic mission succeeded: relations {relation.Opinion:+0;-0;0}."
-            : "Diplomatic action is on cooldown or the treasury is insufficient.";
+        _countryActionFeedback.Text = feedback;
         RefreshCountryViews("Diplomatic mission");
     }
 
@@ -461,9 +453,10 @@ public partial class DealOrForceGame
 
     private void FocusSelectedCapital()
     {
-        if (_selectedNation is null || string.IsNullOrWhiteSpace(_selectedNation.CapitalName)) return;
-        _globe.FocusOn(_selectedNation.CapitalLatitude, _selectedNation.CapitalLongitude, 7.1f);
-        _countryActionFeedback.Text = Simulation.Loc.Format("Focused on {0}.", _selectedNation.CapitalName);
+        if (_selectedNation is null || !CapitalCore.HasSeat(_campaign, _selectedNation)) return;
+        _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, _selectedNation),
+            CapitalCore.EffectiveLongitude(_campaign, _selectedNation), 7.1f);
+        _countryActionFeedback.Text = Simulation.Loc.Format("Focused on {0}.", CountryNames.Capital(_selectedNation, _campaign));
     }
 
     private bool ValidForeignSelection() => _campaign?.Player is not null &&

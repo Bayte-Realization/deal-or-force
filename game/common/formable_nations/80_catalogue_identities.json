@@ -1,0 +1,12 @@
+{
+  "indochina_federation": { "alias_of": "indochinese_federation" },
+  "visegrad_commonwealth": { "alias_of": "visegrad_union" },
+  "indochinese_federation": {
+    "peaceful_accession": true, "subject_integration": true, "ai_foundation": true,
+    "eligible_cultures": ["vietnamese", "lao", "khmer"]
+  },
+  "visegrad_union": {
+    "peaceful_accession": true, "subject_integration": true, "ai_foundation": true
+  },
+  "intermarium": { "required_tags": ["POL", "UKR", "LTU", "BLR", "LVA", "EST"] }
+}

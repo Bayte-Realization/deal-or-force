@@ -1,0 +1,7 @@
+// Same minimums as the earlier offensive-reinforcement rule, now shared with initiation.
+// These only gate autonomous assaults on defended ground, not empty-ground movement
+// or explicit direct attacks. A zero disables the corresponding condition floor.
+{
+  "AutonomousAssaultMinimumOrganisation": 0.16,
+  "AutonomousAssaultMinimumSupply": 0.20
+}

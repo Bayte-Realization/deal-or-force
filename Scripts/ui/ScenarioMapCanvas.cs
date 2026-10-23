@@ -132,7 +132,10 @@ public partial class ScenarioMapCanvas : Control
                     var down = Topology.CellToProvince[ny * Topology.Width + sx];
                     if (owner != Draft.OwnerAt(right) || owner != Draft.OwnerAt(down)) color = new Color(.86f, .86f, .75f);
                     else if (_zoom >= 3 && (p != right || p != down)) color = color.Darkened(.65f);
-                    if (p == SelectedProvince) color = color.Lerp(new Color(1, .82f, .4f), .4f);
+                    if (TargetRegion > 0 && Draft.StateAt(p) == TargetRegion)
+                        color = color.Lerp(new Color(1, .82f, .4f), p == SelectedProvince ? .55f : .28f);
+                    else if (p == SelectedProvince)
+                        color = color.Lerp(new Color(1, .82f, .4f), .4f);
                 }
             }
             var offset = (y * w + x) * 4;

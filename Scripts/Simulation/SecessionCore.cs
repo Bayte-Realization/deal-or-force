@@ -18,6 +18,9 @@ namespace DealOrForce.Simulation;
 /// angry, it has stopped being governed, and the state holding it looks unable to stop it.
 /// None of them alone is enough, which is the point - a poor region is not a secession, an
 /// angry region is not a secession, and a foreign region in a country that works is Wales.
+/// A region of the state's own people can still leave, by the federal road: its politics
+/// have diverged, it has stopped accepting the government, the centre is illegitimate, and
+/// an economic stress is already on the books. Size alone never opens that road.
 ///
 /// What comes out is a country: a tag, a name, a flag, a capital, a government, and an
 /// army of exactly the kind people who have just decided something have. Whether the state
@@ -57,6 +60,22 @@ public sealed class SecessionWeights
     public int JoinLimit = 6;
 
     /// <summary>
+    /// The least share of a neighbouring region's people that must be the seceding people for
+    /// the region to come along. Ground where they hardly live is not theirs to take, however
+    /// angry it is - that was how a Dagestani secession walked off with Rostov and Kharkiv.
+    /// A federal break, which is about conditions rather than a people, does not need it.
+    /// </summary>
+    public float JoinPeopleShare = 0.20f;
+
+    /// <summary>
+    /// Where a region's secession pressure stands after its breakaway is crushed and the region
+    /// taken back. Below zero: the years of exhaustion and repression before the next rising.
+    /// At zero a reconquered region rose again in seven months - Kuban four times, Russia's
+    /// Ukrainian ground five - and the parent was at war for twenty-five years.
+    /// </summary>
+    public float CrushedPressure = -6f;
+
+    /// <summary>
     /// And the whole thing is capped, because a country does not cease to exist in one
     /// afternoon. Past this share of the country's people the joiners are dropped, largest
     /// first, until what leaves is a secession rather than a dissolution.
@@ -64,6 +83,8 @@ public sealed class SecessionWeights
     public float MaximumShare = 0.40f;
 
     public int MilitiaFormations = 4;
+
+
     public float Stability = 0.42f;
     public float WarSupport = 0.80f;
 
@@ -85,6 +106,12 @@ public sealed class SecessionWeights
     public float ArmyResolve = 0.22f;
 
     public float ArmyResolveDivisions = 24f;
+
+    /// <summary>What war weariness, at its height, adds to a parent's willingness to let a region go.</summary>
+    public float Exhaustion = 0.55f;
+
+    /// <summary>What each war beyond the first adds to it.</summary>
+    public float EachFurtherWar = 0.15f;
 
     public int CooldownDays = 730;
 }
@@ -120,7 +147,7 @@ public sealed class SecessionReport
     public string Reason = "";
 
     /// <summary>
-    /// `national`, `sectarian` or `discontent` - see <see cref="Nation.FoundedInRevolt"/>.
+    /// `national`, `sectarian`, `federal` or `discontent` - see <see cref="Nation.FoundedInRevolt"/>.
     /// </summary>
     public string Revolt = "";
 
@@ -175,6 +202,8 @@ public static class SecessionCore
                 case "join_pressure": Weights.JoinPressure = value; break;
                 case "join_discontent": Weights.JoinDiscontent = value; break;
                 case "join_limit": Weights.JoinLimit = (int)MathF.Round(value); break;
+                case "join_people_share": Weights.JoinPeopleShare = value; break;
+                case "crushed_pressure": Weights.CrushedPressure = value; break;
                 case "maximum_share": Weights.MaximumShare = value; break;
                 case "militia_formations": Weights.MilitiaFormations = (int)MathF.Round(value); break;
                 case "stability": Weights.Stability = value; break;
@@ -184,6 +213,8 @@ public static class SecessionCore
                 case "collapse": Weights.Collapse = value; break;
                 case "army_resolve": Weights.ArmyResolve = value; break;
                 case "army_resolve_divisions": Weights.ArmyResolveDivisions = value; break;
+                case "exhaustion": Weights.Exhaustion = value; break;
+                case "each_further_war": Weights.EachFurtherWar = value; break;
                 case "cooldown_days": Weights.CooldownDays = (int)MathF.Round(value); break;
                 default: errors?.Add($"common/secession: '{entry.Name}' is not something this game reads."); break;
             }
@@ -200,7 +231,8 @@ public static class SecessionCore
         var weights = Weights;
 
         var foreign = EconomySystem.ForeignShare(state, owner.Tag);
-        if (foreign < weights.MinimumForeignShare) return 0f;
+        var federal = foreign < weights.MinimumForeignShare && IsFederalBreak(campaign, owner, state);
+        if (!federal && foreign < weights.MinimumForeignShare) return 0f;
         if (state.Population < weights.MinimumPopulation) return 0f;
 
         var losing = false;
@@ -218,14 +250,53 @@ public static class SecessionCore
             if (score < 0f) { losing = true; break; }
         }
 
+        var identity = federal ? M.Clamp01(state.PoliticalDivergence) : M.Clamp01(foreign);
+        var scale = federal ? MathF.Max(0f, campaign.Defines.FederalPressureScale) : 1f;
+        var overstretchScale = 1f + MathF.Max(0f, owner.ImperialOverstretch) * campaign.Defines.SecessionOverstretchMultiplier;
         return weights.Base
-               * MathF.Pow(M.Clamp01(foreign), MathF.Max(0.01f, weights.Nationality))
+               * MathF.Pow(identity, MathF.Max(0.01f, weights.Nationality))
                * (weights.RadicalismFloor + weights.Radicalism * M.Clamp01(state.Radicalism))
                * (1f - M.Clamp01(state.Stability))
                * (weights.WeaknessFloor + weights.Weakness * (1f - M.Clamp01(owner.Stability)))
                * (losing ? weights.WarMultiplier : 1f)
                * (torn ? campaign.Defines.SecessionCivilWarMultiplier : 1f)
-               * (1f - SocialMemory.BorderRelief(campaign, state));
+               * (1f - SocialMemory.BorderRelief(campaign, state))
+               * scale
+               * overstretchScale;
+    }
+
+    /// <summary>
+    /// A region of the country's own people, politically finished with the centre.
+    ///
+    /// The ethnic gate above is what keeps Wales in a Britain that works. It also kept
+    /// every state of a union that works on paper and has stopped working in fact: the
+    /// people are the country's own, so the pressure was defined to be zero. This is the
+    /// other road. It needs the region's politics to have diverged, the region to have
+    /// stopped accepting the government, the centre to be illegitimate, and an economic
+    /// stress that is already on the books — debt, shortage, or a region much poorer than
+    /// the country it is taxed by. None of those is a penalty for being large, and none
+    /// of them names a tag.
+    /// </summary>
+    public static bool IsFederalBreak(Campaign campaign, Nation owner, ScenarioState state)
+    {
+        if (campaign is null || owner is null || state is null) return false;
+        if (!campaign.FeatureEnabled("federal_fracture") || !campaign.FeatureEnabled("political_cohorts")) return false;
+        if (!campaign.FeatureEnabled("secession")) return false;
+        if (state.MapIndex == owner.CapitalStateMapIndex || state.Population < Weights.MinimumPopulation) return false;
+        if (EconomySystem.ForeignShare(state, owner.Tag) >= Weights.MinimumForeignShare) return false;
+        if (state.PoliticalDivergence < campaign.Defines.CenterRegionIdeologySplit) return false;
+        if (state.GovernmentApproval < 0f || state.GovernmentApproval > campaign.Defines.FederalGovernmentApprovalCeiling) return false;
+        if (owner.Stability > campaign.Defines.FederalStabilityCeiling) return false;
+        var defines = campaign.Defines;
+        if (owner.ShortageIndex >= defines.FederalShortageStress) return true;
+        if (campaign.FeatureEnabled("public_debt"))
+        {
+            var debt = owner.DebtCondition;
+            if (debt == DebtCondition.Stressed || debt == DebtCondition.Default
+                || debt == DebtCondition.Insolvent || debt == DebtCondition.Restructuring) return true;
+        }
+        if (StateIdentity.RegionAlienation(campaign, owner, state) >= 0.50f) return true;
+        return state.StandardOfLiving + defines.FederalLivingGap < owner.StandardOfLiving;
     }
 
     /// <summary>
@@ -279,9 +350,16 @@ public static class SecessionCore
         var collapse = M.Clamp01(parent.Stability) / M.Max(0.01f, weights.CollapseBelow);
         if (collapse < 1f) accept += (1f - collapse) * weights.Collapse;
 
-        // Busy elsewhere.
+        // Busy elsewhere - and every war beyond the first is another reason to let one go.
+        var wars = 0;
         foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(parent.Id)) { accept += 0.20f; break; }
+            if (!war.Ended && war.Involves(parent.Id)) wars++;
+        if (wars > 0) accept += 0.20f + (wars - 1) * weights.EachFurtherWar;
+
+        // Exhaustion: a country tired of war lets a province go rather than open another front.
+        // Without it a collapsing Russia fought every region that left it for twenty-five years,
+        // and the wars kept it collapsing; the Soviet Union let its republics go.
+        accept += WarWeariness.NationalFatigue(campaign, parent) * weights.Exhaustion;
 
         // How much of the country is going. Losing a tenth is a province; losing half is
         // the country, and no state accepts that quietly.
@@ -305,6 +383,14 @@ public static class SecessionCore
         foreach (var army in campaign.Armies)
             if (army.NationId == parent.Id) divisions += army.Divisions;
         accept -= M.Clamp01(divisions / M.Max(1f, weights.ArmyResolveDivisions)) * weights.ArmyResolve;
+
+        // Heartland: a state resists its own titular people breaking away far more fiercely.
+        var primaryCultures = DemographyCatalog.PrimaryCultures(parent.Tag);
+        if (primaryCultures.Count > 0 && leaving.Any(p =>
+            EconomySystem.Cultures(campaign.States.Find(s => s.MapIndex == p.MapIndex)).Any(group => primaryCultures.Contains(group.Culture))))
+        {
+            accept -= 0.35f;
+        }
 
         accept = M.Clamp01(accept);
         var accepted = campaign.Random.NextFloat() < accept;

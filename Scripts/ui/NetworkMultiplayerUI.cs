@@ -100,7 +100,7 @@ public partial class DealOrForceGame
         rows.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(rows);
         rows.AddChild(Title("MULTIPLAYER", 24, Ui.Colour("text.accent")));
-        var explanation = Title("Host an authoritative campaign or join by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, Ui.Colour("text.muted"));
+        var explanation = Title("Host a campaign or join one by IPv4 address. Radmin/Hamachi work as a virtual LAN: enter the host's VPN IPv4 address.", 13, Ui.Colour("text.muted"));
         explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(explanation);
 

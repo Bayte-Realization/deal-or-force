@@ -68,6 +68,9 @@ public sealed class StabilityWeights
     public float GovernanceLimit = 0.15f;
     public float GovernanceDecay = 0.004f;
 
+    /// <summary>Cost to national stability per point of imperial overstretch.</summary>
+    public float ImperialOverstretch = 0.18f;
+
     public float Floor = 0.05f;
     public float Ceiling = 0.98f;
 }
@@ -115,6 +118,7 @@ public static class StabilityCore
                 case "approach": Weights.Approach = value; break;
                 case "governance_limit": Weights.GovernanceLimit = value; break;
                 case "governance_decay": Weights.GovernanceDecay = value; break;
+                case "imperial_overstretch": Weights.ImperialOverstretch = value; break;
                 case "floor": Weights.Floor = value; break;
                 case "ceiling": Weights.Ceiling = value; break;
                 default: errors?.Add($"common/stability: '{entry.Name}' is not a weight this game has."); break;
@@ -184,8 +188,8 @@ public static class StabilityCore
 
         var country = people > 0 ? (float)(weighted / people) : weights.Base;
         // A country whose capital has been lost, or that never had one on the map, is
-        // judged by the rest of itself rather than by nothing.
-        if (capitalStability < 0f) capitalStability = country;
+        // judged by the rest of itself rather than by nothing, with a mild prestige/authority drag.
+        if (capitalStability < 0f) capitalStability = country * 0.85f;
 
         var share = M.Clamp01(weights.CapitalShare);
         var geography = capitalStability * share + country * (1f - share);
@@ -195,8 +199,13 @@ public static class StabilityCore
             if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
         var warCost = atWar ? weights.War + (1f - nation.WarSupport) * weights.WarSupport : 0f;
 
+        nation.ImperialOverstretch = Overstretch(campaign, nation);
+        var overstretchCost = nation.ImperialOverstretch * weights.ImperialOverstretch;
+
+        var relocationCost = nation.GovernmentSeatProvinceId > 0 ? 0.05f : 0f;
+
         var memory = SocialMemory.StabilityEffect(campaign, nation);
-        var target = geography - warCost + nation.StabilityBias + nation.StabilityGovernance + memory;
+        var target = geography - warCost - overstretchCost - relocationCost + nation.StabilityBias + nation.StabilityGovernance + memory;
 
         if (drivers is not null)
         {
@@ -204,6 +213,8 @@ public static class StabilityCore
             drivers.Add("The capital and the region around it", capitalStability * share);
             drivers.Add("The rest of the country, by population", country * (1f - share));
             if (warCost > 0f) drivers.Add("The war", -warCost);
+            if (overstretchCost > 0f) drivers.Add(Loc.Get("Imperial overstretch"), -overstretchCost);
+            if (relocationCost > 0f) drivers.Add(Loc.Get("Wartime government relocation"), -relocationCost);
             drivers.Add("What this country is, beyond its conditions", nation.StabilityBias);
             if (MathF.Abs(nation.StabilityGovernance) > 0.0005f)
                 drivers.Add("How it has been governed lately", nation.StabilityGovernance);
@@ -218,15 +229,36 @@ public static class StabilityCore
     }
 
     /// <summary>
-    /// Make the formula agree with the scenario it is being switched on in.
-    ///
-    /// Every country in 2024 is authored with a stability the scenario means: 74 % for
-    /// South Korea is a statement about South Korea, not an accident of its regions'
-    /// radicalism. The bias is the difference between that and what conditions alone
-    /// explain - institutions, legitimacy, a century of habit - and it is what the formula
-    /// carries forward. Without it, switching stability to a formula would quietly restate
-    /// the settledness of all 261 countries on the first week.
+    /// Imperial overstretch: when an empire annexes non-homeland territories with substantial
+    /// foreign populations beyond its administrative capacity, governance strains, stability
+    /// drops, and peripheral radicalism rises until regional movements break away ("nothing is forever").
     /// </summary>
+    public static float Overstretch(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return 0f;
+        var capacity = campaign.Defines?.BaseImperialCapacity ?? 4;
+        var strainedStates = 0f;
+        foreach (var state in campaign.StatesOf(nation.MapIndex))
+        {
+            if (state is null || state.Unclaimed) continue;
+            var isHomeland = TerritorialClaims.TitleOf(campaign, nation, state) == TerritorialTitle.Homeland;
+            if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
+                strainedStates += 1f;
+            else if (campaign.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex &&
+                     state.PoliticalDivergence >= 0.50f)
+                strainedStates += 0.5f;
+        }
+        if (campaign.ElapsedDays > 0)
+        {
+            var subjects = 0;
+            foreach (var other in campaign.Nations)
+                if (other.AnswersTo(nation.Id)) subjects++;
+            if (subjects > 2) strainedStates += (subjects - 2) * 0.5f;
+        }
+        if (strainedStates <= capacity) return 0f;
+        return MathF.Min(1.0f, (strainedStates - capacity) * 0.08f);
+    }
+
     /// <summary>
     /// Whether this world has had its baselines taken.
     ///
@@ -243,6 +275,16 @@ public static class StabilityCore
         return false;
     }
 
+    /// <summary>
+    /// Make the formula agree with the scenario it is being switched on in.
+    ///
+    /// Every country in 2024 is authored with a stability the scenario means: 74 % for
+    /// South Korea is a statement about South Korea, not an accident of its regions'
+    /// radicalism. The bias is the difference between that and what conditions alone
+    /// explain - institutions, legitimacy, a century of habit - and it is what the formula
+    /// carries forward. Without it, switching stability to a formula would quietly restate
+    /// the settledness of all 261 countries on the first week.
+    /// </summary>
     public static void Calibrate(Campaign campaign)
     {
         if (campaign is null) return;

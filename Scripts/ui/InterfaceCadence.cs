@@ -24,7 +24,11 @@ public partial class DealOrForceGame
         KeepFleetPanel(delta);
         KeepResourceAtlas(delta);
         _interfaceSinceRefresh += delta;
-        if (!_campaign.IsPaused && _interfaceSinceRefresh < RunningInterfaceInterval) return;
+        if (_interfaceSinceRefresh < RunningInterfaceInterval)
+        {
+            if (_campaign.IsPaused) _campaign.FlushInterfaceChanges();
+            return;
+        }
         _interfaceSinceRefresh = 0d;
         foreach (var (screen, button) in _screenButtons)
         {

@@ -93,8 +93,23 @@ path order. The subfolders are there to be read by people, not by the game.
 
     {
       "FRA": { "name": "The French Republic", "color": "#2a4f8f" },
-      "DEU": { "capital_name": "Frankfurt" }
+      "DEU": { "capital_name": "Frankfurt" },
+      "KAZ": { "capital_name": "Astana", "capital_latitude": 51.128, "capital_longitude": 71.43 }
     }
+
+A rename and a move are separate on purpose. `capital_name` renames the city;
+`capital_latitude` and `capital_longitude` move it, and neither clears the other - renaming a
+capital should not oblige you to restate its coordinates, and a mod laying out a different map
+has no name worth keeping. The seat is whichever region is nearest that point, so moving the
+point moves the government with it. A country you give a name and no point keeps the point the
+game ships with, and a country you say nothing about keeps everything.
+
+**`common/countries` says what a country IS. `history/countries` says what it HAD.** The two
+folders are both called `countries`, are both keyed by country tag and are both JSON, and they
+are not interchangeable. A name, a map colour or a capital written into `history/` does nothing
+at all and reports no error - that folder is for the year the bookmark opens: money, people, an
+army, a government, how much of it works the land. See the split at the top of
+`common/countries/00_countries.json`.
 
 **Change the balance.** `common/defines/50_my_balance.json`. Any key from the shipped
 files; anything you leave out keeps its value.

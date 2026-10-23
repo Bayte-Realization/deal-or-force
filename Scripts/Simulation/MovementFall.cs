@@ -68,11 +68,17 @@ public static class MovementFall
     /// <summary>Every country found with no ground this week has its fall decided, once.</summary>
     internal static void Decide(Campaign campaign)
     {
-        foreach (var nation in campaign.Nations.ToList())
+        // Nothing in this walk founds or removes a nation, so a pinned-count index walk is
+        // the list walk without the copy of it.
+        for (var id = 0; id < campaign.Nations.Count; id++)
         {
+            var nation = campaign.Nations[id];
             if (nation.Movement is not null || campaign.Fallen.Contains(nation.Id)) continue;
-            if (!campaign.Homelands.ContainsKey(nation.Id)) continue;
-            if (campaign.StatesOf(nation).Length > 0) continue;
+            // A real country (people, a tag, a founding) holding no ground at the weekly
+            // review is a ghost: every founding path seeds homelands now, so a missing
+            // entry can no longer exempt a stateless straggler from the fall decision.
+            if ((nation.Population <= 0 && (!campaign.Homelands.ContainsKey(nation.Id) || nation.CollapseAnnounced)) ||
+                campaign.StatesOf(nation).Length > 0) continue;
             campaign.Fallen.Add(nation.Id);
             var chance = ExileChance(campaign, nation, out var refuge);
             if (refuge is null) continue;

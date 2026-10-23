@@ -1,0 +1,7 @@
+[configuration]
+entry_symbol = "dof_odin_init"
+compatibility_minimum = "4.6"
+reloadable = false
+
+[libraries]
+windows.x86_64 = "res://addons/dof_odin/dof_odin.dll"

@@ -78,6 +78,7 @@ public static class MovementRules
         using (SimProfiler.Measure("movements"))
         using (SimProfiler.Measure("  mov:rules"))
         {
+            Movements.RetireDuplicateRepresentations(campaign);
             MovementLifecycle.Tick(campaign);
             // What the world decides about who has fallen happens on the week, as it did.
             if (campaign.ElapsedDays % week == 0)
@@ -92,9 +93,12 @@ public static class MovementRules
         // day, so their cost did not spread: one frame in seven carried every movement's week
         // at once, the largest hitch in a late campaign at the top speed. Every movement still
         // has exactly one week in any seven days - on its day rather than on everybody's.
-        foreach (var nation in campaign.Nations.ToList())
+        // An uprising can found a nation mid-pass, so the walk pins the count and goes by
+        // index (Id == index); founders join on their next day rather than mid-list.
+        for (var id = 0; id < campaign.Nations.Count; id++)
         {
-            if (nation.Movement is not { Dissolved: false } || !OnItsDay(campaign, nation.Id, week)) continue;
+            var nation = campaign.Nations[id];
+            if (nation.Movement is not { Dissolved: false } || !OnItsDay(campaign, id, week)) continue;
             using (SimProfiler.Measure("movements"))
             using (SimProfiler.Measure("  mov:rules"))
             {
@@ -110,25 +114,15 @@ public static class MovementRules
     internal static bool OnItsDay(Campaign campaign, int id, int cycle) =>
         (campaign.ElapsedDays + (id % cycle + cycle) % cycle) % cycle == 0;
 
-    private static Campaign _ownersFor;
-    private static int _ownersDay = -1;
-    private static readonly Dictionary<int, Nation> OwnersByIndex = new();
-
-    /// <summary>Every country by its map index, built once a week rather than searched for per region.</summary>
-    internal static Dictionary<int, Nation> Owners(Campaign campaign, bool rebuild = false)
-    {
-        if (!rebuild && ReferenceEquals(_ownersFor, campaign) && _ownersDay == campaign.ElapsedDays) return OwnersByIndex;
-        OwnersByIndex.Clear();
-        foreach (var candidate in campaign.Nations) OwnersByIndex[candidate.MapIndex] = candidate;
-        _ownersFor = campaign;
-        _ownersDay = campaign.ElapsedDays;
-        return OwnersByIndex;
-    }
+    internal static Dictionary<int, Nation> Owners(Campaign campaign, bool rebuild = false) =>
+        campaign?.NationsByMapIndex() ?? new Dictionary<int, Nation>();
 
     internal static Nation OwnerOf(Campaign campaign, ScenarioState region) =>
-        region is not null && Owners(campaign).TryGetValue(region.NationMapIndex, out var owner) ? owner : null;
+        region is not null && campaign != null ? campaign.NationByMapIndex(region.NationMapIndex) : null;
 
     private static readonly Dictionary<int, bool> OwnStateCache = new();
+    private static readonly HashSet<int> LiveRegions = new();
+    private static readonly List<int> StaleSupport = new();
 
     internal static void Week(Campaign campaign, Nation nation)
     {
@@ -139,7 +133,11 @@ public static class MovementRules
 
         // Land lost is land lost: a movement that had a country and has had it taken back
         // goes on as what it was before - somewhere to be governed from, and a following.
+        // Land HELD is the opposite door: the movement graduates into the state it has
+        // become, and everything below stops applying to it.
         SynchroniseTerritory(campaign, nation);
+        state = nation.Movement;
+        if (state is null) return;
 
         // The headquarters arrives where it was going.
         if (state.MovingToStateMapIndex >= 0 && campaign.ElapsedDays >= state.ArrivesOnDay)
@@ -157,30 +155,48 @@ public static class MovementRules
         long supporters = 0;
         long believers = 0;
         OwnStateCache.Clear();
-        foreach (var region in campaign.States)
+        LiveRegions.Clear();
+        Dictionary<ScenarioState, (long Own, long Faithful)> people;
+        using (SimProfiler.Measure("      mov:people"))
+            people = PeopleIn(campaign, definition);
+        // The regions where this movement has people, not every region on the map. The
+        // support dictionary is sparse, and the people index already knows its own keys.
+        using (SimProfiler.Measure("      mov:support"))
         {
-            var own = PeopleOf(campaign, region, definition, out var faithful);
-            if (own <= 0 && faithful <= 0) { state.Support.Remove(region.MapIndex); continue; }
-            var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful);
-            if (supportCeiling <= 0f) { state.Support.Remove(region.MapIndex); continue; }
-            believers += faithful;
-            var support = state.Support.GetValueOrDefault(region.MapIndex);
-            var owner = OwnerOf(campaign, region);
-            var foreign = false;
-            if (owner is not null && owner.Id != nation.Id)
+            foreach (var (region, known) in people)
             {
-                if (!OwnStateCache.TryGetValue(owner.Id, out var theirs)) OwnStateCache[owner.Id] = theirs = OwnState(owner, definition);
-                foreign = !theirs;
+                var own = known.Own;
+                var faithful = known.Faithful;
+                if (own <= 0 && faithful <= 0) continue;
+                var owner = OwnerOf(campaign, region);
+                var supportCeiling = MovementReach.SupportCeiling(campaign, nation, region, definition, own, faithful, owner);
+                if (supportCeiling <= 0f) continue;
+                LiveRegions.Add(region.MapIndex);
+                believers += faithful;
+                var support = state.Support.GetValueOrDefault(region.MapIndex);
+                var foreign = false;
+                if (owner is not null && owner.Id != nation.Id)
+                {
+                    if (!OwnStateCache.TryGetValue(owner.Id, out var theirs)) OwnStateCache[owner.Id] = theirs = OwnState(owner, definition);
+                    foreign = !theirs;
+                }
+                var foreignRule = foreign ? 0.12f : 0f;
+                var grievance = M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.25f +
+                                          region.WarDamage * 0.4f + foreignRule);
+                var civic = CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner);
+                var reputation = SocialMemory.Esteem(campaign, owner, nation) * defines.SocialMovementWeight;
+                var target = M.Clamp(MathF.Max(civic, 0.05f + state.Legitimacy * 0.2f + grievance * 0.5f) + reputation, 0f, MathF.Min(.75f, supportCeiling));
+                support += (target - support) * defines.MovementSupportDrift;
+                state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
+                supporters += (long)(own * support);
             }
-            var foreignRule = foreign ? 0.12f : 0f;
-            var grievance = M.Clamp01(region.Radicalism * 0.6f + (1f - region.Stability) * 0.25f +
-                                      region.WarDamage * 0.4f + foreignRule);
-            var civic = CivilIndependence.AwarenessTarget(campaign, definition, state, region, owner);
-            var reputation = SocialMemory.Esteem(campaign, owner, nation) * defines.SocialMovementWeight;
-            var target = M.Clamp(MathF.Max(civic, 0.05f + state.Legitimacy * 0.2f + grievance * 0.5f) + reputation, 0f, MathF.Min(.75f, supportCeiling));
-            support += (target - support) * defines.MovementSupportDrift;
-            state.Support[region.MapIndex] = M.Clamp(support, 0f, supportCeiling);
-            supporters += (long)(own * support);
+            if (state.Support.Count > LiveRegions.Count)
+            {
+                StaleSupport.Clear();
+                foreach (var key in state.Support.Keys)
+                    if (!LiveRegions.Contains(key)) StaleSupport.Add(key);
+                foreach (var key in StaleSupport) state.Support.Remove(key);
+            }
         }
         var fromFaith = (long)(believers * defines.MovementFaithShare * 0.1f);
 
@@ -231,7 +247,7 @@ public static class MovementRules
         {
             var sponsor = campaign.NationByTag(tag);
             if (sponsor is null || sponsor.Id == nation.Id || sponsor.Movement is not null) continue;
-            var opinion = CampaignDiplomacy.Get(campaign, sponsor.Id, nation.Id).Opinion;
+            var opinion = CampaignDiplomacy.Peek(campaign, sponsor.Id, nation.Id)?.Opinion ?? 0f;
             var willing = M.Clamp01(0.5f + opinion / 100f);
             sponsored += perYear / 52f * willing;
         }
@@ -287,41 +303,26 @@ public static class MovementRules
     // group of all eighteen hundred regions, which made movements a sixth of a campaign day.
     // A day is the right lifetime: the census moves weekly, before either asks, and whatever
     // else moves people between regions moves a border with them, which clears it.
-    private static Campaign _peopleCampaign;
-    private static int _peopleDay = -1;
-    private static int _peopleMapRevision = -1;
-    private static int _peopleStates = -1;
-    private static readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
-    private static readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
-    private static bool _indexed;
+    internal sealed class MovementPeopleCache
+{
+    public int Week = -1;
+    public int MapRevision = -1;
+    public int States = -1;
+    public readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
+    public readonly Dictionary<string, List<PopulationGroupAt>> ByCulture = new(StringComparer.OrdinalIgnoreCase);
+    public readonly Dictionary<string, List<PopulationGroupAt>> ByReligion = new(StringComparer.OrdinalIgnoreCase);
+    public readonly Dictionary<string, Dictionary<ScenarioState, long>> CultureTotals = new(StringComparer.OrdinalIgnoreCase);
+    public bool Indexed;
+}
 
-    private readonly record struct PopulationGroupAt(ScenarioState Region, PopulationGroup Group);
+    internal readonly record struct PopulationGroupAt(ScenarioState Region, PopulationGroup Group);
 
     /// <summary>
-    /// <see cref="PeopleOf(ScenarioState, MovementDefinition, out long)"/>, remembered for the day.
-    ///
-    /// Answered from an index of who lives where rather than by reading every group of the
-    /// region. A movement's week asks this of all eighteen hundred regions, and every
-    /// movement asks it - seventeen walks of every population group in the world, a week's
-    /// single largest frame thirty-six years in. The index is one walk; each movement then
-    /// reads only the groups of its own peoples and faiths. The same sums in the same
-    /// integers, so the answer is the one the walk gave.
+    /// Remembered for the day.
     /// </summary>
     internal static long PeopleOf(Campaign campaign, ScenarioState region, MovementDefinition definition, out long faithful)
     {
-        if (!ReferenceEquals(_peopleCampaign, campaign) || _peopleDay != campaign.ElapsedDays ||
-            _peopleMapRevision != campaign.MapRevision || _peopleStates != campaign.States.Count)
-        {
-            PeopleToday.Clear();
-            _indexed = false;
-            _peopleCampaign = campaign;
-            _peopleDay = campaign.ElapsedDays;
-            _peopleMapRevision = campaign.MapRevision;
-            _peopleStates = campaign.States.Count;
-        }
-        if (!PeopleToday.TryGetValue(definition, out var regions))
-            PeopleToday[definition] = regions = CountPeople(campaign, definition);
+        var regions = PeopleIn(campaign, definition);
         if (regions.TryGetValue(region, out var known))
         {
             faithful = known.Faithful;
@@ -331,39 +332,80 @@ public static class MovementRules
         return 0;
     }
 
-    /// <summary>Every region with any of a movement's peoples or believers in it, and how many.</summary>
+    /// <summary>
+    /// Every region with any of a movement's peoples or believers in it, for the current day.
+    /// </summary>
+    internal static Dictionary<ScenarioState, (long Own, long Faithful)> PeopleIn(
+        Campaign campaign, MovementDefinition definition)
+    {
+        EnsurePeopleCache(campaign);
+        var cache = campaign.MovementPeople;
+        if (!cache.PeopleToday.TryGetValue(definition, out var regions))
+            cache.PeopleToday[definition] = regions = CountPeople(campaign, definition);
+        return regions;
+    }
+
+    private static void EnsurePeopleCache(Campaign campaign)
+    {
+        var cache = campaign.MovementPeople;
+        var week = campaign.ElapsedDays / 7;
+        if (cache.Week == week && cache.MapRevision == campaign.MapRevision &&
+            cache.States == campaign.States.Count)
+        {
+            return;
+        }
+        cache.PeopleToday.Clear();
+        cache.CultureTotals.Clear();
+        cache.Indexed = false;
+        cache.Week = week;
+        cache.MapRevision = campaign.MapRevision;
+        cache.States = campaign.States.Count;
+    }
+
+    private static Dictionary<ScenarioState, long> CultureTotalsOf(Campaign campaign, string culture)
+    {
+        var cache = campaign.MovementPeople;
+        if (cache.CultureTotals.TryGetValue(culture, out var totals)) return totals;
+        totals = new Dictionary<ScenarioState, long>();
+        if (cache.ByCulture.TryGetValue(culture, out var groups))
+            foreach (var (region, group) in groups)
+                totals[region] = totals.GetValueOrDefault(region) + group.Size;
+        cache.CultureTotals[culture] = totals;
+        return totals;
+    }
+
     private static Dictionary<ScenarioState, (long Own, long Faithful)> CountPeople(Campaign campaign, MovementDefinition definition)
     {
-        if (!_indexed)
+        var cache = campaign.MovementPeople;
+        if (!cache.Indexed)
         {
-            foreach (var list in ByCulture.Values) list.Clear();
-            foreach (var list in ByReligion.Values) list.Clear();
+            foreach (var list in cache.ByCulture.Values) list.Clear();
+            foreach (var list in cache.ByReligion.Values) list.Clear();
             foreach (var region in campaign.States)
                 foreach (var group in region.PopulationGroups)
                 {
                     if (group.Size <= 0) continue;
-                    if (!ByCulture.TryGetValue(group.Culture ?? "", out var cultured)) ByCulture[group.Culture ?? ""] = cultured = new List<PopulationGroupAt>();
+                    if (!cache.ByCulture.TryGetValue(group.Culture ?? "", out var cultured))
+                        cache.ByCulture[group.Culture ?? ""] = cultured = new List<PopulationGroupAt>();
                     cultured.Add(new PopulationGroupAt(region, group));
-                    if (!ByReligion.TryGetValue(group.Religion ?? "", out var believing)) ByReligion[group.Religion ?? ""] = believing = new List<PopulationGroupAt>();
+                    if (!cache.ByReligion.TryGetValue(group.Religion ?? "", out var believing))
+                        cache.ByReligion[group.Religion ?? ""] = believing = new List<PopulationGroupAt>();
                     believing.Add(new PopulationGroupAt(region, group));
                 }
-            _indexed = true;
+            cache.Indexed = true;
         }
         var counted = new Dictionary<ScenarioState, (long Own, long Faithful)>();
-        // Each people once, however the data spells it twice: the walk counted a group once.
-        foreach (var people in definition.Peoples.Distinct(StringComparer.OrdinalIgnoreCase))
-            if (ByCulture.TryGetValue(people, out var groups))
+        foreach (var people in definition.DistinctPeoples)
+            foreach (var (region, size) in CultureTotalsOf(campaign, people))
+            {
+                var known = counted.GetValueOrDefault(region);
+                counted[region] = (known.Own + size, known.Faithful);
+            }
+        foreach (var faith in definition.DistinctFaiths)
+            if (cache.ByReligion.TryGetValue(faith, out var groups))
                 foreach (var (region, group) in groups)
                 {
-                    var known = counted.GetValueOrDefault(region);
-                    counted[region] = (known.Own + group.Size, known.Faithful);
-                }
-        // A believer who is not one of its peoples - the walk's `else`.
-        foreach (var faith in definition.Faiths.Distinct(StringComparer.OrdinalIgnoreCase))
-            if (ByReligion.TryGetValue(faith, out var groups))
-                foreach (var (region, group) in groups)
-                {
-                    if (MovementDefinition.Listed(definition.Peoples, group.Culture)) continue;
+                    if (definition.HasPeople(group.Culture)) continue;
                     var known = counted.GetValueOrDefault(region);
                     counted[region] = (known.Own, known.Faithful + group.Size);
                 }
@@ -377,8 +419,8 @@ public static class MovementRules
         foreach (var group in region.PopulationGroups)
         {
             if (group.Size <= 0) continue;
-            if (MovementDefinition.Listed(definition.Peoples, group.Culture)) own += group.Size;
-            else if (MovementDefinition.Listed(definition.Faiths, group.Religion)) faithful += group.Size;
+            if (definition.HasPeople(group.Culture)) own += group.Size;
+            else if (definition.HasFaith(group.Religion)) faithful += group.Size;
         }
         return own;
     }
@@ -433,6 +475,55 @@ public static class MovementRules
             host?.DisplayName ?? "", refuge.DisplayName);
     }
 
+    /// <summary>
+    /// What the host should hear before the headquarters is thrown out. Empty while the
+    /// welcome still has room. Reading it does not cool or spend the patience.
+    /// </summary>
+    public static string Patience(Campaign c, Nation movement)
+    {
+        var state = movement?.Movement;
+        if (c is null || state is null || state.Dissolved || !state.Landless) return "";
+        if (state.HeadquartersStateMapIndex < 0) return "";
+        var line = MathF.Max(0.05f, c.Defines.MovementExpelHeat);
+        if (state.Heat < line * 0.45f) return "";
+        var armed = MovementMethods.StageOf(c, movement) >= MovementStage.Armed;
+        if (state.Heat >= line * 0.75f)
+            return armed
+                ? "The welcome is almost gone: what it will do on this ground has used it up."
+                : "The welcome is almost gone. Another hard week and the headquarters is thrown out.";
+        return armed
+            ? "The host is losing patience with what this movement is willing to do here."
+            : "The host is losing patience. A headquarters that works in the open spends it.";
+    }
+
+    /// <summary>A short mark for the province card. Empty while <see cref="Patience"/> is empty.</summary>
+    public static string PatienceChip(Campaign c, Nation movement)
+    {
+        var state = movement?.Movement;
+        if (c is null || state is null || Patience(c, movement).Length == 0) return "";
+        var line = MathF.Max(0.05f, c.Defines.MovementExpelHeat);
+        return state.Heat >= line * 0.75f ? "welcome almost gone" : "welcome wearing thin";
+    }
+
+    /// <summary>The headquarters on this country's ground that is closest to being thrown out, if any.</summary>
+    public static Nation WornWelcome(Campaign c, Nation host)
+    {
+        if (c is null || host is null) return null;
+        Nation worn = null;
+        var heat = -1f;
+        foreach (var movement in c.Nations)
+        {
+            var state = movement.Movement;
+            if (state is null || state.Dissolved || !state.Landless) continue;
+            if (Movements.HostOf(c, movement) != host) continue;
+            if (Patience(c, movement).Length == 0) continue;
+            if (state.Heat <= heat) continue;
+            heat = state.Heat;
+            worn = movement;
+        }
+        return worn;
+    }
+
     /// <summary>A region of the friendliest country that is not at war with it, not the one throwing it out.</summary>
     internal static ScenarioState BestRefuge(Campaign campaign, Nation nation, Nation except)
     {
@@ -485,6 +576,13 @@ public static class MovementRules
     {
         if (nation?.Movement is not { } state) return;
         var landless = !campaign.HasOwnedLand(nation);
+        if (!landless && state.Exile)
+        {
+            // A government in exile that has come home and holds land of its own resumes
+            // full sovereign governance as a regular state.
+            Restoration.RestoreExiledNation(campaign, nation);
+            return;
+        }
         if (state.Landless == landless) return;
         if (landless) BecomeLandless(campaign, nation);
         else
@@ -493,6 +591,41 @@ public static class MovementRules
             if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
         }
         campaign.MovementRevision++;
+    }
+
+    /// <summary>The transition the map itself declares: a movement with borders is a state.
+    /// The tag, the name, the flag and the wars stay; the movement bookkeeping goes.</summary>
+    internal static void GraduateToStatehood(Campaign campaign, Nation nation, bool restoration = false)
+    {
+        var state = nation.Movement;
+        if (state is null) return;
+        state.DesignatedBy.Clear();
+        state.RecognisedBy.Clear();
+        campaign.Fallen.Remove(nation.Id);
+        if (restoration || state.Exile)
+        {
+            nation.Movement = null;
+        }
+        else
+        {
+            state.Landless = false;
+            if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
+        }
+        nation.NameProclaimed = true;
+        nation.PoliticsChangedDay = campaign.ElapsedDays;
+        var held = campaign.StatesOf(nation);
+        var seat = held.OrderByDescending(s => s.Population).FirstOrDefault();
+        if (seat is not null)
+        {
+            CapitalCore.Establish(campaign, nation, seat);
+        }
+        campaign.LocateCapitals(preserveExisting: true);
+        campaign.MovementRevision++;
+        campaign.MarkStrategicChange();
+        campaign.MarkMapChanged();
+        campaign.Chronicle.Record(campaign, "movement_statehood", nation.Id, -1, nation.Name);
+        DiagnosticLogs.Write("simulation",
+            $"MOVEMENT_STATEHOOD nation={nation.Tag} regions={held.Length} day={campaign.ElapsedDays}");
     }
 
     internal static string RegionName(Campaign campaign, int mapIndex) =>
@@ -547,6 +680,12 @@ public static class MovementRules
         var definition = Movements.DefinitionOf(nation);
         if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition)) return false;
         var defines = campaign.Defines;
+        var occupyingOwner = campaign.Nations.Find(candidate => candidate.MapIndex == region.NationMapIndex);
+        if (RevoltTerritory.HasForeignOccupation(campaign, occupyingOwner, nation, region))
+        {
+            state.LastReport = Loc.Get("An uprising cannot displace foreign occupation without fighting.");
+            return false;
+        }
         var chance = UprisingChance(campaign, nation, region);
         if (!float.IsFinite(chance) || chance <= 0f || !float.IsFinite(nation.Treasury) ||
             nation.Treasury < defines.MovementUprisingCost) return false;
@@ -567,26 +706,227 @@ public static class MovementRules
             return false;
         }
 
-        if (!TakeRegion(campaign, nation, region, owner)) return false;
-        state.LastReport = Loc.Format("The uprising in {0} succeeded: it is ours.", region.DisplayName);
+        // The flashpoint carried, so the homeland carries: the rest of the people's zone the
+        // same government still holds rises with it instead of leaving confetti on the map.
+        var taken = TakeZone(campaign, nation, region, owner);
+        if (taken == 0) return false;
+        if (state is not null && nation.Movement is not null)
+            state.LastReport = taken > 1
+                ? Loc.Format("The uprising in {0} succeeded: {1} region(s) are ours.", region.DisplayName, taken)
+                : Loc.Format("The uprising in {0} succeeded: it is ours.", region.DisplayName);
         return true;
     }
 
-    /// <summary>The region is its own: the ground, a capital, militia, and a war with the country it rose against.</summary>
-    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
+    /// <summary>
+    /// Success in one region of the homeland is success for the homeland. A rising that
+    /// wins its flashpoint does not stop at the city limits, a referendum that carries does
+    /// not ask the same question county by county for a decade, and an exile that comes
+    /// home does not stop at the doorstep: the rest of the people's zone that the same
+    /// holder still controls comes with the first region. Three brakes keep it honest —
+    /// only regions the definition itself names as homeland (or a partition of one), only
+    /// ground the same holder controls, and a vote frees a region only where the movement's
+    /// own majority actually carried. A homeland chunk some other country holds stays where
+    /// it is; that is a different war, for another day.
+    /// </summary>
+    /// <returns>The seed first, then the rest of the zone in map order, de-duplicated.</returns>
+    internal static List<ScenarioState> ZoneOf(Campaign campaign, Nation nation, MovementDefinition definition,
+        ScenarioState seed, Nation owner, bool peacefulVote, bool restoration = false)
+    {
+        var zone = new List<ScenarioState>();
+        if (campaign is null || nation?.Movement is not { Dissolved: false } || definition is null ||
+            seed is null || owner is null) return zone;
+        zone.Add(seed);
+        var ownerTotalStates = campaign.StatesOf(owner).Length;
+        // Map order, so the same campaign always takes the same borders in the same sequence.
+        foreach (var region in campaign.States.OrderBy(candidate => candidate.MapIndex))
+        {
+            if (region is null || region.MapIndex == seed.MapIndex) continue;
+            if (region.NationMapIndex != owner.MapIndex) continue;
+            if (region.Unclaimed || region.Population <= 0) continue;
+            bool isHome = MovementReach.IsHomeland(campaign, definition, region) ||
+                (campaign.Homelands.TryGetValue(nation.Id, out var homes) &&
+                 (homes.Contains(region.MapIndex) || homes.Contains(TerritorialClaims.Origin(region))));
+            if (!isHome) continue;
+            // A chunk some other army stands on is a different war, not a free border.
+            if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) continue;
+            if (peacefulVote)
+            {
+                var votes = CivilIndependence.ResidentSupport(nation, region);
+                if (!float.IsFinite(votes) || votes <= campaign.Defines.CivilReferendumMajority) continue;
+            }
+            // A rising spreads where a rising could start. The flashpoint carries the rest of
+            // the homeland only over ground the holder is not actually standing on: the army
+            // in a region is what decides whether people there can rise at all, and handing a
+            // garrisoned region over because a neighbouring city rose is how a country taken
+            // and held by ninety divisions was given back to a movement that had won one town.
+            // A restoration is exempt: it is a government returning to its own ground, by
+            // agreement or on the bayonets of the army it already has there.
+            else if (!restoration && !CanCarry(campaign, nation, region, owner)) continue;
+            // Peaceful secession must not dissolve the parent state entirely without a war.
+            if (peacefulVote && zone.Count + 1 >= ownerTotalStates)
+                continue;
+            zone.Add(region);
+        }
+        // A vote frees each region that carried it, joined up or not; a rising holds what it
+        // can reach from the flashpoint.
+        return peacefulVote ? zone : Connected(campaign, nation, zone);
+    }
+
+    /// <summary>
+    /// Whether a rising that won its flashpoint carries this region with it.
+    ///
+    /// Two things it must be able to do there: start at all - the chance an uprising in the
+    /// region succeeds is above nothing - and find the state not standing on it with a formed
+    /// division. A garrison is the state's answer to a rising, and ground it is standing on is
+    /// taken from it by fighting, not by a neighbouring city's success. A country of twenty-four
+    /// regions held by ninety divisions used to come back to its movement whole after one town
+    /// changed hands; no army can be said to have defended ground it lost without a battle.
+    /// </summary>
+    private static bool CanCarry(Campaign campaign, Nation nation, ScenarioState region, Nation owner)
+    {
+        var def = Movements.DefinitionOf(nation);
+        var isHomeland = def is not null && MovementReach.IsHomeland(campaign, def, region);
+        if (!isHomeland && UprisingChance(campaign, nation, region) <= 0f) return false;
+        var topology = campaign.ProvinceMap;
+        if (topology is null || owner is null) return true;
+        foreach (var army in campaign.Armies)
+        {
+            if (army.NationId != owner.Id || army.InBattle || army.ProvinceId <= 0 ||
+                army.ProvinceId > topology.ProvinceCount) continue;
+            if (topology.ProvinceToState[army.ProvinceId] != region.MapIndex) continue;
+            if (army.Divisions * army.Strength < 1f) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// The part of a zone that hangs together: the seed and every zone region that can be reached
+    /// from it over zone regions or ground the nation already holds. A homeland scattered across
+    /// a map - by a war, or by a homeland that drifted - rose as one act and left snakes and
+    /// islands; the rest waits for its own flashpoint. A referendum is not held to this: each
+    /// region that votes to leave has chosen for itself.
+    /// </summary>
+    private static List<ScenarioState> Connected(Campaign campaign, Nation nation, List<ScenarioState> zone)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null || zone.Count <= 1) return zone;
+        var wanted = new HashSet<int>();
+        foreach (var region in zone) wanted.Add(region.MapIndex);
+        var held = new HashSet<int>();
+        foreach (var region in campaign.StatesOf(nation)) held.Add(region.MapIndex);
+        var links = new Dictionary<int, HashSet<int>>();
+        for (var province = 1; province <= map.ProvinceCount; province++)
+        {
+            int here = map.ProvinceToState[province];
+            if (!wanted.Contains(here) && !held.Contains(here)) continue;
+            foreach (var next in map.Neighbors[province])
+            {
+                int there = map.ProvinceToState[next];
+                if (there == here || (!wanted.Contains(there) && !held.Contains(there))) continue;
+                if (!links.TryGetValue(here, out var set)) links[here] = set = new HashSet<int>();
+                set.Add(there);
+            }
+        }
+        var reached = new HashSet<int> { zone[0].MapIndex };
+        var queue = new Queue<int>();
+        queue.Enqueue(zone[0].MapIndex);
+        while (queue.Count > 0)
+            if (links.TryGetValue(queue.Dequeue(), out var next))
+                foreach (var region in next)
+                    if (reached.Add(region)) queue.Enqueue(region);
+        return zone.Where(region => reached.Contains(region.MapIndex)).ToList();
+    }
+
+    /// <summary>
+    /// The whole zone of interest changes hands in one act: the seed region and every other
+    /// homeland region the same holder still has. The regions are annexed one by one - each
+    /// through the ordinary border machinery, so its people and its output are counted once
+    /// under the new flag - and the act is settled once at the end
+    /// (<see cref="SettleTransfer"/>): one militia, one war, one proclamation.
+    /// </summary>
+    /// <returns>How many regions it took; 0 when not even the seed could be taken.</returns>
+    internal static int TakeZone(Campaign campaign, Nation nation, ScenarioState seed, Nation owner,
         bool peacefully = false, bool restoration = false)
+    {
+        var definition = Movements.DefinitionOf(nation);
+        if (definition is null || seed is null) return 0;
+        var zone = ZoneOf(campaign, nation, definition, seed, owner, peacefulVote: peacefully && !restoration, restoration: restoration);
+        // The flashpoint comes first and must take: a rising that lost in its own city did not
+        // carry the country, whatever the rest of the zone would have done.
+        if (!TakeRegion(campaign, nation, seed, owner, peacefully, restoration, settle: false)) return 0;
+        var gained = new List<ScenarioState>(zone.Count) { seed };
+        foreach (var region in zone)
+            if (region.MapIndex != seed.MapIndex &&
+                TakeRegion(campaign, nation, region, owner, peacefully, restoration, settle: false))
+                gained.Add(region);
+        SettleTransfer(campaign, nation, gained[0], gained, owner, peacefully, restoration);
+        return gained.Count;
+    }
+
+    /// <summary>
+    /// The part of a garrison that changes flags with the ground, divided ONCE for the whole
+    /// of what is being taken.
+    ///
+    /// The share lives in <see cref="Reintegration.Defect"/> and is a share of what actually
+    /// stands on the ground being given up - an agreed referendum divides the army as surely
+    /// as a contested one, only quietly. It must be asked once per transfer, never once per
+    /// region: each call takes its slice of what the last one left, and a call that finds no
+    /// garrison on its own region falls back to a cross-section of the owner's whole army,
+    /// so a zone of twenty-four regions could empty an occupier's order of battle into a
+    /// single uprising. Measured on the 2024 world before this: Russia annexed Ukraine, an
+    /// uprising followed, and eighty-three of its ninety-one formations left in one act.
+    /// </summary>
+    private static int DefectGarrison(Campaign campaign, Nation nation, Nation owner,
+        IReadOnlyCollection<int> provinces, bool peacefully)
+    {
+        if (campaign is null || nation is null || owner is null || provinces is null ||
+            provinces.Count == 0) return 0;
+        var defected = Reintegration.Defect(campaign, owner, nation, provinces.ToHashSet(),
+            peacefully ? campaign.Defines.PeacefulSecessionDefectionShare : null);
+        if (defected > 0)
+            DiagnosticLogs.Write("simulation",
+                $"MOVEMENT_DEFECTION nation={nation.Tag} from={owner.Tag} formations={defected} peaceful={peacefully}");
+        return defected;
+    }
+
+    /// <summary>
+    /// One region changes hands: the ground, the people on it and its output, through the same
+    /// border machinery every other transfer uses. What follows a successful act - militia out
+    /// of the cadres, the war with the country it rose against, the movement becoming a
+    /// country - belongs to the act rather than to one region, so a caller taking a whole zone
+    /// passes <paramref name="settle"/> false for every region and settles once at the end
+    /// (<see cref="TakeZone"/>).
+    /// </summary>
+    internal static bool TakeRegion(Campaign campaign, Nation nation, ScenarioState region, Nation owner,
+        bool peacefully = false, bool restoration = false, bool settle = true)
     {
         // A restoration is its own kind of return: the country is already the country it was, so
         // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
-        if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
-        if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        // Whole-region movement settlements must not overwrite a third party's occupation,
+        // including restorations and peaceful referendums. They need an actual military settlement.
+        if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) return false;
+        if (settle)
+        {
+            if (peacefully && !restoration && CivilIndependence.Refusal(campaign, nation, region).Length != 0) return false;
+            if (!peacefully && !restoration && !MovementReach.CanClaimTerritory(campaign, nation, region)) return false;
+        }
+        else
+        {
+            // Inside TakeZone: the seed region already verified political/military mandate.
+            // Secondary regions in the same homeland zone under the same owner need only
+            // verify they are valid homeland ground with no foreign occupation and sane data.
+            var def = Movements.DefinitionOf(nation);
+            if (!restoration && def is not null && !MovementReach.IsHomeland(campaign, def, region) &&
+                !(campaign.Homelands.TryGetValue(nation.Id, out var h) && (h.Contains(region.MapIndex) || h.Contains(TerritorialClaims.Origin(region)))))
+                return false;
+        }
         if (campaign?.ProvinceMap is null || nation?.Movement is null || region is null ||
             !float.IsFinite(region.Stability) || !float.IsFinite(region.StandardOfLiving) ||
             !float.IsFinite(region.Literacy) || !float.IsFinite(nation.Gdp) ||
             owner is not null && !float.IsFinite(owner.Gdp)) return false;
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
-        var defines = campaign.Defines;
         var topology = campaign.ProvinceMap;
         // Record the region's real economy before ownership changes. A movement's
         // donations GDP and zero population are not the tax base of its new country.
@@ -599,6 +939,14 @@ public static class MovementRules
             if (topology.ProvinceToState[province] == region.MapIndex) provinces.Add(province);
 
         StatePartition.Annex(campaign, provinces, nation, asConquest: false);
+        // The ground changes hands, and so does the part of the garrison standing on it: an
+        // agreed referendum divides the army as surely as a contested one, only quietly. That
+        // division belongs to the ACT, not to the region, and is made once in SettleTransfer -
+        // which every path reaches, with one region or with a whole zone. It used to be made
+        // here for every region: the shares compounded, and the fallback that hands over a
+        // cross-section when no garrison stood in one region fired for every such region in
+        // turn, so taking a homeland of twenty-four regions could move most of the old owner's
+        // army, including formations nowhere near it.
         var heldStates = campaign.StatesOf(nation);
         nation.Population = heldStates.Sum(s => s.Population);
         nation.Gdp = MathF.Max(.01f, previousGdp + regionalGdp);
@@ -627,26 +975,99 @@ public static class MovementRules
         }
         state.Landless = false;
         if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
-        if (!string.IsNullOrWhiteSpace(definition.StateName)) nation.Name = definition.StateName;
+        // A restoration is not a founding: the country returns under the name it fell with,
+        // the way it keeps the government it had. Only a movement that takes ground for the
+        // first time is naming something new.
+        if (!restoration)
+        {
+            var renamed = false;
+            if (!string.IsNullOrWhiteSpace(definition.StateName))
+            {
+                nation.Name = definition.StateName;
+                renamed = true;
+            }
+            else if (definition.Peoples.Count > 0 && DemographyCatalog.Culture(definition.Peoples[0]) is { Country.Length: > 0 } peopleState)
+            {
+                nation.Name = peopleState.Country;
+                renamed = true;
+            }
+            else if (wasLandless && region is not null && !string.IsNullOrWhiteSpace(region.Name))
+            {
+                nation.Name = region.Name;
+                renamed = true;
+            }
+            if (renamed) nation.NameProclaimed = true;
+        }
         var seat = campaign.StatesOf(nation).OrderByDescending(candidate => candidate.Population).FirstOrDefault();
-        if (seat is not null) nation.CapitalStateMapIndex = seat.MapIndex;
-        campaign.LocateCapitals();
+        if (wasLandless && seat is not null) CapitalCore.Establish(campaign, nation, seat);
+        campaign.LocateCapitals(preserveExisting: true);
         // A restoration keeps the government the country had when it fell; nothing was founded anew.
-        if (!restoration) nation.Government = peacefully ? definition.Government : "provisional_government";
+        if (!restoration)
+        {
+            nation.Government = !string.IsNullOrWhiteSpace(definition.Government) && definition.Government != "provisional_government"
+                ? definition.Government
+                : peacefully ? "parliamentary_republic" : "presidential_republic";
+            nation.StartGovernment = "";
+            nation.StartIdeology = "";
+        }
         nation.PoliticsChangedDay = campaign.ElapsedDays;
 
-        // The cadres become the country's militia, and so does the street: every supporter in the
-        // region that rose is somebody who can be handed a rifle, and the fighters sent in ahead
-        // are already there. The tunnels and the camps give them ground to hold.
+        if (settle) SettleTransfer(campaign, nation, region, new[] { region }, owner, peacefully, restoration);
+        return true;
+    }
+
+    /// <summary>
+    /// What a successful act does to a movement the day it wins ground: cadres and the street
+    /// become its militia, the tunnels are dug in, the war with the country it rose against is
+    /// declared once, and ground of its own makes it a country. It runs once per act however
+    /// many regions came with it - a rising that carries a homeland raises one militia, fights
+    /// one war and proclaims one state - so the regions are passed whole and their supporters
+    /// and hidden fighters are counted together.
+    /// </summary>
+    private static void SettleTransfer(Campaign campaign, Nation nation, ScenarioState seed,
+        IReadOnlyList<ScenarioState> gained, Nation owner, bool peacefully, bool restoration)
+    {
+        var state = nation.Movement;
+        var definition = Movements.DefinitionOf(nation);
+        if (state is null || definition is null || seed is null) return;
+        var defines = campaign.Defines;
+
+        // The garrison changes flags once for the whole transfer, not once per region
+        // (DefectGarrison): the share must be a share of the army that stood on the ground
+        // given up, not a slice of what the previous region left behind.
+        if (owner is not null && owner.Id != nation.Id)
+        {
+            var topology = campaign.ProvinceMap;
+            var regions = new HashSet<ushort>();
+            foreach (var region in gained)
+                if (region is not null) regions.Add((ushort)region.MapIndex);
+            var ground = new HashSet<int>();
+            if (topology is not null)
+                for (var province = 1; province <= topology.ProvinceCount; province++)
+                    if (regions.Contains(topology.ProvinceToState[province])) ground.Add(province);
+            DefectGarrison(campaign, nation, owner, ground, peacefully);
+        }
+
+        // The cadres become the country's militia, and so does the street: every supporter in
+        // the ground that came over is somebody who can be handed a rifle, and the fighters
+        // sent in ahead are already there. The tunnels and the camps give them ground to hold.
         var perFormation = defines.MovementMilitiaPerCadres * (definition.Has("armed_wing") ? 0.7f : 1f);
-        var street = MovementRules.PeopleOf(region, definition, out _) * state.Support.GetValueOrDefault(region.MapIndex);
-        var hidden = state.Infiltrated.GetValueOrDefault(region.MapIndex);
-        state.Infiltrated.Remove(region.MapIndex);
+        var street = 0f;
+        var hidden = 0f;
+        foreach (var region in gained)
+        {
+            street += MovementRules.PeopleOf(region, definition, out _) * state.Support.GetValueOrDefault(region.MapIndex);
+            hidden += state.Infiltrated.GetValueOrDefault(region.MapIndex);
+            state.Infiltrated.Remove(region.MapIndex);
+        }
         var formations = Math.Min(defines.MovementUprisingMilitiaMax,
             (int)(state.Cadres / MathF.Max(1f, perFormation)) +
             (int)(street / MathF.Max(1f, defines.MovementMilitiaPerSupporters)) +
             (int)(hidden / MathF.Max(1f, perFormation * 0.5f)));
-        if (definition.Has("nonviolence")) formations = Math.Min(formations, 1);
+        // A nonviolent movement carries no rifles at all - a ballot campaign that rose at the
+        // polls governs by politics, and an empty formation standing in its square is a lie
+        // the militia ledger then has to feed.
+        if (definition.Has("nonviolence")) formations = 0;
         if (peacefully || restoration) formations = 0;
         var raised = 0;
         foreach (var held in campaign.StatesOf(nation))
@@ -665,11 +1086,21 @@ public static class MovementRules
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
             // It holds ground of its own since this morning, which the day's border table cannot know.
             CampaignDiplomacy.ForgetBorders();
-            CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, region.MapIndex, "uprising", onOwnInitiative: false);
+            CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
         }
+        // Remember the newly liberated regions as the nation's homeland so restorations and title checks recognize them.
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var homes))
+            campaign.Homelands[nation.Id] = gained.Select(r => r.MapIndex).ToList();
+        else
+            foreach (var r in gained)
+                if (!homes.Contains(r.MapIndex)) homes.Add(r.MapIndex);
+        // The borders are on the map, so the movement is done being a movement: ground of
+        // its own makes it a country at once (the same rule SynchroniseTerritory applies a
+        // week later to ground gained any other way). What follows - wars, peace, exile -
+        // happens to it as to any other state.
+        GraduateToStatehood(campaign, nation, restoration);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
-        return true;
     }
 
     internal static float Roll(int seed, int nationId, int day, int salt)

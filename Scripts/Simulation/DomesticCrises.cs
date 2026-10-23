@@ -18,6 +18,20 @@ public sealed partial class Defines
     public int CrisisResponseCooldownDays { get; set; } = 180;
     public float CrisisResponseCostShare { get; set; } = .0006f;
     public float CrisisResponseCostFloor { get; set; } = .015f;
+    /// <summary>How long a paid settlement of one region cools it.</summary>
+    public int CrisisConciliationDays { get; set; } = 120;
+    /// <summary>Cost is this share of GDP times the region's share of the country's people, and never below the floor.</summary>
+    public float CrisisConciliationCostShare { get; set; } = .004f;
+    public float CrisisConciliationCostFloor { get; set; } = .02f;
+    public float CrisisConciliationPressurePerDay { get; set; } = .003f;
+    public float CrisisConciliationRadicalismPerDay { get; set; } = .0016f;
+    public float CrisisConciliationDivergencePerDay { get; set; } = .0012f;
+    public float CrisisConciliationApprovalPerDay { get; set; } = .001f;
+    /// <summary>Below this heat the region is not asking for the money.</summary>
+    public float CrisisConciliationHeat { get; set; } = .22f;
+    /// <summary>A country nobody plays pays only for a louder region, and only with this much treasury in reserve.</summary>
+    public float CrisisConciliationAiHeat { get; set; } = .55f;
+    public float CrisisConciliationAiReserve { get; set; } = 4f;
 }
 
 public sealed partial class ScenarioState
@@ -43,6 +57,10 @@ public sealed class DomesticCrisisState
     public string ResponseId = "";
     public int ResponseUntilDay = -1;
     public int ResponseCooldownUntilDay = -1;
+    /// <summary>The region being paid to settle, or -1. One at a time.</summary>
+    public int ConciliationRegion = -1;
+    /// <summary>The last day that payment still cools the region. -1 when none is running.</summary>
+    public int ConciliationUntilDay = -1;
 }
 
 public sealed class DomesticCrisisRegion
@@ -142,10 +160,13 @@ public static partial class DomesticCrises
                     else region.ResidentAwareness = Move(region.ResidentAwareness, ResidentAwareness.Target(c, region),
                         MathF.Max(0f, c.Defines.ResidentAwarenessChangePerDay) * days);
                 }
+            PoliticalCohorts.Review(c, nation, days);
             if (crisesEnabled)
             {
                 ReviewResponse(c, nation, days);
+                ReviewConciliation(c, nation, days);
                 ReviewPressure(c, nation, days);
+                ConsiderConciliation(c, nation);
             }
         }
     }

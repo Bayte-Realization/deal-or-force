@@ -466,9 +466,10 @@ public static class Escalation
         if (relation.GuaranteeByA || relation.GuaranteeByB) factor *= 0.4f;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id)) factor *= 0.2f;
         // Structural tension is not softened by distance: an armistice line is an armistice line.
+        var globalCycle = GeopoliticalCycle.GlobalTensionOffset(c);
         var reasons = structural * MathF.Max(factor, MathF.Min(1f, factor * 2f)) +
                       (hostility + grievance + lostLand + rivalry + proxy + ideology) * factor;
-        var target = M.Clamp(reasons + relation.TensionBaseline, 0f, 100f);
+        var target = M.Clamp(reasons + relation.TensionBaseline + globalCycle, 0f, 100f);
         return new TensionDrivers(structural, hostility, grievance, lostLand, rivalry, proxy, ideology, factor, target,
             relation.TensionBaseline);
     }
@@ -764,8 +765,11 @@ public static class Escalation
     }
 
     /// <summary>Whether neither of the two would open fire on the other (<see cref="WouldFireFirst"/>).</summary>
-    public static bool Deterred(Campaign c, Nation a, Nation b) =>
-        a is not null && b is not null && !WouldFireFirst(c, a, b) && !WouldFireFirst(c, b, a);
+    public static bool Deterred(Campaign c, Nation a, Nation b) => Deterred(c, a, b, true);
+
+    /// <summary>A screen must not write saved intelligence just to explain why nobody fires.</summary>
+    public static bool Deterred(Campaign c, Nation a, Nation b, bool refreshAssessment) =>
+        a is not null && b is not null && !WouldFireFirst(c, a, b, refreshAssessment) && !WouldFireFirst(c, b, a, refreshAssessment);
 
     /// <summary>
     /// A government that would start shooting at a border: one that could stand up to the other
@@ -773,18 +777,18 @@ public static class Escalation
     /// a press and an election restrain as much as the democratic peace does (AiStatecraft.Restraint) -
     /// and that is not already fighting a major war somewhere else.
     /// </summary>
-    private static bool WouldFireFirst(Campaign c, Nation shooter, Nation target)
+    private static bool WouldFireFirst(Campaign c, Nation shooter, Nation target, bool refreshAssessment = true)
     {
-        if (!CanFace(c, shooter, target)) return false;
+        if (!CanFace(c, shooter, target, refreshAssessment)) return false;
         if (AiStatecraft.Restraint(c, shooter) >= c.Defines.AiDemocraticPeaceRestraint) return false;
         foreach (var war in c.Wars)
             if (!war.Ended && war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
         return true;
     }
 
-    private static bool CanFace(Campaign c, Nation attacker, Nation defender) =>
+    private static bool CanFace(Campaign c, Nation attacker, Nation defender, bool refreshAssessment = true) =>
         AiStatecraft.CachedStrength(c, attacker) >=
-        c.Defines.BorderWarStrengthRatio * AiStatecraft.Deterrence(c, attacker, defender);
+        c.Defines.BorderWarStrengthRatio * AiStatecraft.Deterrence(c, attacker, defender, refreshAssessment);
 
     /// <summary>The defender's region on the shared border with the most people: what a border war is about.</summary>
     private static int BorderRegion(Campaign c, Nation attacker, Nation defender)

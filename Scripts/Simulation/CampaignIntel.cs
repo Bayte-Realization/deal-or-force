@@ -44,7 +44,10 @@ public static partial class CampaignIntel
     /// (IntelAssessmentDays): reading the live figure let every general staff see a hidden
     /// mobilisation the day it happened, which is what fog of war exists to prevent.
     /// </summary>
-    public static float EstimatedStrength(Campaign c, int viewerId, Nation target)
+    public static float EstimatedStrength(Campaign c, int viewerId, Nation target) => EstimatedStrength(c, viewerId, target, true);
+
+    /// <summary>Read-only previews calculate the same result without committing a new assessment.</summary>
+    public static float EstimatedStrength(Campaign c, int viewerId, Nation target, bool refreshAssessment)
     {
         if (target is null) return 0;
         if (CanInspect(viewerId, target.Id)) return AiStatecraft.CachedStrength(c, target);
@@ -55,12 +58,15 @@ public static partial class CampaignIntel
         if (network >= c.Defines.IntelInspectStrength)
             return AiStatecraft.CachedStrength(c, target) * (1f + error * (2f * Error(c.Seed, viewerId, target.Id, c.ElapsedDays / 365) - 1f));
         var every = Math.Max(1, c.Defines.IntelAssessmentDays);
+        var assessed = target.AssessedStrength;
         if (target.AssessedDay < 0 || c.ElapsedDays < target.AssessedDay || c.ElapsedDays - target.AssessedDay >= every)
         {
-            target.AssessedStrength = AiStatecraft.CachedStrength(c, target);
-            target.AssessedDay = c.ElapsedDays;
+            assessed = AiStatecraft.CachedStrength(c, target);
+            // Interface previews use the same hypothetical assessment without changing
+            // saved intelligence merely because somebody opened a tooltip.
+            if (refreshAssessment) { target.AssessedStrength = assessed; target.AssessedDay = c.ElapsedDays; }
         }
-        return target.AssessedStrength *
+        return assessed *
                (1f + error * (2f * Error(c.Seed, viewerId, target.Id, c.ElapsedDays / 365) - 1f));
     }
 

@@ -10,7 +10,8 @@ namespace DealOrForce;
 /// Opt-in verification of the shipped executable, not an editor-only script.
 /// Official release templates disable external script/scene overrides. Keep the
 /// probe built in so CI can test the actual pack, assembly and loose data together.
-/// It never loads an existing save or writes a campaign; normal launches do nothing.
+/// Normal launches do nothing. A development-only late-save probe accepts only an
+/// explicit temporary copy and redirects all saves away from the player's archive.
 /// </summary>
 public partial class ExportVerification : Node
 {
@@ -35,6 +36,9 @@ public partial class ExportVerification : Node
         try
         {
             AudioServer.SetBusMute(0, true);
+            var pureRule = Rules.AssaultRules.Assess(true, true, true, true, false, 0, 0, 1, 1, .16f, .20f);
+            Check(pureRule.Ready && typeof(Rules.AssaultRules).Assembly.GetName().Name == "DealOrForce.Rules",
+                "production F# rules load and execute inside Godot");
             var tree = GetTree();
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();
@@ -43,6 +47,18 @@ public partial class ExportVerification : Node
                 Loc.Language = args[languageAt + 1];
             Check(tree.CurrentScene is MainMenuScene && tree.CurrentScene.FindChildren("*", "Button", true, false).Count > 3,
                 "managed main menu and its controls load");
+            // The F# pure-rule library is an optional dependency, and the hook that reaches it
+            // is deliberately forgiving: on its first exception it answers with the managed
+            // implementation from then on and writes one line to the log, so a pack that cannot
+            // load the assembly still plays perfectly - on different code than the one that was
+            // verified. The editor and the test stand prove the fallback does not happen there
+            // (AssaultRulesBackendTests checks the installed hook); nothing proved it about the
+            // shipped pack, which is exactly where FSharp.Core is the kind of dependency that
+            // goes missing. Checked here, before the campaign, because loadability is a property
+            // of the pack and not of a world. The call is what makes the check mean anything:
+            // UsingFSharp reads true before the first call ever happens.
+            AssaultRulesHook.TryAssess(true, true, true, false, false, 0, 0, 1f, 1f, 0.5f, 0.2f, out _);
+            Check(AssaultRulesHook.UsingFSharp, "assault readiness resolves through the shipped F# rules library");
             // Source-only UI probes may explicitly permit locally installed tooling.
             // Shipped-executable verification never supplies this flag.
             var developmentProbe = OS.GetCmdlineUserArgs().Contains("--verify-development");
@@ -77,7 +93,186 @@ public partial class ExportVerification : Node
                     game.Call("RefreshLocalisedText");
                     Check(Loc.Language == args[languageAt + 1], "requested verification language is active");
                 }
+                if (args.Contains("--verify-political-appointments-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-campaign-alerts-only"))
+                {
+                    await VerifyCampaignAlerts(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                var lateSaveAt = Array.IndexOf(args, "--verify-late-save");
+                if (developmentProbe && args.Contains("--verify-military-access-only"))
+                {
+                    await VerifyMilitaryAccess(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-paused-doctrines-only"))
+                {
+                    await VerifyPausedDoctrines(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-enemy-readiness-only"))
+                {
+                    await VerifyEnemyReadiness(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && lateSaveAt >= 0 && lateSaveAt + 1 < args.Length)
+                {
+                    var soakDaysAt = Array.IndexOf(args, "--verify-late-save-days");
+                    var soakDays = soakDaysAt >= 0 && soakDaysAt + 1 < args.Length && int.TryParse(args[soakDaysAt + 1], out var parsedDays)
+                        ? Math.Clamp(parsedDays, 1, 365) : 30;
+                    await VerifyLateSaveStability(game, args[lateSaveAt + 1], soakDays);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-counter-textures-only"))
+                {
+                    VerifyCounterTextureLifetime(game);
+                    if (!args.Contains("--verify-partial-withdrawal-only"))
+                    {
+                        GD.Print($"EXPORT_VERIFY failures={_failures}");
+                        GetTree().Quit(_failures == 0 ? 0 : 1);
+                        return;
+                    }
+                }
+                if (args.Contains("--verify-peace-beneficiary-only"))
+                {
+                    await VerifyPeaceBeneficiary(game);
+                    if (args.Contains("--verify-benelux-motto")) await VerifyBeneluxMotto(game);
+                    if (args.Contains("--verify-capital-loss")) await VerifyCapitalLoss(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-benelux-motto"))
+                {
+                    await VerifyBeneluxMotto(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-capital-loss"))
+                {
+                    await VerifyCapitalLoss(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-partial-withdrawal-only"))
+                {
+                    await VerifyPartialWithdrawal(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-portraits-front-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    VerifyLeaderPhotoFormats();
+                    await VerifyFrontOverlay(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-institutions-only"))
+                {
+                    await VerifyPoliticalAppointments(game);
+                    VerifyLeaderPhotoFormats();
+                    await VerifyInstitutions(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-country-dossier-only"))
+                {
+                    await VerifyCountryDossier(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-occupation-map-only"))
+                {
+                    await VerifyOccupationMap(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-audio-focus-only"))
+                {
+                    await VerifyAudioFocus(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-decision-resources-only"))
+                {
+                    await VerifyDecisionResources(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-hud-only"))
+                {
+                    await VerifyHudText(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-war-score-scale-only"))
+                {
+                    await VerifyWarScoreScale(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-diplomacy-only"))
+                {
+                    await VerifyDiplomacyLayout(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-army-activity-only"))
+                {
+                    await VerifyArmyActivity(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-movement-only"))
+                {
+                    VerifyCivilWarBanners(game);
+                    await VerifyMovementDiplomacy(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                await VerifyAgendaWorkspace(game);
+                if (args.Contains("--verify-agenda-only"))
+                {
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                await VerifyDiplomacyLayout(game);
                 await VerifySovereignFinance(game);
+                await VerifyReligionAndOccupation(game);
+                await VerifyGarrison(game);
+                await VerifyDevelop(game);
                 game.Call("OpenScreen", "Laws");
                 await Wait(.25);
                 Check(game.FindChild("PolicySearch", true, false) is not null, "laws workspace is available");
@@ -90,7 +285,10 @@ public partial class ExportVerification : Node
                 (game.FindChild("ClosePolicyWorkspace", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
                 await VerifyDealWorkspace(game);
                 await VerifyConflictWorkspaces(game);
+                await VerifyTerritorialMovementRepresentation(game);
+                await VerifyMovementBanners(game);
                 await VerifyMovementDiplomacy(game);
+                VerifyCivilWarBanners(game);
                 GD.Print(game.Call("ConsoleAdvance", "7").AsString());
                 foreach (var flag in new[] { "roman_empire_v2", "eastern_roman_empire_v2", "western_roman_empire" })
                 {
@@ -108,6 +306,91 @@ public partial class ExportVerification : Node
         }
         GD.Print("EXPORT_VERIFY failures=" + _failures);
         GetTree().Quit(_failures == 0 ? 0 : 1);
+    }
+
+    private async Task VerifyReligionAndOccupation(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var originalLanguage = Loc.Language;
+        foreach (var language in new[] { "english", "russian" })
+        {
+            Loc.Language = language;
+            game.Call("RefreshLocalisedText");
+            game.Call("OpenStateAffairs");
+            await Wait(.2);
+            var before = CampaignFingerprint.Of(world);
+            var buttons = game.FindChildren("StateReligion_*", "Button", true, false).OfType<Button>().ToArray();
+            Check(buttons.Count(b => b.Name == "StateReligion_irreligion") == 1,
+                language + " has exactly one irreligion option");
+            Check(buttons.Select(b => b.Name.ToString()).Distinct().Count() == buttons.Length,
+                language + " religion choices have unique identities");
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                game.VerificationRevealReligion(); await Wait(.15);
+                await Capture("religion-single-" + language + "-" + size.X);
+            }
+            Check(before == CampaignFingerprint.Of(world), "religion inspection changes no campaign state");
+            game.Call("CloseStateAffairs");
+        }
+        Loc.Language = originalLanguage; game.Call("RefreshLocalisedText");
+        GetTree().Root.Size = new(1920, 1080);
+        var map = world.ProvinceMap;
+        var owner = world.NationByTag("UKR");
+        var occupier = world.NationByTag("RUS");
+        var province = Enumerable.Range(1, map.ProvinceCount).First(p =>
+            map.ProvinceToNation[p] == owner.MapIndex && !map.IsWater(p) &&
+            world.Armies.All(a => a.ProvinceId != p) &&
+            CityCatalog.ProvinceUnder(map, map.CenterOf(p).Latitude, map.CenterOf(p).Longitude) == p);
+        var oldControl = world.ProvinceController[province];
+        world.SetProvinceController(province, (ushort)occupier.MapIndex);
+        var occupationBefore = CampaignFingerprint.Of(world);
+        game.VerificationFocusProvince(province); await Wait(1);
+        foreach (var language in new[] { "english", "russian" })
+        {
+            Loc.Language = language; game.Call("RefreshLocalisedText");
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.4);
+                var pick = game.VerificationCentrePick();
+                Check(pick.ProvinceId == province && pick.Nation?.Id == owner.Id,
+                    language + " actual map hit keeps Ukrainian ownership under Russian occupation");
+                var tooltip = game.VerificationCentreTooltip();
+                // This check is named for a distinction, so it asserts the distinction rather
+                // than a sentence. The occupation line was rewritten by the state-identity
+                // readability pass into something that names the occupier, names the owner and
+                // says an occupation is not an annexation - strictly better for the player - and
+                // a check pinned to the old wording started failing on a tooltip that had
+                // improved. Requiring both countries to appear, and to be different countries,
+                // keeps the check answering the question it was written for.
+                Check(occupier.DisplayName != owner.DisplayName &&
+                      tooltip.Contains(occupier.DisplayName) && tooltip.Contains(owner.DisplayName),
+                    language + " actual map tooltip distinguishes occupier from owner");
+                game.VerificationInspectPick(pick); await Wait(.15);
+                await Capture("occupation-not-title-" + language + "-" + size.X);
+            }
+        }
+        Check(map.ProvinceToNation[province] == owner.MapIndex && occupationBefore == CampaignFingerprint.Of(world),
+            "occupied map inspection never transfers title or alters the campaign");
+        world.SetProvinceController(province, oldControl);
+        Loc.Language = originalLanguage; game.Call("RefreshLocalisedText");
+        GetTree().Root.Size = new(1920, 1080);
+        game.Call("OpenScreen", "Nation");
+    }
+
+    private async Task VerifyGarrison(DealOrForceGame game)
+    {
+        var ordered = game.VerificationGarrison(out var report);
+        Check(ordered, "province card garrison order reaches a real division: " + report);
+        await Wait(.1);
+    }
+
+    private async Task VerifyDevelop(DealOrForceGame game)
+    {
+        var opened = game.VerificationDevelop(out var report);
+        Check(opened, "province card development opens construction on that region: " + report);
+        await Wait(.1);
     }
 
     private async Task VerifyDomesticWorkspace(DealOrForceGame game)
@@ -310,6 +593,62 @@ public partial class ExportVerification : Node
         game.Call("OpenScreen", "Nation");
     }
 
+    private async Task VerifyTerritorialMovementRepresentation(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var actor = world.NationByTag("HTH");
+        Check(actor?.FactionId == "ansar_allah" && world.StatesOf(actor).Length > 0 &&
+            world.Armies.Any(a => a.NationId == actor.Id), "Ansar Allah retains its territorial administration and army");
+        Check(world.NationByTag("HOU") is null, "no duplicate Ansar Allah movement is founded");
+        if (actor is null) return;
+        var before = CampaignFingerprint.Of(world);
+        game.VerificationFocusAdministration(actor);
+        await Wait(.8);
+        Check(game.FindChild("Headquarters_HOU", true, false) is null,
+            "the rendered movement layer contains no duplicate HOU headquarters");
+        var language = Loc.Language;
+        foreach (var locale in new[] { "english", "russian" })
+        {
+            Loc.Language = locale;
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.3);
+                await Capture("yemen-territorial-" + locale + "-" + size.X);
+            }
+        }
+        Loc.Language = language;
+        GetTree().Root.Size = new(1920, 1080);
+        Check(before == CampaignFingerprint.Of(world), "inspecting Yemen does not change the campaign");
+    }
+
+    private async Task VerifyMovementBanners(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        world.IsPaused = true;
+        var before = CampaignFingerprint.Of(world);
+        foreach (var tag in new[] { "HMS", "BVC" })
+        {
+            var movement = world.NationByTag(tag);
+            Check(movement?.Movement is not null, tag + " exists for the real flag presentation check");
+            if (movement is null) continue;
+            var stem = "flag_" + tag.ToLowerInvariant();
+            var expected = SettingsCatalog.Flag("movement_flags") && SpriteCatalog.Has(stem + "_insignia")
+                ? stem + "_insignia" : stem;
+            Check(DealOrForceGame.FlagSpriteFor(tag) == expected, tag + " map/profile resolve the authored banner");
+            Check(DealOrForceGame.FlagTextureFor(tag) is not null, tag + " real flag texture loads");
+            game.VerificationShowMovement(movement);
+            foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+            {
+                GetTree().Root.Size = size; await Wait(.2);
+                await Capture("restored-flag-" + tag.ToLowerInvariant() + "-" + size.X);
+            }
+            game.VerificationCloseMovement();
+        }
+        Check(before == CampaignFingerprint.Of(world), "movement flag inspection changes no simulation state");
+        GetTree().Root.Size = new(1920, 1080);
+    }
+
     private async Task VerifyMovementDiplomacy(DealOrForceGame game)
     {
         var world = game.VerificationWorld;
@@ -336,6 +675,38 @@ public partial class ExportVerification : Node
                 Check(game.FindChildren(prefix + "Country_*", "Button", true, false).Count == expected,
                     prefix + " list reflects exact living records, not an invented count");
             }
+            var scroll = game.FindChild("MovementScroll", true, false) as ScrollContainer;
+            if (scroll is not null) scroll.ScrollVertical = 120;
+            await Wait(.1);
+            var position = scroll?.ScrollVertical ?? 0;
+            // Run actual campaign time, then force a fresh UI snapshot as the periodic
+            // driver does. Do not merely check the old, still-alive Control instances.
+            world.TickDay();
+            game.VerificationRefreshMovement();
+            await Wait(.2);
+            foreach (var prefix in new[] { "MovementRecognition", "MovementDesignation" })
+                Check((game.FindChild(prefix + "List", true, false) as Control)?.Visible == true,
+                    prefix + " remains expanded across a simulation day and rebuilt rows");
+            Check(scroll is not null && Math.Abs(scroll.ScrollVertical - position) <= 2,
+                "movement scrolling survives the same tick refresh");
+            var designation = game.FindChild("MovementDesignationToggle", true, false) as Button;
+            designation?.EmitSignal(BaseButton.SignalName.Pressed);
+            game.VerificationRefreshMovement(true); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "an explicitly collapsed section stays collapsed independently of the other section");
+            game.VerificationCloseMovement();
+            game.VerificationShowMovement(movement); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "closing and reopening the same movement preserves the user's disclosures");
+            var otherMovement = world.Nations.First(n => n.Id != movement.Id && n.Movement is { Dissolved: false });
+            game.VerificationShowMovement(otherMovement); await Wait(.1);
+            game.VerificationShowMovement(movement); await Wait(.15);
+            Check((game.FindChild("MovementDesignationList", true, false) as Control)?.Visible == false &&
+                (game.FindChild("MovementRecognitionList", true, false) as Control)?.Visible == true,
+                "another movement's rebuilt card does not overwrite these disclosure choices");
+            before = CampaignFingerprint.Of(world);
             foreach (var size in new[] { new Vector2I(1920,1080), new Vector2I(1280,720) })
             {
                 GetTree().Root.Size = size; await Wait(.2);
@@ -352,6 +723,37 @@ public partial class ExportVerification : Node
             game.VerificationCloseMovement();
         }
         GetTree().Root.Size = new(1920,1080);
+    }
+
+    private void VerifyCivilWarBanners(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        var opposition = world.AddNation(new Nation { Tag = "XCV", Name = "rising:transitional_council:RUS:Russia",
+            Government = "provisional_government", Ideology = "social_democracy", MapIndex = 60000 });
+        DemographyCatalog.Declare(opposition.Tag, new[] { "ukrainian" });
+        var ordinary = DealOrForceGame.FlagSpriteFor(opposition.Tag);
+        Check(ordinary.Length > 0 && SpriteCatalog.TextureOf(ordinary) != SpriteCatalog.TextureOf("flag_ukr"),
+            "a nationwide civil-war side does not fly its seed region's foreign flag in the real UI");
+        opposition.SubjectType = "puppet"; opposition.OverlordId = world.NationByTag("UKR").Id;
+        Check(DealOrForceGame.FlagSpriteFor(opposition.Tag) == "flag_rus_civil_war_ukr_social_democracy",
+            "real UI flag cache notices actual foreign dependence");
+        var texture = DealOrForceGame.FlagTextureFor(opposition.Tag);
+        using var image = texture?.GetImage();
+        Check(image is not null && image.GetWidth() == 300 && image.GetPixel(150,20).R > .9f &&
+            image.GetPixel(150,100).B > .9f && image.GetPixel(150,180).R > .9f,
+            "the dependent-opposition white-blue-white PNG imports and renders as a real texture");
+        opposition.SubjectType = "";
+        Check(DealOrForceGame.FlagSpriteFor(opposition.Tag) == ordinary,
+            "ending dependence immediately restores the ordinary civil-war banner");
+        var diaspora = world.AddNation(new Nation { Tag = "XCD", Name = "Regional government",
+            Government = "provisional_government", Ideology = "nationalism", MapIndex = 60001 });
+        DemographyCatalog.Declare(diaspora.Tag,new[]{"indian_diaspora"});
+        Check(DealOrForceGame.FlagSpriteFor(diaspora.Tag) == "flag_culture_hindustani",
+            "the independent diaspora provisional government does not display a British-style cross");
+        diaspora.SubjectType = "puppet"; diaspora.OverlordId = world.NationByTag("GBR").Id;
+        Check(DealOrForceGame.FlagSpriteFor(diaspora.Tag) == "flag_culture_indian_diaspora",
+            "a restricted colonial-style banner is enabled only by actual British dependence");
+        diaspora.SubjectType = "";
     }
 
     private void Check(bool condition, string caption)
@@ -381,4 +783,25 @@ public partial class DealOrForceGame
     internal void VerificationEnableFinancialOrders() { if (_observerMode) ToggleObserverMode(); }
     internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
+    internal void VerificationRefreshMovement(bool force = false)
+    { if (force) _movementBuiltFrom = ""; RefreshMovementPanel(); }
+    internal void VerificationFocusAdministration(Nation nation) =>
+        _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude, 5.5f);
+    internal void VerificationRevealReligion()
+    {
+        for (Node parent = _religionButtons.GetParent(); parent is not null; parent = parent.GetParent())
+            if (parent is ScrollContainer scroll) { scroll.EnsureControlVisible(_religionButtons); break; }
+    }
+    internal void VerificationFocusProvince(int province)
+    {
+        var point = _campaign.ProvinceMap.CenterOf(province);
+        _globe.FocusOn(point.Latitude, point.Longitude, 5.5f);
+    }
+    internal GlobePick VerificationCentrePick()
+    {
+        _globe.VerificationPickAt(GetViewport().GetVisibleRect().Size / 2, out var pick);
+        return pick;
+    }
+    internal string VerificationCentreTooltip() => _globe._GetTooltip(GetViewport().GetVisibleRect().Size / 2);
+    internal void VerificationInspectPick(GlobePick pick) => ShowMapSelection(pick);
 }

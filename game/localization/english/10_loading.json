@@ -24,5 +24,6 @@
   "no external mods · open user://mods or res://mods": "no external mods · open user://mods or res://mods",
   "{0} mod(s) loaded": "{0} mod(s) loaded",
   "{0} warning(s)": "{0} warning(s)",
+  "Content packs load after the base game and before mods.": "Content packs load after the base game and before mods.",
   "{0} of {1} content pack(s) active": "{0} of {1} content pack(s) active"
 }

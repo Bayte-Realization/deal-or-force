@@ -1,0 +1,89 @@
+// National decisions for demography, fertility, border migration policy, and brain drain (BrainDrain.cs, HouseholdEconomy.cs).
+{
+  "talent_retention_programme": {
+    "name": "Talent retention programme",
+    "resource_costs": {"political_points": 20},
+    "description": "Fund university fellowships, research grants and return-home incentives to stem the emigration of engineers, doctors and scientists.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0022,
+    "unavailable": "Requires active brain drain and funds to counter it",
+    "trigger": {
+      "use": [
+        "solvent"
+      ],
+      "max_brain_drain": -0.05
+    },
+    "effects": {
+      "add_modifier": {
+        "talent_retention": 0
+      },
+      "literacy": 0.004,
+      "research": 10
+    }
+  },
+  "pronatalist_family_programme": {
+    "name": "Pronatalist family charter",
+    "resource_costs": {"political_points": 25},
+    "description": "Introduce generous child grants, subsidized family housing and parental tax relief to raise birth rates and stave off demographic winter.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0025,
+    "unavailable": "Requires a solvent treasury to fund family allowances and housing grants",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "pronatalist_drive": 0
+      },
+      "standard_of_living": 0.008,
+      "stability": 0.010
+    },
+    "ai_will_do": "ai_pronatalist_charter"
+  },
+  "open_migration_doors_policy": {
+    "name": "Open doors to foreign labour",
+    "resource_costs": {"political_points": 20},
+    "description": "Lift immigration quotas and recruit workers abroad to offset an ageing workforce, boosting economic output while bringing new cultures into your cities.",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0012,
+    "unavailable": "Requires peace and a stable, solvent economy that migrants want to move to",
+    "trigger": {
+      "use": [
+        "at_peace",
+        "solvent",
+        "settled"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "open_migration_doors": 0
+      },
+      "productivity": 0.010,
+      "state.radicalism": 0.008
+    },
+    "ai_will_do": "ai_open_migration"
+  },
+  "strict_border_controls_policy": {
+    "name": "Enforce strict border controls",
+    "resource_costs": {"political_points": 15},
+    "description": "Close immigration quotas and tighten exit permits to halt demographic replacement and curb specialist flight, relying solely on native births.",
+    "cooldown_days": 450,
+    "gdp_cost_share": 0.0014,
+    "unavailable": "Requires treasury funds to staff border checkpoints and migration enforcement",
+    "trigger": {
+      "use": [
+        "solvent"
+      ]
+    },
+    "effects": {
+      "add_modifier": {
+        "strict_border_controls": 0
+      },
+      "stability": 0.012,
+      "market_access": -0.02
+    },
+    "ai_will_do": "ai_strict_borders"
+  }
+}

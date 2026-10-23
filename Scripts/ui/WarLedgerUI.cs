@@ -51,7 +51,7 @@ public partial class DealOrForceGame
     private int _warDetailBuiltFor = -1;
 
     /// <summary>How lopsided a war has to be before its front line reaches the end of the bar.</summary>
-    private static float WarLedgerBarScale => Ui.Metric("war_ledger.bar_scale", 40f);
+    private static float WarLedgerBarScale => Ui.Metric("war_ledger.bar_scale", 100f);
 
     /// <summary>The same for one part of a war's score, which is a fraction of the whole.</summary>
     private static float WarLedgerPartScale => Ui.Metric("war_ledger.part_scale", 20f);
@@ -227,9 +227,7 @@ public partial class DealOrForceGame
     {
         _openScreen = "Wars";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        _warLedgerLayer.Visible = true;
-        _warLedgerLayer.MoveToFront();
+        RaiseWorkspaceLayer(_warLedgerLayer);
         ShowWarLedgerList();
     }
 
@@ -532,6 +530,7 @@ public partial class DealOrForceGame
         var mine = _campaign.Player is not null && war.Involves(_campaign.Player.Id);
 
         row.WarId = war.Id;
+        row.Bar.Name = "WarLedgerScoreBar" + war.Id;
         var styled = mine ? 1 : 0;
         if (row.Styled != styled)
         {
@@ -572,6 +571,12 @@ public partial class DealOrForceGame
         var standing = new List<string> { WarStanding(war, attacker, defender) };
         standing.Add(Simulation.Loc.Format("{0} province(s) of front", (war.AttackerFront.Count + war.DefenderFront.Count).ToString("N0")));
         if (battles > 0) standing.Add(Simulation.Loc.Format("{0} battle(s)", battles.ToString("N0")));
+        // Why it was declared. A war the map opened with has no reason recorded because nobody
+        // in this campaign declared it - a scenario's wars are history, not decisions - and
+        // saying "no reason given" about them would be the ledger inventing an accusation the
+        // simulation never made. So the segment is shown when there is something to show.
+        var reason = WarReason(war);
+        if (reason.Length > 0) standing.Add(reason);
         row.Standing.Text = string.Join("  ·  ", standing);
 
         row.Losses.Text = Fmt.People(war.AttackerLosses + war.DefenderLosses);
@@ -610,6 +615,17 @@ public partial class DealOrForceGame
         return Simulation.Loc.Format("{0} · {1} ahead", score,
             (war.WarScore > 0f ? attacker?.DisplayName : defender?.DisplayName) ?? Tr("nobody"));
     }
+
+    /// <summary>
+    /// Why this war was declared, in the words of whoever declared it.
+    ///
+    /// A war a government could give no reason for is the expensive kind - it costs it standing
+    /// at home and abroad - and until now a player had no way to tell those wars apart from the
+    /// justified ones. The reason was worked out at the declaration, charged for, and thrown
+    /// away. It is kept on the war now, and said here, so the map explains itself.
+    /// </summary>
+    private string WarReason(StrategicWar war) =>
+        Tr(Simulation.CasusBelliNames.Of(war.Justification));
 
     private ScenarioState WarObjective(StrategicWar war) =>
         war.ClaimedStateMapIndex < 0
@@ -788,10 +804,12 @@ public partial class DealOrForceGame
         standing.HorizontalAlignment = HorizontalAlignment.Center;
         front.AddChild(standing);
         var tug = Bar(24);
+        tug.Name = "WarLedgerDetailScoreBar";
         tug.Tug(Mathf.Clamp(war.WarScore / WarLedgerBarScale, -1f, 1f), attackerColour, defenderColour);
         front.AddChild(tug);
         var scale = Body(Simulation.Loc.Format("the front line is drawn at the war score; the end of the bar is {0}",
             WarLedgerBarScale.ToString("0")), 11, Ui.Colour("text.faint"));
+        scale.Name = "WarLedgerScaleCaption";
         scale.HorizontalAlignment = HorizontalAlignment.Center;
         front.AddChild(scale);
         faces.AddChild(front);
@@ -889,6 +907,23 @@ public partial class DealOrForceGame
         var defendingDivisions = war.Side(false).Sum(id => committed.GetValueOrDefault(id));
         Split(going, "DIVISIONS COMMITTED", attackingDivisions, defendingDivisions,
             Simulation.Loc.Format("{0} against {1}", attackingDivisions.ToString("N0"), defendingDivisions.ToString("N0")));
+        // A front where nobody is ordered to advance is not a broken front necessarily - it
+        // is a front that is holding - and a player looking at two armies standing still
+        // deserves to see which of the two it is, in numbers.
+        var advancing = 0;
+        var holding = 0;
+        var reserve = 0;
+        foreach (var army in _campaign.Armies)
+        {
+            if (army.AssignedWarId != war.Id) continue;
+            if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) advancing++;
+            else if (army.OrderKind == ArmyOrder.ReserveFront) reserve++;
+            else holding++;
+        }
+        going.AddChild(Yielding(Body(Simulation.Loc.Format(
+            "{0:N0} ordered to advance · {1:N0} holding · {2:N0} in reserve",
+            advancing, holding, reserve), 11,
+            advancing > 0 ? Ui.Colour("text.body_soft") : Ui.Colour("state.warning"))));
         if (attacker is not null && defender is not null)
         {
             going.AddChild(new Control { CustomMinimumSize = new Vector2(0, 2) });

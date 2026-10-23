@@ -141,6 +141,9 @@ public partial class DealOrForceGame
         Add("pops", "PEOPLE", "pops [region name]",
             "A region's people three ways: by trade, by class, and by sector. The selected " +
             "region unless one is named.", ConsolePops, "population");
+        Add("migration", "PEOPLE", "migration [DEU]",
+            "Brain drain, talent inflow and regional migration balance for a country.",
+            ConsoleMigration, "braindrain");
 
         // ------------------------------------------------------------------------- the war --
         Add("wars", "WAR", "wars", "Every war being fought, with its score and its fronts.", _ => ConsoleWars());
@@ -342,6 +345,16 @@ public partial class DealOrForceGame
             "A verse, and eight seconds later the game closes. It does not save first. " +
             "The verse is in game/common/console.",
             _ => ConsoleTouchGrass());
+        // And two that cannot be taken back, after the routes of Deltarune that cannot either.
+        Add("snowgrave", "FUN", "snowgrave",
+            "The world freezes under a thick sheet of ice. The calendar goes on; nothing else ever " +
+            "moves again, and the music stops for good. Saved with the world - there is no way back.",
+            _ => ConsoleSnowgrave());
+        Add("weirdroute", "FUN", "weirdroute",
+            "The music stops, and every army in the world - and every one raised after - marches over " +
+            "any border to the nearest water and walks into it. A world with no water gets static " +
+            "instead. Saved with the world - there is no way back.",
+            _ => ConsoleWeirdRoute());
 
         _consoleCommands = table;
         _consoleByName = new Dictionary<string, ConsoleCommand>(StringComparer.OrdinalIgnoreCase);
@@ -406,8 +419,9 @@ public partial class DealOrForceGame
         foreach (var command in _consoleCommands)
         {
             // Not itself, or it recurses; not `clear`, or the report is wiped as it is written;
-            // not `touchgrass`, or the test closes the game it is testing.
-            if (command.Name is "selftest" or "clear" or "touchgrass") continue;
+            // not `touchgrass`, or the test closes the game it is testing; not the curses, or
+            // it spoils the world it is testing for good.
+            if (command.Name is "selftest" or "clear" or "touchgrass" or "snowgrave" or "weirdroute") continue;
             try
             {
                 command.Run("");
@@ -811,6 +825,26 @@ public partial class DealOrForceGame
                 .Take(6).Select(row => (DemographyCatalog.CultureName(row.Culture), row.Size))));
     }
 
+    private string ConsoleMigration(string argument)
+    {
+        var nation = ConsoleNation(argument);
+        if (nation is null || _campaign is null) return "No such country.";
+        var dest = _campaign.NationById(nation.BrainDrainDestinationId);
+        var src = _campaign.NationById(nation.BrainGainSourceId);
+        var states = _campaign.StatesOf(nation)
+            .OrderByDescending(s => Math.Abs(s.ReviewNetMigration))
+            .ThenByDescending(s => s.BrainDrainPressure)
+            .Take(6)
+            .Select(s => $"    {s.Name,-24} net {Fmt.PeopleDelta(s.ReviewNetMigration),10} · pressure {Fmt.Percent(s.BrainDrainPressure)} · literacy {Fmt.Percent(s.Literacy)}");
+        return EscapeBb(
+            $"{nation.Name} ({nation.Tag}) · weekly {Fmt.PeopleDelta(nation.WeeklyNetMigration)} · cumulative {Fmt.PeopleDelta(nation.CumulativeNetMigration)}\n" +
+            $"  brain flow   {nation.BrainDrainRate:+0.0%;-0.0%;0.0%} · " +
+            (dest is not null ? $"primary outflow to {dest.Name} ({dest.Tag})"
+                : src is not null ? $"primary inflow from {src.Name} ({src.Tag})"
+                : "no active cross-border stream") + "\n" +
+            "  REGIONS\n" + string.Join("\n", states));
+    }
+
     // =====================================================================================
     //  The war
     // =====================================================================================
@@ -874,7 +908,10 @@ public partial class DealOrForceGame
         if (war is null) return $"{_campaign.Player.Name} is not at war.";
         // Signed from the player's side, because that is how anybody testing a peace thinks
         // about it: 60 means "I am winning by sixty", whichever side of the war I am on.
-        war.WarScore = war.AttackerId == _campaign.Player.Id ? score : -score;
+        var low = MathF.Min(_campaign.Defines.WarScoreMin, _campaign.Defines.WarScoreMax);
+        var high = MathF.Max(_campaign.Defines.WarScoreMin, _campaign.Defines.WarScoreMax);
+        var signed = war.AttackerId == _campaign.Player.Id ? score : -score;
+        war.WarScore = Math.Clamp(signed, low, high);
         Refresh();
         return $"{EscapeBb(war.Name)}: war score set to {war.WarScore:0.0}. `peace` opens the conference.";
     }
@@ -1494,9 +1531,11 @@ public partial class DealOrForceGame
         {
             var blocked = DecisionCatalog.BlockReason(_campaign, nation, definition);
             var cost = DecisionCatalog.Cost(nation, definition);
+            var resources = DecisionResources.PriceText(nation, definition);
+            var resourceLabel = resources.Length > 0 ? " · " + EscapeBb(resources) : "";
             return blocked.Length == 0
-                ? $"  {Bb("state.positive")}{definition.Id}[/color]  ${cost:0.00}B"
-                : $"  {Bb("text.muted")}{definition.Id}[/color]  ${cost:0.00}B  - {EscapeBb(blocked)}";
+                ? $"  {Bb("state.positive")}{definition.Id}[/color]  ${cost:0.00}B{resourceLabel}"
+                : $"  {Bb("text.muted")}{definition.Id}[/color]  ${cost:0.00}B{resourceLabel}  - {EscapeBb(blocked)}";
         }).ToArray();
         return rows.Length == 0 ? "The decision catalogue is empty." : string.Join("\n", rows);
     }
@@ -1607,8 +1646,13 @@ public partial class DealOrForceGame
         if (node is PanelContainer panel && node.HasMeta("skin_panel_surface"))
         {
             var surface = (PanelSurface)node.GetMeta("skin_panel_surface").AsInt32();
-            panel.AddThemeStyleboxOverride("panel", node.GetMeta("skin_campaign_surface").AsBool()
-                ? CampaignPanelStyle(surface) : PanelStyle(surface));
+            var inCampaign = node.GetMeta("skin_campaign_surface").AsBool();
+            panel.AddThemeStyleboxOverride("panel", inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
+            // A menu window's edge is a child of its own, drawn over the artwork, so a skin change
+            // has to repaint that child as well or the line keeps the old tint
+            // (DealOrForceGame.TexturedPanel).
+            if (!inCampaign && panel.GetNodeOrNull<Panel>("ShellEdge") is { } edge)
+                edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
         }
         if (node is Button button && node.HasMeta("skin_button_primary"))
         {

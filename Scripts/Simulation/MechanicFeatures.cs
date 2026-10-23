@@ -14,13 +14,25 @@ public sealed partial class Defines
         ["navy"] = true, ["research"] = true, ["construction"] = true,
         ["recruitment"] = true, ["decisions"] = true, ["events"] = true,
         ["politics"] = true, ["movements"] = true, ["colonisation"] = true,
-        ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true,
+        ["subjects"] = true, ["formable_nations"] = true, ["secession"] = true, ["culture_union"] = true,
         ["war_damage"] = true, ["war_weariness"] = true, ["militia"] = true,
-        ["historical_norms"] = true, ["public_reputation"] = true, ["seasonal_water"] = true, ["movement_lifecycle"] = true,
+        ["historical_norms"] = true, ["public_reputation"] = true, ["seasons"] = true, ["seasonal_water"] = true, ["seasonal_roads"] = true, ["weather"] = true, ["movement_lifecycle"] = true,
         ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true, ["deals"] = true,
-        ["resident_awareness"] = true, ["domestic_crises"] = true, ["organizations"] = true,
+        ["resident_awareness"] = true, ["domestic_crises"] = true, ["political_cohorts"] = true, ["federal_fracture"] = true, ["organizations"] = true,
         ["escalation"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true, ["coups"] = true,
-        ["foreign_assistance"] = true
+        ["foreign_assistance"] = true, ["government_promises"] = true, ["strategic_goals"] = true, ["state_identity"] = true,
+        ["tactical_doctrines"] = true, ["strategic_doctrines"] = true,
+        // The union and demographic cycles ship enabled; the data files 78 and 79 declare
+        // the same. They were missing from this compiled table, so a mod that shipped no
+        // override saw a different world from the one the package describes.
+        ["union_cohesion"] = true, ["demographic_cycle"] = true,
+        // Intelligence networks and the world-order emergency on top: dormant content the
+        // console `feature` command can turn on, and a save that predates them agrees with
+        // what the shipped data declares because the data declares the same thing.
+        ["intelligence"] = true, ["world_order_emergency"] = false,
+        // Who leads a country, and what happens to them. A ruler is a person with traits,
+        // and the traits feed the same modifier totals a national spirit does.
+        ["rulers"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -38,11 +50,11 @@ public sealed partial class Defines
         ["RecruitmentSystem"] = "recruitment", ["EventSystem"] = "events",
         ["GovernanceEvents"] = "politics", ["MovementRules"] = "movements", ["MovementAi"] = "movements",
         ["ColonisationCore"] = "colonisation", ["SubjectSystem"] = "subjects", ["SubmissionSystem"] = "subjects",
-        ["PeacefulFormationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
+        ["PeacefulFormationAi"] = "formable_nations", ["FormableProclamationAi"] = "formable_nations", ["SecessionEvents"] = "secession",
         ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
         ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia",
         ["Escalation"] = "escalation", ["ProxyWars"] = "proxy_wars", ["Factions"] = "de_facto_factions", ["Coups"] = "coups",
-        ["ForeignAssistance"] = "foreign_assistance"
+        ["ForeignAssistance"] = "foreign_assistance", ["Rulers"] = "rulers"
     };
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -115,10 +127,12 @@ public static class MechanicFeatures
     {
         "long_range_forces", "aviation", "drones", "artillery", "air_defence", "navy",
         "research", "construction", "recruitment", "decisions", "events", "politics",
-        "movements", "colonisation", "subjects", "formable_nations", "secession",
-        "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasonal_water", "movement_lifecycle", "public_debt",
-        "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises",
-        "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance"
+        "movements", "colonisation", "subjects", "formable_nations", "secession", "culture_union",
+        "war_damage", "war_weariness", "militia", "historical_norms", "public_reputation", "seasons", "seasonal_water", "seasonal_roads", "weather", "movement_lifecycle", "public_debt",
+        "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
+        "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
+        "government_promises", "strategic_goals", "state_identity", "rulers", "intelligence", "world_order_emergency", "tactical_doctrines",
+        "strategic_doctrines", "union_cohesion", "demographic_cycle"
     };
 
     public static Dictionary<string, string> CommandDefaults()
@@ -126,25 +140,31 @@ public static class MechanicFeatures
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         void Bind(string flag, params string[] commands)
         { foreach (var command in commands) result[command] = flag; }
-        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand");
+        Bind("navy", "SetFleetOrderCommand", "OrderHullsCommand", "CommissionNewFleetCommand", "EmbarkArmiesCommand", "LaunchInvasionCommand");
         Bind("research", "SetResearchCommand");
         Bind("construction", "QueueConstructionCommand", "DemolishBuildingCommand");
         Bind("recruitment", "RaiseArmyCommand");
         Bind("decisions", "TakeDecisionCommand");
         Bind("politics", "ChangePoliticsCommand", "SetPolicyRateCommand", "SetGovernmentFocusCommand");
-        Bind("domestic_crises", "StartCrisisResponseCommand");
+        Bind("domestic_crises", "StartCrisisResponseCommand", "ConciliateRegionCommand");
         Bind("movements", "MovementActionCommand", "MovementDealingCommand");
         Bind("colonisation", "ColoniseCommand");
-        Bind("subjects", "OfferSubmissionCommand");
+        Bind("subjects", "OfferSubmissionCommand", "ConsolidateSubjectsCommand");
         Bind("formable_nations", "FormNationCommand", "InviteFormationCommand");
         Bind("war_damage", "RebuildRegionCommand");
         Bind("public_reputation", "StartPublicOutreachCommand");
         Bind("public_debt", "ManageDebtCommand");
         Bind("escalation", "HoldTalksCommand");
         Bind("proxy_wars", "SponsorWarCommand");
-        Bind("deals", "ProposeDealCommand", "RespondDealCommand");
+        Bind("deals", "ProposeDealCommand", "RespondDealCommand", "AskForCorridorCommand");
         Bind("foreign_assistance", "RequestForeignAssistanceCommand", "RespondForeignAssistanceCommand");
         Bind("organizations", "OrganizationCommand");
+        Bind("intelligence", "IntelNetworkCommand");
+        Bind("government_promises", "MakePromiseCommand");
+        Bind("strategic_goals", "AdoptGoalCommand", "AbandonGoalCommand");
+        Bind("state_identity", "DeclareStateIdentityCommand");
+        Bind("tactical_doctrines", "StudyDoctrineCommand");
+        Bind("strategic_doctrines", "AdoptStrategicDoctrineCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
     }
@@ -164,8 +184,17 @@ public static class MechanicFeatures
         return false;
     }
 
-    public static bool ValidId(string id) => !string.IsNullOrWhiteSpace(id) && id.Length <= 80 &&
-        id.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+    public static bool ValidId(string id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 80) return false;
+        if (BuiltIns.Contains(id)) return true;
+        for (var i = 0; i < id.Length; i++)
+        {
+            var c = id[i];
+            if (!char.IsAsciiLetterOrDigit(c) && c != '_') return false;
+        }
+        return true;
+    }
 
     public static string Of(SupportKind kind) => kind switch
     {

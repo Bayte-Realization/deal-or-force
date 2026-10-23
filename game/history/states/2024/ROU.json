@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2021 census by county (Hungarians in Harghita, Covasna, Mures, Bihor, Satu Mare).
 {
   // Alba
   "ro_ab": {
     "population": 883183,
     "urbanization": 0.44,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.8987, "hungarian": 0.05, "romani": 0.034, "ukrainian": 0.0083, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 0.818, "Coal": 0.394, "Oil": 0.464, "IronOre": 0.208, "RareEarths": 0.087, "NaturalGas": 0.547, "Timber": 2.558, "Bauxite": 0.077, "Uranium": 0.006 }
   },
@@ -23,7 +24,7 @@
   "ro_ar": {
     "population": 1032883,
     "urbanization": 0.5,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.7342, "hungarian": 0.2, "romani": 0.05, "ukrainian": 0.0083, "german": 0.0017, "russian": 0.0017, "turkish": 0.0017, "bulgarian": 0.0008, "serbian": 0.0008, "tatar": 0.0008 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.849, "Coal": 0.423, "Oil": 0.807, "IronOre": 0.245, "RareEarths": 0.063, "NaturalGas": 0.551, "Timber": 2.512, "Bauxite": 0.071, "Uranium": 0.015 }
   },
@@ -31,7 +32,7 @@
   "ro_ag": {
     "population": 2003739,
     "urbanization": 0.56,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.703, "Coal": 0.174, "Oil": 0.274, "IronOre": 0.072, "RareEarths": 0.039, "NaturalGas": 0.145, "Timber": 0.709, "Bauxite": 0.059, "Uranium": 0.003 }
   },
@@ -39,7 +40,7 @@
   "ro_bc": {
     "population": 637523,
     "urbanization": 0.64,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.78, "Coal": 0.349, "Oil": 0.391, "IronOre": 0.342, "RareEarths": 0.135, "NaturalGas": 0.831, "Timber": 1.095, "Bauxite": 0.185, "Uranium": 0.012 }
   },
@@ -47,7 +48,7 @@
   "ro_bz": {
     "population": 840410,
     "urbanization": 0.48,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.155, "Coal": 0.578, "Oil": 0.433, "IronOre": 0.357, "RareEarths": 0.134, "NaturalGas": 0.734, "Timber": 3.089, "Bauxite": 0.093, "Uranium": 0.013 }
   },
@@ -55,7 +56,7 @@
   "ro_cj": {
     "population": 893917,
     "urbanization": 0.58,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.8036, "hungarian": 0.15, "romani": 0.03, "ukrainian": 0.0083, "german": 0.0018, "russian": 0.0018, "turkish": 0.0018, "bulgarian": 0.0009, "serbian": 0.0009, "tatar": 0.0009 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.115, "Coal": 0.495, "Oil": 0.536, "IronOre": 0.262, "RareEarths": 0.089, "NaturalGas": 0.482, "Timber": 3.337, "Bauxite": 0.156, "Uranium": 0.008 }
   },
@@ -63,7 +64,7 @@
   "ro_cl": {
     "population": 5514155,
     "urbanization": 0.63,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.949, "Coal": 0.151, "Oil": 0.488, "IronOre": 0.14, "RareEarths": 0.063, "NaturalGas": 0.405, "Timber": 2.304, "Bauxite": 0.066, "Uranium": 0.009 }
   },
@@ -71,7 +72,7 @@
   "ro_dj": {
     "population": 1409164,
     "urbanization": 0.47,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.235, "Coal": 0.091, "Oil": 0.235, "IronOre": 0.106, "RareEarths": 0.04, "NaturalGas": 0.19, "Timber": 2.207, "Bauxite": 0.049, "Uranium": 0.006 }
   },
@@ -79,7 +80,7 @@
   "ro_gj": {
     "population": 530837,
     "urbanization": 0.52,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.06, "Coal": 0.083, "Oil": 0.147, "IronOre": 0.136, "RareEarths": 0.028, "NaturalGas": 0.252, "Timber": 0.971, "Bauxite": 0.04, "Uranium": 0.002 }
   },
@@ -87,7 +88,7 @@
   "ro_hr": {
     "population": 315765,
     "urbanization": 0.44,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "hungarian": 0.8513, "romanian": 0.1204, "romani": 0.02, "ukrainian": 0.0083 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.343, "Coal": 0.159, "Oil": 0.23, "IronOre": 0.145, "RareEarths": 0.032, "NaturalGas": 0.354, "Timber": 0.793, "Bauxite": 0.043, "Uranium": 0.006 }
   },
@@ -95,7 +96,7 @@
   "ro_is": {
     "population": 1129794,
     "urbanization": 0.47,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.316, "Coal": 0.222, "Oil": 0.394, "IronOre": 0.306, "RareEarths": 0.052, "NaturalGas": 0.481, "Timber": 3.068, "Bauxite": 0.08, "Uranium": 0.014 }
   },
@@ -103,7 +104,7 @@
   "ro_mm": {
     "population": 591693,
     "urbanization": 0.57,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.7879, "hungarian": 0.12, "ukrainian": 0.05, "romani": 0.034, "german": 0.0018, "russian": 0.0018, "turkish": 0.0018, "bulgarian": 0.0009, "serbian": 0.0009, "tatar": 0.0009 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.26, "Coal": 0.254, "Oil": 0.402, "IronOre": 0.358, "RareEarths": 0.065, "NaturalGas": 0.83, "Timber": 1.392, "Bauxite": 0.144, "Uranium": 0.01 }
   },
@@ -111,7 +112,7 @@
   "ro_ms": {
     "population": 664823,
     "urbanization": 0.47,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.4669, "hungarian": 0.45, "romani": 0.07, "ukrainian": 0.0083, "german": 0.0011, "russian": 0.0011, "turkish": 0.0011, "bulgarian": 0.0005, "serbian": 0.0005, "tatar": 0.0005 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.296, "Coal": 0.19, "Oil": 0.276, "IronOre": 0.202, "RareEarths": 0.051, "NaturalGas": 0.637, "Timber": 1.142, "Bauxite": 0.124, "Uranium": 0.011 }
   },
@@ -119,7 +120,7 @@
   "ro_sv": {
     "population": 789269,
     "urbanization": 0.38,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.9019, "ukrainian": 0.05, "romani": 0.034, "hungarian": 0.0051, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.056, "Coal": 0.112, "Oil": 0.143, "IronOre": 0.1, "RareEarths": 0.032, "NaturalGas": 0.271, "Timber": 2.874, "Bauxite": 0.045, "Uranium": 0.003 }
   },
@@ -127,7 +128,7 @@
   "ro_tm": {
     "population": 1166179,
     "urbanization": 0.46,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.8987, "hungarian": 0.05, "romani": 0.034, "ukrainian": 0.0083, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.474, "Coal": 0.535, "Oil": 0.431, "IronOre": 0.422, "RareEarths": 0.093, "NaturalGas": 0.767, "Timber": 2.602, "Bauxite": 0.118, "Uranium": 0.01 }
   },
@@ -135,7 +136,7 @@
   "ro_vn": {
     "population": 953210,
     "urbanization": 0.54,
-    "cultures": { "romanian": 0.8846, "hungarian": 0.0595, "romani": 0.0357, "ukrainian": 0.0113, "german": 0.002, "russian": 0.002, "turkish": 0.002, "bulgarian": 0.001, "serbian": 0.001, "tatar": 0.001 },
+    "cultures": { "romanian": 0.943, "romani": 0.034, "ukrainian": 0.0083, "hungarian": 0.0051, "german": 0.0021, "russian": 0.0021, "turkish": 0.0021, "bulgarian": 0.0011, "serbian": 0.0011, "tatar": 0.0011 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.419, "Coal": 0.157, "Oil": 0.513, "IronOre": 0.257, "RareEarths": 0.061, "NaturalGas": 0.461, "Timber": 0.864, "Bauxite": 0.115, "Uranium": 0.013 }
   }

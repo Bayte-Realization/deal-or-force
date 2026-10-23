@@ -1,0 +1,26 @@
+{
+  "note": "Restore the authored movement or homeland banners. These are not all official party logos. Runtime sprite bindings take precedence over old tag-named PNGs; see game/gfx/flags/96_movement_historical_bindings.json and docs/MOVEMENT_FLAG_CORRECTIONS_2026_10_20_RU.md.",
+  "banners": {
+    "flag_afc": "flag_cod",
+    "flag_bvc": "flag_culture_bavarian",
+    "flag_scv": "flag_culture_scottish",
+    "flag_wcv": "flag_culture_welsh",
+    "flag_qcv": "flag_culture_quebecois",
+    "flag_bdf": "flag_blr_nationalism",
+    "flag_ccc": "flag_culture_catalan_nationalism",
+    "flag_ich": "flag_culture_chechen",
+    "flag_ipb": "flag_culture_igbo",
+    "flag_jkl": "flag_culture_kashmiri",
+    "flag_jsm": "flag_culture_sindhi",
+    "flag_knu": "flag_culture_karen",
+    "flag_ksf": "flag_culture_kanak",
+    "flag_mjl": "flag_culture_crimean_tatar",
+    "flag_ola": "flag_culture_oromo",
+    "flag_onf": "flag_culture_somali_nationalism",
+    "flag_pkk": "flag_culture_kurdish_socialism",
+    "flag_tpl": "flag_culture_tigrayan",
+    "flag_tpn": "flag_culture_papuan",
+    "flag_ulm": "flag_culture_papuan",
+    "flag_wuc": "flag_culture_uyghur"
+  }
+}

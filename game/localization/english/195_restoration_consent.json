@@ -1,0 +1,19 @@
+{
+  "Restore the country": "Restore the country",
+  "Only a country that still has a government can be restored.": "Only a country that still has a government can be restored.",
+  "This is not a government in exile.": "This is not a government in exile.",
+  "A country can only be restored to its own homeland.": "A country can only be restored to its own homeland.",
+  "That ground is already ours.": "That ground is already ours.",
+  "The country already stands on its own ground.": "The country already stands on its own ground.",
+  "Another country already bears this name.": "Another country already bears this name.",
+  "The holder will not hand it back, and we do not hold it.": "The holder will not hand it back, and we do not hold it.",
+  "The government has returned to {0}: {1} stands again.": "The government has returned to {0}: {1} stands again.",
+  "Gave us our country back": "Gave us our country back",
+  "Authorise a return": "Authorise a return",
+  "Revoke return permission": "Revoke return permission",
+  "Permit this exiled government to recover one homeland region you hold. This can transfer an entire region. Friendship alone grants no permission; it expires after one year or one return.": "Permit this exiled government to recover one homeland region you hold. This can transfer an entire region. Friendship alone grants no permission; it expires after one year or one return.",
+  "Withdraw permission for a future return. Existing borders are not reversed.": "Withdraw permission for a future return. Existing borders are not reversed.",
+  "{0} authorises one return to a homeland region it holds.": "{0} authorises one return to a homeland region it holds.",
+  "{0} withdraws permission for a future return.": "{0} withdraws permission for a future return.",
+  "Return to a homeland region fully under your control, or obtain its holder's explicit permission. Friendship alone does not transfer land.": "Return to a homeland region fully under your control, or obtain its holder's explicit permission. Friendship alone does not transfer land."
+}

@@ -51,7 +51,7 @@ public partial class DealOrForceGame
             var button = ActionButton(tab.Label, () => SelectPolicyTab(id), 0, 34,
                 iconPath: "res://game/gfx/interface/icons/icon_" + (id == "Course" || id == "Agendas" ? "agenda" : "laws") + ".png");
             button.Name = "PolicyTab_" + id; button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.AddThemeFontSizeOverride("font_size", 12);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.ClipText = true; button.TooltipText = Ui.Tip(Tr(tab.Label));
             tabs.AddChild(button); _policyTabs[id] = button;
         }
@@ -75,27 +75,38 @@ public partial class DealOrForceGame
 
     private static VBoxContainer PolicyColumn(Control parent, string name, bool expand)
     {
+        var frame = new PanelContainer { Name = name + "Frame", SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = expand ? SizeFlags.ExpandFill : SizeFlags.Fill };
+        frame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(frame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        parent.AddChild(frame);
         var scroll = new ScrollContainer { Name = name + "Scroll", SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsHorizontal = expand ? SizeFlags.ExpandFill : SizeFlags.Fill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
-        parent.AddChild(scroll);
+        frame.AddChild(scroll);
         var rows = new VBoxContainer { Name = name, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         rows.AddThemeConstantOverride("separation", 8); scroll.AddChild(rows); return rows;
     }
 
     private static void ClearPolicyRows(Control parent)
     {
-        foreach (var child in parent.GetChildren()) { parent.RemoveChild(child); child.QueueFree(); }
+        foreach (var child in parent.GetChildren())
+        {
+            // A canvas is not a row. The doctrine tree and its row of books are built once and
+            // held across the page's rebuilds, because rebuilding a tree every day would lose the
+            // zoom, the scroll and the card the player was reading (DoctrineTreeUI).
+            if (child.HasMeta(KeepOnRefresh)) { parent.RemoveChild(child); continue; }
+            parent.RemoveChild(child);
+            child.QueueFree();
+        }
     }
 
     private void ShowPoliticalPolicies()
     {
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
-        foreach (var other in new[] { _diplomacyLayer, _ledgerLayer, _warLedgerLayer, _productionLayer, _tradeScreenLayer })
-            if (other is not null) other.Visible = false;
         _openScreen = "Laws";
-        _policyLayer.Visible = true; _policyLayer.MoveToFront();
+        RaiseWorkspaceLayer(_policyLayer);
         _policyWorkspaceFeedback.Text = "";
         SelectPolicyTab(_policyTab);
         _policySearch.GrabFocus(); UpdateScreenButtons();
@@ -111,6 +122,9 @@ public partial class DealOrForceGame
     private void SelectPolicyTab(string tab)
     {
         if (!_policyTabs.ContainsKey(tab)) return;
+        // Compatibility entry retained for older GUI mods: one book of war, one owner.
+        // Do not render laws underneath a tab labelled Doctrines.
+        if (tab == "Doctrines") { ClosePolicyWorkspace(); OpenArmyDoctrinePage(); return; }
         _policyTab = tab; _policyCategory = ""; _policySelected = ""; _policySearch.Text = "";
         foreach (var (id, button) in _policyTabs) StyleButton(button, id == tab);
         _policyOptionsScroll.ScrollVertical = 0;
@@ -185,8 +199,14 @@ public partial class DealOrForceGame
     {
         if (_policyLayer is not { Visible: true } || _campaign?.Player is null) return;
         var n = _campaign.Player;
+        // Political credit belongs where political action is taken, and the Laws workspace is
+        // where it is taken: a law, an agenda, a course in war all come out of this number.
+        var credit = _campaign.Defines.PoliticalPointsPerWeek +
+            _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
         _policySummary.Text = n.DisplayName + " · " + Tr("Stability") + " " + Fmt.Percent(n.Stability) +
-            " · " + Tr("Treasury") + " " + Fmt.Money(n.Treasury) + " · " + Tr("Enacted laws") + " " + n.Laws.Count;
+            " · " + Tr("Treasury") + " " + Fmt.Money(n.Treasury) + " · " + Tr("Enacted laws") + " " + n.Laws.Count +
+            " · " + Tr("Political credit") + " " + Fmt.Number(n.PoliticalPoints) +
+            " (" + Loc.Format("{0}/week", Fmt.Number(credit)) + ")";
         // Do not tear down focused controls on every simulation frame.
         if (_policyBuiltDay == _campaign.ElapsedDays) return;
         _policyBuiltDay = _campaign.ElapsedDays;
@@ -198,6 +218,8 @@ public partial class DealOrForceGame
             ShowNationalCourse(n, _policyOptions);
             _policyOptionsScroll.ScrollVertical = scroll;
         }
+        // Doctrines are the army's book now: they are read on the Army panel's own tab
+        // (DoctrineTreeUI, ArmyPanelUI), and paid for in the experience the army earns.
         RefreshPolicyPreview();
     }
 }

@@ -20,5 +20,26 @@ static class WeatherReadabilityTests
         var c = new Campaign(1010); var fingerprint = CampaignFingerprint.Of(c);
         _ = WeatherReadability.Read(c.Defines);
         Check(CampaignFingerprint.Of(c) == fingerprint, "weather readout does not mutate a campaign");
+        Check(WeatherReadability.LayersAllowed(null) && WeatherReadability.LayersAllowed(c), "clouds and mist draw until a campaign turns them off");
+        c.SetFeature("weather", false);
+        Check(!WeatherReadability.LayersAllowed(c), "defines can switch the cloud and mist shell off");
+        c.Date = new GameDate(2024, 1, 15);
+        Check(WaterConditions.RoadThroughput(c, 60) < 0.9f && WaterConditions.RoadThroughput(c, 0) == 1f,
+            "January slows northern roads and leaves the equator open");
+        Check(WaterConditions.SeasonCaption(c, 52) == "Deep winter" && WaterConditions.SeasonCaption(c, 0) == "The wet season",
+            "January is deep winter in the north and a wet season on the equator");
+        c.Date = new GameDate(2024, 7, 15);
+        Check(WaterConditions.SeasonCaption(c, 52) == "High summer" && WaterConditions.SeasonCaption(c, -52) == "Deep winter",
+            "July is high summer in the north and deep winter in the south");
+        c.Date = new GameDate(2024, 1, 15);
+        c.SetFeature("seasons", false);
+        Check(WaterConditions.RoadThroughput(c, 60) == 1f && WaterConditions.LakeAvailability(c, 60) == 1f
+              && WaterConditions.CrossingDifficulty(c, 55) == 1f,
+            "seasons master switch returns water and roads to fair weather");
+        Check(WaterConditions.SeasonCaption(c, 52) == "", "a switched-off calendar does not invent a season");
+        c.SetFeature("seasons", true);
+        c.SetFeature("seasonal_roads", false);
+        Check(WaterConditions.RoadThroughput(c, 60) == 1f && WaterConditions.LakeAvailability(c, 60) < 1f,
+            "road season switches off without silencing winter lakes");
     }
 }

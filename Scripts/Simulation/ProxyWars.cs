@@ -15,6 +15,14 @@ public sealed partial class Defines
     public float ProxyMoneyShare { get; set; } = 0.35f;
     /// <summary>What it costs, in billions, to bring one division from no equipment to full.</summary>
     public float ProxyEquipmentValue { get; set; } = 0.60f;
+    /// <summary>
+    /// The share of its own depots' daily intake of ammunition and of arms a backer ships to
+    /// its client, for each level of support above the first (advisers and money send none):
+    /// a quarter at weapons, half at weapons at scale.
+    /// Without it a war fought on foreign shells ran dry in four months whatever its backers
+    /// sent (StrategicStockpiles.Ship).
+    /// </summary>
+    public float ProxyShipmentShare { get; set; } = 0.25f;
     /// <summary>Volunteers a week at the highest level, as a share of the sponsor's people, and at most.</summary>
     public float ProxyVolunteerShare { get; set; } = 0.0000015f;
     public float ProxyVolunteersCap { get; set; } = 1500f;
@@ -55,6 +63,9 @@ public sealed class Sponsorship
     /// <summary>Billions sent so far, and last week.</summary>
     public float Delivered;
     public float LastWeekCost;
+    /// <summary>Ammunition and arms shipped from the backer's depots at the last delivery, for the reports.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public float LastShipment;
     public int UnpaidWeeks;
     /// <summary>
     /// The day before which the computer does not withdraw it for want of interest: a backing
@@ -91,7 +102,8 @@ public sealed partial class Campaign
 ///
 /// A sponsorship is the third way. The sponsor pays every week - a level of support priced as
 /// a share of its own economy - and the client receives part of it as money, the rest as
-/// weapons that re-equip its divisions, and at the highest level volunteers. The client wears
+/// weapons that re-equip its divisions; from the second level on it also ships munitions out
+/// of its own depots, and at the highest level volunteers. The client wears
 /// the backing as a modifier on its army. The sponsor is not at war with anybody, but the
 /// country it is arming against knows, and the tension between them rises (Escalation); two
 /// powers arming opposite sides of one war are a confrontation, and it shows on both of them.
@@ -261,6 +273,10 @@ public static class ProxyWars
             client.Treasury += cost * defines.ProxyMoneyShare;
             arms[client.Id] = arms.GetValueOrDefault(client.Id) + cost * (1f - defines.ProxyMoneyShare);
             backing[client.Id] = backing.GetValueOrDefault(client.Id) + s.Level;
+            // And from the backer's own depots, the shells and the guns themselves.
+            s.LastShipment = s.Level >= 2
+                ? StrategicStockpiles.Ship(c, sponsor, client, defines.ProxyShipmentShare * (s.Level - 1), days)
+                : 0f;
             if (s.Level >= 3)
                 client.ManpowerReserve += MathF.Min(defines.ProxyVolunteersCap, sponsor.Population * defines.ProxyVolunteerShare) * days / 7f;
         }

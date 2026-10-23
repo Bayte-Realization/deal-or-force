@@ -80,8 +80,64 @@ public static class MovementMethods
     /// <summary>What its situation argues for, 0 to 1.</summary>
     public static float Target(Campaign c, Nation movement, MovementDefinition definition)
     {
+        var pulls = PullsOf(c, movement, definition);
+        return M.Clamp01(0.2f + pulls.Identity * 0.6f
+                         + (pulls.Temper - 0.3f) * 0.9f
+                         + pulls.Crackdowns * 0.06f
+                         + pulls.Listed * 0.015f
+                         + pulls.Arms * 0.08f
+                         - pulls.Legitimacy * 0.35f
+                         - pulls.Ground);
+    }
+
+    /// <summary>
+    /// The single strongest reason the methods are where they are. An English key.
+    /// Reading it does not move the movement.
+    /// </summary>
+    public static string LoudestPressure(Campaign c, Nation movement)
+    {
+        var state = movement?.Movement;
+        if (c is null || state is null || state.Dissolved) return "";
+        var pulls = PullsOf(c, movement, Movements.DefinitionOf(movement));
+        var anger = MathF.Abs((pulls.Temper - 0.3f) * 0.9f);
+        var crack = pulls.Crackdowns * 0.06f;
+        var arms = pulls.Arms * 0.08f;
+        var listed = pulls.Listed * 0.015f;
+        var standing = pulls.Legitimacy * 0.35f;
+        var ground = pulls.Ground;
+        var best = anger;
+        var cause = (pulls.Temper - 0.3f) >= 0f
+            ? "The people who follow it are already angry."
+            : "The people who follow it are quiet, and that is pulling it back.";
+        void Take(float weight, string sentence)
+        {
+            if (weight <= best) return;
+            best = weight;
+            cause = sentence;
+        }
+        Take(crack, "Crackdowns this year are pushing it toward the gun.");
+        Take(arms, "Backers are sending it weapons.");
+        Take(listed, "Being listed as terrorists is hardening it.");
+        Take(standing, "The world is taking it seriously, and that is pulling it back from the gun.");
+        Take(ground, "Ground of its own is pulling it back toward politics.");
+        if (best < 0.04f) return "It is still close to the way it began.";
+        return cause;
+    }
+
+    struct MethodPulls
+    {
+        public float Temper;
+        public float Crackdowns;
+        public float Listed;
+        public float Arms;
+        public float Legitimacy;
+        public float Ground;
+        public float Identity;
+    }
+
+    static MethodPulls PullsOf(Campaign c, Nation movement, MovementDefinition definition)
+    {
         var state = movement.Movement;
-        // The temper of the people who follow it, weighted by how much they follow it.
         float weight = 0f, radical = 0f;
         foreach (var (region, support) in state.Support)
         {
@@ -91,20 +147,25 @@ public static class MovementMethods
             weight += support;
             radical += support * place.Radicalism;
         }
-        var temper = weight > 0f ? radical / weight : 0.3f;
         var year = c.ElapsedDays - 365;
-        var crackdowns = c.Chronicle.Entries.Count(e => e.Kind == "movement_crackdown" && e.TargetId == movement.Id && e.Day >= year);
-        var listed = state.DesignatedBy.Count;
-        var arms = c.Sponsorships.Count(s => !s.Ended && s.ClientId == movement.Id && s.Level >= 2);
-        var identity = Initial(definition) - 0.3f;
-        var target = 0.2f + identity * 0.6f
-                     + (temper - 0.3f) * 0.9f
-                     + Math.Min(crackdowns, 4) * 0.06f
-                     + Math.Min(listed, 5) * 0.015f
-                     + arms * 0.08f
-                     - state.Legitimacy * 0.35f
-                     - (state.Landless ? 0f : 0.1f);
-        return M.Clamp01(target);
+        var crackdowns = 0;
+        foreach (var entry in c.Chronicle.Entries)
+            if (entry.Kind == "movement_crackdown" && entry.TargetId == movement.Id && entry.Day >= year)
+                crackdowns++;
+        var arms = 0;
+        foreach (var sponsorship in c.Sponsorships)
+            if (!sponsorship.Ended && sponsorship.ClientId == movement.Id && sponsorship.Level >= 2)
+                arms++;
+        return new MethodPulls
+        {
+            Temper = weight > 0f ? radical / weight : 0.3f,
+            Crackdowns = Math.Min(crackdowns, 4),
+            Listed = Math.Min(state.DesignatedBy.Count, 5),
+            Arms = arms,
+            Legitimacy = state.Legitimacy,
+            Ground = state.Landless ? 0f : 0.1f,
+            Identity = Initial(definition) - 0.3f
+        };
     }
 
     public static void Tick(Campaign c)

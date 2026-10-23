@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Amazigh-speaking shares by region, 2014 census.
 {
   // Chaouia-Ouardigha
   "ma_09": {
     "population": 9461498,
     "urbanization": 0.68,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.7635, "berber": 0.2, "arab_levantine": 0.0097, "arab_sudanese": 0.0073, "wolof": 0.0073, "french": 0.0061, "spanish": 0.0061 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.611, "Coal": 0.286, "Oil": 0.794, "IronOre": 0.329, "RareEarths": 0.113, "NaturalGas": 0.543, "Timber": 1.703, "Bauxite": 0.076, "Uranium": 0.011 }
   },
@@ -23,7 +24,7 @@
   "ma_10": {
     "population": 2425241,
     "urbanization": 0.43,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.8591, "berber": 0.1, "arab_levantine": 0.0109, "arab_sudanese": 0.0082, "wolof": 0.0082, "french": 0.0068, "spanish": 0.0068 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.687, "Coal": 0.355, "Oil": 0.703, "IronOre": 0.357, "RareEarths": 0.054, "NaturalGas": 0.429, "Timber": 3.064, "Bauxite": 0.083, "Uranium": 0.008 }
   },
@@ -31,7 +32,7 @@
   "ma_05": {
     "population": 2277580,
     "urbanization": 0.79,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.7635, "berber": 0.2, "arab_levantine": 0.0097, "arab_sudanese": 0.0073, "wolof": 0.0073, "french": 0.0061, "spanish": 0.0061 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 0.973, "Coal": 0.127, "Oil": 0.386, "IronOre": 0.129, "RareEarths": 0.046, "NaturalGas": 0.376, "Timber": 2.546, "Bauxite": 0.03, "Uranium": 0.003 }
   },
@@ -39,7 +40,7 @@
   "ma_14": {
     "population": 818466,
     "urbanization": 0.54,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.6205, "berber": 0.35, "arab_levantine": 0.0079, "arab_sudanese": 0.0059, "wolof": 0.0059, "french": 0.0049, "spanish": 0.0049 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.166, "Coal": 0.137, "Oil": 0.469, "IronOre": 0.238, "RareEarths": 0.078, "NaturalGas": 0.409, "Timber": 1.847, "Bauxite": 0.095, "Uranium": 0.006 }
   },
@@ -47,7 +48,7 @@
   "ma_15": {
     "population": 364863,
     "urbanization": 0.97,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.9069, "berber": 0.05, "arab_levantine": 0.0115, "arab_sudanese": 0.0086, "wolof": 0.0086, "french": 0.0072, "spanish": 0.0072 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.929, "Coal": 0.186, "Oil": 0.465, "IronOre": 0.269, "RareEarths": 0.056, "NaturalGas": 0.436, "Timber": 2.008, "Bauxite": 0.113, "Uranium": 0.008 }
   },
@@ -55,7 +56,7 @@
   "ma_11": {
     "population": 2279621,
     "urbanization": 0.74,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.5727, "berber": 0.4, "arab_levantine": 0.0073, "arab_sudanese": 0.0055, "wolof": 0.0055, "french": 0.0045, "spanish": 0.0045 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.646, "Coal": 0.186, "Oil": 0.398, "IronOre": 0.14, "RareEarths": 0.05, "NaturalGas": 0.529, "Timber": 1.319, "Bauxite": 0.097, "Uranium": 0.011 }
   },
@@ -63,7 +64,7 @@
   "ma_06": {
     "population": 7063828,
     "urbanization": 0.71,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.5249, "berber": 0.45, "arab_levantine": 0.0067, "arab_sudanese": 0.005, "wolof": 0.005, "french": 0.0042, "spanish": 0.0042 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.61, "Coal": 0.142, "Oil": 0.148, "IronOre": 0.108, "RareEarths": 0.027, "NaturalGas": 0.142, "Timber": 1.789, "Bauxite": 0.069, "Uranium": 0.003 }
   },
@@ -71,7 +72,7 @@
   "ma_04": {
     "population": 1793377,
     "urbanization": 0.59,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.5727, "berber": 0.4, "arab_levantine": 0.0073, "arab_sudanese": 0.0055, "wolof": 0.0055, "french": 0.0045, "spanish": 0.0045 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.757, "Coal": 0.256, "Oil": 0.793, "IronOre": 0.346, "RareEarths": 0.059, "NaturalGas": 0.808, "Timber": 1.67, "Bauxite": 0.175, "Uranium": 0.019 }
   },
@@ -79,7 +80,7 @@
   "ma_16": {
     "population": 186584,
     "urbanization": 0.97,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.9069, "berber": 0.05, "arab_levantine": 0.0115, "arab_sudanese": 0.0086, "wolof": 0.0086, "french": 0.0072, "spanish": 0.0072 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 0.939, "Coal": 0.275, "Oil": 0.628, "IronOre": 0.374, "RareEarths": 0.089, "NaturalGas": 0.54, "Timber": 2.119, "Bauxite": 0.098, "Uranium": 0.013 }
   },
@@ -87,7 +88,7 @@
   "ma_13": {
     "population": 2555419,
     "urbanization": 0.66,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "berber": 0.6499, "arab_maghrebi": 0.3341, "arab_levantine": 0.0042, "arab_sudanese": 0.0032, "wolof": 0.0032, "french": 0.0027, "spanish": 0.0027 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.268, "Coal": 0.204, "Oil": 0.3, "IronOre": 0.156, "RareEarths": 0.034, "NaturalGas": 0.241, "Timber": 0.907, "Bauxite": 0.029, "Uranium": 0.007 }
   },
@@ -95,7 +96,7 @@
   "ma_12": {
     "population": 302220,
     "urbanization": 0.05,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "berber": 0.6002, "arab_maghrebi": 0.3818, "arab_levantine": 0.0048, "arab_sudanese": 0.0036, "wolof": 0.0036, "french": 0.003, "spanish": 0.003 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.407, "Coal": 0.285, "Oil": 0.468, "IronOre": 0.181, "RareEarths": 0.054, "NaturalGas": 0.54, "Timber": 0.757, "Bauxite": 0.104, "Uranium": 0.005 }
   },
@@ -103,7 +104,7 @@
   "ma_01": {
     "population": 5574614,
     "urbanization": 0.65,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "arab_maghrebi": 0.8115, "berber": 0.15, "arab_levantine": 0.0103, "arab_sudanese": 0.0077, "wolof": 0.0077, "french": 0.0064, "spanish": 0.0064 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
     "resources": { "Food": 1.56, "Coal": 0.208, "Oil": 0.28, "IronOre": 0.147, "RareEarths": 0.039, "NaturalGas": 0.171, "Timber": 1.084, "Bauxite": 0.033, "Uranium": 0.003 }
   },
@@ -111,7 +112,7 @@
   "ma_03": {
     "population": 1368458,
     "urbanization": 0.28,
-    "cultures": { "arab_maghrebi": 0.63, "berber": 0.34, "arab_levantine": 0.008, "arab_sudanese": 0.006, "wolof": 0.006, "french": 0.005, "spanish": 0.005 },
+    "cultures": { "berber": 0.6002, "arab_maghrebi": 0.3818, "arab_levantine": 0.0048, "arab_sudanese": 0.0036, "wolof": 0.0036, "french": 0.003, "spanish": 0.003 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.035, "Coal": 0.304, "Oil": 0.541, "IronOre": 0.209, "RareEarths": 0.13, "NaturalGas": 0.447, "Timber": 2.694, "Bauxite": 0.102, "Uranium": 0.02 }
   }

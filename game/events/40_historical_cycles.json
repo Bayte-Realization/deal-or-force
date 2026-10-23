@@ -1,0 +1,205 @@
+// Deal or Force - historical cycles: imperial overstretch, hegemonic complacency,
+// revanchist generations, and sovereign debt reckonings ("nothing is eternal").
+{
+  "imperial_overstretch_crisis": {
+    "title": "The weight of distant provinces",
+    "description": "Garrisons, subsidies, and antagonistic provincial assemblies are draining the centre faster than the new territories pay back. The cabinet must choose between devolving authority or ruling by decree.",
+    "trigger": {
+      "min_imperial_overstretch": 0.14
+    },
+    "weight": 1.6,
+    "options": [
+      {
+        "title": "Grant provincial charters and fiscal autonomy",
+        "consequence": "Costs immediate revenue, relieves overstretch and calms the periphery.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "imperial_overstretch": -0.08,
+          "state.radicalism": -0.02,
+          "stability": 0.015
+        }
+      },
+      {
+        "title": "Double the garrisons and rule from the centre",
+        "consequence": "Order holds on the surface; peripheral anger and foreign suspicion deepen.",
+        "effects": {
+          "military_spending": 0.01,
+          "stability": 0.008,
+          "state.radicalism": 0.024,
+          "notoriety": 3.5
+        }
+      }
+    ]
+  },
+  "hegemonic_complacency": {
+    "title": "The long peace dulls the blade",
+    "description": "Years of comfortable reserves and unchallenged calm have turned procurement offices and regional commands into sinecures. Inspectors report padded rosters and obsolete depots.",
+    "trigger": {
+      "at_war": false,
+      "min_stability": 0.78,
+      "min_treasury": 120.0
+    },
+    "weight": 1.2,
+    "options": [
+      {
+        "title": "Purge the sinecures and audit the depots",
+        "consequence": "Spends political capital and ruffles the establishment, restoring sharp readiness.",
+        "effects": {
+          "political_points": -10,
+          "army_experience": 8,
+          "productivity": 0.008,
+          "stability": -0.012
+        }
+      },
+      {
+        "title": "Let the peace dividend stand",
+        "consequence": "Households remain content while field readiness quietly erodes.",
+        "effects": {
+          "standard_of_living": 0.008,
+          "stability": 0.01,
+          "army.organisation": -0.05
+        }
+      }
+    ]
+  },
+  "revanchist_generation": {
+    "title": "A generation that only knows the old map",
+    "description": "Veterans' leagues, student societies, and provincial newspapers are demanding that the government stop accepting yesterday's humiliating borders as permanent.",
+    "trigger": {
+      "at_war": false,
+      "max_stability": 0.58,
+      "max_war_support": 0.65
+    },
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Give their grievances a public platform",
+        "consequence": "War support and political energy surge, at the price of domestic agitation.",
+        "effects": {
+          "war_support": 0.07,
+          "political_points": 8,
+          "state.radicalism": 0.014
+        }
+      },
+      {
+        "title": "Keep the textbooks and the borders as they are",
+        "consequence": "Calms the streets and disappoints the nationalists.",
+        "effects": {
+          "stability": 0.014,
+          "war_support": -0.04
+        }
+      }
+    ]
+  },
+  "sovereign_debt_reckoning": {
+    "title": "The bond market closes its window",
+    "description": "Creditors are demanding a higher premium to roll over short-term obligations while inflation eats into real wages. Delaying a decision will only make the terms harsher.",
+    "trigger": {
+      "min_inflation": 0.09,
+      "max_treasury": 15.0
+    },
+    "weight": 1.5,
+    "options": [
+      {
+        "title": "Enact an emergency fiscal compact",
+        "consequence": "Curbs inflation and steadies the currency at a sharp political cost.",
+        "effects": {
+          "tax_rate": 0.018,
+          "inflation": -0.025,
+          "stability": -0.015
+        }
+      },
+      {
+        "title": "Monetise the shortfall for another quarter",
+        "consequence": "Buys immediate cash and fuels the inflationary spiral.",
+        "effects": {
+          "treasury_percent": 0.08,
+          "inflation": 0.028,
+          "state.radicalism": 0.018
+        }
+      }
+    ]
+  },
+  "demographic_winter_alarm": {
+    "title": "Empty maternity wards and ageing towns",
+    "description": "Census registrars report that deaths have overtaken births across the urban heartland while pension obligations climb. Without young families or newcomers, the workforce will shrink every year.",
+    "trigger": {
+      "min_literacy": 0.84,
+      "min_state.urbanization": 0.58
+    },
+    "weight": 1.3,
+    "options": [
+      {
+        "title": "Fund a national pronatalist drive",
+        "consequence": "Costly family grants lift birth rates and support young households.",
+        "effects": {
+          "treasury_percent": -0.05,
+          "welfare_spending": 0.008,
+          "standard_of_living": 0.006
+        },
+        "modifiers": [
+          {
+            "id": "pronatalist_drive",
+            "days": 540
+          }
+        ]
+      },
+      {
+        "title": "Open the doors to foreign workers",
+        "consequence": "Migrants replenish the factories and bring their own cultures into the cities.",
+        "effects": {
+          "productivity": 0.008,
+          "state.radicalism": 0.012
+        },
+        "modifiers": [
+          {
+            "id": "open_migration_doors",
+            "days": 540
+          }
+        ]
+      },
+      {
+        "title": "Accept a smaller, older nation",
+        "consequence": "Preserves the treasury today while the country slowly ages.",
+        "effects": {
+          "stability": -0.008,
+          "productivity": -0.006
+        }
+      }
+    ]
+  },
+  "baby_boom_generation": {
+    "title": "A surge of young families",
+    "description": "Rising confidence and household security have triggered an unexpected surge in marriages and births across the provinces. Schools and clinics are already asking for extra rooms.",
+    "trigger": {
+      "at_war": false,
+      "min_stability": 0.65,
+      "min_standard_of_living": 0.55
+    },
+    "weight": 1.1,
+    "options": [
+      {
+        "title": "Expand schools and maternity clinics",
+        "consequence": "Turns the birth wave into a lasting demographic boom.",
+        "effects": {
+          "treasury_percent": -0.04,
+          "education_spending": 0.005,
+          "literacy": 0.004
+        },
+        "modifiers": [
+          {
+            "id": "demographic_boom",
+            "days": 540
+          }
+        ]
+      },
+      {
+        "title": "Let families manage on their own",
+        "consequence": "Saves state funds; the surge is smaller but still welcome.",
+        "effects": {
+          "stability": 0.006
+        }
+      }
+    ]
+  }
+}

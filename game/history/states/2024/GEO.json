@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2014 census by region (Kvemo Kartli, Samtskhe-Javakheti).
 {
   // Imereti
   "ge_im": {
     "population": 674122,
     "urbanization": 0.7,
-    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "cultures": { "georgian": 0.9478, "russian": 0.0314, "greek": 0.0044, "ossetian": 0.0044, "kurdish": 0.0032, "abkhaz": 0.0022, "assyrian": 0.0022, "avar": 0.0022, "ukrainian": 0.0022 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.089, "Coal": 0.082, "Oil": 0.255, "IronOre": 0.102, "RareEarths": 0.019, "NaturalGas": 0.219, "Timber": 3.408, "Bauxite": 0.039, "Uranium": 0.004 }
   },
@@ -23,7 +24,7 @@
   "ge_ka": {
     "population": 333116,
     "urbanization": 0.05,
-    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "cultures": { "georgian": 0.7969, "armenian": 0.099, "azerbaijani": 0.06, "russian": 0.0264, "greek": 0.0037, "ossetian": 0.0037, "kurdish": 0.0027, "abkhaz": 0.0019, "assyrian": 0.0019, "avar": 0.0019, "ukrainian": 0.0019 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.13, "Coal": 0.285, "Oil": 0.691, "IronOre": 0.17, "RareEarths": 0.102, "NaturalGas": 0.563, "Timber": 1.391, "Bauxite": 0.068, "Uranium": 0.01 }
   },
@@ -31,7 +32,7 @@
   "ge_mm": {
     "population": 2383688,
     "urbanization": 0.73,
-    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "cultures": { "georgian": 0.8198, "azerbaijani": 0.08, "armenian": 0.055, "russian": 0.0272, "greek": 0.0038, "ossetian": 0.0038, "kurdish": 0.0028, "abkhaz": 0.0019, "assyrian": 0.0019, "avar": 0.0019, "ukrainian": 0.0019 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.316, "Coal": 0.226, "Oil": 0.502, "IronOre": 0.293, "RareEarths": 0.054, "NaturalGas": 0.35, "Timber": 2.154, "Bauxite": 0.097, "Uranium": 0.006 }
   },
@@ -39,7 +40,7 @@
   "ge_sz": {
     "population": 329456,
     "urbanization": 0.2,
-    "cultures": { "georgian": 0.8484, "azerbaijani": 0.0608, "armenian": 0.0441, "russian": 0.0281, "greek": 0.0039, "ossetian": 0.0039, "kurdish": 0.0029, "abkhaz": 0.002, "assyrian": 0.002, "avar": 0.002, "ukrainian": 0.002 },
+    "cultures": { "georgian": 0.9478, "russian": 0.0314, "greek": 0.0044, "ossetian": 0.0044, "kurdish": 0.0032, "abkhaz": 0.0022, "assyrian": 0.0022, "avar": 0.0022, "ukrainian": 0.0022 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.638, "Coal": 0.247, "Oil": 0.277, "IronOre": 0.187, "RareEarths": 0.04, "NaturalGas": 0.234, "Timber": 1.146, "Bauxite": 0.072, "Uranium": 0.004 }
   }

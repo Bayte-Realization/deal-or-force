@@ -29,10 +29,46 @@ public static class HydrologyCatalog
     public static IReadOnlyList<RiverFeature> RiverFeatures => Rivers;
     public static IReadOnlyList<LakeFeature> LakeFeatures => Lakes;
 
+    /// <summary>Bumped whenever the rivers or lakes are reloaded.</summary>
+    internal static int Revision { get; private set; }
+
+    private static int _lakeFingerprintRevision = -1;
+    private static ulong _lakeFingerprint;
+
+    /// <summary>
+    /// A hash of the lakes the vector raster fills - their ranks and outer rings - so what is
+    /// drawn from them can be kept across a reload that brings back the same lakes, which is
+    /// what every campaign's mod pass does. Worked out once per reload, over the points.
+    /// </summary>
+    internal static ulong LakeFingerprint
+    {
+        get
+        {
+            if (_lakeFingerprintRevision == Revision) return _lakeFingerprint;
+            var hash = 1469598103934665603UL;
+            void Mix(ulong value) { hash ^= value; hash *= 1099511628211UL; }
+            foreach (var lake in Lakes)
+            {
+                if (lake.Rank > 6 || lake.Rings.Length == 0) continue;
+                var ring = lake.Rings[0];
+                Mix((ulong)lake.Rank);
+                Mix((ulong)ring.Length);
+                foreach (var point in ring)
+                {
+                    Mix(BitConverter.SingleToUInt32Bits(point.Longitude));
+                    Mix(BitConverter.SingleToUInt32Bits(point.Latitude));
+                }
+            }
+            (_lakeFingerprint, _lakeFingerprintRevision) = (hash, Revision);
+            return hash;
+        }
+    }
+
     static HydrologyCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
+        Revision++;
         Rivers.Clear();
         Lakes.Clear();
         LoadBase("rivers.json");
@@ -60,6 +96,7 @@ public static class HydrologyCatalog
 
     public static void LoadGeoJson(string json, List<string> errors)
     {
+        Revision++;
         using var document = JsonDocument.Parse(json);
         if (!document.RootElement.TryGetProperty("features", out var features) ||
             features.ValueKind != JsonValueKind.Array)

@@ -343,14 +343,15 @@ public partial class DealOrForceGame
         if (pick.ProvinceId <= 0) return;
 
         // Nothing selected to command, so the right button is free to mean the other
-        // obvious thing: open the file on whoever owns the ground under the cursor.
+        // obvious thing: what can be done about the ground under the cursor - its region,
+        // its owner's diplomacy, a network, a reconnaissance flight (ProvinceContextMenuUI).
         //
         // It cannot mean both. An army or a fleet selected keeps the order - that is the
         // convention every game of this shape uses and the one a player's hands already
         // know - and this only takes the case where the click did nothing at all.
         if (_selectedArmy is null)
         {
-            OpenDiplomacyWithOwnerOf(pick.ProvinceId);
+            ShowProvinceContextMenu(pick);
             return;
         }
         if (_selectedArmy.NationId != _campaign.Player.Id)
@@ -405,7 +406,7 @@ public partial class DealOrForceGame
             SetArmyFeedback(Simulation.Loc.Format(
                 Simulation.Plural.Key("Order for {0:N0} division submitted to the host.", targets.Length),
                 targets.Length) + " " +
-                Simulation.Loc.Get("The authoritative route will appear after validation."));
+                Simulation.Loc.Get("The host will confirm the route."));
             return;
         }
         SetArmyFeedback(MoveResultSummary(results, pick, append) +
@@ -423,12 +424,13 @@ public partial class DealOrForceGame
         var parts = new List<string>();
         AddResult(parts, results, ArmyMoveResult.Issued, append ? "waypoint appended" : "moving");
         AddResult(parts, results, ArmyMoveResult.AttackIssued, "advancing along the marked route; defended provinces require a battle");
+        AddResult(parts, results, ArmyMoveResult.WithdrawnAndMoving, "disengaged from battle and moving");
         AddResult(parts, results, ArmyMoveResult.RouteInterrupted, "route blocked");
         AddResult(parts, results, ArmyMoveResult.QueuedAfterBattle, "queued until battle ends");
         AddResult(parts, results, ArmyMoveResult.OrderCancelled, "order cancelled");
         AddResult(parts, results, ArmyMoveResult.AlreadyAtDestination, "already there");
         AddResult(parts, results, ArmyMoveResult.TargetNotControlled, "neutral territory: no military access or active war");
-        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no legal land corridor (water or neutral territory may block the route)");
+        AddResult(parts, results, ArmyMoveResult.NoLandRoute, "no way through by land");
         AddResult(parts, results, ArmyMoveResult.NotControlled, "not under your control");
         AddResult(parts, results, ArmyMoveResult.InvalidTarget, "invalid destination");
         AddResult(parts, results, ArmyMoveResult.ArmyNotFound, "formation no longer exists");
@@ -467,6 +469,7 @@ public partial class DealOrForceGame
         var stopped = 0;
         var withdrawn = 0;
         var blocked = 0;
+        var pending = 0;
         foreach (var army in targets)
         {
             if (army.InBattle)
@@ -474,6 +477,7 @@ public partial class DealOrForceGame
                 var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
                 _campaign.Commands.Enqueue(withdrawal);
                 _campaign.Commands.ApplyAll(_campaign);
+                if (!withdrawal.Applied) { pending++; continue; }
                 if (withdrawal.Withdrawn) withdrawn++; else blocked++;
                 continue;
             }
@@ -483,6 +487,11 @@ public partial class DealOrForceGame
             if (command.Halted) stopped++;
         }
         ShowSelectedArmies();
+        if (pending > 0)
+        {
+            SetArmyFeedback(Tr("Order sent to the host. Awaiting confirmation."));
+            return;
+        }
         if (withdrawn > 0 || blocked > 0)
         {
             SetArmyFeedback(Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}", withdrawn, stopped, blocked));
@@ -748,7 +757,7 @@ public partial class DealOrForceGame
             _selectedArmies.Add(detached);
             _globe.SelectArmies(_selectedArmies.Select(army => army.Id));
             ShowSelectedArmies();
-            _sideBody.Text += "\n\nFormation split successfully. Both independent halves remain selected and visible.";
+            _sideBody.Text += "\n\n" + Simulation.Loc.Get("Split in two.");
         }
         else
         {

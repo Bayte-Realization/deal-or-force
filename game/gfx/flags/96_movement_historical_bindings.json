@@ -1,0 +1,9 @@
+// Specific movement identities, not a word/culture-based association.
+// Source notes and the distinction between a movement flag and a homeland fallback:
+// docs/MOVEMENT_FLAG_CORRECTIONS_2026_10_20_RU.md
+{
+  "sprites": {
+    "flag_bdf": "res://game/gfx/flags/flag_blr_nationalism.png",
+    "flag_afc": "res://game/gfx/flags/flag_cod.png"
+  }
+}

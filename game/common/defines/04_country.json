@@ -41,6 +41,10 @@
   // top speed thirty days is a second and a half.
   "AutosaveMinimumSeconds": 120,
   "SaveTextFormat": false,
+  // Diagnostics only: walk every object in the snapshot before writing. Off because the
+  // weekly live-integrity gate plus the serializer's own refusal of NaN/Infinity already
+  // protect the last good save, and the full walk costs more than writing the file.
+  "SaveDeepIntegrity": false,
   "SecondsPerDay": 5,
   "GlobeRadius": 2600,
   "LandRelief": 26,
@@ -75,6 +79,12 @@
   "RadicalismDecay": 0.03,
   "StartingTreasury": 5000000000,
   "DefaultTaxRate": 0.21,
+  // What a country history/countries says nothing about opens with, as a share of its yearly
+  // income, and what one whose income is unknown is assumed to earn per head. Both are
+  // fallbacks: a country that states a treasury or a GDP in history keeps its own figure, and
+  // the base game's Korea states a treasury.
+  "BaseTreasuryGdpShare": 0.10,
+  "MicrostateGdpPerHead": 15,
   "BuildingUpkeep": 18000,
   "ConstructionRate": 0.008,
   "MilitaryEligibleShare": 0.42,
@@ -86,7 +96,6 @@
 
   // Nationality: what a moved border leaves behind
   "MinorityRadicalismPerWeek": 0.0012,
-  "AssimilationPerWeek": 0.0009,
 
   // The capital. Moving it by choice costs CapitalMoveCostShare of GDP (never less than the
   // floor) and CapitalMoveStabilityCost of settledness, and the government cannot move again

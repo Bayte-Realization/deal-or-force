@@ -383,7 +383,9 @@ public partial class DealOrForceGame
     private async System.Threading.Tasks.Task RestoreCampaignFromSlot(string slot)
     {
         WaitForPendingSave();
-        var result = SaveSystem.Load(SaveRoot, slot, ModFingerprint);
+        // Gzip and the save graph are plain data. Parsing them off this thread lets the
+        // loading plate keep drawing; the campaign is swapped in only after the parse returns.
+        var result = await System.Threading.Tasks.Task.Run(() => SaveSystem.Load(SaveRoot, slot, ModFingerprint));
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {
@@ -423,6 +425,9 @@ public partial class DealOrForceGame
         // in this one - a secession, a rising - has no flag, only an empty frame.
         BindFlags(_campaign);
         _globe.BindCampaign(_campaign);
+        // Disk loads may contain a lost capital from an older build. Repair only after
+        // restoring the political raster, even when paused; network attachment is read-only.
+        CapitalCore.Tick(_campaign);
         // The save's own step and autosave, not whatever the player has set since - and for
         // a save written before campaigns kept their options, the player's current ones,
         // which the first read writes into it.

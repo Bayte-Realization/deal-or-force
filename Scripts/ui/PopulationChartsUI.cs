@@ -134,6 +134,40 @@ public partial class DealOrForceGame
                 group + Simulation.Loc.Format("{0} people", Fmt.PeopleExact(entry.Size)));
         }).ToList();
 
+    /// <summary>
+    /// A region's people cut by what they believe rather than by who they are.
+    ///
+    /// The shares are the same ideologies the government itself is chosen from, read from the
+    /// region's own conditions, the laws it lives under and the form of government it lives in
+    /// - so a rich city and a poor countryside in one country are not told they agree. The
+    /// government's own position is starred, because the interesting question about a region is
+    /// not which position is largest but whether the largest one is the one in power.
+    /// </summary>
+    private IReadOnlyList<Slice> PoliticalSlices(ScenarioState state, Nation owner)
+    {
+        if (owner is null) return Array.Empty<Slice>();
+        var people = Math.Max(1L, state.Population);
+        var governing = IdeologyCatalog.Knows(owner.Ideology) ? owner.Ideology : "";
+        var slices = new List<Slice>();
+        foreach (var share in PoliticalMood.RegionShares(_campaign, state, owner))
+        {
+            if (share.Share <= 0f) continue;
+            IdeologyDefinition ideology = null;
+            foreach (var candidate in IdeologyCatalog.All)
+                if (string.Equals(candidate.Id, share.Ideology, StringComparison.OrdinalIgnoreCase))
+                { ideology = candidate; break; }
+            var mine = string.Equals(share.Ideology, governing, StringComparison.OrdinalIgnoreCase);
+            var name = (mine ? "★ " : "") + Simulation.Loc.Get(ideology?.Name ?? share.Name);
+            var size = (long)Math.Round(share.Share * people);
+            var tooltip = Simulation.Loc.Format("{0} people lean this way", Fmt.PeopleExact(size)) + "\n" +
+                (mine
+                    ? "The position the government itself holds. What it holds here is the mandate it governs this region with."
+                    : "An opposition position. A region whose largest leaning is not the government's is a region nobody in the capital is speaking for.");
+            slices.Add(new Slice(name, size, Swatch(ideology?.Colour), tooltip));
+        }
+        return slices;
+    }
+
     private static IReadOnlyList<Slice> ProfessionSlices(ScenarioState state) =>
         EconomySystem.Professions(state).Select(entry =>
         {

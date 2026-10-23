@@ -3,11 +3,11 @@
   "Vulnerabilities": "Vulnerabilities",
   "Recorded events in the world and this country.": "Recorded events in the world and this country.",
   "Import dependence and concentration of named suppliers.": "Import dependence and concentration of named suppliers.",
-  "Recorded facts, not inferred causes. Internal decisions and construction are visible only to their country.": "Recorded facts, not inferred causes. Internal decisions and construction are visible only to their country.",
+  "What has happened. Other countries' internal decisions and building are not shown.": "What has happened. Other countries' internal decisions and building are not shown.",
   "World events": "World events",
   "Country events": "Country events",
   "Recorded: {0} · retained limit: {1}": "Recorded: {0} · retained limit: {1}",
-  "No recorded events yet. Earlier history is not reconstructed from the starting scenario.": "No recorded events yet. Earlier history is not reconstructed from the starting scenario.",
+  "Nothing has happened yet.": "Nothing has happened yet.",
   "Locate country": "Locate country",
   "Newer events": "Newer events",
   "Older events": "Older events",
@@ -29,9 +29,11 @@
   "chronicle.construction_completed": "{0}: completed “{2}” in {3}.",
   "chronicle.militia_raised": "{0}: {3} takes up arms - its people form a militia of their own.",
   "chronicle.militia_stood_down": "{0}: the danger has passed and {2} goes home.",
+  "chronicle.army_stood_down": "{0}: {2} stands down. The treasury cannot pay for the surplus the peace left.",
   "chronicle.ultimatum_accepted": "{1} yields to {0}: {2}.",
   "chronicle.ultimatum_refused": "{1} refuses the ultimatum of {0}: {2}.",
   "chronicle.deal_signed": "{0} strikes a bargain with {1}: {2}.",
   "chronicle.accession_signed": "{0} signs the accession treaty: {2}.",
-  "chronicle.accession_declined": "{0} declines the invitation into {2}."
+  "chronicle.accession_declined": "{0} declines the invitation into {2}.",
+  "chronicle.shard_consolidated": "{0} unites with kindred state {2} into a single nation."
 }

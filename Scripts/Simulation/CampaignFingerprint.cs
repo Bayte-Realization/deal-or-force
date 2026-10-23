@@ -53,6 +53,94 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        if (campaign.Curse.Length > 0)
+        {
+            MixText("world_curse"); MixText(campaign.Curse); Mix(campaign.CurseDay); Mix(campaign.CurseDrowned);
+        }
+        if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
+            campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
+        {
+            MixText("front_disengagement_rules"); Mix(campaign.Defines.FrontStaffDisengages ? 1 : 0);
+            Mix(campaign.Defines.FrontDisengagementMinimumBattleDays);
+            MixFloat(campaign.Defines.FrontDisengagementMaximumShare); MixFloat(campaign.Defines.FrontDisengagementDefenceRatio);
+        }
+        var diplomacyRules = campaign.Defines;
+        if (!diplomacyRules.AiFormableProclamations || diplomacyRules.AiFormableReviewDays != 30 ||
+            diplomacyRules.AiFormableEarliestDay != 120 || diplomacyRules.AiFormableMinimumIntervalDays != 1825 ||
+            diplomacyRules.AiFormableCrisisRecoveryDays != 180 || diplomacyRules.AiFormableTreasuryReserveShare != .02f ||
+            diplomacyRules.AiFormableMinimumScore != .58f)
+        {
+            MixText("formable_proclamation_ai_rules"); Mix(diplomacyRules.AiFormableProclamations ? 1 : 0);
+            Mix(diplomacyRules.AiFormableReviewDays); Mix(diplomacyRules.AiFormableEarliestDay);
+            Mix(diplomacyRules.AiFormableMinimumIntervalDays); Mix(diplomacyRules.AiFormableCrisisRecoveryDays);
+            MixFloat(diplomacyRules.AiFormableTreasuryReserveShare); MixFloat(diplomacyRules.AiFormableMinimumScore);
+        }
+        if (!diplomacyRules.PeaceAlliedBenefits)
+        { MixText("peace_allied_benefits"); Mix(0); }
+        if (!diplomacyRules.OrganicOrganizationReachEnabled || diplomacyRules.AiOrganizationExpansionLimit != 64 ||
+            diplomacyRules.AiOrganizationGlobalGdp != 1000 || diplomacyRules.AiOrganizationFoundingPoliticalCost != 30 ||
+            diplomacyRules.OrganizationLeaderRiftPenalty != .24f)
+        {
+            MixText("organization_reach_rules"); Mix(diplomacyRules.OrganicOrganizationReachEnabled ? 1 : 0);
+            Mix(diplomacyRules.AiOrganizationExpansionLimit); MixFloat(diplomacyRules.AiOrganizationGlobalGdp);
+            MixFloat(diplomacyRules.AiOrganizationFoundingPoliticalCost); MixFloat(diplomacyRules.OrganizationLeaderRiftPenalty);
+        }
+        if (!diplomacyRules.DiplomaticMissionsEnabled || diplomacyRules.DiplomaticMissionPoliticalCost != 8 ||
+            diplomacyRules.DiplomaticMissionWeeklyPoliticalCost != 1.5f || diplomacyRules.DiplomaticMissionStartCash != .1f ||
+            diplomacyRules.DiplomaticMissionWeeklyCash != .01f || diplomacyRules.DiplomaticMissionDays != 180 ||
+            diplomacyRules.DiplomaticMissionLimit != 3 || diplomacyRules.DiplomaticMissionWeeklyOpinion != 1.2f ||
+            diplomacyRules.DiplomaticMissionOpinionCap != 24)
+        {
+            MixText("diplomatic_mission_rules"); Mix(diplomacyRules.DiplomaticMissionsEnabled ? 1 : 0);
+            MixFloat(diplomacyRules.DiplomaticMissionPoliticalCost); MixFloat(diplomacyRules.DiplomaticMissionWeeklyPoliticalCost);
+            MixFloat(diplomacyRules.DiplomaticMissionStartCash); MixFloat(diplomacyRules.DiplomaticMissionWeeklyCash);
+            Mix(diplomacyRules.DiplomaticMissionDays); Mix(diplomacyRules.DiplomaticMissionLimit);
+            MixFloat(diplomacyRules.DiplomaticMissionWeeklyOpinion); MixFloat(diplomacyRules.DiplomaticMissionOpinionCap);
+        }
+        if (campaign.Defines.AiFiscalReserveWeeks != 8)
+        {
+            MixText("ai_fiscal_runway");
+            Mix(campaign.Defines.AiFiscalReserveWeeks);
+        }
+        if (!campaign.Defines.AiCrisisGrants || campaign.Defines.AiCrisisGrantRetryDays != 360)
+        {
+            MixText("crisis_grant_rule");
+            Mix(campaign.Defines.AiCrisisGrants ? 1 : 0);
+            Mix(campaign.Defines.AiCrisisGrantRetryDays);
+        }
+        if (!campaign.Defines.AiSupplyHedges || campaign.Defines.AiSupplyHedgeShare != 0.75f ||
+            campaign.Defines.AiSupplyHedgeSatisfaction != 0.875f || campaign.Defines.AiSupplyHedgeRetryDays != 180)
+        {
+            MixText("supply_hedge_rule");
+            Mix(campaign.Defines.AiSupplyHedges ? 1 : 0);
+            MixFloat(campaign.Defines.AiSupplyHedgeShare);
+            MixFloat(campaign.Defines.AiSupplyHedgeSatisfaction);
+            Mix(campaign.Defines.AiSupplyHedgeRetryDays);
+        }
+        // Preserve the old default fingerprint, but detect different modded assault
+        // rules before peers reach a battle and make different decisions.
+        if (campaign.Defines.AutonomousAssaultMinimumOrganisation != .16f ||
+            campaign.Defines.AutonomousAssaultMinimumSupply != .20f)
+        {
+            MixText("autonomous_assault_rules");
+            MixFloat(campaign.Defines.AutonomousAssaultMinimumOrganisation);
+            MixFloat(campaign.Defines.AutonomousAssaultMinimumSupply);
+        }
+        // These rules decide whether a movement strikes, marches or collects a levy.
+        // Compiled defaults add no bytes to an untouched legacy world; a scenario's
+        // different thresholds must be detected before its first divergent command.
+        var movementRules = campaign.Defines;
+        if (movementRules.MovementStrikeMomentum != .4f || movementRules.MovementMarchMomentum != .65f ||
+            movementRules.MovementParallelMomentum != .5f || movementRules.MovementParallelSupport != .6f ||
+            movementRules.MovementParallelLevy != .0006f || movementRules.MovementStrikeDays != 42 ||
+            movementRules.MovementMarchSupport != .5f)
+        {
+            MixText("movement_power_rules");
+            MixFloat(movementRules.MovementStrikeMomentum); MixFloat(movementRules.MovementMarchMomentum);
+            MixFloat(movementRules.MovementParallelMomentum); MixFloat(movementRules.MovementParallelSupport);
+            MixFloat(movementRules.MovementParallelLevy); Mix(movementRules.MovementStrikeDays);
+            MixFloat(movementRules.MovementMarchSupport);
+        }
         var outbreakBudget = CivilWarOutbreak.Budget(campaign);
         if (outbreakBudget.StartsByDay is { Count: > 0 })
         {
@@ -62,6 +150,18 @@ public static class CampaignFingerprint
             {
                 MixText("civil_war_budget"); Mix(outbreakDays.Length);
                 foreach (var day in outbreakDays) { Mix(day.Key); Mix(day.Value); }
+            }
+        }
+        if (campaign.UltimatumPapers.Count > 0 || campaign.NextUltimatumId != 1)
+        {
+            MixText("ultimatum_desk"); Mix(campaign.NextUltimatumId); Mix(campaign.UltimatumPapers.Count);
+            foreach (var demand in campaign.UltimatumPapers.OrderBy(paper => paper.Id))
+            {
+                Mix(demand.Id); Mix(demand.FromId); Mix(demand.ToId); Mix(demand.CreatedDay); Mix(demand.ExpiresDay);
+                Mix(demand.ClosedDay); Mix((int)demand.State); MixFloat(demand.Reparations);
+                Mix(demand.LiftEmbargo ? 1 : 0); Mix(demand.NonAggression ? 1 : 0);
+                foreach (var region in demand.Regions ?? Array.Empty<int>()) Mix(region);
+                Mix(-104);
             }
         }
         if (campaign.DealOffers.Count > 0 || campaign.NextDealOfferId != 1)
@@ -101,6 +201,26 @@ public static class CampaignFingerprint
         Mix(campaign.Defines.AidIntervalDays); MixFloat(campaign.Defines.AidShareOfRecipientGdp);
         MixFloat(campaign.Defines.AidMaxShareOfTreasury); MixFloat(campaign.Defines.AiAidReserveOfGdp);
         MixFloat(campaign.Defines.AiAidCrisisTreasuryOfGdp);
+        // Empty extension state must not alter the original game's deterministic fingerprint.
+        if (campaign.CrossoverScars.Count > 0 || campaign.CrossoverWorks.Count > 0 ||
+            campaign.CrossoverImpacts.Count > 0 || campaign.DestroyedProvinces.Count > 0)
+        {
+            MixText("bta_bridge");
+            Mix(campaign.CrossoverScars.Count);
+            foreach (var cell in campaign.CrossoverScars.OrderBy(k => k)) Mix(cell);
+            Mix(campaign.CrossoverWorks.Count);
+            foreach (var work in campaign.CrossoverWorks.OrderBy(w => w.Id, StringComparer.Ordinal)) {
+                MixText(work.Id); Mix(work.Province); Mix(work.State); Mix(work.Nation); Mix((int)work.Building);
+                MixFloat(work.X); MixFloat(work.Y); MixFloat(work.Z); Mix(work.Active ? 1 : 0);
+                foreach (var cell in work.Blocks.OrderBy(k => k)) Mix(cell); Mix(-100);
+            }
+            foreach (var impact in campaign.CrossoverImpacts) {
+                Mix(impact.Hour); Mix(impact.Province); MixText(impact.Kind); Mix(impact.Population);
+                MixFloat(impact.Gdp); MixText(impact.Message);
+            }
+            Mix(campaign.DestroyedProvinces.Count);
+            foreach (var province in campaign.DestroyedProvinces.OrderBy(p => p)) Mix(province);
+        }
         foreach (var character in campaign.ScenarioId ?? "2024") Mix(character);
         Mix(-1);
         foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)
@@ -129,6 +249,11 @@ public static class CampaignFingerprint
         foreach (var pair in campaign.Relations.OrderBy(p => p.Key))
         {
             Mix(pair.Key); var r = pair.Value;
+            if (r.MilitaryAccessByA || r.MilitaryAccessByB || r.MilitaryAccessRequestedBy >= 0 || r.MilitaryAccessRequestedDay != -9999)
+            {
+                MixText("military_access_v1"); Mix(r.MilitaryAccessByA ? 1 : 0); Mix(r.MilitaryAccessByB ? 1 : 0);
+                Mix(r.MilitaryAccessRequestedBy); Mix(r.MilitaryAccessRequestedDay);
+            }
             Mix((int)r.Stance); MixFloat(r.Opinion); MixFloat(r.AllianceCohesion);
             Mix(r.AidSentDay);
             Mix(r.AllianceAssessmentDay); Mix(r.AllianceStrainedDays); Mix(r.AllianceReaffirmedDay);
@@ -139,6 +264,21 @@ public static class CampaignFingerprint
             MixFloat(r.AllianceProgramWeeklyCost); MixFloat(r.AllianceProgramTrustBudget);
             Mix(r.AllianceProgramRelief ? 1 : 0);
             Mix(r.AllianceProgramPausedDay);
+            foreach (var reason in r.Reasons.Where(reason=>reason.Id=="diplomatic_outreach"))
+            {
+                MixText("diplomatic_goodwill"); Mix(reason.GrantedDay); Mix(reason.ExpiresDay);
+                Mix(reason.Stacks); MixFloat(reason.Scale);
+            }
+            if (r.MissionByA is not null || r.MissionByB is not null)
+            {
+                MixText("diplomatic_missions_v1");
+                foreach (var mission in new[] { r.MissionByA, r.MissionByB })
+                {
+                    Mix(mission is null ? 0 : 1); if (mission is null) continue;
+                    Mix(mission.StartedDay); Mix(mission.EndsDay); Mix(mission.LastPaidDay); Mix(mission.PaidWeeks);
+                    MixFloat(mission.WeeklyPoliticalCost); MixFloat(mission.WeeklyCash); MixFloat(mission.WeeklyOpinion); MixFloat(mission.OpinionCap);
+                }
+            }
             // How close the two are to fighting, and what they hold against each other (Escalation).
             MixFloat(r.Tension); MixFloat(r.StructuralTension); MixFloat(r.TensionBaseline); MixFloat(r.TensionAnchor); MixFloat(r.GrievanceA); MixFloat(r.GrievanceB);
             Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);
@@ -149,6 +289,7 @@ public static class CampaignFingerprint
         {
             Mix(o.Id); Mix(o.FounderId); Mix(o.FoundedDay); Mix(o.LastReviewDay); Mix(o.NextMotionId);
             MixText(o.Name); MixText(o.GeneratedCountryTag); MixText(o.CharterId); MixFloat(o.Budget); MixFloat(o.Cohesion); Mix(o.Dissolved ? 1 : 0);
+            if (!string.IsNullOrEmpty(o.DoctrineId)) { MixText("org_doctrine"); MixText(o.DoctrineId); }
             MixText(o.LastOutcome); Mix(o.LastYes); Mix(o.LastVoters);
             foreach (var member in o.Members.OrderBy(id => id)) Mix(member); Mix(-20);
             foreach (var invitation in o.Invitations.OrderBy(id => id)) Mix(invitation); Mix(-21);
@@ -156,6 +297,7 @@ public static class CampaignFingerprint
             if (o.Motion is { } m)
             {
                 Mix(m.Id); Mix(m.ProposerId); Mix(m.TargetId); Mix(m.EndsDay); MixText(m.Kind); MixFloat(m.Amount);
+                if (!string.IsNullOrEmpty(m.Subject)) { MixText("motion_subject"); MixText(m.Subject); }
                 foreach (var v in m.Votes.OrderBy(v => v.Key)) { Mix(v.Key); Mix(v.Value ? 1 : 0); }
             }
             Mix(-23);
@@ -169,6 +311,13 @@ public static class CampaignFingerprint
 
         foreach (var nation in Ordered(campaign.Nations, nation => nation.Id))
         {
+            if (nation.GovernmentSeatProvinceId != 0)
+            { MixText("government_seat"); Mix(nation.GovernmentSeatProvinceId); }
+            if (nation.Delegated.Count > 0 || nation.ArmyByHand)
+            {
+                MixText("staff_portfolios_v1"); Mix(nation.ArmyByHand ? 1 : 0); Mix(nation.Delegated.Count);
+                foreach (var portfolio in nation.Delegated.OrderBy(p => p, StringComparer.Ordinal)) MixText(portfolio);
+            }
             Mix(nation.Id);
             foreach (var character in nation.FormedNationId ?? "") Mix(character);
             Mix(-1);
@@ -207,17 +356,88 @@ public static class CampaignFingerprint
             MixFloat(crisis.CoupPressure); Mix(crisis.DaysAboveThreshold); Mix(crisis.LastReviewDay);
             Mix(crisis.CooldownUntilDay); MixText(crisis.LastOutcomeId); Mix(crisis.LastOutcomeDay);
             MixText(crisis.ResponseId); Mix(crisis.ResponseUntilDay); Mix(crisis.ResponseCooldownUntilDay);
+            if (crisis.ConciliationUntilDay >= 0)
+            { MixText("conciliation"); Mix(crisis.ConciliationRegion); Mix(crisis.ConciliationUntilDay); }
             Mix(nation.CoupPlotDay); Mix(nation.LastCoupDay);
+            if (nation.LastPoliticalScandalDay >= 0)
+            { MixText("political_scandal"); Mix(nation.LastPoliticalScandalDay); }
             if (nation.LastMilitaryCoupDay >= 0)
             { MixText("last_military_coup"); Mix(nation.LastMilitaryCoupDay); }
+            var grantClocks = 0;
+            foreach (var clock in nation.DecisionAvailableDay)
+                if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal)) grantClocks++;
+            if (grantClocks > 0)
+            {
+                MixText("crisis_grant");
+                foreach (var clock in nation.DecisionAvailableDay.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+            }
+            var hedgeClocks = 0;
+            foreach (var clock in nation.DecisionAvailableDay)
+                if (clock.Key.StartsWith("supply_hedge/", StringComparison.Ordinal)) hedgeClocks++;
+            if (hedgeClocks > 0)
+            {
+                MixText("supply_hedge");
+                foreach (var clock in nation.DecisionAvailableDay.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                    if (clock.Key.StartsWith("supply_hedge/", StringComparison.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+            }
             foreach (var origin in nation.RenouncedTerritoryOrigins.OrderBy(id => id)) Mix(origin);
             Mix(-17);
+            // Kept empty-state compatible, like the movement command state above: a country
+            // with no promises out hashes exactly as it did before the mechanic existed.
+            if (nation.Promises.Count > 0)
+            {
+                foreach (var promise in nation.Promises.OrderBy(p => p.Id, StringComparer.Ordinal))
+                { MixText(promise.Id); Mix(promise.MadeDay); Mix(promise.DueDay); }
+                Mix(-30);
+            }
+            // A goal is private, but it is still state two peer campaigns must agree on.
+            if (nation.Goals.Count > 0)
+            {
+                foreach (var goal in nation.Goals.OrderBy(g => g.Id, StringComparer.Ordinal))
+                { MixText(goal.Id); Mix(goal.AdoptedDay); Mix(goal.CompletedDay); }
+                Mix(-31);
+            }
+            // The declared identity is public fact, and it moves who likes whom.
+            if (nation.IdentityChangedDay >= 0)
+            { MixText("state_identity"); MixText(nation.DeclaredReligion); MixText(nation.DeclaredCulture); Mix(nation.IdentityChangedDay); }
             MixFloat(nation.Gdp);
             MixFloat(nation.WeeklyBalance);
             MixFloat(nation.LivingOffset);
             MixText(nation.StartGovernment); MixText(nation.StartIdeology);
             Mix(nation.Movement is null ? 0 : 1);
-            if (nation.Movement is { } movement) MixFloat(movement.Militancy);
+            if (nation.Movement is { } movement)
+            {
+                MixFloat(movement.Militancy);
+                // Panel history is not authority. These inputs and cooldowns are: they
+                // can change the next strike/march before any headline total changes.
+                // Keep empty legacy state at its old hash, and exclude LastReport,
+                // whose translated text differs legitimately between participants.
+                if (!string.IsNullOrEmpty(movement.Id) || movement.Dissolved || !movement.Landless ||
+                    movement.Cadres != 0f || movement.Legitimacy != 0f || movement.IncomeWeekly != 0f ||
+                    movement.Support.Count > 0 || movement.RecognisedBy.Count > 0 || movement.ReadyOnDay.Count > 0 ||
+                    movement.MovingToStateMapIndex != -1 || movement.ArrivesOnDay != -1 || movement.Exile ||
+                    movement.Peoples.Count > 0 || movement.Homeland.Count > 0)
+                {
+                    MixText("movement_command_state"); MixText(movement.Id);
+                    Mix(movement.Dissolved ? 1 : 0); Mix(movement.Landless ? 1 : 0);
+                    MixFloat(movement.Cadres); MixFloat(movement.Legitimacy); MixFloat(movement.IncomeWeekly);
+                    Mix(movement.Support.Count);
+                    foreach (var support in movement.Support.OrderBy(p => p.Key)) { Mix(support.Key); MixFloat(support.Value); }
+                    Mix(movement.RecognisedBy.Count);
+                    foreach (var country in movement.RecognisedBy.OrderBy(id => id)) Mix(country);
+                    Mix(movement.ReadyOnDay.Count);
+                    foreach (var clock in movement.ReadyOnDay.OrderBy(p => p.Key, StringComparer.Ordinal))
+                    { MixText(clock.Key); Mix(clock.Value); }
+                    Mix(movement.MovingToStateMapIndex); Mix(movement.ArrivesOnDay); Mix(movement.Exile ? 1 : 0);
+                    // Identity lists remain ordered, just as the exile definition reads
+                    // them. Only unordered maps and recognition sets are canonicalized.
+                    Mix(movement.Peoples.Count); foreach (var people in movement.Peoples) MixText(people);
+                    Mix(movement.Homeland.Count); foreach (var region in movement.Homeland) MixText(region);
+                }
+            }
             Mix(nation.ProductionReferenceInitialized ? 1 : 0);
             MixFloat(nation.ProductionReferenceGdp); Mix(nation.ProductionReferencePopulation);
             Mix(nation.LastCivilWarDay);
@@ -227,6 +447,7 @@ public static class CampaignFingerprint
             // stability is about to disagree too.
             MixFloat(nation.StabilityBias);
             MixFloat(nation.StabilityGovernance);
+            if (nation.TroublesDays > 0) { MixText("troubles"); Mix(nation.TroublesDays); }
             MixFloat(nation.WarSupport);
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.
@@ -253,6 +474,20 @@ public static class CampaignFingerprint
             // bytes, keeping pre-feature fingerprints compatible with untouched worlds.
             MixFloatDictionary("intel_networks", nation.IntelNetworks);
             MixFloatDictionary("organization_belonging_at_start", nation.OrganizationBelongingAtStart);
+            if (nation.CovertOperations.Count > 0)
+            {
+                MixText("covert_operations"); Mix(nation.CovertOperations.Count);
+                foreach (var operation in nation.CovertOperations)
+                {
+                    MixText(operation.Kind); Mix(operation.TargetId); Mix(operation.RegionMapIndex);
+                    Mix(operation.StartedDay); Mix(operation.DueDay); MixFloat(operation.Spent);
+                }
+            }
+            if (nation.CovertQuietUntil.Count > 0)
+            {
+                MixText("covert_quiet"); Mix(nation.CovertQuietUntil.Count);
+                foreach (var quiet in nation.CovertQuietUntil.OrderBy(p => p.Key)) { Mix(quiet.Key); Mix(quiet.Value); }
+            }
             if (!string.IsNullOrEmpty(nation.ConsolidationProject) || nation.ConsolidationFocusId != -1 ||
                 nation.ConsolidationAmbition != 0f)
             {
@@ -266,6 +501,126 @@ public static class CampaignFingerprint
                 MixText("address_to_nation"); Mix(nation.LastAddressDay); MixFloat(nation.AddressWeariness);
                 MixText(nation.AddressPromise); Mix(nation.AddressPromiseDueDay); MixFloat(nation.AddressPromiseMark);
             }
+            if (nation.WeeklyNetMigration != 0 || nation.CumulativeNetMigration != 0 ||
+                nation.BrainDrainRate != 0f || nation.BrainDrainDestinationId != -1 ||
+                nation.BrainGainSourceId != -1)
+            {
+                MixText("brain_drain"); Mix(nation.WeeklyNetMigration); Mix(nation.CumulativeNetMigration);
+                MixFloat(nation.BrainDrainRate); Mix(nation.BrainDrainDestinationId); Mix(nation.BrainGainSourceId);
+            }
+            // The army's book of war, and what buys its articles. A country with no doctrine has
+            // written nothing yet, so an untouched legacy world keeps its old hash exactly.
+            if (nation.TacticalDoctrine.Branch.Length > 0 || nation.TacticalDoctrine.Known.Count > 0 ||
+                nation.TacticalDoctrine.LearningNode.Length > 0)
+            {
+                MixText("tactical_doctrines"); MixText(nation.TacticalDoctrine.Branch); Mix(nation.TacticalDoctrine.Known.Count);
+                foreach (var node in nation.TacticalDoctrine.Known.OrderBy(id => id, StringComparer.Ordinal)) MixText(node);
+                MixText(nation.TacticalDoctrine.LearningNode); Mix(nation.TacticalDoctrine.LearningDoneDay);
+            }
+            // The grand strategy in force, and when the government last changed its mind.
+            // A country that has chosen none keeps the hash it always had.
+            if (nation.StrategicDoctrine.Id.Length > 0 || nation.StrategicDoctrine.LastChangeDay > -9999)
+            {
+                MixText("strategic_doctrine"); MixText(nation.StrategicDoctrine.Id);
+                Mix(nation.StrategicDoctrine.LastChangeDay);
+            }
+            if (nation.ArmyExperience != 0f || nation.AirExperience != 0f ||
+                nation.NavalExperience != 0f || nation.PoliticalPoints != 0f)
+            {
+                MixText("military_experience");
+                MixFloat(nation.ArmyExperience); MixFloat(nation.AirExperience);
+                MixFloat(nation.NavalExperience); MixFloat(nation.PoliticalPoints);
+            }
+            if (MathF.Abs(nation.ImperialOverstretch) > 0.0001f)
+            {
+                MixText("imperial_overstretch");
+                MixFloat(nation.ImperialOverstretch);
+            }
+            // How many weeks in a row this country has been counted as dying, and whether
+            // the world has already said so out loud. Two peers that disagree about either
+            // will announce the same death on different weeks, and relinquish its ground a
+            // week apart. A country that is not dying emits no bytes, so untouched worlds
+            // keep the fingerprint they have always had.
+            if (nation.CollapseReviews != 0 || nation.CollapseAnnounced)
+            {
+                MixText("demographic_collapse");
+                Mix(nation.CollapseReviews); Mix(nation.CollapseAnnounced ? 1 : 0);
+            }
+            if (nation.HasCustomSubjectState)
+            {
+                MixText("subject_interactions");
+                Mix(nation.SubjectIntegrating ? 1 : 0);
+                MixFloat(nation.SubjectIntegrationProgress);
+                MixFloat(nation.SubjectLibertyModifier);
+                Mix(nation.LastSubjectInteractionDay);
+                Mix(nation.SubjectTributeHolidayUntilDay);
+                if (nation.SubjectConspiring || nation.SubjectForeignBackers.Count > 0 || nation.LastForeignAgitationDay != -9999)
+                {
+                    Mix(nation.SubjectConspiring ? 1 : 0);
+                    Mix(nation.LastForeignAgitationDay);
+                    Mix(nation.SubjectForeignBackers.Count);
+                    foreach (var backerId in nation.SubjectForeignBackers.OrderBy(id => id)) Mix(backerId);
+                }
+            }
+            if (!string.IsNullOrEmpty(nation.CustomName) || !string.IsNullOrEmpty(nation.CustomFlag))
+            {
+                MixText("national_cosmetics");
+                MixText(nation.CustomName);
+                MixText(nation.CustomFlag);
+            }
+            if (!string.IsNullOrEmpty(nation.FoundNameKind) || nation.NameSettledDay >= 0 || nation.ReleasedFromId >= 0)
+            {
+                MixText("founded_name");
+                MixText(nation.FoundNameKind); MixText(nation.FoundNameId);
+                MixText(nation.FoundNameForm); MixText(nation.FoundNameBase);
+                MixText(nation.NameConvention); Mix(nation.NameSettledDay); Mix(nation.ReleasedFromId);
+            }
+            if (nation.HasCustomLeadership)
+            {
+                MixText("ruler_cabinet");
+                MixText(nation.HeadOfStateName); MixText(nation.HeadOfStateTrait);
+                Mix(nation.HeadOfStateBirthYear); Mix(nation.HeadOfStateSinceDay);
+                MixText(nation.HeadOfGovernmentName); MixText(nation.HeadOfGovernmentTrait);
+                Mix(nation.HeadOfGovernmentBirthYear); Mix(nation.HeadOfGovernmentSinceDay);
+                Mix(nation.NextElectionDay); Mix(nation.LastCabinetChangeDay); Mix(nation.RulerGeneration);
+                Mix(nation.Cabinet.Count);
+                foreach (var entry in nation.Cabinet.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                { MixText(entry.Key.ToLowerInvariant()); MixText(entry.Value); }
+            }
+            if (nation.HasCustomStockpiles)
+            {
+                MixText("strategic_stockpiles");
+                Mix(nation.StockpilesSeeded ? 1 : 0);
+                Mix(nation.Stockpiles.Count);
+                foreach (var entry in nation.Stockpiles.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                { MixText(entry.Key.ToLowerInvariant()); MixFloat(entry.Value); }
+            }
+            if (nation.StockpileCoverage.Count > 0)
+            {
+                MixText("stockpile_coverage");
+                foreach (var entry in nation.StockpileCoverage.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                { MixText(entry.Key.ToLowerInvariant()); MixFloat(entry.Value); }
+            }
+            if (nation.Elections is { } elections)
+            {
+                MixText("elections_v1"); MixText(elections.Government); MixFloat(elections.Control);
+                Mix(elections.Round); Mix(elections.IncumbentTerms); MixText(elections.IncumbentName);
+                Mix(elections.LastDay); MixFloat(elections.IncumbentVote); MixText(elections.Result);
+                Mix(elections.Suspended ? 1 : 0); Mix(elections.LastPostponedRound);
+                Mix(elections.TransferOnDay); MixText(elections.Winner); MixText(elections.WinnerTrait);
+                Mix(elections.WinnerBirthYear); Mix(elections.DisputedUntilDay);
+                Mix(elections.LastControlReviewDay);
+            }
+            if (nation.CabinetPeople.Count > 0)
+            {
+                MixText("minister_people_v1"); Mix(nation.CabinetPeople.Count);
+                foreach (var entry in nation.CabinetPeople.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    MixText(entry.Key.ToLowerInvariant()); MixText(entry.Value?.Name);
+                    Mix(entry.Value?.BirthYear ?? 0); MixText(entry.Value?.TraitId);
+                    Mix(entry.Value?.AppointedDay ?? 0);
+                }
+            }
         }
 
         // How far each region has gone towards leaving. Two peers that disagree about this
@@ -278,6 +633,10 @@ public static class CampaignFingerprint
             Mix(state.Population); MixFloat(state.StandardOfLiving); MixFloat(state.Radicalism); MixFloat(state.WarDamage);
             MixFloat(state.NonBuildingJobs); Mix(state.LastHouseholdReviewDay); Mix(state.ReviewBirths); Mix(state.ReviewDeaths);
             MixFloat(state.BasicNeedsCoverage); MixFloat(state.EmploymentTarget); MixFloat(state.LivelihoodStress);
+            if (state.ReviewNetMigration != 0 || state.BrainDrainPressure != 0f)
+            {
+                MixText("state_migration"); Mix(state.ReviewNetMigration); MixFloat(state.BrainDrainPressure);
+            }
             foreach (var group in state.PopulationGroups)
             {
                 MixText(group.Culture); MixText(group.Religion); MixText(group.Profession); Mix((int)group.Class); Mix((int)group.Sector);
@@ -286,8 +645,23 @@ public static class CampaignFingerprint
             Mix(-20);
             MixFloat(state.SecessionPressure);
             MixFloat(state.ResidentAwareness);
+            if (state.PoliticalDivergence >= 0f || state.LawApproval >= 0f || state.GovernmentApproval >= 0f)
+            {
+                MixText("political_cohort");
+                MixFloat(state.PoliticalDivergence); MixFloat(state.LawApproval); MixFloat(state.GovernmentApproval);
+            }
             Mix(state.RememberedOwner); Mix(state.SettledBorderDays); Mix(state.LastBorderReviewDay);
             MixFloat(state.BorderHabit);
+            // The age structure is authoritative, not decoration: the young share sets how many of
+            // the country's own children are born, the old share how many of them die, and both
+            // decide who arrives and which culture a region ends up counted under (DemographicCycle).
+            // Mixed only when it differs from the default, so a save written before the structure
+            // existed hashes byte for byte as it did.
+            if (state.YoungShare != 0.30f || state.OldShare != 0.09f)
+            {
+                MixText("demographic_cycle");
+                MixFloat(state.YoungShare); MixFloat(state.OldShare);
+            }
             foreach (var tag in state.CoreTags.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
             Mix(-18);
             foreach (var tag in state.Claims.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
@@ -302,9 +676,37 @@ public static class CampaignFingerprint
             MixFloat(army.Strength);
             MixFloat(army.Entrenchment);
             Mix(army.Route.Count);
+            if (army.InBattle || army.ReadyDay > 0)
+            { MixText("battle_assignment"); Mix(army.BattleId); Mix(army.ReadyDay); }
             if (army.ContractUntilDay >= 0)
             { MixText("contract_until"); Mix(army.ContractUntilDay); }
+            // A drilling formation fights differently from a ready one the day it is called.
+            if (army.Training) { MixText("training"); Mix(army.Id); }
         }
+        // A withdrawal can leave the province, headcount and battle losses unchanged,
+        // but change who may fight next hour. Empty legacy battles emit no new bytes.
+        foreach (var battle in Ordered(campaign.Battles, b => b.Id))
+        {
+            if (battle.WithdrawnAttackers.Count == 0 && battle.WithdrawnDefenders.Count == 0) continue;
+            MixText("battle_withdrawal"); Mix(battle.Id); Mix(battle.Ended ? 1 : 0);
+            Mix(battle.Attackers.Count); foreach (var id in battle.Attackers.OrderBy(id => id)) Mix(id);
+            Mix(battle.Defenders.Count); foreach (var id in battle.Defenders.OrderBy(id => id)) Mix(id);
+            Mix(battle.WithdrawnAttackers.Count); foreach (var id in battle.WithdrawnAttackers.OrderBy(id => id)) Mix(id);
+            Mix(battle.WithdrawnDefenders.Count); foreach (var id in battle.WithdrawnDefenders.OrderBy(id => id)) Mix(id);
+        }
+        if (campaign.Battles.Any(b => b.WithdrawnAttackers.Count > 0 || b.WithdrawnDefenders.Count > 0))
+        {
+            foreach (var army in Ordered(campaign.Armies, a => a.Id))
+            {
+                MixText("withdrawal_formation"); Mix(army.Id); MixFloat(army.Divisions); Mix(army.MaxPersonnel);
+                MixFloat(army.Recovering); MixFloat(army.Equipment); Mix(army.BattleId); Mix(army.ReadyDay);
+                Mix(army.AssignedWarId); Mix(army.FrontLineId); Mix((int)army.OrderKind);
+                Mix(army.DirectOrder ? 1 : 0); Mix(army.OrderProvinceId);
+                foreach (var step in army.Route) Mix(step); Mix(-35);
+            }
+        }
+        foreach (var army in Ordered(campaign.Armies, a => a.Id))
+            if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
         foreach (var war in Ordered(campaign.Wars, war => war.Id))
         {
             Mix(war.Id);
@@ -314,6 +716,31 @@ public static class CampaignFingerprint
             Mix(war.CivilConflict ? 1 : 0); Mix(war.EscalationStage); Mix(war.AiNegotiationUnlockDay);
             if (war.WorldWarDay >= 0)
             { MixText("world_war"); Mix(war.WorldWarDay); }
+            if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
+            { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            // Coalition membership changes combat and access before any province moves.
+            // Keep the historical bilateral golden when there are no allied members.
+            if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
+            {
+                MixText("war_coalition"); Mix(war.AttackerId); Mix(war.DefenderId);
+                Mix(war.AttackerAllies.Count);
+                foreach (var member in war.AttackerAllies.OrderBy(id => id)) Mix(member);
+                Mix(war.DefenderAllies.Count);
+                foreach (var member in war.DefenderAllies.OrderBy(id => id)) Mix(member);
+            }
+        }
+        // Previous-market attribution is input to supply diplomacy between weekly
+        // settlements. An unknown legacy week adds no bytes; a known (even empty)
+        // week and its original summation order are authoritative campaign state.
+        if (campaign.TradeRoutesDay >= 0 || campaign.TradeRoutes.Count > 0)
+        {
+            MixText("trade_attribution_v1"); Mix(campaign.TradeRoutesDay);
+            Mix(campaign.TradeRoutes.Count);
+            foreach (var route in campaign.TradeRoutes)
+            {
+                Mix(route.SellerId); Mix(route.BuyerId); Mix((int)route.Commodity);
+                MixFloat(route.Volume); MixFloat(route.Value);
+            }
         }
         var controllers = campaign.ProvinceController;
         if (controllers is null) return hash;

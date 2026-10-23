@@ -1,0 +1,26 @@
+// Two companions from the 16 October sitting, generated through Creative Claw and kept in
+// the listening library rather than the daily rotation: statecraft_papers joins the uneasy
+// negotiation mood (free - no Single() playlist claims it), western_wind is the calm
+// companion for campaigns in the Americas, where no calm track is pinned. Both were mastered
+// 7 dB hotter than the rest of the score (-11.8 against -19 LUFS), hence the trim.
+{
+  "tracks": {
+    "statecraft_papers": {
+      "file": "audio/statecraft_papers.ogg",
+      "label": "Statecraft papers",
+      "when": "campaign",
+      "moods": ["uneasy"],
+      "weight": 2,
+      "volume_db": -7
+    },
+    "western_wind": {
+      "file": "audio/western_wind.ogg",
+      "label": "Western wind",
+      "when": "campaign",
+      "moods": ["calm"],
+      "regions": ["north_america", "south_america"],
+      "weight": 2,
+      "volume_db": -7
+    }
+  }
+}

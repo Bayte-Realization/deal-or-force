@@ -1,0 +1,21 @@
+[submodule "godot-languages-rust"]
+	path = Tools/GodotLanguages/upstream/rust
+	url = https://github.com/godot-rust/gdext.git
+[submodule "godot-languages-nim"]
+	path = Tools/GodotLanguages/upstream/nim
+	url = https://github.com/godot-nim/gdext-nim.git
+[submodule "godot-languages-odin"]
+	path = Tools/GodotLanguages/upstream/odin
+	url = https://github.com/dresswithpockets/odin-godot.git
+[submodule "godot-languages-kotlin"]
+	path = Tools/GodotLanguages/upstream/kotlin
+	url = https://github.com/utopia-rise/godot-jvm.git
+[submodule "godot-languages-sandbox"]
+	path = Tools/GodotLanguages/upstream/sandbox
+	url = https://github.com/libriscv/godot-sandbox.git
+[submodule "godot-languages-luau"]
+	path = Tools/GodotLanguages/upstream/luau
+	url = https://github.com/Fumohouse/godot-luau-script.git
+[submodule "godot-languages-lua"]
+	path = Tools/GodotLanguages/upstream/lua
+	url = https://github.com/gilzoide/lua-gdextension.git

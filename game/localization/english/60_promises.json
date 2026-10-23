@@ -1,0 +1,77 @@
+{
+  "chronicle.promise_made": "{0} promises in public: {2}.",
+  "chronicle.promise_kept": "{0} keeps its public promise: {2}.",
+  "chronicle.promise_broken": "{0} misses its public promise: {2}.",
+
+  "PROMISES": "PROMISES",
+  "Promise": "Promise",
+  "Make promise": "Make promise",
+  "Days left: {0}": "Days left: {0}",
+  "Deadline {0} days": "Deadline {0} days",
+  "Already promised to the public": "Already promised to the public",
+  "The government can only keep {0} promises at once": "The government can only keep {0} promises at once",
+  "A promise made in public. Keeping it earns trust; missing the deadline costs more than never promising. The result is measured the same way every other condition in the game is.": "A promise made in public. Keeping it earns trust; missing the deadline costs more than never promising. The result is measured the same way every other condition in the game is.",
+  "If kept:": "If kept:",
+  "If missed:": "If missed:",
+  "Promises: {0} active · {1} available": "Promises: {0} active · {1} available",
+  "The promise is concluded the day its outcome is true, even before the deadline. Past the deadline it is broken whatever the trend.": "The promise is concluded the day its outcome is true, even before the deadline. Past the deadline it is broken whatever the trend.",
+
+  "Mend the war scars": "Mend the war scars",
+  "Promise in public that the ruined regions will be rebuilt within two years. The promise is kept the day no region is badly damaged any more.": "Promise in public that the ruined regions will be rebuilt within two years. The promise is kept the day no region is badly damaged any more.",
+  "Nothing is ruined badly enough to promise its repair": "Nothing is ruined badly enough to promise its repair",
+
+  "Settle the schools": "Settle the schools",
+  "Promise in public that within three years the country will not be counted among the poorly schooled any more.": "Promise in public that within three years the country will not be counted among the poorly schooled any more.",
+  "Literacy is not low enough for this promise to mean anything": "Literacy is not low enough for this promise to mean anything",
+
+  "Raise the floor": "Raise the floor",
+  "Promise in public that within two years the standard of living will clear the line under which a country counts as hungry for work.": "Promise in public that within two years the standard of living will clear the line under which a country counts as hungry for work.",
+  "Living standards are not low enough for this promise to mean anything": "Living standards are not low enough for this promise to mean anything",
+
+  "Refill the treasury": "Refill the treasury",
+  "Promise in public that within eighteen months the treasury will be solvent again.": "Promise in public that within eighteen months the treasury will be solvent again.",
+  "The treasury is not empty enough to make this a promise": "The treasury is not empty enough to make this a promise",
+
+  "Curb runaway inflation": "Curb runaway inflation",
+  "Promise in public to bring annual inflation back under 4% within eighteen months.": "Promise in public to bring annual inflation back under 4% within eighteen months.",
+  "Inflation is not high enough to make bringing it down a public pledge": "Inflation is not high enough to make bringing it down a public pledge",
+
+  "Stem the brain drain": "Stem the brain drain",
+  "Promise in public that the flight of talent and educated youth will be halted within two years.": "Promise in public that the flight of talent and educated youth will be halted within two years.",
+  "The country is not losing skilled citizens at an alarming rate": "The country is not losing skilled citizens at an alarming rate",
+
+  "Restore domestic order": "Restore domestic order",
+  "Promise in public to pacify social agitation and bring national stability above 65% within eighteen months.": "Promise in public to pacify social agitation and bring national stability above 65% within eighteen months.",
+  "Domestic order is not fractured enough for this to be a public pledge": "Domestic order is not fractured enough for this to be a public pledge",
+
+  "Public trust": "Public trust",
+  "The government promised a thing in public and delivered it. Institutions feel a little firmer while the memory lasts.": "The government promised a thing in public and delivered it. Institutions feel a little firmer while the memory lasts.",
+  "Broken promise": "Broken promise",
+  "A promise was made in public and missed. People remember the date, and they bring it up.": "A promise was made in public and missed. People remember the date, and they bring it up.",
+
+  "Promise on track: {0}": "Promise on track: {0}",
+  "Government promise: {0}": "Government promise: {0}",
+  "The promised outcome is met and will conclude.": "The promised outcome is met and will conclude.",
+  "{0} days remaining to achieve the outcome.": "{0} days remaining to achieve the outcome.",
+  "Fulfilling the promise raises public trust; breaking it damages government credibility.": "Fulfilling the promise raises public trust; breaking it damages government credibility.",
+  "Promised outcome": "Promised outcome",
+  "Deadline in": "Deadline in",
+  "Status now": "Status now",
+  "Fulfilled (pending conclusion)": "Fulfilled (pending conclusion)",
+  "In progress": "In progress",
+  "Review the government commitment": "Review the government commitment",
+
+  "Regional unrest: {0}": "Regional unrest: {0}",
+  "Devastated region: {0}": "Devastated region: {0}",
+  "Local radicalism and secession pressure are reaching critical levels.": "Local radicalism and secession pressure are reaching critical levels.",
+  "Extensive war destruction is paralyzing the regional economy.": "Extensive war destruction is paralyzing the regional economy.",
+  "Failure to conciliate or protect the region could provoke riots or separatism.": "Failure to conciliate or protect the region could provoke riots or separatism.",
+  "Unreconstructed infrastructure retards supply routes and living conditions.": "Unreconstructed infrastructure retards supply routes and living conditions.",
+  "Rebuilding war damage restores production capacity and regional stability.": "Rebuilding war damage restores production capacity and regional stability.",
+  "Unrest heat": "Unrest heat",
+  "Secession pressure": "Secession pressure",
+  "Government approval": "Government approval",
+  "War damage": "War damage",
+  "Inspect regional crisis": "Inspect regional crisis",
+  "Open regional construction": "Open regional construction"
+}

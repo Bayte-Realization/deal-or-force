@@ -218,6 +218,7 @@ public static class CommodityCatalog
     }
 }
 
+[System.Text.Json.Serialization.JsonConverter(typeof(MarketQuoteConverter))]
 public sealed class MarketQuote
 {
     public Commodity Commodity;

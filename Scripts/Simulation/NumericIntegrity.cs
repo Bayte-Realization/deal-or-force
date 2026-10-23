@@ -105,6 +105,16 @@ public static class NumericIntegrity
         foreach (var a in c.Armies) { var issue = ScalarIssue(a, "army " + a.Id); if (issue is not null) return issue; }
         foreach (var b in c.Battles) { var issue = ScalarIssue(b, "battle " + b.Id); if (issue is not null) return issue; }
         foreach (var w in c.Wars) { var issue = ScalarIssue(w, "war " + w.Id); if (issue is not null) return issue; }
+        foreach (var f in c.Fleets) { var issue = ScalarIssue(f, "fleet " + f.Id); if (issue is not null) return issue; }
+        foreach (var f in c.SupportFormations) { var issue = ScalarIssue(f, "support " + f.Id); if (issue is not null) return issue; }
+        if (c.ProvinceOccupation is { } occupation)
+            for (var index = 0; index < occupation.Length; index++)
+                if (!float.IsFinite(occupation[index])) return "occupation[" + index + "]";
+        foreach (var relation in c.Relations.Values)
+        {
+            var issue = ScalarIssue(relation, "relation");
+            if (issue is not null) return issue;
+        }
         return null;
     }
 
@@ -135,10 +145,13 @@ public sealed partial class Campaign
     [JsonIgnore] public string SimulationFault { get; private set; } = "";
 
     /// <summary>A failed, partially executed step must not be resumed as if it succeeded.</summary>
-    public void BlockSimulation(string reason)
+    public void BlockSimulation(string reason, Exception exception = null)
     {
         SimulationFault = reason ?? "simulation error";
         IsPaused = true;
+        // The exception goes into the envelope when it exists: the diagnostic snapshot quotes
+        // only the message, and a message without a stack is a bug report nobody can act on.
+        CrashEnvelope.Dump(this, exception, reason);
         MarkStrategicChange();
     }
 }

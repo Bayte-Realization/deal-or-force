@@ -134,7 +134,27 @@ public partial class MainMenuScene : Control
         rows.AddThemeConstantOverride("separation", 9);
         margin.AddChild(rows);
 
-        rows.AddChild(new TextureRect
+        // The logo is a paper banner, and the paper is part of the art rather than an accident:
+        // the lettering is a dark blue and a dark red that cannot be read against a navy panel.
+        // That is why the transparent brand_logo_menu.png that also ships is NOT used here,
+        // however much it looks like it was meant to be - measured, its strokes are #2E466B and
+        // #8F1C1E, and on this panel neither is legible.
+        //
+        // What was wrong was the framing. The paper sat hard against the panel with no edge at
+        // all, so it read as a white rectangle pasted onto the screen instead of as a plaque
+        // laid on the desk. The plate gives it that edge, and the paper colour is a token so a
+        // reskin can move the plaque with the rest of the palette.
+        var logoPlate = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore };
+        var plateStyle = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("brand.paper"),
+            BorderColor = Ui.Colour("button.primary_border"),
+            CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3,
+            CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3
+        };
+        plateStyle.SetBorderWidthAll(1);
+        logoPlate.AddThemeStyleboxOverride("panel", plateStyle);
+        logoPlate.AddChild(new TextureRect
         {
             Texture = GD.Load<Texture2D>(SpriteCatalog.TextureOf("brand_logo_banner",
                 "res://game/gfx/interface/brand_logo_banner.png")),
@@ -143,6 +163,7 @@ public partial class MainMenuScene : Control
             CustomMinimumSize = new Vector2(0, 150),
             MouseFilter = MouseFilterEnum.Ignore
         });
+        rows.AddChild(logoPlate);
 
         rows.AddChild(MenuCaption("Choose a world. Shape its future.", 15, "text.muted"));
         rows.AddChild(new Control { CustomMinimumSize = new Vector2(0, 8) });
@@ -425,7 +446,9 @@ public partial class MainMenuScene : Control
         tabs.AddThemeConstantOverride("h_separation", 6);
         tabs.AddThemeConstantOverride("v_separation", 5);
         headRows.AddChild(tabs);
-        foreach (var category in SettingsCatalog.Categories())
+        var categories = DealOrForce.Modding.LauncherSelection.IsEditorRun
+            ? SettingsCatalog.Categories().Append("editor_mods") : SettingsCatalog.Categories();
+        foreach (var category in categories.Distinct(StringComparer.OrdinalIgnoreCase))
         {
             var captured = category;
             var tab = new Button
@@ -466,7 +489,12 @@ public partial class MainMenuScene : Control
         actions.AddChild(MenuAction("Back", HideSettings, 40));
         var reset = MenuAction("Reset this page", () =>
         {
-            SettingsRows.ResetCategory(_settingsCategory, ApplyMenuSetting);
+            if (_settingsCategory == "editor_mods")
+            {
+                EditorModRows.Reset();
+                RefreshModFrontendMenu();
+            }
+            else SettingsRows.ResetCategory(_settingsCategory, ApplyMenuSetting);
             ShowSettingsCategory(_settingsCategory);
         }, 40);
         actions.AddChild(reset);
@@ -496,6 +524,11 @@ public partial class MainMenuScene : Control
             DealOrForceGame.StyleButton(tab, string.Equals(id, category, StringComparison.OrdinalIgnoreCase));
 
         foreach (var child in _settingsRows.GetChildren()) child.QueueFree();
+        if (category == "editor_mods" && DealOrForce.Modding.LauncherSelection.IsEditorRun)
+        {
+            EditorModRows.Build(_settingsRows, false, RefreshModFrontendMenu);
+            return;
+        }
         foreach (var definition in SettingsCatalog.In(category))
             SettingsRows.Build(definition, _settingsRows, ApplyMenuSetting);
     }
@@ -635,6 +668,9 @@ public partial class MainMenuScene : Control
         _language.Text = LanguageLabel();
     }
 
+    private static string LanguageLabel() =>
+        Loc.Format("Language: {0}", Loc.DisplayName(Loc.Language));
+
     private void RefreshModFrontendMenu()
     {
         _menuMods.Discover();
@@ -643,9 +679,6 @@ public partial class MainMenuScene : Control
             Loc.LoadDirectory(System.IO.Path.Combine(package.PhysicalRoot, "localization"), package.Errors);
         if (_modActions is not null) _modActions.Visible = _menuMods.FrontendActions().Count > 0;
     }
-
-    private static string LanguageLabel() =>
-        Loc.Format("Language: {0}", Loc.DisplayName(Loc.Language));
 
     /// <summary>
     /// Put every caption on this screen back into the current language.

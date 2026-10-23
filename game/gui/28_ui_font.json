@@ -1,0 +1,37 @@
+// The interface's type sizes, in pixels.
+//
+// Screens read these through Ui.Metric instead of hard-coding a size per label, so the type of
+// the whole interface can be retuned from data without recompiling - and so two screens that
+// mean the same thing by a caption actually set the same size for it.
+//
+// The names are a scale, not a set of independent numbers: button_small <= button <=
+// button_large, caption <= body, heading_small <= heading < heading_large, and nothing below
+// ten, which is the smallest size worth putting in front of a player. A mod is free to retune
+// the whole scale; Tools/FormableTests/ResponsiveHudLayoutTests.cs holds it to the order.
+//
+// These are values, not a redesign. Each caller passes the number it used before as its
+// fallback, so nothing moves until a mod or the base game changes a token here.
+{
+  "metrics": {
+    "ui.font.button": 12,
+    "ui.font.button_small": 11,
+    "ui.font.button_large": 13,
+    "ui.font.caption": 11,
+    "ui.font.body": 13,
+    "ui.font.tooltip": 12,
+    "ui.font.heading_small": 13,
+    "ui.font.heading": 16,
+    "ui.font.heading_large": 24,
+    "ui.font.navigation": 11,
+    "ui.font.tab": 13,
+    "ui.font.console": 14,
+    "ui.font.handbook.caption": 11,
+    "ui.font.handbook.button": 13,
+    "ui.font.handbook.heading": 24,
+    "ui.font.handbook.sub": 13,
+    "ui.font.handbook.point": 15,
+    "ui.font.handbook.paragraph": 15,
+    "ui.font.handbook.link": 13,
+    "ui.font.handbook.row": 12
+  }
+}

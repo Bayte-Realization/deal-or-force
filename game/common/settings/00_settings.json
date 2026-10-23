@@ -143,6 +143,18 @@
     "description": "Close up, a drifting veil over the ground your country cannot see. Only its look: what is hidden stays hidden either way. Also a button on the map bar.",
     "default": true
   },
+  "map_trade_traffic": {
+    "category": "interface", "order": 248, "kind": "toggle",
+    "name": "Trade on the map",
+    "description": "Ships on the sea lanes between the world's busiest trading partners, and lorries on the roads between neighbours - more for the larger trade. They stop when the clock does.",
+    "default": true
+  },
+  "map_event_pulses": {
+    "category": "interface", "order": 249, "kind": "toggle",
+    "name": "Events on the map",
+    "description": "A ring where something has just happened: a war, a split, a coup, a new country. It fades. Off leaves the map quiet.",
+    "default": true
+  },
   "map_ambience": {
     "category": "audio", "order": 425, "kind": "toggle",
     "name": "Sound of the map",
@@ -186,8 +198,8 @@
   "movement_flags": {
     "category": "interface", "order": 262, "kind": "toggle",
     "name": "Movements fly their own flags",
-    "description": "Show the flags armed movements really fly instead of neutral banners in their colours. Off by default: a video that shows the flag of a group some governments list as terrorist can be age-restricted or demonetised.",
-    "default": false
+    "description": "Show authored movement insignia when available. Disable to use their alternate plain banners.",
+    "default": true
   },
 
   // ---------------------------------------------------------------- what it looks like ---
@@ -214,6 +226,14 @@
     "values": ["1280x720", "1600x900", "1920x1080", "2560x1440", "3440x1440", "3840x2160"],
     "labels": ["1280 × 720", "1600 × 900", "1920 × 1080", "2560 × 1440", "3440 × 1440", "3840 × 2160"],
     "default": "1920x1080"
+  },
+  "graphics_quality": {
+    "category": "video", "order": 314, "kind": "choice",
+    "name": "Graphics quality",
+    "description": "How much of the picture the game may spend on this machine. Automatic starts from what the graphics card is and lowers the picture by itself when the frame rate falls; a named level stays where it is put.",
+    "values": ["auto", "high", "balanced", "low", "software"],
+    "labels": ["Automatic", "High", "Balanced", "Low", "Processor"],
+    "default": "auto"
   },
   "render_scale": {
     "category": "video", "order": 315, "kind": "choice",

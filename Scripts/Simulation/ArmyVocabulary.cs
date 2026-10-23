@@ -32,6 +32,53 @@ public static class ArmyVocabulary
         ArmyStance.Aggressive => "Aggressive",
         _ => "Balanced"
     });
+
+    /// <summary>
+    /// Why a formation is where it is, in the words a player needs to tell "waiting" from
+    /// "stuck".
+    ///
+    /// A division standing still with no explanation reads as a broken order. Most of the
+    /// time it is doing exactly what it was told - holding a line, preparing an assault,
+    /// waiting for a plan to ripen - and a few of those states are the difference between a
+    /// front that is quiet and a front that is not working. The exact number is included
+    /// wherever one exists: planning, provinces left on the march.
+    /// </summary>
+    public static string Situation(Campaign campaign, Army army)
+    {
+        if (army is null) return "";
+        if (army.InBattle) return Loc.Format("Engaged in battle #{0}", army.BattleId);
+        if (army.EmbarkedFleetId >= 0) return Loc.Get("At sea under the fleet's orders.");
+        if (campaign is not null && MilitaryAccess.MustReturn(campaign, army))
+            return Loc.Get("Interned on neutral ground; awaiting a safe return home.");
+        if (campaign is not null && army.ReadyDay > campaign.ElapsedDays)
+            return Loc.Format("Regrouping: {0} day(s) before combat readiness.", army.ReadyDay - campaign.ElapsedDays);
+        if (army.CutOff) return Loc.Get("Cut off from supply; waiting for the pocket to be relieved.");
+        if (army.DirectOrder)
+            return army.Route.Count > 0
+                ? Loc.Format("Following a direct march: {0:N0} province(s) to go.", army.Route.Count)
+                : Loc.Get("Holding the destination of a direct order.");
+        if (army.FrontLineId >= 0) return Loc.Get("Holding a line drawn on the map.");
+        if (army.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)
+        {
+            if (!army.PlanActive)
+                return Loc.Format(
+                    "Preparing an offensive: plan {0:P0} ready; it attacks when the staff activates it.",
+                    army.Planning);
+            if (army.Route.Count > 0)
+                return Loc.Format("Advancing to the front: {0:N0} province(s) to go.", army.Route.Count);
+            if (army.OrderProvinceId > 0 && army.OrderProvinceId == army.ProvinceId)
+                return Loc.Get("In position; waiting for the assault conditions.");
+            return Loc.Get("Advancing: no route to an enemy province yet.");
+        }
+        if (army.OrderKind == ArmyOrder.DefendFront) return Loc.Get("Holding the line; it attacks only when ordered.");
+        if (army.OrderKind == ArmyOrder.ReserveFront) return Loc.Get("In reserve behind the line.");
+        if (army.AssignedWarId >= 0) return Loc.Get("Attached to a war but not yet given a role.");
+        if (campaign is not null)
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(army.NationId))
+                    return Loc.Get("Idle: no front has claimed this formation.");
+        return Loc.Get("At rest: the country is not at war.");
+    }
 }
 
 /// <summary>

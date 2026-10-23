@@ -39,6 +39,7 @@ public partial class DealOrForceGame
     private VBoxContainer _diplomacyDetailBody = null!;
     private VBoxContainer _diplomacyPactRows = null!;
     private VBoxContainer _diplomacyActionRows = null!;
+    private Control _diplomacyActionColumn = null!;
     private Label _diplomacyFeedback = null!;
     private Button _diplomacyImproveButton = null!;
     private Button _diplomacyDenounceButton = null!;
@@ -68,6 +69,7 @@ public partial class DealOrForceGame
         public Button Select;
         public Control Flag;
         public Label Name;
+        public Label Identity;
         public Label Opinion;
         public Label Stance;
         public Nation Nation;
@@ -122,6 +124,8 @@ public partial class DealOrForceGame
         header.AddChild(_diplomacyInboxButton);
         header.AddChild(ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
+        header.AddChild(ActionButton("Subjects", () => OpenSubjectsModal(), 0, 32));
+        header.AddChild(ActionButton("Release country", () => OpenReleaseCountryModal(), 0, 32));
         header.AddChild(HandbookButton("diplomacy"));
         header.AddChild(ActionButton("×", CloseDiplomacyScreen, 38, 32));
 
@@ -179,17 +183,29 @@ public partial class DealOrForceGame
         listScroll.AddChild(_diplomacyListRows);
 
         // ---- the page: the country itself.
+        var page = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        page.AddThemeConstantOverride("separation", 8);
+        body.AddChild(page);
+        BuildDiplomacyDossierChrome(page);
         var pageScroll = new ScrollContainer
         {
+            Name = "DiplomacyDossierScroll",
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto
         };
-        body.AddChild(pageScroll);
+        _diplomacyDossierScroll = pageScroll;
+        page.AddChild(pageScroll);
         _diplomacyDetailBody = new VBoxContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            // The same idiom as the action column below: a VBoxContainer inside a ScrollContainer
+            // is sized to its content unless it is told to fill, so the page's inset panels stop
+            // short of the viewport and the column reads as unfinished rather than as a page that
+            // simply has less on it today. The children keep their own flags, so nothing moves -
+            // the container is the thing that now reaches the bottom.
+            SizeFlagsVertical = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(420, 0)
         };
         _diplomacyDetailBody.AddThemeConstantOverride("separation", 12);
@@ -199,10 +215,12 @@ public partial class DealOrForceGame
         // ---- the actions: what you can do about any of it.
         var actions = new VBoxContainer
         {
+            Name = "DiplomacyActionColumn",
             CustomMinimumSize = new Vector2(270, 0),
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         actions.AddThemeConstantOverride("separation", 7);
+        _diplomacyActionColumn = actions;
         body.AddChild(actions);
         var actionScroll = new ScrollContainer
         {
@@ -212,7 +230,7 @@ public partial class DealOrForceGame
             FollowFocus = true, MouseForcePassScrollEvents = false
         };
         actions.AddChild(actionScroll);
-        _diplomacyActionRows = new VBoxContainer { Name = "WideDiplomaticActions", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _diplomacyActionRows = new VBoxContainer { Name = "WideDiplomaticActions", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         _diplomacyActionRows.AddThemeConstantOverride("separation", 7);
         actionScroll.AddChild(_diplomacyActionRows);
 
@@ -234,6 +252,7 @@ public partial class DealOrForceGame
             () => ToggleAgreement(AgreementKind.TradeAgreement, DiplomacyTarget(), _diplomacyFeedback));
         _diplomacyPactButton = AddDiplomacyAction("AGREEMENTS", "Non-aggression pact",
             () => ToggleAgreement(AgreementKind.NonAggressionPact, DiplomacyTarget(), _diplomacyFeedback));
+        AddMilitaryAccessControls(_diplomacyActionRows, DiplomacyTarget, "Wide");
         _diplomacyDealButton = AddDiplomacyAction("AGREEMENTS", "Propose a deal",
             ConfirmOrProposeDeal);
         _diplomacyDealButton.Name = "ProposeDealWide";
@@ -281,12 +300,20 @@ public partial class DealOrForceGame
         _diplomacyActionRows.AddChild(_diplomacySubjectActions);
         var subjectHeading = Title("SUBJECTS", 12, Ui.Colour("text.caption"));
         _diplomacySubjectActions.AddChild(subjectHeading);
+        var openSubjectManager = ActionButton("Manage satellite...", () => OpenSubjectsModal(DiplomacyTarget()), 0, 32, true);
+        openSubjectManager.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _diplomacySubjectActions.AddChild(openSubjectManager);
         _diplomacyReleaseButton = ActionButton("Release", ReleaseDiplomacySubject, 0, 32);
         _diplomacyReleaseButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _diplomacySubjectActions.AddChild(_diplomacyReleaseButton);
         _diplomacyIntegrateButton = ActionButton("Integrate", IntegrateDiplomacySubject, 0, 32);
         _diplomacyIntegrateButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _diplomacySubjectActions.AddChild(_diplomacyIntegrateButton);
+
+        // Spacer takes all leftover vertical room so the action buttons never float in an
+        // empty actions column when only a few actions are available for the selected country.
+        var _ = new Control { SizeFlagsVertical = SizeFlags.ExpandFill };
+        _diplomacyActionRows.AddChild(_);
 
         _diplomacyFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _diplomacyFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -303,6 +330,8 @@ public partial class DealOrForceGame
         if (_diplomacyActionSections.Add(section))
             _diplomacyActionRows.AddChild(Title(section, 12, Ui.Colour("text.caption")));
         var button = ActionButton(caption, callback, 0, 34, primary);
+        button.ClipText = true;
+        button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _diplomacyActionRows.AddChild(button);
         return button;
@@ -328,19 +357,23 @@ public partial class DealOrForceGame
     {
         _openScreen = "Diplomacy";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        if (_stateAffairsLayer is not null) _stateAffairsLayer.Visible = false;
-        if (_productionLayer is not null) _productionLayer.Visible = false;
-        if (_tradeScreenLayer is not null) _tradeScreenLayer.Visible = false;
-        if (_selectedNation is null) _selectedNation = _campaign.Player;
+        if (_selectedNation is null || _selectedNation.Id == _campaign.Player.Id)
+            _selectedNation = DiplomacyDefaultPartner() ?? _selectedNation;
         _diplomacySelectedId = _selectedNation?.Id ?? -1;
-        _diplomacyLayer.Visible = true;
-        _diplomacyLayer.MoveToFront();
+        RaiseWorkspaceLayer(_diplomacyLayer);
         RebuildDiplomacyList(force: true);
         ForceDiplomacyRefresh();
         UpdateScreenButtons();
     }
+
+    /// <summary>
+    /// Who diplomacy opens on when the player has not chosen anybody: the neighbour the player
+    /// is on worst terms with, or the largest country in the world if there is no land
+    /// neighbour. The choice itself lives in the simulation (<see cref="CampaignDiplomacy.DefaultPartner"/>)
+    /// so it can be tested without a scene; this only asks for it.
+    /// </summary>
+    private Nation DiplomacyDefaultPartner() =>
+        CampaignDiplomacy.DefaultPartner(_campaign, _campaign?.Player);
 
     private void CloseDiplomacyScreen()
     {
@@ -402,7 +435,11 @@ public partial class DealOrForceGame
             .Where(nation => query.Length == 0 ||
                              nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                              nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                             nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+                             nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                             Simulation.StateIdentity.Caption(_campaign, nation, true)
+                                 .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                             Simulation.StateIdentity.Caption(_campaign, nation, false)
+                                 .Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(nation => nation.Gdp)
             .ToArray();
 
@@ -433,7 +470,7 @@ public partial class DealOrForceGame
         // minimum size, so the row reads as a one-pixel smear. Anchor the inner box to the
         // full rectangle, inset by the row style's own padding, and give the button the
         // height the row needs, which a plain Button does not take from its children.
-        row.Select = new Button { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 28) };
+        row.Select = new Button { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 44) };
         row.Select.AddThemeStyleboxOverride("normal", ShellRowStyle(false));
         row.Select.AddThemeStyleboxOverride("hover", ShellRowStyle(true));
         row.Select.AddThemeStyleboxOverride("pressed", ShellRowStyle(true));
@@ -449,14 +486,32 @@ public partial class DealOrForceGame
         row.Select.AddChild(inner);
 
         row.Flag = FlagBadge("", 18);
-        inner.AddChild(row.Flag);
+        // A fixed slot, so the names line up down the list whatever each flag's proportions.
+        var flagSlot = new CenterContainer { CustomMinimumSize = new Vector2(40, 0), MouseFilter = MouseFilterEnum.Ignore };
+        flagSlot.AddChild(row.Flag);
+        inner.AddChild(flagSlot);
+        // The name and, under it, what the state says it is: the two facts a player scans a
+        // country list for before opening anything.
+        var text = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        text.AddThemeConstantOverride("separation", 0);
+        inner.AddChild(text);
         row.Name = Title("", 13, Ui.Colour("text.body"));
+        row.Name.Name = "DiplomacyCountryName";
         Fixed(row.Name, 0);
         row.Name.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.Name.MaxLinesVisible = 3;
         row.Name.VerticalAlignment = VerticalAlignment.Center;
         row.Name.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        inner.AddChild(row.Name);
+        text.AddChild(row.Name);
+        row.Identity = Title("", 10, Ui.Colour("text.muted"));
+        row.Identity.Name = "DiplomacyCountryIdentity";
+        row.Identity.ClipText = true;
+        // Both demographics are useful when choosing a diplomatic partner. Ellipsising
+        // this line hid the culture almost everywhere, especially in Russian at 720p.
+        // Wrap in the existing column instead of widening the whole window over the map.
+        row.Identity.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        row.Identity.MaxLinesVisible = -1;
+        text.AddChild(row.Identity);
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
         Fixed(row.Stance, 64);
         row.Stance.VerticalAlignment = VerticalAlignment.Center;
@@ -467,11 +522,18 @@ public partial class DealOrForceGame
         row.Opinion.VerticalAlignment = VerticalAlignment.Center;
         inner.AddChild(row.Opinion);
 
-        float lastNameWidth = -1;
+        float lastNameWidth = -1, lastIdentityWidth = -1;
         row.Name.Resized += () =>
         {
             if (Math.Abs(row.Name.Size.X - lastNameWidth) < .5f) return;
             lastNameWidth = row.Name.Size.X;
+            FitDiplomacyName(row);
+        };
+        // The identity line wraps too, and its width settles on its own layout pass.
+        row.Identity.Resized += () =>
+        {
+            if (Math.Abs(row.Identity.Size.X - lastIdentityWidth) < .5f) return;
+            lastIdentityWidth = row.Identity.Size.X;
             FitDiplomacyName(row);
         };
 
@@ -480,11 +542,28 @@ public partial class DealOrForceGame
         return row;
     }
 
+    /// <summary>The declared name with the exact share of the country it stands on.</summary>
+    private string StateIdentityWithShare(Nation nation, bool religion)
+    {
+        var caption = Simulation.StateIdentity.Caption(_campaign, nation, religion);
+        if (caption == Tr("none declared")) return caption;
+        var share = religion
+            ? Simulation.StateIdentity.ReligionShare(_campaign, nation, nation.DeclaredReligion)
+            : Simulation.StateIdentity.CultureShare(_campaign, nation, nation.DeclaredCulture);
+        return Simulation.Loc.Format("{0} · {1:0.0%} of the country", caption, share);
+    }
+
     private void RepaintDiplomacyRow(DiplomacyRow row, Nation nation)
     {
         row.Nation = nation;
         SetFlag(row.Flag, nation.Tag, 18);
-        row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag);
+        // Who the state says it is, on every row: the two names a diplomat scans for, with
+        // the exact share each stands on. The same line answers the map tooltip and the
+        // country dossier, so the number cannot disagree between screens.
+        var identity = Simulation.StateIdentity.Brief(_campaign, nation);
+        row.Identity.Text = identity;
+        row.Identity.TooltipText = Ui.Tip(identity);
+        row.Select.TooltipText = Ui.Tip(nation.DisplayName + " · " + nation.Tag + "\n" + identity);
         row.Name.Text = nation.DisplayName;
         FitDiplomacyName(row);
         var relation = CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, nation.Id);
@@ -503,7 +582,11 @@ public partial class DealOrForceGame
     // theme line spacing and the actual HBox width all affect the final height.
     private static float ReserveWrappedLabelLines(Label label)
     {
-        var lines = Math.Clamp(label.GetLineCount(), 1, Math.Max(1, label.MaxLinesVisible));
+        // Before its first layout a label is a few pixels wide and "wraps" into a line per word.
+        // Reserving that stretched the first row of the list to some 400 pixels, pushing every
+        // other country out of sight, until something happened to resize the name.
+        var lines = label.Size.X < 40f ? 1 : Math.Max(1, label.GetLineCount());
+        if (label.MaxLinesVisible > 0) lines = Math.Min(lines, label.MaxLinesVisible);
         var height = Mathf.Ceil(Math.Max(14f, label.GetLineHeight()) * lines +
             label.GetThemeConstant("line_spacing") * (lines - 1) + 2);
         label.CustomMinimumSize = new Vector2(label.CustomMinimumSize.X, height);
@@ -512,9 +595,12 @@ public partial class DealOrForceGame
 
     private static void FitDiplomacyName(DiplomacyRow row)
     {
-        var height = ReserveWrappedLabelLines(row.Name);
-        // A Button is not a container and ignores its child's minimum height.
-        row.Select.CustomMinimumSize = new Vector2(0, Math.Max(28f, height + 6f));
+        ReserveWrappedLabelLines(row.Name);
+        ReserveWrappedLabelLines(row.Identity);
+        // Both the wrapped name AND identity line (plus flag/opinion) must fit.
+        // Reserving only the first label shrank a two-line row to 28 pixels.
+        var content = row.Name.GetParent().GetParent() as Control;
+        row.Select.CustomMinimumSize = new Vector2(0, Math.Max(44f, (content?.GetCombinedMinimumSize().Y ?? 38f) + 6f));
     }
 
     // ------------------------------------------------------------------ the page
@@ -574,7 +660,7 @@ public partial class DealOrForceGame
         };
         chip.AddThemeConstantOverride("icon_max_width", 22);
         chip.AddThemeConstantOverride("h_separation", 6);
-        chip.AddThemeFontSizeOverride("font_size", 12);
+        chip.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 12));
         chip.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
         chip.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
         StyleBoxFlat Style(bool hover)
@@ -649,14 +735,16 @@ public partial class DealOrForceGame
 
         RebuildDiplomacyList();
         MarkDiplomacySelection();
-        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}";
+        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}|{_diplomacyDossierPage}|{Loc.Language}";
         if (key == _diplomacyPageKey) return;
         _diplomacyPageKey = key;
+        var scrollY = _diplomacyDossierScroll.ScrollVertical;
         foreach (var child in _diplomacyDetailBody.GetChildren())
         {
             _diplomacyDetailBody.RemoveChild(child);
             child.QueueFree();
         }
+        _diplomacyDossierScroll.SetDeferred(ScrollContainer.PropertyName.ScrollVertical, scrollY);
 
         Label Text(string words, int size, Color colour)
         {
@@ -678,6 +766,7 @@ public partial class DealOrForceGame
         {
             var panel = new PanelContainer();
             panel.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 12));
+            AtlasSurfaceSkin.Attach(panel, AtlasSurfaceSkin.Level.Inset, "war.card");
             _diplomacyDetailBody.AddChild(panel);
             var stack = new VBoxContainer();
             stack.AddThemeConstantOverride("separation", 7);
@@ -688,6 +777,8 @@ public partial class DealOrForceGame
             if (aside.Length > 0)
             {
                 var note = Text(aside, 13, asideColour ?? Ui.Colour("text.accent"));
+                note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                note.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 note.HorizontalAlignment = HorizontalAlignment.Right;
                 head.AddChild(note);
             }
@@ -712,29 +803,9 @@ public partial class DealOrForceGame
         var canSee = own || CanInspectNation(nation.Id);
 
         // ---- who they are, and what they think of us.
-        var banner = new PanelContainer();
-        banner.AddThemeStyleboxOverride("panel", WarInsetStyle(18, 14));
-        _diplomacyDetailBody.AddChild(banner);
-        var top = new HBoxContainer();
-        top.AddThemeConstantOverride("separation", 14);
-        banner.AddChild(top);
-        var flag = FlagBadge(nation.Tag, 46);
-        TintBlankFlag(flag, nation);
-        top.AddChild(flag);
-        var who = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ShrinkCenter };
-        who.AddThemeConstantOverride("separation", 1);
-        top.AddChild(who);
-        who.AddChild(Giving(Text(nation.DisplayName, 22, Ui.Colour("text.bright"))));
-        who.AddChild(Giving(Text(Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
-            Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name)), 12, Ui.Colour("text.caption"))));
-        who.AddChild(Giving(Text(canSee
-            ? Simulation.Loc.Format("{0} people · GDP {1} · stability {2}",
-                Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Percent(nation.Stability))
-            : Tr("What they have is not known to us."), 12, Ui.Colour("text.muted"))));
-
-        var aside = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter, CustomMinimumSize = new Vector2(160, 0) };
-        aside.AddThemeConstantOverride("separation", 2);
-        top.AddChild(aside);
+        RefreshDiplomacyDossierChrome(nation, canSee);
+        var aside = _diplomacyDossierOpinion;
+        ClearChildren(aside);
         Label Right(Label label)
         {
             label.HorizontalAlignment = HorizontalAlignment.Right;
@@ -751,17 +822,38 @@ public partial class DealOrForceGame
             if (_campaign.FeatureEnabled("national_courses") && nation.NationalCourse.Initialized)
                 Field("National agenda", Tr(NationalCourseCatalog.Find(nation.NationalCourse.Dominant)?.Name ?? nation.NationalCourse.Dominant));
         }
+        if (_diplomacyDossierPage == "Government")
+        {
+            var institutions = Field("Government");
+            institutions.AddChild(BuildGrandStrategyLeaderHeader(nation, compact: false));
+            CardRow(institutions, "Form of government", Tr(PoliticsCore.GovernmentOf(nation).Name),
+                Tr(PoliticsCore.GovernmentOf(nation).Description));
+            CardRow(institutions, "Ideology", Tr(PoliticsCore.IdeologyOf(nation).Name),
+                Tr(PoliticsCore.IdeologyOf(nation).Description));
+            CardRow(institutions, "State culture", StateIdentityWithShare(nation, false));
+            CardRow(institutions, "State religion", StateIdentityWithShare(nation, true));
+            foreach (var portfolio in Rulers.AllPortfolios)
+                if (Rulers.ActiveMinister(nation, portfolio.Id) is { } min)
+                    CardRow(institutions, portfolio.Name,
+                        $"{Rulers.MinisterPersonName(nation, portfolio.Id)} ({Simulation.Loc.Format("{0} yrs", Rulers.MinisterPersonAge(_campaign, nation, portfolio.Id))}) · {Tr(min.Name)}");
+            if (canSee) AddSpiritRows(Field("NATIONAL SPIRITS"), nation);
+            _diplomacyActionColumn.Visible = _diplomacyActionRows.Visible = !own;
+            if (!own) RefreshDiplomacyActions(player, nation);
+            return;
+        }
         if (own)
         {
+            _diplomacyActionColumn.Visible = false;
             _diplomacyActionRows.Visible = false;
             aside.AddChild(Right(RowLabel("YOUR COUNTRY", 11, Ui.Colour("text.accent"))));
             RefreshOwnDiplomacy(player, Field, Text, Giving, Bar);
             Society();
             return;
         }
+        _diplomacyActionColumn.Visible = true;
         _diplomacyActionRows.Visible = true;
 
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var opinionColour = relation.Opinion > 0 ? positive : relation.Opinion < 0 ? negative : Ui.Colour("text.body_soft");
         aside.AddChild(Right(RowLabel("THEIR OPINION OF US", 10, Ui.Colour("text.caption"))));
         aside.AddChild(Right(Text(relation.Opinion.ToString("+0;-0;0"), 28, opinionColour)));
@@ -777,8 +869,10 @@ public partial class DealOrForceGame
             })));
 
         // ---- what they are in: wars, blocs, backers, claims (DiplomacyStandingUI).
-        AddWorldStanding(nation, Field, Text, Bar);
+        if (_diplomacyDossierPage == "Overview") AddWorldStanding(nation, Field, Text, Bar);
 
+        if (_diplomacyDossierPage == "Comparison")
+        {
         // ---- the balance of power: a sentence, then each weight as a bar of ours against theirs.
         var mine = DiplomacyStrength(player);
         var theirs = DiplomacyStrength(nation);
@@ -855,7 +949,10 @@ public partial class DealOrForceGame
             divisions.GetValueOrDefault(player.Id).ToString("0.#"), divisions.GetValueOrDefault(nation.Id).ToString("0.#"));
         Weigh("Population", player.Population, nation.Population, Fmt.People(player.Population), Fmt.People(nation.Population));
         Weigh("Stability", player.Stability, nation.Stability, Fmt.Percent(player.Stability), Fmt.Percent(nation.Stability));
+        }
 
+        if (_diplomacyDossierPage == "Relations")
+        {
         // ---- the opinion, and what it is made of.
         var drivers = relation.OpinionDrivers.Entries
             .OrderByDescending(item => Math.Abs(item.Value))
@@ -871,7 +968,7 @@ public partial class DealOrForceGame
             var value = (float)entry.Value;
             var row = new HBoxContainer();
             row.AddThemeConstantOverride("separation", 10);
-            row.AddChild(Giving(Text(Tr(entry.Source), 12, Ui.Colour("text.body_soft"))));
+            row.AddChild(Giving(Text(TranslateOpinionDriver(entry.Source), 12, Ui.Colour("text.body_soft"))));
             var bar = Bar(8, 120);
             bar.Lean(value / largest, positive, negative);
             row.AddChild(bar);
@@ -879,6 +976,7 @@ public partial class DealOrForceGame
             figure.CustomMinimumSize = new Vector2(46, 0);
             row.AddChild(figure);
             reasons.AddChild(row);
+        }
         }
 
         // ---- the war, if there is one: the same bar as on the Wars screen, our side on the left.
@@ -889,6 +987,7 @@ public partial class DealOrForceGame
             var score = attacking ? war.WarScore : -war.WarScore;
             var front = Field("AT WAR", WarNames.Of(_campaign, war), negative);
             var tug = Bar(18);
+            tug.Name = "DiplomacyPlayerScoreBar" + war.Id;
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), ourColour, theirColour);
             front.AddChild(tug);
             var line = new HBoxContainer();
@@ -903,6 +1002,8 @@ public partial class DealOrForceGame
         }
 
         // ---- every tie between us, and what their trade is worth.
+        if (_diplomacyDossierPage == "Relations")
+        {
         var ties = Field("TIES");
         _diplomacyPactRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _diplomacyPactRows.AddThemeConstantOverride("separation", 5);
@@ -912,6 +1013,7 @@ public partial class DealOrForceGame
             _diplomacyPactRows.AddChild(Text(Tr("No treaty, no tie and no trade between us."), 12, Ui.Colour("text.muted")));
 
         Society();
+        }
         RefreshDiplomacyActions(player, nation);
     }
 
@@ -1026,7 +1128,7 @@ public partial class DealOrForceGame
             var agenda = new VBoxContainer(); agenda.AddThemeConstantOverride("separation", 6);
             council.AddChild(agenda);
             agenda.AddChild(Title(Tr("Alliance council"), 15, Ui.Colour("text.accent")));
-            var explanation = Title(Tr("Trust is earned by kept commitments, not repeated declarations."), 12, Ui.Colour("text.body_soft"));
+            var explanation = Title(Tr("Trust grows with every commitment kept."), 12, Ui.Colour("text.body_soft"));
             explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             agenda.AddChild(explanation);
             var ceiling = Title(Simulation.Loc.Format("Sustainable trust: {0:P0}", AllianceMaintenance.Target(_campaign, relation)), 12, Ui.Colour("text.body_soft"));
@@ -1118,9 +1220,9 @@ public partial class DealOrForceGame
         RefreshDiplomaticPeaceButton(_diplomacyPeaceButton, nation);
         RefreshIntelNetworkAction(player, nation);
         _diplomacyWarButton.Visible = !_diplomacyPeaceButton.Visible;
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, nation.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
         var cooldown = _campaign.ElapsedDays - relation.LastActionDay < 14;
-        _diplomacyImproveButton.Disabled = cooldown || player.Treasury < 0.1f;
+        RefreshOutreachButton(_diplomacyImproveButton, nation);
         _diplomacyDenounceButton.Disabled = cooldown;
 
         if (relation.Stance == DiplomaticStance.Allied)
@@ -1138,7 +1240,7 @@ public partial class DealOrForceGame
         else
         {
             _diplomacyAllianceButton.Text = Tr("Propose alliance");
-            var can = AllianceSystem.CanPropose(_campaign, player, nation, out var refusal);
+            var can = AllianceSystem.CanPropose(_campaign, player, nation, out var refusal, preview: true);
             _diplomacyAllianceButton.Disabled = !can;
             if (!can)
             {
@@ -1147,7 +1249,7 @@ public partial class DealOrForceGame
             else
             {
                 var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, player, why);
+                var willingness = AllianceSystem.Willingness(_campaign, nation, player, why, refreshAssessment: false);
                 var needed = _campaign.Defines.AllianceWillingness;
                 var parts = why.Entries
                     .OrderByDescending(entry => Math.Abs(entry.Value))
@@ -1182,7 +1284,7 @@ public partial class DealOrForceGame
         StyleButton(_diplomacyUltimatumButton, false);
         _diplomacyUltimatumButton.Text = Tr("Issue ultimatum");
         var canDeal = Ultimatum.CanNegotiateDeal(_campaign, player, nation, out var dealRefusal);
-        _diplomacyDealButton.Disabled = !canDeal || _observerMode;
+        _diplomacyDealButton.Disabled = !canDeal;
         _diplomacyDealButton.TooltipText = Ui.Tip(!canDeal ? dealRefusal : nation.IsHuman
             ? Tr("Send an offer to this player's inbox. They must explicitly accept; nothing is signed automatically.")
             : Tr("Compose a peaceful exchange of cash, treaties or regions. Review before sending."));
@@ -1214,14 +1316,10 @@ public partial class DealOrForceGame
     {
         if (!ValidDiplomacyTarget()) return;
         var target = DiplomacyTarget();
-        var relation = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, target.Id);
-        var before = relation.Opinion;
-        _campaign.Commands.Enqueue(new ImproveRelationsCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id });
-        _campaign.Commands.ApplyAll(_campaign);
+        var feedback = SendOrRecallDiplomaticMission(target);
         _diplomacyPendingWarTarget = -1;
-        _diplomacyFeedback.Text = relation.Opinion > before
-            ? Simulation.Loc.Format("Mission received: their opinion of us is {0:+0;-0;0}.", relation.Opinion)
-            : Tr("Diplomatic action is on cooldown or the treasury is insufficient.");
+        if (_diplomacyFeedback is not null) _diplomacyFeedback.Text = feedback;
+        if (_mapDiplomacyFeedback is not null) _mapDiplomacyFeedback.Text = feedback;
         ForceDiplomacyRefresh();
     }
 

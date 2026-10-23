@@ -12,11 +12,26 @@ public sealed partial class Defines
     public float ArmyWarDivisionsPerPost { get; set; } = 1.5f;
 
     /// <summary>How far past its peacetime establishment a country at war will go - and one being overrun.</summary>
-    public float ArmyWarCeiling { get; set; } = 2.0f;
+    public float ArmyWarCeiling { get; set; } = 2.5f;
     public float ArmyWarCeilingOverrun { get; set; } = 3.5f;
 
     /// <summary>The most formations a country being overrun raises at once.</summary>
     public int ArmyEmergencyRaises { get; set; } = 3;
+
+    /// <summary>
+    /// The most formations a country short of its front raises in one look. Routine rebuilding
+    /// stays one at a time - an army recovers over months, which is what losing one should
+    /// cost - but a front that exists today cannot be held by a queue that delivers a single
+    /// division a month: the shortage itself is the reason the queue runs several wide.
+    /// </summary>
+    public int ArmyWartimeRaiseBatch { get; set; } = 3;
+
+    /// <summary>
+    /// How far over its establishment a country at peace lets its army sit before one formation
+    /// goes home at each look, and only when the treasury cannot pay that surplus. A country
+    /// still fighting is not disarmed by a peace it has not made.
+    /// </summary>
+    public float ArmyPeaceDisbandMargin { get; set; } = 1.25f;
 }
 
 public sealed partial class Nation
@@ -118,6 +133,7 @@ public static class Attrition
         foreach (var army in campaign.Armies)
         {
             if (!army.CutOff || army.Divisions <= 0f) continue;
+            if (MilitaryAccess.MustReturn(campaign, army)) { MilitaryAccess.Provision(army); continue; }
             var pressed = (army.InBattle ? defines.EncircledUnderAttack : 1f) * scale;
             var before = army.Strength;
             army.Strength = M.Clamp01(army.Strength - defines.EncircledStrengthLoss * pressed);
@@ -303,22 +319,26 @@ public static class Attrition
             nation.EstablishedDivisions = M.Lerp(nation.EstablishedDivisions,
                 Establishment(campaign, nation), defines.ArmyEstablishmentDrift);
 
-            // Over establishment and at peace: one formation goes home. Without this the
-            // world only ever ratchets upwards - every war leaves the winner permanently
-            // larger, and nothing ever comes back down.
-            if (strength > nation.EstablishedDivisions * defines.ArmyDisbandMargin)
+            // Over establishment, and only at peace. A war the country is still fighting is
+            // not a reason to send the army home. At peace the surplus goes only when the
+            // treasury cannot pay for it: a country that can pay keeps the army it raised.
+            // The same rule is the player's staff and every other government.
+            var fighting = false;
+            foreach (var war in campaign.Wars)
+                if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
+            if (!nation.IsHuman && !fighting && strength > nation.EstablishedDivisions * defines.ArmyPeaceDisbandMargin)
             {
-                var fighting = false;
-                foreach (var war in campaign.Wars)
-                    if (!war.Ended && war.Involves(nation.Id)) { fighting = true; break; }
-                if (!fighting)
+                var surplus = MathF.Max(1f, strength - nation.EstablishedDivisions);
+                var threatened = nation.WarPlanTargetId >= 0 || AiStatecraft.Threatened(campaign, nation);
+                if (!threatened && (nation.Treasury < 0f || (nation.Treasury < defines.ArmyRebuildCost * surplus && nation.Gdp > 0 && nation.Treasury / nation.Gdp < 0.005f)))
                 {
                     StandDown(campaign, nation);
                     continue;
                 }
-                // Over the peacetime army and at war: it may still be short of what its front needs.
-                if (strength >= warNeed) continue;
             }
+            // Over the wartime margin and not short of the front: do not raise further.
+            if (fighting && strength > nation.EstablishedDivisions * defines.ArmyDisbandMargin &&
+                strength >= warNeed) continue;
 
             // In peace the budget's army; at war the army the front needs, up to a ceiling of the
             // budget's - higher for a country whose ground is being taken. Sudan held ten posts
@@ -326,8 +346,11 @@ public static class Attrition
             // peacetime establishment.
             var target = nation.EstablishedDivisions * defines.ArmyRebuildCeiling;
             if (warNeed > target)
-                target = MathF.Min(warNeed, nation.EstablishedDivisions *
-                    (overrun ? defines.ArmyWarCeilingOverrun : defines.ArmyWarCeiling));
+            {
+                var budgetCeiling = nation.EstablishedDivisions *
+                    (overrun ? defines.ArmyWarCeilingOverrun : defines.ArmyWarCeiling);
+                target = MathF.Max(budgetCeiling, MathF.Min(warNeed, overrun ? warNeed : MathF.Max(budgetCeiling, warNeed * 0.75f)));
+            }
             if (strength >= target) continue;
             // At war it borrows for the army it needs, as far as a country at war may.
             var mayBorrow = (overrun || shortOfFront) && nation.Treasury > -nation.Gdp * defines.WarDebtLimitShare;
@@ -335,19 +358,25 @@ public static class Attrition
 
             var home = HomeState(campaign, nation);
             if (home < 0) continue;
-            var raises = overrun ? Math.Max(1, Math.Min(defines.ArmyEmergencyRaises, (int)MathF.Ceiling((target - strength) / 3f))) : 1;
+            var raises = overrun ? Math.Max(1, Math.Min(defines.ArmyEmergencyRaises, (int)MathF.Ceiling((target - strength) / 3f)))
+                : shortOfFront ? Math.Max(1, Math.Min(defines.ArmyWartimeRaiseBatch, (int)MathF.Ceiling(target - strength)))
+                : 1;
             for (var raise = 0; raise < raises; raise++)
             {
                 if (nation.ManpowerReserve < MilitaryBootstrap.DivisionSize) break;
+                // The reserve that refills the formations already in the field is not spent on new ones.
+                if (!WarWeariness.MayRaise(campaign, nation)) break;
                 if (nation.Treasury < defines.ArmyRebuildCost && !mayBorrow) break;
                 new RaiseArmyCommand
                 {
                     IssuerId = nation.Id,
                     StateMapIndex = home,
-                    Divisions = 1f
+                    Divisions = 1f,
+                    AllowDeficit = mayBorrow
                 }.Apply(campaign);
                 strength += 1f;
             }
+            if (mayBorrow) SovereignFinance.NormalizeAccounts(campaign, nation);
             Standing[nation.Id] = strength;
         }
     }
@@ -373,41 +402,83 @@ public static class Attrition
     /// <summary>
     /// Send one formation home.
     ///
-    /// The weakest one, and never one that is in a battle or posted to a front - a country
-    /// demobilising does not start by dissolving the division holding the line. Most of its
-    /// people go back into the reserve, which is what makes standing down and raising again
-    /// a decision about money and time rather than about population.
+    /// The weakest one that is not holding a war: not a battle, not a front, not ground
+    /// taken from the enemy while the war is still on, and not a plan that is actually
+    /// marching. A default plan flag on a garrison is not that. Most of its people go
+    /// back into the reserve. The country is told why.
     /// </summary>
     private static void StandDown(Campaign campaign, Nation nation)
     {
         Army weakest = null;
         foreach (var army in campaign.Armies)
         {
-            if (army.NationId != nation.Id || army.InBattle) continue;
-            if (army.AssignedWarId >= 0 || army.PlanActive) continue;
+            if (army.NationId != nation.Id || HoldingTheWar(campaign, nation, army)) continue;
             if (weakest is null || army.Power < weakest.Power) weakest = army;
         }
         if (weakest is null) return;
 
         nation.ManpowerReserve += weakest.Personnel * campaign.Defines.ArmyStandDownReturn;
+        var name = weakest.Name;
         Destroy(campaign, weakest, "stood down", lost: false);
+        campaign.Chronicle.Record(campaign, "army_stood_down", nation.Id,
+            subject: name, place: "unpaid_surplus", isPublic: false);
         DiagnosticLogs.Write("simulation",
-            $"STAND_DOWN nation={nation.Tag} army={weakest.Id} day={campaign.ElapsedDays}");
+            $"STAND_DOWN nation={nation.Tag} army={weakest.Id} day={campaign.ElapsedDays} reason=unpaid_surplus");
         campaign.MarkStrategicChange();
+    }
+
+    /// <summary>
+    /// A formation the country still needs for a war it is fighting: on that war's line,
+    /// standing on ground it has taken, or carrying out an order. A plan flag with nowhere
+    /// to go is a garrison and may be the surplus.
+    /// </summary>
+    private static bool HoldingTheWar(Campaign campaign, Nation nation, Army army)
+    {
+        if (army.InBattle || army.AssignedWarId >= 0 || army.FrontLineId >= 0) return true;
+        if (army.PlanActive && (army.OrderProvinceId >= 0 || army.Route.Count > 0 || army.PlannedRoute.Count > 0))
+            return true;
+        if (army.ProvinceId <= 0) return false;
+        var map = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            if (war.FriendlyFront(nation.Id).Contains(army.ProvinceId)) return true;
+            if (map is null || controllers is null || army.ProvinceId >= map.ProvinceToNation.Length ||
+                army.ProvinceId >= controllers.Length) continue;
+            var owner = map.ProvinceToNation[army.ProvinceId];
+            if (owner != 0 && owner != (ushort)nation.MapIndex &&
+                controllers[army.ProvinceId] == (ushort)nation.MapIndex)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>Where a country raises troops: the most populous region it still holds.</summary>
     private static int HomeState(Campaign campaign, Nation nation)
     {
         var best = -1;
+        var bestControlled = -1;
         var people = 0L;
+        var controlledPeople = 0L;
         foreach (var state in campaign.States)
         {
             if (state.NationMapIndex != nation.MapIndex) continue;
-            if (state.Population <= people) continue;
-            people = state.Population;
-            best = state.MapIndex;
+            if (state.Population > people)
+            {
+                people = state.Population;
+                best = state.MapIndex;
+            }
+            if (state.Population > controlledPeople &&
+                RecruitmentSystem.DeploymentProvince(campaign, nation.Id, state.MapIndex) > 0)
+            {
+                controlledPeople = state.Population;
+                bestControlled = state.MapIndex;
+            }
         }
-        return best;
+        // A capital or largest region under occupation is not a place a division can be
+        // trained. The emergency path uses the largest region the country still controls;
+        // the ordinary path keeps its old answer when every region is occupied.
+        return bestControlled >= 0 ? bestControlled : best;
     }
 }

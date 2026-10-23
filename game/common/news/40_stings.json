@@ -1,0 +1,64 @@
+// The short sound a headline makes when it reaches the rail beside the map.
+//
+// A kind of news names a cue from sound/ (05_news.json has the base game's). Only news the
+// rail would show sounds - important enough, or about the player's own country - and never
+// the player's own act, which already has its own sound. `sting_gap_ms` is the least time
+// between two stings, whatever their cues, so a busy day is one sound and not a drum roll.
+// A mod names its own kinds here, points a kind at a cue of its own, or silences one with "".
+{
+  "sting_gap_ms": 9000,
+  "stings": {
+    "coup": "news_coup",
+    "coup_counter": "news_coup",
+    "institutional_coup": "news_coup",
+    "regime_change": "news_regime_change",
+    "march_toppled": "news_regime_change",
+    "ruler_changed": "news_regime_change",
+    "election_lost": "news_election",
+    "election_transfer": "news_election",
+    "election_renewed": "news_election",
+    "election_suspended": "news_election",
+    "election_postponed": "news_election",
+    "general_strike": "news_strike",
+    "march_concessions": "news_strike",
+    "political_scandal": "news_scandal",
+    "spy_network_exposed": "news_scandal",
+    "covert_sabotage_exposed": "news_scandal",
+    "covert_opposition_exposed": "news_scandal",
+    "covert_theft_exposed": "news_scandal",
+    "peace_signed": "news_treaty",
+    "accession_signed": "news_treaty",
+    "deal_signed": "news_treaty",
+    "debt_restructured": "news_treaty",
+    "tension_eased": "news_treaty",
+    "state_formed": "news_new_nation",
+    "state_founded": "news_new_nation",
+    "restoration": "news_new_nation",
+    "peaceful_independence": "news_new_nation",
+    "secession": "news_new_nation",
+    "country_released": "news_new_nation",
+    "subject_broke_free": "news_new_nation",
+    "tension_clashes": "news_clashes",
+    "border_war": "news_clashes",
+    "incident": "news_clashes",
+    "world_incident": "news_clashes",
+    "civil_war": "news_clashes",
+    "civil_war_escalated": "news_clashes",
+    "war_started": "news_clashes",
+    "world_war_began": "news_world_war",
+    "war_total": "news_world_war",
+    "alliance_ended": "news_alliance_broken",
+    "organization_split": "news_alliance_broken",
+    "organization_dissolved": "news_alliance_broken",
+    "organization_expelled": "news_alliance_broken",
+    "sovereign_default": "news_default",
+    "sovereign_insolvency": "news_default",
+    "embargo_started": "news_default",
+    "ultimatum_accepted": "news_default",
+    "ultimatum_refused": "news_default",
+    "war_major": "news_default",
+    "tension_crisis": "news_default",
+    "movement_radicalised": "news_default",
+    "secession_contested": "news_default"
+  }
+}

@@ -155,6 +155,8 @@ public static class SpriteCatalog
         foreach (var file in everything)
         {
             if (!StructuredData.IsDocument(file)) continue;
+            var normalized = file.Replace('\\', '/');
+            if (normalized.Contains("/models/", StringComparison.OrdinalIgnoreCase)) continue;
             var origin = $"gfx/{Path.GetFileName(file)}";
             try { Merge(StructuredData.ReadJson(file), virtualDirectory, origin, errors); }
             catch (Exception exception) { errors?.Add($"{origin}: {exception.Message}"); }

@@ -1,0 +1,23 @@
+{
+  "Features": {
+    "tactical_doctrines": true
+  },
+  // Политические очки: понемногу каждую неделю, больше у устойчивых правительств.
+  // Пока тратятся на переписывание воинского устава; дальше - на решения и законы.
+  "PoliticalPointsPerWeek": 1.5,
+  "PoliticalPointsStabilityWeight": 1.5,
+  // Опыт родов войск: капелька в мире, настоящая река - в бою, на заданиях и в море.
+  "ExperiencePeacetimePerWeek": 0.2,
+  "ArmyExperiencePerDivisionDay": 0.02,
+  "AirExperiencePerMissionDay": 0.05,
+  "NavalExperiencePerHullDay": 0.02,
+  // И его источники: деньги выше базового содержания армии и учения.
+  "ArmyExperienceFundingWeight": 0.6,
+  "TrainingExperiencePerDivisionDay": 0.05,
+  "TrainingCostPerDivisionWeek": 0.005,
+  "AiTrainingMaxArmies": 3,
+  // Цена переписывания устава и срок переучивания.
+  "DoctrineRewritePoliticalCost": 12,
+  "DoctrineRetrainingDays": 180,
+  "DoctrineAiRewriteCooldownDays": 365
+}

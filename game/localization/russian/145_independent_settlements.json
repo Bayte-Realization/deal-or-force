@@ -21,7 +21,7 @@
   "The parent country must retain actual territory.": "Исходная страна должна сохранить территорию на карте.",
   "Released regions must form one connected settlement.": "Отделяемые регионы должны образовывать связную территорию.",
   "There is no free country identity for this settlement.": "Для нового государства нет свободного идентификатора страны.",
-  "The country's financial accounts are invalid.": "Финансовые счета страны содержат недопустимые значения.",
+  "These regions cannot be released right now.": "Сейчас эти регионы отделить нельзя.",
   "Only one independent settlement may be established per deal.": "Одной сделкой можно создать только одно независимое государство.",
   "Independence and subjugation cannot be combined in one settlement.": "В одном договоре нельзя совместить создание независимой страны и подчинение.",
   "{0}: establish an independent country in {1}": "{0}: создать независимое государство в регионах {1}",

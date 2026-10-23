@@ -1,0 +1,31 @@
+// The two moods a concluded promise leaves behind. A kept promise is quiet, competent
+// government: a small, slow lift while it lasts. A broken one is remembered longer than a
+// kept one is thanked - that asymmetry is the whole price of promising in public.
+{
+  "public_trust": {
+    "name": "Public trust",
+    "description": "The government promised a thing in public and delivered it. Institutions feel a little firmer while the memory lasts.",
+    "days": 365,
+    "positive": true,
+    "effects": {
+      "stability": 0.0018,
+      "state.radicalism": -0.0008
+    },
+    "modifiers": {
+      "tax_efficiency": 0.02
+    }
+  },
+  "broken_promise": {
+    "name": "Broken promise",
+    "description": "A promise was made in public and missed. People remember the date, and they bring it up.",
+    "days": 540,
+    "positive": false,
+    "effects": {
+      "stability": -0.0012,
+      "state.radicalism": 0.0006
+    },
+    "modifiers": {
+      "tax_efficiency": -0.01
+    }
+  }
+}

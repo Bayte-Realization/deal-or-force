@@ -25,10 +25,13 @@ public sealed partial class Defines
     public float OrganizationDepartureChance { get; set; } = 0.035f;
     /// <summary>A member never walks out of an organisation younger than this many days.</summary>
     public int OrganizationGraceDays { get; set; } = 540;
-    /// <summary>Below this cohesion an organisation can be wound up.</summary>
-    public float OrganizationDissolveCohesion { get; set; } = 0.14f;
+    /// <summary>Below this cohesion an organisation can be wound up. The old 0.14 asked a
+    /// council to rot almost to nothing before the world was allowed to be rid of it, which
+    /// is why nothing ever ended: a body everyone had stopped believing in sat at 0.2
+    /// forever. A quarter is where a charter has plainly failed and its members know it.</summary>
+    public float OrganizationDissolveCohesion { get; set; } = 0.24f;
     /// <summary>The weekly chance an organisation that low is wound up.</summary>
-    public float OrganizationDissolveChance { get; set; } = 0.03f;
+    public float OrganizationDissolveChance { get; set; } = 0.05f;
     /// <summary>Two estranged members who think this well of each other leave together and found their own.</summary>
     public float OrganizationSchismOpinion { get; set; } = 35f;
     /// <summary>The monthly chance that countries threatened by the same great power sign a pact against it.</summary>
@@ -37,6 +40,7 @@ public sealed partial class Defines
     public int ThreatPactEarliestDay { get; set; } = 365;
     /// <summary>What a threatened country must think of the pact's founder to sign with it.</summary>
     public float ThreatPactOpinion { get; set; } = 25f;
+    public float OrganizationLeaderRiftPenalty { get; set; } = .24f;
 }
 
 /// <summary>
@@ -106,11 +110,36 @@ public static class OrganizationDynamics
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true &&
             members.Any(m => c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.IsDefending(m.Id) && w.EnemiesOf(m.Id).All(e => !org.Members.Contains(e)))))
             target += 0.12f;
+        // Hegemonic rivalry inside the same council erodes unity when the top two members are rivals or far apart.
+        if (InternationalOrganizations.Leader(c, org) is { } leader && InternationalOrganizations.Challenger(c, org) is { } challenger)
+        {
+            var rel = CampaignDiplomacy.Peek(c, leader.Id, challenger.Id);
+            if (rel?.Stance == DiplomaticStance.Rival) target -= 0.08f;
+            else if ((rel?.Opinion ?? 0f) < -15f) target -= 0.04f;
+        }
+        // If the dominant member or patron of the organization collapses into civil conflict, bankruptcy, or isolationism,
+        // the entire organization's cohesion target suffers an organic systemic drop.
+        if (InternationalOrganizations.Leader(c, org) is { } mainLeader)
+        {
+            var totalOrgGdp = MathF.Max(1f, members.Sum(m => MathF.Max(0f, m.Gdp)));
+            var leaderShare = mainLeader.Gdp / totalOrgGdp;
+            if (leaderShare >= 0.25f)
+            {
+                var weight = MathF.Min(1f, leaderShare / 0.5f);
+                if (mainLeader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") target -= 0.14f * weight;
+                if (mainLeader.DebtCondition >= DebtCondition.Insolvent) target -= 0.12f * weight;
+                if (mainLeader.Stability < 0.35f) target -= 0.10f * weight;
+                if (c.Wars.Any(w => !w.Ended && w.CivilConflict && (w.AttackerId == mainLeader.Id || w.DefenderId == mainLeader.Id))) target -= 0.18f * weight;
+            }
+        }
         return M.Clamp(target, 0.05f, 0.95f);
     }
 
     /// <summary>How much a member still belongs, 0 to 1.</summary>
     public static float Belonging(Campaign c, InternationalOrganization org, Nation member)
+        => Belonging(c,org,member,InternationalOrganizations.Leader(c,org));
+
+    private static float Belonging(Campaign c, InternationalOrganization org, Nation member, Nation leader)
     {
         var others = org.Members.Where(id => id != member.Id).Select(c.NationById).Where(n => n is not null).ToList();
         if (others.Count == 0) return 1f;
@@ -122,10 +151,63 @@ public static class OrganizationDynamics
         if (others.Any(o => CampaignDiplomacy.AtWar(c, member.Id, o.Id))) belonging -= 0.4f;
         belonging -= MathF.Min(0.25f, org.UnpaidWeeks.GetValueOrDefault(member.Id) * 0.02f);
         if (org.Cohesion < 0.4f) belonging -= (0.4f - org.Cohesion) * 0.5f;
+        if (!string.IsNullOrEmpty(org.DoctrineId))
+        {
+            belonging += string.Equals(InternationalOrganizations.PreferredDoctrine(c, org, member), org.DoctrineId, StringComparison.OrdinalIgnoreCase)
+                ? 0.04f : -0.04f;
+        }
         // A pact is worth keeping to a country that has somebody to fear.
         if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true && Threatened(c, member)) belonging += 0.15f;
+        if (member.NationalCourse.Dominant is "isolationism" or "armed_neutrality") belonging -= 0.20f;
+        if (member.DebtCondition >= DebtCondition.Insolvent) belonging -= 0.12f;
+        belonging -= LeadershipFriction(c,org,member,leader);
         return M.Clamp01(belonging);
     }
+
+    /// <summary>A hostile hegemon is not diluted to one-thirtieth of a small member's
+    /// interests. Mere leadership is no penalty; rivalry or sustained hostility is.</summary>
+    public static float LeadershipFriction(Campaign c, InternationalOrganization org, Nation member, Nation leader)
+    {
+        if (!c.Defines.OrganicOrganizationReachEnabled || leader is null) return 0;
+        if (leader.Id == member.Id)
+        {
+            var leaderBurden = 0f;
+            if (member.NationalCourse.Dominant is "isolationism" or "armed_neutrality") leaderBurden += 0.28f;
+            if (member.DebtCondition >= DebtCondition.Insolvent) leaderBurden += 0.18f;
+            if (member.Stability < 0.35f) leaderBurden += 0.15f;
+            if (WarWeariness.NationalFatigue(c, member) > 0.40f) leaderBurden += 0.12f;
+            return Math.Clamp(leaderBurden, 0f, 0.5f);
+        }
+        var relation=CampaignDiplomacy.Peek(c,member.Id,leader.Id);
+        if (relation is null) return 0;
+        var hostility = relation.Stance==DiplomaticStance.Rival ? 1f : Math.Clamp((-relation.Opinion-15)/65f,0,1);
+        if (leader.NationalCourse.Dominant is "isolationism" or "armed_neutrality") hostility = MathF.Max(hostility, 0.40f);
+        if (leader.DebtCondition >= DebtCondition.Insolvent || leader.Stability < 0.30f) hostility = MathF.Max(hostility, 0.35f);
+        return hostility * Math.Clamp(c.Defines.OrganizationLeaderRiftPenalty,0,.5f);
+    }
+
+    public static bool SharedThreat(Campaign c,Nation a,Nation b)
+    {
+        bool Afraid(Nation n,int power) => CampaignDiplomacy.Peek(c,n.Id,power) is { } r &&
+            (r.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar || r.Opinion<=-40);
+        foreach(var power in AllianceSystem.GreatPowers(c))
+            if(power!=a.Id && power!=b.Id && Afraid(a,power) && Afraid(b,power)) return true;
+        return false;
+    }
+
+    public static bool FoundingRelevant(Campaign c,Nation founder,Nation target) =>
+        string.Equals(founder.Region,target.Region,StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(founder.Continent,target.Continent,StringComparison.OrdinalIgnoreCase) ||
+        (c.Defines.OrganicOrganizationReachEnabled && (SharedThreat(c,founder,target) ||
+        ((founder.Gdp>=Math.Max(0,c.Defines.AiOrganizationGlobalGdp) || AllianceSystem.GreatPowers(c).Contains(founder.Id)) &&
+         (founder.NationalCourse.Dominant=="global_integration" || founder.TradeDependenceOn(target.Id)>=.02f ||
+          CampaignDiplomacy.Peek(c,founder.Id,target.Id)?.Stance==DiplomaticStance.Allied))));
+
+    public static bool ExpansionRelevant(Campaign c,InternationalOrganization org,Nation proposer,Nation target) =>
+        FoundingRelevant(c,proposer,target) || c.Defines.OrganicOrganizationReachEnabled && org.Members.Any(id=>c.NationById(id) is { } member &&
+            (string.Equals(member.Region,target.Region,StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(member.Continent,target.Continent,StringComparison.OrdinalIgnoreCase) ||
+             SharedThreat(c,member,target) || member.TradeDependenceOn(target.Id)>=.02f));
 
     /// <summary>The share of a member's trade that is with the others, 0 to 1.</summary>
     private static float TradeWithMembers(Nation member, IEnumerable<Nation> others)
@@ -159,6 +241,7 @@ public static class OrganizationDynamics
     private static void Review(Campaign c, InternationalOrganization org)
     {
         var defines = c.Defines;
+        var leader = InternationalOrganizations.Leader(c,org);
         org.Cohesion = M.Clamp01(org.Cohesion + (Target(c, org) - org.Cohesion) * M.Clamp01(defines.OrganizationCohesionPull));
 
         // Whoever attacks a fellow member is out.
@@ -183,13 +266,13 @@ public static class OrganizationDynamics
         // Where each member stood the first time it was weighed, from the first week on.
         foreach (var id in org.Members)
             if (c.NationById(id) is { } weighed && !weighed.OrganizationBelongingAtStart.ContainsKey(org.Id))
-                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed);
+                weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed,leader);
         if (c.ElapsedDays - org.FoundedDay < defines.OrganizationGraceDays) return;
         foreach (var id in org.Members.ToArray())
         {
             var member = c.NationById(id);
             if (member is null || member.IsHuman || !org.Members.Contains(id)) continue;
-            var belonging = Belonging(c, org, member);
+            var belonging = Belonging(c, org, member,leader);
             var floor = defines.OrganizationDepartureBelonging;
             // A member that was already half out on the first day - most of the African Union's
             // quarrels are older than 2024 - is not estranged by them: what counts is how far it
@@ -235,6 +318,45 @@ public static class OrganizationDynamics
             }
         }
         c.Chronicle.Record(c, "organization_left", member.Id, -1, name);
+        // Hegemon / dominant pillar departure shock across ALL organizations:
+        // if a founder or an economic/military pillar (>= 35% of org GDP) leaves, cohesion collapses.
+        var totalGdp = org.Members.Select(c.NationById).Where(n => n != null).Sum(n => n.Gdp);
+        var isPillar = member.Id == org.FounderId || (totalGdp > 0 && member.Gdp >= totalGdp * 0.35f);
+        if (isPillar)
+        {
+            org.Cohesion = MathF.Max(0.05f, org.Cohesion - 0.35f);
+            var remaining = org.Members.Select(c.NationById).Where(n => n is not null && !n.IsSubject && InternationalOrganizations.Eligible(c, n)).ToList();
+            if (remaining.Count >= 3 && org.Cohesion < c.Defines.OrganizationDissolveCohesion)
+            {
+                var newLeader = remaining.OrderByDescending(n => n.Gdp).First();
+                var companions = remaining.Where(n => n.Id != newLeader.Id && (CampaignDiplomacy.Peek(c, newLeader.Id, n.Id)?.Opinion ?? 0f) >= 20f).ToList();
+                if (companions.Count >= 2)
+                {
+                    companions.Insert(0, newLeader);
+                    var newBloc = Found(c, org.CharterId, newLeader, companions);
+                    if (newBloc is not null)
+                    {
+                        c.Chronicle.Record(c, "organization_reorganized", newLeader.Id, -1,
+                            InternationalOrganizations.DisplayName(c, newBloc));
+                    }
+                }
+            }
+        }
+        if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
+        {
+            foreach (var otherId in org.Members)
+            {
+                if (otherId == member.Id) continue;
+                var rel = CampaignDiplomacy.Peek(c, member.Id, otherId);
+                if (rel is { Stance: DiplomaticStance.Allied })
+                {
+                    var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
+                        InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
+                        o.Members.Contains(member.Id) && o.Members.Contains(otherId));
+                    if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+                }
+            }
+        }
     }
 
     private static void Expel(Campaign c, InternationalOrganization org, Nation aggressor, int victimId)
@@ -242,6 +364,7 @@ public static class OrganizationDynamics
         if (aggressor is null || !org.Members.Contains(aggressor.Id)) return;
         var name = InternationalOrganizations.DisplayName(c, org);
         org.Members.Remove(aggressor.Id);
+        InternationalOrganizations.InvalidateDefencePartners();
         org.UnpaidWeeks.Remove(aggressor.Id);
         org.Motion?.Votes.Remove(aggressor.Id);
         org.Cohesion = MathF.Max(0f, org.Cohesion - 0.08f);
@@ -264,8 +387,24 @@ public static class OrganizationDynamics
         org.Motion = null;
         org.Invitations.Clear();
         org.Dissolved = true;
+        InternationalOrganizations.InvalidateDefencePartners();
         var actor = members.OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).FirstOrDefault()?.Id ?? org.FounderId;
         c.Chronicle.Record(c, "organization_dissolved", actor, -1, name);
+        if (InternationalOrganizations.Charter(org.CharterId)?.Defence == true)
+        {
+            for (var i = 0; i < members.Count; i++)
+            for (var j = i + 1; j < members.Count; j++)
+            {
+                var rel = CampaignDiplomacy.Peek(c, members[i].Id, members[j].Id);
+                if (rel is { Stance: DiplomaticStance.Allied })
+                {
+                    var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
+                        InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
+                        o.Members.Contains(members[i].Id) && o.Members.Contains(members[j].Id));
+                    if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+                }
+            }
+        }
         c.MarkStrategicChange();
     }
 
@@ -278,8 +417,7 @@ public static class OrganizationDynamics
 
     /// <summary>
     /// A new organisation of the founders, named for the first two capitals that signed - the
-    /// Warsaw–Vilnius pact - and seeded with them all at once: they negotiated it before they
-    /// announced it.
+    /// Warsaw–Vilnius pact - or an authentic global/regional treaty name, and seeded with them all at once.
     /// </summary>
     private static InternationalOrganization Found(Campaign c, string charterId, Nation founder, IReadOnlyList<Nation> members)
     {
@@ -287,19 +425,131 @@ public static class OrganizationDynamics
         var limit = Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30);
         if (members.Any(m => InternationalOrganizations.Memberships(c, m.Id).Count() >= limit)) return null;
         var second = members.Where(m => m.Id != founder.Id).OrderByDescending(m => m.Gdp).ThenBy(m => m.Id).First();
-        var kind = charterId switch { "collective_defence" => "pact", "development" => "community", _ => "forum" };
-        var name = $"org.name.{kind}|{CapitalOf(founder)}|{CapitalOf(second)}";
+        var name = DetermineOrganizationName(c, charterId, founder, second, members);
         if (InternationalOrganizations.Active(c).Any(o => o.Name == name)) return null;
         var org = InternationalOrganizations.Seed(c, name, charterId, members.Select(m => m.Id));
         if (org is null || org.Name != name) return null;
         org.FounderId = founder.Id;
         org.Cohesion = 0.6f;
+        if (charterId == "collective_defence")
+        {
+            for (var i = 0; i < members.Count; i++)
+            for (var j = i + 1; j < members.Count; j++)
+            {
+                var rel = CampaignDiplomacy.Get(c, members[i].Id, members[j].Id);
+                if (rel.Stance != DiplomaticStance.Allied) rel.Stance = DiplomaticStance.Allied;
+            }
+        }
         c.Chronicle.Record(c, "organization_founded", founder.Id, second.Id, InternationalOrganizations.DisplayName(c, org));
         c.MarkStrategicChange();
         return org;
     }
 
-    private static string CapitalOf(Nation nation) => string.IsNullOrWhiteSpace(nation.CapitalName) ? nation.Tag : nation.CapitalName.Replace("|", " ");
+    public static string DetermineOrganizationName(Campaign c, string charterId, Nation founder, Nation second, IReadOnlyList<Nation> members)
+    {
+        var kind = charterId switch { "collective_defence" => "pact", "development" => "community", _ => "forum" };
+        var isGlobalOrCrossContinent = !string.Equals(founder.Continent, second.Continent, StringComparison.OrdinalIgnoreCase) ||
+                                       founder.Gdp >= c.Defines.AiOrganizationGlobalGdp ||
+                                       members.Select(m => m.Continent).Distinct().Count() > 1;
+
+        if (charterId == "collective_defence")
+        {
+            if (isGlobalOrCrossContinent)
+            {
+                if ((founder.Continent is "north_america" && second.Continent is "europe") ||
+                    (founder.Continent is "europe" && second.Continent is "north_america"))
+                {
+                    if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.transatlantic_treaty"))
+                        return "org.name.transatlantic_treaty";
+                }
+                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_security_coalition"))
+                    return "org.name.global_security_coalition";
+            }
+            if (string.Equals(founder.Continent, "europe", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(second.Continent, "europe", StringComparison.OrdinalIgnoreCase) &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.european_defence_alliance"))
+            {
+                return "org.name.european_defence_alliance";
+            }
+            if ((string.Equals(founder.Continent, "asia", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(founder.Region, "east_asia", StringComparison.OrdinalIgnoreCase)) &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.indopacific_security_dialogue"))
+            {
+                return "org.name.indopacific_security_dialogue";
+            }
+            if ((founder.Continent is "asia" or "europe") && (founder.Region is "eastern_europe" or "central_asia" or "russia" || second.Region is "eastern_europe" or "central_asia") &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.eurasian_security_treaty"))
+            {
+                return "org.name.eurasian_security_treaty";
+            }
+            if (founder.Continent is "africa" && second.Continent is "africa" &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.african_defence_community"))
+            {
+                return "org.name.african_defence_community";
+            }
+            if (founder.Continent is "south_america" or "north_america" && second.Continent is "south_america" or "north_america" &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.panamerican_defence_pact"))
+            {
+                return "org.name.panamerican_defence_pact";
+            }
+            if (founder.Region is "middle_east" or "north_africa" && second.Region is "middle_east" or "north_africa" &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.middle_eastern_security_pact"))
+            {
+                return "org.name.middle_eastern_security_pact";
+            }
+        }
+        else if (charterId == "development")
+        {
+            if (isGlobalOrCrossContinent)
+            {
+                if ((founder.Region is "east_asia" or "oceania" || second.Region is "east_asia" or "oceania") &&
+                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.pacific_trade_partnership"))
+                    return "org.name.pacific_trade_partnership";
+                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_trade_partnership"))
+                    return "org.name.global_trade_partnership";
+            }
+            if (founder.Continent is "africa" && second.Continent is "africa" &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.african_economic_community"))
+            {
+                return "org.name.african_economic_community";
+            }
+            if (founder.Continent is "south_america" or "north_america" && second.Continent is "south_america" or "north_america" &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.panamerican_economic_community"))
+            {
+                return "org.name.panamerican_economic_community";
+            }
+            if ((founder.Region is "eastern_europe" or "central_asia" || second.Region is "eastern_europe" or "central_asia") &&
+                !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.eurasian_economic_council"))
+            {
+                return "org.name.eurasian_economic_council";
+            }
+        }
+        else // "cooperation"
+        {
+            if (isGlobalOrCrossContinent)
+            {
+                if (founder.Continent is "africa" or "asia" or "south_america" &&
+                    second.Continent is "africa" or "asia" or "south_america" &&
+                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.global_south_dialogue"))
+                {
+                    return "org.name.global_south_dialogue";
+                }
+                if (founder.NationalCourse.Dominant is "armed_neutrality" or "isolationism" &&
+                    !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.non_aligned_coalition"))
+                {
+                    return "org.name.non_aligned_coalition";
+                }
+                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.world_cooperation_council"))
+                {
+                    return "org.name.world_cooperation_council";
+                }
+            }
+        }
+
+        return $"org.name.{kind}|{CapitalOf(founder)}|{CapitalOf(second)}";
+    }
+
+    public static string CapitalOf(Nation nation) => string.IsNullOrWhiteSpace(nation.CapitalName) ? nation.Tag : nation.CapitalName.Replace("|", " ");
 
     /// <summary>
     /// The neighbours of a great power that frightens them all sign a pact against it: once a
@@ -317,7 +567,10 @@ public static class OrganizationDynamics
             if (power is null) continue;
             var threatened = c.Nations.Where(n => n.Id != powerId && !n.IsHuman && !n.IsSubject && InternationalOrganizations.Eligible(c, n) &&
                     !n.AnswersTo(powerId) && InternationalOrganizations.Memberships(c, n.Id).Count() < limit &&
-                    CampaignDiplomacy.SharesLandBorder(c, n.MapIndex, power.MapIndex) &&
+                    (CampaignDiplomacy.SharesLandBorder(c, n.MapIndex, power.MapIndex) ||
+                     (string.Equals(n.Region, power.Region, StringComparison.OrdinalIgnoreCase) &&
+                      NavalOperations.Distance(n.CapitalLatitude, n.CapitalLongitude, power.CapitalLatitude, power.CapitalLongitude) < 3500f) ||
+                     (power.Gdp >= c.Defines.AiOrganizationGlobalGdp && (string.Equals(n.Continent, power.Continent, StringComparison.OrdinalIgnoreCase) || n.Gdp >= 300f))) &&
                     CampaignDiplomacy.Peek(c, n.Id, powerId) is { } relation && relation.Stance != DiplomaticStance.Allied &&
                     (relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar || relation.Opinion <= -40f))
                 .OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).ToList();

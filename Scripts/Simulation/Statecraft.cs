@@ -149,38 +149,65 @@ public static class Statecraft
         foreach (var nation in campaign.Nations)
         {
             if (nation.Notoriety < CoalitionThreshold || nation.Population <= 0) continue;
-            if (CoalitionAgainst(campaign, nation.Id) is not null) continue;
+            var existingCoalition = CoalitionAgainst(campaign, nation.Id);
 
             // Who joins: everyone who can see them and has reason to worry. A country that
             // is already their ally does not, and neither does a country too far away to be
             // next - a coalition is neighbours, not a petition.
             Candidates.Clear();
-            foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
+            var landNeighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex).ToHashSet();
+            foreach (var other in campaign.Nations)
             {
-                var neighbour = NationByMapIndex(campaign, mapIndex);
-                if (neighbour is null || neighbour.Id == nation.Id || neighbour.Population <= 0) continue;
-                var relation = CampaignDiplomacy.Peek(campaign, neighbour.Id, nation.Id);
+                if (other.Id == nation.Id || other.Population <= 0 || other.IsSubject) continue;
+                if (!landNeighbours.Contains(other.MapIndex) && AllianceSystem.CapitalKm(other, nation) > 1500f) continue;
+                var relation = CampaignDiplomacy.Peek(campaign, other.Id, nation.Id);
                 if (relation is { Stance: DiplomaticStance.Allied }) continue;
                 if (relation is not null && relation.Opinion > 30f) continue;
-                Candidates.Add(neighbour.Id);
+                Candidates.Add(other.Id);
             }
             if (Candidates.Count < 2) continue;
 
-            var coalition = new Coalition { TargetId = nation.Id, FormedDay = campaign.ElapsedDays };
-            Candidates.Sort();
-            coalition.MemberIds.AddRange(Candidates);
-            campaign.Coalitions.Add(coalition);
-
-            // Containing the same country is the oldest reason two governments have ever
-            // found to get on with each other.
-            foreach (var memberId in coalition.MemberIds)
-            foreach (var otherId in coalition.MemberIds)
+            if (existingCoalition is null)
             {
-                if (memberId >= otherId) continue;
-                OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, memberId, otherId),
-                    "coalition_partner");
+                var coalition = new Coalition { TargetId = nation.Id, FormedDay = campaign.ElapsedDays };
+                Candidates.Sort();
+                coalition.MemberIds.AddRange(Candidates);
+                campaign.Coalitions.Add(coalition);
+
+                // Containing the same country is the oldest reason two governments have ever
+                // found to get on with each other.
+                foreach (var memberId in coalition.MemberIds)
+                foreach (var otherId in coalition.MemberIds)
+                {
+                    if (memberId >= otherId) continue;
+                    OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, memberId, otherId),
+                        "coalition_partner");
+                }
+                campaign.MarkStrategicChange();
             }
-            campaign.MarkStrategicChange();
+            else
+            {
+                var changed = false;
+                foreach (var candidate in Candidates)
+                {
+                    if (!existingCoalition.MemberIds.Contains(candidate))
+                    {
+                        existingCoalition.MemberIds.Add(candidate);
+                        changed = true;
+                        foreach (var otherId in existingCoalition.MemberIds)
+                        {
+                            if (candidate == otherId) continue;
+                            OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, candidate, otherId),
+                                "coalition_partner");
+                        }
+                    }
+                }
+                if (changed)
+                {
+                    existingCoalition.MemberIds.Sort();
+                    campaign.MarkStrategicChange();
+                }
+            }
         }
     }
 
@@ -216,6 +243,16 @@ public static class Statecraft
     /// the world starts counting. Three things count as a reason here, and each of them is
     /// answered out of state the game already keeps rather than a flag somebody sets.
     /// </summary>
+    private static bool IsMonarchy(string government) =>
+        government is "absolute_monarchy" or "constitutional_monarchy";
+
+    private static bool InCivilWar(Campaign campaign, Nation nation)
+    {
+        foreach (var war in campaign.Wars)
+            if (war is { Ended: false, CivilConflict: true } && war.Involves(nation.Id)) return true;
+        return false;
+    }
+
     public static string CasusBelli(Campaign campaign, Nation attacker, Nation defender)
     {
         if (campaign is null || attacker is null || defender is null) return "";
@@ -269,6 +306,66 @@ public static class Statecraft
             if (war is { Ended: false, CivilConflict: true } && war.Opposes(backing.ClientId, defender.Id))
                 return "intervention";
         }
+
+        // A crown in crisis while a cousin of the same house sits on a neighbouring throne:
+        // the oldest reason in the book, and the one the twentieth century closed. Dormant
+        // in 2024 - no shared house is in crisis - and one row of data away for any older
+        // age (DynastyCatalog). The peace that ends such a war restores a personal union
+        // rather than annexing; see AiPeaceOutcomes.
+        if (campaign.Defines.DynasticClaimsEnabled &&
+            IsMonarchy(attacker.Government) && IsMonarchy(defender.Government) &&
+            DynastyCatalog.Shares(attacker.Tag, defender.Tag) &&
+            (defender.Stability < campaign.Defines.DynasticClaimStabilityMax || InCivilWar(campaign, defender)))
+            return "dynastic_claim";
+
+        // And then everything else the two of them remember, weighed the way the opinion panel
+        // already weighs it.
+        //
+        // Until now only two of the things a country can hold against another were ever read here
+        // - land taken and an ultimatum refused - so a government whose non-aggression pact had
+        // been torn up, whose trade had been cut off, whose rebels had been armed and whose
+        // waters had been fished by the same neighbour still had, in its own estimation, "nothing
+        // to say", and a war it badly wanted could not be begun. Measured over five years of the
+        // world: eighty-eight wars worth having, sixty-five of them dropped for want of a reason,
+        // and not one declaration. The reasons were all there, in the opinion the game has been
+        // keeping since the day it was written. Nothing was reading them.
+        //
+        // The gravest single grievance, not the sum of them: a decade of small slights is not a
+        // reason for a war, and a country that could add up denunciations and moved border markers
+        // into a declaration would be declaring wars nobody could explain. The weight is the
+        // modifier's own, from data, so how deep a grudge has to go before it is worth a war is a
+        // decision a mod can make - see <see cref="Defines.CasusBelliGrudgeFloor"/>.
+        if (relation is not null)
+        {
+            var gravest = "";
+            var gravestWeight = 0f;
+            foreach (var reason in relation.Reasons)
+            {
+                var definition = OpinionCatalog.Find(reason.Id);
+                if (definition is null || definition.Value.Opinion >= 0f) continue;
+                // A relation remembers the notoriety of whichever of the two is notorious, so the
+                // attacker's own bad name would read as its grievance: India, notorious, found a
+                // reason for war against Bhutan in it. Only the defender's notoriety is a reason.
+                if (string.Equals(reason.Id, "notoriety", StringComparison.OrdinalIgnoreCase) &&
+                    defender.Notoriety <= attacker.Notoriety) continue;
+                // Doing it twice is worse than doing it once, but the fifth time is not five
+                // times worse than the first: a grudge shared between clauses of the opinion
+                // panel should not quietly become a war aim by repetition alone.
+                var weight = definition.Value.Opinion * M.Min(2f, Math.Max(1, reason.Stacks));
+                if (weight >= gravestWeight) continue;
+                gravestWeight = weight;
+                gravest = reason.Id;
+            }
+            if (!string.IsNullOrEmpty(gravest) && gravestWeight <= campaign.Defines.CasusBelliGrudgeFloor)
+                return gravest;
+        }
+
+        // A state much stronger than a small neighbour can simply take it. This is not a
+        // grievance and it is not free: RecordDeclaration still records the act, and the
+        // notoriety and the coalition that follows are the price. It is a reason the strong
+        // have always given, and without it the AI could want a conquest it was never
+        // allowed to name.
+        if (AnnexationAmbition.HegemonyCause(campaign, attacker, defender)) return "hegemony";
 
         return "";
     }
@@ -477,15 +574,6 @@ public static class Statecraft
     }
 
     /// <summary>
-    /// Whether a country honours a promise it made in easier times.
-    ///
-    /// A player is never dragged in without being asked - their answer arrives as an offer
-    /// they can refuse, the same way a peace does - so this is only ever the computer
-    /// deciding, and it decides the way a government would: it keeps a promise it can afford
-    /// to keep, to a friend it still has, against an enemy it can survive.
-    /// </summary>
-
-    /// <summary>
     /// Everybody this country could ask to join a war it is already fighting.
     ///
     /// Allies and guarantors, and nobody who is in the war already. Whether any of them
@@ -595,6 +683,14 @@ public static class Statecraft
         return false;
     }
 
+    /// <summary>
+    /// Whether a country honours a promise it made in easier times.
+    ///
+    /// A player is never dragged in without being asked - their answer arrives as an offer
+    /// they can refuse, the same way a peace does - so this is only ever the computer
+    /// deciding, and it decides the way a government would: it keeps a promise it can afford
+    /// to keep, to a friend it still has, against an enemy it can survive.
+    /// </summary>
     private static bool WillAnswer(Campaign campaign, Nation friend, Nation defender, Nation attacker,
         DiplomaticRelation bond, bool favour = false)
     {
@@ -605,8 +701,10 @@ public static class Statecraft
         // Already fighting a war of its own is the commonest and most honest excuse.
         foreach (var war in campaign.Wars)
             if (!war.Ended && war.Involves(friend.Id)) return false;
+        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Insolvent) return false;
 
         var willingness = bond.Opinion / 100f;
+        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Default) willingness -= 0.35f;
         if (bond.Stance == DiplomaticStance.Allied) willingness += favour ? 0.25f : 0.55f;
         if (!favour && InternationalOrganizations.DefencePartners(campaign, defender.Id).Contains(friend.Id)) willingness += .55f;
         if (bond.GuaranteedBy(friend.Id)) willingness += favour ? 0.15f : 0.45f;
@@ -638,4 +736,43 @@ public sealed partial class Defines
     /// <summary>How long two countries must have been exchanging fire before it is a reason for a
     /// war rather than only for a border war.</summary>
     public int AiClashesCauseAfterDays { get; set; } = 180;
+}
+
+/// <summary>
+/// A casus belli, said out loud.
+///
+/// The simulation reasons in ids - "reconquest", "broke_non_aggression_pact" - because that is
+/// what can be compared, stored and modded. A player reasons in sentences. This is the one place
+/// the two are joined, so a war on the map can be explained in the same words whichever screen
+/// is doing the explaining.
+///
+/// The six the simulation names for itself are listed here. Everything else is a remembered
+/// grievance, and a grievance is already named in the data the opinion panel reads - so a mod
+/// that renames "Broke our non-aggression pact" renames it in the war ledger too, in the
+/// player's own language, without this file being touched at all.
+/// </summary>
+public static class CasusBelliNames
+{
+    private static readonly Dictionary<string, string> Reasons = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["reconquest"] = "Took our land",
+        ["ultimatum_refusal"] = "Refused our ultimatum",
+        ["irredentism"] = "Our people live there",
+        ["defence_of_an_ally"] = "Attacked a country we are bound to",
+        ["border_clashes"] = "Months of shooting across the border",
+        ["intervention"] = "Fighting people we armed",
+        ["dynastic_claim"] = "A cousin crown in crisis, and our house the senior one",
+        ["hegemony"] = "The strong do what they can",
+        ["reunification"] = "One people, one state",
+        ["conquest"] = "A war to take the country",
+        ["imperialism"] = "The strong do what they can"
+    };
+
+    /// <summary>The sentence a reason is said in, or an empty string when there is no reason.</summary>
+    public static string Of(string id)
+    {
+        if (string.IsNullOrEmpty(id)) return "";
+        if (Reasons.TryGetValue(id, out var named)) return named;
+        return OpinionCatalog.Find(id)?.Name ?? "";
+    }
 }

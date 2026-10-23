@@ -141,11 +141,47 @@ public partial class DealOrForceGame
         var rows = AuthorWindow("Scenarios & workshop",
             () => { CloseAuthorWindow(); ShowMainMenu(); }, "Back to the main menu");
         rows.AddChild(Title("Each scenario owns its date, countries, armies, wars and province ownership.", 14, Ui.Colour("text.muted")));
-        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        rows.AddChild(scroll);
+        // Two columns: the scenarios, and what the chosen one actually is.
+        //
+        // The list used to be a scroll container stretched to fill the panel, which with one
+        // scenario in the world left about six hundred pixels of empty box under a heading
+        // that promised "its date, countries, armies, wars and province ownership". A screen
+        // that says what a thing contains and then shows a blank rectangle reads as broken.
+        // The right-hand column is where that promise is kept, and it is also where the one
+        // question this screen could not answer goes: WHY the map-editing button is greyed
+        // out. That used to be a single hint line that said all three possible reasons at
+        // once, whichever one was true.
+        var columns = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
+        columns.AddThemeConstantOverride("separation", 16);
+        rows.AddChild(columns);
+
+        var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        scroll.SizeFlagsStretchRatio = 1.1f;
+        columns.AddChild(scroll);
         var cards = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         cards.AddThemeConstantOverride("separation", 8);
         scroll.AddChild(cards);
+
+        var detailsCard = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        detailsCard.SizeFlagsStretchRatio = 1f;
+        detailsCard.AddThemeStyleboxOverride("panel", ButtonStyle(false, 0));
+        columns.AddChild(detailsCard);
+        var details = PanelRows(detailsCard, 18, 16, 8);
+        var detailsName = Title("", 21, Ui.Colour("text.bright"));
+        detailsName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        details.AddChild(detailsName);
+        var detailsId = Title("", 13, Ui.Colour("text.caption"));
+        details.AddChild(detailsId);
+        var detailsDescription = Title("", 14, Ui.Colour("text.muted"));
+        detailsDescription.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        details.AddChild(detailsDescription);
+        details.AddChild(new HSeparator());
+        var detailsSource = Title("", 13, Ui.Colour("text.muted"));
+        detailsSource.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        details.AddChild(detailsSource);
+        var detailsEdit = Title("", 13, Ui.Colour("text.muted"));
+        detailsEdit.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        details.AddChild(detailsEdit);
 
         // Each scenario is a card that is chosen by clicking it, lit while it is the one
         // chosen, and started by the one button underneath - or by a double click, the way a
@@ -172,10 +208,22 @@ public partial class DealOrForceGame
             _authorScenarioId = entry?.Id ?? "";
             foreach (var (card, candidate) in pickedCards) Paint(card, candidate, false);
             start.Disabled = chosen is null;
-            edit.Disabled = chosen is null || _campaign.ProvinceMap is null || string.IsNullOrEmpty(chosen.WorldFile);
+            // The three reasons used to be one `||` with no way to tell which one held.
+            var generated = chosen is null || string.IsNullOrEmpty(chosen.WorldFile);
+            var noMap = _campaign is null || _campaign.ProvinceMap is null;
+            edit.Disabled = chosen is null || noMap || generated;
             editHint.Text = Tr(edit.Disabled ? "Generated scenarios: use Edit current world on map to create a copy." :
                 "Workspace scenarios save in place; base and mod scenarios become independent copies.");
             openError.Text = "";
+            detailsName.Text = chosen?.Name ?? "";
+            detailsId.Text = chosen is null ? "" : Tr("Identifier") + ": " + chosen.Id;
+            detailsDescription.Text = chosen?.Description ?? "";
+            detailsSource.Text = chosen is null ? "" : Tr("Source") + ": " +
+                (string.IsNullOrEmpty(chosen.WorldFile) ? Tr("Built into the game") : Tr("An authored world file"));
+            detailsEdit.Text = chosen is null ? ""
+                : generated ? Tr("Map editing: this scenario has no world file of its own. Use \"Edit current world on map\" to make a copy.")
+                : noMap ? Tr("Map editing: waiting for the world to finish loading.")
+                : Tr("Map editing: this scenario opens on the map and saves in place.");
         }
 
         foreach (var entry in entries)

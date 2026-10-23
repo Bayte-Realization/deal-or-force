@@ -813,9 +813,12 @@ public static class EconomySystem
             var nation = campaign.Nations[index];
             // Empty map entities (e.g. the unclaimed Antarctic mask) are not economies.
             // Their nominal placeholder GDP used to finance imaginary arms output forever.
-            if (nation.Movement is null && !campaign.HasOwnedLand(nation))
+            // Fallen countries (all ground lost, the fall flow has ruled) are not economies:
+            // their books close the day the fall is decided, instead of a stateless remnant
+            // financing a phantom army for months.
+            if (nation.Movement is null && (!campaign.HasOwnedLand(nation) || campaign.Fallen.Contains(nation.Id)))
             {
-                nation.Population = 0;
+                nation.Population = campaign.Fallen.Contains(nation.Id) ? 0 : nation.Population;
                 nation.Gdp = nation.GrossOutput = 0;
                 nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
                 continue;
@@ -901,6 +904,10 @@ public static class EconomySystem
             // to the scale the scenario was authored in by a factor calibrated once at
             // seed. Smoothed, because an economy that reprices its entire output every
             // week reads as noise rather than as a trend the player can act on.
+            // And the slow drift of what the country's work is worth: catch-up, the long wave,
+            // the drags of war and empire (SecularCycle) - the only thing that lets the order of
+            // 2024 change.
+            SecularCycle.Week(campaign, nation, atWar);
             if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
             {
                 // Multiply in double: finite operands can overflow an intermediate float
@@ -968,6 +975,12 @@ public static class EconomySystem
             // And then the country is pulled towards what its regions, its capital and its
             // wars actually add up to. A tenth of the gap a week: a shock arrives over a
             // season rather than in an afternoon.
+            if (atWar || nation.Stability < 0.42f || nation.DebtCondition >= DebtCondition.Default)
+                nation.StabilityBias *= 0.996f;
+            else if (nation.StabilityBias > 0.12f)
+                nation.StabilityBias = 0.12f + (nation.StabilityBias - 0.12f) * 0.999f;
+            else if (nation.StabilityBias < -0.10f)
+                nation.StabilityBias = -0.10f + (nation.StabilityBias + 0.10f) * 0.999f;
             var settledStability = StabilityCore.Target(campaign, nation, nation.StabilityDrivers);
             nation.Stability = M.Lerp(nation.Stability, settledStability,
                 M.Clamp01(StabilityCore.Weights.Approach));
@@ -1059,74 +1072,22 @@ public static class EconomySystem
     /// is therefore expensive for years and eventually is not - which is the difference
     /// between a border that has moved and one that is still moving.
     /// </summary>
+    /// <summary>
+    /// The weekly tidy of a region's peoples: a group nobody belongs to any more is dropped.
+    /// This used to run a second assimilation of its own as well, at about five per cent of a
+    /// minority a year into the first group of the state's people it found; DemographicCycle's
+    /// assimilation is now the only one.
+    /// </summary>
     private static void MinorityPressure(Campaign campaign, Nation nation, ScenarioState state)
     {
-        var defines = campaign.Defines;
-        var foreign = ForeignShare(state, nation.Tag);
-        if (foreign <= 0.0001f) return;
-
-        // Minority grievances are counted once, alongside recovery, in RadicalismCore.
-
-        // Assimilation. Fast where people are schooled and comfortable, slow where they
-        // are angry, and never instant.
-        var rate = defines.AssimilationPerWeek *
-                   M.Clamp(state.Literacy + state.StandardOfLiving, 0.2f, 2f) *
-                   M.Clamp(1f - state.Radicalism, 0.05f, 1f);
-        if (rate <= 0f) return;
-
-        long moved = 0;
-        var primary = DemographyCatalog.PrimarySet(nation.Tag);
-        foreach (var group in state.PopulationGroups)
-        {
-            if (group.Size <= 0) continue;
-            if (IsOwn(primary, group)) continue;
-            var share = (long)MathF.Round(group.Size * rate);
-            if (share <= 0) continue;
-            group.Size -= share;
-            moved += share;
-        }
-        if (moved <= 0) return;
-
-        // They become the first of the peoples the state is for. Which one that is comes
-        // from the data, so assimilating into Switzerland does not turn everybody German.
-        var into = DemographyCatalog.PrimaryCulture(nation.Tag);
-        // By hand rather than by List.Find: the predicate would capture `into`, and a
-        // closure allocated once per region per week is a closure allocated a hundred
-        // thousand times a simulated year.
-        PopulationGroup host = null;
-        for (var index = 0; index < state.PopulationGroups.Count; index++)
-        {
-            var candidate = state.PopulationGroups[index];
-            if (!string.Equals(candidate.Culture, into, StringComparison.OrdinalIgnoreCase)) continue;
-            host = candidate;
-            break;
-        }
-        if (host is null)
-        {
-            host = new PopulationGroup
-            {
-                Class = SocialClass.Lower,
-                Sector = Sector.Industry,
-                Culture = into,
-                Religion = DemographyCatalog.FaithOf(into)[0].Religion,
-                Profession = "labourers",
-                Size = 0,
-                Employment = 0.90f,
-                Wealth = 0.38f,
-                StandardOfLiving = state.StandardOfLiving,
-                Radicalism = state.Radicalism
-            };
-            state.PopulationGroups.Add(host);
-        }
-        host.Size += moved;
-        // Compacted by hand, in order, for the reason above: RemoveAll's predicate captured
-        // `host`, and that closure was all the garbage this weekly pass made.
+        // Compacted by hand, in order: RemoveAll's predicate would allocate a closure per region
+        // per week.
         var groups = state.PopulationGroups;
         var kept = 0;
         for (var index = 0; index < groups.Count; index++)
         {
             var group = groups[index];
-            if (group.Size <= 0 && group != host) continue;
+            if (group.Size <= 0) continue;
             groups[kept++] = group;
         }
         if (kept < groups.Count) groups.RemoveRange(kept, groups.Count - kept);
@@ -1429,6 +1390,15 @@ public static class EconomySystem
         return group;
     }
 
+    /// <summary>Bring a region's groups back to its population, in proportion, if they have drifted from it.</summary>
+    internal static void MatchGroups(ScenarioState state)
+    {
+        if (state is null || state.PopulationGroups.Count == 0) return;
+        long total = 0;
+        foreach (var group in state.PopulationGroups) total += group.Size;
+        if (total != state.Population) GrowGroups(state, 1);
+    }
+
     private static void GrowGroups(ScenarioState state, long delta)
     {
         if (state.PopulationGroups.Count == 0 || delta == 0) return;
@@ -1484,9 +1454,17 @@ public static class ConstructionSystem
                 if (project is null || item.Id < project.Id) project = item;
             }
             if (project is null) continue;
+            if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
+                !float.IsFinite(project.Paid) || project.Paid < 0 ||
+                !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) continue;
             var required = project.Cost / Math.Max(1, project.DurationDays);
-            var paid = Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury));
-            if (paid <= 0f) continue;
+            var outstanding = Math.Max(0f, project.Cost - project.Paid);
+            var paid = Math.Min(outstanding,
+                Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
+            // Capacity can fund a site before its work time is complete. Continue that
+            // work, but never charge beyond the contract or require fresh cash for a
+            // fully funded site. Old overpayments are not refunded or rewritten here.
+            if (outstanding > 0f && paid <= 0f) continue;
             nation.Treasury -= paid;
             project.Paid += paid;
             project.ProgressDays++;

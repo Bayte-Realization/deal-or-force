@@ -1,0 +1,12 @@
+{
+  "CrisisConciliationDays": 120,
+  "CrisisConciliationCostShare": 0.004,
+  "CrisisConciliationCostFloor": 0.02,
+  "CrisisConciliationPressurePerDay": 0.003,
+  "CrisisConciliationRadicalismPerDay": 0.0016,
+  "CrisisConciliationDivergencePerDay": 0.0012,
+  "CrisisConciliationApprovalPerDay": 0.001,
+  "CrisisConciliationHeat": 0.22,
+  "CrisisConciliationAiHeat": 0.55,
+  "CrisisConciliationAiReserve": 4
+}

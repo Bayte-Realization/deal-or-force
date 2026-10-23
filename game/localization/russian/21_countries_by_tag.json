@@ -1,12 +1,3 @@
-// Deal or Force - каждая страна по своему тегу.
-//
-// `CountryNames.Resolve` спрашивает `country.<ТЕГ>.name` раньше всего остального, так что
-// имя страны живёт здесь, а 20_countries.json остаётся запасным путём, до которого больше
-// не доходят. Три буквы значат одну страну; английская фраза значит всё, что в игре
-// пишется так же, - именно поэтому выбор языка когда-то предлагал «Англичане».
-//
-// Сгенерировано из common/countries. Переименование страны там не теряет перевод - ради
-// этого теги и нужны.
 {
   "country.ABK.name": "Абхазия",
   "country.ABW.name": "Аруба",
@@ -233,7 +224,7 @@
   "country.SAU.name": "Саудовская Аравия",
   "country.SCR.name": "Риф Скарборо",
   "country.SCV.name": "Шотландская кампания за независимость",
-  "country.SDF.name": "Северо-Восточная Сирия",
+  "country.SDF.name": "Сирийские демократические силы",
   "country.SDN.name": "Судан",
   "country.SEN.name": "Сенегал",
   "country.SER.name": "Банка Серранилья",
@@ -306,12 +297,25 @@
   "country.ZMB.name": "Замбия",
   "country.ZWE.name": "Зимбабве",
   "country.BVC.name": "Баварская партия",
+  "country.ARS.name": "Армия спасения рохинджа Аракана",
+  "country.ELN.name": "Армия национального освобождения",
+  "country.TPN.name": "Национально-освободительная армия Западного Папуа",
+  "country.CMA.name": "Координация движений Азавада",
+  "country.HOU.name": "Ансар Аллах",
+  "country.HZB.name": "Хезболла",
   "name.form.communism": "Народная Республика {0}",
   "name.form.fascism": "Национальное государство {0}",
   "name.form.kingdom": "Королевство {0}",
+  "name.form.republic": "Республика {0}",
   "name.form.islamic_republic": "Исламская Республика {0}",
   "name.form.holy_state": "Священное государство {0}",
   "name.form.federation": "Федерация {0}",
   "name.form.technate": "Технократия {0}",
-  "name.form.provisional": "Временное правительство ({0})"
+  "name.form.provisional": "Временное правительство ({0})",
+  "country.VAN.name": "Вив Ансанм",
+  "country.AIP.name": "Аляска",
+  "country.TNM.name": "Техас",
+  "country.YCA.name": "Калифорния",
+  "country.KAU.name": "Гавайи",
+  "country.RAS.name": "Силезия"
 }

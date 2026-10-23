@@ -152,20 +152,27 @@ public static class Waterfront
         // The sea, from the one place it is visible: a cell with no province on it. Only
         // the four edge-sharing neighbours count - a diagonal touch is a corner, and on a
         // raster this coarse every second inland cell has one.
-        for (var cell = 0; cell < cells.Length; cell++)
+        // Walk rows rather than recovering x/y for each cell. Geography does not need
+        // division, two modulo operations and four bounds-checked Open calls per land
+        // pixel; on the shipped raster those made the first mapped market a long stage.
+        // Horizontal neighbours still wrap at the date line, and vertical edges do not.
+        var water = map.WaterByProvince;
+        for (var y = 0; y < height; y++)
         {
-            var province = cells[cell];
-            if (province <= 0 || province >= access.Length) continue;
-            if (access[province] == WaterAccess.Sea) continue;
-            if (map.WaterByProvince[province]) continue;
+            var row = y * width;
+            var end = row + width;
+            for (var cell = row; cell < end; cell++)
+            {
+                var province = cells[cell];
+                if (province <= 0 || province >= access.Length ||
+                    access[province] == WaterAccess.Sea || water[province]) continue;
 
-            var x = cell % width;
-            var y = cell / width;
-            if (Open(cells, (x + 1) % width, y, width, height) ||
-                Open(cells, (x - 1 + width) % width, y, width, height) ||
-                Open(cells, x, y - 1, width, height) ||
-                Open(cells, x, y + 1, width, height))
-                access[province] = WaterAccess.Sea;
+                if (cells[cell + 1 == end ? row : cell + 1] == 0 ||
+                    cells[cell == row ? end - 1 : cell - 1] == 0 ||
+                    (y > 0 && cells[cell - width] == 0) ||
+                    (y + 1 < height && cells[cell + width] == 0))
+                    access[province] = WaterAccess.Sea;
+            }
         }
 
         // And the rest of the water, which the map does record.
@@ -178,11 +185,5 @@ public static class Waterfront
 
         _byProvince = access;
         Known.AddOrUpdate(map, access);
-    }
-
-    private static bool Open(ushort[] cells, int x, int y, int width, int height)
-    {
-        if (y < 0 || y >= height) return false;
-        return cells[y * width + x] == 0;
     }
 }

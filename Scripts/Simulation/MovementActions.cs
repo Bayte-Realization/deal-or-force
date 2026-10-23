@@ -42,9 +42,9 @@ public static class MovementActions
         new("fundraise", "Fundraise", "Pass the hat round the whole following: two months of donations at once, and a little standing spent asking.", false, false),
         new("recruit", "Recruit", "Pay to train organisers and volunteers: cadres, which uprisings are made of.", false, false),
         new("recognition", "Seek recognition", "Ask a country to recognise it. One that thinks well enough of it does, and the movement's standing rises with every one.", false, true),
-        new("rise", "Rise up", "Call the following into the streets in a region. If it succeeds, the region is its own: a capital, militia, and a war with the country it rose against.", true, false),
-        new("restore", "Restore the country", "Bring a government in exile home: its own homeland becomes its own again, with the people and the output that are on it. It needs the ground - either the country already holds it, or the country holding it is a friend willing to give it back.", true, false, "government_in_exile"),
-        new("referendum", "Negotiate referendum", "Seek a peaceful vote in the homeland. Requires a majority of residents, standing and the parent's consent; no militia or automatic war.", true, false, "civic_independence"),
+        new("rise", "Rise up", "Call the following into the streets in a region. If it succeeds, the whole homeland that government still holds rises with it: a capital, militia, and a war with the country it rose against.", true, false),
+        new("restore", "Restore the country", "Return to a homeland region fully under your control, or obtain its holder's explicit permission. Friendship alone does not transfer land.", true, false, "government_in_exile"),
+        new("referendum", "Negotiate referendum", "Seek a peaceful vote in the homeland. Every region whose own residents vote for it becomes independent; it requires a majority of residents, standing and the parent's consent, and brings no militia or automatic war.", true, false, "civic_independence"),
         new("infiltrate", "Send fighters in", "Smuggle fighters out of the headquarters into a region where its people will hide them. They take days on the road by distance, and an uprising there is stronger for every one that arrives.", true, false),
         new("call_to_arms", "Call to arms", "Hand out rifles in a region it holds: militia out of its supporters there, the more the more of them there are.", true, false),
         new("lobby", "Lobby the host", "Friends in the host's parliament and press: the host thinks better of it and its temper cools.", false, false, "diaspora_lobby"),
@@ -53,6 +53,8 @@ public static class MovementActions
         new("appeal", "Appeal to the world", "Speak at every forum that will listen: standing rises, and the free countries warm to the cause.", false, false, "government_in_exile"),
         new("contract", "Take a contract", "Hire its men out to a country at war that will pay: money every week for half a year.", false, true, "for_hire"),
         new("services", "Social services", "Schools, clinics and food for the poor in a region: support rises twice as fast as a campaign, and the region lives a little better.", true, false, "charity_network"),
+        new("strike", "General strike", "Call the whole following out of work in the country where most of it lives: six weeks in which its economy produces less and its government loses standing. A government of the people tends to give ground after it; a hard one cracks down.", false, false),
+        new("march", "March on the capital", "Fill the streets of a capital whose region follows it. A weak government falls - a political movement takes power, a national one wins the hearing it marched for. A strong one breaks the march up and the movement loses its organisers.", false, false),
     };
 
     public static Kind Of(string id) => Kinds.FirstOrDefault(kind => string.Equals(kind.Id, id, StringComparison.OrdinalIgnoreCase));
@@ -75,13 +77,11 @@ public static class MovementActions
     public static float Cost(Campaign campaign, Nation nation, string action, int stateMapIndex)
     {
         var defines = campaign.Defines;
-        var region = campaign.States.Find(state => state.MapIndex == stateMapIndex);
-        var size = region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
         return action switch
         {
             "move" => defines.MovementRelocationCost,
-            "campaign" => defines.MovementCampaignCost * size,
-            "services" => defines.MovementCampaignCost * size * 2f,
+            "campaign" => defines.MovementCampaignCost * SizeOf(campaign, stateMapIndex),
+            "services" => defines.MovementCampaignCost * SizeOf(campaign, stateMapIndex) * 2f,
             "recruit" => defines.MovementRecruitCostPerThousand * RecruitThousands(nation) *
                          (Movements.DefinitionOf(nation)?.Has("for_hire") == true ? 0.5f : 1f),
             "rise" => defines.MovementUprisingCost,
@@ -92,8 +92,17 @@ public static class MovementActions
             "patrols" => 0.008f,
             "hospital" => 0.03f,
             "appeal" => 0.01f,
+            "strike" => 0.02f,
+            "march" => 0.05f,
             _ => 0f
         };
+    }
+
+    private static float SizeOf(Campaign campaign, int stateMapIndex)
+    {
+        if (stateMapIndex <= 0) return 1f;
+        var region = campaign.States.Find(state => state.MapIndex == stateMapIndex);
+        return region is null ? 1f : MathF.Max(0.3f, MathF.Sqrt(region.Population / 1_000_000f));
     }
 
     private static float RecruitThousands(Nation nation) => 2f;
@@ -125,11 +134,13 @@ public static class MovementActions
         "call_to_arms" => defines.MovementCallToArmsDays,
         "move" => 0,
         "contract" => 182,
+        "strike" => 365,
+        "march" => 730,
         _ => defines.MovementTraitActionDays
     };
 
     /// <summary>Why this cannot be done now; empty when it can.</summary>
-    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId)
+    public static string Refusal(Campaign campaign, Nation nation, string action, int stateMapIndex, int targetNationId, float? knownMomentum = null)
     {
         var state = nation?.Movement;
         var definition = Movements.DefinitionOf(nation);
@@ -141,8 +152,11 @@ public static class MovementActions
                 "The movement has not taken up arms.");
         if (kind.Trait is not null && !definition.Has(kind.Trait)) return Loc.Get("This movement does not do that.");
         var defines = campaign.Defines;
-        var region = campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex);
-        var target = campaign.NationById(targetNationId);
+        // Most actions here are country-wide. Looking up a region and a country before
+        // checking whether the action needs either made every march/strike scan all 1,842
+        // regions for MapIndex -1 and then discard the answer. Ask only when needed.
+        var region = kind.NeedsRegion ? campaign.States.Find(candidate => candidate.MapIndex == stateMapIndex) : null;
+        var target = kind.NeedsNation ? campaign.NationById(targetNationId) : null;
         if (kind.NeedsRegion && region is null) return Loc.Get("Choose a region first.");
         if (kind.NeedsNation && target is null) return Loc.Get("Choose a country first.");
 
@@ -155,6 +169,9 @@ public static class MovementActions
 
         switch (action)
         {
+            case "strike":
+            case "march":
+                return MovementPower.Refusal(campaign, nation, action, knownMomentum);
             case "referendum": return CivilIndependence.Refusal(campaign, nation, region);
             case "restore": return Restoration.Refusal(campaign, nation, region);
             case "move":
@@ -165,7 +182,7 @@ public static class MovementActions
                 if (host is null) return Loc.Get("Nobody governs that ground.");
                 if (host.Movement is not null) return Loc.Get("Not in another movement's ground.");
                 if (CampaignDiplomacy.AtWar(campaign, host.Id, nation.Id)) return Loc.Format("It is at war with {0}.", host.DisplayName);
-                var opinion = CampaignDiplomacy.Get(campaign, host.Id, nation.Id).Opinion;
+                var opinion = CampaignDiplomacy.Peek(campaign, host.Id, nation.Id)?.Opinion ?? 0f;
                 if (state.DesignatedBy.Contains(host.Id)) return Loc.Format("{0} lists it as a terrorist organisation.", host.DisplayName);
                 if (opinion < -25f && !definition.Sponsors.ContainsKey(host.Tag) && !state.InvitedBy.Contains(host.Id))
                     return Loc.Format("{0} will not have it ({1:0} opinion).", host.DisplayName, opinion);
@@ -194,7 +211,7 @@ public static class MovementActions
                     var claimedRegion = Movements.StateById(campaign, claimed);
                     var holder = claimedRegion is null ? null : campaign.Nations.Find(n => n.MapIndex == claimedRegion.NationMapIndex);
                     if (holder is null || holder.Id == nation.Id) continue;
-                    if (holder.Id == target.Id || CampaignDiplomacy.Get(campaign, target.Id, holder.Id).Stance == DiplomaticStance.Allied)
+                    if (holder.Id == target.Id || CampaignDiplomacy.Peek(campaign, target.Id, holder.Id)?.Stance == DiplomaticStance.Allied)
                         return Loc.Format("{0} will not recognise a claim on {1}'s ground.", target.DisplayName, holder.DisplayName);
                 }
                 return "";
@@ -207,7 +224,7 @@ public static class MovementActions
                 var support = state.Support.GetValueOrDefault(region.MapIndex);
                 if (!float.IsFinite(support) || !float.IsFinite(state.Cadres) || !float.IsFinite(state.Legitimacy) ||
                     !float.IsFinite(region.Stability) || !float.IsFinite(nation.Treasury))
-                    return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
+                    return Loc.Get("The campaign data is damaged, so this cannot be done.");
                 if (!definition.Has("for_hire") && support < defines.MovementUprisingSupport)
                     return Loc.Format("Support there is {0}; it takes {1}.", Fmt.Percent(support), Fmt.Percent(defines.MovementUprisingSupport));
                 if (definition.Has("for_hire") && region.Stability > 0.35f)
@@ -263,6 +280,11 @@ public static class MovementActions
 
         switch (action)
         {
+            case "strike":
+            case "march":
+                MovementPower.Do(campaign, nation, action);
+                break;
+
             case "move":
                 state.MovingToStateMapIndex = region.MapIndex;
                 state.ArrivesOnDay = campaign.ElapsedDays + Math.Max(1, defines.MovementRelocationDays);

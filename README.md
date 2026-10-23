@@ -2,9 +2,13 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10.
+A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10. Version **0.8.1**.
 
-Active development branch: **ReimAlpha**. [October 13 checkpoint](docs/REIMALPHA_2026_10_13_RU.md).
+> **[LanguageKit](LanguageKit/README.md)** — the Godot 4.8 Beta1 language kit: source integrations
+> for Luau, F#, Nim, Odin, Rust and Kotlin, with build recipes, probes and a workbench
+> ([guide](LanguageKit/GUIDE.md)).
+
+Active development branch: **ReimAlpha**. [October 13 checkpoint](docs/REIMALPHA_2026_10_13.md).
 
 World rendering scripts now live in
 [`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
@@ -88,6 +92,15 @@ A bare number adds, `_percent` scales, `_mult` multiplies, `_set` assigns, and t
 prefix applies the effect to every region of the country. `mods/_templates` has worked
 examples at all three levels: JSON, GDScript, compiled C#. The rest is in
 [MODDING_GUIDE](docs/MODDING_GUIDE.md).
+
+## Language development kit
+
+The project retains source integrations for **Luau, F#, Nim, Odin, Rust and Kotlin**.
+See the [kit and build recipes](LanguageKit/README.md) and
+[support levels / migration policy](docs/LANGUAGE_BACKENDS_RU.md). All six ran together
+in the Godot 4.8 Beta1 .NET workbench; this does not certify every export or API.
+The campaign remains C#. Rust is reserved for rare, measured hard cases; players and
+ordinary data-mod authors do not need six toolchains.
 
 ## Building and running
 

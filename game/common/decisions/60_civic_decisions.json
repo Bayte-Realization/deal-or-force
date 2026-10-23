@@ -1,0 +1,120 @@
+// Further national decisions (DecisionCore / TakeDecisionCommand).
+//
+// A decision is a button with a price, a condition and a consequence. Everything here uses
+// only blocks the game already ships - `trigger.use` names a condition from
+// common/scripted_triggers, `effects.use` names a change from common/scripted_effects, and
+// `ai_will_do` names a score from common/scripted_modifiers, so an AI country weighs these
+// the same way it weighs the decisions that came before them.
+//
+// The five effects a decision may carry directly are manpower, war_support, stability,
+// literacy and research. Anything richer than that is a scripted effect, which is why the
+// stronger buttons below call one instead of listing numbers.
+{
+  "reconciliation_council": {
+    "name": "National reconciliation council",
+    "resource_costs": {"political_points": 25},
+    "description": "Sit down with the regions that have stopped listening, in public, and be seen to give something up.",
+    "cooldown_days": 540,
+    "gdp_cost_share": 0.0016,
+    "unavailable": "Nothing is restive enough to be worth a council",
+    "trigger": { "use": [ "restive" ] },
+    "effects": { "use": [ "civil_calm" ] },
+    "ai_will_do": "ai_amnesty"
+  },
+  "post_war_reconstruction": {
+    "name": "Post-war reconstruction drive",
+    "resource_costs": {"political_points": 25},
+    "description": "Turn the army's engineers and the returning men onto the ruins, before the ruins become politics.",
+    "cooldown_days": 720,
+    "gdp_cost_share": 0.0030,
+    "unavailable": "Requires a country that has been fought over, and the money to rebuild it",
+    "trigger": { "use": [ "war_torn", "solvent" ] },
+    "effects": { "use": [ "industrial_push" ] },
+    "ai_will_do": "ai_reconstruction_programme"
+  },
+  "schooling_drive": {
+    "name": "Schooling drive",
+    "resource_costs": {"political_points": 20},
+    "description": "Teachers, buildings and a compulsory age: the slowest button in the game, and the one that pays for a century.",
+    "cooldown_days": 730,
+    "gdp_cost_share": 0.0022,
+    "unavailable": "The country is already schooled to the point where this would buy little",
+    "trigger": { "use": [ "poorly_schooled" ] },
+    "effects": { "literacy": 0.010, "stability": 0.010 },
+    "ai_will_do": "ai_education_reform"
+  },
+  "research_endowment": {
+    "name": "National research endowment",
+    "resource_costs": {"political_points": 15},
+    "description": "Fund the laboratories for a decade rather than a budget cycle, so the people in them can plan a career.",
+    "cooldown_days": 900,
+    "gdp_cost_share": 0.0026,
+    "unavailable": "There is nothing in the treasury to endow",
+    "trigger": { "use": [ "solvent" ] },
+    "effects": { "research": 25, "literacy": 0.004 },
+    "ai_will_do": "ai_research_initiative"
+  },
+  "trade_mission": {
+    "name": "Trade mission abroad",
+    "resource_costs": {"political_points": 8},
+    "description": "Send the ministers and the industrialists out to sell something, and come back with contracts.",
+    "cooldown_days": 365,
+    "gdp_cost_share": 0.0010,
+    "unavailable": "A country at war has nothing to send but the army",
+    "trigger": { "use": [ "at_peace" ] },
+    "effects": { "stability": 0.008, "war_support": -0.004 },
+    "ai_will_do": "ai_trade_offensive"
+  },
+  "war_footing": {
+    "name": "Declare a war footing",
+    "resource_costs": {"political_points": 30},
+    "description": "Put the factories and the railways on the general staff's timetable. It works while the war lasts, and it is remembered after.",
+    "cooldown_days": 240,
+    "gdp_cost_share": 0.0022,
+    "unavailable": "There is no war to put the country on a footing for",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "use": [ "war_footing" ] },
+    "ai_will_do": "ai_general_mobilisation"
+  },
+  "national_labour_service": {
+    "name": "National labour service",
+    "resource_costs": {"political_points": 20},
+    "description": "Put the unemployed to work on what the state wants built, and pay them in a wage rather than in a dole.",
+    "cooldown_days": 400,
+    "gdp_cost_share": 0.0018,
+    "unavailable": "Nobody is idle enough to need conscripting into work",
+    "trigger": { "use": [ "hungry_for_work" ] },
+    "effects": { "manpower": 60000, "stability": -0.012, "war_support": 0.010 }
+  },
+  "civic_defence_works": {
+    "name": "Civic defence works",
+    "resource_costs": {"political_points": 15},
+    "description": "Shelters, trenches and fire posts built by the people who would have to use them.",
+    "cooldown_days": 300,
+    "gdp_cost_share": 0.0020,
+    "unavailable": "Digging in is a wartime measure",
+    "trigger": { "use": [ "at_war" ] },
+    "effects": { "manpower": 90000, "war_support": -0.020, "stability": -0.010 }
+  },
+  "amnesty_for_the_weary": {
+    "name": "Amnesty for the weary",
+    "resource_costs": {"political_points": 10},
+    "description": "Let the deserters and the draft dodgers come home. The front gets thinner and the country gets quieter.",
+    "cooldown_days": 500,
+    "gdp_cost_share": 0.0008,
+    "unavailable": "Nobody is weary enough to be offered an amnesty",
+    "trigger": { "use": [ "war_weary", "restive" ] },
+    "effects": { "use": [ "civil_calm" ], "war_support": -0.030 }
+  },
+  "release_the_reserve": {
+    "name": "Release the sovereign reserve",
+    "resource_costs": {"political_points": 10, "army_experience": 10},
+    "description": "Spend the last of what was put aside for exactly this, and admit that this is what it was for.",
+    "cooldown_days": 600,
+    "gdp_cost_share": 0.0,
+    "unavailable": "The treasury is not empty enough to justify it",
+    "trigger": { "use": [ "empty_coffers" ] },
+    "effects": { "use": [ "austerity" ] },
+    "ai_will_do": "ai_austerity_budget"
+  }
+}

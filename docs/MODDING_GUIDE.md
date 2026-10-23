@@ -1226,6 +1226,47 @@ largest when left out). A war over ground of the country's own homeland - the re
 when the world first saw it - is declared as a reconquest, which is a justified war.
 `renounce_claim` strikes a region off the country's homeland for good.
 
+### Dated history: any era, not only 2024
+
+`events/*.json` uses the same event format plus a `date`. The
+campaign reads it on that date, checks the ordinary `trigger` for each country and
+applies the same `options`/`effects`; the player sees the card, an AI takes
+`ai_option`. Set `Defines.StartYear` in a scenario or mod to open in another era -
+1789, 1444 or -0300 (300 BCE) - and the same files can carry revolutions, successions,
+councils or leagues. No C# change is needed for a new date; a date before the common
+era is written `-0300-01-01`, not forced through year one.
+
+```json
+{
+  "a_dated_crisis": {
+    "title": "A dated crisis",
+    "description": "What happened, in prose.",
+    "date": "1789-07-14",
+    "window_days": 30,
+    "trigger": { "tags": ["FRA"] },
+    "ai_option": 1,
+    "options": [
+      { "title": "Reform", "effects": { "stability": 0.03 } },
+      { "title": "Resist", "effects": { "stability": -0.07 } }
+    ]
+  }
+}
+```
+
+- `date` is `YYYY-MM-DD` (or `year`/`month`/`day`); `window_days` is how long a
+  missed event may still fire; `repeat_days` makes it recur from that anchor.
+- An event with no `options` applies its root `effects` directly.
+- Firing is remembered per country in the saved `EventMemory`; a reload cannot
+  deal the same one-shot twice.
+- The engine does not create states or change governments by itself. Use the
+  existing commands/mod hooks for those, or extend the effect vocabulary.
+- A 2024 campaign never fires a 1789 event merely because the file exists; the
+  date window is the gate.
+
+The shipped `00_long_century.json` is a proof pack, not a claim to have written
+every event of the period. A total-conversion mod can replace it with its own
+eras; the loader reads every file in the folder.
+
 ### Lost lands
 
 A region a country held at the start and does not hold now - it seceded, rose under a
@@ -1853,11 +1894,26 @@ host whose patience it spends. They live in `common/movements/*.json` - the head
 `00_movements.json` lists every field and trait - and later files win key by key, so a mod adds a
 movement with a key of its own and changes one by naming it again with only the fields it changes.
 
+- **One organisation, one territorial representative.** An optional
+  `"territorial_faction": "ansar_allah"` links a movement to the **id** of the same actor
+  in `history/factions`, not to its patron, ally or parent country. While that faction owns
+  territory, no extra movement is founded or activated. A scenario without the territorial
+  faction can still use the movement. To keep two deliberately distinct actors, override the
+  field with `""`. Old unused AI headquarters are retired on an advancing simulation day,
+  not during save/network import or map inspection. Player seats, exiles, actual land,
+  military formations/orders and an ongoing war protect an established campaign actor.
+  Retired nation ids and their authored flags remain available for old references.
 - **What it does.** Moves its headquarters, campaigns, fundraises, recruits, seeks recognition,
   sends fighters into a region ahead of a rising (days on the road by distance), and rises. A
   rising that succeeds makes it a country with a capital and militia - out of its cadres, its
   hidden fighters and its street, one formation per `MovementMilitiaPerSupporters` supporters -
-  and a war with the country it rose against. Losing all of it makes it landless again.
+  and a war with the country it rose against. The victory carries the rest of the homeland the
+  same holder governs, but not ground that holder is actually standing on with a formed
+  division: a garrisoned region is taken by fighting, not by a neighbouring city's success.
+  The part of the holder's garrison standing on ground that changes hands goes with it -
+  divided **once** for the whole transfer (`SecessionDefectionShare`, or
+  `PeacefulSecessionDefectionShare` when the hand-over was a vote), never once per region.
+  Losing all of it makes it landless again.
 - **What the world does about it.** Any country - the AI and the player - can recognise it, fund
   it, list it as a terrorist organisation, crack down on its following, expel its headquarters or
   offer it asylum. Opinion reasons are in `common/opinion_modifiers/30_movements.json`.
@@ -1881,8 +1937,33 @@ movement with a key of its own and changes one by naming it again with only the 
   `movement.support`.
 - **Flags.** A movement's real flag, when it is the flag of an armed group, is
   `gfx/flags/flag_<tag>_insignia.png`, shown only with the `movement_flags` setting on.
+  This setting is on by default; an explicitly saved player choice is respected.
+  Landless movements prefer their own base banner before political variants.
+  A `common/flags` overlay can opt out with `"prefer_movement_base": false`.
+  The regional-banner recovery sources are listed in
+  `Tools/IconCompiler/Source/movement-banners.json`; these are not automatically
+  official party logos.
 - The numbers are defines named `Movement*` (see `Scripts/Simulation/MovementRules.cs`), set from
   any `common/defines` file.
+
+### Breakaways: their shape, their name and their capital
+
+A secession starts from a core - a contiguous block of regions of one people, or a bloc breaking
+for the same federal reasons - and may take some neighbours with it (`common/secession`):
+
+- `join_limit` neighbours at most, and only the core's own neighbours, so a new country has a
+  shape rather than a line through the angriest regions next door.
+- `join_people_share` (0.20): the least share of a neighbour's people that must be the seceding
+  people for it to come along; a federal break is exempt. A neighbour that is another country's
+  core - land the parent conquered - never comes along.
+- The core alone is the new country's homeland. A movement's rising takes the part of its homeland
+  that connects to the flashpoint, and a landless movement is revived by a secession only when
+  half the people leaving live in its homeland.
+- The capital is the most populous region of the core.
+- A founded state's name is checked monthly. When less than `Defines.NameHoldMinimum` (0.30) of
+  its people live on what the name is for - its people, its land, its region - it is renamed from
+  the ground it holds (the lands in `common/naming`). The form of state follows a government that
+  has held for `Defines.NameFormFollowsDays` (180). A name the player typed is never changed.
 
 ### Peace, the status quo and war weariness
 
@@ -1905,6 +1986,180 @@ countries fighting it take the `long_war` and `exhausted_by_war` modifiers
 (`common/modifiers/30_war_weariness.json`), and a war with nobody's player in it that reaches
 `PeaceForcedEndDays` ends in the status quo, or in a white peace when neither side leads by
 `PeaceForcedEndLead`.
+
+### Intelligence, covert operations and the living world
+
+**Intelligence networks.** A country founds a network in another (`IntelNetworkCommand`); it grows
+`IntelNetworkGrowth` a week, slower against a watchful state - authority, war and order make the
+counter-intelligence (`IntelNetworks.CounterIntelligence`) - up to `IntelNetworkCeiling`. As it
+grows it shows a share of the target's provinces through the fog, a truer and fresher estimate of
+its strength, and from `IntelInspectStrength` its dossier. Each week it may be found
+(`IntelNetworkExposure`): the network is lost, the target remembers `spied_on_us`
+(`common/opinion_modifiers/51_intelligence.json`) and gains `IntelExposureGrievance`. The numbers
+are in `common/defines/67_intelligence.json`; `"Features": {"intelligence": false}` switches all of
+it off for a scenario or a mod.
+
+**Covert operations** are what a network does past seeing. The kinds are data, in
+`common/covert_operations/*.json`, key by key like every catalogue:
+
+- `effect` - what success does: `sabotage` (war damage to one region's works), `unrest` (one
+  region angrier and less orderly), `opposition` (the country less stable, its capital angrier and
+  its strongest movement funded), `theft` (research the target has, carried home);
+- `minimum_strength` the network needs, `days` to prepare, `cost` in multiples of founding a
+  network, `power` (1 is the defines' figures) and `risk` (added to the chance it is traced).
+
+A mod adds a kind with a new key and one of the four effects, or changes one field of an old one
+by naming it alone. When an operation comes due it works with
+`CovertBaseSuccess + CovertStrengthSuccess x strength - CovertCounterSuccess x counter-intelligence`,
+and it is traced with `CovertExposedOnSuccess`/`CovertExposedOnFailure` plus a share of the
+counter-intelligence. A traced operation keeps `CovertExposureNetworkKept` of the network, leaves
+`covert_operation_against_us` and `CovertExposureGrievance`, and is world news
+(`covert_<effect>_exposed`); one that works unseen tells the target only of a fire it cannot
+explain (`covert_<effect>_suspected`). The network then lies low for `CovertQuietDays`
+(`CovertQuietAfterExposureDays` after an exposure). Governments nobody plays consider an operation
+every `CovertAiReviewDays` with the chance `CovertAiChance`. Every `Covert*` define is in
+`67_intelligence.json`. A player orders them from the right-click card of any province of a
+country where it has a network.
+
+**News.** How much each kind of chronicle entry matters, 0 to 3, is `common/news/*.json`
+(`importance`); the rail beside the map shows `rail_minimum` and above, and everything about the
+player's own country.
+
+**Addresses to the nation** are data in `common/addresses/*.json` - the header of
+`00_addresses.json` lists the fields: what an address gives at once (`stability`, `war_support`),
+whether it needs a war, and the promise it makes (`victory`, `prosperity`, `order`), when that
+falls due and what a broken or a kept promise is worth. A people addressed too often stops
+listening: the weariness halves in `AddressWearinessHalfLifeDays`, and addresses are
+`AddressCooldownDays` apart.
+
+**Organisations that live.** Cohesion follows what the members are to one another; a member that
+no longer belongs may leave, two estranged members may leave together and found their own, a weak
+organisation may be wound up, and neighbours who all fear one great power may sign a pact against
+it. The `Organization*` and `ThreatPact*` defines are in `common/defines/68_living_world.json`.
+
+**Contractors.** A government can hire formations by contract: `ContractorSigningShare` of a
+line infantry division to sign, `ContractorWeeklyShare` of that a week, `ContractorPersonnel` men
+at `ContractorExperience`, for `ContractorDays`, at most `ContractorLimit` at once
+(`68_living_world.json`).
+
+**Movement power.** A movement with momentum (breadth of its following, legitimacy,
+recognitions, cadres and income) can call a general strike in the country where most of its
+following lives (`common/modifiers/42_movement_power.json`, `general_strike`), march on a capital
+that follows it - a march that outweighs the government's standing topples it - and run a parallel
+administration that levies its own dues. The `MovementStrike*`, `MovementMarch*` and
+`MovementParallel*` defines are in `Scripts/Simulation/MovementPower.cs` and can be set from any
+`common/defines` file.
+
+### Sound, music and pictures
+
+Everything the game plays or shows outside the map is data in four folders. A mod layers its own
+`music/`, `sound/`, `gfx/` and `common/` files over the base game's and replaces any entry by
+naming it.
+
+**Music** (`music/*.json`). A track is a file, a moment (`menu`, `campaign` or `any`), the moods
+it suits (`calm`, `uneasy`, `crisis`, `war`, `recovery`, `systemiccrisis`; none means any), a
+weight, a volume trim and optionally the regions it belongs to:
+
+```json
+{
+  "tracks": {
+    "andes_dawn": {
+      "file": "audio/andes_dawn.ogg", "label": "Dawn over the Andes",
+      "when": "campaign", "moods": ["calm"], "regions": ["south_america", "bol"], "weight": 3
+    }
+  }
+}
+```
+
+A region tag is a continent (`europe`, `north_america`), a sub-region of the country table
+(`western_asia`, `caribbean`, `southern_asia`) or a country's own tag (`irn`); spaces and hyphens
+read as underscores, so "North America" and `north_america` are one tag. The most specific tag
+wins: a country hears the tracks tagged with its own tag, else its sub-region's, else its
+continent's, and untagged tracks always play. `"remove": true` takes a track out of rotation.
+Level new music to about -19 LUFS, the level of the rest of the score.
+
+**Cues** (`sound/*.json`, `cues`). A moment the game has a sound for: a file, a channel
+(`strategic`, `battle`, `interface`), a volume, a cooldown and whether it yields to anything
+already speaking. `"war_declared": "audio/mine.wav"` replaces one and keeps its timing.
+
+**Headline stings** (`common/news/*.json`, `stings`). Which cue a kind of news makes when it
+reaches the rail beside the map: `"coup": "news_coup"`; `""` silences a kind. Only news the rail
+shows sounds, never the player's own act, and `sting_gap_ms` keeps a busy day to one sound.
+
+**Map ambience** (`sound/*.json`, `map_ambience`). The sound of the ground under the tactical
+camera: `beds` name looping recordings, `terrain` gives each terrain id the beds it lends and
+their shares, `sea` and `open_country` name the beds for water and for ground with no mix.
+
+```json
+{ "map_ambience": { "beds": { "volcano": "audio/volcano.ogg" },
+                    "terrain": { "volcanic": { "volcano": 1 } } } }
+```
+
+**The listening library** (`presentation/*.json`, `assets`). What the in-game library lists:
+a name, a purpose, a kind (`music`, `sound`, `image`), a file and its source, optionally a
+measured waveform (`duration_seconds`, `peaks`).
+
+**Loading illustrations** (`gfx/`). Every picture whose file name starts with `loading_` is one:
+the loading screen shows them in turn behind the dossier card. A mod adds one by dropping
+`gfx/loading/loading_my_picture.jpg` into its package, and replaces a base one by using the same
+name. 16:9, about 1920 x 1080.
+
+**Event pictures** (`common/event_pictures/*.json`, and an event's own `picture`). The band above
+an event's title. `"events": { "my_event": "finance" }` names one of the shared pictures
+(`gfx/events/event_finance.jpg`); a path under `gfx/` or a `res://` path points at any picture,
+which is how a mod uses its own. An event's own `"picture"` field wins over the table. 3:2, about
+1152 x 768.
+
+Two rules about `gfx/`, because the sprite catalogue reads all of it: every picture there becomes
+a sprite named by its file name wherever it is filed, so prefix new art (`event_`, `loading_`) to
+keep it from taking an icon's name; and every JSON file there is read as sprite declarations, so
+tables like the event pictures live in `common/`.
+
+**Dependencies** (`common/subjects/*.json`). Besides tribute, manpower and the war rules, a kind
+says whether foreign money can raise an independence movement in it (`agitable`, default true)
+and whether it leaves by war (`armed_rebellion`, default true). The base game's leases are
+neither, and its overseas territories and associated states leave peacefully.
+`Defines.SubjectAgitationMinPopulation` (100 000) is the fewest people agitation can work on.
+
+### The rise and fall of economies
+
+What a country's work is worth (`Nation.OutputScale`, calibrated from 2024) is a stock that drifts
+every week (`Scripts/Simulation/SecularCycle.cs`), so the order of 2024 can change. A year's drift:
+
+- **catch-up**: `SecularConvergence` (0.012) times the log distance below the frontier (the 90th
+  percentile of output per head among countries over ten million people), times readiness -
+  human capital, stability above 0.30, and peace;
+- **the cost of leading**: `SecularLeaderDrag` (0.010) times the log distance above it;
+- **a long wave** of the country's own, `SecularWaveAmplitude` (0.008) high and
+  `SecularWaveShortestYears`-`SecularWaveLongestYears` (35-60) long, period and phase from the seed;
+- **a year's fortune**: `SecularFortune` (0.006), from the seed;
+- **drags**: `SecularWarDrag` (0.006) at war, `SecularOverstretchDrag` (0.012) at full overstretch;
+- held within `SecularFloor`-`SecularCeiling` (-4 % to +6 %). `SecularCycleEnabled: false` turns it off.
+
+The economy screen shows it as "Rise and decline", with its parts under the cursor. Conquered ground
+keeps what its work was worth: a conqueror's multiplier is blended with the loser's by people.
+
+### Unions, shards and restorations
+
+- A **culture union** needs the same main people in both countries, and a joiner that is a piece the
+  game made or no bigger than `CultureUnionMaxJoinerRegions` (3) regions. The AI only takes in
+  pieces born in play; a country of 2024 does not sign itself away.
+- A **shard** (`common/defines` `Shard*`) is a small state born in play, never a country of 2024.
+- A vanished country can be **restored** by a breakaway only when `RestorationGroundShare` (0.40)
+  of its people live on that country's old ground.
+- A people with a living state of its own does not found a second one by seceding; its ground in
+  another country is lost land. A region taken back from a crushed breakaway starts again from
+  `crushed_pressure` (-6) in `common/secession`.
+- "The strongman crowns himself" (`common/governance/21_world_transitions.json`) is a road out of a
+  military junta only.
+
+**The console curses.** `snowgrave` and `weirdroute` (Deltarune) are saved with the world and
+cannot be taken back. Under the ice the clock runs and nothing else does; on the weird route every
+formation walks over any border to the nearest water, one province each
+`Defines.WeirdRouteHoursPerProvince` (10). A map with no water at all gets static instead. Their
+sounds are `sound/07_world_curses.json`; `map_ambience.frozen` names the one bed a frozen world
+still hears. The setting `loading_without_ai_art` takes the generated pictures off the loading
+screen.
 
 ### The console and mod diagnostics
 
@@ -1934,3 +2189,56 @@ The console itself is deliberately English — it prints type names and syntax, 
 its files when checking localisation. The exception is the `FUN` category in
 `DeveloperConsoleExtras.cs`: a joke in a language you cannot read is not a joke, so those strings
 go through the table like any other content.
+
+## Dated regional demographic references
+
+A regional source is an observation, not another live population table. Put complete records in
+`common/regional_demography/*.json` (YAML/YML use the same loader). For a new campaign, select
+a record explicitly in `history/states/2024/*.json`:
+
+```json
+{ "example_region": { "culture_profile": "example_region" } }
+```
+
+A reference record has this shape. **All figures and the source below are fictional examples**:
+
+```json
+{
+  "example_region": {
+    "date": "2020-01-01",
+    "source": "Example census",
+    "url": "https://example.org/census",
+    "table": "1",
+    "areas": [{
+      "name": "Example area",
+      "page": 1,
+      "population": 1000,
+      "counts": { "belarusian": 700, "polish": 250 },
+      "unmapped": 10
+    }]
+  }
+}
+```
+
+Counts are non-negative integers keyed by existing culture ids. `unmapped` is a reported category
+without an unambiguous game culture. The difference between population and listed counts plus
+unmapped is the unlisted remainder. Neither remainder becomes an invented culture or religion.
+The initial model normalises mapped counts only; its coverage is disclosed in the population dossier.
+Multiple areas are combined by **adding absolute counts before normalisation**, not averaging shares.
+
+Dates, source, table, area names, positive page numbers and population are required. A record may
+contain 1–128 distinct areas, each with at most 512 culture keys. Negative/string/duplicate counts,
+unknown cultures, over-counted totals and arithmetic overflow reject that record without removing
+the preceding definition. Overlays replace **complete records by id**, not individual area fields.
+Disabling a mod resets the catalog. Reloading a catalog alone never alters a loaded campaign.
+
+Explicit `cultures` or legacy `nationalities` in a history object takes precedence over
+`culture_profile`. Missing profile ids report a history error and leave population intact.
+The same region id in the reference catalog lets the dossier show its geographic source;
+it does not certify a mod's chosen starting mix. A split region inherits its parent's reference
+with a scale warning. Source and area names are localization keys; add the corresponding EN/RU entries.
+
+No measured faith, language or political preference is inferred from this source.
+Faith shares still follow the separate existing cultural defaults unless other scenario data changes
+them; disclose that estimate rather than calling it a religious census. The current population groups,
+not these historic counts, remain authoritative and are saved in the usual campaign snapshot.

@@ -1,5 +1,5 @@
 {
-  "coordination": {"name": "Permanent diplomatic liaison", "duration_days": 84, "weekly_gdp_share": 0.00002, "trust_budget": 0.12},
-  "exercises": {"name": "Defence coordination programme", "duration_days": 112, "weekly_gdp_share": 0.00004, "trust_budget": 0.16},
-  "relief": {"name": "Allied reconstruction fund", "duration_days": 84, "weekly_gdp_share": 0.00006, "trust_budget": 0.14, "relief": true}
+  "coordination": {"name": "Permanent diplomatic liaison", "duration_days": 84, "weekly_gdp_share": 0.00002, "trust_budget": 0.12, "opinion_on_completion": "alliance_liaison_stood_up"},
+  "exercises": {"name": "Defence coordination programme", "duration_days": 112, "weekly_gdp_share": 0.00004, "trust_budget": 0.16, "opinion_on_completion": "alliance_exercises_held"},
+  "relief": {"name": "Allied reconstruction fund", "duration_days": 84, "weekly_gdp_share": 0.00006, "trust_budget": 0.14, "relief": true, "opinion_on_completion": "alliance_fund_finished"}
 }

@@ -49,12 +49,18 @@ public static class StatePartition
         if (topology is null || newOwner is null || provinces is null) return Array.Empty<ScenarioState>();
 
         var touched = new HashSet<int>();
+        var formerOwnerIndices = asConquest ? new HashSet<ushort>() : null;
         var moved = 0;
         var peopleTaken = 0L;
+        var takenFrom = asConquest ? new Dictionary<ushort, long>() : null;
+        // Every road a region comes back by - conquest or a treaty - ends its breakaway's rising.
+        var previousHolder = new Dictionary<int, ushort>();
         foreach (var province in provinces)
         {
             if (province <= 0 || province > topology.ProvinceCount) continue;
-            if (topology.ProvinceToNation[province] == (ushort)newOwner.MapIndex) continue;
+            var prevOwner = topology.ProvinceToNation[province];
+            if (prevOwner == (ushort)newOwner.MapIndex) continue;
+            if (prevOwner > 0) formerOwnerIndices?.Add(prevOwner);
             var stateIndex = topology.ProvinceToState[province];
             if (touched.Add(stateIndex))
             {
@@ -62,6 +68,9 @@ public static class StatePartition
                 {
                     if (state.MapIndex != stateIndex) continue;
                     peopleTaken += state.Population;
+                    if (takenFrom is not null && prevOwner > 0)
+                        takenFrom[prevOwner] = takenFrom.GetValueOrDefault(prevOwner) + Math.Max(0L, state.Population);
+                    if (previousHolder is not null && prevOwner > 0) previousHolder[stateIndex] = prevOwner;
                     break;
                 }
             }
@@ -74,6 +83,32 @@ public static class StatePartition
         // What the neighbours make of it. Scaled by people rather than provinces, because a
         // hundred square kilometres of tundra is not what makes a neighbourhood nervous.
         if (asConquest) Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);
+        // A breakaway crushed: the region taken back from a state that seceded from its conqueror
+        // goes quiet for years rather than rising again the moment the cooling-off period ends.
+        if (previousHolder is { Count: > 0 })
+            foreach (var (stateIndex, holder) in previousHolder)
+            {
+                var breakaway = campaign.Nations.Find(n => n.MapIndex == holder);
+                if (breakaway is null || breakaway.SecededFromId != newOwner.Id) continue;
+                var region = campaign.States.Find(s => s.MapIndex == stateIndex);
+                if (region is not null) region.SecessionPressure = MathF.Min(region.SecessionPressure, SecessionCore.Weights.CrushedPressure);
+            }
+        // Conquered ground keeps what its work was worth. Its output was priced at the
+        // conqueror's own 2024 multiplier (Nation.OutputScale), so taking a poor neighbour made
+        // its people as productive as the conqueror's overnight and conquest paid the rich in
+        // GDP. The multiplier is blended by people, the way a peaceful transfer already blends it.
+        if (takenFrom is { Count: > 0 } && newOwner.OutputScale > 0f && newOwner.Population > 0)
+        {
+            double weight = newOwner.Population, sum = newOwner.OutputScale * (double)newOwner.Population;
+            foreach (var (index, people) in takenFrom)
+            {
+                var loser = campaign.Nations.Find(n => n.MapIndex == index);
+                if (loser is null || loser.OutputScale <= 0f || people <= 0) continue;
+                weight += people;
+                sum += loser.OutputScale * (double)people;
+            }
+            if (weight > 0 && sum > 0) newOwner.OutputScale = (float)(sum / weight);
+        }
 
         // One piece per owner, and nothing said about geography - the same rule the map is
         // built under, and for the same reason it gives there.
@@ -102,6 +137,19 @@ public static class StatePartition
         Reunify(campaign);
 
         campaign.InvalidateStateIndex();
+        if (formerOwnerIndices is { Count: > 0 })
+        {
+            foreach (var ownerMapIndex in formerOwnerIndices)
+            {
+                var formerOwner = campaign.Nations.Find(n => n.MapIndex == ownerMapIndex);
+                if (formerOwner is null || formerOwner.Movement is not null || campaign.HasOwnedLand(formerOwner)) continue;
+                formerOwner.Gdp = 0f;
+                formerOwner.GrossOutput = 0f;
+                formerOwner.WeeklyTaxIncome = 0f;
+                formerOwner.WeeklyExpenses = 0f;
+                formerOwner.WeeklyBalance = 0f;
+            }
+        }
         campaign.MarkMapChanged();
         return created;
     }

@@ -25,7 +25,7 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class ScriptedEffects
 {
-    private enum Operation { Add, Percent, Mult, Set }
+    internal enum Operation { Add, Percent, Mult, Set }
 
     private sealed class Field
     {
@@ -64,6 +64,18 @@ public static class ScriptedEffects
             "Unpaid contractual interest, distinct from outstanding principal.");
         NationField("payment_arrears", n => n.PaymentArrears, (n, v) => n.PaymentArrears = v, 0f, float.PositiveInfinity,
             "Unpaid primary public spending; does not alone mean a contractual debt default.");
+        // The services' experience and the government's political credit (MilitaryExperience).
+        // They are earned by doing - battle, missions, sea time, funding, drill - and spent on the
+        // war Doctrine (TacticalDoctrines); a decision or event may also grant them, which is how content
+        // says \"this exercise taught the army something\" without a line of code.
+        NationField("army_experience", n => n.ArmyExperience, (n, v) => n.ArmyExperience = v, 0f, 100000f,
+            "Army experience: what the army Doctrines are paid for in. Earned by fighting, drilling and funding.");
+        NationField("air_experience", n => n.AirExperience, (n, v) => n.AirExperience = v, 0f, 100000f,
+            "Air experience: what the Doctrine of the sky is paid for in. Earned by flying real missions.");
+        NationField("naval_experience", n => n.NavalExperience, (n, v) => n.NavalExperience = v, 0f, 100000f,
+            "Naval experience: what the Doctrine of the coast is paid for in. Earned at sea and in action.");
+        NationField("political_points", n => n.PoliticalPoints, (n, v) => n.PoliticalPoints = v, 0f, 100000f,
+            "Political credit: what a government can push through besides money. Spent on rewriting a war Doctrine.");
         // A movement's own figures (Movements). On a country that is not one they read nought
         // and writing them does nothing, so an event can be written for "all" without asking.
         NationField("movement.cadres", n => n.Movement?.Cadres ?? 0f,
@@ -103,6 +115,8 @@ public static class ScriptedEffects
             "Pending domestic reputation impulse, -1 to 1; it is absorbed gradually, not an instant status label.");
         NationField("literacy", n => n.Literacy, (n, v) => n.Literacy = v, 0.05f, 0.999f,
             "Share of the population that is literate, 0-1.");
+        NationField("brain_drain", n => n.BrainDrainRate, (n, v) => n.BrainDrainRate = v, -1f, 1f,
+            "Signed human-capital migration flow, -1 (severe brain drain) to +1 (strong talent inflow).");
         // Money, which a script could previously neither read nor move - so a mod could add
         // a decision that emptied the treasury and none that noticed what it did to prices.
         // Bounded by what the model itself allows rather than by a number written here, so a
@@ -135,6 +149,12 @@ public static class ScriptedEffects
             "Share of output spent on education and science.");
         NationField("market_access", n => n.MarketAccess, (n, v) => n.MarketAccess = v, 0f, 1f,
             "Access to the world market, 0-1.");
+        NationField("imperial_overstretch", n => n.ImperialOverstretch, (n, v) => n.ImperialOverstretch = v, 0f, 1f,
+            "Imperial overstretch of a state governing distant or divergent territories, 0-1.");
+        NationField("notoriety", n => n.Notoriety, (n, v) => n.Notoriety = v, 0f, 100f,
+            "International notoriety from conquests and broken treaties, 0-100.");
+        NationField("union_cohesion", n => n.UnionCohesion, (n, v) => n.UnionCohesion = v, 0f, 1f,
+            "Cohesion of a proclaimed union or restored state, 0-1.");
         NationField("population", n => n.Population, (n, v) => n.Population = (long)MathF.Max(0f, v),
             0f, float.PositiveInfinity, "National population headcount.");
 
@@ -152,6 +172,8 @@ public static class ScriptedEffects
             "Stability in every state the nation owns.");
         StateField("state.war_damage", s => s.WarDamage, (s, v) => s.WarDamage = v, 0f, 1f,
             "War damage in every state the nation owns: 0 untouched, 1 ruins.");
+        StateField("state.brain_drain", s => s.BrainDrainPressure, (s, v) => s.BrainDrainPressure = v, 0f, 1f,
+            "Brain drain emigration pressure in every state the nation owns, 0-1.");
 
         // The country's forces, every division and every fleet at once: an army rested, drilled
         // or re-equipped, a navy back from a refit.
@@ -337,20 +359,21 @@ public static class ScriptedEffects
             SovereignFinance.NormalizeAccounts(campaign, nation);
         }
 
-        private static float Combine(float current, float value, Operation operation, Field field)
+        internal static float PreviewCombine(float current, float value, Operation operation, string fieldName, float min, float max)
         {
             var result = operation switch
             {
-                // A cost stays a cost in debt. Explicit _mult remains literal for mods
-                // that deliberately scale outstanding debt rather than grant income/costs.
-                Operation.Percent when field.Name == "treasury" => current + MathF.Abs(current) * value,
+                Operation.Percent when fieldName == "treasury" => current + MathF.Abs(current) * value,
                 Operation.Percent => current * (1f + value),
                 Operation.Mult => current * value,
                 Operation.Set => value,
                 _ => current + value
             };
-            return M.Clamp(result, field.Min, field.Max);
+            return M.Clamp(result, min, max);
         }
+
+        private static float Combine(float current, float value, Operation operation, Field field) =>
+            PreviewCombine(current, value, operation, field.Name, field.Min, field.Max);
 
         /// <summary>Plain-language summary, so the UI can describe a modded option that shipped no text.</summary>
         public string Describe()
@@ -588,21 +611,113 @@ public static class ScriptedEffects
         return lines.Count == 0 ? "" : Loc.Get("Effects:") + "\n" + string.Join("\n", lines.Select(line => "  " + line));
     }
 
+    /// <summary>
+    /// Preview the exact direct state transitions an effect will apply to <paramref name="nation"/>
+    /// right now ("Stability: 72.0% → 73.5% (+1.5%)"), without mutating the campaign or nation.
+    /// Separates immediate guaranteed state changes from ongoing national spirits.
+    /// </summary>
+    public static IReadOnlyList<string> PreviewForNation(Campaign campaign, Nation nation, Effect effect, float treasuryCost = 0f)
+    {
+        var lines = new List<string>();
+        if (campaign is null || nation is null) return lines;
+        if (treasuryCost > 0.0001f)
+        {
+            var afterCash = nation.Treasury - treasuryCost;
+            lines.Add(Loc.Format("{0}: {1} → {2} ({3})",
+                Loc.Get("Treasury"), Fmt.Money(nation.Treasury), Fmt.Money(afterCash), Fmt.MoneyDelta(-treasuryCost)));
+        }
+        if (effect is null) return lines;
+        lines.AddRange(SpiritLines(effect.Grants));
+        foreach (var id in effect.Revokes)
+            if (ModifierCatalog.Get(id) is { } spirit)
+                lines.Add(Loc.Format("Loses «{0}»", Loc.Get(spirit.Name)));
+
+        var owned = campaign.StatesOf(nation);
+        foreach (var entry in effect.Entries)
+        {
+            if (FeatureEffect(entry.Key, out var feature))
+            {
+                lines.Add(Loc.Format(entry.Value >= .5f ? "Enable mechanic: {0}" : "Disable mechanic: {0}", feature));
+                continue;
+            }
+            if (!Resolve(entry.Key, out var field, out var operation)) continue;
+            var label = field.Name.StartsWith("reputation.", StringComparison.Ordinal)
+                ? Loc.Format("Public narrative: {0}", field.Name[11..])
+                : Loc.Get(Labels.GetValueOrDefault(field.Name, field.Name));
+            if (label.Length > 4 && label == label.ToUpper(CultureInfo.CurrentCulture))
+                label = label[..1] + label[1..].ToLower(CultureInfo.CurrentCulture);
+
+            float before;
+            if (field.GetNation is not null) before = field.GetNation(nation);
+            else if (field.GetState is not null && owned.Length > 0) before = owned.Average(s => field.GetState(s));
+            else if (field.GetArmy is not null)
+            {
+                var armies = campaign.Armies.Where(a => a.NationId == nation.Id).ToArray();
+                if (armies.Length == 0) continue;
+                before = armies.Average(a => field.GetArmy(a));
+            }
+            else if (field.GetFleet is not null)
+            {
+                var fleets = campaign.Fleets.Where(f => f.NationId == nation.Id).ToArray();
+                if (fleets.Length == 0) continue;
+                before = fleets.Average(f => field.GetFleet(f));
+            }
+            else continue;
+
+            var after = Effect.PreviewCombine(before, entry.Value, operation, field.Name, field.Min, field.Max);
+            var delta = after - before;
+            lines.Add(Loc.Format("{0}: {1} → {2} ({3})",
+                label,
+                FormatPreviewValue(field.Name, before),
+                FormatPreviewValue(field.Name, after),
+                FormatPreviewDelta(field.Name, delta)));
+        }
+        return lines;
+    }
+
+    private static string FormatPreviewValue(string fieldName, float value)
+    {
+        if (fieldName is "treasury" or "public_debt" or "debt_arrears" or "payment_arrears" or "gdp")
+            return Fmt.Money(value);
+        if (fieldName is "manpower" or "population" or "state.population" or "movement.cadres")
+            return Fmt.People((long)MathF.Round(value));
+        if (Fractions.Contains(fieldName) || fieldName.StartsWith("social.", StringComparison.Ordinal) ||
+            fieldName.StartsWith("reputation.", StringComparison.Ordinal))
+            return Fmt.Percent(value);
+        return value.ToString("0.##", CultureInfo.CurrentCulture);
+    }
+
+    private static string FormatPreviewDelta(string fieldName, float delta)
+    {
+        if (fieldName is "treasury" or "public_debt" or "debt_arrears" or "payment_arrears" or "gdp")
+            return Fmt.MoneyDelta(delta);
+        if (fieldName is "manpower" or "population" or "state.population" or "movement.cadres")
+            return Fmt.PeopleDelta(Math.Round(delta));
+        if (Fractions.Contains(fieldName) || fieldName.StartsWith("social.", StringComparison.Ordinal) ||
+            fieldName.StartsWith("reputation.", StringComparison.Ordinal))
+            return (delta * 100f).ToString("+0.#;-0.#;0.#", CultureInfo.CurrentCulture) + "%";
+        return delta.ToString("+0.##;-0.##;0.##", CultureInfo.CurrentCulture);
+    }
+
     /// <summary>Which fields are a share of one, so that +0.03 reads as three percentage points.</summary>
     private static readonly HashSet<string> Fractions = new(StringComparer.OrdinalIgnoreCase)
     {
         "stability", "war_support", "standard_of_living", "literacy", "inflation", "key_rate",
+        "credit_confidence",
         "tax_rate", "military_spending", "welfare_spending", "education_spending", "market_access",
         "movement.legitimacy", "movement.heat", "movement.support",
         "state.standard_of_living", "state.radicalism", "state.literacy", "state.urbanization", "state.stability",
-        "state.war_damage", "worst_war_damage",
+        "state.war_damage", "worst_war_damage", "brain_drain", "state.brain_drain",
         "army.organisation", "army.entrenchment", "army.experience", "army.equipment", "fleet.readiness", "fleet.supply"
     };
 
     /// <summary>What each field is called on screen - an English key the tables translate.</summary>
     private static readonly Dictionary<string, string> Labels = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["treasury"] = "Treasury", ["gdp"] = "GDP", ["productivity"] = "Productivity",
+        ["treasury"] = "Treasury", ["public_debt"] = "Public debt",
+        ["credit_confidence"] = "Credit confidence",
+        ["debt_arrears"] = "Debt arrears", ["payment_arrears"] = "Public payment arrears",
+        ["gdp"] = "GDP", ["productivity"] = "Productivity",
         ["stability"] = "Stability", ["war_support"] = "War support",
         ["standard_of_living"] = "Standard of living", ["literacy"] = "Literacy",
         ["inflation"] = "Inflation", ["key_rate"] = "Key rate",
@@ -626,6 +741,8 @@ public static class ScriptedEffects
         ["fleet.readiness"] = "Readiness of every fleet",
         ["fleet.supply"] = "Stores of every fleet",
         ["research"] = "Research points",
+        ["brain_drain"] = "Brain drain",
+        ["state.brain_drain"] = "Brain drain pressure in every region",
         ["movement.cadres"] = "Cadres",
         ["movement.legitimacy"] = "Standing",
         ["movement.heat"] = "The host's temper",
@@ -754,6 +871,42 @@ public sealed class ScriptedTrigger
         }
         return true;
     }
+
+    /// <summary>
+    /// Dimensionless distance from <paramref name="nation"/>'s current state to satisfying this
+    /// trigger: 0 when <see cref="Matches"/> is already true, positive when numeric bounds are
+    /// not yet met, and <see cref="float.PositiveInfinity"/> when a discrete condition (such as
+    /// <c>at_war</c> or <c>tags</c>) fails or a value cannot be read.
+    /// </summary>
+    public float Shortfall(Campaign campaign, Nation nation)
+    {
+        if (nation is null) return float.PositiveInfinity;
+        if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
+            return float.PositiveInfinity;
+        if (_atWar.HasValue && campaign is not null &&
+            campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
+            return float.PositiveInfinity;
+
+        var total = 0f;
+        foreach (var (key, target, isMinimum) in _bounds)
+        {
+            if (!ScriptedValues.TryRead(campaign, nation, key, out var current)) return float.PositiveInfinity;
+            var raw = isMinimum ? target - current : current - target;
+            if (raw <= 0f) continue;
+            var normalized = key.Trim().Replace('-', '_').ToLowerInvariant() switch
+            {
+                "treasury" or "public_debt" or "debt_arrears" or "payment_arrears" or "gdp" =>
+                    raw / MathF.Max(0.1f, nation.Gdp),
+                "manpower" or "population" or "state.population" =>
+                    raw / MathF.Max(1f, nation.Population * 0.02f),
+                "army_experience" or "air_experience" or "naval_experience" or "political_points" =>
+                    raw / 100f,
+                _ => raw
+            };
+            total += normalized;
+        }
+        return total;
+    }
 }
 
 /// <summary>A `use` entry is one name or a list of them.</summary>
@@ -779,7 +932,8 @@ public static class ScriptedValues
     /// What a trigger may ask about and no effect may set, because it is worked out rather than
     /// kept: the worst-hit region's war damage is a question about every region at once.
     /// </summary>
-    private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase) { "worst_war_damage" };
+    private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase)
+        { "worst_war_damage", "available_air_formations", "available_fleet_hulls" };
 
     public static bool IsReadOnly(string key) => key is not null &&
         (ReadOnly.Contains(key.Trim().Replace('-', '_')) || key.Equals("year", StringComparison.OrdinalIgnoreCase) ||
@@ -799,12 +953,24 @@ public static class ScriptedValues
         {
             case "year": value = campaign.Date.Year; return true;
             case "treasury": value = nation.Treasury; return true;
+            case "public_debt": value = nation.PublicDebt; return true;
+            case "credit_confidence": value = nation.CreditConfidence; return true;
+            case "debt_arrears": value = nation.DebtArrears; return true;
+            case "payment_arrears": value = nation.PaymentArrears; return true;
             case "gdp": value = nation.Gdp; return true;
             case "productivity": value = nation.Productivity; return true;
             case "stability": value = nation.Stability; return true;
             case "war_support": value = nation.WarSupport; return true;
             case "standard_of_living": value = nation.StandardOfLiving; return true;
             case "literacy": value = nation.Literacy; return true;
+            case "brain_drain": value = nation.BrainDrainRate; return true;
+            case "army_experience": value = nation.ArmyExperience; return true;
+            case "air_experience": value = nation.AirExperience; return true;
+            case "naval_experience": value = nation.NavalExperience; return true;
+            case "political_points": value = nation.PoliticalPoints; return true;
+            case "available_air_formations": value = AvailableAirFormations(campaign, nation); return true;
+            case "available_fleet_hulls": value = AvailableFleetHulls(campaign, nation); return true;
+            case "state.brain_drain": value = Average(campaign, nation, state => state.BrainDrainPressure); return true;
             case "inflation": value = nation.Inflation; return true;
             case "key_rate": value = CentralBank.KeyRate(nation); return true;
             case "government_sets_key_rate": value = nation.GovernmentSetsKeyRate ? 1f : 0f; return true;
@@ -828,6 +994,37 @@ public static class ScriptedValues
                 return true;
             default: return false;
         }
+    }
+
+    private static int AvailableAirFormations(Campaign campaign, Nation nation)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null) return 0;
+        var controllers = campaign.ProvinceController ?? map.ProvinceToNation;
+        var count = 0;
+        foreach (var formation in campaign.SupportFormations)
+        {
+            if (formation.NationId != nation.Id || !(formation.Strength > .05f) ||
+                !SupportTypeCatalog.TryGet(formation.TypeId, out var type) || type.Kind != SupportKind.Air ||
+                !SupportCore.Enabled(campaign, type)) continue;
+            var province = formation.BaseProvinceId;
+            if (province > 0 && province < controllers.Length && province < map.ProvinceToState.Length &&
+                controllers[province] == nation.MapIndex && map.ProvinceToState[province] == formation.StateMapIndex)
+                count++;
+        }
+        return count;
+    }
+
+    private static float AvailableFleetHulls(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("navy")) return 0;
+        var count = 0f;
+        foreach (var fleet in campaign.Fleets)
+            if (fleet.NationId == nation.Id && fleet.Hulls > 0 && fleet.Strength > .05f &&
+                fleet.Organisation > .05f && fleet.Supply > .05f && fleet.ReadyDay <= campaign.ElapsedDays &&
+                !fleet.InAction && !fleet.IsLoaded)
+                count += fleet.Hulls;
+        return count;
     }
 
     private static float Average(Campaign campaign, Nation nation, Func<ScenarioState, float> read)

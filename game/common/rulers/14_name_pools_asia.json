@@ -1,0 +1,28 @@
+{
+  "names": {
+    "han": {
+      "given": ["An", "Bai", "Bao", "Bo", "Chang", "Chao", "Cheng", "Chong", "Da", "Dong", "Enlai", "Feng", "Fu", "Gang", "Guang", "Guo", "Hai", "Han", "Hao", "Hong", "Hua", "Hui", "Jian", "Jie", "Jin", "Jing", "Jun", "Kai", "Lei", "Li", "Liang", "Lin", "Ling", "Long", "Ming", "Peng", "Ping", "Qiang", "Qing", "Rui", "Shan", "Sheng", "Shi", "Shu", "Tao", "Wei", "Wen", "Wu", "Xiang", "Xiao", "Xin", "Xing", "Xiong", "Yan", "Yang", "Yao", "Yi", "Yin", "Yong", "You", "Yu", "Yuan", "Yue", "Zhen", "Zhi", "Zhong", "Zhou", "Zhu"],
+      "family": ["Cai", "Cao", "Chen", "Cheng", "Cui", "Deng", "Ding", "Dong", "Du", "Fan", "Fang", "Feng", "Fu", "Gao", "Gu", "Guo", "Han", "He", "Hong", "Hou", "Hu", "Huang", "Jia", "Jiang", "Jin", "Kong", "Li", "Liang", "Lin", "Liu", "Lu", "Luo", "Ma", "Meng", "Pan", "Peng", "Qian", "Qiu", "Ren", "Shen", "Shi", "Song", "Sun", "Tang", "Tian", "Wan", "Wang", "Wei", "Wu", "Xia", "Xiao", "Xie", "Xu", "Yang", "Yao", "Ye", "Yu", "Yuan", "Zeng", "Zhang", "Zhao", "Zhen", "Zheng", "Zhou", "Zhu", "Zou"]
+    },
+    "japonic": {
+      "given": ["Akihiko", "Akira", "Daichi", "Daisuke", "Eiji", "Fumio", "Hajime", "Haruki", "Hideo", "Hiroshi", "Ichiro", "Isamu", "Jiro", "Kaito", "Kazuki", "Kenji", "Kenta", "Kiyoshi", "Koji", "Makoto", "Masahiro", "Masato", "Minoru", "Naoki", "Noboru", "Osamu", "Ryo", "Satoshi", "Shigeru", "Shin", "Shinji", "Shiro", "Shoichi", "Takashi", "Takeshi", "Taro", "Tatsuya", "Tomoya", "Toshiro", "Yasuo", "Yoshio", "Yuki", "Yutaka", "Ayaka", "Emi", "Haruka", "Keiko", "Mika", "Naomi", "Sakura", "Yoko", "Yumi"],
+      "family": ["Abe", "Aoki", "Endo", "Fujita", "Fujiwara", "Hasegawa", "Hayashi", "Ikeda", "Ishikawa", "Ito", "Kato", "Kawasaki", "Kimura", "Kobayashi", "Kondo", "Maeda", "Matsumoto", "Mori", "Murata", "Nakagawa", "Nakamura", "Nakano", "Ogawa", "Okada", "Ono", "Saito", "Sakamoto", "Sasaki", "Sato", "Shibata", "Shimizu", "Suzuki", "Takahashi", "Takano", "Tanaka", "Watanabe", "Yamada", "Yamaguchi", "Yamamoto", "Yoshida"]
+    },
+    "koreanic": {
+      "given": ["Byung-ho", "Chang-ho", "Chul", "Dae-jung", "Dong-wook", "Do-yun", "Eun-sik", "Gi-tae", "Hak-jun", "Ho-jin", "Hyun-woo", "Il-sung", "Jae-hyun", "Jang-ho", "Jin-woo", "Jong-il", "Jun-ho", "Ki-nam", "Kwang-su", "Min-ho", "Myung-bak", "Nam-il", "Sang-hoon", "Seok-jin", "Seung-min", "Sung-jin", "Tae-ho", "Won-shik", "Yong-ho", "Young-chul", "Eun-ji", "Hye-jin", "Ji-woo", "Min-ji", "Seo-yeon", "Soo-jin", "Yu-na"],
+      "family": ["Ahn", "Bae", "Cha", "Cho", "Choi", "Chung", "Han", "Hong", "Hwang", "Jang", "Jeon", "Jeong", "Jo", "Kang", "Kim", "Ko", "Koo", "Kwon", "Lee", "Lim", "Moon", "Nam", "Oh", "Park", "Ryu", "Seo", "Shin", "Son", "Song", "Yoon", "Yoo"]
+    },
+    "mongolic": {
+      "given": ["Altai", "Amarbat", "Baatar", "Batbayar", "Bold", "Chuluun", "Davaa", "Dorj", "Enkhbat", "Erdene", "Ganbaatar", "Ganzorig", "Jargal", "Khasbaatar", "Lkhagva", "Mendbayar", "Munkhbat", "Naranbaatar", "Nomin", "Ochir", "Otgonbayar", "Purev", "Sukhbaatar", "Temujin", "Tumen", "Zorig", "Anu", "Bolormaa", "Enkhjargal", "Oyun", "Sarnai", "Sarangerel", "Tuya"],
+      "family": ["Batbayar", "Bold", "Bor", "Chuluun", "Davaa", "Dorj", "Enkh", "Erdene", "Gan", "Jargal", "Lkhagva", "Munkh", "Naran", "Ochir", "Purev", "Sukh", "Temur", "Tumen", "Zorig"]
+    },
+    "tungusic": {
+      "given": ["Aixin", "Baturu", "Chengde", "Dorgon", "Fuca", "Giyesu", "Heshen", "Hongtaiji", "Jirgalang", "Kangxi", "Nurhaci", "Qianlong", "Shunzhi", "Songgotu", "Yongzheng", "Zaitian", "Ani", "Bohai", "Deri", "Fiyangga", "Ningguta", "Sahaliyan", "Tunggiya", "Ula", "Yehe"],
+      "family": ["Aisin Gioro", "Bohai", "Fuca", "Gioro", "Hešeri", "Janggiya", "Konggoro", "Niohuru", "Šumuru", "Tunggiya", "Uya", "Yehe"]
+    },
+    "tibetic": {
+      "given": ["Ananda", "Dorje", "Gyaltsen", "Jampa", "Jigme", "Karma", "Kelsang", "Lobsang", "Namgyal", "Ngawang", "Palden", "Pema", "Phuntsok", "Rinchen", "Samten", "Sonam", "Tashi", "Tenzin", "Thubten", "Tsering", "Ugyen", "Wangchuk", "Yeshe", "Dechen", "Dolma", "Drolma", "Kunsang", "Lhamo", "Peldon", "Yangchen"],
+      "family": ["Bhutia", "Dorje", "Gyalpo", "Jigme", "Kelsang", "Lobsang", "Namgyal", "Ngawang", "Palden", "Rinchen", "Samten", "Tenzin", "Tsering", "Wangchuk", "Yeshe"]
+    }
+  }
+}

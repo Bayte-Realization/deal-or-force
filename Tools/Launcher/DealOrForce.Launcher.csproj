@@ -11,6 +11,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../Scripts/Modding/ContentSelection.cs" Link="ContentSelection.cs" />
+    <Compile Include="../../Scripts/Simulation/GameBuildInfo.cs" Link="GameBuildInfo.cs" />
+    <Resource Include="../../game/gfx/loading/loading_war_room.jpg" Link="Art/loading_war_room.jpg" />
+    <Resource Include="../../game/gfx/loading/loading_negotiation_hall.jpg" Link="Art/loading_negotiation_hall.jpg" />
+    <Resource Include="../../game/gfx/loading/loading_port_dusk.jpg" Link="Art/loading_port_dusk.jpg" />
+    <Resource Include="../../game/gfx/loading/loading_winter_front.jpg" Link="Art/loading_winter_front.jpg" />
     <Resource Include="../../game/gfx/interface/brand_logo_banner.png" Link="Brand.png" />
     <Resource Include="../../icon.ico" Link="App.ico" />
   </ItemGroup>

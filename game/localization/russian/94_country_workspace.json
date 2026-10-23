@@ -1,0 +1,23 @@
+{
+  "All matching initiatives": "Все подходящие инициативы",
+  "Cabinet": "Кабинет",
+  "RISING POLITICIANS & CANDIDATE POOL": "ПЕРСПЕКТИВНЫЕ ПОЛИТИКИ И КАНДИДАТЫ",
+  "Scout new candidates": "Искать кандидатов",
+  "Appoint to cabinet": "Назначить министром",
+  "Install as leader": "Назначить главой",
+  "Scouted a new slate of rising politicians.": "Найдены новые перспективные политики.",
+  "Generate a fresh set of politician candidates from your country's cultural name pool.": "Найти новых политиков с именами из культурного списка страны.",
+  "Appointment order submitted.": "Приказ о назначении отправлен.",
+  "Appointment cost: {0}": "Цена назначения: {0}",
+  "Insufficient treasury for this appointment.": "В казне недостаточно средств для этого назначения.",
+  "chronicle.minister_died": "После смерти министра {3} в стране {0} освободилось место в кабинете.",
+  "chronicle.government_head_died": "Глава правительства страны {0} скончался; должность занимает {3}.",
+  "{0} initiatives · {1} ready": "Инициатив: {0} · доступно: {1}",
+  "No active diplomatic ties.": "Нет действующих дипломатических связей.",
+  "Subject status": "Статус зависимости",
+  "Comparison": "Сравнение",
+  "Relations": "Связи",
+  "Actions": "Действия",
+  "Liberty desire": "Стремление к свободе",
+  "{0} initiatives · scroll to browse": "Инициатив: {0} · прокрутите список"
+}

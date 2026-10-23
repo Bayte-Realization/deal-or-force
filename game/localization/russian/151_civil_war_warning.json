@@ -5,7 +5,7 @@
   "An outbreak is possible. Restore institutional stability before the next weekly review.": "Возможна вспышка войны. Восстановите стабильность институтов до следующей недельной проверки.",
   "No governed country selected.": "Управляемая страна не выбрана.",
   "Civil-war outbreaks are disabled.": "Вспышки гражданских войн отключены.",
-  "This actor is not an independent established government.": "Этот участник не является самостоятельным действующим правительством.",
+  "Only an independent state can have a civil war.": "Гражданская война возможна только в независимом государстве.",
   "Random outbreaks in player countries are disabled in campaign settings.": "Случайные вспышки в странах игроков отключены в настройках кампании.",
   "The campaign is still in its initial protection period.": "Начальный защитный период кампании ещё не закончился.",
   "The country is protected from another outbreak during recovery.": "Во время восстановления страна защищена от повторной вспышки.",
@@ -13,5 +13,9 @@
   "Too few residents or governed regions for a territorial civil war.": "Для территориальной гражданской войны недостаточно жителей или управляемых регионов.",
   "Institutions remain above the civil-war instability threshold.": "Стабильность институтов выше порога гражданской войны.",
   "Civil-war outbreaks in player countries": "Гражданские войны в странах игроков",
-  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Разрешает в Вашей стране те же недельные вспышки из-за нестабильности, что и в других государствах. Раздел кризисов окна законов и повесток показывает текущий риск и защиту на время восстановления. Это не гарантированный обратный отсчёт."
+  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Разрешает в Вашей стране те же недельные вспышки из-за нестабильности, что и в других государствах. Раздел кризисов окна законов и повесток показывает текущий риск и защиту на время восстановления. Это не гарантированный обратный отсчёт.",
+  "The weekly chance starts from how far stability sits below the line.": "Недельный шанс тем выше, чем дальше стабильность ниже порога.",
+  "A recent military coup doubles that chance.": "Недавний военный переворот удваивает этот шанс.",
+  "A losing war abroad raises that chance.": "Проигрышная война за рубежом повышает этот шанс.",
+  "Imperial overstretch raises that chance.": "Имперское перенапряжение повышает этот шанс."
 }

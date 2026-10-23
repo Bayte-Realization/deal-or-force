@@ -200,6 +200,7 @@ public static class SettingsRows
         "interface" => "Interface",
         "video" => "Display",
         "audio" => "Sound",
+        "editor_mods" => "Editor mods",
         _ => category
     };
 

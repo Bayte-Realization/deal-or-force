@@ -1,0 +1,96 @@
+{
+  "treaty_of_paris_1783": {
+    "title": "The Treaty of Paris",
+    "description": "Recognition of American independence redraws the Atlantic balance of power. European powers weigh the cost of distant empires against domestic treasuries.",
+    "date": "1783-09-03",
+    "window_days": 45,
+    "trigger": { "tags": ["GBR", "USA", "FRA", "SPA"] },
+    "effects": { "stability": 0.02, "political_points": 6, "treasury_percent": -0.015 }
+  },
+  "crimean_war_1853": {
+    "title": "The Eastern Question",
+    "description": "Clashes over holy sites and maritime straits erupt into war between European powers. Steamships, rifles and telegraphs reveal the industrial face of modern conflict.",
+    "date": "1853-10-16",
+    "window_days": 45,
+    "trigger": { "tags": ["RUS", "TUR", "GBR", "FRA"] },
+    "effects": { "war_support": 0.035, "stability": -0.025, "treasury_percent": -0.02 }
+  },
+  "meiji_restoration_1868": {
+    "title": "The Meiji Restoration",
+    "description": "The shogunate falls as the imperial government pursues radical modernization. Feudal domains yield to industrialization, rail networks and universal conscription.",
+    "date": "1868-01-03",
+    "window_days": 60,
+    "trigger": { "tags": ["JPN"] },
+    "effects": { "productivity": 0.04, "literacy": 0.03, "state.radicalism": 0.03, "political_points": 10 }
+  },
+  "berlin_conference_1884": {
+    "title": "The Berlin Conference",
+    "description": "European chancelleries divide an entire continent into spheres of influence and protectorates. Effective occupation replaces historical exploration as title to land.",
+    "date": "1884-11-15",
+    "window_days": 90,
+    "trigger": { "tags": ["GER", "GBR", "FRA", "BEL", "POR"] },
+    "effects": { "political_points": 8, "treasury_percent": 0.015 }
+  },
+  "treaty_of_versailles_1919": {
+    "title": "The Peace of Versailles",
+    "description": "The Great War ends in a compromise of collective security, territorial partitions and severe reparations. Old empires shatter into fragile nation-states.",
+    "date": "1919-06-28",
+    "window_days": 60,
+    "trigger": { "tags": ["FRA", "GBR", "USA", "GER", "ITA"] },
+    "effects": { "stability": -0.03, "state.radicalism": 0.04, "political_points": 5 }
+  },
+  "bretton_woods_1944": {
+    "title": "The Bretton Woods Agreement",
+    "description": "Forty-four nations gather in New Hampshire to create the post-war financial order. Pegged exchange rates, the IMF and the World Bank promise currency stability.",
+    "date": "1944-07-22",
+    "window_days": 60,
+    "trigger": { "tags": ["USA", "GBR", "FRA", "CAN"] },
+    "effects": { "credit_confidence": 0.08, "gdp_percent": 0.03, "stability": 0.02 }
+  },
+  "bandung_conference_1955": {
+    "title": "The Bandung Conference",
+    "description": "Twenty-nine Asian and African nations proclaim the Non-Aligned Movement, refusing to become pawns in Cold War bloc rivalry while defending anticolonial sovereignty.",
+    "date": "1955-04-18",
+    "window_days": 45,
+    "trigger": { "tags": ["IDN", "IND", "EGY", "CHN", "YUG"] },
+    "effects": { "political_points": 12, "stability": 0.02 }
+  },
+  "cuban_missile_crisis_1962": {
+    "title": "The Brink of Annihilation",
+    "description": "Strategic missiles in the Caribbean bring the superpowers face to face with nuclear exchange. Navies blockade, air forces scramble, and diplomacy races the clock.",
+    "date": "1962-10-16",
+    "window_days": 21,
+    "trigger": { "tags": ["USA", "RUS", "CUB"] },
+    "effects": { "stability": -0.06, "state.radicalism": 0.04, "political_points": -8 }
+  },
+  "nixon_shock_1971": {
+    "title": "The Gold Window Closes",
+    "description": "Unilateral suspension of dollar-gold convertibility brings an end to Bretton Woods fixed parities. The world enters the era of floating fiat currencies.",
+    "date": "1971-08-15",
+    "window_days": 30,
+    "trigger": { "tags": ["USA"] },
+    "effects": { "inflation": 0.025, "credit_confidence": -0.04, "weekly_balance": 0.02 }
+  },
+  "dotcom_and_digital_2000": {
+    "title": "The Digital Frontier",
+    "description": "Global fiber networks and personal computers transform telecommunications and capital markets. Speculative valuations collide with real technological leaps.",
+    "date": "2000-03-10",
+    "window_days": 60,
+    "effects": { "productivity": 0.03, "gdp_percent": 0.025, "literacy": 0.01 }
+  },
+  "arab_spring_2011": {
+    "title": "The Arab Spring",
+    "description": "Mass protests, social media mobilization and food price spikes trigger sudden uprisings across North Africa and the Middle East, challenging decades of authoritarian rule.",
+    "date": "2011-01-14",
+    "window_days": 90,
+    "trigger": { "tags": ["TUN", "EGY", "LBY", "SYR", "YEM"] },
+    "effects": { "stability": -0.08, "state.radicalism": 0.07, "political_points": -6 }
+  },
+  "supply_chain_nearshoring_2021": {
+    "title": "Strategic Reshoring",
+    "description": "Pandemic bottlenecks, transport costs and geopolitical tension push governments toward semiconductor subsidies, critical mineral alliances and domestic friend-shoring.",
+    "date": "2021-06-01",
+    "window_days": 60,
+    "effects": { "inflation": 0.015, "gdp_percent": 0.01, "stability": 0.01 }
+  }
+}

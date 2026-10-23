@@ -27,6 +27,17 @@ addons/
 .vs/
 .vscode/
 .idea/
+# Local assistant instructions and generated agent state are not game content.
+/.agents/
+/.mimosa/
+/.mcp.json
+/.mcp.json.bak
+/.devin/config.local.json
+/tmp/
+/tmp_playtest/
+/Tools/BtaBridge/
+/crash_envelope*.json
+/DealOrForce.csproj.old*
 
 # --- Third-party demo content shipped with an addon, unused by the game ---
 demo/
@@ -40,6 +51,16 @@ perf.log
 # once, on the day it was produced - it belongs in a scratch folder, not in history.
 /simbench*.log
 /bench*.log
+# Local compiler/probe scratch, not language-kit sources or reproducible reports.
+/Scripts/Rules/tmp/
+/tmp_*.log
+/tmp_*.cmd
+/tmp_verify_headless*/
+/naming_build.log
+/naming_test.log
+/tautology_probe*.log
+/0
+/@icons picker.html
 /Deal or Force Launcher.exe
 /Tools/TerrainCompiler/cache/
 /Tools/CityCompiler/cache/

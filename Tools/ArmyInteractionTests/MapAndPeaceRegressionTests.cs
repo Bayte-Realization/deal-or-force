@@ -103,13 +103,18 @@ static class MapAndPeaceRegressionTests
             "overwhelming victory chooses an affordable complete annexation, not a thin partial strip");
         Check(ledger.Cost(complete) <= ledger.Budget && PeaceConference.BlockReason(c, war, complete).Length == 0,
             "full settlement obeys real cost and ownership validation");
+        // A winner already standing on the country does not trade that occupation for a
+        // client and hand the ground back. List price used to do exactly that: the bill
+        // exceeded the score, the provinces were cleared, and the peace returned them.
+        war.Limited = true;
         c.Defines.PeaceCostPerProvince = 100;
         var dependent = new PeaceDemand { WarId = war.Id, ProposerId = rus.Id };
-        Check(AiStatecraft.WriteDecisiveSettlement(c, rus, war, new PeaceLedger(c, war, rus.Id), dependent) &&
-            dependent.Provinces.Count == 0 && SubjectCatalog.Knows(dependent.Subjugate),
-            "unaffordable annexation is compared with a dependent-state settlement before extras");
-        Check(PeaceConference.Resolve(c, war, dependent) && ukr.AnswersTo(rus.Id) && territory.All(p => map.ProvinceToNation[p] == ukr.MapIndex),
-            "dependency is created through the real peace resolver without changing the subject's borders");
+        var heldLedger = new PeaceLedger(c, war, rus.Id);
+        var kept = AiStatecraft.WriteDecisiveSettlement(c, rus, war, heldLedger, dependent);
+        if (!kept || dependent.Provinces.Count == 0)
+            AiStatecraft.WriteDemand(c, rus, war, heldLedger, dependent, heldLedger.Budget);
+        Check(territory.All(p => dependent.Provinces.Contains(p)),
+            "a finished occupation stays in the peace when its list price is past the war score");
         war.Ended = false; war.WarScore = 20;
         Check(!AiStatecraft.WriteDecisiveSettlement(c, rus, war, new PeaceLedger(c, war, rus.Id), new()),
             "modest progress does not fabricate a decisive victory");

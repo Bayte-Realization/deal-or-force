@@ -1,0 +1,20 @@
+[package]
+name = "dof_graph_kernel_fixture"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[lib]
+name = "dof_graph_kernel"
+crate-type = ["cdylib"]
+
+[features]
+abi2 = []
+status3 = []
+malformed = []
+
+[profile.release]
+panic = "unwind"
+
+[dependencies]

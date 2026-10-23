@@ -14,6 +14,13 @@ public partial class DealOrForceGame
     private VBoxContainer _constructionQueueRows;
     private VBoxContainer _marketTableRows;
     private OptionButton _constructionRegion;
+    private HFlowContainer _economyDesk;
+    private Button _deskWeek;
+    private Button _deskTreasury;
+    private Button _deskGood;
+    private Button _deskSites;
+    private Commodity _deskGoodId;
+    private bool _deskHasGood;
     private LineEdit _buildingSearch;
     private LineEdit _marketSearch;
     private CheckButton _shortagesOnly;
@@ -69,6 +76,90 @@ public partial class DealOrForceGame
         _marketTableRows = new VBoxContainer { Name = "MarketTable" };
         _marketTableRows.AddThemeConstantOverride("separation", 6);
         _economyMarketRows.AddChild(_marketTableRows);
+
+        _economyDesk = new HFlowContainer
+        {
+            Name = "EconomyDesk", Visible = false, SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        _economyDesk.AddThemeConstantOverride("h_separation", 6);
+        _economyDesk.AddThemeConstantOverride("v_separation", 6);
+        _deskWeek = DeskButton("Week", () => OpenEconomyTab("Budget"), "Open the week's taxes and spending.");
+        _deskTreasury = DeskButton("Treasury", () => OpenEconomyTab("Finance"), "Open the treasury and the debt.");
+        _deskGood = DeskButton("Market", OpenDeskGood, "Open this good on the market.");
+        _deskSites = DeskButton("Sites", () => OpenEconomyTab("Construction"), "Open the construction queue.");
+        parent.AddChild(_economyDesk);
+        parent.MoveChild(_economyDesk, _economyControls.GetIndex());
+    }
+
+    private Button DeskButton(string label, System.Action open, string tip)
+    {
+        var button = ActionButton(label, () =>
+        {
+            open();
+            if (label != "Market") PlayStrategicCue("ui_select");
+        }, 0, 34);
+        button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        button.ClipText = true;
+        button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
+        button.AddThemeFontOverride("font", PresentationFonts.Tabular());
+        Tip(button, tip);
+        _economyDesk.AddChild(button);
+        return button;
+    }
+
+    private void OpenDeskGood()
+    {
+        OpenEconomyTab("Market");
+        if (_deskHasGood && _marketSearch is not null)
+        {
+            var name = Tr(CommodityCatalog.Get(_deskGoodId).Name);
+            _marketSearch.Text = name;
+            _marketSearch.CaretColumn = name.Length;
+            _shortagesOnly.ButtonPressed = false;
+            RefreshMarketTable();
+        }
+        var shortOf = _deskHasGood && _campaign?.Player?.Market.GetValueOrDefault(_deskGoodId) is { IsShortage: true };
+        PlayStrategicCue(shortOf ? "event_alert" : "ui_select");
+    }
+
+    private void RefreshEconomyDesk()
+    {
+        if (_economyDesk is null || _campaign?.Player is null) return;
+        var player = _campaign.Player;
+        var settled = _campaign.ElapsedDays >= _campaign.Defines.EconomyTickDays || player.Budget.HasEntries;
+        SetDeskCaption(_deskWeek, Simulation.Loc.Format("Week {0}", settled ? SignedMoney(player.WeeklyBalance) : "—"));
+        SetDeskCaption(_deskTreasury, Simulation.Loc.Format("Treasury {0}", Fmt.Money(player.Treasury)));
+        var worst = player.Market.Values.OrderBy(quote => quote.Satisfaction).ThenBy(quote => quote.Commodity).FirstOrDefault();
+        _deskHasGood = worst is not null;
+        if (worst is not null)
+        {
+            _deskGoodId = worst.Commodity;
+            SetDeskCaption(_deskGood, Simulation.Loc.Format("{0} {1:P0}", Tr(CommodityCatalog.Get(worst.Commodity).Name), worst.Satisfaction));
+        }
+        else SetDeskCaption(_deskGood, Tr("Market"));
+        var sites = _campaign.Construction.Count(project => project.NationId == player.Id);
+        SetDeskCaption(_deskSites, Simulation.Loc.Format("Sites {0}/{1}", sites, _campaign.Defines.MaxConstructionProjects));
+    }
+
+    /// <summary>
+    /// A desk button's caption is a NUMBER - a treasury, a weekly balance, a market share - and
+    /// a clipped number is not a shortened number, it is a different one: "$184.8B" cut to fit a
+    /// narrow button reads "$18". So the button is measured against the text it actually holds
+    /// and given that width, rather than clipped to whatever the row happened to leave it. A row
+    /// that then does not fit wraps, because the desk is a flow container - which is the honest
+    /// way to run out of room, instead of quietly changing what the figure says.
+    /// </summary>
+    private static void SetDeskCaption(Button button, string caption)
+    {
+        if (button is null) return;
+        button.Text = caption;
+        button.SetMeta(LocAppliedMeta, caption);
+        var font = button.GetThemeFont("font");
+        if (font is null) return;
+        var fontSize = button.GetThemeFontSize("font_size");
+        var width = font.GetStringSize(caption, HorizontalAlignment.Left, -1, fontSize).X;
+        button.ClipText = false;
+        button.CustomMinimumSize = new Vector2(MathF.Ceiling(width) + 22f, button.CustomMinimumSize.Y);
     }
 
     private LineEdit ShellSearch(string hint, string name)
@@ -81,6 +172,7 @@ public partial class DealOrForceGame
     private void RefreshEconomyWorkbench()
     {
         var player = _campaign.Player;
+        RefreshEconomyDesk();
         _marketStatus.Text = Simulation.Loc.Format("Market access {0:P0} · trade {1}", player.MarketAccess, SignedMoney(player.WeeklyTradeBalance));
         _updatingConstructionRegion = true;
         _constructionRegion.Clear();
@@ -208,10 +300,11 @@ public partial class DealOrForceGame
     private VBoxContainer WorkbenchCard(Container parent)
     {
         var card = new PanelContainer();
-        card.AddThemeStyleboxOverride("panel", ShellRowStyle(true));
+        card.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(card, AtlasSurfaceSkin.Level.Inset, "surface.inset");
         parent.AddChild(card);
         var rows = new VBoxContainer();
-        rows.AddThemeConstantOverride("separation", 5);
+        rows.AddThemeConstantOverride("separation", 6);
         card.AddChild(rows);
         return rows;
     }
@@ -251,10 +344,12 @@ public partial class DealOrForceGame
             var supply = Title(Simulation.Loc.Format("Supply {0:P0}", quote.Satisfaction), 13,
                 Ui.Colour(quote.IsShortage ? "state.warning" : "state.positive"));
             supply.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            supply.AddThemeFontOverride("font", PresentationFonts.Tabular());
             numbers.AddChild(supply);
             var price = Title(Fmt.Money(quote.Price), 14, Ui.Colour("text.bright"));
             price.AutowrapMode = TextServer.AutowrapMode.Off;
             price.HorizontalAlignment = HorizontalAlignment.Right;
+            price.AddThemeFontOverride("font", PresentationFonts.Tabular());
             numbers.AddChild(price);
             var bar = new ProgressBar { MinValue = 0, MaxValue = 100, Value = quote.Satisfaction * 100,
                 ShowPercentage = false, CustomMinimumSize = new Vector2(0, 4), MouseFilter = MouseFilterEnum.Ignore };

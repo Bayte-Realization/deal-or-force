@@ -44,7 +44,7 @@ public static class CampaignUiCatalog
     public static string DetailLabel(string screen, string field, string fallback) =>
         DetailLabels.TryGetValue(screen, out var labels) ? labels.GetValueOrDefault(field, fallback) : fallback;
     public static readonly HashSet<string> Destinations = new(StringComparer.Ordinal)
-        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger", "Trade", "Production", "Research", "Support", "Laws", "Conflicts", "Situation" };
+        { "Nation", "Economy", "Military", "Diplomacy", "Wars", "Decisions", "State Affairs", "Ledger", "Trade", "Production", "Research", "Support", "Laws", "Conflicts", "Situation", "Doctrines" };
     private static readonly HashSet<string> Actions = new(StringComparer.Ordinal)
         { "government", "ledger", "wars", "diplomacy" };
     private static readonly Dictionary<string, string[]> AllowedTabs = new()

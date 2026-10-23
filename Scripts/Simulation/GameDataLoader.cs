@@ -197,6 +197,9 @@ public static class GameDataLoader
 
     private static object ConvertValue(JsonElement value, Type type)
     {
+        if (type == typeof(string[]))
+            return value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(x => x.ValueKind == JsonValueKind.String)
+                ? value.EnumerateArray().Select(x => x.GetString()).ToArray() : null;
         if (type == typeof(Dictionary<string, bool>) || type == typeof(Dictionary<string, string>))
         {
             try { return value.ValueKind == JsonValueKind.Object ? value.Deserialize(type) : null; }
@@ -205,6 +208,10 @@ public static class GameDataLoader
         if (type == typeof(float) && value.TryGetSingle(out var single)) return single;
         if (type == typeof(double) && value.TryGetDouble(out var real)) return real;
         if (type == typeof(int) && value.TryGetInt32(out var integer)) return integer;
+        // `long` is not a wider `int` here: the civil-war minimum population is a count of
+        // people, and a mod that wanted a hundred-million threshold would silently get the
+        // built-in two million because the number did not fit an int and nothing said so.
+        if (type == typeof(long) && value.TryGetInt64(out var wide)) return wide;
         if (type == typeof(bool) && (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.False))
             return value.GetBoolean();
         if (type == typeof(string) && value.ValueKind == JsonValueKind.String) return value.GetString();

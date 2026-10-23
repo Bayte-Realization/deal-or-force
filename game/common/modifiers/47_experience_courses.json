@@ -1,0 +1,43 @@
+// Курсы, которые оплачиваются опытом, а не деньгами.
+//
+// Опыт - единственная валюта, которую нельзя одолжить: она накоплена тем, что страна уже
+// сделала. Поэтому эти духи висят ограниченный срок: армия проходит курс, знает больше, чем
+// знала, и через полгода это становится её обычным уровнем, а не отдельной заслугой.
+//
+// Решения, которые их выдают, названы в common/decisions/80_doctrine_decisions.json, и каждое
+// списывает тот опыт, который курс и даёт.
+{
+  "intensive_field_course": {
+    "name": "Intensive field course",
+    "description": "What the army learned by doing is drilled into the men who will do it next: the articles it has read are taught under canvas, with the weather and the distances that go with them.",
+    "days": 240,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "army_attack": 0.03,
+      "organisation_recovery": 0.04
+    }
+  },
+  "airmanship_week": {
+    "name": "Airmanship week",
+    "description": "Every wing spends a week on the things that are never urgent until they are: instrument approaches, formation in cloud, and the fuel maths of coming home late.",
+    "days": 180,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "support_losses": -0.08,
+      "support_recovery": 0.06
+    }
+  },
+  "long_cruise": {
+    "name": "The long cruise",
+    "description": "Squadrons sent to sea on a schedule longer than the exercise: station-keeping, gunnery at range, and engines run for weeks instead of afternoons.",
+    "days": 180,
+    "positive": true,
+    "effects": {},
+    "modifiers": {
+      "naval_speed": 0.05,
+      "shipbuilding_speed": 0.04
+    }
+  }
+}

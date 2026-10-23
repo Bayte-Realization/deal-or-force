@@ -1,6 +1,6 @@
 {
   "Offices and foreign support do not grant a territorial mandate here.": "Штаб и иностранная поддержка не дают права на создание государства в этом регионе.",
-  "Invalid simulation values prevent this action. Pause and inspect the campaign.": "Некорректные значения симуляции блокируют это действие. Остановите время и проверьте кампанию.",
+  "The campaign data is damaged, so this cannot be done.": "Данные кампании повреждены, это действие недоступно.",
   "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.": "Симуляция остановлена: {0}. Последнее исправное сохранение не изменено. Загрузите его перед продолжением.",
   "Saving stopped: invalid simulation values. The last good save is unchanged.": "Сохранение остановлено: некорректные значения симуляции. Последнее исправное сохранение не изменено.",
   "A diagnostic snapshot could not be written; see the error log.": "Не удалось записать диагностический снимок; подробности — в журнале ошибок.",

@@ -1,4 +1,7 @@
-// Belarus (BLR) on 1 January 2024: 6 regions, 9,466,856 people.
+// Belarus (BLR), 2024 scenario: 6 regions, model population 9,466,856.
+// Ethnic baseline: Belstat, 2019 census, volume 2 (2021), table 6.2 - mapped head-counts by oblast,
+// normalised to shares (https://www.belstat.gov.by). Not a 2024 census.
+// The game region by_mi combines Minsk city and Minsk oblast by absolute counts.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -15,7 +18,7 @@
   "by_br": {
     "population": 1249281,
     "urbanization": 0.75,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.8819, "russian": 0.0737, "ukrainian": 0.0283, "polish": 0.0112, "armenian": 0.0008, "jewish": 0.0007, "romani": 0.0007, "tatar": 0.0006, "german": 0.0004, "azerbaijani": 0.0004, "lithuanian": 0.0003, "moldovan": 0.0003, "turkmen": 0.0002, "georgian": 0.0002, "uzbek": 0.0001, "kazakh": 0.0001, "latvian": 0.0001 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.745, "Coal": 0.187, "Oil": 0.618, "IronOre": 0.275, "RareEarths": 0.071, "NaturalGas": 0.455, "Timber": 1.425, "Bauxite": 0.064, "Uranium": 0.006 }
   },
@@ -23,7 +26,7 @@
   "by_ho": {
     "population": 1260614,
     "urbanization": 0.74,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.8922, "russian": 0.0801, "ukrainian": 0.0185, "polish": 0.0019, "jewish": 0.0014, "romani": 0.0013, "turkmen": 0.0009, "tatar": 0.0008, "armenian": 0.0007, "azerbaijani": 0.0005, "moldovan": 0.0004, "german": 0.0003, "lithuanian": 0.0003, "georgian": 0.0002, "uzbek": 0.0002, "kazakh": 0.0001, "tajik": 0.0001, "latvian": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.423, "Coal": 0.379, "Oil": 0.382, "IronOre": 0.302, "RareEarths": 0.076, "NaturalGas": 0.619, "Timber": 2.495, "Bauxite": 0.08, "Uranium": 0.007 }
   },
@@ -31,7 +34,7 @@
   "by_hr": {
     "population": 1039928,
     "urbanization": 0.63,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.6945, "polish": 0.221, "russian": 0.0649, "ukrainian": 0.0107, "lithuanian": 0.0022, "tatar": 0.0014, "armenian": 0.0011, "jewish": 0.0009, "azerbaijani": 0.0007, "german": 0.0005, "turkmen": 0.0005, "romani": 0.0005, "latvian": 0.0003, "moldovan": 0.0002, "georgian": 0.0002, "uzbek": 0.0001, "kazakh": 0.0001, "tajik": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.812, "Coal": 0.157, "Oil": 0.306, "IronOre": 0.119, "RareEarths": 0.029, "NaturalGas": 0.249, "Timber": 0.674, "Bauxite": 0.047, "Uranium": 0.005 }
   },
@@ -39,7 +42,7 @@
   "by_ma": {
     "population": 1331964,
     "urbanization": 0.7,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.9175, "russian": 0.0624, "ukrainian": 0.0123, "polish": 0.0021, "jewish": 0.0012, "armenian": 0.001, "tatar": 0.0008, "azerbaijani": 0.0006, "turkmen": 0.0004, "georgian": 0.0003, "moldovan": 0.0003, "romani": 0.0003, "german": 0.0003, "lithuanian": 0.0002, "uzbek": 0.0001, "tajik": 0.0001, "latvian": 0.0001, "kazakh": 0.0001, "chinese_diaspora": 0.0001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.985, "Coal": 0.17, "Oil": 0.198, "IronOre": 0.101, "RareEarths": 0.021, "NaturalGas": 0.236, "Timber": 1.199, "Bauxite": 0.027, "Uranium": 0.004 }
   },
@@ -47,7 +50,7 @@
   "by_mi": {
     "population": 3549373,
     "urbanization": 0.91,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.8959, "russian": 0.0687, "ukrainian": 0.0164, "polish": 0.0103, "jewish": 0.0021, "armenian": 0.0013, "tatar": 0.001, "azerbaijani": 0.0009, "romani": 0.0006, "turkmen": 0.0005, "chinese_diaspora": 0.0004, "georgian": 0.0004, "lithuanian": 0.0003, "german": 0.0003, "moldovan": 0.0002, "uzbek": 0.0002, "latvian": 0.0001, "tajik": 0.0001, "kazakh": 0.0001 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.679, "Coal": 0.613, "Oil": 0.983, "IronOre": 0.258, "RareEarths": 0.102, "NaturalGas": 0.742, "Timber": 1.036, "Bauxite": 0.093, "Uranium": 0.017 }
   },
@@ -55,7 +58,7 @@
   "by_vi": {
     "population": 1035696,
     "urbanization": 0.85,
-    "cultures": { "belarusian": 0.8518, "russian": 0.0837, "polish": 0.0312, "ukrainian": 0.0171, "armenian": 0.001, "azerbaijani": 0.001, "bashkir": 0.001, "chuvash": 0.001, "estonian": 0.001, "georgian": 0.001, "german": 0.001, "jewish": 0.001, "kazakh": 0.001, "latvian": 0.001, "lithuanian": 0.001, "moldovan": 0.001, "mordvin": 0.001, "romani": 0.001, "tatar": 0.001, "uzbek": 0.001 },
+    "cultures": { "belarusian": 0.8422, "russian": 0.1244, "ukrainian": 0.0162, "polish": 0.0088, "jewish": 0.0014, "romani": 0.0011, "turkmen": 0.0011, "tatar": 0.0009, "lithuanian": 0.0009, "armenian": 0.0008, "azerbaijani": 0.0005, "latvian": 0.0003, "moldovan": 0.0003, "german": 0.0003, "georgian": 0.0002, "uzbek": 0.0002, "chinese_diaspora": 0.0001, "tajik": 0.0001, "kazakh": 0.0001 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.837, "Coal": 0.295, "Oil": 0.611, "IronOre": 0.354, "RareEarths": 0.103, "NaturalGas": 0.351, "Timber": 2.267, "Bauxite": 0.121, "Uranium": 0.017 }
   }

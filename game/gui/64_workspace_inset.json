@@ -1,0 +1,27 @@
+// Every workspace opens clear of the navigation rail.
+//
+// The rail is a FIXED number of pixels wide (`shell.navigation_size`, 82) while the workspaces
+// were placed by SHARE of the window - 0.055 of it. The two agree at 1920 (106 px) and stop
+// agreeing below it: 0.055 of 1280 is 70 px and of 800 is 44 px, so on anything but a wide
+// screen every one of these panels slid its left edge under the rail. The production workspace
+// had the same fault with a worse number (0.044) and is fixed in 28_production_units.json,
+// which also keeps its fixed 850-pixel width; the rest are corrected here, together, so the
+// rule is in one place: a fixed rail wants a fixed offset, and 92 px leaves it a ten-pixel
+// gutter at every window width the game supports.
+//
+// Nothing else about these panels changes: the vertical edges, the right edge and the fact
+// that they scale with the window are all as they were. This file is read after the ones it
+// corrects, which is the project's ordinary way of overriding a declaration.
+{
+  "layout": {
+    "modal.war_ledger": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.ledger": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.diplomacy": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.trade": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.policies": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.deal": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.conflicts": { "anchors": [0, 0.115, 0.945, 0.9], "offsets": [92, 0, 0, 0] },
+    "modal.research": { "anchors": [0, 0.1, 0.975, 0.94], "offsets": [92, 0, 0, 0] },
+    "modal.support": { "anchors": [0, 0.115, 0.795, 0.73], "offsets": [92, 0, 0, 0] }
+  }
+}

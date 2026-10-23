@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -41,6 +41,8 @@ public static class NationalModifiers
         new("credit_capacity", "Credit capacity", "Sustainable sovereign borrowing capacity."),
         new("borrowing_cost", "Borrowing cost", "Sovereign risk premium, not the central bank policy rate.", HigherIsBetter: false),
         new("movement_activity", "Civic mobilisation", "How readily regional grievances organise into civic movements."),
+        new("assimilation", "Assimilation", "How fast the country's minorities adopt the culture around them: its own, where its people live."),
+        new("settlement", "Settlement", "Settlers of the country's own people sent into its regions where they are few."),
         // The army.
         new("army_attack", "Division attack", "The fire a division puts down in an attack."),
         new("army_defense", "Division defence", "The fire a division puts down holding ground."),
@@ -54,6 +56,7 @@ public static class NationalModifiers
         new("support_losses", "Long-range losses", "Strength long-range formations lose over a defended front.", HigherIsBetter: false),
         new("support_recovery", "Long-range recovery", "How fast worn long-range formations are brought back to strength."),
         new("militia_readiness", "Militia readiness", "How quickly a threatened region raises its own militia."),
+        new("deterrence", "Deterrence", "The standing of a power no neighbour attacks directly: a war between two holders is priced out of the arithmetic."),
         // The navy.
         new("naval_speed", "Fleet speed", "How fast a fleet sails."),
         new("shipbuilding_speed", "Shipbuilding speed", "How fast the yards lay down and finish hulls."),
@@ -92,7 +95,12 @@ public static class NationalModifiers
     {
         if (nation is null) yield break;
         foreach (var source in NationalCourses.Sources(nation)) yield return source;
+        foreach (var source in UnionCohesion.Sources(nation)) yield return source;
+        foreach (var source in DemographicCycle.Sources(nation)) yield return source;
+        foreach (var source in TacticalDoctrines.Sources(nation)) yield return source;
+        foreach (var source in StrategicDoctrines.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
+        foreach (var source in Rulers.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology && technology.Effects.Count > 0)
                 yield return (technology.Name, technology.Effects);
@@ -109,10 +117,44 @@ public static class NationalModifiers
 
     private static Dictionary<string, float> Build(Nation nation)
     {
-        var totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (_, modifiers) in Sources(nation))
+        // The dictionary is the country's own, kept and refilled: it is rebuilt every day
+        // for every country, and a fresh dictionary a day for two hundred and sixty
+        // countries is the collector's whole budget. Values are refilled from scratch, so
+        // the sum is exactly what a new dictionary would have held.
+        var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        totals.Clear();
+        static void Add(Dictionary<string, float> totals, IReadOnlyDictionary<string, float> modifiers)
+        {
+            if (modifiers is null || modifiers.Count == 0) return;
+            // Walked as the dictionary it nearly always is: through the interface every walk
+            // boxed an enumerator, thirty sources a country a day. Same entries, same order.
+            if (modifiers is Dictionary<string, float> concrete)
+            {
+                foreach (var (key, value) in concrete)
+                    totals[key] = totals.GetValueOrDefault(key) + value;
+                return;
+            }
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
+        }
+        foreach (var (_, modifiers) in NationalCourses.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in UnionCohesion.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in DemographicCycle.Sources(nation)) Add(totals, modifiers);
+        foreach (var (_, modifiers) in TacticalDoctrines.Sources(nation)) Add(totals, modifiers);
+        if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
+        if (nation.LawsActive)
+            foreach (var category in PoliticalPolicyCatalog.NationalCategories)
+                if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
+        if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
+            PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) Add(totals, definition.Modifiers);
+        foreach (var (_, modifiers) in Rulers.Sources(nation)) Add(totals, modifiers);
+        foreach (var id in nation.Technologies)
+            if (TechnologyCatalog.Of(id) is { } technology) Add(totals, technology.Effects);
+        foreach (var active in nation.Modifiers)
+            if (ModifierCatalog.Get(active.Id) is { } spirit) Add(totals, spirit.Modifiers);
+        if (GovernmentCatalog.Of(nation.Government) is { } government) Add(totals, government.Modifiers);
+        if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) Add(totals, ideology.Modifiers);
+        if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) Add(totals, focus.Modifiers);
         return totals;
     }
 
@@ -126,7 +168,9 @@ public static class NationalModifiers
         PoliticalPolicies.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
-            nation.ModifierTotals = null;
+            // Rebuild into the country's own dictionary rather than dropping it: same sums,
+            // none of the allocation. Invalidate still drops it outright on a source change.
+            Build(nation);
             var stability = Of(nation, "stability_weekly");
             var support = Of(nation, "war_support_weekly");
             var radicalism = Of(nation, "radicalism_weekly");

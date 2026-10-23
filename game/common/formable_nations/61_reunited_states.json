@@ -1,0 +1,64 @@
+// Государства, которых на карте 2024 года нет, но которые собираются из тех, что есть.
+//
+// Каждое из них — не выдумка ради числа: это либо реальная короткая федерация, распавшаяся на
+// памяти живущих (Малийская федерация, 1959-1960; Федерация Самоа — раздел 1899 года), либо
+// разделённый народ с одним языком и одной историей (два Конго), либо разделённая страна,
+// которую собирают обратно (Панама и Колумбия, 1903), либо историческое государство, которое
+// можно реставрировать (Речь Посполитая — в границах двух её нынешних наследниц, Польши и
+// Литвы, без претензий на чужие земли).
+//
+// Требуется именно то, что названо: государство провозглашается только на уже принадлежащей
+// земле, никакое провозглашение не дарует территории. Флаги обязаны существовать —
+// `Tools/FormableTests/FlagArtworkTests.cs` проверяет, что у каждого из них есть арт.
+{
+  "congo_reunited": {
+    "name": "United Congo",
+    "description": "One Congo under one administration: the river, its two capitals and the railway that was always meant to run end to end.",
+    "eligible_tags": ["COD", "COG"],
+    "required_tags": ["COD", "COG"],
+    "minimum_stability": 0.62,
+    "gdp_cost_share": 0.025,
+    "governance_gain": 0.03,
+    "productivity_gain": 0.02
+  },
+  "mali_federation": {
+    "name": "Mali Federation",
+    "description": "The union of 1959 put back together: Senegal and Mali as one state, as they were for the months before Dakar and Bamako disagreed.",
+    "eligible_tags": ["MLI", "SEN"],
+    "required_tags": ["MLI", "SEN"],
+    "minimum_stability": 0.68,
+    "gdp_cost_share": 0.02,
+    "governance_gain": 0.04,
+    "productivity_gain": 0.015
+  },
+  "panama_reunited": {
+    "name": "Panama reunited",
+    "description": "The department that left in 1903 comes back: the isthmus and the mainland under one government, with the canal as a domestic waterway.",
+    "eligible_tags": ["PAN", "COL"],
+    "required_tags": ["PAN", "COL"],
+    "minimum_stability": 0.66,
+    "gdp_cost_share": 0.022,
+    "governance_gain": 0.035,
+    "productivity_gain": 0.02
+  },
+  "polish_lithuanian": {
+    "name": "Polish-Lithuanian Commonwealth",
+    "description": "The old republic restored between its two surviving heirs: a shared parliament in Warsaw and Vilnius, and no claim to anything else.",
+    "eligible_tags": ["POL", "LTU"],
+    "required_tags": ["POL", "LTU"],
+    "minimum_stability": 0.72,
+    "gdp_cost_share": 0.025,
+    "governance_gain": 0.05,
+    "productivity_gain": 0.02
+  },
+  "samoa_reunited": {
+    "name": "United Samoa",
+    "description": "One Samoa again, as it was before 1899 drew a line through it: the two administrations become one, the language was never divided.",
+    "eligible_tags": ["WSM", "ASM"],
+    "required_tags": ["WSM", "ASM"],
+    "minimum_stability": 0.7,
+    "gdp_cost_share": 0.012,
+    "governance_gain": 0.03,
+    "productivity_gain": 0.015
+  }
+}

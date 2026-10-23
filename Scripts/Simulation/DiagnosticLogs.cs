@@ -108,9 +108,32 @@ public static class DiagnosticLogs
     {
         if (!_running) return;
         // Best effort for managed crashes; no promise for power loss, native abort or GPU reset.
+        // The last words are written and flushed before the dump, and the dump is taken with
+        // the file writer released: it takes its own lock, and a second thread crashing while
+        // the dump runs must not find itself waiting for a writer that waits for the dump.
         lock (FilesLock)
         {
-            try { WriteLine("errors", Line("FATAL " + message)); FlushFiles(); }
+            try
+            {
+                WriteLine("errors", Line("FATAL " + message));
+                FlushFiles();
+            }
+            catch (Exception e) { LastFailure = e.Message; }
+        }
+        CrashEnvelope.Dump(CrashEnvelope.ActiveCampaign, null, message);
+    }
+
+    /// <summary>
+    /// Write and flush one line now, without the fatal handler's crash dump. A dump that
+    /// failed reports itself through here: calling Fatal instead would ask for another dump
+    /// from inside the one that just failed - the same request that cannot succeed.
+    /// </summary>
+    public static void Note(string channel, string message)
+    {
+        if (!_running) return;
+        lock (FilesLock)
+        {
+            try { WriteLine(channel, Line(message)); FlushFiles(); }
             catch (Exception e) { LastFailure = e.Message; }
         }
     }

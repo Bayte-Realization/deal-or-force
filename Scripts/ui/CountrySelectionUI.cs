@@ -20,6 +20,7 @@ public partial class DealOrForceGame
     private Label _pickerSubheading = null!;
     private VBoxContainer _pickerSeats = null!;
     private Control _pickerFlag = null!;
+    private VBoxContainer _pickerLeaderBox;
     private Nation _pickerNation;
     private bool _pickerHotseatMode;
     private LineEdit _pickerSeed = null!;
@@ -99,6 +100,8 @@ public partial class DealOrForceGame
         nameRow.AddChild(_pickerName);
         _pickerTier = Title("KOR · major power", 13, Ui.Colour("text.muted"));
         rows.AddChild(_pickerTier);
+        _pickerLeaderBox = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddChild(_pickerLeaderBox);
         _pickerStats = Title("", 15, Ui.Colour("text.bright"));
         _pickerStats.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_pickerStats);
@@ -140,10 +143,10 @@ public partial class DealOrForceGame
         // BEFORE they pick a country, and until now the only door to them was the pause
         // menu, which does not exist until a campaign is running.
         actionRow.AddChild(ActionButton("Settings", ShowSettings, 120, 38));
-        var clouds = MapVisualToggle("map_clouds", "Clouds", "Hide or show clouds without changing what your country can see.", 96);
-        clouds.Name = "PickerClouds"; actionRow.AddChild(clouds);
-        var fog = MapVisualToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
-        fog.Name = "PickerFog"; actionRow.AddChild(fog);
+        // The globe here is a map being studied for its borders, and clouds are in the way of it.
+        actionRow.AddChild(WeatherToggle("map_clouds", "Clouds", "Clouds over the world. Press to hide or show them - the same option as in the settings.", 96));
+        var pickerFog = WeatherToggle("map_mist", "FOG", "Hide or show the visual mist. Unseen provinces remain unseen.", 70);
+        pickerFog.Name = "PickerFog"; actionRow.AddChild(pickerFog);
 
         // The seed the next world is built from. The same seed builds the same world to the
         // digit - which is what a bug report is made of - and a different seed builds a
@@ -238,6 +241,7 @@ public partial class DealOrForceGame
         if (_isLoading || !PickerSeedParsed(out var seed) || seed == _campaign.Seed) return;
         var previousSeed = _campaignSeed;
         _campaignSeed = seed;
+        _campaignSeedChosen = true;
         var rebuilt = _pickerScenarioEntry is null
             ? await RebuildCampaignWithLoading()
             : await RebuildAuthoredScenarioWithLoading(_pickerScenarioEntry);
@@ -295,10 +299,7 @@ public partial class DealOrForceGame
     /// file is read later, so the city inherited "Kyiv Oblast". Everywhere the two agree -
     /// which is everywhere else - the plain name answers and nothing extra is needed.
     /// </summary>
-    private static string CapitalName(Simulation.Nation nation) =>
-        nation is null || string.IsNullOrWhiteSpace(nation.CapitalName)
-            ? ""
-            : Simulation.Loc.GetOr("capital." + nation.CapitalName, Simulation.Loc.Get(nation.CapitalName));
+    private string CapitalName(Simulation.Nation nation) => CountryNames.Capital(nation, _campaign);
 
     private void SetPickerNation(Nation nation, bool focus)
     {
@@ -313,20 +314,28 @@ public partial class DealOrForceGame
             : "minor power");
         var states = _campaign.States.Count(state => state.NationMapIndex == nation.MapIndex);
         if (nation.Landless) tier = Tr("movement without land");
-        if (focus && !string.IsNullOrWhiteSpace(nation.CapitalName))
-            _globe.FocusOn(nation.CapitalLatitude, nation.CapitalLongitude,
+        if (focus && CapitalCore.HasSeat(_campaign, nation))
+            _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, nation), CapitalCore.EffectiveLongitude(_campaign, nation),
                 states <= 2 ? 6.5f : states <= 5 ? 7.3f : 8.4f);
         var armies = _campaign.Armies.Where(army => army.NationId == nation.Id).ToArray();
         var divisions = armies.Sum(army => army.Divisions);
         _pickerName.Text = nation.DisplayName;
         SetFlag(_pickerFlag, nation.Tag, 32);
         _pickerTier.Text = Simulation.Loc.Format("{0} · rank #{1} · {2}", nation.Tag, rank, tier);
+        if (_pickerLeaderBox is not null)
+        {
+            ClearRuntimeChildren(_pickerLeaderBox);
+            _pickerLeaderBox.AddChild(BuildGrandStrategyLeaderHeader(nation, compact: true));
+        }
         _pickerStats.Text = nation.Landless
             ? Simulation.Loc.Format("Headquarters  {0}, {1}\nCadres  {2}    Standing  {3}\nTreasury  {4}\nNo land: it campaigns, raises money and rises up to take some.",
                 MovementRules.RegionName(_campaign, nation.Movement.HeadquartersStateMapIndex),
                 Movements.HostOf(_campaign, nation)?.DisplayName ?? "", Fmt.People(nation.Movement.Cadres),
                 Fmt.Percent(nation.Movement.Legitimacy), Fmt.Money(nation.Treasury))
-            : Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}", CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+            : Simulation.Loc.Format("Capital  {0}\nPopulation  {1}\nGDP  {2}    Treasury  {3}\nRegions  {4:N0}    Divisions  {5:0.#}",
+                CapitalName(nation), Fmt.People(nation.Population), Fmt.Money(nation.Gdp), Fmt.Money(nation.Treasury), states, divisions);
+        if (!nation.Landless && _campaign.FeatureEnabled("state_identity"))
+            _pickerStats.Text += "\n" + Simulation.StateIdentity.Brief(_campaign, nation);
         _pickerLocation.Text = Tr("Click the map to inspect a region and its tactical province.");
         _pickerBegin.Text = _pickerHotseatMode
             ? Simulation.Loc.Format("START HOTSEAT · {0} PLAYERS", _campaign.HumanSeats.Count)
@@ -356,7 +365,11 @@ public partial class DealOrForceGame
             .Where(nation => query.Length == 0 ||
                 nation.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                 nation.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase))
+                nation.Tag.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                Simulation.StateIdentity.Caption(_campaign, nation, true)
+                    .Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                Simulation.StateIdentity.Caption(_campaign, nation, false)
+                    .Contains(query, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(nation => nation.Gdp)
             .Take(4)
             .ToArray();
@@ -367,6 +380,9 @@ public partial class DealOrForceGame
             var button = ActionButton($"{nation.Tag}   {nation.DisplayName}", () => SetPickerNation(captured, true), 0, 31,
                 _pickerHotseatMode ? _campaign.HumanSeats.Contains(nation.Id) : nation == _pickerNation);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            // The flag beside the tag, which the movement rows below always had and these rows
+            // did not: the list is where a player learns which country is which.
+            ListFlag(button, nation, 24);
             _pickerResults.AddChild(button);
         }
 
@@ -445,7 +461,7 @@ public partial class DealOrForceGame
         _sidePanel.Visible = false;
         _pickerSearch.Text = Tr("");
         _pickerHeading.Text = Tr("LOCAL MULTIPLAYER");
-        _pickerSubheading.Text = Tr("Choose 2 or more countries · players share one deterministic world");
+        _pickerSubheading.Text = Tr("Choose two or more countries · one shared world");
         _pickerSeats.Visible = true;
         _pickerSeatToggle.Visible = true;
         SetPickerNation(_pickerNation ?? _campaign.Player, true);

@@ -118,7 +118,7 @@
   "HUN": { "primary_cultures": ["hungarian"] },
   "IDN": { "primary_cultures": ["javanese"] },
   "IMN": { "primary_cultures": ["manx", "english"] },
-  "IND": { "primary_cultures": ["hindustani"] },
+  "IND": { "primary_cultures": ["hindustani", "bengali", "marathi", "telugu", "tamil", "gujarati", "kannada", "malayali", "odia", "punjabi", "rajasthani", "assamese"] },
   "IOA": { "primary_cultures": ["australian"] },
   "IOT": { "primary_cultures": ["english"] },
   "IRL": { "primary_cultures": ["irish"] },

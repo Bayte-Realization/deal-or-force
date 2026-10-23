@@ -51,8 +51,8 @@ public static class InterfaceSkin
         ("text.body",           "#e9eef5"),
         ("text.body_soft",      "#c8d3e0"),
         ("text.muted",          "#9dabbc"),
-        ("text.hint",           "#8190a2"),
-        ("text.faint",          "#718299"),
+        ("text.hint",           "#8797ac"),
+        ("text.faint",          "#7f8fa4"),
         ("text.caption",        "#8e9daf"),
 
         // Semantic - reserved for meaning, never for decoration. Anything drawn in
@@ -86,7 +86,13 @@ public static class InterfaceSkin
         ("production.focus",          "#f5dfa2"),
         ("state.warning",       "#e7b058"),
         ("state.info",          "#77c9e8"),
-        ("state.critical",      "#ef8c62"),
+        // Deliberately not the soft salmon (#ef8c62) this used to be. On the ten-pixel tension
+        // ramp a salmon step sat one shade from state.negative and the two read as the same bar,
+        // so "armed clashes" and "at war" were told apart by nothing. The shipped data was moved
+        // to a violet for that reason and this default was left behind, which meant a mod that
+        // ships no skin of its own - or anything reading the compiled palette - still got the
+        // colour the fix existed to remove. SimBench holds the two together; it was failing.
+        ("state.critical",      "#b473e0"),
 
         // Surfaces
         ("surface.background",  "#060b13"),
@@ -95,6 +101,17 @@ public static class InterfaceSkin
         ("surface.inset",       "#172635"),
         ("surface.line",        "#50677d"),
         ("surface.line_faint",  "#33455688"),
+        // Named by screens written after this list, and missing from it. An unknown token comes
+        // back magenta on purpose, but on a panel *ground* that is not a wrong pixel: the whole
+        // full-screen workspace is filled with it, which is how the budget and the state-affairs
+        // rooms came back with a pink edge nobody asked for. `surface.base` is the ground of those
+        // workspaces, `surface.raised` a card lifted off it, and `surface.panel` the neutral fill
+        // the territory preview asks for. A ground that is still misspelt is now caught by
+        // AtlasSurfaceSkin.Attach rather than shown.
+        ("surface.base",        "#131f2c"),
+        ("surface.raised",      "#1b2b3a"),
+        ("surface.panel",       "#131f2c"),
+        ("brand.paper",         "#e9e4d9"),
 
         // Buttons
         ("button.text",             "#edf2f7"),
@@ -221,6 +238,8 @@ public static class InterfaceSkin
         ("war.inset",             "#0e1a25"),
         ("war.inset_border",      "#273848"),
         ("war.killed",            "#c2474f"),
+        ("portrait.anonymous_background", "#b8bcc2"),
+        ("portrait.anonymous_foreground", "#f7f7f7"),
         ("war.wounded",           "#cf9446"),
         ("war.captured",          "#7e93aa"),
     };
@@ -270,15 +289,20 @@ public static class InterfaceSkin
         ("hud.map_controls",   new PanelRect(1f, 1f, 1f, 1f,    -720f, -52f, -8f, -8f)),
         ("hud.resource_atlas", new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 536f, -62f)),
         ("hud.alerts",         new PanelRect(0.5f, 0f, 0.5f, 0f, -390f, 110f, 390f, 168f)),
-        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -300f, 90f, -8f, 620f)),
+        ("hud.outliner",       new PanelRect(1f, 0f, 1f, 0f,    -316f, 90f, -20f, 620f)),
         ("hud.army_panel",     new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 612f, -60f)),
         // Top-anchored and as tall as what it holds, rather than stretched to the bottom of
         // the screen: a fleet panel is a dozen lines, and the rest of the column was empty.
         ("hud.fleet_panel",    new PanelRect(0f, 0f, 0f, 0f,      106f, 90f, 548f, 610f)),
         // What a left click on the map selects: the country, as tall as what it holds, and
-        // its region and province along the bottom, clear of the map controls.
-        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 0f,      106f, 90f, 548f, 760f)),
-        ("hud.region_card",    new PanelRect(0f, 1f, 0f, 1f,     552f, -262f, 1290f, -8f)),
+        // its region and province along the bottom, clear of the map controls. The bottom edge
+        // is a fixed 60 pixels up from the screen rather than flush with it, which is what keeps
+        // the card off the map toolbar - a 44-pixel strip that wraps to 88 when its buttons do,
+        // so the card is given the wrapped height and its gutter rather than a number that only
+        // fits the unwrapped one.
+        ("hud.country_card",   new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 548f, -60f)),
+        // Right edge clamps to the screen so the card never hangs past a 720p display.
+        ("hud.region_card",    new PanelRect(0f, 1f, 1f, 1f,     552f, -262f, -8f, -8f)),
         ("hud.peace_panel",    new PanelRect(1f, 0f, 1f, 1f,    -470f, 100f, -18f, -100f)),
         ("hud.hotseat",        new PanelRect(0f, 1f, 0f, 1f,      106f, -54f, 365f, -6f)),
         ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      106f, -54f, 425f, -6f)),
@@ -292,32 +316,49 @@ public static class InterfaceSkin
         ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
         ("modal.ultimatum",    new PanelRect(0.22f, 0.13f, 0.79f, 0.89f, 0f, 0f, 0f, 0f)),
-        ("modal.deal",         new PanelRect(0.055f, 0.115f, 0.945f, 0.9f, 0f, 0f, 0f, 0f)),
-        ("modal.settings",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -440f, -350f, 440f, 350f)),
-        ("modal.save_load",    new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -420f, -360f, 420f, 360f)),
+        ("modal.deal",         new PanelRect(0f, 0.115f, 0.945f, 0.9f,  92f, 0f, 0f, 0f)),
+        ("modal.settings",     new PanelRect(0.04f, 0.05f, 0.96f, 0.95f, 0f, 0f, 0f, 0f)),
+        ("modal.save_load",    new PanelRect(0.04f, 0.05f, 0.96f, 0.95f, 0f, 0f, 0f, 0f)),
         ("modal.handover",     new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -250f, -160f, 250f, 160f)),
-        ("modal.multiplayer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -285f, -340f, 285f, 340f)),
-        ("modal.ledger",       new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
-        ("modal.war_ledger",   new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("modal.multiplayer",  new PanelRect(0.15f, 0.08f, 0.85f, 0.92f, 0f, 0f, 0f, 0f)),
+        ("modal.ledger",       new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
+        ("modal.war_ledger",   new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
 
-        // The three full pages of the campaign - diplomacy, trade and production - take
-        // the same rectangle the ledger and the war ledger take: most of the screen, with
-        // the map still visible behind the shade and the top bar still readable above it.
-        ("modal.diplomacy",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        // The two workspaces that run beside the map rather than over it, declared in
+        // game/gui/60_situation_room.json and game/gui/61_media_library.json. They were
+        // named in the data and never given a compiled default, so the code's answer for
+        // them was the fallback full-screen rectangle - and a mod that removed the data
+        // file would have got that instead of the panel the game actually draws.
+        ("workspace.situation", new PanelRect(0.07f, 0.115f, 0.94f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("workspace.media",     new PanelRect(0.07f, 0.13f, 0.94f, 0.91f, 0f, 0f, 0f, 0f)),
+
+        // The campaign's full pages. The ledger, the war ledger, diplomacy, trade, the policies
+        // workspace and the conflicts board all take one rectangle: most of the screen, with the
+        // map still visible behind the shade and the top bar still readable above it.
+        //
+        // The left edge is a FIXED 92 pixels and not a share of the window, which is the one thing
+        // about these panels that has ever been wrong. The navigation rail is a fixed 82 pixels
+        // wide, so an edge placed at 0.055 of the window agreed with it at 1920 and slid under it
+        // everywhere narrower - 70 pixels at 1280, 44 at 800. The shipped data was corrected to a
+        // fixed offset (`game/gui/64_workspace_inset.json`) and these defaults were left behind, so
+        // a mod shipping no layout of its own still got the panel under the rail. Mirrored here,
+        // which is the invariant the bench holds: a default a modder cannot reproduce is a default
+        // that does not exist.
+        ("modal.diplomacy",    new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
         ("modal.handbook",     new PanelRect(0.10f, 0.10f, 0.90f, 0.92f, 0f, 0f, 0f, 0f)),
-        ("modal.conflicts",    new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
-        ("modal.policies",     new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
-        ("modal.trade",        new PanelRect(0.055f, 0.115f, 0.945f, 0.90f, 0f, 0f, 0f, 0f)),
+        ("modal.conflicts",    new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
+        ("modal.policies",     new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
+        ("modal.trade",        new PanelRect(0f, 0.115f, 0.945f, 0.90f, 92f, 0f, 0f, 0f)),
         // The production page's own file (game/gui/28_production_units.json) ships the panel it
-        // finished at: wider than the other three pages, and sitting higher. Mirrored here,
-        // which is the invariant the bench holds - a default a modder cannot reproduce is a
-        // default that does not exist.
-        ("modal.production",   new PanelRect(0.044f, 0.084f, 0.044f, 0.944f, 0f, 0f, 850f, 0f)),
-        ("modal.support",      new PanelRect(0.045f, 0.115f, 0.795f, 0.73f, 0f, 0f, 0f, 0f)),
+        // finished at: a fixed 850 pixels wide rather than a share, so its cell grid does not
+        // reflow when the window does, and starting beside the rail rather than under it.
+        ("modal.production",   new PanelRect(0f, 0.115f, 0f, 0.9f,  92f, 0f, 942f, 0f)),
+        ("modal.support",      new PanelRect(0f, 0.115f, 0.795f, 0.73f, 92f, 0f, 0f, 0f)),
         // The long-range forces panel docks beside the map, the way the army panel does: its
         // orders are given looking at the bases and their reach, so the map stays in view.
         ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 712f, -60f)),
-        ("modal.research",     new PanelRect(0.055f, 0.10f, 0.975f, 0.94f, 0f, 0f, 0f, 0f)),
+        ("modal.research",     new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
+        ("modal.doctrines",    new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in
         // 22_multiplayer.json and 24_workshop.json and never given a compiled default - so

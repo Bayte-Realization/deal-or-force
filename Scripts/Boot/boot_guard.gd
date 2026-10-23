@@ -226,8 +226,12 @@ func _frame_is_drawn() -> bool:
 	var size := image.get_size()
 	var samples := 0
 	var bright := 0
-	var step_x := maxi(1, size.x / 96)
-	var step_y := maxi(1, size.y / 54)
+	# A whole-pixel stride across roughly ninety-six by fifty-four samples: the truncation is the
+	# point, so the division is written as one on purpose. As `size.x / 96` it was integer division
+	# too, and Godot said so on every headless run - a warning that was correct about the arithmetic
+	# and wrong about the intent, and which hid any real warning beside it.
+	var step_x := maxi(1, int(size.x / 96.0))
+	var step_y := maxi(1, int(size.y / 54.0))
 	for y in range(0, size.y, step_y):
 		for x in range(0, size.x, step_x):
 			var colour := image.get_pixel(x, y)

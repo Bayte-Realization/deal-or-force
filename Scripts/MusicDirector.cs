@@ -11,7 +11,8 @@ public partial class MusicDirector : Node
 {
     private static MusicDirector _instance;
     private readonly AudioStreamPlayer[] _decks = new AudioStreamPlayer[2];
-    private readonly float[] _mix = new float[2];
+    private readonly MusicPlaybackTransition _transition = new();
+    private readonly AudioFocusEnvelope _cueFocus = new();
     private readonly MusicCatalog.Track[] _tracks = new MusicCatalog.Track[2];
     private readonly Random _order = new();
     private readonly MusicMoodLatch _mood = new();
@@ -19,22 +20,28 @@ public partial class MusicDirector : Node
     private Node _asker;
     private Func<MusicCatalog.Moment> _askMoment;
     private Func<MusicReadout> _askSituation;
+    private Func<bool> _askSilence;
     private MusicCatalog.Moment _moment = MusicCatalog.Moment.Menu;
     private MusicReadout _readout = new(MusicMood.Calm, "No campaign pressure recorded.");
-    private bool _started, _changing;
+    private bool _started;
     private bool _lastAdaptive;
-    private int _active, _catalogRevision = -1;
+    private int _catalogRevision = -1;
     private string _playing = "";
-    private Tween _fade;
     private double _clock;
-    private string _region = "";
+    private string _region = "", _subRegion = "", _country = "";
     private bool _auditionSuppressed;
 
     public void SuppressForAudition(bool suppressed)
     { _auditionSuppressed = suppressed; RefreshVolume(); }
 
+    public void DuckForCue(double seconds, float decibels) =>
+        _cueFocus.Request(seconds, Mathf.DbToLinear(decibels));
+
+    public void ClearCueFocus() => _cueFocus.Reset();
+    internal float CueFocusGain => _cueFocus.Gain;
+
     public MusicMood CurrentMood => _mood.Current;
-    public string CurrentTrack => _playing.Length == 0 ? "" : Loc.Get(_tracks[_active].Label);
+    public string CurrentTrack => _playing.Length == 0 ? "" : Loc.Get(_tracks[_transition.ActiveDeck].Label);
     public string CurrentReason => Loc.Get(_readout.Reason);
     public bool Adaptive => SettingsCatalog.Flag("adaptive_music");
 
@@ -46,8 +53,15 @@ public partial class MusicDirector : Node
         return _instance;
     }
 
-    public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null)
-    { _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; if (IsInsideTree()) Follow(); }
+    /// <param name="silence">
+    /// While this says so, nothing plays: a world under a console curse has no soundtrack
+    /// (WorldCurses). Asked of the scene, so leaving it for the menu brings the music back.
+    /// </param>
+    public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null,
+        Func<bool> silence = null)
+    { _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; _askSilence = silence; if (IsInsideTree()) Follow(); }
+
+    private bool Silenced => _askSilence is not null && _asker is not null && IsInstanceValid(_asker) && _askSilence();
 
     public override void _Ready()
     {
@@ -56,16 +70,30 @@ public partial class MusicDirector : Node
             var index = i;
             _decks[i] = new AudioStreamPlayer { Name = "MusicDeck" + i, ProcessMode = ProcessModeEnum.Always };
             AddChild(_decks[i]);
-            _decks[i].Finished += () => { if (index == _active && !_changing) PlayNext(); };
+            _decks[i].Finished += () =>
+            { if (index == _transition.ActiveDeck && !_transition.IsChanging) RequestNext(advance: true); };
         }
         Follow();
     }
 
     public override void _Process(double delta)
     {
-        // Recompute gains even during a crossfade: muting never waits for the tween to finish.
+        _cueFocus.Advance(delta);
+        var completed = _transition.Advance(delta);
+        if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
+        else if (completed == MusicTransitionCompletion.Silence)
+            foreach (var deck in _decks) deck.Stop();
+        DrainSelection();
+        // Recompute gains even during a crossfade: muting never waits for it to finish.
         RefreshVolume();
         _clock += delta; if (_clock < 2) return; _clock = 0; Follow();
+    }
+
+    public override void _ExitTree()
+    {
+        // There is no deferred tween callback left to revive an obsolete scene's selection.
+        _transition.Reset(); _playing = ""; _asker = null; _askMoment = null; _askSituation = null; _askSilence = null;
+        if (ReferenceEquals(_instance, this)) _instance = null;
     }
 
     public void RefreshVolume()
@@ -73,8 +101,8 @@ public partial class MusicDirector : Node
         for (var i = 0; i < _decks.Length; i++)
         {
             if (_decks[i] is null) continue;
-            var share = Mathf.Clamp(SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_music") * _mix[i] *
-                (_auditionSuppressed ? 0 : 1), 0, 1);
+            var share = _transition.Gain(i, SettingsCatalog.Number("volume_master"),
+                SettingsCatalog.Number("volume_music"), _auditionSuppressed) * _cueFocus.Gain;
             _decks[i].VolumeDb = share <= .0005f ? -80f : SoundCatalog.GetChannel("music").VolumeDb + _tracks[i].VolumeDb + Mathf.LinearToDb(share);
         }
     }
@@ -82,6 +110,7 @@ public partial class MusicDirector : Node
     private void Follow()
     {
         if (_decks[0] is null) return;
+        if (Silenced) { FadeToSilence(1.5); return; }
         var live = _asker is not null && IsInstanceValid(_asker);
         var moment = live && _askMoment is not null ? _askMoment() : _moment;
         _readout = live && _askSituation is not null ? _askSituation() : new(MusicMood.Calm, "No campaign pressure recorded.");
@@ -91,27 +120,41 @@ public partial class MusicDirector : Node
         if (catalogChanged) { _catalogRevision = MusicCatalog.Revision; _unavailable.Clear(); }
         var reset = !_started || moment != _moment || adaptive != _lastAdaptive;
         _lastAdaptive = adaptive;
-        var regionChanged = _region != _readout.Region;
-        _region = _readout.Region;
+        var regionChanged = _region != _readout.Region || _subRegion != _readout.SubRegion || _country != _readout.Country;
+        _region = _readout.Region; _subRegion = _readout.SubRegion; _country = _readout.Country;
         var moodChanged = _mood.Observe(requested, Time.GetTicksMsec() / 1000d, MusicCatalog.Director, reset);
         _moment = moment; _started = true;
         if (reset || catalogChanged || moodChanged || regionChanged)
         {
-            // Keep a compatible track running rather than restarting it on every context update.
-            var pool = Pool();
-            if (!reset && !catalogChanged && pool.Any(t => t.Name == _playing) && _decks[_active].Playing) return;
-            PlayNext();
+            RequestNext(advance: reset || catalogChanged);
         }
-        else if (!_decks[_active].Playing && !_changing) PlayNext();
-        else if (!_changing && !_tracks[_active].Loop && _decks[_active].Stream is { } stream && stream.GetLength() > 0 &&
-                 stream.GetLength() - _decks[_active].GetPlaybackPosition() <= MusicCatalog.Director.FadeSeconds) PlayNext();
+        else if (!_decks[_transition.ActiveDeck].Playing && !_transition.IsChanging) RequestNext(advance: true);
+        else if (!_transition.IsChanging && !_tracks[_transition.ActiveDeck].Loop && _decks[_transition.ActiveDeck].Stream is { } stream && stream.GetLength() > 0 &&
+                 stream.GetLength() - _decks[_transition.ActiveDeck].GetPlaybackPosition() <= MusicCatalog.Director.FadeSeconds) RequestNext(advance: true);
     }
 
     private IReadOnlyList<MusicCatalog.Track> Pool() => Adaptive
-        ? MusicCatalog.For(_moment, _mood.Current, _region) : MusicCatalog.For(_moment);
+        ? MusicCatalog.For(_moment, _mood.Current, _region, _subRegion, _country) : MusicCatalog.For(_moment);
+
+    private void RequestNext(bool advance)
+    {
+        _transition.RequestSelection(advance);
+        DrainSelection();
+    }
+
+    private void DrainSelection()
+    {
+        if (_transition.IsChanging || !_transition.SelectionPending) return;
+        // Coalesce changes during a fade. The latest scene, region and mood decide;
+        // returning to a compatible context does not restart a perfectly good track.
+        var compatible = _decks[_transition.ActiveDeck].Playing &&
+            Pool().Any(track => string.Equals(track.Name, _playing, StringComparison.OrdinalIgnoreCase));
+        if (_transition.TryTakeSelection(compatible)) PlayNext();
+    }
 
     private void PlayNext()
     {
+        if (Silenced) { FadeToSilence(1.5); return; }
         var available = Pool().Where(t => !_unavailable.Contains(t.Name)).ToList();
         if (available.Count > 1) available.RemoveAll(t => t.Name == _playing);
         while (available.Count > 0)
@@ -142,32 +185,17 @@ public partial class MusicDirector : Node
 
     private void Crossfade(MusicCatalog.Track track, AudioStream stream)
     {
-        _fade?.Kill();
-        var old = _active; var next = 1 - old;
-        var startingMix = _decks[old].Playing ? _mix[old] : 0f;
-        _decks[next].Stop(); _decks[next].Stream = stream; _tracks[next] = track; _mix[next] = 0;
-        _active = next; _playing = track.Name; _changing = true;
+        var next = _transition.BeginTrack(MusicCatalog.Director.FadeSeconds,
+            _decks[_transition.ActiveDeck].Playing);
+        _decks[next].Stop(); _decks[next].Stream = stream; _tracks[next] = track;
+        _playing = track.Name;
         RefreshVolume(); _decks[next].Play();
-        _fade = CreateTween();
-        _fade.TweenMethod(Callable.From<float>(value =>
-        {
-            // Equal-power gains preserve the bed through the transition; no gap between tracks.
-            _mix[old] = startingMix * Mathf.Sqrt(1 - value); _mix[next] = Mathf.Sqrt(value);
-            RefreshVolume();
-        }), 0f, 1f, MusicCatalog.Director.FadeSeconds);
-        _fade.TweenCallback(Callable.From(() =>
-        { _decks[old].Stop(); _mix[old] = 0; _mix[next] = 1; _changing = false; RefreshVolume(); }));
     }
 
-    private void FadeToSilence()
+    private void FadeToSilence(double seconds = -1)
     {
         if (_playing.Length == 0) return;
-        _fade?.Kill(); _playing = ""; _changing = true;
-        var first = _mix[0]; var second = _mix[1];
-        _fade = CreateTween();
-        _fade.TweenMethod(Callable.From<float>(v =>
-        { _mix[0] = first * (1 - v); _mix[1] = second * (1 - v); RefreshVolume(); }), 0f, 1f, MusicCatalog.Director.FadeSeconds);
-        _fade.TweenCallback(Callable.From(() =>
-        { foreach (var deck in _decks) deck.Stop(); _mix[0] = _mix[1] = 0; _changing = false; }));
+        _playing = "";
+        _transition.BeginSilence(seconds >= 0 ? seconds : MusicCatalog.Director.FadeSeconds);
     }
 }

@@ -1,0 +1,100 @@
+{
+  "date": "2026-10-20",
+  "days_per_run": 1095,
+  "seeds": [
+    20261020,
+    20261021,
+    20261022
+  ],
+  "data_files": 7776,
+  "data_bytes": 222505334,
+  "data_sha256": "EBF04D32AC253FC1DC36C263393C64E3AEDD7A8E9222812FA1F2859D79236E29",
+  "assembly_sha256": "40A88FBC3E3CA222AAFB38625A725E1F5BF15AE1B2318B4F8A575184EC5F9A20",
+  "comparison": "Same fixed assembly and data. Before disables DiplomaticMissionsEnabled and OrganicOrganizationReachEnabled; After uses shipped true values. Not a reconstruction of an earlier Git tree.",
+  "scope": "Actual daily ticks with real province graph. Checks finite/nonnegative GDP/population/political wallets, decision resource wallets and continuity of the bounded paid-decision history. Not the complete legacy SimBench invariant suite or a rendering performance comparison.",
+  "scoped_flipped_invariant_verdicts": 0,
+  "post_snapshot_changes": "An additional empty-population mission cleanup guard and floating-menu UI refresh were separately verified by narrow/native checks after freezing this binary.",
+  "runs": [
+    {
+      "side": "before",
+      "seed": 20261020,
+      "summary": "DIPLOMACY_PROBE seed=20261020 days=1095 missionPaidWeeks=0 bornInstitutions=14 failures=0 fingerprint=9850BFC62575C66D seconds=173.6",
+      "final": "DIPLOMACY_YEAR seed=20261020 day=1095 newBlocs=14 largestNew=3 crossRegionNew=3 NATO_members=31 NATO_dissolved=False USA_stability=0.819 USA_GDP=21147.5",
+      "spending": {
+        "air_experience": 330,
+        "army_experience": 3731,
+        "political_points": 33980
+      },
+      "facts": "DIPLOMACY_FACTS organization_sanction=30; organization_doctrine=28; tension_crisis=18; organization_founded=14; institutional_crisis_warning=4; civil_war_escalated=3; organization_expelled=3; secession_contested=3; organization_left=2; civil_war=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=214 purchases=1212 history-gap=0 invalid-wallet-samples=0"
+    },
+    {
+      "side": "before",
+      "seed": 20261021,
+      "summary": "DIPLOMACY_PROBE seed=20261021 days=1095 missionPaidWeeks=0 bornInstitutions=15 failures=0 fingerprint=853B039371443A39 seconds=232.6",
+      "final": "DIPLOMACY_YEAR seed=20261021 day=1095 newBlocs=15 largestNew=3 crossRegionNew=2 NATO_members=31 NATO_dissolved=False USA_stability=0.763 USA_GDP=20949.8",
+      "spending": {
+        "air_experience": 114,
+        "army_experience": 3661,
+        "naval_experience": 18,
+        "political_points": 34126
+      },
+      "facts": "DIPLOMACY_FACTS organization_sanction=27; organization_doctrine=26; organization_founded=15; tension_crisis=10; institutional_crisis_warning=6; civil_war_escalated=3; organization_expelled=3; civil_war=2; organization_left=2; organization_dissolved=1; organization_split=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=215 purchases=1202 history-gap=0 invalid-wallet-samples=0"
+    },
+    {
+      "side": "before",
+      "seed": 20261022,
+      "summary": "DIPLOMACY_PROBE seed=20261022 days=1095 missionPaidWeeks=0 bornInstitutions=13 failures=0 fingerprint=59BF80FE26DC8119 seconds=187.3",
+      "final": "DIPLOMACY_YEAR seed=20261022 day=1095 newBlocs=13 largestNew=3 crossRegionNew=4 NATO_members=31 NATO_dissolved=False USA_stability=0.833 USA_GDP=21484.7",
+      "spending": {
+        "air_experience": 246,
+        "army_experience": 3743,
+        "political_points": 34516
+      },
+      "facts": "DIPLOMACY_FACTS organization_doctrine=24; tension_crisis=14; organization_founded=13; institutional_crisis_warning=5; organization_sanction=4; civil_war_escalated=3; secession_contested=3; organization_expelled=2; organization_left=1; civil_war=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=219 purchases=1230 history-gap=0 invalid-wallet-samples=0"
+    },
+    {
+      "side": "after",
+      "seed": 20261020,
+      "summary": "DIPLOMACY_PROBE seed=20261020 days=1095 missionPaidWeeks=5798 bornInstitutions=19 failures=0 fingerprint=CE2C066A0957741C seconds=191.8",
+      "final": "DIPLOMACY_YEAR seed=20261020 day=1095 newBlocs=19 largestNew=4 crossRegionNew=12 NATO_members=31 NATO_dissolved=False USA_stability=0.807 USA_GDP=20932.9",
+      "spending": {
+        "air_experience": 300,
+        "army_experience": 3622,
+        "naval_experience": 18,
+        "political_points": 28320
+      },
+      "facts": "DIPLOMACY_FACTS diplomatic_mission_started=370; diplomatic_mission_ended=345; organization_doctrine=32; organization_founded=19; tension_crisis=18; organization_sanction=16; organization_left=7; institutional_crisis_warning=4; organization_dissolved=4; organization_expelled=3; civil_war=2; secession_contested=2; civil_war_escalated=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=191 purchases=990 history-gap=0 invalid-wallet-samples=0"
+    },
+    {
+      "side": "after",
+      "seed": 20261021,
+      "summary": "DIPLOMACY_PROBE seed=20261021 days=1095 missionPaidWeeks=6622 bornInstitutions=16 failures=0 fingerprint=E4C6B650ED9BA25E seconds=227.4",
+      "final": "DIPLOMACY_YEAR seed=20261021 day=1095 newBlocs=16 largestNew=4 crossRegionNew=9 NATO_members=31 NATO_dissolved=False USA_stability=0.404 USA_GDP=20333.4",
+      "spending": {
+        "air_experience": 162,
+        "army_experience": 3619,
+        "naval_experience": 35,
+        "political_points": 27505
+      },
+      "facts": "DIPLOMACY_FACTS diplomatic_mission_started=413; diplomatic_mission_ended=392; organization_doctrine=30; organization_founded=16; tension_crisis=12; organization_sanction=7; organization_expelled=4; institutional_crisis_warning=4; civil_war_escalated=2; organization_left=2; organization_dissolved=2; civil_war=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=193 purchases=969 history-gap=0 invalid-wallet-samples=0"
+    },
+    {
+      "side": "after",
+      "seed": 20261022,
+      "summary": "DIPLOMACY_PROBE seed=20261022 days=1095 missionPaidWeeks=5608 bornInstitutions=18 failures=0 fingerprint=D62987C95377F911 seconds=222.6",
+      "final": "DIPLOMACY_YEAR seed=20261022 day=1095 newBlocs=18 largestNew=5 crossRegionNew=13 NATO_members=31 NATO_dissolved=False USA_stability=0.801 USA_GDP=21073.1",
+      "spending": {
+        "air_experience": 234,
+        "army_experience": 3739,
+        "political_points": 28105
+      },
+      "facts": "DIPLOMACY_FACTS diplomatic_mission_started=350; diplomatic_mission_ended=331; organization_doctrine=32; organization_founded=18; tension_crisis=16; organization_sanction=6; institutional_crisis_warning=4; organization_left=4; organization_dissolved=3; civil_war_escalated=2; organization_expelled=1; secession_contested=1",
+      "resourceTrace": "RESOURCE_TRACE successful paid decisions by AI: countries=192 purchases=995 history-gap=0 invalid-wallet-samples=0"
+    }
+  ]
+}

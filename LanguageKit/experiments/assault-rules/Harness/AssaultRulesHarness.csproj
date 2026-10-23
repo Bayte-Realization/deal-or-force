@@ -1,0 +1,19 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Rules/AssaultRules.fsproj" />
+    <!-- Actual game sources, as in ArmyInteractionTests; never a copied C# assessor. -->
+    <Compile Include="../../../../Scripts/Simulation/**/*.cs" />
+    <Compile Include="../../../../Scripts/Modding/ModContracts.cs" />
+    <Compile Include="../../../../Scripts/Modding/ModOperations.cs" />
+  </ItemGroup>
+  <Import Project="../../../../Scripts/Simulation/StructuredData.Dependencies.props" />
+</Project>

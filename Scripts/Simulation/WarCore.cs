@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -49,6 +50,19 @@ public sealed partial class StrategicWar
     /// <summary>Regions the new border cut in two, and so brought into existence.</summary>
     public int CreatedStates;
     public int ClaimedStateMapIndex = -1;
+
+    /// <summary>
+    /// What the attacking government told the world it was fighting for, as the id the
+    /// simulation reasons in - see <see cref="CasusBelliNames"/>.
+    ///
+    /// It lives on the war rather than on the country because it belongs to the war: a
+    /// government that declared twice kept only the second reason, so the first war on the map
+    /// was described by an argument made about a different one. It is worked out at the
+    /// declaration, priced into the attacker's standing at the same moment, and until now
+    /// thrown away - which is why a player could see that a war had begun and never why.
+    /// An empty string is the expensive kind: a war nobody can give a reason for.
+    /// </summary>
+    public string Justification = "";
 
     /// <summary>
     /// The day before which neither AI belligerent will sit down. A war a scenario opens
@@ -149,6 +163,25 @@ public sealed partial class StrategicWar
     /// <summary>How many countries are in it. Two is the ordinary war.</summary>
     public int BelligerentCount => 2 + AttackerAllies.Count + DefenderAllies.Count;
 
+    /// <summary>
+    /// Put a country on one side of an existing war. A leader cannot change sides, and a
+    /// member already on the other side is moved rather than counted twice.
+    /// </summary>
+    public void Join(int nationId, bool attacking)
+    {
+        if (nationId < 0 || nationId == AttackerId || nationId == DefenderId) return;
+        if (attacking)
+        {
+            DefenderAllies.Remove(nationId);
+            AttackerAllies.Add(nationId);
+        }
+        else
+        {
+            AttackerAllies.Remove(nationId);
+            DefenderAllies.Add(nationId);
+        }
+    }
+
     public IReadOnlySet<int> FriendlyFront(int nationId) =>
         IsAttacking(nationId) ? AttackerFront : IsDefending(nationId) ? DefenderFront : EmptyFront;
 
@@ -171,18 +204,45 @@ public static class WarNames
         if (war.Name.Length > 0 && Loc.Has(war.Name)) return Loc.Get(war.Name);
         var attacker = campaign?.NationById(war.AttackerId);
         var defender = campaign?.NationById(war.DefenderId);
+        if (attacker is null || defender is null) return Literal(war.Name);
         // A war against a rising of the country's own people is that country's civil war.
-        var rising = attacker?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? defender
-            : defender?.Name.StartsWith("rising:", StringComparison.Ordinal) == true ? attacker : null;
+        var rising = attacker.Name.StartsWith("rising:", StringComparison.Ordinal) ? defender
+            : defender.Name.StartsWith("rising:", StringComparison.Ordinal) ? attacker : null;
         if (rising is not null && war.CivilConflict)
             return Loc.Format("{0} Civil War", rising.DisplayName);
-        if (attacker is not null && defender is not null &&
-            (war.Name.Length == 0 || war.Name == $"{attacker.Name}–{defender.Name} War"))
-            return Loc.Format("{0}–{1} War", attacker.DisplayName, defender.DisplayName);
-        if (attacker is not null && defender is not null && war.Name == $"{attacker.Name}–{defender.Name} Border War")
-            return Loc.Format("{0}–{1} Border War", attacker.DisplayName, defender.DisplayName);
-        return war.Name;
+        // A secession is the same war seen from the other side: the parent state and the
+        // province that left it. Naming it after both countries reads as a tautology -
+        // "Gulf Union-Republic of East War" - when it is one country's civil war.
+        if (SeniorSide(war, attacker, defender) is { } senior)
+            return Loc.Format("{0} Civil War", senior.DisplayName);
+        // A pair name is rebuilt from today's names, not today's spellings of yesterday's.
+        if (IsPairName(war.Name) || NationNaming.LooksLikeKey(war.Name))
+            return Loc.Format(war.Name.EndsWith(" Border War", StringComparison.Ordinal)
+                ? "{0}–{1} Border War" : "{0}–{1} War", attacker.DisplayName, defender.DisplayName);
+        return Literal(war.Name);
     }
+
+    /// <summary>A stored name that is only a key is not a name.</summary>
+    private static string Literal(string name) =>
+        name.Length > 0 && !NationNaming.LooksLikeKey(name) ? name : "";
+
+    /// <summary>
+    /// The state a civil war is being fought over, or nothing when this is a war between
+    /// two separate countries. A breakaway names its parent; a parent names the breakaway.
+    /// </summary>
+    private static Nation SeniorSide(StrategicWar war, Nation attacker, Nation defender)
+    {
+        if (attacker.SecededFromId == defender.Id) return defender;
+        if (defender.SecededFromId == attacker.Id) return attacker;
+        if (!war.CivilConflict) return null;
+        if (WarAims.IsRebel(attacker) && !WarAims.IsRebel(defender)) return defender;
+        if (WarAims.IsRebel(defender) && !WarAims.IsRebel(attacker)) return attacker;
+        return defender;
+    }
+
+    /// <summary>A war the game wrote from two country names, rather than a history name.</summary>
+    private static bool IsPairName(string name) =>
+        name.EndsWith(" War", StringComparison.Ordinal) && name.Contains("\u2013", StringComparison.Ordinal);
 }
 
 public static class WarBootstrap
@@ -192,17 +252,23 @@ public static class WarBootstrap
         var russia = campaign.NationByTag("RUS");
         var ukraine = campaign.NationByTag("UKR");
         if (russia is null || ukraine is null) return;
+        campaign.MarkWarsChanged();
         campaign.Wars.Add(new StrategicWar
         {
             Id = 0,
             Name = "Russo-Ukrainian War",
             AttackerId = russia.Id,
             DefenderId = ukraine.Id,
+            Justification = "irredentism",
             StartedDay = campaign.ElapsedDays,
             AiNegotiationUnlockDay = campaign.ElapsedDays + campaign.Defines.ScenarioWarNegotiationLockDays,
             ClaimedStateMapIndex = campaign.States.FirstOrDefault(state =>
                 state.NationMapIndex == ukraine.MapIndex &&
-                state.Name.Contains("Kyiv", StringComparison.OrdinalIgnoreCase))?.MapIndex ??
+                (state.Name.Contains("Donetsk", StringComparison.OrdinalIgnoreCase) ||
+                 state.Name.Contains("Luhansk", StringComparison.OrdinalIgnoreCase)))?.MapIndex ??
+                campaign.States.FirstOrDefault(state =>
+                    state.NationMapIndex == ukraine.MapIndex &&
+                    state.Name.Contains("Crimea", StringComparison.OrdinalIgnoreCase))?.MapIndex ??
                 campaign.States.Where(state => state.NationMapIndex == ukraine.MapIndex)
                     .OrderByDescending(state => state.Population).FirstOrDefault()?.MapIndex ?? -1
         });
@@ -329,7 +395,7 @@ public static partial class FrontPlanner
     /// and kept until the front is redrawn or a province changes hands, which is exactly
     /// when the answer can change.
     /// </summary>
-    private static readonly Dictionary<long, (int Stamp, HashSet<int> Line)> ReserveLines = new();
+    private static readonly ConditionalWeakTable<Campaign, Dictionary<long, (int Stamp, HashSet<int> Line)>> ReserveLines = new();
 
     public static HashSet<int> ReserveLine(Campaign campaign, StrategicWar war, int nationId)
     {
@@ -341,7 +407,10 @@ public static partial class FrontPlanner
         var key = ((long)war.Id << 32) | (uint)nationId;
         var stamp = HashCode.Combine(war.LastFrontDay, campaign.MapRevision,
             war.AttackerFront.Count, war.DefenderFront.Count);
-        if (ReserveLines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
+        // A save being inspected beside a live world can use the same ids and
+        // revision on a different front. Neither may own the other's cached set.
+        var lines = ReserveLines.GetValue(campaign, static _ => new());
+        if (lines.TryGetValue(key, out var cached) && cached.Stamp == stamp) return cached.Line;
 
         var result = new HashSet<int>();
         var front = war.FriendlyFront(nationId);
@@ -350,7 +419,7 @@ public static partial class FrontPlanner
             if (!front.Contains(neighbor) && controllers[neighbor] == nation.MapIndex)
                 result.Add(neighbor);
         if (result.Count == 0) result = new HashSet<int>(front);
-        ReserveLines[key] = (stamp, result);
+        lines[key] = (stamp, result);
         return result;
     }
 
@@ -438,14 +507,24 @@ public static partial class FrontPlanner
     {
         // Filtered by hand: the lambda captured the war, so this was a fresh closure and a
         // fresh enumerator for every one of the world's wars, every day.
+        //
+        // The doctrine is resolved once per country on a side, not once per division. Every
+        // division of a country is answered by the same profile, and this ran hourly for
+        // every war in the world - a quarter of a thousand lookups a day to arrive at a
+        // dozen answers. The profile is still read fresh for each country, so an army that
+        // has just lost its supply still switches to the defensive posture this hour.
+        var profiles = new Dictionary<int, AiStrategyDefinition>();
         foreach (var army in assigned)
         {
             if (army.AssignedWarId != war.Id || army.PlanActive) continue;
             if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) continue;
             var nation = campaign.NationById(army.NationId);
-            if (nation is null || nation.IsHuman) continue;
-            var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
-            if (army.Planning < profile.ExecutePlanningThreshold) continue;
+            // A player's divisions are the player's - unless the general staff in the field
+            // was handed over, in which case they march by the same rule as everybody else's.
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
+            if (!profiles.TryGetValue(nation.Id, out var profile))
+                profiles[nation.Id] = profile = AiStrategyCatalog.Resolve(campaign, war, nation);
+            if (army.Planning < profile.ExecutePlanningThreshold && !Warfare.CanStartOpenAdvance(campaign, war, army)) continue;
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
         }
     }
@@ -471,23 +550,90 @@ public static partial class FrontPlanner
         var score = attacking ? war.WarScore : -war.WarScore;
         var ours = attacking ? war.AttackerLosses : war.DefenderLosses;
         var theirs = attacking ? war.DefenderLosses : war.AttackerLosses;
-        if (score < -10f && ours > theirs * 3f && ours / MathF.Max(1f, nation.Population) > c.Defines.AiBleedingLossShare)
+        // Wars for existence are the exception to bleeding conservatively. A side whose own
+        // ground is under the enemy's boot does not get to sit the war out no matter what
+        // the losses say; an attacker who is actually taking ground is not "bleeding for
+        // nothing" either - the occupation is the point. The cut below is for futile
+        // bleeding, and futile is measured by the map, not by the casualty list.
+        var ownGroundGone = (attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue) >= 0.05f;
+        var gainingGround = war.DefenderOccupiedValue >= 0.02f || war.AttackerOccupiedValue >= 0.02f;
+        var bleeding = score < -10f && ours > theirs * 3f &&
+            ours / MathF.Max(1f, nation.Population) > c.Defines.AiBleedingLossShare;
+        if (bleeding && !(ownGroundGone || gainingGround))
         {
             pressing = false;
             share *= 0.2f;
         }
+        else if (!attacking)
+        {
+            // A defender whose sovereignty or core provinces are threatened must not remain purely passive:
+            // counter-offensives actively contest lost ground when the army is intact.
+            var territoryThreatened = war.DefenderOccupiedValue > 0.005f || score < -2f;
+            var canPress = ours <= theirs * 2.5f && nation.WarSupport >= 0.20f;
+            // Lost ground is a reason to counter-attack, not an order to. A tenth of the country
+            // occupied used to make the counter-offensive the majority posture whatever the
+            // casualty list said: Ukraine threw more than half its army forward from the fourth
+            // month, lost five men for every Russian, and was gone by the end of the year on every
+            // seed. A defender presses while it can afford to and holds when it cannot - which is
+            // what defending a country is.
+            if (territoryThreatened && canPress)
+            {
+                pressing = true;
+                share = MathF.Max(share, 0.45f);
+            }
+            else if (score > 4f && canPress)
+            {
+                // Exploiting clear battlefield momentum to end the war decisively.
+                pressing = true;
+                share = MathF.Max(share, 0.38f);
+            }
+        }
+        else if (ownGroundGone)
+        {
+            // An attacker whose own land is being taken while they attack abroad presses
+            // regardless of the ledger: the war at home is the one that matters.
+            pressing = true;
+            share = MathF.Max(share, 0.5f);
+        }
+        // And an army has to be able to attack. Whatever the situation asks, an offensive by
+        // divisions at a quarter of their organisation is not an offensive: Ukraine kept half its
+        // army advancing into Russia at 24-43 % until one counter-blow broke the whole front in a
+        // month. Below the readiness line the share falls away - an operational pause, for either
+        // side - and comes back as the divisions recover.
+        share *= Readiness(c, war, nation);
         return share;
     }
 
-    private static int AdvanceCount(int count, float share, bool attacking) =>
-        Math.Min(count, Math.Max(attacking && share > 0 && count > 0 ? 1 : 0, (int)MathF.Round(count * share)));
+    /// <summary>
+    /// How ready a country's force in a war is to attack, 0 to 1: full at AiOffensiveReadyOrganisation
+    /// of average organisation, nothing at AiOffensiveExhaustedOrganisation.
+    /// </summary>
+    internal static float Readiness(Campaign c, StrategicWar war, Nation nation)
+    {
+        float organisation = 0f;
+        var count = 0;
+        foreach (var army in c.Armies)
+        {
+            if (army.NationId != nation.Id || army.AssignedWarId != war.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
+            organisation += army.Organisation;
+            count++;
+        }
+        if (count == 0) return 1f;
+        var ready = c.Defines.AiOffensiveReadyOrganisation;
+        var spent = MathF.Min(ready - 0.01f, c.Defines.AiOffensiveExhaustedOrganisation);
+        return M.Clamp01((organisation / count - spent) / MathF.Max(0.01f, ready - spent));
+    }
+
+    private static int AdvanceCount(int count, float share, bool pressingOrAttacking) =>
+        Math.Min(count, Math.Max(share > 0 && count > 0 && (pressingOrAttacking || count <= 3) ? 1 : 0, (int)MathF.Round(count * share)));
 
     /// <summary>Fill missing roles with a replacement without reordering formations already marching.</summary>
     internal static void GiveIdleRole(Campaign c, Army army)
     {
         var war = c.Wars.Find(w => !w.Ended && w.Id == army.AssignedWarId);
         var nation = c.NationById(army.NationId);
-        if (war is null || nation is null || nation.IsHuman) return;
+        if (war is null || nation is null) return;
+        if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command)) return;
         var profile = AiStrategyCatalog.Resolve(c, war, nation);
         var peers = c.Armies.Where(a => a.NationId == nation.Id && a.AssignedWarId == war.Id &&
             a.TemplateId != MilitiaCore.TemplateId).ToArray();
@@ -521,8 +667,7 @@ public static partial class FrontPlanner
     /// </summary>
     private static List<Army> ArmiesFor(Campaign campaign, StrategicWar war, int nationId)
     {
-        var armies = campaign.Armies.FindAll(army =>
-            army.NationId == nationId && army.TemplateId != MilitiaCore.TemplateId);
+        var armies = FieldArmy(campaign, nationId);
         SplitWars.Clear();
         var stamp = armies.Count;
         foreach (var candidate in campaign.Wars)
@@ -533,13 +678,14 @@ public static partial class FrontPlanner
             }
         if (SplitWars.Count < 2) return armies;
 
-        // Once a day: the passes for each war, and every redraw of a front in between, read the
-        // same split, so what one war's pass decides is not undone by the next war's.
+        // Once per simulation step: all wars read the same split within that step.
+        // A day-long derived cache survives hourly movement and cannot be reproduced
+        // by a cold client loading a snapshot halfway through that day.
         if (!Splits.TryGetValue(nationId, out var split)) Splits[nationId] = split = new ArmySplit();
-        if (!ReferenceEquals(split.Campaign, campaign) || split.Day != campaign.ElapsedDays || split.Stamp != stamp)
+        if (!ReferenceEquals(split.Campaign, campaign) || split.Hour != campaign.ElapsedHours || split.Stamp != stamp)
         {
             split.Campaign = campaign;
-            split.Day = campaign.ElapsedDays;
+            split.Hour = campaign.ElapsedHours;
             split.Stamp = stamp;
             Split(campaign, nationId, SplitWars, armies, split.ByWar);
         }
@@ -549,7 +695,7 @@ public static partial class FrontPlanner
     private sealed class ArmySplit
     {
         public Campaign Campaign;
-        public int Day = -1;
+        public long Hour = -1;
         public int Stamp;
         public readonly Dictionary<int, List<Army>> ByWar = new();
     }
@@ -683,7 +829,12 @@ public static partial class FrontPlanner
     private static void AssignSide(Campaign campaign, StrategicWar war, int nationId, bool attacking)
     {
         var nation = campaign.NationById(nationId);
-        if (nation is null || nation.IsHuman) return;
+        // A country the computer runs takes its orders here. A player's does not - unless
+        // the general staff in the field was handed over (Delegation.Command), in which case
+        // its divisions are assigned and executed by exactly the same planner. Before this
+        // check the delegation moved a player's free reserve into posts but never gave it a
+        // role in a war, so an army handed to the staff stood on the front and did nothing.
+        if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) return;
         var profile = AiStrategyCatalog.Resolve(campaign, war, nation);
         // Territorial defence is not part of the field army's order of battle. Militia holds
         // the region it stood up in; sweeping it into the front shares distorted them badly -
@@ -691,6 +842,8 @@ public static partial class FrontPlanner
         // militia pushed real divisions out of defending and into attacking, and Ukraine lost
         // two thirds of its ground to a mechanic written to help it hold.
         var armies = ArmiesFor(campaign, war, nationId);
+        if (armies.Count == 0) return;
+        var participantObjective = ObjectiveFor(campaign, war, nation);
         // Strongest first.
         //
         // Worth recording what does NOT work here, because it looks obviously right: Power
@@ -705,7 +858,7 @@ public static partial class FrontPlanner
         // The churn is real - 8,000-odd orders in three years against 2,900 arrivals - but
         // the cure is not here. It is that a division should be re-posted when its post has
         // stopped being useful, not when the list it came from was rebuilt.
-        armies.Sort((a, b) => b.Power.CompareTo(a.Power));
+        armies.Sort((a, b) => b.Power != a.Power ? b.Power.CompareTo(a.Power) : a.Id.CompareTo(b.Id));
 
         var advanceShare = AdvanceShare(campaign, war, nation, profile, attacking, out var pressing);
         var advance = AdvanceCount(armies.Count, advanceShare, pressing);
@@ -745,21 +898,36 @@ public static partial class FrontPlanner
             //
             // Or when it is being handed to this war from another one the country is fighting.
             if (army.OrderKind != order || (order == ArmyOrder.Spearhead &&
-                    army.ObjectiveStateMapIndex != war.ClaimedStateMapIndex) ||
+                    army.ObjectiveStateMapIndex != participantObjective) ||
                 army.AssignedWarId != war.Id)
                 new SetArmyOrderCommand
                 {
                     IssuerId = nationId,
                     ArmyId = army.Id,
                     WarId = war.Id,
-                    ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
+                    ObjectiveStateMapIndex = participantObjective,
                     Order = order
                 }.Apply(campaign);
 
             if (army.Stance != stance)
                 new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
 
-            var execute = army.Planning >= profile.ExecutePlanningThreshold;
+            bool execute;
+            if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
+            {
+                execute = false;
+            }
+            else if (army.PlanActive)
+            {
+                // Active offensive plan continues unless the division is exhausted in organisation or supply.
+                var assessment = AssaultReadiness.Assess(campaign, army);
+                execute = assessment.Reason is not (AssaultReadiness.Reason.LowOrganisation or AssaultReadiness.Reason.LowSupply);
+            }
+            else
+            {
+                execute = army.Planning >= profile.ExecutePlanningThreshold;
+            }
+
             if (army.PlanActive != execute)
                 new SetArmyPlanExecutionCommand
                 {

@@ -212,13 +212,26 @@ public static class Loc
                      .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
             var language = Path.GetFileName(folder);
-            foreach (var file in StructuredData.Files(folder, SearchOption.TopDirectoryOnly)
-                         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
+            var files = StructuredData.Files(folder, SearchOption.TopDirectoryOnly);
+            // Read the files together. Merge stays in file-name order, so a later file still wins.
+            var texts = new string[files.Length];
+            var faults = new Exception[files.Length];
+            System.Threading.Tasks.Parallel.For(0, files.Length, index =>
             {
-                try { Merge(language, StructuredData.ReadJson(file), errors); }
+                try { texts[index] = StructuredData.ReadJson(files[index]); }
+                catch (Exception exception) { faults[index] = exception; }
+            });
+            for (var index = 0; index < files.Length; index++)
+            {
+                if (faults[index] is not null)
+                {
+                    errors?.Add($"localization/{language}/{Path.GetFileName(files[index])}: {faults[index].Message}");
+                    continue;
+                }
+                try { Merge(language, texts[index], errors); }
                 catch (Exception exception)
                 {
-                    errors?.Add($"localization/{language}/{Path.GetFileName(file)}: {exception.Message}");
+                    errors?.Add($"localization/{language}/{Path.GetFileName(files[index])}: {exception.Message}");
                 }
             }
         }
@@ -258,13 +271,17 @@ public static class Loc
     /// <summary>
     /// Look up a key. Falls through the current language, then English, then returns the
     /// key itself - so an untranslated screen reads as slightly odd rather than as empty,
-    /// and a missing key is visible to whoever is testing instead of silent.
+    /// and a missing key is visible to whoever is testing instead of silent. An entry that
+    /// is present but empty counts as untranslated rather than as a blank: a half-finished
+    /// translation shows the English sentence, never an empty panel.
     /// </summary>
     public static string Get(string key)
     {
         if (string.IsNullOrEmpty(key)) return "";
-        if (Tables.TryGetValue(_language, out var table) && table.TryGetValue(key, out var text)) return text;
-        if (Tables.TryGetValue(DefaultLanguage, out var fallback) && fallback.TryGetValue(key, out var english)) return english;
+        if (Tables.TryGetValue(_language, out var table) && table.TryGetValue(key, out var text) &&
+            text.Length > 0) return text;
+        if (Tables.TryGetValue(DefaultLanguage, out var fallback) && fallback.TryGetValue(key, out var english) &&
+            english.Length > 0) return english;
         return key;
     }
 

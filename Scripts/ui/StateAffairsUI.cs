@@ -93,7 +93,7 @@ public partial class DealOrForceGame
         header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
 
         _stateAffairsSummary = Title("", 13, Ui.Colour("text.body_soft"));
-        _stateAffairsSummary.CustomMinimumSize = new Vector2(0, 34);
+        _stateAffairsSummary.CustomMinimumSize = new Vector2(0, 52);
         rows.AddChild(_stateAffairsSummary);
 
         StateSection(rows, "THE WEEK'S BUDGET",
@@ -148,10 +148,7 @@ public partial class DealOrForceGame
         MarkFirstStep("budget");
         _openScreen = "State Affairs";
         _sidePanel.Visible = false;
-        if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
-        if (_warLedgerLayer is not null) _warLedgerLayer.Visible = false;
-        _stateAffairsLayer.Visible = true;
-        _stateAffairsLayer.MoveToFront();
+        RaiseWorkspaceLayer(_stateAffairsLayer);
         UpdateScreenButtons();
         RefreshStateAffairs();
     }
@@ -218,6 +215,15 @@ public partial class DealOrForceGame
         _stateAffairsSummary.Text =
             Simulation.Loc.Format("Treasury {0} · public debt {1} · balance {2} a week · stability {3:P0} · standard of living {4:P0}",
                 Fmt.Money(nation.Treasury), Fmt.Money(SovereignFinance.Outstanding(nation)), Fmt.MoneyDelta(nation.WeeklyBalance), nation.Stability, nation.StandardOfLiving);
+        var (bAnnual, dAnnual, _, vitalStatus) = HouseholdEconomy.NationalVitalSummary(_campaign, nation);
+        _stateAffairsSummary.Text += "\n" + Simulation.Loc.Format(
+            "Demography: {0} · Pop {1} · Births {2:P1} · Deaths {3:P1} · Migration {4}",
+            Simulation.Loc.Get(vitalStatus),
+            Fmt.PeopleExact(nation.Population),
+            bAnnual,
+            dAnnual,
+            (nation.ReviewNetMigration >= 0 ? "+" : "−") + Fmt.PeopleExact(Math.Abs(nation.ReviewNetMigration)));
+        _stateAffairsSummary.TooltipText = Ui.Tip(DemographicCycle.Explain(_campaign, nation));
         var spirits = DescribeModifiers(nation);
         if (!string.IsNullOrEmpty(spirits)) _stateAffairsSummary.Text += "\n" + spirits;
 
@@ -229,6 +235,8 @@ public partial class DealOrForceGame
         RefreshCentralBank(nation);
         RefreshPolicyRates(nation);
         RefreshPolitics(nation);
+        RefreshIdentity(nation);
+        RefreshRulersAndCabinetSection(nation);
         RefreshAddress(nation);
         _updatingStateAffairs = false;
 
@@ -312,6 +320,7 @@ public partial class DealOrForceGame
         // The order is the order somebody works in.
         BuildStateBudget(rows);
         BuildPolicyRates(rows);
+        BuildRulersAndCabinetSection(rows);
         BuildPoliticsControls(rows);
         BuildAddressControls(rows);
 

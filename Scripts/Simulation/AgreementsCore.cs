@@ -82,7 +82,8 @@ public static class AgreementSystem
         relation is not null && (kind == AgreementKind.TradeAgreement ? relation.TradeAgreement : relation.NonAggressionPact);
 
     /// <summary>Whether this country may ask for this at all today, and if not, why not.</summary>
-    public static bool CanPropose(Campaign campaign, Nation asking, Nation asked, AgreementKind kind, out string reason)
+    public static bool CanPropose(Campaign campaign, Nation asking, Nation asked, AgreementKind kind, out string reason,
+        bool preview = false)
     {
         reason = "";
         if (campaign is null || asking is null || asked is null || asking == asked)
@@ -90,7 +91,8 @@ public static class AgreementSystem
             reason = Loc.Get("Invalid target.");
             return false;
         }
-        var relation = CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
+        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, asking.Id, asked.Id)
+            : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
         if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return false; }
         if (Signed(relation, kind)) { reason = Loc.Get("Already signed."); return false; }
         // Somebody playing answers for themselves, and there is no table to put it on yet.
@@ -113,12 +115,13 @@ public static class AgreementSystem
 
     /// <summary>The asked country's answer, as a number against <see cref="Needed"/>, and what it is made of.</summary>
     public static float Willingness(Campaign campaign, Nation asked, Nation asking, AgreementKind kind,
-        Breakdown why = null)
+        Breakdown why = null, bool preview = false)
     {
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
         var defines = campaign.Defines;
-        var relation = CampaignDiplomacy.Get(campaign, asked.Id, asking.Id);
+        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, asked.Id, asking.Id)
+            : CampaignDiplomacy.Get(campaign, asked.Id, asking.Id);
 
         var willingness = relation.Opinion / 100f;
         why?.Add("How they regard us", relation.Opinion / 100f);
@@ -184,7 +187,7 @@ public static class AgreementSystem
     }
 
     /// <summary>What an aid package from this country to that one would be worth, or zero if it cannot be sent.</summary>
-    public static float AidAmount(Campaign campaign, Nation giving, Nation receiving, out string reason)
+    public static float AidAmount(Campaign campaign, Nation giving, Nation receiving, out string reason, bool preview = false)
     {
         reason = "";
         if (campaign is null || giving is null || receiving is null || giving == receiving)
@@ -192,7 +195,8 @@ public static class AgreementSystem
             reason = Loc.Get("Invalid target.");
             return 0f;
         }
-        var relation = CampaignDiplomacy.Get(campaign, giving.Id, receiving.Id);
+        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, giving.Id, receiving.Id)
+            : CampaignDiplomacy.Get(campaign, giving.Id, receiving.Id);
         if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return 0f; }
         var since = campaign.ElapsedDays - relation.AidSentDay;
         if (since < campaign.Defines.AidIntervalDays)

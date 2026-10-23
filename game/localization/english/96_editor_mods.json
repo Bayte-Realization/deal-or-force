@@ -1,0 +1,13 @@
+{
+  "Editor mods": "Editor mods",
+  "MOD_EDITOR_HEADING": "Mods for Godot runs",
+  "MOD_EDITOR_SEPARATE": "Choose which installed mods load when running this project from Godot. Your launcher selection is separate.",
+  "MOD_EDITOR_RESTART": "Saved choices apply after restarting the game. The current campaign keeps its loaded mods.",
+  "MOD_EDITOR_NEXT_CAMPAIGN": "Changes apply the next time you open a campaign. No project files need editing.",
+  "MOD_EDITOR_SAVED": "Selection saved. Open a campaign to use these mods.",
+  "MOD_EDITOR_EMPTY": "No installed mods were found.",
+  "MOD_EDITOR_ENABLED": "Enabled for editor runs",
+  "MOD_EDITOR_DISABLED": "Disabled for editor runs",
+  "MOD_EDITOR_DEPENDENCY": "Selected, but a required mod is missing or disabled.",
+  "MOD_EDITOR_SAVE_FAILED": "Could not save the mod selection."
+}

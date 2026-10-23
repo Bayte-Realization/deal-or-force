@@ -20,6 +20,14 @@ public sealed partial class Sparkline : Control
     private readonly List<double> _values = new();
     private int _lastDay = int.MinValue;
     private int _lastDirection;
+    private bool _layoutAllows = true;
+    internal bool HasHistory => _values.Count >= 2;
+
+    internal void AllowLayout(bool allowed)
+    {
+        _layoutAllows = allowed;
+        Visible = allowed && HasHistory;
+    }
 
     /// <summary>The label to flash when the figure turns.</summary>
     public Label Flash;
@@ -60,7 +68,7 @@ public sealed partial class Sparkline : Control
             while (_values.Count > Weeks) _values.RemoveAt(0);
             Turned();
         }
-        if (Visible != _values.Count >= 2) Visible = _values.Count >= 2;
+        if (Visible != (_layoutAllows && HasHistory)) Visible = _layoutAllows && HasHistory;
         QueueRedraw();
     }
 
@@ -98,13 +106,21 @@ public sealed partial class Sparkline : Control
             points[i] = new Vector2(x + 1f, y);
         }
         // A faint floor, the thread, and the latest week as a point.
-        DrawLine(new Vector2(points[0].X, size.Y - 1f), new Vector2(size.X - 1f, size.Y - 1f), Ui.Colour("text.faint", 0.25f), 1f);
-        var fill = new Vector2[points.Length + 2];
-        Array.Copy(points, fill, points.Length);
-        fill[^2] = new Vector2(points[^1].X, size.Y - 1f);
-        fill[^1] = new Vector2(points[0].X, size.Y - 1f);
+        var floorY = size.Y - 1f;
+        DrawLine(new Vector2(points[0].X, floorY), new Vector2(size.X - 1f, floorY), Ui.Colour("text.faint", 0.25f), 1f);
         var shade = colour; shade.A = 0.12f;
-        DrawColoredPolygon(fill, shade);
+        var quad = new Vector2[4];
+        for (var i = 0; i + 1 < points.Length; i++)
+        {
+            var a = points[i];
+            var b = points[i + 1];
+            if (b.X - a.X <= 0.1f) continue;
+            quad[0] = new Vector2(a.X, MathF.Min(a.Y, floorY - 0.5f));
+            quad[1] = new Vector2(b.X, MathF.Min(b.Y, floorY - 0.5f));
+            quad[2] = new Vector2(b.X, floorY);
+            quad[3] = new Vector2(a.X, floorY);
+            DrawColoredPolygon(quad, shade);
+        }
         DrawPolyline(points, new Color(colour, 0.85f), 1.2f, true);
         DrawCircle(points[^1], 1.8f, colour.Lightened(0.2f));
     }

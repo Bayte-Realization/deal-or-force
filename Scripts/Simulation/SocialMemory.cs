@@ -23,6 +23,7 @@ public sealed partial class Defines
 }
 
 /// <summary>A belief held by one audience, not an objective moral score of a people.</summary>
+[System.Text.Json.Serialization.JsonConverter(typeof(PublicImageConverter))]
 public sealed class PublicImage
 {
     public float Esteem;
@@ -189,6 +190,10 @@ public static class SocialMemory
         }
     }
 
+    private static readonly Dictionary<string, Nation> SubjectsScratch = new(StringComparer.Ordinal);
+    private static readonly Dictionary<int, Nation> OwnersScratch = new();
+    private static readonly Dictionary<int, Nation> ByIdScratch = new();
+
     public static void Tick(Campaign c)
     {
         if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(SocialMemory))) return;
@@ -196,10 +201,15 @@ public static class SocialMemory
         if (!habits && !images) return;
         if (images) PublicOutreachActions.Tick(c);
         var interval = Math.Max(1, c.Defines.SocialReviewDays);
-        var subjects = new Dictionary<string, Nation>(c.Nations.Count, StringComparer.Ordinal);
-        var owners = new Dictionary<int, Nation>(c.Nations.Count);
+        var subjects = SubjectsScratch; subjects.Clear();
+        var owners = OwnersScratch; owners.Clear();
+        var byId = ByIdScratch; byId.Clear();
         foreach (var subject in c.Nations)
-        { subjects.TryAdd(NationKey(subject), subject); owners.TryAdd(subject.MapIndex, subject); }
+        {
+            subjects.TryAdd(NationKey(subject), subject);
+            owners.TryAdd(subject.MapIndex, subject);
+            byId[subject.Id] = subject;
+        }
         foreach (var n in c.Nations)
         {
             if (habits && Due(c.ElapsedDays, n.Id, n.LastInstitutionReviewDay, interval))
@@ -228,7 +238,15 @@ public static class SocialMemory
             if (!Due(c.ElapsedDays, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
             var days = s.LastBorderReviewDay < 0 ? 1 : Math.Min(3650, c.ElapsedDays - s.LastBorderReviewDay);
             s.LastBorderReviewDay = c.ElapsedDays;
-            if (s.RememberedOwner != s.NationMapIndex)
+            if (s.RememberedOwner < 0)
+            {
+                // The border the scenario drew is not a conquest. Only a later change of
+                // owner starts the clock again.
+                s.RememberedOwner = s.NationMapIndex;
+                s.SettledBorderDays = (int)MathF.Round(MathF.Max(1f, c.Defines.BorderHabitYears) * 365f * 3f);
+                s.BorderHabit = Habit(s.SettledBorderDays, c.Defines.BorderHabitYears);
+            }
+            else if (s.RememberedOwner != s.NationMapIndex)
             { s.RememberedOwner = s.NationMapIndex; s.SettledBorderDays = 0; s.BorderHabit = 0f; }
             if (!owners.TryGetValue(s.NationMapIndex, out var owner)) continue;
             var occupied = StabilityCore.OccupiedShare(c, s, owner);
@@ -240,8 +258,8 @@ public static class SocialMemory
         }
         if (images) foreach (var relation in c.Relations.Values)
         {
-            var a = c.NationById(relation.A); var b = c.NationById(relation.B);
-            if (a is null || b is null) continue;
+            if (((c.ElapsedDays + relation.A + relation.B) % interval) != 0) continue;
+            if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
             ReviewForeign(c, a, b, relation);
             ReviewForeign(c, b, a, relation);
         }
@@ -283,16 +301,27 @@ public static class SocialMemory
         }
         (image ?? Image(audience, NationKey(subject), true)).Review(c.ElapsedDays, target, c.Defines);
     }
+    private static readonly Dictionary<string, long> CulturePopulationsScratch = new(StringComparer.Ordinal);
+    private static readonly List<string> CultureSubjectsScratch = new();
+    private static readonly HashSet<string> ActiveCoalitionsScratch = new(StringComparer.Ordinal);
+    private static readonly List<string> StaleCoalitionsScratch = new();
+
     private static void ReviewCultures(Campaign c, Nation audience)
     {
         // Familiarity through living together; never transfer a government's crimes to a whole people.
-        var populations = new Dictionary<string, long>(StringComparer.Ordinal);
+        var populations = CulturePopulationsScratch; populations.Clear();
         foreach (var s in c.StatesOf(audience)) foreach (var group in s.PopulationGroups)
             if (!string.IsNullOrWhiteSpace(group.Culture) && group.Size > 0)
                 populations[group.Culture] = populations.GetValueOrDefault(group.Culture) + group.Size;
-        var subjects = populations.Keys.Concat(audience.PublicImages.Keys
-            .Where(key => key.StartsWith("culture:", StringComparison.Ordinal)).Select(key => key[8..]))
-            .Distinct(StringComparer.Ordinal).OrderBy(key => key, StringComparer.Ordinal);
+        var subjects = CultureSubjectsScratch; subjects.Clear();
+        foreach (var key in populations.Keys) subjects.Add(key);
+        foreach (var key in audience.PublicImages.Keys)
+            if (key.StartsWith("culture:", StringComparison.Ordinal))
+            {
+                var culture = key[8..];
+                if (!populations.ContainsKey(culture)) subjects.Add(culture);
+            }
+        subjects.Sort(StringComparer.Ordinal);
         foreach (var culture in subjects)
         {
             var contact = M.Clamp(populations.GetValueOrDefault(culture) / (float)Math.Max(1, audience.Population), 0f, 1f);
@@ -303,7 +332,7 @@ public static class SocialMemory
     }
     private static void ReviewOrganisations(Campaign c, Nation audience)
     {
-        var active = new HashSet<string>(StringComparer.Ordinal);
+        var active = ActiveCoalitionsScratch; active.Clear();
         foreach (var group in c.Coalitions)
         {
             var key = CoalitionKey(group); active.Add(key);
@@ -313,8 +342,10 @@ public static class SocialMemory
             Image(audience, key, true).Review(c.ElapsedDays, rating, c.Defines);
         }
         // Dissolved organisations cannot accumulate thousands of stale images in century-long games.
-        foreach (var key in audience.PublicImages.Keys.Where(k => k.StartsWith("coalition:") && !active.Contains(k)).ToArray())
-            audience.PublicImages.Remove(key);
+        var stale = StaleCoalitionsScratch; stale.Clear();
+        foreach (var key in audience.PublicImages.Keys)
+            if (key.StartsWith("coalition:", StringComparison.Ordinal) && !active.Contains(key)) stale.Add(key);
+        for (var i = 0; i < stale.Count; i++) audience.PublicImages.Remove(stale[i]);
     }
 
     public static void Witness(Campaign c, string kind, int actorId, int targetId)

@@ -1,0 +1,20 @@
+{
+  "names": {
+    "iberoamerican": {
+      "given": ["Agustín", "Alejandro", "Alfonso", "Andrés", "Antonio", "Baltasar", "Benito", "Bernardo", "Camilo", "Carlos", "Cristóbal", "Diego", "Eduardo", "Emiliano", "Enrique", "Ernesto", "Esteban", "Felipe", "Fernando", "Francisco", "Gabriel", "Gonzalo", "Guillermo", "Gustavo", "Hernán", "Horacio", "Ignacio", "Javier", "Joaquín", "Jorge", "José", "Juan", "Leandro", "Lorenzo", "Luis", "Manuel", "Marcelo", "Mariano", "Martín", "Mateo", "Matías", "Miguel", "Nicolás", "Pablo", "Pedro", "Rafael", "Ramón", "Ricardo", "Roberto", "Rodrigo", "Salvador", "Santiago", "Sebastián", "Tomás", "Vicente", "Adriana", "Beatriz", "Camila", "Carmen", "Catalina", "Elena", "Isabel", "Lucía", "Mariana", "Sofía", "Valentina"],
+      "family": ["Acosta", "Aguilar", "Almeida", "Alvarez", "Arias", "Bautista", "Benítez", "Blanco", "Cabrera", "Calderón", "Cárdenas", "Carrillo", "Castillo", "Castro", "Cortés", "Cruz", "Delgado", "Díaz", "Domínguez", "Duarte", "Espinoza", "Estrada", "Fernández", "Flores", "Fuentes", "García", "Gómez", "González", "Guerrero", "Gutiérrez", "Hernández", "Herrera", "Jiménez", "López", "Luna", "Maldonado", "Medina", "Mendoza", "Molina", "Morales", "Moreno", "Muñoz", "Navarro", "Núñez", "Ortega", "Ortiz", "Pacheco", "Padilla", "Peña", "Pérez", "Ramírez", "Ramos", "Reyes", "Ríos", "Rivera", "Rodríguez", "Rojas", "Romero", "Ruiz", "Salazar", "Sánchez", "Santos", "Silva", "Soto", "Suárez", "Torres", "Vargas", "Vásquez", "Vega", "Velázquez", "Zapata"]
+    },
+    "amerindian": {
+      "given": ["Amaru", "Anacaona", "Atahualpa", "Cuauhtémoc", "Deganawida", "Hiawatha", "Huayna", "Itzcoatl", "Kusi", "Lautaro", "Manco", "Moctezuma", "Nezahualcoyotl", "Pachacuti", "Tupac", "Yupanqui", "Zuma", "Ahuiliztli", "Citlali", "Ixchel", "Nayeli", "Xochitl", "Yaretzi", "Killa", "Sisa", "Nina", "Pakal", "Ek", "Kan", "Ix", "Chak", "Ahau"],
+      "family": ["Canek", "Caupolicán", "Chamorro", "Colhuacan", "Guaman", "Huaman", "Inca", "Mamani", "Nahuatl", "Ocllo", "Poma", "Quispe", "Titu", "Yupanqui", "Zapotec"]
+    },
+    "aboriginal": {
+      "given": ["Banjora", "Barak", "Bunji", "Daku", "Djarra", "Gali", "Gulaga", "Jarrah", "Jirra", "Kai", "Kalti", "Kira", "Koa", "Kurrajong", "Mali", "Marlu", "Minga", "Nindi", "Nyungar", "Pindi", "Tali", "Tjilpi", "Waru", "Wirra", "Yarran", "Yindi", "Alinta", "Bindi", "Kirra", "Lowanna", "Marla", "Mika", "Nara", "Tarni"],
+      "family": ["Banjora", "Bunji", "Djarra", "Gali", "Jarrah", "Jirra", "Kalti", "Koa", "Marlu", "Minga", "Nindi", "Pindi", "Tali", "Waru", "Wirra", "Yarran", "Yindi"]
+    },
+    "other": {
+      "given": ["Adam", "Adrian", "Alex", "Andrei", "Anton", "Ari", "Benjamin", "Daniel", "David", "Elias", "Emil", "Erik", "Felix", "Gabriel", "Hugo", "Ivan", "Jonas", "Julian", "Karl", "Leo", "Lucas", "Marcus", "Martin", "Mateo", "Milan", "Nikolai", "Noah", "Oliver", "Pavel", "Peter", "Rafael", "Samuel", "Simon", "Stefan", "Thomas", "Tobias", "Victor", "William", "Anna", "Clara", "Elena", "Emma", "Hanna", "Ida", "Julia", "Laura", "Lea", "Lena", "Maria", "Mia", "Nora", "Olivia", "Sara", "Sofia"],
+      "family": ["Andersen", "Bauer", "Becker", "Berg", "Costa", "Dahl", "Fischer", "Hansen", "Hoffmann", "Jansen", "Keller", "Klein", "Kovač", "Larsen", "Lind", "Meyer", "Moreau", "Novak", "Olsen", "Peters", "Rossi", "Schmidt", "Silva", "Svensson", "Weber"]
+    }
+  }
+}

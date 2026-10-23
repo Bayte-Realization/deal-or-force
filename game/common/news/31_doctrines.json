@@ -1,0 +1,9 @@
+// How much the war doctrines' news matters. An article is internal business (1) - the reports
+// carry it. Rewriting a doctrine is a public act of the state (2): an army is being told it
+// has been doing it wrong, and everybody can see it.
+{
+  "importance": {
+    "doctrine_article": 1,
+    "doctrine_rewritten": 2
+  }
+}

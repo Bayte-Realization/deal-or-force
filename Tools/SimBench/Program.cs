@@ -39,8 +39,25 @@ public static class Program
             ? chosen
             : 20260830;
 
+        // `--world-build [repeats]`: where the seconds of world-building go, phase by phase.
+        //
+        // Checked before the campaign below is built, because this report builds its own and
+        // building the world twice would double the wait for the numbers.
+        var buildAt = Array.IndexOf(args, "--world-build");
+        if (buildAt >= 0)
+            return WorldBuildReport.Run(seed, buildAt + 1 < args.Length &&
+                int.TryParse(args[buildAt + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var buildRepeats)
+                    ? buildRepeats : 1);
+
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
+        // The roster contract covers the world the bookmark opens with. Countries the
+        // simulation itself founds - secessions, risings, proclamations, fifteen years of
+        // them - generate their tags from culture names and answer to no shipped row; that
+        // is the living world working, so the definition check below skips them.
+        var bookmarkTags = new HashSet<string>(
+            campaign.Nations.Where(n => !string.IsNullOrWhiteSpace(n.Tag)).Select(n => n.Tag),
+            StringComparer.Ordinal);
         // `--load <folder> <slot>`: the reports below run on a saved campaign instead of 2024 -
         // a player's century-old world, where the faults that only age shows are.
         var loadAt = Array.IndexOf(args, "--load");
@@ -115,6 +132,10 @@ public static class Program
         // `--flags` checks only the flags every country opens under - seconds, not a bench run.
         if (Array.IndexOf(args, "--flags") >= 0)
             return Check("every country opens under its own flag", EveryCountryOpensUnderItsOwnFlag());
+        // Exercise the real province-map lifecycle without running every multi-year fixture.
+        if (Array.IndexOf(args, "--movements-only") >= 0)
+            return Check("a movement without land lives, moves, rises and can lose its land again",
+                MovementsLiveWithoutLand());
         // `--alliance-check` asks for an alliance and answers it, alone: the minute version of the
         // full bench's alliance line, for a change to who signs what.
         if (Array.IndexOf(args, "--alliance-check") >= 0)
@@ -124,6 +145,10 @@ public static class Program
             return Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         if (Array.IndexOf(args, "--rows") >= 0)
             return Check("a save row carries every field", ASaveRowCarriesEveryField());
+        // `--crash-replay-check`: the tape a crashed game leaves in its envelope must rebuild
+        // the same world headless - the promise CrashEnvelope makes when it writes one.
+        if (Array.IndexOf(args, "--crash-replay-check") >= 0)
+            return Check("a crash envelope replays into the same world", CrashEnvelopeReplays(seed));
         // `--loc` checks every translation alone: seconds, and the list of what is wrong.
         if (Array.IndexOf(args, "--loc") >= 0)
             return Check("every translation says what it is and passes what the English passes", TranslationsAreSound());
@@ -162,6 +187,8 @@ public static class Program
                 Check("effective shipped defines match the compiled defaults", ShippedDefinesMatchTheCode()) +
                 Check("the English table indexes visible captions", TheEnglishTableIsAnIndex()) +
                 Check("translations are sound", TranslationsAreSound());
+        if (Array.IndexOf(args, "--stability-only") >= 0)
+            return Check("a country is as settled as its regions and its capital say", StabilityIsWorkedOutRatherThanStored());
 
         // Authored national employment shares precede province-history transfers.
         // A coastal correction can give ABK residents from a Georgian region; their
@@ -177,6 +204,32 @@ public static class Program
         DebugRegion("before map");
         var mapped = AttachMap(campaign);
         DebugRegion("after map");
+        var diagnoseWarAt = Array.IndexOf(args, "--diagnose-war");
+        var territoryAt = Array.IndexOf(args, "--diagnose-territory");
+        if (territoryAt >= 0 && territoryAt + 2 < args.Length)
+            return mapped ? TerritoryDiagnosisReport.Run(campaign, args[territoryAt + 1], args[territoryAt + 2]) : 2;
+        var isolationAt = Array.IndexOf(args, "--isolation-only");
+        if (isolationAt >= 0)
+            return Check("two worlds in one process do not read each other's notes",
+                TwoWorldsDoNotShareNotes(isolationAt + 1 < args.Length && int.TryParse(args[isolationAt + 1], out var isolationDays)
+                    ? Math.Clamp(isolationDays,1,45) : 45));
+        if (diagnoseWarAt >= 0 && diagnoseWarAt + 1 < args.Length)
+            return mapped ? WarDiagnosisReport.Run(campaign, args[diagnoseWarAt + 1],
+                diagnoseWarAt + 2 < args.Length && int.TryParse(args[diagnoseWarAt + 2], out var replayDays) ? replayDays : 0) : 2;
+        // `--peace-watch ATK DEF DAYS`: one war, watched day by day - ground held, ground a
+        // treaty could keep, and formations that left the field without a battle (PeaceWatchReport).
+        var peaceWatchAt = Array.IndexOf(args, "--peace-watch");
+        if (peaceWatchAt >= 0 && peaceWatchAt + 2 < args.Length)
+            return mapped ? PeaceWatchReport.Run(campaign, args[peaceWatchAt + 1], args[peaceWatchAt + 2],
+                peaceWatchAt + 3 < args.Length && int.TryParse(args[peaceWatchAt + 3], out var watchDays)
+                    ? Math.Clamp(watchDays, 1, 3650) : 365) : 2;
+        if (Array.IndexOf(args, "--waterfront-check") >= 0)
+            return mapped ? WaterfrontReferenceCheck.Run(campaign) : 2;
+        var tradeProfileAt = Array.IndexOf(args, "--trade-profile");
+        if (tradeProfileAt >= 0)
+            return mapped ? TradeLatencyReport.Run(campaign,
+                tradeProfileAt + 1 < args.Length && int.TryParse(args[tradeProfileAt + 1], out var tradeRepeats)
+                    ? tradeRepeats : 20) : 2;
         if (Array.IndexOf(args, "--authored-world") >= 0)
             return Check("authored national statistics", authoredStatistics) +
                 Check("province ownership matches ground and explicit corrections", ProvincesSitWhereTheirOwnerIs(campaign)) +
@@ -203,6 +256,9 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
+        // added up across every neighbouring pair in the world, term by term (AiAppetiteReport).
+        if (Array.IndexOf(args, "--ai-appetite") >= 0) return AiAppetiteReport.Run(campaign, days);
         // `--war-ledger [TAG]`: every war of the run, its length and its end (WarLedgerReport).
         // `--secession-war REGION [CULTURE]`: one region breaks away and the war is watched (SecessionWarReport).
         var secessionAt = Array.IndexOf(args, "--secession-war");
@@ -265,10 +321,56 @@ public static class Program
         if (allocAt >= 0) return Allocations(campaign,
             allocAt + 1 < args.Length && int.TryParse(args[allocAt + 1], out var allocDays) ? allocDays : 60);
 
+        // `--replay <save-root> <slot> [days]` loads a player's save and plays on from it,
+        // stopping at the first fault with the full stack - the deterministic half of a crash
+        // investigation, and the piece SAFE-01 was always missing. A campaign that crashed in
+        // play is asked to crash the same way here, where the exception can be read.
+        var replayAt = Array.IndexOf(args, "--replay");
+        if (replayAt >= 0)
+        {
+            var root = replayAt + 1 < args.Length ? args[replayAt + 1]
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Deal or Force", "save games");
+            var slot = replayAt + 2 < args.Length ? args[replayAt + 2] : "autosave";
+            var length = replayAt + 3 < args.Length && int.TryParse(args[replayAt + 3], out var replayDays) ? replayDays : 30;
+            return ReplaySave(root, slot, length);
+        }
+
         // `--front` plays the main run alone and asks only about the war in it: whether the
         // Russo-Ukrainian front is still a front, and whether an army replaces what it loses.
         // Half an hour of bench for a question about manpower was too long a loop.
         if (Array.IndexOf(args, "--front") >= 0) return Front(campaign, days);
+        // `--peoples` asks who lives where after the years have moved them: the world's share of
+        // people who are not of their region's majority, the mixed regions, the people who moved
+        // inside their own country, and the most mixed regions of the first day followed through.
+        if (Array.IndexOf(args, "--peoples") >= 0) return Peoples(campaign, days);
+        if (Array.IndexOf(args, "--data-readers-only") >= 0)
+            return Check("every folder of data is read by something", EveryFolderOfDataIsRead());
+        if (Array.IndexOf(args, "--decisions-only") >= 0)
+        {
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            return Check("governments take decisions written in data", GovernmentsTakeScriptedDecisions(campaign, days));
+        }
+        if (Array.IndexOf(args, "--decision-resources") >= 0)
+        {
+            var resources = new DecisionResourceTrace(campaign);
+            campaign.StepCompleted += resources.Observe;
+            campaign.IsPaused = false;
+            for (var day = 0; day < days; day++) campaign.TickDay();
+            campaign.StepCompleted -= resources.Observe;
+            return resources.Print(campaign);
+        }
+        if (Array.IndexOf(args, "--identity-regressions-only") >= 0)
+        {
+            // Expiry <= 0 means permanent. Exercise expiry after day one, not by
+            // accidentally turning the old date into the permanent sentinel.
+            campaign.IsPaused = false;
+            while (campaign.ElapsedDays < 2) campaign.TickDay();
+            var identityFailures = Check("a country flies a flag that answers to what it has become", FlagsFollowWhatACountryIs());
+            identityFailures += Check("a country is named by its tag, not by an English sentence", CountriesAreNamedByTag(campaign));
+            identityFailures += Check("a country remembers why it dislikes another", OpinionIsRememberedAndForgotten(campaign));
+            return identityFailures == 0 ? 0 : 1;
+        }
 
         // `--sea <png>` draws the sea lanes - water, basins, straits, ports and a handful of
         // voyages - and prints how long each voyage is and how long it took to plot. "The
@@ -453,6 +555,8 @@ public static class Program
             var year = new Dictionary<string, int>();
             var total = new Dictionary<string, int>();
             long pulseSeen = 0;
+            long covertSeen = 0;
+            var covert = new Dictionary<string, int>();
             var largest = 0;
             for (var day = 1; day <= pulseDays; day++)
             {
@@ -465,6 +569,14 @@ public static class Program
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
                 }
                 if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
+                // Covert operations are mostly private: counted from the whole chronicle.
+                foreach (var entry in campaign.Chronicle.Entries)
+                {
+                    if (entry.Sequence <= covertSeen) continue;
+                    covertSeen = entry.Sequence;
+                    if (!entry.Public && entry.Kind.StartsWith("covert_", StringComparison.Ordinal))
+                        covert[entry.Kind] = covert.GetValueOrDefault(entry.Kind) + 1;
+                }
                 foreach (var war in campaign.Wars) if (!war.Ended && !war.CivilConflict) largest = Math.Max(largest, war.BelligerentCount);
                 if (day % 365 != 0 && day != pulseDays) continue;
                 Console.WriteLine($"PULSE year to day {campaign.ElapsedDays} ({campaign.Date}): largest war between states {largest}; " +
@@ -473,6 +585,7 @@ public static class Program
                 largest = 0;
             }
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             return 0;
         }
 
@@ -607,8 +720,31 @@ public static class Program
         }
 
         var profileAt = Array.IndexOf(args, "--profile");
+        if (args.Contains("--personnel-lifecycle")) return PoliticalLifecycleProbe.Run(campaign, Math.Min(days, 36500));
+        if (args.Contains("--staff-watch")) return StaffWatchProbe.Run(campaign, Math.Min(days,3650));
+        if (args.Contains("--diplomacy-world")) return DiplomaticWorldProbe.Run(campaign, Math.Min(days,3650));
+        if (args.Contains("--front-disengagement-world")) return FrontDisengagementProbe.Run(campaign, days);
         if (profileAt >= 0) return Profile(campaign,
             profileAt + 1 < args.Length && int.TryParse(args[profileAt + 1], out var profileDays) ? profileDays : 120);
+
+        // `--opportunity-report N [window]` plays N days and asks one question of every war that
+        // started in them: was the target weak when the AI chose to strike, or merely available?
+        // AI-05 asks for opportunism measured before it is tuned, and nothing in the bench says
+        // today whether a declaration is timed at all. This writes no state and reads the same
+        // figure the AI itself weighs a fight with, so it cannot move the balance it judges.
+        var opportunityAt = Array.IndexOf(args, "--opportunity-report");
+        if (opportunityAt >= 0) return OpportunityReport(campaign,
+            opportunityAt + 1 < args.Length && int.TryParse(args[opportunityAt + 1], out var opportunityDays) ? opportunityDays : 730,
+            opportunityAt + 2 < args.Length && int.TryParse(args[opportunityAt + 2], out var opportunityWindow) ? opportunityWindow : 365);
+
+        // `--war-judgement [days]`: why does the AI almost never want a war? The five-seed funnel
+        // said the answer is not the die and not the target choice - it is that WarJudgement
+        // returns zero or less for nearly every neighbour pair. This says which of the two ways
+        // that happens, over pairs that actually touch. Read-only, and it needs no change to the
+        // game: JudgeWarFor is already public, and -10 is distinguishable from an ordinary loss.
+        var judgementAt = Array.IndexOf(args, "--war-judgement");
+        if (judgementAt >= 0) return WarJudgementReport(campaign,
+            judgementAt + 1 < args.Length && int.TryParse(args[judgementAt + 1], out var judgementDays) ? judgementDays : 365);
 
         var frontBefore = new FrontSnapshot(campaign);
 
@@ -715,6 +851,7 @@ public static class Program
         campaign.IsPaused = false;
         var ukraineTrace = new List<int>();
         var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
+        var traceFront = Environment.GetEnvironmentVariable("DOF_TRACE_FRONT") == "1";
         // Wall time on a developer's machine is noise - the same seed and the same code
         // measured 11.5 ms and 19.2 ms a day depending on what else was running. What a
         // day costs in garbage does not move, so that is what gets reported alongside it:
@@ -733,6 +870,9 @@ public static class Program
             // what it says.
             if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
                 ukraineTrace.Add(HeldBy(campaign, ukraineIndex));
+            // Opt-in: DOF_TRACE_FRONT=1 prints how both armies' people develop, so a front that
+            // is decided by a reserve reaching zero can be seen happening rather than inferred.
+            if (traceFront && day % 30 == 0) TraceFront(campaign, day);
         }
         run.Stop();
 
@@ -771,7 +911,7 @@ public static class Program
         failures += Check("no nation ran to a nonsense GDP", GdpSane(campaign));
         failures += Check("the shipped skin matches the compiled defaults", SkinIsCoherent());
         failures += Check("the shipped country definitions describe the world the game starts in",
-            ShippedCountriesMatchTheScenario(campaign));
+            ShippedCountriesMatchTheScenario(campaign, bookmarkTags));
         failures += Check("a category folder is read whole and later files win",
             ACategoryFolderIsReadWhole());
         failures += Check("the shipped defines match the compiled defaults", ShippedDefinesMatchTheCode());
@@ -951,6 +1091,264 @@ public static class Program
         return Profile(campaign, days);
     }
 
+    /// <summary>
+    /// How well the world times its wars. For every state-on-state war that starts in the run,
+    /// the target's strength on the day it was struck is set among that same target's strengths
+    /// over the days the attacker could have waited instead. The yardstick is the figure the AI
+    /// itself weighs a fight with (AiStatecraft.StrengthOf through its daily cache), so a bad
+    /// number means a missed window rather than a different ruler. Reported, never asserted:
+    /// AI-05 asks for opportunism measured before it is tuned, and a threshold set today would
+    /// be a taste written as a contract.
+    /// </summary>
+    private static int OpportunityReport(Campaign campaign, int days, int window)
+    {
+        campaign.IsPaused = false;
+        var byNation = new Dictionary<int, Dictionary<int, float>>();
+        var known = new HashSet<int>();
+        var declared = new List<(int Attacker, int Defender, int Day, bool Engaged)>();
+        // Who was fighting on which day. A target's strength after it has been invaded is partly
+        // the invasion: measured against those days, "the AI could have waited for a weaker
+        // target" is partly "the AI could have waited to hit it, then hit it again". Only days
+        // when the target was at peace are kept below, so the window is a window the attacker
+        // really could have had.
+        var atWar = new HashSet<(int Nation, int Day)>();
+        var until = campaign.ElapsedDays + Math.Max(1, days);
+        while (campaign.ElapsedDays < until)
+        {
+            campaign.TickDay();
+            var today = campaign.ElapsedDays;
+            foreach (var nation in campaign.Nations)
+            {
+                if (!byNation.TryGetValue(nation.Id, out var byDay))
+                    byNation[nation.Id] = byDay = new Dictionary<int, float>();
+                byDay[today] = AiStatecraft.CachedStrength(campaign, nation);
+            }
+            foreach (var live in campaign.Wars)
+            {
+                if (live.Ended || live.CivilConflict) continue;
+                atWar.Add((live.AttackerId, today));
+                atWar.Add((live.DefenderId, today));
+            }
+            foreach (var war in campaign.Wars)
+            {
+                if (!known.Add(war.Id)) continue;
+                // Was the target already bleeding for someone else on the day it was struck?
+                // Answered here, while the live list is in front of us - the same question asked
+                // at the end of the run would answer a different one.
+                var engaged = campaign.Wars.Any(other => other.Id != war.Id && !other.Ended &&
+                    !other.CivilConflict && (other.AttackerId == war.DefenderId || other.DefenderId == war.DefenderId));
+                declared.Add((war.AttackerId, war.DefenderId, today, engaged));
+            }
+        }
+        var last = campaign.ElapsedDays;
+
+        var timed = new List<(string Attacker, string Defender, int Day, float At, float Low, double Percentile, bool Engaged)>();
+        var authored = 0;
+        // Wars the AI did choose but that cannot be scored, because the target spent the whole
+        // window at war and has no peaceful days left to compare against. Reported apart from
+        // "nobody chose a war": the two read the same and mean opposite things, and the second
+        // is a fact about the AI while the first is a fact about the measurement.
+        var unmeasurable = 0;
+        // The honest half of the question. Everything measured against the days after the strike
+        // is measured through the war's own effects, which is why that percentile swung from 0.30
+        // to 0.91 on the same seeds when the window changed. This compares the target's strength
+        // on the day it was struck against its own peaceful days before that - a window that
+        // existed no matter what the attacker chose, so it cannot be flattered or condemned by
+        // the war it is measuring.
+        var baselined = new List<(string Attacker, string Defender, int Day, double Baseline)>();
+        foreach (var war in declared)
+        {
+            // The scenario opens with its own wars already lit. Timing them measures the
+            // author's day-one situation, not anybody's judgement, and on a year's run they
+            // outnumber the wars the AI actually chose several to one - so they are counted
+            // and set aside rather than averaged in.
+            if (war.Day <= 1) { authored++; continue; }
+            if (!byNation.TryGetValue(war.Defender, out var byDay)) continue;
+            if (!byDay.TryGetValue(war.Day, out var at)) continue;
+            var attacker = campaign.NationById(war.Attacker);
+            var defender = campaign.NationById(war.Defender);
+            // Computed before the drop below: the clean window stands on its own, and filtering it
+            // by the contaminated one's sufficiency would quietly bias the honest number toward
+            // wars whose target happened to have quiet years afterwards.
+            var behind = new List<float>();
+            for (var day = Math.Max(0, war.Day - Math.Max(1, window)); day < war.Day; day++)
+            {
+                if (atWar.Contains((war.Defender, day))) continue;
+                if (byDay.TryGetValue(day, out var value)) behind.Add(value);
+            }
+            if (behind.Count >= 8)
+            {
+                var strongerBefore = behind.Count(value => value < at);
+                baselined.Add((attacker?.Tag ?? "?", defender?.Tag ?? "?", war.Day,
+                    strongerBefore / (double)(behind.Count - 1)));
+            }
+            var ahead = new List<float>();
+            for (var day = war.Day; day <= Math.Min(last, war.Day + Math.Max(1, window)); day++)
+            {
+                // Peace days only: a target weakened by the war being measured is not a window
+                // that was available before it.
+                if (atWar.Contains((war.Defender, day))) continue;
+                if (byDay.TryGetValue(day, out var value)) ahead.Add(value);
+            }
+            // A target that has since dissolved, or that was at war for the whole window, has no
+            // peaceful trajectory to compare against. Either way the war is dropped rather than
+            // scored on days the attacker itself made unusable.
+            if (ahead.Count < 8) { unmeasurable++; continue; }
+            var lower = ahead.Count(value => value < at);
+            timed.Add((attacker?.Tag ?? "?", defender?.Tag ?? "?", war.Day, at, ahead.Min(),
+                lower / (double)(ahead.Count - 1), war.Engaged));
+        }
+
+        var chosen = declared.Count(war => war.Day > 1);
+        // Printed before the early return below. The clean window stands on its own evidence: if
+        // it were reported only when the after-strike window happened to have enough peace days,
+        // the honest number would vanish from exactly the runs where the dishonest one was
+        // unusable - which is the opposite of a fallback.
+        if (baselined.Count > 0)
+        {
+            var ordered = baselined.Select(entry => entry.Baseline).OrderBy(value => value).ToList();
+            Console.WriteLine($"  opportunity (clean): {baselined.Count} of {chosen} chosen war(s) have >= {Math.Max(1, window)} peaceful " +
+                              $"days of their target's own history before the strike; on that record the target stood at percentile " +
+                              $"{baselined.Average(entry => entry.Baseline):0.00} (median {ordered[ordered.Count / 2]:0.00}) where 0.5 is an " +
+                              "ordinary day for it - above 0.5 means the AI waited until the target was stronger than usual, below means " +
+                              "it struck one already weaker than its own norm");
+            foreach (var entry in baselined.OrderByDescending(entry => entry.Baseline).Take(5))
+                Console.WriteLine($"    {entry.Attacker} strikes {entry.Defender} on day {entry.Day}: target at percentile " +
+                                  $"{entry.Baseline:0.00} of its own peaceful past {Math.Max(1, window)} days");
+        }
+        if (timed.Count == 0)
+        {
+            // Two different nulls, said apart: nobody deciding, and a decision that cannot be
+            // scored, read identically in a log and send somebody hunting the wrong thing.
+            Console.WriteLine(chosen == 0
+                ? $"  opportunity: no war was chosen in {days} day(s) - the {authored} that exist opened with the " +
+                  "scenario and are not anybody's decision. There is nothing to time."
+                : $"  opportunity: {chosen} war(s) were chosen in {days} day(s) but none can be scored - the target spent " +
+                  $"{Math.Max(1, window)} day(s) at war and has no peaceful days to compare against. This measures the " +
+                  "instrument, not the AI.");
+            return 0;
+        }
+        Console.WriteLine($"  opportunity: {chosen} war(s) chosen by their own government, {timed.Count} of them scoreable" +
+                          (unmeasurable > 0 ? $" ({unmeasurable} dropped for want of peaceful comparison days)" : "") +
+                          $", on a world where {authored} more opened with the scenario and are not anybody's decision; " +
+                          $"target strength percentile at the strike averages " +
+                          $"{timed.Average(war => war.Percentile):0.00} (0 = struck the weakest moment the wait allowed, " +
+                          "0.5 = as if at random, 1 = struck the strongest)");
+        Console.WriteLine($"  opportunity: {timed.Count(war => war.Engaged)} of them fell on a target already fighting someone else");
+        var missed = timed.Select(war => (war.At - war.Low) / MathF.Max(1f, war.At)).OrderBy(share => share).ToList();
+        Console.WriteLine($"  opportunity: the median target was {missed[missed.Count / 2] * 100:0}% stronger on the day it was struck " +
+                          $"than on its weakest day within {Math.Max(1, window)} days of waiting");
+        foreach (var war in timed.OrderByDescending(war => war.Percentile).Take(5))
+            Console.WriteLine($"    {war.Attacker} strikes {war.Defender} on day {war.Day}: target {war.At:N0} against a window low of " +
+                              $"{war.Low:N0} - percentile {war.Percentile:0.00}" + (war.Engaged ? ", target already at war" : ""));
+        return 0;
+    }
+
+    /// <summary>
+    /// Which of the two ways a war stops being worth it is the one that actually stops it.
+    ///
+    /// The five-seed funnel showed the AI choosing war one to three times a year across 261
+    /// countries, and showed the cause is not the die nor the choice of target but that
+    /// <c>WarJudgement</c> hands back zero or less for almost every neighbour. That sum has two
+    /// separate ways to fail and they want opposite fixes: nothing is wanted at all, or
+    /// something is wanted and the price of taking it is higher. WarJudgement returns exactly
+    /// -10 for the first (and for an ally below the betrayal nerve), and an ordinary negative
+    /// number for the second, so the two can be counted apart without touching the game.
+    /// </summary>
+    private static int WarJudgementReport(Campaign campaign, int days)
+    {
+        campaign.IsPaused = false;
+        var until = campaign.ElapsedDays + Math.Max(1, days);
+        while (campaign.ElapsedDays < until) campaign.TickDay();
+
+        var threshold = campaign.Defines.AiWarDesireThreshold;
+        var noValue = 0; var pricedOut = 0; var wantsButSmall = 0; var wantsEnough = 0; var noValueAllies = 0;
+        // WarValue's first early return is `if (mine <= 0.01f) return 0f` - the attacker has no
+        // estimated army at all. That one is reproducible from outside the game, because
+        // StrengthOf is public and is exactly what WarValue calls, so the "no hand" case can be
+        // separated from the rest of the -10 bucket without a diagnostic hook in AiJudgement.
+        // The advantage gate below it cannot be reproduced here: it needs HelpFor, which is
+        // private, and reconstructing it by hand would be a second implementation to keep in
+        // step rather than a measurement.
+        var noValueNoArmy = 0;
+        var noGateAdvantage = 0; var noMotiveAtAll = 0;
+        var pairs = 0;
+        var nations = campaign.Nations.Where(nation => nation.Population > 0 && nation.MapIndex > 0)
+            .OrderBy(nation => nation.Id).ToArray();
+        var hand = nations.ToDictionary(nation => nation.Id, nation => AiStatecraft.StrengthOf(campaign, nation));
+        foreach (var attacker in nations)
+            foreach (var target in nations)
+            {
+                if (target.Id == attacker.Id) continue;
+                if (!CampaignDiplomacy.SharesLandBorder(campaign, attacker.MapIndex, target.MapIndex)) continue;
+                pairs++;
+                var judgement = AiStatecraft.JudgeWarFor(campaign, attacker, target);
+                if (judgement == -10f)
+                {
+                    noValue++;
+                    // WarJudgement returns -10 for an ally only after the value check passed,
+                    // so allied pairs are the ambiguous case and non-allied -10 is unambiguous.
+                    // The sub-counts are kept disjoint on purpose: an ally with no army would
+                    // land in two of them, and the verdict below subtracts them from the total.
+                    var allied = CampaignDiplomacy.Peek(campaign, attacker.Id, target.Id) is
+                        { Stance: DiplomaticStance.Allied };
+                    if (allied) { noValueAllies++; }
+                    else if (hand[attacker.Id] <= 0.01f) { noValueNoArmy++; }
+                    else
+                    {
+                        // JudgeWarParts already exists for exactly this question, and WarValue
+                        // fills its parts list only after both early returns - so an empty list
+                        // here means the pair never reached a motive, and a filled one means it
+                        // did and the motives summed to nothing.
+                        var parts = AiStatecraft.JudgeWarParts(campaign, attacker, target).ValueParts;
+                        if (parts.Count == 0) noGateAdvantage++; else noMotiveAtAll++;
+                    }
+                }
+                else if (judgement < 0f) pricedOut++;
+                else if (judgement < threshold) wantsButSmall++;
+                else wantsEnough++;
+            }
+
+        double Share(int count) => pairs == 0 ? 0 : count * 100.0 / pairs;
+        // The -10 bucket is two different things: a pair with nothing to fight over, and an
+        // ally whose betrayal nerve has not been reached. Only the first is the diagnosis, so
+        // split it - and the split needs no new game API, because WarJudgement returns -10 for
+        // an ally only after the value check passed, which leaves non-allied -10 unambiguous.
+        var alliedAmongNoValue = noValueAllies;
+        Console.WriteLine($"  war judgement: {pairs} touching country pairs after {days} day(s), against a desire threshold of {threshold:0.00}");
+        Console.WriteLine($"    nothing wanted at all (or an ally below the nerve): {noValue} ({Share(noValue):0.0} %)");
+        Console.WriteLine($"      of those, pairs that are allied - the ambiguous case:      {alliedAmongNoValue}");
+        Console.WriteLine($"      of those, not allied (so not the ally-below-nerve case):   {noValue - alliedAmongNoValue} " +
+                          $"({(pairs == 0 ? 0 : (noValue - alliedAmongNoValue) * 100.0 / pairs):0.0} % of all pairs)");
+        // Printed at the level of the whole -10 bucket, not nested under the non-allied line:
+        // it is counted over every -10 pair, so showing it as a subset of a number it is not a
+        // subset of would be the same conflation this report exists to avoid.
+        Console.WriteLine($"    attacker has no estimated army at all (WarValue's first exit): {noValueNoArmy} ({Share(noValueNoArmy):0.0} %)");
+        // Split by whether WarValue reached the motives at all: JudgeWarParts fills its list
+        // only after both early returns, so an empty list is the advantage gate and a filled one
+        // is a country that looked for a reason, weighed every one, and found none.
+        Console.WriteLine($"    stopped at the advantage gate (no motive ever weighed): {noGateAdvantage} ({Share(noGateAdvantage):0.0} %)");
+        Console.WriteLine($"    weighed every motive and still valued it at nothing:   {noMotiveAtAll} ({Share(noMotiveAtAll):0.0} %)");
+        Console.WriteLine($"    wanted, but the price of the war is higher:         {pricedOut} ({Share(pricedOut):0.0} %)");
+        Console.WriteLine($"    worth it, under the threshold:                      {wantsButSmall} ({Share(wantsButSmall):0.0} %)");
+        Console.WriteLine($"    worth it and over the threshold:                    {wantsEnough} ({Share(wantsEnough):0.0} %)");
+        // The verdict says what is known and names what is not. It used to claim "there is no
+        // title worth fighting for", which conflated an absent motive with an insufficient
+        // advantage and an unestimated army - three different fixes hiding in one bucket.
+        Console.WriteLine(pairs == 0
+            ? "  war judgement: no touching pairs to measure."
+            : "  war judgement: " + (noValue >= pricedOut + wantsButSmall + wantsEnough
+                ? $"what binds is WarValue returning zero or less ({noValue} of {pairs} pairs): " +
+                  $"{noValueNoArmy} have no army to fight with, {noGateAdvantage} stop at the advantage " +
+                  $"gate, {noMotiveAtAll} weigh every motive and find nothing, and {alliedAmongNoValue} " +
+                  "are allies below the betrayal nerve. The advantage gate is not a threshold to " +
+                  "lower: the estimate of a target carries what its allies would add, so most " +
+                  "neighbours genuinely are not weaker than us."
+                : pricedOut >= wantsButSmall + wantsEnough ? "what binds is the price of the war, not the desire."
+                : "what binds is the desire threshold, not the price and not an absent title."));
+        return 0;
+    }
+
     private static int Profile(Campaign campaign, int days)
     {
         campaign.IsPaused = false;
@@ -1045,6 +1443,7 @@ public static class Program
         Console.WriteLine($"  countries in more than one war: {bare.Sum(sample => sample.Pairs):N0} country-war pair(s) sampled, " +
                           $"{bare.Sum(sample => sample.Bare):N0} with a front of their own and nobody of theirs on it.");
         Console.WriteLine($"  divisions of countries at war serving no war, summed over {bare.Count} samples: {idle:N0}.");
+        Console.WriteLine($"  war emergency: reinforced {WarEmergency.Reinforced:N0}, rushed {WarEmergency.Rushed:N0}, raised {WarEmergency.Raised:N0}.");
         Console.WriteLine($"  the staff re-posted {FrontManager.Reposts:N0} division(s) in {days} day(s).");
         Console.WriteLine($"  at peace, {ThreatPosture.Moves:N0} division(s) were moved to the borders their countries fear.");
         Console.WriteLine($"  the disposition moved {ArmyDisposition.Relieved:N0} starving formation(s) to ground that could feed them " +
@@ -1374,17 +1773,82 @@ public static class Program
         return ~crc;
     }
 
+    private static int Peoples(Campaign campaign, int days)
+    {
+        static Dictionary<string, long> Mix(ScenarioState state)
+        {
+            var mix = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+            foreach (var group in state.PopulationGroups)
+                if (group.Size > 0) mix[group.Culture ?? ""] = mix.GetValueOrDefault(group.Culture ?? "") + group.Size;
+            return mix;
+        }
+        (double Minority, int Mixed) World()
+        {
+            long all = 0, minority = 0;
+            var mixed = 0;
+            foreach (var state in campaign.States)
+            {
+                if (state.Unclaimed || state.Population <= 0) continue;
+                var mix = Mix(state);
+                if (mix.Count == 0) continue;
+                var total = mix.Values.Sum();
+                var top = mix.Values.Max();
+                all += total;
+                minority += total - top;
+                if (top < total * 0.8) mixed++;
+            }
+            return (minority / (double)Math.Max(1, all), mixed);
+        }
+        string Describe(ScenarioState state)
+        {
+            var mix = Mix(state);
+            var total = Math.Max(1, mix.Values.Sum());
+            return string.Join(", ", mix.OrderByDescending(p => p.Value).Take(3)
+                .Select(p => $"{p.Key} {p.Value / (double)total:P0}"));
+        }
+        var watched = campaign.States.Where(state => !state.Unclaimed && state.Population >= 300_000)
+            .Select(state => (state, mix: Mix(state)))
+            .Where(item => item.mix.Count > 1)
+            .OrderBy(item => item.mix.Values.Max() / (double)Math.Max(1, item.mix.Values.Sum()))
+            .Take(8).Select(item => item.state).ToList();
+        // And the regions a reader asks about by id (DOF_PEOPLES_WATCH=cn_xj,ro_hr,...).
+        foreach (var id in (Environment.GetEnvironmentVariable("DOF_PEOPLES_WATCH") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
+            if (campaign.States.FirstOrDefault(state => string.Equals(state.Id, id.Trim(), StringComparison.OrdinalIgnoreCase)) is { } asked &&
+                !watched.Contains(asked)) watched.Add(asked);
+        var (startMinority, startMixed) = World();
+        Console.WriteLine($"  day 0: {startMinority:P1} of the world's people are not of their region's majority; {startMixed:N0} regions are mixed (largest people under 80 %).");
+        foreach (var state in watched) Console.WriteLine($"    {state.Id,-10} {Describe(state)}");
+        campaign.IsPaused = false;
+        long moved = 0;
+        for (var day = 1; day <= days; day++)
+        {
+            campaign.TickDay();
+            moved += InternalMigration.MovedToday;
+            if (day % 365 != 0 && day != days) continue;
+            var (minority, mixedNow) = World();
+            Console.WriteLine($"  day {day}: {minority:P1} minority, {mixedNow:N0} mixed regions, {Fmt.People(moved)} moved inside their own country so far.");
+        }
+        foreach (var state in watched) Console.WriteLine($"    {state.Id,-10} {Describe(state)}");
+        var (endMinority, _) = World();
+        return Check("minorities are not dissolved by the years alone",
+            endMinority >= startMinority * Math.Pow(0.97, days / 365.0)
+                ? ""
+                : $"the world's minority share fell from {startMinority:P1} to {endMinority:P1} in {days} day(s)");
+    }
+
     private static int Front(Campaign campaign, int days)
     {
         var before = new FrontSnapshot(campaign);
         campaign.IsPaused = false;
         var trace = new List<int>();
         var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
+        var traceFront = Environment.GetEnvironmentVariable("DOF_TRACE_FRONT") == "1";
         for (var day = 0; day < days; day++)
         {
             campaign.TickDay();
             if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
                 trace.Add(HeldBy(campaign, ukraineIndex));
+            if (traceFront && day % 30 == 0) TraceFront(campaign, day);
             if (day % 60 == 59) WarsOf(campaign, "UKR", day + 1);
         }
         foreach (var tag in new[] { "RUS", "UKR" })
@@ -1398,6 +1862,7 @@ public static class Program
         var failures = Check("the Russo-Ukrainian front is still a stalemate",
             FrontIsAStalemate(campaign, before, trace, days));
         failures += Check("a war costs formations and an army replaces them", WarCostsFormations(campaign, days));
+        failures += Check("the peace an AI writes hangs together", ThePeaceAnAiWritesHangsTogether(campaign));
         return failures;
     }
 
@@ -1496,6 +1961,7 @@ public static class Program
         for (var day = 0; day < days; day++) campaign.TickDay();
         var folder = Path.Combine(Path.GetTempPath(), "dof_save_cost");
         Directory.CreateDirectory(folder);
+        SimProfiler.Reset();
         var watch = Stopwatch.StartNew();
         var prepared = SaveSystem.Prepare(folder, "probe", campaign, "", "probe", true);
         var prepareMs = watch.Elapsed.TotalMilliseconds;
@@ -1512,6 +1978,10 @@ public static class Program
             SaveSystem.Prepare(folder, "probe_warm", campaign, "", "probe", true);
             warm.Add(watch.Elapsed.TotalMilliseconds);
         }
+        foreach (var sample in SimProfiler.All.OrderByDescending(entry => entry.TotalMilliseconds))
+            if (sample.Runs > 0)
+                Console.WriteLine($"    save phase {sample.Name,-20} {sample.TotalMilliseconds,8:N0} ms  " +
+                                  $"×{sample.Runs}  {sample.AllocatedBytes / 1048576.0,7:0.0} MB");
         watch.Restart();
         var historyBytes = JsonSerializer.SerializeToUtf8Bytes(
             Enumerable.Range(0, campaign.Nations.Count).ToDictionary(id => id, id => campaign.History.ForNation(id)));
@@ -1519,10 +1989,21 @@ public static class Program
                           $"the history alone {watch.Elapsed.TotalMilliseconds:N0} ms for {historyBytes.Length / 1048576.0:0.0} MB.");
         var compressed = File.ReadAllBytes(Path.Combine(folder, "probe.bdfsave"));
         byte[] json;
-        using (var input = new MemoryStream(compressed))
-        using (var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress))
-        using (var output = new MemoryStream())
+        // Sniff the container instead of assuming gzip: saves may be this game's Brotli
+        // ("BDF2" magic), gzip, or plain JSON, and the probe measures whatever was written.
+        if (compressed.Length >= 4 && System.Text.Encoding.ASCII.GetString(compressed, 0, 4) == "BDF2")
         {
+            using var input = new MemoryStream(compressed, 4, compressed.Length - 4);
+            using var brotli = new System.IO.Compression.BrotliStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
+            brotli.CopyTo(output);
+            json = output.ToArray();
+        }
+        else
+        {
+            using var input = new MemoryStream(compressed);
+            using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+            using var output = new MemoryStream();
             gzip.CopyTo(output);
             json = output.ToArray();
         }
@@ -1535,6 +2016,14 @@ public static class Program
             using var memory = new MemoryStream();
             using (var gzip = new System.IO.Compression.GZipStream(memory, level, true)) gzip.Write(json);
             Console.WriteLine($"  gzip {level,-12} {watch.Elapsed.TotalMilliseconds,7:N0} ms  {memory.Length / 1048576.0,6:0.0} MB");
+        }
+        foreach (var level in new[] { System.IO.Compression.CompressionLevel.Optimal,
+                     System.IO.Compression.CompressionLevel.SmallestSize })
+        {
+            watch.Restart();
+            using var memory = new MemoryStream();
+            using (var brotli = new System.IO.Compression.BrotliStream(memory, level, true)) brotli.Write(json);
+            Console.WriteLine($"  brotli {level,-10} {watch.Elapsed.TotalMilliseconds,7:N0} ms  {memory.Length / 1048576.0,6:0.0} MB");
         }
         watch.Restart();
         using (var document = System.Text.Json.JsonDocument.Parse(json))
@@ -2054,6 +2543,36 @@ public static class Program
         return held;
     }
 
+    private static void TraceFront(Campaign campaign, int day)
+    {
+        var russia = campaign.NationByTag("RUS");
+        var ukraine = campaign.NationByTag("UKR");
+        if (russia is null || ukraine is null) return;
+        var war = campaign.Wars.Find(w => !w.Ended && w.Involves(russia.Id) && w.Involves(ukraine.Id));
+        if (war is null) { Console.WriteLine($"  front d{day}: no live RUS-UKR war"); return; }
+        string Side(Nation nation)
+        {
+            var force = campaign.Armies.Where(a => a.NationId == nation.Id && a.AssignedWarId == war.Id).ToList();
+            var strength = force.Count == 0 ? 0f : force.Average(a => a.Strength);
+            return $"{nation.Tag} reserve {Fmt.People(nation.ManpowerReserve)} " +
+                   $"(ceiling {Fmt.People(nation.Population * campaign.Defines.MobilisationCeilingShare)}), " +
+                   $"cap {Fmt.People(nation.ReinforcementCapacity)}/d, put back {Fmt.People(nation.ReinforcedLastWeek)}/wk, " +
+                   $"{force.Count} div at {strength:P0}, overrun {WarWeariness.Overrun(campaign, nation)}, " +
+                   $"war support {nation.WarSupport:P0} | " +
+                   // How the force stands, not only how big it is: a front breaks when the line is
+                   // raw, tired or cut off long before it runs out of men.
+                   $"org {(force.Count == 0 ? 0f : force.Average(a => a.Organisation)):P0}, " +
+                   $"exp {(force.Count == 0 ? 0f : force.Average(a => a.Experience)):P0}, " +
+                   $"dug {(force.Count == 0 ? 0f : force.Average(a => a.Entrenchment)):P0}, " +
+                   $"{force.Count(a => a.CutOff)} cut off, {force.Count(a => a.InBattle)} in battle";
+        }
+        Console.WriteLine($"  front d{day}: intensity {war.Intensity}, losses {war.AttackerLosses:N0}/{war.DefenderLosses:N0} " +
+                          $"(killed {war.AttackerKilled:N0}/{war.DefenderKilled:N0}, taken {war.AttackerCaptured:N0}/{war.DefenderCaptured:N0}), " +
+                          $"occupied A {war.AttackerOccupiedValue:P1} D {war.DefenderOccupiedValue:P1}");
+        Console.WriteLine($"      {Side(russia)}");
+        Console.WriteLine($"      {Side(ukraine)}");
+    }
+
     private static string FrontIsAStalemate(Campaign campaign, FrontSnapshot before,
         List<int> ukraineTrace, int days)
     {
@@ -2160,6 +2679,14 @@ public static class Program
                               $"{Fmt.People(nation.ReinforcedLastWeek)} put back this week, " +
                               $"average strength {force.Average(army => army.Strength):P0}, " +
                               $"{force.Count(army => army.InBattle):N0} of {force.Count:N0} locked in battle.");
+            // And the depots, which decide a long war as surely as the men do: a side whose
+            // ammunition has run dry fights with what arrived that day.
+            string Depot(string good) =>
+                $"{good.ToLowerInvariant()} {StrategicStockpiles.Get(campaign, nation, good):0.#} " +
+                $"(+{nation.DailyStockpileGain.GetValueOrDefault(good):0.##}/-{nation.DailyStockpileBurn.GetValueOrDefault(good):0.##} a day)";
+            Console.WriteLine($"  {nation.Tag} depots: {Depot("Ammunition")}, {Depot("Arms")}, {Depot("Oil")}, {Depot("Food")}, " +
+                              $"munitions {StrategicStockpiles.CombatMunitionsFactor(campaign, nation):P0}, " +
+                              $"{campaign.Sponsorships.Where(s => !s.Ended && s.ClientId == nation.Id).Sum(s => s.LastShipment):0.#} shipped in by backers at the last delivery.");
         }
         if (war.Ended) return "the war ended on its own with nobody playing";
         // Neither army may be ground out of existence. This is the one that mattered and
@@ -4997,7 +5524,7 @@ public static class Program
     /// edits one world while playing another. So every country the scenario creates must
     /// have a definition, and the definition must say what the game says.
     /// </summary>
-    private static string ShippedCountriesMatchTheScenario(Campaign campaign)
+    private static string ShippedCountriesMatchTheScenario(Campaign campaign, HashSet<string> bookmarkTags)
     {
         var shipped = new Dictionary<string, (string Name, string Color, string Capital)>(StringComparer.Ordinal);
         foreach (var document in GameDataLoader.DataDocuments("common", "countries"))
@@ -5020,9 +5547,16 @@ public static class Program
         {
             if (string.IsNullOrWhiteSpace(nation.Tag)) continue;
             // Movements are declared in common/movements, not common/countries; the de facto
-            // powers of 2024 in history/factions.
+            // powers of 2024 in history/factions. A country the simulation founded answers to
+            // a tag the bookmark never shipped, and is nobody's drift.
             if (nation.Movement is not null || nation.FactionId.Length > 0) continue;
+            if (!bookmarkTags.Contains(nation.Tag)) continue;
             if (!shipped.TryGetValue(nation.Tag, out var entry)) { missing.Add(nation.Tag); continue; }
+            // A country that renamed itself in play (a proclamation, a formable, a rising, a
+            // faction settling back into its parent) answers a different name than the roster,
+            // and the proclamation repaints the colour with it - the living world working,
+            // not drift. Its having a definition at all is still required.
+            if (nation.NameProclaimed) continue;
             if (!string.Equals(entry.Name, nation.Name, StringComparison.Ordinal))
                 drifted.Add($"{nation.Tag} name: file '{entry.Name}', game '{nation.Name}'");
             else if (!string.Equals(entry.Color, nation.Color, StringComparison.OrdinalIgnoreCase))
@@ -5105,6 +5639,8 @@ public static class Program
         // declaration again, a modder is back to writing JSON to replace an icon.
         var declared = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in Directory.EnumerateFiles(root!, "*.json", SearchOption.AllDirectories))
+        {
+            if (file.Replace('\\', '/').Contains("/models/", StringComparison.OrdinalIgnoreCase)) continue;
             using (var document = JsonDocument.Parse(File.ReadAllText(file), GameDataLoader.ForgivingJson))
             {
                 var body = document.RootElement;
@@ -5112,6 +5648,7 @@ public static class Program
                 if (body.ValueKind != JsonValueKind.Object) continue;
                 foreach (var entry in body.EnumerateObject()) declared.Add(entry.Name);
             }
+        }
         var byConvention = SpriteCatalog.Names.Count(name => !declared.Contains(name));
         if (byConvention < 20)
             return $"only {byConvention:N0} sprite(s) come from the file names alone; " +
@@ -5483,9 +6020,11 @@ public static class Program
         var rusStart = HeldBy(rus);
 
         var idleDays = new Dictionary<int, int>();
-        var lastTarget = new Dictionary<int, int>();
+        var lastOrder = new Dictionary<int, ArmyOrderSample>();
+        var armyTags = new Dictionary<int, string>();
         var retargets = new Dictionary<int, int>();
         var arrivals = new Dictionary<int, int>();
+        var progressResets = 0;
         var lastProvince = new Dictionary<int, int>();
         var visited = new Dictionary<int, Dictionary<int, int>>();
         var everFought = new HashSet<int>();
@@ -5494,6 +6033,28 @@ public static class Program
         long engagedRounds = 0;
         var stuckPeak = 0;
 
+        void ObserveOrders(Campaign world)
+        {
+            foreach (var army in world.Armies)
+            {
+                armyTags[army.Id] = world.NationById(army.NationId)?.Tag ?? "unknown";
+                var now = ArmyOrderSample.Of(army);
+                if (lastOrder.TryGetValue(army.Id, out var before))
+                {
+                    var changes = ArmyOrderSample.Compare(before, now);
+                    if ((changes & ArmyOrderChange.Arrived) != 0)
+                        arrivals[army.Id] = arrivals.GetValueOrDefault(army.Id) + 1;
+                    if ((changes & ArmyOrderChange.Retargeted) != 0)
+                        retargets[army.Id] = retargets.GetValueOrDefault(army.Id) + 1;
+                    if ((changes & ArmyOrderChange.ProgressReset) != 0) progressResets++;
+                }
+                lastOrder[army.Id] = now;
+            }
+        }
+        ObserveOrders(campaign);
+        // A daily endpoint can miss an arrival followed by a new task on the same day.
+        // The observer issues no commands and runs after the authoritative step finishes.
+        campaign.StepCompleted += ObserveOrders;
         const int days = 365 * 3;
         for (var day = 0; day < days; day++)
         {
@@ -5515,21 +6076,6 @@ public static class Program
             // anywhere hides: it is always on its way somewhere.
             foreach (var army in campaign.Armies)
             {
-                // How often a formation is told to go somewhere ELSE. Route is a one-step
-                // queue and is refilled daily for anything that is moving, so counting days
-                // with a route measures nothing; what matters is how often the destination
-                // changes under a division that has not reached the last one.
-                if (!lastTarget.TryGetValue(army.Id, out var was2)) lastTarget[army.Id] = army.OrderProvinceId;
-                else if (was2 != army.OrderProvinceId)
-                {
-                    lastTarget[army.Id] = army.OrderProvinceId;
-                    if (army.OrderProvinceId > 0)
-                    {
-                        if (was2 > 0 && army.ProvinceId != was2) retargets[army.Id] = retargets.GetValueOrDefault(army.Id) + 1;
-                        else arrivals[army.Id] = arrivals.GetValueOrDefault(army.Id) + 1;
-                    }
-                }
-
                 if (!lastProvince.TryGetValue(army.Id, out var was)) lastProvince[army.Id] = army.ProvinceId;
                 else if (was != army.ProvinceId)
                 {
@@ -5566,6 +6112,7 @@ public static class Program
             }
         }
 
+        campaign.StepCompleted -= ObserveOrders;
         var ukrEnd = HeldBy(ukr);
         var rusEnd = HeldBy(rus);
 
@@ -5655,11 +6202,12 @@ public static class Program
         Console.WriteLine($"    orders: {churn:N0} re-target(s) of a division that had not arrived, " +
                           $"against {arrived:N0} arrival(s) - worst division re-tasked {worstChurn:N0} times " +
                           $"({campaign.NationById(churned?.NationId ?? -1)?.Tag}, {churned?.OrderKind})");
+        Console.WriteLine($"    orders observed at completed steps; same-goal progress resets: {progressResets:N0}");
         // By country, because a world with a dozen civil wars in it is a dozen armies being
         // commanded, and one of them can carry the whole figure.
         var churnBy = new Dictionary<string, (int Retargets, int Arrivals)>();
         string TagOfArmy(int armyId) =>
-            campaign.NationById(campaign.Armies.Find(a => a.Id == armyId)?.NationId ?? -1)?.Tag ?? "gone";
+            armyTags.GetValueOrDefault(armyId, "unknown");
         foreach (var (armyId, count) in retargets)
         {
             var tag = TagOfArmy(armyId);
@@ -5851,7 +6399,7 @@ public static class Program
         };
         DemographyCatalog.Declare("ZZZ", new[] { "chechen" });
         var borrowed = FlagCatalog.Resolve(campaign, invented);
-        if (borrowed != "flag_culture_chechen")
+        if (borrowed != "flag_culture_chechen_communism")
             return $"a country founded by Chechens resolved to '{borrowed}' rather than their flag";
 
         // And the same people, having decided something, may fly something else again.
@@ -6422,18 +6970,19 @@ public static class Program
         OpinionSystem.Settle(campaign, relation);
         // Two countries with no history of each other are not strangers any more: they can
         // see what the other is. So what is left when the reasons are cleared has to be
-        // exactly what their politics are worth to each other and what its public has come to
-        // think of the other's (SocialMemory, which is a reputation rather than a reason and
-        // is not cleared with them), and nothing else.
+        // politics, declared identity and public reputation. Identity is not a historical
+        // opinion reason either: clearing reasons does not abolish either state church.
         var politics = PoliticsCore.Affinity(campaign, first.Id, second.Id);
+        var identity = StateIdentity.Affinity(campaign, first.Id, second.Id);
         var reputation = SocialMemory.OpinionEffect(campaign, relation);
-        if (Math.Abs(relation.Opinion - Math.Clamp(politics + reputation, -100f, 100f)) > 0.01f)
+        var baseline = Math.Clamp(politics + identity + reputation, -100f, 100f);
+        if (Math.Abs(relation.Opinion - baseline) > 0.01f)
             return $"a country with no history of another has an opinion of {relation.Opinion:0.0}, " +
-                   $"where its politics account for {politics:0.0} and its public's view of the other for {reputation:0.0}";
+                   $"where politics account for {politics:0.0}, identity for {identity:0.0} and public reputation for {reputation:0.0}";
 
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         var remembered = relation.Opinion;
-        if (remembered > -50f + politics)
+        if (remembered > Math.Max(-100f, baseline - 50f))
             return $"a declaration of war moved opinion to {remembered:0.0}, which is barely a grudge";
 
         // What the screen shows has to equal what it is made of.
@@ -7407,7 +7956,15 @@ public static class Program
                          @"Chronicle\.Record\([^,]+,\s*([^,]+),"))
                 foreach (System.Text.RegularExpressions.Match kind in System.Text.RegularExpressions.Regex.Matches(
                              call.Groups[1].Value, "\"([a-z_]+)\""))
-                    result.Add("chronicle." + kind.Groups[1].Value);
+                {
+                    var id = kind.Groups[1].Value;
+                    // A kind assembled at run time - "covert_" + operation + "_done" - hands the
+                    // harvester its fragments, and a fragment is not a caption. The assembled
+                    // keys are what the tables actually hold, and demanding a row for "_done"
+                    // would mean teaching the tables to translate half a word.
+                    if (id.StartsWith("_", StringComparison.Ordinal) || id.EndsWith("_", StringComparison.Ordinal)) continue;
+                    result.Add("chronicle." + id);
+                }
         }
         var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
         foreach (var folder in new[] { "budget", "government_focus", "trade_policies", "governments", "ideologies", "countries",
@@ -8196,7 +8753,7 @@ public static class Program
             var shipped = JsonSerializer.Serialize(shippedValue);
             var code = Convert.ToString(property.GetValue(compiled),
                 System.Globalization.CultureInfo.InvariantCulture) ?? "";
-            if (compiledValue is System.Collections.IDictionary) code = JsonSerializer.Serialize(compiledValue);
+            if (compiledValue is System.Collections.IDictionary or Array) code = JsonSerializer.Serialize(compiledValue);
             drifted.Add($"{entry.Name}: file {shipped}, code {code}");
         }
 
@@ -8212,6 +8769,13 @@ public static class Program
     {
         if (shipped is float number && compiled is float baseline)
             return MathF.Abs(number - baseline) < 0.0001f;
+        if (shipped is Array values && compiled is Array baselineValues)
+        {
+            if (values.Rank != 1 || baselineValues.Rank != 1 || values.Length != baselineValues.Length) return false;
+            for (var i = 0; i < values.Length; i++)
+                if (!DefineValuesAgree(values.GetValue(i), baselineValues.GetValue(i))) return false;
+            return true;
+        }
         if (shipped is System.Collections.IDictionary map && compiled is System.Collections.IDictionary defaults)
         {
             if (map.Count != defaults.Count) return false;
@@ -8250,6 +8814,12 @@ public static class Program
         if (DefineValuesAgree(0.25f, 0.5f)) return "a real numeric rebalance went undetected";
         right.Clear();
         if (DefineValuesAgree(left, right)) return "a missing feature went undetected";
+        if (!DefineValuesAgree(new[] { "#C57857", "#4F94C0" }, new[] { "#C57857", "#4F94C0" }))
+            return "equivalent ordered define arrays disagree";
+        if (DefineValuesAgree(new[] { "#C57857", "#4F94C0" }, new[] { "#4F94C0", "#C57857" }))
+            return "an array reorder went undetected";
+        if (DefineValuesAgree(new[] { "#C57857" }, new[] { "#C57857", "#4F94C0" }))
+            return "an array length change went undetected";
         return "";
     }
 
@@ -9429,6 +9999,44 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// Write an envelope the way a crash does, read it back and replay its tape onto a second
+    /// campaign of the same seed - the offline reproduction <c>CrashEnvelope</c> promises.
+    /// Returns "" when the two worlds agree, or the disagreement for Check to print.
+    /// </summary>
+    private static string CrashEnvelopeReplays(int seed)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "dof_envelope_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            CrashEnvelope.Clear();
+            var crashed = Campaign.CreateBootstrap(seed);
+            crashed.Commands.Enqueue(new SetTaxRateCommand { IssuerId = crashed.Player.Id, Value = .35f });
+            crashed.Commands.ApplyAll(crashed);
+            var fingerprint = CampaignFingerprint.Of(crashed);
+            var path = CrashEnvelope.Dump(crashed, null, "crash replay check", directory);
+            if (path.Length == 0)
+                return "the envelope was not written: " +
+                    (CrashEnvelope.LastFailure.Length > 0 ? CrashEnvelope.LastFailure : "no path returned");
+            var envelope = CrashEnvelope.Load(path);
+            if (envelope is null) return "the envelope did not read back";
+            if (envelope.CampaignSeed != seed) return $"the envelope names seed {envelope.CampaignSeed}, not {seed}";
+            if (envelope.RecentCommands.Count != 1)
+                return $"the tape holds {envelope.RecentCommands.Count} commands, expected the one that was issued";
+            var replayed = Campaign.CreateBootstrap(seed);
+            var applied = CrashEnvelope.Replay(replayed, envelope);
+            if (applied != 1) return $"replayed {applied} of the tape's one command";
+            var reproduced = CampaignFingerprint.Of(replayed);
+            return reproduced == fingerprint ? ""
+                : $"the replayed world differs: 0x{reproduced:X16} vs 0x{fingerprint:X16}";
+        }
+        finally
+        {
+            CrashEnvelope.Clear();
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, true); } catch { }
+        }
+    }
+
     private static string AnAllianceIsAskedForAndAnswered()
     {
         var campaign = Campaign.CreateBootstrap(20240501);
@@ -10030,8 +10638,30 @@ public static class Program
         var campaign = Campaign.CreateBootstrap(20240905);
         if (!AttachMap(campaign)) return "no province map to stand on";
         var all = Movements.Of(campaign).ToList();
-        var declared = MovementCatalog.All.Count(definition => !definition.Template);
-        if (all.Count < declared) return $"{all.Count} movements founded of {declared}";
+        var declared = MovementCatalog.All.Where(definition => !definition.Template && definition.StartActive).ToArray();
+        var representedAsFactions = 0;
+        foreach (var definition in declared)
+        {
+            if (all.Any(nation => nation.Movement?.Id == definition.Id)) continue;
+            // Exact tags or an explicit territorial_faction identity link may represent a
+            // movement already. Never substitute an unrelated country with a colliding name.
+            var actor = Movements.TerritorialActor(campaign, definition) ?? campaign.NationByTag(definition.Tag);
+            var faction = Factions.Of(actor);
+            if (actor is not null && actor.Movement is null && faction is not null &&
+                (string.Equals(faction.Tag, definition.Tag, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(faction.Id, definition.TerritorialFaction, StringComparison.Ordinal)) &&
+                campaign.StatesOf(actor).Length > 0)
+            { representedAsFactions++; continue; }
+            return $"movement {definition.Id}/{definition.Tag} has neither its movement nor an authored territorial faction";
+        }
+        Console.WriteLine($"  movement representation: {declared.Length} active definitions; " +
+                          $"{all.Count} movement actors and {representedAsFactions} already-territorial factions.");
+        var houthis = campaign.NationByTag("HTH");
+        if (campaign.NationByTag("HOU") is not null || houthis?.FactionId != "ansar_allah" ||
+            campaign.StatesOf(houthis).Length == 0 || !campaign.Armies.Any(a => a.NationId == houthis.Id))
+            return "Ansar Allah must have one territorial administration with its land and army, not a duplicate HOU headquarters";
+        Console.WriteLine($"  Yemen: HTH owns {campaign.StatesOf(houthis).Length} regions; " +
+            $"{campaign.Armies.Count(a => a.NationId == houthis.Id)} formations; no duplicate HOU actor.");
         foreach (var movement in all)
         {
             if (!movement.Landless) return $"{movement.Tag} starts with land";
@@ -10924,7 +11554,7 @@ public static class Program
 
         var offenders = new List<string>();
         var total = 0;
-        foreach (var file in Directory.EnumerateFiles(scripts, "*.cs", SearchOption.AllDirectories))
+        foreach (var file in ProductionSourceFiles(scripts))
         {
             var name = Path.GetFileName(file);
             if (skip.Contains(name)) continue;
@@ -10933,6 +11563,7 @@ public static class Program
             var relative = Path.GetRelativePath(scripts, file).Replace('\\', '/');
             if (relative.StartsWith("Simulation/", StringComparison.OrdinalIgnoreCase)) continue;
             if (relative.StartsWith("Modding/", StringComparison.OrdinalIgnoreCase)) continue;
+            if (relative.StartsWith("LegacySourceMap/", StringComparison.OrdinalIgnoreCase)) continue;
 
             var lines = File.ReadAllLines(file);
             for (var index = 0; index < lines.Length; index++)
@@ -10987,6 +11618,42 @@ public static class Program
         return false;
     }
 
+    /// <summary>
+    /// Load a player's save and play on from it, headless, until the day count runs out or
+    /// the simulation faults - whichever comes first. The point is the stack: a crash a
+    /// player walked into is asked to happen here, where the exception can be read in full,
+    /// instead of in a dialog that only quotes its message.
+    /// </summary>
+    private static int ReplaySave(string root, string slot, int days)
+    {
+        if (!Directory.Exists(root)) { Console.WriteLine($"  no such save root: {root}"); return 1; }
+        SaveLoadResult loaded;
+        try { loaded = SaveSystem.Load(root, slot, ""); }
+        catch (Exception ex) { Console.WriteLine("  load failed: " + ex.Message); return 1; }
+        var campaign = loaded.Campaign;
+        if (campaign is null) { Console.WriteLine("  the save carried no campaign"); return 1; }
+        campaign.IsPaused = false;
+        Console.WriteLine($"  replay: {slot} from {campaign.Date} ({campaign.ElapsedDays} days), {days} day(s) on");
+        for (var day = 0; day < days; day++)
+        {
+            try { campaign.TickDay(); }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  [CRASH] day {campaign.ElapsedDays} ({campaign.Date}): {ex.GetType().Name}: {ex.Message}");
+                Console.WriteLine(ex.StackTrace ?? "");
+                return 1;
+            }
+            if (campaign.SimulationFault.Length > 0)
+            {
+                Console.WriteLine($"  [FAULT] day {campaign.ElapsedDays} ({campaign.Date}): {campaign.SimulationFault}");
+                return 1;
+            }
+            if (day % 10 == 9) Console.WriteLine($"  replayed to day {campaign.ElapsedDays} ({campaign.Date})");
+        }
+        Console.WriteLine($"  [ ok ] {days} day(s) replayed from {slot} without a fault");
+        return 0;
+    }
+
     private static string EveryFolderOfDataIsRead()
     {
         var scripts = FindScripts();
@@ -11002,6 +11669,29 @@ public static class Program
         DiagnosticLogs.ResetCatalog();
         InterfaceSkin.ResetCatalog();
         ScenarioInspectorCatalog.ResetCatalog();
+        // The sound/art workspace loads its inventory lazily, outside the headless
+        // campaign. Exercise the real reader rather than exempting its folder.
+        MediaLibraryCatalog.Load();
+        // Make this audit independent of which expensive campaign fixtures ran
+        // before it. These are real lazy catalog readers, not an allowlist of paths.
+        ScriptLibrary.ResetCatalog();
+        AddressToNation.ResetCatalog();
+        CovertOperations.ResetCatalog();
+        DecisionCatalog.ResetCatalog();
+        PromiseCatalog.ResetCatalog();
+        GoalCatalog.ResetCatalog();
+        FlagCatalog.ResetCatalog();
+        FormableNations.ResetCatalog();
+        GovernanceEvents.ResetCatalog();
+        PeaceTermCatalog.ResetCatalog();
+        SecessionCore.ResetCatalog();
+        SocialIncidentCatalog.ResetCatalog();
+        // Dated history and deterrence are lazy catalogues too: reading them here is what
+        // makes the folder audit see the real reader instead of an allowlist entry.
+        EventCatalog.ResetCatalog();
+        Deterrence.ResetCatalog();
+        _ = Deterrence.Holders.Count;
+        _ = UnitTypeCatalog.All.Count();
         // And the catalogues read the first time something needs them - the handbook when F1 is
         // pressed, the news weights at the first headline, the coups at the first review - so a
         // bench that has not happened to need them yet does not report their folders as dead.
@@ -11010,6 +11700,7 @@ public static class Program
         AllianceProgramCatalog.ResetCatalog();
         OutreachCatalog.ResetCatalog();
         IncidentCatalog.ResetCatalog();
+        MediaLibraryCatalog.Load();
         Coups.ResetCatalog();
         Coups.GovernmentRisk(new Nation());
         if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
@@ -11128,6 +11819,18 @@ public static class Program
         foreach (var property in typeof(NationHistorySample).GetProperties())
             if (property.GetIndexParameters().Length == 0 && !Equals(property.GetValue(sample), property.GetValue(sampleBack)))
                 wrong.Add($"NationHistorySample.{property.Name}");
+
+        foreach (var rowType in new[] { typeof(PublicImage), typeof(MarketQuote), typeof(OpinionReason), typeof(LandBattle.Round) })
+        {
+            var instance = Activator.CreateInstance(rowType)!;
+            var rowFields = rowType.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public);
+            for (var index = 0; index < rowFields.Length; index++)
+                rowFields[index].SetValue(instance, Distinct(rowFields[index].FieldType, index));
+            var restored = JsonSerializer.Deserialize(JsonSerializer.Serialize(instance, rowType), rowType)!;
+            foreach (var field in rowFields)
+                if (!Equals(field.GetValue(instance), field.GetValue(restored)))
+                    wrong.Add($"{rowType.Name}.{field.Name}");
+        }
 
         if (wrong.Count > 0)
             return $"{wrong.Count} field(s) do not survive their save row: {string.Join(", ", wrong)} - add them to Simulation/SaveRows.cs";
@@ -11388,6 +12091,8 @@ public static class Program
 
                 // Ground changed hands, so of course the figures moved.
                 if (held != hadRegions) continue;
+                // A fallen country's books closing is the fall flow working, not a cliff.
+                if (campaign.Fallen.Contains(nation.Id)) continue;
                 if (was < 1f) continue;
 
                 var drop = 1f - nation.Gdp / was;
@@ -11602,7 +12307,8 @@ public static class Program
         // A white peace will not be looked at until a war is four months old, and forty
         // days of real ticking is what this check can afford. The war is aged rather than
         // fought, which is the one thing being proved here that the calendar is not.
-        war.StartedDay -= 200;
+        war.StartedDay -= Math.Max(200, (int)campaign.Defines.AiWearyDays + 10);
+        war.WarScore = 0f;
         PeaceNegotiation.Resolve(campaign, war, aggressor.Id, PeaceTerms.WhitePeace);
         if (!war.Ended) return $"a white peace did not end the war: {war.LastNegotiation}";
         foreach (var friend in friends)
@@ -12290,12 +12996,13 @@ public static class Program
         client.IsPaused = false;
         if (Environment.GetEnvironmentVariable("SNAP_DIFF") == "1")
             Console.WriteLine("  snapshot at the moment of sending: " + SnapshotDifferences(host, client));
-        for (var day = 0; day < 10; day++)
+        var hourly = Environment.GetEnvironmentVariable("SNAP_HOURLY") == "1";
+        for (var day = 0; day < (hourly ? 240 : 10); day++)
         {
-            host.TickDay(); client.TickDay();
+            if (hourly) { host.Tick(); client.Tick(); } else { host.TickDay(); client.TickDay(); }
             if (CampaignFingerprint.Of(host) == CampaignFingerprint.Of(client)) continue;
             // The first day they part, and where: the saved worlds compared field by field.
-            return $"the two worlds agreed at the moment of the snapshot and diverged on day {day + 1}, " +
+            return $"the two worlds agreed at the moment of the snapshot and diverged on {(hourly ? "step" : "day")} {day + 1}, " +
                    "so something the simulation reads is not in it: " + WhatDiffers(host, client) +
                    " | first differences: " + SnapshotDifferences(host, client);
         }
@@ -12379,40 +13086,53 @@ public static class Program
         // Both of them: whichever campaign ticks second is the one that reads the first
         // one's notes, so checking only the leader would miss the whole problem.
         var firstAlone = Campaign.CreateBootstrap(20250303);
+        IsolationTrace.Print(firstAlone, "first-created");
         var secondAlone = Campaign.CreateBootstrap(19991231);
+        IsolationTrace.Print(firstAlone, "after-second-created");
         if (!AttachMap(firstAlone) || !AttachMap(secondAlone))
             return "no province map, so there is nothing to share";
         // The two worlds have to be genuinely different, or a cache leaking between them
         // leaks nearly the right answer and nothing shows. Halving one world's armies makes
         // every strength comparison in it different from the other's.
         Halve(secondAlone);
+        IsolationTrace.Print(firstAlone, "first-mapped");
         firstAlone.IsPaused = false;
         secondAlone.IsPaused = false;
         for (var day = 0; day < days; day++) firstAlone.TickDay();
+        IsolationTrace.Print(firstAlone, "first-finished");
         for (var day = 0; day < days; day++) secondAlone.TickDay();
+        IsolationTrace.Print(firstAlone, "after-second-finished");
         var expectedFirst = CampaignFingerprint.Of(firstAlone);
         var expectedSecond = CampaignFingerprint.Of(secondAlone);
 
         var same = Campaign.CreateBootstrap(20250303);
+        IsolationTrace.Print(same, "repeat-created");
         var other = Campaign.CreateBootstrap(19991231);
+        IsolationTrace.Print(same, "repeat-after-other-created");
         if (!AttachMap(same) || !AttachMap(other)) return "the second pair got no province map";
         Halve(other);
+        IsolationTrace.Print(same, "repeat-mapped");
         same.IsPaused = false;
         other.IsPaused = false;
         for (var day = 0; day < days; day++)
         {
             same.TickDay();
+            IsolationTrace.Print(same, "repeat-ticked");
             other.TickDay();
         }
 
         var leaderMatches = CampaignFingerprint.Of(same) == expectedFirst;
         var followerMatches = CampaignFingerprint.Of(other) == expectedSecond;
         if (!leaderMatches || !followerMatches)
+        {
+            Console.WriteLine("ISOLATION_DIFF " + SnapshotDifferences(leaderMatches ? secondAlone : firstAlone,
+                leaderMatches ? other : same));
             return $"the campaign that ticked {(leaderMatches ? "second" : "first")} came out " +
                    $"different when run beside another one for {days} day(s) - something cached is " +
                    "stamped with the day, the map revision or the country count rather than the " +
                    "campaign, and a multiplayer client rebuilding from a snapshot will " +
                    "desynchronise on it";
+        }
 
         Console.WriteLine($"  isolation: a campaign ticked beside a different one for {days} day(s) " +
                           "and came out identical to the bit.");

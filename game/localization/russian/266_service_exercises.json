@@ -1,0 +1,11 @@
+{
+  "This exercise needs funding and an operational air formation at a controlled base": "Для учений нужны средства и боеспособное авиасоединение на подконтрольной базе",
+  "This exercise needs funding and serviceable ships not in combat or carrying troops": "Для учений нужны средства и исправные корабли, не занятые боем или перевозкой войск",
+  "Select a valid country.": "Выберите существующую страну.",
+  "Insufficient army experience: need 25, available {0:0.#}.": "Недостаточно армейского опыта: требуется 25, доступно {0:0.#}.",
+  "Insufficient treasury to organize field maneuvers.": "Недостаточно средств в казне для проведения полевых манёвров.",
+  "Select a friendly army.": "Выберите союзную армию.",
+  "Formations in battle cannot be retrained.": "Соединения в бою не могут проходить переподготовку.",
+  "Insufficient army experience: need {0:0}, available {1:0.#}.": "Недостаточно армейского опыта: требуется {0:0}, доступно {1:0.#}.",
+  "chronicle.military_exercises_conducted": "{0} проводит масштабные армейские полевые манёвры."
+}

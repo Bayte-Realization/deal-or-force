@@ -1,0 +1,23 @@
+{
+  "_comment": "De facto administrations from history/factions that can normalise into ordinary countries when their war ends. The names, colours and capitals match the faction entries; without these rows a settled faction would be a country with no definition.",
+  "HTH": {
+    "name": "Ansar Allah",
+    "color": "#4e7d3a",
+    "capital_name": "Sanaa"
+  },
+  "SIG": {
+    "name": "Syrian Interim Government",
+    "color": "#2e7d32",
+    "capital_name": "Azaz"
+  },
+  "HTS": {
+    "name": "Syrian Salvation Government",
+    "color": "#d8d8d0",
+    "capital_name": "Idlib"
+  },
+  "SDF": {
+    "name": "North and East Syria",
+    "color": "#f2c94c",
+    "capital_name": "Raqqa"
+  }
+}

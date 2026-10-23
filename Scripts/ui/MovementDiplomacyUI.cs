@@ -11,8 +11,13 @@ public partial class DealOrForceGame
     {
         var countries = ids.Select(_campaign.NationById).Where(n => n is not null).OrderBy(n => n.DisplayName).ToArray();
         var prefix = heading == "RECOGNISED BY" ? "MovementRecognition" : "MovementDesignation";
-        var rows = new VBoxContainer { Name = prefix + "List", Visible = false };
-        var toggle = ActionButton(Loc.Format("{0} · {1}", Tr(heading), countries.Length), () => rows.Visible = !rows.Visible,
+        var expanded = MovementExpandedSections(_movementShown.Id);
+        var rows = new VBoxContainer { Name = prefix + "List", Visible = expanded.Contains(prefix) };
+        var toggle = ActionButton(Loc.Format("{0} · {1}", Tr(heading), countries.Length), () =>
+        {
+            rows.Visible = !rows.Visible;
+            if (rows.Visible) expanded.Add(prefix); else expanded.Remove(prefix);
+        },
             0, 34, iconPath: Icon("diplomacy"));
         toggle.Name = prefix + "Toggle"; _movementRows.AddChild(toggle);
         _movementRows.AddChild(rows);

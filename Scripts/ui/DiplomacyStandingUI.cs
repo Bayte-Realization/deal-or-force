@@ -82,6 +82,7 @@ public partial class DealOrForceGame
             var score = attacking ? war.WarScore : -war.WarScore;
             var enemies = war.EnemiesOf(nation.Id).Select(id => c.NationById(id)).Where(n => n is not null).ToList();
             var tug = bar(10, 140);
+            tug.Name = "DiplomacyStandingScoreBar" + war.Id;
             tug.Tug(Mathf.Clamp(score / WarLedgerBarScale, -1f, 1f), WarSideColour(nation),
                 WarSideColour(enemies.FirstOrDefault() ?? nation));
             head.AddChild(tug);
@@ -144,6 +145,17 @@ public partial class DealOrForceGame
         Chips("Defends", others.Where(o => Tie(o) is { } t && t.GuaranteedBy(nation.Id)));
         Chips("Under embargo by", others.Where(o => Tie(o) is { } t && t.EmbargoBy(o.Id)));
         Chips("Embargoes", others.Where(o => Tie(o) is { } t && t.EmbargoBy(nation.Id)));
+
+        // ---- unfulfilled war claims (grudges from past wars)
+        Chips("Unfinished claims against", others.Where(o => Tie(o) is { } t && OpinionSystem.Has(t, "unfinished_war_claim")));
+        Chips("Unfinished claims on us", others.Where(o => CampaignDiplomacy.Peek(c, o.Id, nation.Id) is { } t && OpinionSystem.Has(t, "unfinished_war_claim")));
+
+        // ---- active war plans (visible to observer or with sufficient intel)
+        if (_observerMode || CampaignIntel.PlayerCanInspect(c, nation.Id))
+        {
+            if (nation.WarPlanTargetId >= 0 && c.NationById(nation.WarPlanTargetId) is { } target)
+                Chips("Planning war against", new[] { target }, _ => "  " + Tr("active plan"));
+        }
 
         // ---- land: what it says is its own and others hold, and who says the same of its land.
         if (c.ProvinceMap is not null && nation.Movement is null)

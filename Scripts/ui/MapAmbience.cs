@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -11,18 +12,30 @@ namespace DealOrForce;
 /// them, which over a long campaign is most of the time. This fills the silence from the
 /// camera's point of view, the same way the weather fills the sky: from the strategic height
 /// a hush of high wind over the world; brought down to the tactical distance the wind falls
-/// away into open country; and near a battle the player can see, the front beyond the hills.
-/// Three loops, crossfaded slowly, under every cue and at the effects volume.
+/// away into the sound of the ground under the camera - open country, forest, jungle, desert,
+/// snow, a city, the sea; and near a battle the player can see, the front beyond the hills.
+/// Loops crossfaded slowly, under every cue and at the effects volume.
 /// </summary>
 public sealed partial class MapAmbience : Node
 {
     private const string Folder = "res://game/sound/audio/ambience/";
     private readonly Func<GlobePresentation> _globe;
     private readonly Func<Campaign> _campaign;
-    private AudioStreamPlayer _high, _land, _front;
+    private AudioStreamPlayer _high, _front;
+    // Each terrain lends the tactical camera the beds of its ground, a marsh a share of rain;
+    // open water is the sea, and ground with no mix of its own is open country. Which bed is
+    // which recording, and which terrain sounds like what, is sound/'s `map_ambience` block.
+    private readonly Dictionary<string, AudioStreamPlayer> _beds = new();
+    private readonly Dictionary<string, float> _ground = new();
+    private readonly AudioFocusEnvelope _cueFocus = new();
     private float _frontNear;
     private double _frontCheck;
     public bool AuditionSuppressed { get; set; }
+
+    public void DuckForCue(double seconds, float decibels) =>
+        _cueFocus.Request(seconds, Mathf.DbToLinear(decibels));
+    public void ClearCueFocus() => _cueFocus.Reset();
+    internal float CueFocusGain => _cueFocus.Gain;
 
     public MapAmbience(Func<GlobePresentation> globe, Func<Campaign> campaign)
     {
@@ -34,15 +47,20 @@ public sealed partial class MapAmbience : Node
     public override void _Ready()
     {
         _high = Loop("wind_high.ogg");
-        _land = Loop("land_calm.ogg");
+        foreach (var (name, file) in SoundCatalog.AmbienceBeds) _beds[name] = Loop(file, name);
         _front = Loop("front_far.ogg");
     }
 
-    private AudioStreamPlayer Loop(string file)
+    private AudioStreamPlayer Loop(string file) => Loop(Folder + file, file.Replace(".ogg", ""));
+
+    private AudioStreamPlayer Loop(string path, string name)
     {
-        var player = new AudioStreamPlayer { Name = "Ambience_" + file.Replace(".ogg", ""), VolumeDb = -80f };
-        if (ResourceLoader.Exists(Folder + file) && GD.Load<AudioStream>(Folder + file) is AudioStream stream)
+        var player = new AudioStreamPlayer { Name = "Ambience_" + name, VolumeDb = -80f };
+        if (ResourceLoader.Exists(path) && GD.Load<AudioStream>(path) is AudioStream stream)
         {
+            // The library and the map may share an imported recording. Only this
+            // private playback copy loops; browsing it must not become endless.
+            stream = (AudioStream)stream.Duplicate();
             if (stream is AudioStreamOggVorbis ogg) ogg.Loop = true;
             player.Stream = stream;
         }
@@ -52,18 +70,32 @@ public sealed partial class MapAmbience : Node
 
     public override void _Process(double delta)
     {
-        if (AuditionSuppressed)
+        _cueFocus.Advance(delta);
+        var level = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects") *
+                    (SettingsCatalog.Flag("map_ambience") ? 1f : 0f);
+        if (AuditionSuppressed || level <= .0005f)
         {
             // Keep the loops' phases; audition must not restart or randomize the map's sound.
-            if (GodotObject.IsInstanceValid(_high)) _high.VolumeDb = -80;
-            if (GodotObject.IsInstanceValid(_land)) _land.VolumeDb = -80;
-            if (GodotObject.IsInstanceValid(_front)) _front.VolumeDb = -80;
+            Silence(_high, !AuditionSuppressed);
+            foreach (var bed in _beds.Values) Silence(bed, !AuditionSuppressed);
+            Silence(_front, !AuditionSuppressed);
             return;
         }
         var globe = _globe();
         var campaign = _campaign();
-        var level = SettingsCatalog.Number("volume_master") * SettingsCatalog.Number("volume_effects") *
-                    (SettingsCatalog.Flag("map_ambience") ? 1f : 0f);
+        level *= _cueFocus.Gain;
+        // A cursed world (WorldCurses): under the ice only the wind over it, at every height;
+        // the static has its own sound, and the ground none.
+        if (campaign?.Curse is WorldCurses.Snowgrave or WorldCurses.Static)
+        {
+            var hush = 1f - MathF.Exp(-(float)delta * 1.5f);
+            var wind = campaign.Curse == WorldCurses.Snowgrave && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree();
+            Mix(_high, 0f, hush);
+            Mix(_front, 0f, hush);
+            foreach (var (name, player) in _beds)
+                Mix(player, wind && name == SoundCatalog.FrozenBed ? 0.6f * level : 0f, hush);
+            return;
+        }
         var live = campaign is not null && GodotObject.IsInstanceValid(globe) && globe.IsVisibleInTree() && level > 0.0005f;
 
         var height = live ? globe.ViewHeight : 12f;
@@ -76,12 +108,41 @@ public sealed partial class MapAmbience : Node
         {
             _frontCheck = 0.5;
             _frontNear = FrontNear(campaign, globe, height);
+            if (land > 0.001f) Survey(campaign.ProvinceMap, globe, height);
         }
 
         var step = 1f - MathF.Exp(-(float)delta * 1.5f);
         Mix(_high, live ? high * 0.55f * level : 0f, step);
-        Mix(_land, live ? land * 0.45f * level : 0f, step);
+        foreach (var (name, player) in _beds)
+            Mix(player, live ? land * 0.45f * _ground.GetValueOrDefault(name) * level : 0f, step);
         Mix(_front, live ? _frontNear * 0.70f * level : 0f, step);
+    }
+
+    /// <summary>
+    /// What ground is under the camera: nine points around the view centre, so a coast or a
+    /// forest edge blends the beds instead of switching them. Presentation only.
+    /// </summary>
+    private void Survey(ProvinceTopology map, GlobePresentation globe, float height)
+    {
+        _ground.Clear();
+        var openCountry = SoundCatalog.OpenCountryBed;
+        if (map is null) { _ground[openCountry] = 1f; return; }
+        var (latitude, longitude) = globe.ViewCentre;
+        var radius = Mathf.Lerp(.5f, 2.5f, Mathf.InverseLerp(5.3f, 8.6f, height));
+        const float point = 1f / 9f;
+        for (var i = 0; i < 9; i++)
+        {
+            var angle = i * MathF.Tau / 8f;
+            var lat = i == 8 ? latitude : Math.Clamp(latitude + radius * MathF.Sin(angle), -89f, 89f);
+            var lon = i == 8 ? longitude : longitude + radius * MathF.Cos(angle) / MathF.Max(.2f, MathF.Cos(Mathf.DegToRad(latitude)));
+            var province = CityCatalog.ProvinceUnder(map, lat, lon);
+            if (province <= 0) { Add(SoundCatalog.SeaBed, point); continue; }
+            if (SoundCatalog.TerrainAmbience.TryGetValue(map.TerrainAt(province).Id, out var mix))
+                foreach (var (bed, share) in mix) Add(bed, point * share);
+            else Add(openCountry, point);
+        }
+
+        void Add(string bed, float share) => _ground[bed] = _ground.GetValueOrDefault(bed) + share;
     }
 
     /// <summary>How close the camera is to a battle the player can see, 0 to 1; only from low down.</summary>
@@ -117,5 +178,12 @@ public sealed partial class MapAmbience : Node
         }
         player.VolumeDb = Mathf.LinearToDb(next);
         if (!player.Playing) player.Play((float)GD.RandRange(0.0, Math.Max(0.0, player.Stream.GetLength() - 1.0)));
+    }
+
+    private static void Silence(AudioStreamPlayer player, bool stop)
+    {
+        if (!GodotObject.IsInstanceValid(player)) return;
+        player.VolumeDb = -80;
+        if (stop && player.Playing) player.Stop();
     }
 }

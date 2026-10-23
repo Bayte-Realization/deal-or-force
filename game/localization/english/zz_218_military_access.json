@@ -1,0 +1,21 @@
+{
+  "Request military access": "Request military access",
+  "Grant military access": "Grant military access",
+  "Revoke military access": "Revoke military access",
+  "Renounce military access": "Renounce military access",
+  "Military access is already available.": "Military access is already available.",
+  "A military access request awaits a reply.": "A military access request awaits a reply.",
+  "Wait before requesting military access again.": "Wait before requesting military access again.",
+  "Military access request sent.": "Military access request sent.",
+  "Military access refused.": "Military access refused.",
+  "Military access granted.": "Military access granted.",
+  "Military access ended.": "Military access ended.",
+  "Military access permits transit, not occupation or an alliance. A human government must explicitly approve a request.": "Military access permits transit, not occupation or an alliance. A human government must explicitly approve a request.",
+  "Let their troops cross your land. Revocation sends unauthorised visitors home safely; it does not destroy them.": "Let their troops cross your land. Revocation sends unauthorised visitors home safely; it does not destroy them.",
+  "Your access: {0} · Their access: {1}": "Your access: {0} · Their access: {1}",
+  "Passage allowed": "Allowed",
+  "Passage unavailable": "Not granted",
+  "{0} requests military access.": "{0} requests military access.",
+  "Interned on neutral ground; awaiting a safe return home.": "Interned on neutral ground; awaiting a safe return home.",
+  "Regrouping: {0} day(s) before combat readiness.": "Regrouping: {0} day(s) before combat readiness."
+}

@@ -8,7 +8,7 @@ namespace DealOrForce.Simulation;
 
 public enum LibraryMediaKind { Music, Sound, Image, Video }
 public sealed record LibraryMedia(string Id, string Name, string Purpose, LibraryMediaKind Kind, string File, string Source,
-    double DurationSeconds = 0, IReadOnlyList<float> Peaks = null);
+    double DurationSeconds = 0, IReadOnlyList<float> Peaks = null, float VolumeDb = 0);
 
 /// <summary>Presentation-only inventory. Loading or browsing never touches campaign state.</summary>
 public static class MediaLibraryCatalog
@@ -61,6 +61,13 @@ public static class MediaLibraryCatalog
                 if (!supported) throw new FormatException("unsupported local format for this media kind");
                 // A renamed recording keeps its measurement. A different file must not inherit a false waveform.
                 var sameFile = old is not null && resolved == old.File;
+                var volume = sameFile ? old.VolumeDb : 0;
+                if (e.TryGetProperty("volume_db", out var trim))
+                {
+                    if (trim.ValueKind != JsonValueKind.Number || !trim.TryGetSingle(out volume) ||
+                        !float.IsFinite(volume) || volume < -60 || volume > 0)
+                        throw new FormatException("volume_db must be finite and between -60 and 0");
+                }
                 var duration = sameFile ? old.DurationSeconds : 0;
                 if (e.TryGetProperty("duration_seconds", out var length))
                 {
@@ -86,7 +93,7 @@ public static class MediaLibraryCatalog
                 if (peaks?.Count > 0 && (duration <= 0 || kind is not (LibraryMediaKind.Music or LibraryMediaKind.Sound)))
                     throw new FormatException("a waveform needs an audio recording and a positive duration");
                 Items[entry.Name] = new(entry.Name, Text("name", old?.Name ?? entry.Name), Text("purpose", old?.Purpose ?? ""), kind,
-                    resolved, Text("source", old?.Source ?? ""), duration, peaks);
+                    resolved, Text("source", old?.Source ?? ""), duration, peaks, volume);
             }
             catch (Exception ex) { errors?.Add(origin + ": " + entry.Name + ": " + ex.Message); }
         }

@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-15",
+  "source_base": "21564ec",
+  "verification": {
+    "isolated_formable_tests": {
+      "pass": 2614,
+      "exit_code": 0
+    },
+    "original_formable_tests": {
+      "pass": 2743,
+      "exit_code": 0,
+      "note": "Includes additional local WIP; not evidence it was published."
+    },
+    "isolated_army_tests": {
+      "pass": 458,
+      "exit_code": 0
+    },
+    "coalition_focused": {
+      "pass": 37,
+      "bilateral_route_oracle_queries": 2304
+    },
+    "fiscal_focused": {
+      "pass": 43
+    },
+    "construction_funding_focused": {
+      "pass": 14
+    },
+    "music_transition_pure": {
+      "pass": 28
+    },
+    "music_transition_native": {
+      "pass": 11
+    },
+    "new_ogg_native": {
+      "pass": 5
+    },
+    "game_probe": {
+      "pass": 82,
+      "failures": 0,
+      "headless": true,
+      "screenshots": 0
+    },
+    "isolated_build": {
+      "errors": 0,
+      "warnings": 0
+    },
+    "original_editor_scan": {
+      "files_scanned": 849,
+      "errors": 2,
+      "warnings": [
+        "Scripts/Boot/boot_guard.gd:229 integer division",
+        "Scripts/Boot/boot_guard.gd:230 integer division"
+      ],
+      "csharp_build": "success",
+      "scene_load_skipped": true,
+      "non_game_errors": [
+        "build/godot-luau-script/extern/godot-cpp/test/project/example.gd: missing Example native test class",
+        "build/godot-luau-script/extern/godot-cpp/test/project/main.gd: external test_base.gd path"
+      ]
+    }
+  },
+  "soaks": [
+    {
+      "seed": 20260830,
+      "requested_days": 365,
+      "completed_days": 365,
+      "step_hours": 1,
+      "invariant_failures": 0,
+      "alerts": 0,
+      "initial_gdp_billions": 88471.08834591974,
+      "final_gdp_billions": 93090.12107814103,
+      "initial_active_wars": 9,
+      "final_active_wars": 9,
+      "final_regions": 1869,
+      "final_high_inflation_countries": 0
+    },
+    {
+      "seed": 20261015,
+      "requested_days": 730,
+      "completed_days": 730,
+      "step_hours": 1,
+      "invariant_failures": 0,
+      "alerts": 0,
+      "initial_gdp_billions": 88471.08834591974,
+      "final_gdp_billions": 94986.40548943728,
+      "initial_active_wars": 9,
+      "final_active_wars": 8,
+      "final_regions": 1869,
+      "final_high_inflation_countries": 0
+    },
+    {
+      "seed": 20260831,
+      "requested_days": 730,
+      "completed_days": 730,
+      "step_hours": 1,
+      "invariant_failures": 0,
+      "alerts": 0,
+      "initial_gdp_billions": 88471.08834591974,
+      "final_gdp_billions": 94277.05629208218,
+      "initial_active_wars": 9,
+      "final_active_wars": 8,
+      "final_regions": 1865,
+      "final_high_inflation_countries": 0
+    }
+  ],
+  "limitations": [
+    "Soak invariants sampled every 90 days and at the end, not a century-scale balance proof.",
+    "Soak runs overlapped tests/each other; no CPU/FPS speedup inferred from timing.",
+    "Music generated from a bell-free brief, not source-stem removal; no artistic listening acceptance claimed.",
+    "Native player fixture left ObjectDB warnings at exit; leak freedom not claimed.",
+    "Coalition combat is not joint high command, allied supply or complete naval/diplomatic rework.",
+    "Pending cash offers remain soft commitments; generic settlement retains its normal live rules."
+  ]
+}

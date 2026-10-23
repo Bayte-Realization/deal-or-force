@@ -16,6 +16,7 @@
   "CoupDefeatWeight": 0.25,
   "CoupDefaultWeight": 0.10,
   "CoupPoliticalMismatchWeight": 0.05,
+  "CoupOverstretchWeight": 0.15,
   // Paid responses run over time; their cooldown begins after completion.
   "CrisisResponseDurationDays": 90,
   "CrisisResponseCooldownDays": 180,

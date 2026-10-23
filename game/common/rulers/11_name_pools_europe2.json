@@ -1,0 +1,20 @@
+{
+  "names": {
+    "latin": {
+      "given": ["Alessandro", "Alfonso", "Andrea", "Angelo", "Antonio", "Bruno", "Carlo", "Cesare", "Claudio", "Dario", "Domenico", "Edoardo", "Emilio", "Enrico", "Fabio", "Federico", "Filippo", "Franco", "Gabriele", "Giacomo", "Giorgio", "Giovanni", "Giulio", "Lorenzo", "Luca", "Marco", "Mario", "Massimo", "Matteo", "Michele", "Nicola", "Paolo", "Pietro", "Raffaele", "Riccardo", "Roberto", "Salvatore", "Stefano", "Tommaso", "Vittorio", "Alessia", "Beatrice", "Bianca", "Chiara", "Elena", "Francesca", "Giulia", "Isabella", "Laura", "Lucia", "Margherita", "Paola", "Sofia", "Valentina"],
+      "family": ["Amato", "Barbieri", "Bianchi", "Bruno", "Caputo", "Caruso", "Colombo", "Conti", "Costa", "D'Angelo", "De Luca", "Esposito", "Ferrari", "Ferri", "Fiore", "Gallo", "Gentile", "Giordano", "Greco", "Leone", "Lombardi", "Longo", "Mancini", "Marini", "Mazza", "Messina", "Monti", "Moretti", "Orlando", "Palumbo", "Pellegrini", "Rinaldi", "Riva", "Romano", "Rossetti", "Russo", "Sala", "Santoro", "Serra", "Silva", "Testa", "Valentini", "Villa", "Vitale"]
+    },
+    "hellenic": {
+      "given": ["Alexios", "Anastasios", "Andreas", "Antonios", "Apostolos", "Athanasios", "Charalampos", "Christos", "Dimitrios", "Evangelos", "Georgios", "Grigorios", "Ioannis", "Konstantinos", "Kostas", "Lambros", "Leonidas", "Nikolaos", "Panagiotis", "Petros", "Spyridon", "Stavros", "Theodoros", "Vasileios", "Yiannis", "Zacharias", "Aikaterini", "Anastasia", "Dimitra", "Eleni", "Evgenia", "Fotini", "Georgia", "Ioanna", "Kalliopi", "Maria", "Niki", "Sofia", "Vasiliki", "Zoe"],
+      "family": ["Alexopoulos", "Antoniou", "Christodoulou", "Dimitriou", "Economou", "Fotopoulos", "Georgiou", "Ioannidis", "Karagiannis", "Katsaros", "Konstantinidis", "Kostopoulos", "Lambropoulos", "Makris", "Nikolaou", "Papadakis", "Papadopoulos", "Papas", "Petridis", "Rallis", "Sakellarios", "Sarris", "Stavrou", "Theodorou", "Vasileiou", "Vlachos", "Zachariadis"]
+    },
+    "baltic": {
+      "given": ["Aivars", "Andris", "Arvids", "Edgars", "Guntis", "Ilmars", "Janis", "Juris", "Karlis", "Martins", "Oskars", "Peteris", "Raimonds", "Roberts", "Valdis", "Viesturs", "Zigurds", "Auste", "Dalia", "Egle", "Giedre", "Ieva", "Jolanta", "Kristina", "Laima", "Milda", "Rasa", "Ruta", "Vaida", "Zita", "Andres", "Jaan", "Kalev", "Margus", "Peeter", "Rein", "Toomas", "Urmas", "Kadi", "Kersti", "Maarja"],
+      "family": ["Bērziņš", "Cīrulis", "Eglītis", "Jansons", "Kalniņš", "Liepa", "Ozols", "Priede", "Rozītis", "Saulītis", "Vītols", "Zariņš", "Balčiūnas", "Brazauskas", "Jankauskas", "Kazlauskas", "Petrauskas", "Stankevičius", "Vaitkus", "Žukauskas", "Kask", "Kukk", "Mägi", "Rebane", "Saar", "Sepp", "Tamm", "Vaher"]
+    },
+    "finnic": {
+      "given": ["Aarne", "Ahti", "Antti", "Eero", "Eino", "Erkki", "Hannu", "Heikki", "Ilmari", "Jari", "Jouko", "Juhani", "Kalevi", "Kimmo", "Lauri", "Markku", "Matti", "Mikko", "Olavi", "Pekka", "Pentti", "Risto", "Sakari", "Seppo", "Tapani", "Tapio", "Toivo", "Väinö", "Aino", "Anneli", "Eeva", "Helmi", "Inkeri", "Kaarina", "Kirsti", "Leena", "Marja", "Päivi", "Riitta", "Sirkka", "Tuula"],
+      "family": ["Aalto", "Ahonen", "Hakala", "Heikkinen", "Hiltunen", "Hämäläinen", "Järvinen", "Karjalainen", "Kinnunen", "Korhonen", "Koskinen", "Lahtinen", "Laine", "Lehtinen", "Lehtonen", "Mäkinen", "Manninen", "Mattila", "Nieminen", "Ojala", "Pitkänen", "Rantanen", "Räsänen", "Salminen", "Salo", "Savolainen", "Toivonen", "Virtanen", "Vuorinen"]
+    }
+  }
+}

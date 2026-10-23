@@ -1,0 +1,27 @@
+// Карточка провинции по правой кнопке (ProvinceContextMenuUI.cs).
+{
+  "THIS REGION": "ЭТОТ РЕГИОН",
+  "Open the region": "Открыть регион",
+  "Its people, buildings, garrison and what can be built there.": "Его население, постройки, гарнизон и то, что там можно построить.",
+  "Recruit here": "Набрать войска здесь",
+  "Rebuild what the war broke": "Восстановить разрушенное войной",
+  "Nothing here is in ruins.": "Здесь нечего восстанавливать.",
+  "Regional laws": "Региональные законы",
+  "Confirm: move the capital here ({0})": "Подтвердить перенос столицы сюда ({0})",
+  "The government moves here. It costs {0} and a little order while it settles.": "Правительство переезжает сюда. Это стоит {0} и немного порядка, пока всё не уляжется.",
+  "Cash, regions and promises, both sides on one table.": "Деньги, регионы и обещания обеих сторон на одном столе.",
+  "Agents in their country, for {0}. It grows week by week and shows more as it grows.": "Агенты в их стране за {0}. Сеть растёт неделя за неделей и показывает всё больше.",
+  "Send reconnaissance flights here": "Послать сюда воздушную разведку",
+  "Reconnaissance flies over an enemy's ground, in a war.": "Воздушная разведка летает над землёй врага, во время войны.",
+  "No aircraft or drone of ours that can fly reconnaissance reaches this province.": "Ни один наш самолёт или дрон, способный вести разведку, сюда не долетает.",
+  "Disputes over this region": "Споры за этот регион",
+  "Crack down on {0}": "Подавить движение «{0}»",
+  "Fund {0}": "Финансировать движение «{0}»",
+  "{0} · {1} people · stability {2}": "{0} · население {1} · стабильность {2}",
+  "held by {0}": "занят: {0}",
+  "at war with us": "воюет с нами",
+  "opinion {0:+0;-0;0}": "мнение {0:+0;-0;0}",
+  "our network {0}": "наша сеть {0}",
+  "war damage {0}": "разрушения {0}",
+  "{0} flies reconnaissance from its base: the fog lifts over enemy ground within {1:0} km.": "Соединение «{0}» ведёт разведку со своей базы: туман над землёй врага рассеивается в радиусе {1:0} км."
+}

@@ -13,6 +13,7 @@
     "map.flat_counter_min_ratio": 0.25,
     "map.front_width_pixels": 1.6,
     "map.flat_counter_gap": 4,
+    "map.flat_support_bias": 1.0,
     "map.flat_fleet_counter_width": 64,
     "map.flat_capital_pixels": 14,
     "map.flat_zoom_step": 0.15,
@@ -26,6 +27,12 @@
     "support.flat_counter_width": 64,
     "support.flat_idle_width": 34,
     "support.reach_width_pixels": 1.2,
-    "support.reach_idle_width_pixels": 0.7
+    "support.reach_idle_width_pixels": 0.7,
+    // Bottom map-mode control strip (MapControlsUI.cs). Named so the strip's density and
+    // button height can be retuned as data; each is read with its current literal as the
+    // fallback, so nothing moves until a value here changes.
+    "map.controls_flow_h_gap": 4,
+    "map.controls_flow_v_gap": 4,
+    "map.controls_button_height": 34
   }
 }

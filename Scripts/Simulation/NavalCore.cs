@@ -123,6 +123,7 @@ public sealed class Fleet
     /// <summary>Hulls laid down for it and not yet delivered, and how far along the next one is.</summary>
     public int HullsOrdered;
     public float HullProgress;
+    public MobilisationMode HullOrderMode;
 
     /// <summary>Hulls sunk under it, over the whole campaign.</summary>
     public int HullsLost;

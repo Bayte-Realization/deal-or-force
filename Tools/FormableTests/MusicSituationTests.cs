@@ -48,6 +48,8 @@ static class MusicSituationTests
         region.NationMapIndex = rival.MapIndex;
         Check(MusicSituation.Read(c, n, region).Mood == MusicMood.Calm, "foreign region is not represented as national radicalism");
         Check(MusicSituation.Read(c, n, region, observer: true).Region == "asia", "observer's selected region chooses the regional palette");
+        rival.Region = "Western Asia";
+        Check(MusicSituation.Read(c, n, region, observer: true).SubRegion == "western_asia", "the palette carries the sub-region as a tag");
         c.Wars.Add(new StrategicWar { Id = 1, AttackerId = n.Id, DefenderId = rival.Id });
         Check(MusicSituation.Read(c, n).Mood == MusicMood.War, "own active war outranks other pressure");
         Check(MusicSituation.Read(c, n, observer: true).Mood == MusicMood.Crisis && MusicSituation.Read(c, n, observer: true).WorldWarExposure == 1,

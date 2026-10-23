@@ -82,7 +82,6 @@
 
   // The trade instructions screen.
   "TRADE INSTRUCTIONS": "TRADE INSTRUCTIONS",
-  "What this country has told its traders to do, good by good and country by country. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them. A change takes effect at the next weekly clearing.": "What this country has told its traders to do, good by good and country by country. Every control here is declared in common/trade, so a mod can change the limits, the defaults and the names of all of them. A change takes effect at the next weekly clearing.",
   "for the good above only": "for the good above only",
   "Apply the rules below to the good selected above rather than to everything. A rule naming a good is read first, and what the country said in general is the fallback.": "Apply the rules below to the good selected above rather than to everything. A rule naming a good is read first, and what the country said in general is the fallback.",
   "Forget everything this country has decided about its trade and let every good be traded on its merits again.": "Forget everything this country has decided about its trade and let every good be traded on its merits again.",

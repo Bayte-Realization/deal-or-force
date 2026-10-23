@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -99,7 +100,7 @@ public static class AllianceSystem
     /// Whether these two could sign anything at all, and if not, which of the several
     /// reasons it is. Every one of them is a fact a player can act on rather than a refusal.
     /// </summary>
-    public static bool CanPropose(Campaign campaign, Nation proposer, Nation target, out string refusal)
+    public static bool CanPropose(Campaign campaign, Nation proposer, Nation target, out string refusal, bool preview = false)
     {
         refusal = "";
         if (campaign is null || proposer is null || target is null || proposer.Id == target.Id)
@@ -108,7 +109,8 @@ public static class AllianceSystem
             return false;
         }
 
-        var relation = CampaignDiplomacy.Get(campaign, proposer.Id, target.Id);
+        var relation = preview ? CampaignDiplomacy.ReadOrNeutral(campaign, proposer.Id, target.Id)
+            : CampaignDiplomacy.Get(campaign, proposer.Id, target.Id);
         if (relation.Stance == DiplomaticStance.Allied)
         {
             refusal = $"{proposer.Tag} and {target.Tag} are already allied.";
@@ -163,11 +165,13 @@ public static class AllianceSystem
     /// shelter, and whether you both fear the same country - which is what most alliances in
     /// history were actually about.
     /// </summary>
-    public static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why = null)
+    public static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why = null,
+        bool refreshAssessment = true)
     {
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
-        var relation = CampaignDiplomacy.Get(campaign, asked.Id, asking.Id);
+        var relation = refreshAssessment ? CampaignDiplomacy.Get(campaign, asked.Id, asking.Id)
+            : CampaignDiplomacy.ReadOrNeutral(campaign, asked.Id, asking.Id);
         var defines = campaign.Defines;
 
         var willingness = relation.Opinion / 100f;
@@ -189,7 +193,7 @@ public static class AllianceSystem
         // wants somebody large to stand behind; a large one gains little from somebody it
         // would have to carry.
         var mine = MathF.Max(0.01f, AiStatecraft.StrengthOf(campaign, asked));
-        var theirs = CampaignIntel.EstimatedStrength(campaign, asked.Id, asking);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, asked.Id, asking, refreshAssessment);
         var shelter = M.Clamp(theirs / mine - 1f, -0.6f, 1.2f) * defines.AllianceShelterWeight;
         willingness += shelter;
         why?.Add("What they bring", shelter);
@@ -304,9 +308,12 @@ public static class AllianceSystem
         return willingness;
     }
 
-    private static readonly HashSet<int> Powers = new();
-    private static int _powersDay = int.MinValue;
-    private static Campaign _powersFor;
+    private sealed class PowerFrame
+    {
+        internal int Day = int.MinValue;
+        internal readonly HashSet<int> Powers = new();
+    }
+    private static readonly ConditionalWeakTable<Campaign, PowerFrame> PowerFrames = new();
 
     /// <summary>
     /// The countries large enough that a quarrel with them is everybody's quarrel - the same
@@ -314,9 +321,13 @@ public static class AllianceSystem
     /// </summary>
     internal static HashSet<int> GreatPowers(Campaign campaign)
     {
-        if (_powersFor == campaign && _powersDay == campaign.ElapsedDays) return Powers;
-        _powersFor = campaign;
-        _powersDay = campaign.ElapsedDays;
+        // Preserve EACH world's first reading of the day. A single campaign-stamped
+        // cache recalculated mid-day after another world evicted it, changing who felt
+        // threatened and thus organisation cohesion in an interleaved multiplayer replay.
+        var frame = PowerFrames.GetOrCreateValue(campaign);
+        var Powers = frame.Powers;
+        if (frame.Day == campaign.ElapsedDays) return Powers;
+        frame.Day = campaign.ElapsedDays;
         Powers.Clear();
         var ranked = new List<(float Strength, int Id)>();
         foreach (var nation in campaign.Nations)

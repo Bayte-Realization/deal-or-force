@@ -1,11 +1,10 @@
 {
   "Energy systems III": "Энергосистемы III",
-  "A conditional late-game improvement in energy efficiency and supply. This abstracts possible advances rather than predicting a particular invention or date.": "Условное позднее улучшение энергоэффективности и снабжения. Это обобщение возможного прогресса; конкретного изобретения или даты здесь нет.",
+  "Late gains in energy efficiency and supply.": "Поздние успехи в энергоэффективности и снабжении.",
   "Power transmission II": "Передача энергии II",
-  "A conditional improvement in grid efficiency, reliability and transmission capacity; no specific future breakthrough is assumed.": "Условное улучшение эффективности, надёжности и пропускной способности энергосетей без привязки к конкретному будущему открытию.",
+  "Better, more reliable power grids.": "Более надёжные и эффективные энергосети.",
   "Combat automation II": "Автоматизация боевых систем II",
-  "A further stage of assisted coordination and automation, represented by improved attack and defence rather than a predicted weapon system.": "Следующая ступень автоматизации и координации. Выражена через улучшение атаки и защиты; конкретное оружие не предсказывается.",
+  "The next step in automated warfare: better attack and defence.": "Следующий шаг автоматизации войны: сильнее атака и оборона.",
   "Medical systems II": "Медицинские системы II",
-  "A conditional improvement in treatment effectiveness and recovery, combining medical data and biological research.": "Условное улучшение эффективности лечения и восстановления на основе медицинских данных и биологических исследований.",
-  "Future tiers represent possible development paths, not dated predictions.": "Будущие ступени — условные пути развития. Годы открытий заранее не известны."
+  "A conditional improvement in treatment effectiveness and recovery, combining medical data and biological research.": "Условное улучшение эффективности лечения и восстановления на основе медицинских данных и биологических исследований."
 }

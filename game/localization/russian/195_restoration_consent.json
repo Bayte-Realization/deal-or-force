@@ -1,0 +1,19 @@
+{
+  "Restore the country": "Восстановить страну",
+  "Only a country that still has a government can be restored.": "Восстановить можно только страну, у которой сохранилось правительство.",
+  "This is not a government in exile.": "Это не правительство в изгнании.",
+  "A country can only be restored to its own homeland.": "Восстановить страну можно только на её родине.",
+  "That ground is already ours.": "Эта земля уже принадлежит нам.",
+  "The country already stands on its own ground.": "Страна уже существует на своей земле.",
+  "Another country already bears this name.": "Другая страна уже носит это имя.",
+  "The holder will not hand it back, and we do not hold it.": "Владелец не разрешил возвращение, а мы не контролируем весь регион.",
+  "The government has returned to {0}: {1} stands again.": "Правительство вернулось в {0}: {1} вновь на карте.",
+  "Gave us our country back": "Вернули нам нашу страну",
+  "Authorise a return": "Разрешить возвращение",
+  "Revoke return permission": "Отозвать разрешение",
+  "Permit this exiled government to recover one homeland region you hold. This can transfer an entire region. Friendship alone grants no permission; it expires after one year or one return.": "Разрешить этому правительству в изгнании вернуться в один из принадлежащих вам регионов его родины. Это может передать ему целый регион. Дружба сама по себе не даёт разрешения; оно действует один год или до первого возвращения.",
+  "Withdraw permission for a future return. Existing borders are not reversed.": "Отозвать разрешение на будущее возвращение. Уже установленные границы не меняются.",
+  "{0} authorises one return to a homeland region it holds.": "{0}: разрешено одно возвращение в принадлежащий этой стране регион родины.",
+  "{0} withdraws permission for a future return.": "{0}: разрешение на будущее возвращение отозвано.",
+  "Return to a homeland region fully under your control, or obtain its holder's explicit permission. Friendship alone does not transfer land.": "Вернитесь в регион родины, полностью находящийся под вашим контролем, либо получите отдельное разрешение его владельца. Дружба сама по себе не передаёт землю."
+}

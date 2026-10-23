@@ -1,0 +1,46 @@
+// Как страна называется, когда её политика изменилась.
+//
+// Машинерия в CountryNames: сначала спрашивают точный ключ
+// `country.<TAG>.<government|ideology>.<value>.name`, потом общий шаблон `name.form.*`, потом
+// обычное имя страны. Здесь лежат только те случаи, где имя действительно другое — там, где
+// общий шаблон дал бы «Народную Республику Франция».
+{
+  "country.RUS.ideology.communism.name": "Российская Советская Республика",
+  "country.RUS.government.absolute_monarchy.name": "Российская Империя",
+  "country.RUS.government.constitutional_monarchy.name": "Российская Империя",
+  "country.CHN.ideology.communism.name": "Китайская Народная Республика",
+  "country.CHN.government.absolute_monarchy.name": "Китайская Империя",
+  "country.USA.ideology.communism.name": "Социалистические Штаты Америки",
+  "country.USA.ideology.fascism.name": "Американское Национальное Государство",
+  "country.FRA.ideology.communism.name": "Французская Советская Республика",
+  "country.FRA.government.absolute_monarchy.name": "Королевство Франция",
+  "country.FRA.government.constitutional_monarchy.name": "Королевство Франция",
+  "country.DEU.ideology.communism.name": "Германская Социалистическая Республика",
+  "country.DEU.government.absolute_monarchy.name": "Германская Империя",
+  "country.DEU.government.constitutional_monarchy.name": "Германская Империя",
+  "country.GBR.ideology.communism.name": "Британский Союз",
+  "country.GBR.government.parliamentary_republic.name": "Британское Содружество",
+  "country.GBR.government.presidential_republic.name": "Британское Содружество",
+  "country.ITA.ideology.communism.name": "Итальянская Народная Республика",
+  "country.ITA.government.constitutional_monarchy.name": "Королевство Италия",
+  "country.ITA.government.absolute_monarchy.name": "Королевство Италия",
+  "country.ESP.government.parliamentary_republic.name": "Испанская Республика",
+  "country.ESP.government.presidential_republic.name": "Испанская Республика",
+  "country.ESP.ideology.communism.name": "Испанская Народная Республика",
+  "country.POL.ideology.communism.name": "Польская Народная Республика",
+  "country.UKR.ideology.communism.name": "Украинская Советская Республика",
+  "country.BRA.ideology.communism.name": "Бразильская Народная Республика",
+  "country.BRA.government.absolute_monarchy.name": "Бразильская Империя",
+  "country.BRA.government.constitutional_monarchy.name": "Бразильская Империя",
+  "country.JPN.government.absolute_monarchy.name": "Императорская Япония",
+  "country.JPN.ideology.communism.name": "Японская Народная Республика",
+  "country.JPN.government.parliamentary_republic.name": "Японская Республика",
+  "country.IRN.ideology.theocratic_rule.name": "Исламская Республика Иран",
+  "country.IRN.government.constitutional_monarchy.name": "Шаханшахское Государство Иран",
+  "country.IRN.government.absolute_monarchy.name": "Шаханшахское Государство Иран",
+  "country.IRN.government.parliamentary_republic.name": "Иранская Республика",
+  "country.IND.government.one_party_state.name": "Республика Индия",
+  "country.TUR.government.one_party_state.name": "Турецкая Республика",
+  "country.TUR.government.absolute_monarchy.name": "Османская Держава",
+  "country.EGY.government.one_party_state.name": "Египетская Арабская Республика"
+}

@@ -1,0 +1,13 @@
+{
+  "Law approval": "Принятие законов",
+  "Government approval": "Принятие правительства",
+  "Political divergence": "Политическое расхождение",
+  "Share of the region that accepts the laws it lives under. It moves with living standards and shortages, not with a button.": "Доля региона, которая принимает законы, при которых живёт. Она движется вместе с уровнем жизни и дефицитом, а не от кнопки.",
+  "Share of the region that accepts the government over it. A low figure with a still-orderly state is a scandal. A low figure with a failing state feeds coups and breaks.": "Доля региона, которая принимает правительство над собой. Низкая цифра при ещё крепком порядке — скандал. Низкая цифра при слабеющем государстве питает перевороты и расколы.",
+  "How far this region's politics have moved from the centre. High divergence is a state with its own mind. It is not a foreign people, and it does not by itself draw a border.": "Насколько политика региона ушла от центра. Высокое расхождение — это край со своим умом. Это не чужой народ, и само по себе оно не проводит границу.",
+  "Political opinion has not been reviewed yet. It is read with the country, once a day.": "Политическое мнение ещё не снято. Оно читается вместе со страной, раз в день.",
+  "The governed do not accept the government": "Управляемые не принимают правительство",
+  "Laws {0:P0} · government {1:P0} · divergence {2:P0}": "Законы {0:P0} · правительство {1:P0} · расхождение {2:P0}",
+  "chronicle.political_scandal": "{0} держится в порядке и без любви: законы действуют, а люди под ними — нет.",
+  "Reading the world's conflicts.": "Читаем конфликты мира."
+}

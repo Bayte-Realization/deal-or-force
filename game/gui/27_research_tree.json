@@ -5,7 +5,10 @@
     "research.column_gap": 64,
     "research.row_gap": 28,
     "research.card_font_size": 14,
-    "research.details_width": 320
+    "research.details_width": 350,
+    "research.details_max_width": 560,
+    "research.details_fraction": 0.38,
+    "research.page_size": 18
   },
   "layout": {
     "modal.research": {

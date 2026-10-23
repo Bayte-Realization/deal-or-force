@@ -17,7 +17,7 @@ public static class Dismantlement
         if (!c.FeatureEnabled("secession")) return Loc.Get("Territorial release is disabled.");
         if (parent is null || c.ProvinceMap is null || regions is null || regions.Length == 0 || regions.Distinct().Count() != regions.Length)
             return Loc.Get("Select whole regions for an independent settlement.");
-        if (!RegionalResourcePartition.ValidAccounts(parent)) return Loc.Get("The country's financial accounts are invalid.");
+        if (!RegionalResourcePartition.ValidAccounts(parent)) return Loc.Get("These regions cannot be released right now.");
         var states = regions.Select(id => c.States.Find(s => s.MapIndex == id)).ToArray();
         if (states.Any(s => s is null || s.NationMapIndex != parent.MapIndex || s.Unclaimed || s.Population <= 0))
             return Loc.Get("Only populated regions of that country can be released.");
@@ -64,7 +64,7 @@ public static class Dismantlement
         var relation = CampaignDiplomacy.Get(c, parent.Id, born.Id);
         relation.Stance = DiplomaticStance.Truce;
         relation.TruceUntil = c.ElapsedDays + 3650;
-        c.LocateCapitals(); c.MarkStrategicChange();
+        c.LocateCapitals(preserveExisting: true); c.MarkStrategicChange();
         return born;
     }
 }

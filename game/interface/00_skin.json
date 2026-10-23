@@ -19,20 +19,43 @@
     "text.body": "#e9eef5",
     "text.body_soft": "#c8d3e0",
     "text.muted": "#9dabbc",
-    "text.hint": "#8190a2",
-    "text.faint": "#718299",
+    // The two dimmest steps were raised after measuring, not after looking. Against the
+    // lightest panel background the interface actually renders (#21272E, sampled from a
+    // captured frame) `text.faint` sat at 3.84:1 and `text.hint` at 4.62:1, and these are the
+    // two steps the SMALLEST text uses - footnotes and captions, where a low ratio is hardest
+    // to read. WCAG AA asks 4.5:1 for normal text. They are now 4.57:1 and 5.06:1, which keeps
+    // the ramp in order (faint < hint < caption 5.44 < muted 6.44) and puts every step of it
+    // above the line. Nothing above them moved.
+    "text.hint": "#8797ac",
+    "text.faint": "#7f8fa4",
     "text.caption": "#8e9daf",
     "state.positive": "#4fb477",
     "state.negative": "#c94f55",
     "state.warning": "#e7b058",
     "state.info": "#77c9e8",
-    "state.critical": "#ef8c62",
+    // The fifth step of the severity ramp: calm (green), friction (blue), crisis (amber),
+    // clashes, war (red). Red, amber and green are taken by the other four, and the old value
+    // here was a soft salmon that sat next to `state.negative` - two reds a step apart, which on
+    // a ten-pixel tension bar is one colour. A violet is the one hue the ramp does not already
+    // use, so "clashes" and "war" can no longer be mistaken for each other.
+    "state.critical": "#b473e0",
     "surface.background": "#060b13",
     "surface.panel_tint": "#c7dbf0fa",
     "surface.overlay": "#0d1722e8",
     "surface.inset": "#172635",
     "surface.line": "#50677d",
     "surface.line_faint": "#33455688",
+    "surface.base": "#131f2c",
+    "surface.raised": "#1b2b3a",
+    "surface.panel": "#131f2c",
+    // The paper the brand banner is printed on.
+    //
+    // The banner's own lettering is a dark blue and a dark red that cannot be read against a
+    // navy panel, which is why the logo sits on paper rather than on the panel - and why the
+    // transparent brand_logo_menu.png that also ships is NOT used in the menu. This is the
+    // colour of that paper, so a reskin can move the plaque with everything else instead of
+    // finding a raw hex in the code.
+    "brand.paper": "#e9e4d9",
     "button.text": "#edf2f7",
     "button.text_hover": "#fff0b0",
     "button.text_pressed": "#d7c581",
@@ -110,6 +133,7 @@
     // right default for a mod that has not thought about it and the wrong one for the game:
     // the backdrop is art we ship, and without this line nothing ever asked for it. Set it
     // to 0 for the flat colour.
-    "shell.space_texture": 1
+    "shell.space_texture": 1,
+    "news.feed_rows": 3
   }
 }

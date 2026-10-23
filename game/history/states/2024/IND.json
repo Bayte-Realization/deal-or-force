@@ -15,7 +15,7 @@
   "in_an": {
     "population": 434192,
     "urbanization": 0.296,
-    "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
+    "cultures": { "bengali": 0.3, "hindustani": 0.25, "tamil": 0.2, "telugu": 0.15, "malayali": 0.1 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.854, "Coal": 0.155, "Oil": 0.347, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.276, "Timber": 1.041, "Bauxite": 0.159, "Uranium": 0.005 }
   },
@@ -23,7 +23,7 @@
   "in_ap": {
     "population": 79072293,
     "urbanization": 0.35,
-    "cultures": { "telugu": 0.4943, "nepali": 0.3034, "sindhi": 0.1517, "parsi": 0.0506 },
+    "cultures": { "telugu": 0.89, "hindustani": 0.07, "tamil": 0.02, "kannada": 0.02 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 3, "Infrastructure": 1 },
     "resources": { "Food": 2.162, "Coal": 1.863, "Oil": 0.241, "IronOre": 1.708, "RareEarths": 8.499, "NaturalGas": 0.32, "Timber": 1.644, "Bauxite": 0.159, "Uranium": 0.005 }
   },
@@ -47,7 +47,7 @@
   "in_br": {
     "population": 38479058,
     "urbanization": 0.22,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.99, "bengali": 0.01 },
     "buildings": { "Agriculture": 15, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.459, "Coal": 0.155, "Oil": 0.589, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.457, "Timber": 3.363, "Bauxite": 0.159, "Uranium": 0.006 }
   },
@@ -55,7 +55,7 @@
   "in_ct": {
     "population": 26826474,
     "urbanization": 0.23,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.96, "odia": 0.02, "marathi": 0.02 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.85, "Coal": 18.947, "Oil": 0.23, "IronOre": 12.669, "RareEarths": 0.151, "NaturalGas": 0.224, "Timber": 1.697, "Bauxite": 4.537, "Uranium": 0.003 }
   },
@@ -63,7 +63,7 @@
   "in_gj": {
     "population": 94666983,
     "urbanization": 0.35,
-    "cultures": { "gujarati": 0.526, "nepali": 0.2844, "sindhi": 0.1422, "parsi": 0.0474 },
+    "cultures": { "gujarati": 0.86, "hindustani": 0.08, "sindhi": 0.02, "marathi": 0.02, "rajasthani": 0.02 },
     "buildings": { "Agriculture": 30, "CivilianIndustry": 3, "Infrastructure": 1 },
     "resources": { "Food": 2.183, "Coal": 0.155, "Oil": 0.217, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.172, "Timber": 1.083, "Bauxite": 8.916, "Uranium": 0.004 }
   },
@@ -71,7 +71,7 @@
   "in_hr": {
     "population": 65812345,
     "urbanization": 0.49,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.91, "punjabi": 0.09 },
     "buildings": { "Agriculture": 16, "CivilianIndustry": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.945, "Coal": 0.155, "Oil": 0.257, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.253, "Timber": 1.797, "Bauxite": 0.159, "Uranium": 0.005 }
   },
@@ -79,7 +79,7 @@
   "in_hp": {
     "population": 2927988,
     "urbanization": 0.29,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.95, "punjabi": 0.04, "nepali": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.152, "Coal": 0.155, "Oil": 0.119, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.292, "Timber": 1.146, "Bauxite": 0.159, "Uranium": 0.005 }
   },
@@ -95,7 +95,7 @@
   "in_jh": {
     "population": 33536110,
     "urbanization": 0.25,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.85, "bengali": 0.1, "odia": 0.05 },
     "buildings": { "Agriculture": 12, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.463, "Coal": 14.676, "Oil": 0.376, "IronOre": 7.971, "RareEarths": 0.151, "NaturalGas": 0.328, "Timber": 3.397, "Bauxite": 7.164, "Uranium": 0.004 }
   },
@@ -103,7 +103,7 @@
   "in_ka": {
     "population": 99703498,
     "urbanization": 0.33,
-    "cultures": { "kannada": 0.4217, "nepali": 0.347, "sindhi": 0.1735, "parsi": 0.0578 },
+    "cultures": { "kannada": 0.7, "hindustani": 0.11, "telugu": 0.07, "marathi": 0.05, "tamil": 0.04, "malayali": 0.03 },
     "buildings": { "Agriculture": 33, "CivilianIndustry": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.492, "Coal": 0.155, "Oil": 0.318, "IronOre": 11.886, "RareEarths": 0.151, "NaturalGas": 0.849, "Timber": 2.881, "Bauxite": 0.159, "Uranium": 0.01 }
   },
@@ -127,7 +127,7 @@
   "in_ld": {
     "population": 64473,
     "urbanization": 0.465,
-    "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
+    "cultures": { "malayali": 1 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.834, "Coal": 0.155, "Oil": 0.19, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.17, "Timber": 3.173, "Bauxite": 0.159, "Uranium": 0.004 }
   },
@@ -135,7 +135,7 @@
   "in_mp": {
     "population": 97208001,
     "urbanization": 0.19,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.98, "marathi": 0.02 },
     "buildings": { "Agriculture": 39, "CivilianIndustry": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.535, "Coal": 11.259, "Oil": 0.348, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.408, "Timber": 1.69, "Bauxite": 0.159, "Uranium": 0.005 }
   },
@@ -143,7 +143,7 @@
   "in_mh": {
     "population": 195843051,
     "urbanization": 0.47,
-    "cultures": { "marathi": 0.3955, "nepali": 0.3627, "sindhi": 0.1814, "parsi": 0.0605 },
+    "cultures": { "marathi": 0.7, "hindustani": 0.23, "gujarati": 0.03, "telugu": 0.02, "kannada": 0.02 },
     "buildings": { "Agriculture": 51, "CivilianIndustry": 9, "Infrastructure": 1 },
     "resources": { "Food": 2.348, "Coal": 6.134, "Oil": 0.663, "IronOre": 1.708, "RareEarths": 0.151, "NaturalGas": 0.531, "Timber": 1.211, "Bauxite": 6.289, "Uranium": 0.006 }
   },
@@ -151,7 +151,7 @@
   "in_mn": {
     "population": 2135874,
     "urbanization": 0.3,
-    "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
+    "cultures": { "meitei": 0.6, "naga": 0.25, "chin": 0.1, "nepali": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.037, "Coal": 0.155, "Oil": 0.329, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.277, "Timber": 1.063, "Bauxite": 0.159, "Uranium": 0.007 }
   },
@@ -159,7 +159,7 @@
   "in_ml": {
     "population": 3060455,
     "urbanization": 0.37,
-    "cultures": { "nepali": 0.6, "sindhi": 0.3, "parsi": 0.1 },
+    "cultures": { "khasi": 0.75, "bengali": 0.15, "nepali": 0.05, "hindustani": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.337, "Coal": 1.009, "Oil": 0.539, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.488, "Timber": 0.85, "Bauxite": 0.159, "Uranium": 0.009 }
   },
@@ -175,7 +175,7 @@
   "in_nl": {
     "population": 513328,
     "urbanization": 0.43,
-    "cultures": { "kachin": 0.3, "chin": 0.25, "assamese": 0.18, "bengali": 0.1, "hindustani": 0.09, "nepali": 0.05, "burmese": 0.03 },
+    "cultures": { "naga": 0.85, "hindustani": 0.05, "bengali": 0.05, "nepali": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 0.913, "Coal": 0.155, "Oil": 0.512, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.388, "Timber": 2.845, "Bauxite": 0.159, "Uranium": 0.006 }
   },
@@ -183,7 +183,7 @@
   "in_or": {
     "population": 30366555,
     "urbanization": 0.23,
-    "cultures": { "odia": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "odia": 0.88, "hindustani": 0.05, "telugu": 0.04, "bengali": 0.03 },
     "buildings": { "Agriculture": 12, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.217, "Coal": 19.801, "Oil": 0.533, "IronOre": 43.202, "RareEarths": 25.193, "NaturalGas": 0.707, "Timber": 3.07, "Bauxite": 61.455, "Uranium": 0.013 }
   },
@@ -199,7 +199,7 @@
   "in_rj": {
     "population": 80459638,
     "urbanization": 0.25,
-    "cultures": { "rajasthani": 0.6876, "nepali": 0.1874, "sindhi": 0.0937, "parsi": 0.0312 },
+    "cultures": { "rajasthani": 0.72, "hindustani": 0.25, "punjabi": 0.02, "sindhi": 0.01 },
     "buildings": { "Agriculture": 30, "CivilianIndustry": 2, "Infrastructure": 1 },
     "resources": { "Food": 2.027, "Coal": 0.155, "Oil": 0.435, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.586, "Timber": 2.122, "Bauxite": 0.159, "Uranium": 0.01 }
   },
@@ -215,7 +215,7 @@
   "in_tg": {
     "population": 73133367,
     "urbanization": 0.3,
-    "cultures": { "telugu": 0.4943, "nepali": 0.3034, "sindhi": 0.1517, "parsi": 0.0506 },
+    "cultures": { "telugu": 0.77, "hindustani": 0.2, "marathi": 0.02, "kannada": 0.01 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 2, "Infrastructure": 1 },
     "resources": { "Food": 0.809, "Coal": 6.134, "Oil": 0.214, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.27, "Timber": 0.959, "Bauxite": 0.159, "Uranium": 0.003 }
   },
@@ -223,7 +223,7 @@
   "in_up": {
     "population": 178440857,
     "urbanization": 0.37,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.99, "punjabi": 0.01 },
     "buildings": { "Agriculture": 55, "CivilianIndustry": 6, "Infrastructure": 1 },
     "resources": { "Food": 1.432, "Coal": 2.718, "Oil": 0.205, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.299, "Timber": 3.181, "Bauxite": 0.159, "Uranium": 0.006 }
   },
@@ -231,7 +231,7 @@
   "in_ut": {
     "population": 4330532,
     "urbanization": 0.4,
-    "cultures": { "hindustani": 0.97, "nepali": 0.018, "sindhi": 0.009, "parsi": 0.003 },
+    "cultures": { "hindustani": 0.96, "punjabi": 0.02, "nepali": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.275, "Coal": 0.155, "Oil": 0.735, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.943, "Timber": 1.176, "Bauxite": 0.159, "Uranium": 0.015 }
   },

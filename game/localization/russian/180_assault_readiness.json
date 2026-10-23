@@ -1,0 +1,20 @@
+{
+  "AUTOMATIC ASSAULT": "АВТОМАТИЧЕСКОЕ НАСТУПЛЕНИЕ",
+  "Already in battle; readiness is checked before a new assault.": "Отряд уже в бою; готовность проверяется перед новым штурмом.",
+  "Minimum assault readiness met; a reachable defended target is still needed. This is not a prediction of victory.": "Минимум готовности достигнут. Ещё нужна доступная цель, защищённая противником. Это не прогноз победы.",
+  "An explicit order overrides the automatic readiness floor. Low supply or organisation still weakens the attack.": "Прямой приказ разрешает атаку ниже порога готовности. Нехватка снабжения и организации по-прежнему ослабляет отряд.",
+  "The offensive plan is paused. Execute resumes it; Prepare keeps the formation on its line.": "Наступление приостановлено. «Выполнять» возобновит план; «Подготовка» оставит отряд на своей линии.",
+  "Recovering: {0:N0} day(s) before a new automatic assault.": "Восстановление: до следующего автоматического штурма — {0:N0} дн.",
+  "Waiting for organisation: {0:P1} available; more than {1:P1} required. Hold the line or use reserves to recover.": "Ожидание организации: есть {0:P1}, нужно больше {1:P1}. Удерживайте линию или отведите отряд в резерв для восстановления.",
+  "Waiting for supply: {0:P1} available; more than {1:P1} required. Reduce crowding or improve the supply corridor.": "Ожидание снабжения: есть {0:P1}, нужно больше {1:P1}. Рассредоточьте войска или улучшите пути снабжения.",
+  "This formation has no automatic assault order.": "У этого отряда нет приказа на автоматическое наступление.",
+  "No current formation is available for an assault.": "Нет действующего отряда для наступления.",
+  "These are minimum conditions for an automatic assault, not an estimate of victory. Orders, access, enemy strength and battle frontage still matter.": "Это минимальные условия для автоматического штурма, а не вероятность победы. Также важны приказы, доступ к цели, силы противника и ширина фронта.",
+  "Automatic assault: {0:N0} of {1:N0} formations meet the minimum.": "Автоматическое наступление: минимум готовности достигнут у {0:N0} из {1:N0} отрядов.",
+  "Already fighting: {0:N0}": "Уже в бою: {0:N0}",
+  "Explicit orders: {0:N0}; automatic health floors do not apply.": "Прямые приказы: {0:N0}; порог организации и снабжения не применяется.",
+  "Plans paused: {0:N0}": "Приостановленные планы: {0:N0}",
+  "Recovering: {0:N0}": "Восстанавливаются: {0:N0}",
+  "Waiting for organisation: {0:N0}": "Ожидают восстановления организации: {0:N0}",
+  "Waiting for supply: {0:N0}": "Ожидают снабжения: {0:N0}"
+}

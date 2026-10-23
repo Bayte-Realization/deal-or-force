@@ -23,19 +23,45 @@ public partial class DealOrForceGame
     private Button ActionCard(Container parent, string title, string what, string cost,
         IReadOnlyList<string> result, string why, string actionLabel, bool enabled, Action enact, string name = null)
     {
-        var card = WorkbenchCard(parent);
+        var panel = new PanelContainer();
+        var cardStyle = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("surface.inset"),
+            BorderColor = Ui.Colour(enabled ? "button.primary_border" : "surface.line_faint"),
+            BorderWidthLeft = enabled ? 3 : 1,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            CornerRadiusTopLeft = 4,
+            CornerRadiusTopRight = 4,
+            CornerRadiusBottomLeft = 4,
+            CornerRadiusBottomRight = 4,
+            ContentMarginLeft = 12,
+            ContentMarginRight = 12,
+            ContentMarginTop = 10,
+            ContentMarginBottom = 10
+        };
+        panel.AddThemeStyleboxOverride("panel", cardStyle);
+        parent.AddChild(panel);
 
-        var heading = Title(title, 15, Ui.Colour("text.bright"));
+        var card = new VBoxContainer();
+        card.AddThemeConstantOverride("separation", 6);
+        panel.AddChild(card);
+
+        var heading = Title(title, 15, Ui.Colour(enabled ? "text.bright" : "text.muted"));
         heading.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         card.AddChild(heading);
 
         if (!string.IsNullOrWhiteSpace(what)) card.AddChild(CardLine(what, "text.body_soft"));
-        if (!string.IsNullOrWhiteSpace(cost)) card.AddChild(CardLine(cost, "text.accent_dim"));
+        if (!string.IsNullOrWhiteSpace(cost)) card.AddChild(CardLine(cost, enabled ? "text.accent" : "text.accent_dim"));
 
         if (result is { Count: > 0 })
         {
-            card.AddChild(CardLine(Tr("Result"), "text.caption"));
-            foreach (var line in result) card.AddChild(CardLine("· " + line, "text.body_soft"));
+            var resultBox = new VBoxContainer();
+            resultBox.AddThemeConstantOverride("separation", 2);
+            resultBox.AddChild(CardLine(Tr("Result") + ":", "text.caption"));
+            foreach (var line in result) resultBox.AddChild(CardLine("· " + line, "text.body"));
+            card.AddChild(resultBox);
         }
 
         var button = ActionButton(actionLabel, enact, 0, 32, enabled);
@@ -45,7 +71,7 @@ public partial class DealOrForceGame
 
         // Why it cannot be taken, under the button it belongs to: the reason is read after the
         // player has decided they want the action, not before it.
-        if (!string.IsNullOrWhiteSpace(why)) card.AddChild(CardLine(why, "state.warning"));
+        if (!string.IsNullOrWhiteSpace(why)) card.AddChild(CardLine("⚠ " + why, "state.warning"));
         return button;
     }
 

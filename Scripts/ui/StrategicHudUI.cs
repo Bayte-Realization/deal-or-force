@@ -24,6 +24,9 @@ public partial class DealOrForceGame
         _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
         Ui.Place(_outliner, "hud.outliner");
+        // A right-anchored panel whose content is wider than its column would otherwise grow
+        // to the right, past the screen edge. Let it take the extra width from the map side.
+        _outliner.GrowHorizontal = Control.GrowDirection.Begin;
         // One scrollable rail keeps alerts and dossiers inside the available viewport.
         var outer = Margin(_outliner, (int)Ui.Metric("panel.pad", 10), (int)Ui.Metric("spacing.sm", 8));
         outer.ClipContents = true;
@@ -186,6 +189,12 @@ public partial class DealOrForceGame
                 () => OpenEconomyTab("Budget"),
                 Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
 
+        if (player.BrainDrainRate <= -0.10f && player.WeeklyNetMigration < 0)
+            AddAlert(player.BrainDrainRate <= -0.22f ? AlertLevel.Critical : AlertLevel.Warning, "literacy",
+                Simulation.Loc.Format("Brain drain: {0}", Fmt.Percent(MathF.Abs(player.BrainDrainRate))),
+                OpenSituationRoom,
+                Tr("Skilled specialists and households are emigrating. Inspect the Situation Room or Decisions to anchor talent at home."));
+
         if (construction.Length == 0 && _campaign.FeatureEnabled("construction"))
             AddAlert(AlertLevel.Notice, "alert_construction", Tr("Nothing being built"),
                 () => OpenEconomyTab("Construction"), Tr("Construction capacity is idle."));
@@ -204,21 +213,17 @@ public partial class DealOrForceGame
         // otherwise collapsing a group or changing language erases the already read news.
         // What matters, not everything: aid sent and buildings finished stay in the reports.
         foreach (var line in NewsFeed.Headlines(_campaign,
-                     (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 6), 1, 20)))
+                     (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 3), 1, 12)))
         {
-            var actor = line.ActorId > 0 ? _campaign.NationById(line.ActorId) : null;
             NewsFeed.Line captured = line;
-            AddOutlinerButton(line.Text, actor is null ? null : () =>
-                {
-                    _selectedNation = actor;
-                    OpenDiplomacyScreen();
-                },
-                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day));
+            AddOutlinerButton(line.Text, () => FocusNews(captured),
+                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day)
+                + System.Environment.NewLine + Tr("Show it on the map."));
             if (_outlinerGroupRows.GetChild(_outlinerGroupRows.GetChildCount() - 1) is Button news)
             {
                 news.Name = "WorldNews_" + line.Sequence;
                 news.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-                news.AddThemeFontSizeOverride("font_size", 12);
+                news.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 12));
                 news.CustomMinimumSize = new Vector2(0, 48);
             }
         }
@@ -524,7 +529,7 @@ public partial class DealOrForceGame
         button.Visible = !hidden;
         button.Alignment = HorizontalAlignment.Left;
         button.ClipText = true;
-        button.AddThemeFontSizeOverride("font_size", 12);
+        button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
         _outlinerRows.AddChild(button);
         _outlinerRows.AddChild(group);
         var position = 0;

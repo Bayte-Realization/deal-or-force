@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -46,11 +47,10 @@ public static class Delegation
     /// The general staff: keeping the army at the size the budget pays for - raising a
     /// formation to replace one lost, standing one down when a peace leaves too many.
     ///
-    /// The one portfolio a player's country has always had delegated, without being told: the
-    /// same rebuild every other country runs ran for the player too, so an army the player had
-    /// raised for a war they were planning was quietly stood down, one division a month, while
-    /// they planned it. It stays delegated by default - a player who never opens this keeps the
-    /// army they had - and it can now be taken back.
+    /// It stays delegated by default, and it can be taken back. Taken back, nothing is raised
+    /// or stood down. Left with the staff, a surplus goes home only after a peace, only when
+    /// the treasury cannot pay it, and never a formation that is holding a war. The same rule
+    /// the other governments use, and the country is told which formation and why.
     /// </summary>
     public const string Army = "army";
 
@@ -73,19 +73,63 @@ public static class Delegation
     /// are worth taking.</summary>
     public const string Cabinet = "cabinet";
 
-    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Command, Navy, Diplomacy, Cabinet };
+    public const string Construction = "construction";
+    public const string Research = "research";
+    public const string Personnel = "personnel";
+
+    /// <summary>The colonial office: the subject management every other overlord runs —
+    /// granting land to a fitting existing subject rather than founding micro-vassals, and
+    /// releasing an unruly, culturally foreign periphery as an autonomous satellite when the
+    /// empire is overstretched. It acts on the same monthly review and the same thresholds
+    /// the computer's overlords use. Founding a subject, annexing one or granting land by
+    /// hand stays the player's, and the office only ever acts on the same monthly day it
+    /// would for anybody else.</summary>
+    public const string Subjects = "subjects";
+
+    private const string ManualConstruction = "construction_manual";
+    private const string ManualResearch = "research_manual";
+
+    public static readonly IReadOnlyList<string> Portfolios = new[] { Budget, Trade, Army, Command, Navy, Diplomacy, Cabinet, Construction, Research, Personnel, Subjects };
 
     /// <summary>Whether this country has handed that portfolio over.</summary>
     public static bool Holds(Nation nation, string portfolio) =>
-        nation is not null && (portfolio == Army ? !nation.ArmyByHand : nation.Delegated.Contains(portfolio));
+        nation is not null && (portfolio switch
+        {
+            Army => !nation.ArmyByHand,
+            // Preserve old saves: research was automatic and the delegated treasury also built.
+            Research => !nation.Delegated.Contains(ManualResearch),
+            Construction => nation.Delegated.Contains(Construction) ||
+                nation.Delegated.Contains(Budget) && !nation.Delegated.Contains(ManualConstruction),
+            _ => nation.Delegated.Contains(portfolio)
+        });
 
     public static void Set(Nation nation, string portfolio, bool delegated)
     {
         if (nation is null || !((IList<string>)Portfolios).Contains(portfolio)) return;
-        if (portfolio == Army) { nation.ArmyByHand = !delegated; return; }
+        if (portfolio == Army)
+        {
+            nation.ArmyByHand = !delegated;
+            if (delegated) nation.Delegated.Add(portfolio); else nation.Delegated.Remove(portfolio);
+            return;
+        }
+        if (portfolio is Research or Construction)
+        {
+            var marker = portfolio == Research ? ManualResearch : ManualConstruction;
+            if (delegated) nation.Delegated.Remove(marker); else nation.Delegated.Add(marker);
+        }
         if (delegated) nation.Delegated.Add(portfolio);
         else nation.Delegated.Remove(portfolio);
     }
+
+    /// <summary>
+    /// Whether the AI runs this government's cabinet: a country that is not a human's seat at
+    /// all, or one whose cabinet the player handed over. Read by the promise layer, so a
+    /// delegated cabinet pledges in public on exactly the terms an AI one does - the cabinet
+    /// already takes decisions through the same door (Delegation.Tick), and a government that
+    /// spends the budget but never speaks would be half a delegation.
+    /// </summary>
+    public static bool RunByAi(Nation nation) =>
+        nation is not null && (!(nation.IsHuman || nation.IsPlayer) || Holds(nation, Cabinet));
 
     /// <summary>
     /// A month of whatever the player has handed over.
@@ -99,6 +143,7 @@ public static class Delegation
     {
         if (campaign is null || nation is null || nation.Delegated.Count == 0) return;
         if (Holds(nation, Budget)) AiStatecraft.GovernTheBudget(campaign, nation);
+        else if (Holds(nation, Construction)) AiStatecraft.PlanConstruction(campaign, nation);
         if (Holds(nation, Trade)) RunTheTradeDesk(campaign, nation);
         if (Holds(nation, Cabinet)) AiStatecraft.RunTheCabinet(campaign, nation);
     }
@@ -123,23 +168,40 @@ public static class Delegation
     /// </summary>
     private static void RunTheTradeDesk(Campaign campaign, Nation nation)
     {
+        var atWar = campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
+        var fiscalStress = nation.DebtCondition >= DebtCondition.Stressed || nation.Treasury < 0.5f;
+
         foreach (var (commodity, quote) in nation.Market)
         {
             var definition = CommodityCatalog.Get(commodity);
             if (definition is null) continue;
 
             var essential = definition.EssentialWeight >= 0.5f;
+            var military = CommodityCatalog.IdOf(commodity) is "ammunition" or "fuel" or "oil" or "iron_ore" or "rare_earths";
             var short_ = quote.IsShortage;
             var covered = quote.Demand <= 0.001f ? 1f : quote.Production / quote.Demand;
 
             if (short_)
             {
                 // Buy it first, and do not haggle while people are going without.
-                Instruct(nation, commodity, TradeDesk.ImportPriority, essential ? 2.5f : 1.6f);
+                var priority = (essential || (atWar && military)) ? 2.5f : 1.6f;
+                // If treasury is in severe distress, don't overspend on non-essentials
+                if (fiscalStress && !essential && !military) priority = 1.0f;
+
+                Instruct(nation, commodity, TradeDesk.ImportPriority, priority);
                 Instruct(nation, commodity, TradeDesk.ImportCeiling, 1f);
                 // And stop selling what we do not have.
                 Instruct(nation, commodity, TradeDesk.ExportReserve,
-                    essential ? 1f : M.Clamp(1f - covered, 0f, 1f));
+                    essential || (atWar && military) ? 1f : M.Clamp(1f - covered, 0f, 1f));
+                continue;
+            }
+
+            // In wartime, reserve military and fuel stocks even if slightly above demand
+            if (atWar && military && covered < 1.6f)
+            {
+                Instruct(nation, commodity, TradeDesk.ExportReserve, 0.40f);
+                Instruct(nation, commodity, TradeDesk.ImportPriority, 1.8f);
+                Instruct(nation, commodity, TradeDesk.ImportCeiling, 1f);
                 continue;
             }
 

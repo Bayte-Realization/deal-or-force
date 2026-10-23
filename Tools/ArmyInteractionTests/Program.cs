@@ -15,7 +15,37 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--military-access-only")) { MilitaryAccessTests.Run(); return; }
+        if (args.Length == 0) MilitaryAccessTests.Run();
+        if (args.Contains("--capital-loss-only")) { CapitalLossTests.Run(); return; }
+        if (args.Length == 0) CapitalLossTests.Run();
+        if (args.Contains("--peace-beneficiary-only")) { PeaceBeneficiaryTests.Run(); return; }
+        if (args.Length == 0) PeaceBeneficiaryTests.Run();
+        if (args.Contains("--peace-battle-assignment-only")) { PeaceBattleAssignmentTests.Run(); return; }
+        if (args.Length == 0) PeaceBattleAssignmentTests.Run();
+        if (args.Contains("--partial-front-only")) { PartialFrontWithdrawalTests.Run(); return; }
+        if (args.Length == 0) PartialFrontWithdrawalTests.Run();
+        if (args.Contains("--front-disengagement-performance-only")) { FrontDisengagementPerformanceTests.Run(); return; }
+        if (args.Length == 0) FrontDisengagementPerformanceTests.Run();
+        if (args.Contains("--friendly-route-search-only")) { FriendlyRouteSearchTests.Run(); return; }
+        if (args.Length == 0) FriendlyRouteSearchTests.Run();
+        if (args.Contains("--friendly-route-components-only")) { FriendlyRouteComponentsTests.Run(); return; }
+        if (args.Length == 0) FriendlyRouteComponentsTests.Run();
+        if (args.Contains("--enemy-readiness-ai-only")) { EnemyReadinessAiTests.Run(); return; }
+        if (args.Length == 0) EnemyReadinessAiTests.Run();
+        if (args.Contains("--military-condition-readout-only")) { MilitaryConditionReadoutTests.Run(); return; }
+        if (args.Length == 0) MilitaryConditionReadoutTests.Run();
+        if (args.Contains("--move-battle-preflight-only")) { MoveBattlePreflightTests.Run(); return; }
+        if (args.Length == 0) MoveBattlePreflightTests.Run();
+        if (args.Contains("--open-advance-only")) { OpenAdvanceTests.Run(); return; }
+        if (args.Contains("--front-cache-isolation-only")) { FrontCacheIsolationTests.Run(); return; }
+        if (args.Contains("--march-continuity-only")) { MarchContinuityTests.Run(); return; }
+        if (args.Contains("--combat-attrition-only")) { CombatAttritionRefactorTests.Run(); return; }
+        if (args.Contains("--coalition-combat-only")) { CoalitionCombatTests.Run(); return; }
+        if (args.Contains("--assault-readiness-only")) { AssaultReadinessTests.Run(); return; }
         if (args.Contains("--ai-front-recovery-only")) { AiFrontRecoveryTests.Run(); return; }
+        if (args.Contains("--advance-rotation-only")) { AdvanceTargetTests.Run(); return; }
+        if (args.Contains("--mobilisation-only")) { MobilisationTests.Run(); return; }
         if (args.Contains("--plan-erasing-only")) { PlanErasingTests.Run(); return; }
         PlanErasingTests.Run();
         if (args.Contains("--features-only")) { FeatureTests.Run(); return; }
@@ -24,6 +54,9 @@ static class Program
         if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
+        OpenAdvanceTests.Run();
+        FrontCacheIsolationTests.Run();
+        MarchContinuityTests.Run();
         var c = Campaign.CreateBootstrap(20260906);
         // These isolated subsystem fixtures count steps in days, without running the
         // world's economy/AI. Do not silently inherit the campaign's hourly UI clock.
@@ -312,6 +345,9 @@ static class Program
         StaffTests.Run(map);
         FrontStaffTests.Run(map);
         AiFrontRecoveryTests.Run();
+        AssaultReadinessTests.Run();
+        CombatAttritionRefactorTests.Run();
+        CoalitionCombatTests.Run();
         ModifierTests.Run(map);
     }
 }

@@ -105,6 +105,44 @@ public partial class DealOrForceGame
 
         DetailHeading("PEOPLE");
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
+        if (owner is not null)
+        {
+            var (regBirth, regDeath, _) = HouseholdEconomy.VitalRates(_campaign, owner, _selectedState);
+            DetailRow("Natural growth",
+                Simulation.Loc.Format("{0:+0.00%;-0.00%;0.00%}/yr (+{1} / −{2})",
+                    regBirth - regDeath, Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
+                "Annual natural population change from births and mortality. Hover for the factor-by-factor breakdown.",
+                regDeath > regBirth ? "state.warning" : regBirth - regDeath >= 0.012f ? "state.positive" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    HouseholdEconomy.VitalRates(_campaign, owner, _selectedState, b);
+                    return b;
+                });
+            DetailRow("Age structure",
+                Simulation.Loc.Format("{0} young · {1} work · {2} old",
+                    Fmt.Percent(_selectedState.YoungShare),
+                    Fmt.Percent(DemographicCycle.WorkingShare(_selectedState)),
+                    Fmt.Percent(_selectedState.OldShare)),
+                "Share of residents below working age, of working age, and past retirement. High old-age share depresses births and raises mortality.",
+                _selectedState.OldShare >= _campaign.Defines.DemographyReferenceOldShare + 0.04f ? "state.warning" : "text.bright");
+        }
+        if (_selectedState.ReviewNetMigration != 0 || _selectedState.BrainDrainPressure >= 0.04f)
+        {
+            DetailRow("Net migration", Fmt.PeopleDelta(_selectedState.ReviewNetMigration),
+                "Net weekly movement of residents into or out of this region.");
+            DetailRow("Brain drain", Fmt.Percent(_selectedState.BrainDrainPressure),
+                "Share of educated specialists under pressure to leave this region due to war, instability or low living standards. Universities and research laboratories anchor them here.",
+                _selectedState.BrainDrainPressure > 0.25f ? "state.negative" :
+                _selectedState.BrainDrainPressure > 0.10f ? "state.warning" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    if (owner is not null)
+                        BrainDrain.CalculatePressure(_campaign, owner, _selectedState, AiFiscalPolicy.AtWar(_campaign, owner), b);
+                    return b;
+                });
+        }
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
             "How much of the region can read. Literacy raises productivity and assimilates minorities faster.");
         DetailRow("Standard of living", Fmt.Percent(_selectedState.StandardOfLiving),
@@ -244,7 +282,38 @@ public partial class DealOrForceGame
             DetailRow("Livelihood stress", Fmt.Percent(_selectedState.LivelihoodStress),
                 "Shortages, lack of jobs and local destruction put pressure on living standards and radicalism.");
             DetailRow("Births / deaths, last review", Loc.Format("{0} / {1}", Fmt.People(_selectedState.ReviewBirths), Fmt.People(_selectedState.ReviewDeaths)),
-                "Aggregate game rates: literacy affects births; living conditions, medicine and local destruction affect deaths. Not a real-world forecast or a migration count.");
+                "Literacy, urbanisation, welfare and age structure shape the birth rate; living conditions, medicine, war damage and old-age share shape the death rate.",
+                _selectedState.ReviewDeaths > _selectedState.ReviewBirths ? "state.warning" : "text.bright",
+                () =>
+                {
+                    var b = new Simulation.Breakdown();
+                    if (owner is not null) HouseholdEconomy.VitalRates(_campaign, owner, _selectedState, b);
+                    return b;
+                });
+            DetailRow("Age structure",
+                Simulation.Loc.Format("{0} young · {1} work · {2} old",
+                    Fmt.Percent(_selectedState.YoungShare),
+                    Fmt.Percent(DemographicCycle.WorkingShare(_selectedState)),
+                    Fmt.Percent(_selectedState.OldShare)),
+                "Share of residents below working age, of working age, and past retirement.");
+            var mig = _selectedState.ReviewNetMigration;
+            if (mig != 0)
+            {
+                DetailRow("Net migration, last review",
+                    (mig >= 0 ? "+" : "−") + Fmt.People(Math.Abs(mig)),
+                    mig > 0
+                        ? "Inflow of migrants drawn by stability, standard of living, and peace. Large inflows reshape regional culture over time."
+                        : "Outflow of emigrants escaping poverty, devastation, shortages, or political instability.",
+                    mig < 0 ? "state.warning" : "text.bright");
+                var migShare = Math.Abs(mig) / (float)Math.Max(1L, _selectedState.Population);
+                if (mig > 0 && migShare >= _campaign.Defines.DemographyFloodShare)
+                {
+                    DetailRow("Cultural shift & replacement alert",
+                        Fmt.Percent(migShare),
+                        "Foreign cultural influx exceeds assimilation rate: regional culture is shifting rapidly.",
+                        "state.warning");
+                }
+            }
         }
         DetailRow("Population", Fmt.People(_selectedState.Population), Fmt.PeopleExact(_selectedState.Population));
         DetailRow("Literacy", Fmt.Percent(_selectedState.Literacy),
@@ -263,8 +332,14 @@ public partial class DealOrForceGame
             "People of no nation this state is for. A starred people below is one of its own.",
             foreign > 0.5f ? "state.negative" : foreign > 0.15f ? "state.warning" : "state.positive");
 
+        DetailDemographicReference();
         DetailComposition("PEOPLES", CultureSlices(_selectedState, owner), total);
         DetailComposition("FAITHS", ReligionSlices(_selectedState), total, 6);
+        // What the same people believe, not who they are: the ideologies the government itself
+        // is chosen from, read from this region's own conditions, its laws and its government.
+        // Placed with the other two cuts because "who lives here" and "what they want" are the
+        // same question asked twice, and the region is where the difference shows.
+        DetailComposition("POLITICS", PoliticalSlices(_selectedState, owner), total, 6);
         // Ten rows for ten trades. At nine the last one vanished into "and 1 more", and
         // the two summaries below stopped adding up to anything a reader could check -
         // which is exactly the complaint that led to splitting the axes in the first place.
@@ -362,9 +437,16 @@ public partial class DealOrForceGame
             "Who holds it right now. An army takes control; a treaty takes ownership.",
             controller == owner ? "text.bright" : "state.warning");
         if (controller != owner && controller is not null && CanInspectNation(controller.Id))
+        {
             DetailRow("Occupation", Fmt.Percent(occupation),
                 "How firmly the occupier holds it. Above the secure threshold it can be kept at a peace.",
                 occupation >= _campaign.Defines.OccupationSecureThreshold ? "state.positive" : "state.warning");
+            var slip = Simulation.OccupationResistance.WeeklySlip(_campaign, _selectedProvinceId);
+            if (slip > 0f)
+                DetailRow("Resistance",
+                    Simulation.Loc.Format("slipping {0:P1} of the hold a week", slip / MathF.Max(0.0001f, occupation)),
+                    "Partisans and quiet non-cooperation take the occupation down week by week. A garrison slows them; the occupier's own people in the region slow them further.");
+        }
 
         DetailHeading("GROUND");
         DetailRow("Neighbours", adjacent.Length.ToString("N0"),
@@ -381,10 +463,27 @@ public partial class DealOrForceGame
             DetailRow("Visible divisions", "none", "No known formations. Foreign forces are hidden by fog of war.");
         foreach (var army in formations.Take(8))
             DetailRow(Shorten(army.Name, 18),
-                Simulation.Loc.Format("{0:0.0} div · {1:P0}", army.Divisions, army.Organisation),
-                CanInspectNation(army.NationId) ? DivisionTooltip(army) : "Observed foreign formation. Orders and route are unavailable.",
+                Simulation.Loc.Format("{0:0.0} div · org {1:P0} · eq {2:P0}", army.Divisions, army.Organisation, army.Equipment),
+                CanInspectNation(army.NationId) ? DivisionTooltip(army) : ObservedForeignCondition(army),
                 army.CutOff ? "state.negative" : army.InBattle ? "state.warning" : "text.bright");
     }
+
+    /// <summary>
+    /// What the player may know about a foreign division: the condition anybody standing
+    /// next to it can see, and nothing about its orders. The contact test lives in
+    /// <see cref="Simulation.MilitaryConditionReadout"/>, so this row cannot quietly become
+    /// a more generous source than the counter's readiness bars.
+    /// </summary>
+    private static string ObservedForeignCondition(Simulation.Army army) =>
+        army.Name + "\n" +
+        Simulation.Loc.Format("Observed personnel: {0:N0}", army.Personnel) + "\n" +
+        Simulation.Loc.Format("Organisation: {0:P0}", Simulation.BattleReadout.Unit(army.Organisation)) + "\n" +
+        Simulation.Loc.Format("Equipment: {0:P0}", Simulation.BattleReadout.Unit(army.Equipment)) + "\n" +
+        Simulation.Loc.Format("Fighting strength: {0:P0}", Simulation.BattleReadout.Unit(army.Strength)) + "\n" +
+        Simulation.Loc.Format("Supply: {0:P0}", Simulation.BattleReadout.Unit(army.SupplyLevel)) +
+        (army.CutOff ? " — " + Simulation.Loc.Get("CUT OFF") : "") + "\n" +
+        Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n\n" +
+        Simulation.Loc.Get("Foreign formation — orders and route are not available.");
 
     private void QueueRegionalBuilding(BuildingKind kind)
     {

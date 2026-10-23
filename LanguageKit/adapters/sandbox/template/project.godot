@@ -1,0 +1,7 @@
+config_version=5
+
+[application]
+config/name="Deal or Force - sandbox isolation probe"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

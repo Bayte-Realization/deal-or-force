@@ -37,7 +37,8 @@ public sealed partial class Nation
 public static class PoliticalPolicies
 {
     public static string Slot(PoliticalPolicy p, string targetTag = "", int region = 0) =>
-        p.Scope + ":" + p.Category + (p.Scope == "foreign" ? ":" + targetTag : p.Scope == "region" ? ":" + region : "");
+        p.Scope == "foreign" ? p.SlotKey + ":" + targetTag :
+        p.Scope == "region" ? p.SlotKey + ":" + region : p.SlotKey;
 
     public static PoliticalPolicy Effective(Nation n, PoliticalPolicy p, string target = "", int region = 0) =>
         n.Laws.TryGetValue(Slot(p, target, region), out var law) ? PoliticalPolicyCatalog.Find(law.Id) :
@@ -52,6 +53,24 @@ public static class PoliticalPolicies
         if (n.AgendasActive && n.Agenda is { Completed: false } agenda &&
             PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition)
             yield return (definition.Name, definition.Modifiers);
+    }
+
+    /// <summary>
+    /// The nationalities law a government nobody plays moves to, or null to keep the one it has:
+    /// fascism settles; the liberal and social-democratic families give up settling and forcing
+    /// for civic integration; everybody else keeps what history or an earlier government left.
+    /// </summary>
+    private static PoliticalPolicy NationalitiesFor(Nation n)
+    {
+        var current = PoliticalPolicyCatalog.Find("nationalities_integration") is { } any ? Effective(n, any)?.Id ?? "" : "";
+        var wanted = n.Ideology switch
+        {
+            "fascism" => "nationalities_settlement",
+            "liberalism" or "social_democracy" or "libertarianism"
+                when current is "nationalities_settlement" or "nationalities_assimilation" => "nationalities_integration",
+            _ => null
+        };
+        return wanted is null ? null : PoliticalPolicyCatalog.Find(wanted);
     }
 
     public static bool CanAdopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
@@ -102,21 +121,31 @@ public static class PoliticalPolicies
     public static void Tick(Campaign c)
     {
         NationalCourses.Tick(c);
+        var lawsEnabled = c.FeatureEnabled("laws");
+        var agendasEnabled = c.FeatureEnabled("political_agendas");
+        var reformDay = c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0;
         foreach (var n in c.Nations)
         {
-            n.LawsActive = c.FeatureEnabled("laws"); n.AgendasActive = c.FeatureEnabled("political_agendas");
+            n.LawsActive = lawsEnabled; n.AgendasActive = agendasEnabled;
             if (n.LastPolicyReviewDay == c.ElapsedDays) continue;
             n.LastPolicyReviewDay = c.ElapsedDays;
-            if (!n.IsHuman && !c.Fallen.Contains(n.Id) && c.ElapsedDays > 0 && c.ElapsedDays % 90 == 0)
+            if (reformDay && !n.IsHuman && !c.Fallen.Contains(n.Id))
             {
                 var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
                     n.Stability < .50f ? "security_community" : n.Ideology == "liberalism" ? "rights_association" : "education_technical";
                 Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
+                // What a state does about its minorities changes with what it believes, and
+                // only then: a fascist state settles, a liberal one stops settling and forcing.
+                if (NationalitiesFor(n) is { } nationalities &&
+                    !string.Equals(Effective(n, nationalities).Id, nationalities.Id, StringComparison.Ordinal))
+                    Adopt(c, n, nationalities);
                 if (n.AgendasActive && n.Agenda is not { Completed: false })
                 {
                     var promise = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_recovery" :
-                        n.StandardOfLiving < .65f ? "social_compact" : "national_reconciliation";
-                    Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
+                        n.Stability >= .62f && !c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) ? "peace_dividend" :
+                        n.StandardOfLiving >= .61f ? "social_compact" : "national_reconciliation";
+                    if (n.DebtCondition >= DebtCondition.Stressed || n.Stability >= .56f || n.StandardOfLiving >= .61f)
+                        Adopt(c, n, PoliticalPolicyCatalog.Find(promise, true), agenda: true);
                 }
             }
             if (n.LawsActive)

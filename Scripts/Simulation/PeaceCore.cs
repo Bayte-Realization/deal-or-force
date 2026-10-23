@@ -74,7 +74,7 @@ public static class PeaceTermCatalog
             "Unconditional surrender under the current occupation map.",
             100f, 100f, 0f, 0, 0f),
         [PeaceTerms.StatusQuo] = new(
-            "Each side keeps what it holds securely, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
+            "Each side keeps the enemy ground it holds, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
             12f, 50f, -0.35f, 365, 50f)
     };
 
@@ -175,7 +175,43 @@ public static class PeaceNegotiation
         return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
                        exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
                        Reintegration.CompromisePenalty(campaign, war, proposerId, terms) -
-                       Escalation.SunkCost(campaign, war), 0f, 100f);
+                       Escalation.SunkCost(campaign, war) - WarAimResolve(campaign, war, proposerId, terms), 0f, 100f);
+    }
+
+    private static float WarAimResolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
+    {
+        // Only a compromise proposed by the LOSING side asks the winning AI to give up
+        // an achievable aim. A human still decides explicitly; capitulation is never blocked.
+        if (terms is not (PeaceTerms.Ceasefire or PeaceTerms.WhitePeace or PeaceTerms.StatusQuo)) return 0;
+        var score = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
+        var responder = campaign.NationById(war.EnemyLeaderOf(proposerId));
+        if (score >= 0 || responder is null || responder.IsHuman ||
+            !AiStatecraft.ShouldPressWarAim(campaign, responder, war)) return 0;
+        var penalty = campaign.Defines.AiWarAimResolvePenalty;
+        if (!float.IsFinite(penalty)) penalty = 70f;
+        penalty = Math.Clamp(penalty, 0f, 100f);
+
+        var duration = campaign.ElapsedDays - war.StartedDay;
+        var stalemateDiscount = 0f;
+        if (duration > 365)
+        {
+            var years = (duration - 365f) / 365f;
+            stalemateDiscount = terms == PeaceTerms.StatusQuo ? MathF.Min(0.85f, years * 0.35f) : MathF.Min(0.60f, years * 0.20f);
+        }
+        if (war.Stalled)
+            stalemateDiscount = MathF.Max(stalemateDiscount, terms == PeaceTerms.StatusQuo ? 0.65f : 0.40f);
+
+        var wearinessDiscount = WarWeariness.Weariness(campaign, war) / 100f * 0.5f;
+        stalemateDiscount = MathF.Min(0.90f, stalemateDiscount + wearinessDiscount);
+
+        if (terms == PeaceTerms.StatusQuo)
+        {
+            var responderOccupied = war.IsAttacking(responder.Id) ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
+            if (responderOccupied > 0.02f)
+                stalemateDiscount = MathF.Max(stalemateDiscount, 0.50f + MathF.Min(0.40f, responderOccupied));
+        }
+
+        return MathF.Max(0f, penalty * (1f - stalemateDiscount));
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
@@ -275,22 +311,23 @@ public static class PeaceNegotiation
             var winner = campaign.NationById(winnerId);
             var kept = new List<int>();
 
-            // A breakaway that surrenders goes back whole: every province it owns, held or not,
-            // returns to the state it broke from. It is not a conquest.
+            // Direct breakaways return whole. A successor rebel state may have broken
+            // from an intervening polity instead: unconditional surrender still returns
+            // the winner's real homeland, not just one secured province. No foreign
+            // acquisitions, renounced titles or third-party occupations are invented.
             var beaten = terms == PeaceTerms.Capitulate ? campaign.NationById(proposerId) : null;
-            if (winner is not null && Reintegration.IsBreakawayOf(beaten, winner))
+            var recovered = Reintegration.CapitulationGround(campaign, war, beaten, winner);
+            var recoveredSet = recovered.ToHashSet();
+            if (recovered.Count > 0)
             {
-                foreach (var pair in war.OriginalController)
-                    if (campaign.ProvinceMap.ProvinceToNation[pair.Key] != beaten.MapIndex)
-                        campaign.SetProvinceController(pair.Key, pair.Value);
-                var whole = Reintegration.Everything(campaign, beaten);
-                foreach (var province in whole) campaign.SetProvinceController(province, (ushort)winner.MapIndex);
-                var rejoined = StatePartition.Annex(campaign, whole, winner, asConquest: false);
-                war.AnnexedProvinces = whole.Count;
+                foreach (var province in recovered) campaign.SetProvinceController(province, (ushort)winner.MapIndex);
+                var rejoined = StatePartition.Annex(campaign, recovered, winner, asConquest: false);
+                war.AnnexedProvinces = recovered.Count;
                 war.CreatedStates = rejoined.Count;
             }
-            else foreach (var pair in war.OriginalController)
+            foreach (var pair in war.OriginalController)
             {
+                if (recoveredSet.Contains(pair.Key)) continue;
                 var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
                 var inGoal = terms != PeaceTerms.EnforceWarGoal ||
                              campaign.ProvinceMap?.ProvinceToState[pair.Key] == war.ClaimedStateMapIndex;
@@ -313,20 +350,23 @@ public static class PeaceNegotiation
                         campaign.SetProvinceController(province, was);
                 kept = tidied;
                 var created = StatePartition.Annex(campaign, kept, winner);
-                war.AnnexedProvinces = kept.Count;
-                war.CreatedStates = created.Count;
+                war.AnnexedProvinces += kept.Count;
+                war.CreatedStates += created.Count;
             }
         }
 
-        // A deadlock: both sides keep what they hold securely, each drawn into a border of its own.
+        // A deadlock: each side keeps the enemy ground it controls. Security used to be the
+        // gate, so a finished occupation was handed back except the one region that had
+        // crossed the line. The border is still drawn afterwards (PeaceShape): a pocket
+        // that does not touch the holder does not become a country.
         if (terms == PeaceTerms.StatusQuo && campaign.ProvinceController is not null && campaign.ProvinceOccupation is not null)
         {
             var heldBy = new Dictionary<int, List<int>>();
             foreach (var pair in war.OriginalController)
             {
-                var secured = campaign.ProvinceOccupation[pair.Key] >= campaign.Defines.OccupationSecureThreshold;
                 var holder = campaign.Nations.Find(nation => nation.MapIndex == campaign.ProvinceController[pair.Key]);
-                if (!secured || holder is null || !war.Involves(holder.Id) || !EnemyGround(campaign, war, pair.Key, holder.Id))
+                var controlled = holder is not null && campaign.ProvinceController[pair.Key] != pair.Value;
+                if (!controlled || !war.Involves(holder.Id) || !EnemyGround(campaign, war, pair.Key, holder.Id))
                 {
                     campaign.SetProvinceController(pair.Key, pair.Value);
                     continue;
@@ -352,6 +392,7 @@ public static class PeaceNegotiation
         }
 
         war.Ended = true;
+        campaign.MarkWarsChanged();
         war.EndedDay = campaign.ElapsedDays;
         war.PeaceProposerId = proposerId;
         var sideScore = war.IsAttacking(proposerId) ? war.WarScore : -war.WarScore;
@@ -359,6 +400,8 @@ public static class PeaceNegotiation
             ? war.EnemyLeaderOf(proposerId)
             : terms is PeaceTerms.WhitePeace or PeaceTerms.Ceasefire ? -1
             : sideScore > 0f ? proposerId : -1;
+
+        Factions.SettleCivilWarSurvivors(campaign, war);
         war.PeaceSummary = terms switch
         {
             PeaceTerms.Ceasefire => "A one-year ceasefire restored the pre-war control map.",
@@ -368,7 +411,7 @@ public static class PeaceNegotiation
             PeaceTerms.DemilitarizedSettlement => "Pre-war borders were restored and the defeated armed forces were partially demobilised.",
             PeaceTerms.EnforceWarGoal => "Secured provinces inside the declared war goal were retained; all other advances were evacuated.",
             PeaceTerms.EnforceDemands => "Secured occupations were retained; unsecured advances were evacuated.",
-            PeaceTerms.StatusQuo => "A deadlock: each side kept what it held securely, and the line became the border.",
+            PeaceTerms.StatusQuo => Loc.Get("A deadlock: each side kept the ground it held, and the line became the border."),
             _ => $"{campaign.NationById(proposerId)?.Name ?? "A belligerent"} capitulated."
         };
         war.AttackerFront.Clear();
@@ -400,8 +443,7 @@ public static class PeaceNegotiation
         }
         foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
         {
-            battle.Ended = true;
-            battle.Outcome = "Peace agreement";
+            Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
         campaign.MarkMapChanged();
     }

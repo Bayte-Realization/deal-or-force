@@ -1,0 +1,12 @@
+diff --git a/src/core/godot_builtin_bindings.cpp b/src/core/godot_builtin_bindings.cpp
+--- a/src/core/godot_builtin_bindings.cpp
++++ b/src/core/godot_builtin_bindings.cpp
+@@ -293,7 +293,7 @@ static int call_builtin_method(lua_State *L, const ApiBuiltinClass &p_builtin_class,
+ 			}
+ 		}
+ 
+-		if (p_method.return_type != GDEXTENSION_VARIANT_TYPE_NIL) {
++		if (p_method.return_type != -1) {
+ 			LuaStackOp<Variant>::push(L, ret);
+ 			return 1;
+ 		}

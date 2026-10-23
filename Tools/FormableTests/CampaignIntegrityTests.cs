@@ -23,6 +23,8 @@ static class CampaignIntegrityTests
         StrictRows();
         SaveProtection();
         CivilWarRules();
+        CrashEnvelopeReplayRing();
+        CrashEnvelopeReportsFailedDumpWithoutRecursing();
     }
 
     static void ProductionReference()
@@ -213,5 +215,80 @@ static class CampaignIntegrityTests
             "splitting a country conserves physical capacity rather than rebasing it from nominal GDP");
         Check(CivilWarOutbreak.EligibilityReason(c, parent).Length > 0 && CivilWarOutbreak.Break(c, parent) is null,
             "recovery and an existing civil war prevent repeated fragmentation");
+    }
+
+    static void CrashEnvelopeReplayRing()
+    {
+        CrashEnvelope.Clear();
+        var c = Campaign.CreateBootstrap(101);
+        var player = c.Player;
+        var initialTax = player.TaxRate;
+
+        // Issue commands through CampaignCommandQueue
+        c.Commands.Enqueue(new SetTaxRateCommand { IssuerId = player.Id, Value = 0.35f });
+        c.Commands.ApplyAll(c);
+
+        var recent = CrashEnvelope.GetRecentCommands();
+        Check(recent.Count == 1, "recorded single command in CrashEnvelope");
+        Check(recent[0].TypeName == nameof(SetTaxRateCommand), "recorded command type matches");
+        Check(MathF.Abs(player.TaxRate - 0.35f) < 0.001f, "command applied correctly");
+
+        // Dump crash envelope to temp directory
+        var tempDir = Path.Combine(Path.GetTempPath(), "dof_crash_test_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var dumpPath = CrashEnvelope.Dump(c, new InvalidOperationException("Test crash trigger"), "Test fault", tempDir);
+            Check(File.Exists(dumpPath), "crash envelope written to disk");
+
+            var loaded = CrashEnvelope.Load(dumpPath);
+            Check(loaded != null && loaded.CampaignSeed == c.Seed, "crash envelope restores valid campaign metadata");
+            Check(loaded.ExceptionMessage.Contains("Test fault"), "crash envelope captures fault message");
+            Check(loaded.RecentCommands.Count == 1, "crash envelope preserves recorded command tape");
+
+            // Test replay onto a fresh campaign with same seed
+            var fresh = Campaign.CreateBootstrap(101);
+            Check(MathF.Abs(fresh.Player.TaxRate - initialTax) < 0.001f, "fresh campaign has initial tax rate");
+            var replayed = CrashEnvelope.Replay(fresh, loaded);
+            Check(replayed == 1, "replayed exactly one command from envelope");
+            Check(MathF.Abs(fresh.Player.TaxRate - 0.35f) < 0.001f, "replayed command reproduced target state deterministically");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+            CrashEnvelope.Clear();
+        }
+    }
+
+    /// <summary>A dump that cannot reach the disk must say so, not re-enter the fatal handler
+    /// that asked for it: the two used to call each other until the stack ran out.</summary>
+    static void CrashEnvelopeReportsFailedDumpWithoutRecursing()
+    {
+        CrashEnvelope.Clear();
+        var root = Path.Combine(Path.GetTempPath(), "dof_crash_dump_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var blocker = Path.Combine(root, "blocker.txt");
+        File.WriteAllText(blocker, "a file where the envelope directory was asked to be");
+        try
+        {
+            Check(DiagnosticLogs.Start(Path.Combine(root, "logs")),
+                "the diagnostic journal starts, so the fatal handler is live during the check");
+            var campaign = new Campaign(707);
+            var refused = CrashEnvelope.Dump(campaign, new InvalidOperationException("no room"),
+                "failed dump", Path.Combine(blocker, "envelopes"));
+            Check(refused.Length == 0, "a dump that cannot reach the disk returns no path");
+            Check(CrashEnvelope.LastFailure.Length > 0, "the failed dump records its reason");
+            var written = CrashEnvelope.Dump(campaign, null, "second attempt", Path.Combine(root, "envelopes"));
+            Check(written.Length > 0 && File.Exists(written), "a later dump still writes after one failure");
+            DiagnosticLogs.Stop();
+            var errors = File.ReadAllText(Path.Combine(root, "logs", "errors.log"));
+            Check(errors.Contains("CRASH_ENVELOPE_FAILED"), "the failed dump is named in the error journal");
+            Check(!errors.Contains("FATAL"), "reporting a failed dump does not raise a second fatal error");
+        }
+        finally
+        {
+            DiagnosticLogs.Stop();
+            CrashEnvelope.Clear();
+            try { Directory.Delete(root, true); } catch { }
+        }
     }
 }

@@ -11,12 +11,19 @@ static class PoliticalPolicyTests
     public static void Run()
     {
         PoliticalPolicyCatalog.ResetCatalog();
-        Check(PoliticalPolicyCatalog.AllLaws.Count() == 45 && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 15,
-            "45 laws in 15 categories load");
-        Check(PoliticalPolicyCatalog.AllAgendas.Count() == 6, "six agendas load");
         var errors = new List<string>();
         foreach (var doc in GameDataLoader.DataDocuments("common", "laws")) using (doc) PoliticalPolicyCatalog.MergeLaws(doc.RootElement, errors);
         Check(errors.Count == 0, "all vanilla laws pass scope/effect validation");
+        // Raised from 45/15 on 15 October 2026: common/laws/10_new_policy_areas.json adds seven
+        // more areas (trade, currency, energy, research, pensions, regional development, foreign
+        // posture). The number is asserted so a law file that stops loading is noticed, so it
+        // moves when a law file is deliberately added - and a duplicate key in a new file would
+        // show up here as a total that did not move, which is the other thing this catches.
+        // 71/23 since 22 October 2026: common/laws/30_nationalities.json, four answers to what a
+        // state does about its minorities.
+        Check(PoliticalPolicyCatalog.AllLaws.Count() == 71 && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 23,
+            "71 laws in 23 categories load");
+        Check(PoliticalPolicyCatalog.AllAgendas.Count() == 6, "six agendas load");
         var c = Campaign.CreateBootstrap(701); var n = c.NationByTag("ITA"); c.ConfigureSinglePlayer(n.Id);
         n.Treasury = 100;
         var law = PoliticalPolicyCatalog.Find("rights_association");

@@ -3,46 +3,183 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
-/// <summary>Withdraw only the issuer's formation, through the replay/network command path.</summary>
+/// <summary>Withdraw only the issuer's formation, through the replay/network command path.
+/// A Share below one pulls only that fraction of the divisions out: the rest stand fast in
+/// the battle, so a country can feed one fight and hold its line at the same time instead
+/// of every division it owns being pinned by a single enemy touch.</summary>
 public sealed class WithdrawArmyFromBattleCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }
     public int ArmyId { get; init; }
+    public int TargetProvinceId { get; init; } = -1;
+    /// <summary>The fraction of divisions to pull out, 0.05..1. One (the default) is the
+    /// whole-formation withdrawal this command has always been.</summary>
+    public float Share { get; init; } = 1f;
     public bool Withdrawn { get; private set; }
+    public bool Applied { get; private set; }
+    public int WithdrawnArmyId { get; private set; } = -1;
     public string Result { get; private set; } = "Not in battle";
 
     public void Apply(Campaign campaign)
     {
-        if (!MechanicFeatures.Allows(campaign, this)) return;
         Withdrawn = false;
+        Applied = true;
+        WithdrawnArmyId = -1;
+        Result = "Not in battle";
+        if (!MechanicFeatures.Allows(campaign, this)) return;
         var army = campaign?.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) { Result = "Order not authorised"; return; }
-        Withdrawn = Warfare.Withdraw(campaign, army, out var result);
-        Result = result;
+        if (!float.IsFinite(Share) || Share <= 0f || Share > 1f)
+        { Result = "Invalid withdrawal share"; return; }
+        var share = Share;
+        if (share < 0.999f)
+        {
+            Withdrawn = Warfare.WithdrawShare(campaign, army, share, out var partial, TargetProvinceId);
+            Result = partial;
+            if (Withdrawn) WithdrawnArmyId = campaign.Armies[^1].Id;
+        }
+        else
+        {
+            Withdrawn = Warfare.Withdraw(campaign, army, out var full, TargetProvinceId);
+            Result = full;
+            if (Withdrawn) WithdrawnArmyId = army.Id;
+        }
     }
 }
 
 public static partial class Warfare
 {
-    internal static bool Withdraw(Campaign campaign, Army army, out string result)
+    /// <summary>
+    /// Pull a share of a formation out of a battle while the rest of it keeps fighting.
+    ///
+    /// The leaving divisions become a detachment of their own: the defenders' part marches
+    /// to the same friendly line a full retreat would take (and pays the same rest, because
+    /// ground given up under fire is ground given up), the attackers' part simply stops
+    /// pressing and stands where it was. The formations that stay keep their place in the
+    /// battle, their losses and their organisation - the fight reads smaller, not reset.
+    /// </summary>
+    internal static bool WithdrawShare(Campaign campaign, Army army, float share, out string result,
+        int targetProvinceId = -1)
+    {
+        result = "Not in battle";
+        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
+        if (battle is null || !float.IsFinite(army.Divisions) || army.Divisions < 2f)
+        { result = "Too small to split"; return false; }
+        if (!float.IsFinite(share) || share <= 0 || share >= 1f)
+        { result = "Invalid withdrawal share"; return false; }
+        var attacking = battle.Attackers.Contains(army.Id);
+        if (!attacking && !battle.Defenders.Contains(army.Id)) return false;
+
+        var leaving = M.Clamp(MathF.Floor(army.Divisions * share + .0001f), 1f, army.Divisions - 1f);
+        var remaining = army.Divisions - leaving;
+        if (remaining < 1f || leaving < 1f) { result = "Too small to split"; return false; }
+
+        // Resolve the defender's line of retreat before anything mutates, so a refusal
+        // leaves both the battle and the formation exactly as they were.
+        var retreat = 0;
+        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
+        if (!attacking)
+        {
+            retreat = WithdrawalProvince(campaign, war, army, targetProvinceId);
+            if (retreat == 0) { result = "No friendly line of retreat"; return false; }
+        }
+
+        var fraction = leaving / army.Divisions;
+        var personnel = (int)MathF.Floor(army.Personnel * fraction);
+        var establishment = (int)MathF.Floor(army.MaxPersonnel * fraction);
+        var wounded = army.Recovering * fraction;
+        var id = campaign.Armies.Max(candidate => candidate.Id) + 1;
+        var map0 = campaign.ProvinceMap;
+        var detachment = new Army
+        {
+            Id = id,
+            NationId = army.NationId,
+            StateMapIndex = army.StateMapIndex,
+            ProvinceId = army.ProvinceId,
+            Divisions = leaving,
+            Name = $"{army.Name} Detachment",
+            TemplateId = army.TemplateId,
+            Personnel = personnel,
+            MaxPersonnel = establishment,
+            Recovering = wounded,
+            Equipment = army.Equipment,
+            Experience = army.Experience,
+            Cohesion = army.Cohesion,
+            Recon = army.Recon,
+            Engineers = army.Engineers,
+            Artillery = army.Artillery,
+            Stance = army.Stance,
+            ReinforcementPriority = army.ReinforcementPriority,
+            ArmyGroupId = army.ArmyGroupId,
+            ContractUntilDay = army.ContractUntilDay,
+            Training = army.Training,
+            ReadyDay = army.ReadyDay,
+            PlanActive = false,
+            DirectOrder = true,
+            Organisation = army.Organisation,
+            Strength = army.Strength,
+            SupplyLevel = army.SupplyLevel,
+            SupplyDistance = army.SupplyDistance,
+            SupplySourceStateMapIndex = army.SupplySourceStateMapIndex,
+            SupplyCongestion = army.SupplyCongestion,
+            CutOff = army.CutOff,
+            Latitude = army.Latitude,
+            Longitude = army.Longitude
+        };
+        army.Divisions = remaining;
+        army.Personnel -= personnel;
+        army.MaxPersonnel -= establishment;
+        army.Recovering -= wounded;
+        campaign.Armies.Add(detachment);
+        // The new ID must not be immediately drafted back into this very battle.
+        (attacking ? battle.WithdrawnAttackers : battle.WithdrawnDefenders).Add(id);
+        if (!attacking)
+        {
+            detachment.ProvinceId = retreat;
+            detachment.StateMapIndex = map0.ProvinceToState[retreat];
+            (detachment.Latitude, detachment.Longitude) = map0.CenterOf(retreat);
+            detachment.Entrenchment = 0;
+            // Ground was given up under fire; the detachment needs a breath before it is a
+            // formation again. The part that stayed gets no rest - it never left the line.
+            detachment.ReadyDay = Math.Max(army.ReadyDay, campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays);
+        }
+        _provinceIndexStale = true;
+        EnsureIndexed(campaign);
+        campaign.MarkStrategicChange();
+        result = attacking
+            ? $"{leaving:0} division(s) broke off the attack"
+            : $"{leaving:0} division(s) fell back to friendly ground";
+        return true;
+    }
+
+    /// <summary>Read-only preflight shared by orders and the autonomous front staff.</summary>
+    internal static int WithdrawalProvince(Campaign campaign, StrategicWar war, Army army, int targetProvinceId)
+    {
+        var map = campaign.ProvinceMap;
+        if (map is null || army.ProvinceId <= 0 || army.ProvinceId >= map.Neighbors.Length) return 0;
+        if (targetProvinceId > 0 && targetProvinceId <= map.ProvinceCount)
+        {
+            if (map.Neighbors[army.ProvinceId].Contains(targetProvinceId) &&
+                WarCoalition.SafeRetreatProvince(campaign, war, army.NationId, targetProvinceId)) return targetProvinceId;
+            var route = WarCoalition.FriendlyRoute(campaign, war, army.NationId, army.ProvinceId, targetProvinceId);
+            if (route.Length > 0 && WarCoalition.SafeRetreatProvince(campaign, war, army.NationId, route[0])) return route[0];
+        }
+        return WarCoalition.SpreadRetreatProvince(campaign, war, army, army.ProvinceId);
+    }
+
+    internal static bool Withdraw(Campaign campaign, Army army, out string result, int targetProvinceId = -1)
     {
         result = "Not in battle";
         var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
         if (battle is null || army.Divisions < .1f) return false;
+        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
         var attacking = battle.Attackers.Contains(army.Id);
         if (!attacking && !battle.Defenders.Contains(army.Id)) return false;
 
         var retreat = 0;
         if (!attacking)
         {
-            var nation = campaign.NationById(army.NationId);
-            var map = campaign.ProvinceMap;
-            var control = campaign.ProvinceController;
-            if (nation is not null && map is not null && control is not null &&
-                army.ProvinceId > 0 && army.ProvinceId < map.Neighbors.Length)
-                foreach (var neighbor in map.Neighbors[army.ProvinceId])
-                    if (control[neighbor] == nation.MapIndex && !map.IsWater(neighbor) &&
-                        (retreat == 0 || neighbor < retreat)) retreat = neighbor;
+            retreat = WithdrawalProvince(campaign, war, army, targetProvinceId);
             // A trapped defender cannot cancel enemy fire by pressing a button. No
             // state changes precede this check, and no surrender is hidden in the order.
             if (retreat == 0) { result = "No friendly line of retreat"; return false; }
@@ -76,18 +213,17 @@ public static partial class Warfare
         // Do not heal strength, organisation, equipment or reset the battle's losses.
         _provinceIndexStale = true;
         EnsureIndexed(campaign);
-        var attackers = Side(battle.Attackers, battle.AttackerId, AttackingSide);
+        var attackers = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);
         if (attackers.Count == 0) Close(campaign, battle, battle.DefenderId, "Attackers withdrew");
         else
         {
             // An uncommitted garrison still defends the province after one unit leaves.
             foreach (var remaining in InProvince(battle.ProvinceId))
-                if (!remaining.InBattle && remaining.NationId == battle.DefenderId && remaining.Divisions >= .1f)
+                if (!remaining.InBattle && WarCoalition.SameSide(war, remaining.NationId, battle.DefenderId) && remaining.Divisions >= .1f)
                     Join(battle, remaining, false);
-            var defenders = Side(battle.Defenders, battle.DefenderId, DefendingSide);
+            var defenders = Side(war, battle.Defenders, battle.DefenderId, DefendingSide);
             if (defenders.Count == 0)
             {
-                var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
                 var occupied = war is not null && Capture(campaign, war, battle.ProvinceId,
                     battle.AttackerId, attackers, defenders, "defenders withdrew");
                 Close(campaign, battle, battle.AttackerId,

@@ -20,7 +20,8 @@ public static class NewsFeed
     public sealed record Line(long Sequence, int Day, string Kind, string Text, int ActorId, int TargetId);
 
     private static Dictionary<string, int> _importance;
-    private static int _railMinimum = 2;
+    private static Dictionary<string, string> _stings = new(System.StringComparer.OrdinalIgnoreCase);
+    private static int _railMinimum = 2, _stingGapMs = 9000;
 
     /// <summary>
     /// How much a kind of news matters, 0 to 3 (common/news): 0 is routine - aid sent, a building
@@ -32,6 +33,36 @@ public static class NewsFeed
     {
         _importance ??= Load();
         return kind is not null && _importance.TryGetValue(kind, out var level) ? level : 1;
+    }
+
+    /// <summary>
+    /// The sound cue a headline of this kind makes when it reaches the rail (common/news
+    /// "stings"), or "" for none. Presentation only: nothing in the simulation reads it.
+    /// </summary>
+    public static string Sting(string kind)
+    {
+        _importance ??= Load();
+        return kind is not null && _stings.TryGetValue(kind, out var cue) ? cue : "";
+    }
+
+    /// <summary>Every kind of news that has a sting, and its cue.</summary>
+    public static IReadOnlyDictionary<string, string> Stings
+    {
+        get
+        {
+            _importance ??= Load();
+            return _stings;
+        }
+    }
+
+    /// <summary>The least time between two headline stings, so a busy day is one sound.</summary>
+    public static int StingGapMs
+    {
+        get
+        {
+            _importance ??= Load();
+            return _stingGapMs;
+        }
     }
 
     public static int RailMinimum
@@ -52,7 +83,8 @@ public static class NewsFeed
     private static Dictionary<string, int> Load()
     {
         _importance = new Dictionary<string, int>(System.StringComparer.OrdinalIgnoreCase);
-        _railMinimum = 2;
+        _stings = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+        _railMinimum = 2; _stingGapMs = 9000;
         foreach (var document in GameDataLoader.DataDocuments("common", "news"))
             using (document)
                 Merge(document.RootElement, null);
@@ -65,6 +97,14 @@ public static class NewsFeed
         if (root.ValueKind != System.Text.Json.JsonValueKind.Object) return;
         if (root.TryGetProperty("rail_minimum", out var minimum) && minimum.TryGetInt32(out var level))
             _railMinimum = System.Math.Clamp(level, 0, 3);
+        if (root.TryGetProperty("sting_gap_ms", out var gap) && gap.TryGetInt32(out var ms))
+            _stingGapMs = System.Math.Clamp(ms, 0, 120000);
+        if (root.TryGetProperty("stings", out var stings) && stings.ValueKind == System.Text.Json.JsonValueKind.Object)
+            foreach (var entry in stings.EnumerateObject())
+            {
+                if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.String) _stings[entry.Name] = entry.Value.GetString().Trim();
+                else errors?.Add($"common/news: sting '{entry.Name}' needs a cue name, or \"\" for silence.");
+            }
         if (!root.TryGetProperty("importance", out var kinds) || kinds.ValueKind != System.Text.Json.JsonValueKind.Object) return;
         foreach (var entry in kinds.EnumerateObject())
         {
@@ -99,19 +139,23 @@ public static class NewsFeed
         for (var index = campaign.Chronicle.Entries.Count - 1; index >= 0; index--)
         {
             var entry = campaign.Chronicle.Entries[index];
-            if (!entry.Public || entry.Sequence <= since) continue;
+            // A covert operation's outcome is private, and news to the one country it names first.
+            var told = !entry.Public && entry.ActorId == campaign.Player.Id && CovertOperations.TellsActor(entry.Kind);
+            if (!entry.Public && !told || entry.Sequence <= since) continue;
             // Chronicle snapshots retain their historical text. Translate at read time,
             // without rewriting the saved entry or renaming a historical identity.
             string Country(int id, string recorded)
             {
                 var nation = campaign.NationById(id);
-                return nation is not null && nation.Name == recorded ? nation.DisplayName : Loc.Get(recorded);
+                return nation is not null && nation.Name == recorded ? nation.DisplayName : CountryNames.Recorded(recorded);
             }
             var subject = entry.Kind is "ultimatum_accepted" or "ultimatum_refused"
-                ? campaign.States.FirstOrDefault(state => state.Name == entry.Subject)?.DisplayName ?? Loc.Get(entry.Subject)
-                : Loc.Get(entry.Subject);
+                ? campaign.States.FirstOrDefault(state => state.Name == entry.Subject)?.DisplayName ??
+                  CountryNames.Recorded(entry.Subject)
+                : CountryNames.Recorded(entry.Subject);
             var text = Loc.Format("chronicle." + entry.Kind,
-                Country(entry.ActorId, entry.ActorName), Country(entry.TargetId, entry.TargetName), subject, Loc.Get(entry.Place));
+                Country(entry.ActorId, entry.ActorName), Country(entry.TargetId, entry.TargetName), subject,
+                CountryNames.Recorded(entry.Place));
             yield return new Line(entry.Sequence, entry.Day, entry.Kind, text, entry.ActorId, entry.TargetId);
             if (take > 0 && ++emitted >= take) yield break;
         }

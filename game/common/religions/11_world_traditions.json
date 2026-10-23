@@ -1,0 +1,39 @@
+// Further authored traditions, in the same shape as 10_living_traditions.json.
+//
+// The rule the existing file states is kept here: these are distinct traditions with their own
+// name, not sub-labels invented to make a census tidier. A region that believes one of these is
+// not rounded into a broader family, and a religious founding mandate reads the difference.
+//
+// `group` is one of the families common/religions/00_religions.json already declares, so a
+// tradition added here joins an existing family rather than creating a new one - which is what
+// keeps `required_religion_groups` in common/formable_nations working unchanged.
+{
+  // The older churches, each with its own liturgy, calendar and hierarchy. Calling an Armenian
+  // Apostolic a Catholic, or a Chaldean an Assyrian, is the kind of rounding this file exists
+  // to avoid.
+  "coptic_orthodox": {"name": "Coptic Orthodox", "group": "christian", "colour": "#8f6f4f"},
+  "ethiopian_orthodox": {"name": "Ethiopian Orthodox", "group": "christian", "colour": "#7f6f3f"},
+  "armenian_apostolic": {"name": "Armenian Apostolic", "group": "christian", "colour": "#9f5f5f"},
+  "assyrian_church": {"name": "Church of the East", "group": "christian", "colour": "#7f5f8f"},
+  "chaldean_catholic": {"name": "Chaldean Catholic", "group": "christian", "colour": "#8f6f9f"},
+  "maronite": {"name": "Maronite", "group": "christian", "colour": "#9f7f6f"},
+  "old_believers": {"name": "Old Believers", "group": "christian", "colour": "#6f6f8f"},
+  "zion_christian": {"name": "Zion Christian", "group": "christian", "colour": "#6f8f6f"},
+
+  // The Buddhist traditions are named separately for the same reason Taoism is not called
+  // Shinto elsewhere in this folder: a Theravada village and a Vajrayana monastery are not the
+  // same community, and a founding mandate that cannot tell them apart is not reading the map.
+  "theravada": {"name": "Theravada", "group": "dharmic", "colour": "#c09f4f"},
+  "mahayana": {"name": "Mahayana", "group": "dharmic", "colour": "#b08f5f"},
+  "vajrayana": {"name": "Vajrayana", "group": "dharmic", "colour": "#a07f6f"},
+
+  // African-diaspora traditions that are not the three already shipped, kept in the same family
+  // rather than treated as folk practice.
+  "quimbanda": {"name": "Quimbanda", "group": "african_diaspora", "colour": "#8f5f7f"},
+  "palo": {"name": "Palo", "group": "african_diaspora", "colour": "#7f5f6f"},
+
+  // East Asian traditions with their own institutions.
+  "won_buddhism": {"name": "Won Buddhism", "group": "east_asian", "colour": "#9f8f4f"},
+  "nichiren": {"name": "Nichiren", "group": "east_asian", "colour": "#af7f4f"},
+  "jeung_san_do": {"name": "Jeung San Do", "group": "east_asian", "colour": "#8f9f6f"}
+}

@@ -1,0 +1,20 @@
+{
+  "Page {0} / {1}": "Page {0} / {1}",
+  "Once unlocked: {0} week(s) at this pace.": "Once unlocked: {0} week(s) at this pace.",
+  "Catalogue": "Catalogue",
+  "Dependencies": "Dependencies",
+  "Any status": "Any status",
+  "Ready or researching": "Ready or researching",
+  "Invested projects": "Invested projects",
+  "Reset filters": "Reset filters",
+  "Current project: {0} · {1} / {2} points": "Current project: {0} · {1} / {2} points",
+  "{0} matching technologies": "{0} matching technologies",
+  "Selected project and all prerequisites": "Selected project and all prerequisites",
+  "Lines connect prerequisites to discoveries": "Lines connect prerequisites to discoveries",
+  "SELECTED PROJECT": "SELECTED PROJECT",
+  "Show dependency path": "Show dependency path",
+  "Research is disabled in this campaign.": "Research is disabled in this campaign.",
+  "No research progress at the current pace.": "No research progress at the current pace.",
+  "Switching projects keeps invested points. Inspecting a technology does not start research.": "Switching projects keeps invested points. Inspecting a technology does not start research.",
+  "Future tiers represent possible development paths, not dated predictions.": "Future tiers represent possible development paths, not dated predictions."
+}

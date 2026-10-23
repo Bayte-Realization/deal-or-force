@@ -16,6 +16,14 @@ public partial class DealOrForceGame
 {
     private static readonly (string Portfolio, string On, string Off, string Tooltip)[] StaffPortfolios =
     {
+        (Delegation.Construction, "The works ministry plans construction", "Let the works ministry plan construction",
+            "Selects and pays for regional projects using the same planner and fiscal reserve as other countries. Separate from tax and spending; taking it back does not cancel existing projects."),
+        (Delegation.Research, "The research ministry selects technologies", "Let the research ministry select technologies",
+            "The same weekly technology planner as other countries. Taking it back stops automatic selection, not progress on the current project. Unspent progress is retained."),
+        (Delegation.Personnel, "The personnel office fills the cabinet", "Let the personnel office fill the cabinet",
+            "Fills vacant ministerial portfolios on the same review and at the same appointment cost as other countries. Does not dismiss your appointees or decide elections."),
+        (Delegation.Subjects, "The colonial office manages the subjects", "Let the colonial office manage the subjects",
+            "Once a month it does what every other overlord's administration does: grants land to a fitting existing subject rather than founding micro-vassals, and releases an unruly, culturally foreign periphery as an autonomous satellite when the empire is overstretched. It never annexes, founds or dissolves a subject by choice, and never acts in wartime; those stay yours."),
         (Delegation.Budget, "The treasury is running itself", "Let the treasury run itself",
             "Hand tax and spending to your own civil service - the same staff that governs every " +
             "other country in the world. Once a month it taxes what a thinning treasury needs, " +
@@ -30,8 +38,9 @@ public partial class DealOrForceGame
             "time - the instructions it left stay until you change them."),
         (Delegation.Army, "The general staff keeps the army at strength", "Let the general staff keep the army at strength",
             "The general staff raises a formation when the army falls below what the military budget pays for, " +
-            "and stands one down after a peace that leaves too many - at your treasury's cost, in your most " +
-            "populous region. Take it into your own hands and nothing is raised or disbanded unless you do it."),
+            "and stands one surplus down after a peace when the treasury cannot pay for it. It records why, " +
+            "and it does not stand down a formation that is holding a war. Take it into your own hands and " +
+            "nothing is raised or disbanded unless you do it."),
         (Delegation.Command, "The general staff commands the free army", "Let the general staff command the free army",
             "Hand the formations you have not given orders to the general staff - the one that commands every " +
             "other country's army. At peace it keeps them where a country keeps its army: the capital, the " +
@@ -71,7 +80,7 @@ public partial class DealOrForceGame
         foreach (var (portfolio, on, off, tooltip) in StaffPortfolios)
         {
             var held = Delegation.Holds(nation, portfolio);
-            var toggle = new CheckButton { Text = Tr(held ? on : off) };
+            var toggle = new CheckButton { Name = "StaffPortfolio_" + portfolio, Text = Tr(held ? on : off) };
             toggle.SetPressedNoSignal(held);
             toggle.TooltipText = Ui.Tip(Tr(tooltip));
             var captured = portfolio;

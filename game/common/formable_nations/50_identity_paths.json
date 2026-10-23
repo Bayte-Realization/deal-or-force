@@ -2,7 +2,8 @@
 // These overlays retain every territory, stability, cost, politics and treaty check.
 {
   "soviet_union": {
-    "description": "A renewed union of the fifteen republics, founded by any of their successor governments or a culturally related successor state. Socialist institutions, the complete foundation territory, peace and a stable mandate remain mandatory.",
+    "description": "A renewed union of the fifteen republics, founded by any of their successor governments or a culturally related successor state. The complete foundation territory, peace and a stable mandate remain mandatory. The government of the day does not close the road.",
+    "required_ideology": [],
     "eligible_tags": ["RUS", "BLR", "UKR", "KAZ", "UZB", "TKM", "TJK", "KGZ", "ARM", "AZE", "GEO", "MDA", "LVA", "LTU", "EST"],
     "eligible_cultures": ["russian", "belarusian", "ukrainian", "kazakh", "uzbek", "turkmen", "tajik", "kyrgyz", "armenian", "azerbaijani", "georgian", "moldovan", "latvian", "lithuanian", "estonian"],
     "supersedes": ["union_state", "eurasian_union", "central_asian_union", "transcaucasia"],

@@ -1,0 +1,23 @@
+{
+  "Alt with the wheel zooms; Ctrl with the wheel moves the view, the middle button drags it, and Shift makes Ctrl up and down.": "Alt с колесом — приближение; Ctrl с колесом — перемещение вида; средняя кнопка — перетаскивание; Shift + Ctrl — вверх и вниз.",  "One Congo under one administration: the river, its two capitals and the railway that was always meant to run end to end.": "Единое Конго под одной администрацией: река, две её столицы и железная дорога, которой всегда было суждено идти от края до края.",
+  "The union of 1959 put back together: Senegal and Mali as one state, as they were for the months before Dakar and Bamako disagreed.": "Союз 1959 года снова вместе: Сенегал и Мали как одно государство — такие, какими они были за месяцы до разногласий Дакара и Бамако.",
+  "The department that left in 1903 comes back: the isthmus and the mainland under one government, with the canal as a domestic waterway.": "Департамент, отделившийся в 1903 году, возвращается: перешеек и материк под одним правительством, а канал — внутренний водный путь.",
+  "The old republic restored between its two surviving heirs: a shared parliament in Warsaw and Vilnius, and no claim to anything else.": "Старая республика восстановлена между двумя её уцелевшими наследниками: общий парламент в Варшаве и Вильнюсе и никаких притязаний на чужое.",
+  "One Samoa again, as it was before 1899 drew a line through it: the two administrations become one, the language was never divided.": "Единое Самоа — как до того, как 1899 год провёл по нему черту: две администрации становятся одной, а язык никогда не был разделён.",
+  "Union cohesion": "Сплочённость союза",
+  "War, instability and radicalism wear a union down; a quiet, stable year puts it back together. Below the floor a region leaves, and the rest of the claim stays yours to pick up again.": "Война, нестабильность и радикализм подтачивают союз; спокойный стабильный год собирает его заново. Ниже порога регион выходит, а остальные претензии остаются вашими.",
+  "{0} {1:0.0%}": "{0} {1:0.0%}",
+  "{0} · {1} {2:+0;-0;0}": "{0} · {1} {2:+0;-0;0}",
+  "{0} · {1} {2:0.0}": "{0} · {1} {2:0.0}",
+  "Garrison here": "Поставить гарнизон",
+  "Develop here": "Развивать здесь",
+  "Choose what to build in this region. The queue, the price and the effect are on one screen.": "Выберите, что строить в этом регионе. Очередь, цена и эффект — на одном экране.",
+  "No free division: every formation is fighting, marching or at sea.": "Нет свободного соединения: все дерутся, идут маршем или находятся в море.",
+  "Station a division here to hold the province. It remains a normal formation with normal upkeep.": "Поставьте сюда дивизию, чтобы удерживать провинцию. Это обычное соединение с обычным содержанием.",
+  "Orders the nearest free division to march here and hold the province. It remains a normal formation with normal upkeep and can be ordered away again.": "Приказывает ближайшему свободному соединению идти сюда и удерживать провинцию. Это обычное соединение с обычным содержанием; его можно снова отправить в другое место.",
+  "A division is marching to garrison this province.": "Дивизия идёт, чтобы встать гарнизоном в этой провинции.",
+  "A division is already there.": "Дивизия уже там.",
+  "No way through by land.": "Нет сухопутного пути.",
+  "That ground is not under your control.": "Эта земля не под вашим контролем.",
+  "The garrison order was refused.": "Приказ о гарнизоне отклонён."
+}

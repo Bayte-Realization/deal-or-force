@@ -1,0 +1,6 @@
+// События на карте (GlobeEventPulses.cs).
+{
+  "Events on the map": "События на карте",
+  "A mark where the news is - a war begun, shooting on a border, a coup, a strike, a bloc split or signed - pulsing while it is fresh. Rest the cursor on one to read it.": "Знак там, где случилось событие: началась война, стрельба на границе, переворот, забастовка, раскол или подписание блока. Пульсирует, пока новость свежая. Наведите курсор, чтобы прочитать её.",
+  "{0} days ago": "{0} дн. назад"
+}

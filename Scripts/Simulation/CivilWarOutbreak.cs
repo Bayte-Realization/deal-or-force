@@ -13,8 +13,8 @@ public sealed partial class Defines
     /// CivilWarCoupMemoryDays doubles it.
     /// </summary>
     public bool CivilWarOutbreaks { get; set; } = true;
-    public float CivilWarStabilityThreshold { get; set; } = 0.30f;
-    public float CivilWarWeeklyChance { get; set; } = 0.010f;
+    public float CivilWarStabilityThreshold { get; set; } = 0.32f;
+    public float CivilWarWeeklyChance { get; set; } = 0.012f;
     /// <summary>The most civil wars the whole world begins in a year. A century-old campaign
     /// whose stability has drifted down everywhere began thirteen in one year - Japan and
     /// Spain among them - without it.</summary>
@@ -32,6 +32,8 @@ public sealed partial class Defines
     public bool CivilWarStrikesPlayers { get; set; } = false;
     /// <summary>How much faster a state's minorities leave while it fights a civil war.</summary>
     public float SecessionCivilWarMultiplier { get; set; } = 3f;
+    /// <summary>How much imperial overstretch amplifies secession pressure across foreign regions.</summary>
+    public float SecessionOverstretchMultiplier { get; set; } = 0.50f;
 }
 
 /// <summary>
@@ -99,9 +101,9 @@ public static class CivilWarOutbreak
         if (c is null || nation is null) return "No governed country selected.";
         var d = c.Defines;
         if (!d.CivilWarOutbreaks || !MechanicFeatures.SystemEnabled(c, "SecessionEvents")) return "Civil-war outbreaks are disabled.";
-        if (!float.IsFinite(nation.Stability) || !float.IsFinite(d.CivilWarStabilityThreshold)) return "Invalid simulation values prevent this action. Pause and inspect the campaign.";
+        if (!float.IsFinite(nation.Stability) || !float.IsFinite(d.CivilWarStabilityThreshold)) return "The campaign data is damaged, so this cannot be done.";
         if (nation.Movement is not null || nation.FactionId.Length > 0 || nation.IsSubject || c.Fallen.Contains(nation.Id))
-            return "This actor is not an independent established government.";
+            return "Only an independent state can have a civil war.";
         if (nation.IsHuman && !d.CivilWarStrikesPlayers) return "Random outbreaks in player countries are disabled in campaign settings.";
         if (c.ElapsedDays < d.CivilWarEarliestDay) return "The campaign is still in its initial protection period.";
         if (nation.LastCivilWarDay > 0 && c.ElapsedDays - nation.LastCivilWarDay < d.CivilWarCooldownDays)
@@ -122,16 +124,42 @@ public static class CivilWarOutbreak
             !float.IsFinite(d.CivilWarStabilityThreshold)) return 0f;
         var depth = M.Clamp01((d.CivilWarStabilityThreshold - nation.Stability) / MathF.Max(0.01f, d.CivilWarStabilityThreshold));
         var chance = d.CivilWarWeeklyChance * depth;
-        // Both coup routes set LastCoupDay. The independent military timestamp preserves
-        // an earlier coup's existing multiplier even after a later institutional transition.
-        var coupDay = nation.LastMilitaryCoupDay;
-        var coup = coupDay >= 0 && coupDay <= c.ElapsedDays &&
-            c.ElapsedDays - (long)coupDay <= d.CivilWarCoupMemoryDays;
-        if (coup) chance *= 2f;
-        // A country at war abroad and losing has its army away from home.
-        if (c.Wars.Any(w => !w.Ended && !w.CivilConflict && w.Involves(nation.Id) &&
-                            (w.IsAttacking(nation.Id) ? w.WarScore : -w.WarScore) < -10f)) chance *= 1.5f;
+        if (RecentMilitaryCoup(c, nation)) chance *= 2f;
+        if (LosingForeignWar(c, nation)) chance *= 1.5f;
+        if (nation.ImperialOverstretch > 0.05f) chance *= (1f + nation.ImperialOverstretch * 0.75f);
         return float.IsFinite(chance) ? Math.Clamp(chance, 0f, 1f) : 0f;
+    }
+
+    /// <summary>
+    /// Why <see cref="Chance"/> is the number it is, as localisation keys. Only the factors
+    /// that are actually on are named, in the order the chance multiplies them.
+    /// </summary>
+    public static string[] Factors(Campaign c, Nation nation)
+    {
+        if (c is null || nation is null || Chance(c, nation) <= 0f) return Array.Empty<string>();
+        var factors = new List<string> { "The weekly chance starts from how far stability sits below the line." };
+        if (RecentMilitaryCoup(c, nation)) factors.Add("A recent military coup doubles that chance.");
+        if (LosingForeignWar(c, nation)) factors.Add("A losing war abroad raises that chance.");
+        if (nation.ImperialOverstretch > 0.05f) factors.Add("Imperial overstretch raises that chance.");
+        return factors.ToArray();
+    }
+
+    /// <summary>Both coup routes set LastCoupDay. This stamp keeps a military coup's multiplier after a later institutional transition.</summary>
+    private static bool RecentMilitaryCoup(Campaign c, Nation nation)
+    {
+        var coupDay = nation.LastMilitaryCoupDay;
+        var memory = c.Defines.CivilWarCoupMemoryDays;
+        return coupDay >= 0 && coupDay <= c.ElapsedDays && c.ElapsedDays - (long)coupDay <= memory;
+    }
+
+    /// <summary>A country at war abroad and losing has its army away from home.</summary>
+    private static bool LosingForeignWar(Campaign c, Nation nation)
+    {
+        foreach (var war in c.Wars)
+            if (!war.Ended && !war.CivilConflict && war.Involves(nation.Id) &&
+                (war.IsAttacking(nation.Id) ? war.WarScore : -war.WarScore) < -10f)
+                return true;
+        return false;
     }
 
     internal static void RestoreMilitaryCoupMemory(Campaign campaign)

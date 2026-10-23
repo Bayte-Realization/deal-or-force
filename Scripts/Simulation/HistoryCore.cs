@@ -88,25 +88,34 @@ public sealed class CampaignHistory
             foreach (var values in _samples.Values) Thin(values, _lastCapturedDay / 364 * 364);
     }
 
+    private float[] _militaryPowerScratch = Array.Empty<float>();
+    private float[] _warSupportScratch = Array.Empty<float>();
+
     public void Capture(Campaign campaign, bool force = false)
     {
         if (campaign is null || (!force && campaign.ElapsedDays % 7 != 0) || _lastCapturedDay == campaign.ElapsedDays)
             return;
 
-        var militaryPower = new float[campaign.Nations.Count];
+        var nationCount = campaign.Nations.Count;
+        if (_militaryPowerScratch.Length < nationCount) _militaryPowerScratch = new float[nationCount];
+        else Array.Clear(_militaryPowerScratch, 0, nationCount);
+        var militaryPower = _militaryPowerScratch;
         foreach (var army in campaign.Armies)
-            if (army.NationId >= 0 && army.NationId < militaryPower.Length)
+            if (army.NationId >= 0 && army.NationId < nationCount)
                 militaryPower[army.NationId] += army.Power;
         foreach (var fleet in campaign.Fleets)
-            if (fleet.NationId >= 0 && fleet.NationId < militaryPower.Length)
+            if (fleet.NationId >= 0 && fleet.NationId < nationCount)
                 militaryPower[fleet.NationId] += fleet.Hulls * 0.32f;
 
-        var warSupport = campaign.Nations.Select(nation => nation.WarSupport).ToArray();
-        foreach (var war in campaign.Wars.Where(war => !war.Ended))
+        if (_warSupportScratch.Length < nationCount) _warSupportScratch = new float[nationCount];
+        var warSupport = _warSupportScratch;
+        for (var i = 0; i < nationCount; i++) warSupport[i] = campaign.Nations[i].WarSupport;
+        foreach (var war in campaign.Wars)
         {
-            if (war.AttackerId >= 0 && war.AttackerId < warSupport.Length)
+            if (war.Ended) continue;
+            if (war.AttackerId >= 0 && war.AttackerId < nationCount)
                 warSupport[war.AttackerId] = MathF.Min(warSupport[war.AttackerId], war.AttackerWarSupport);
-            if (war.DefenderId >= 0 && war.DefenderId < warSupport.Length)
+            if (war.DefenderId >= 0 && war.DefenderId < nationCount)
                 warSupport[war.DefenderId] = MathF.Min(warSupport[war.DefenderId], war.DefenderWarSupport);
         }
 

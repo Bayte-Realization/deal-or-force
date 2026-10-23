@@ -1,0 +1,18 @@
+{
+  "There is no diplomatic mission to recall.": "There is no diplomatic mission to recall.",
+  "A diplomatic mission is already working here.": "A diplomatic mission is already working here.",
+  "End the war before sending a goodwill mission.": "End the war before sending a goodwill mission.",
+  "An active embargo blocks a goodwill mission.": "An active embargo blocks a goodwill mission.",
+  "Insufficient treasury for a diplomatic mission.": "Insufficient treasury for a diplomatic mission.",
+  "Recall a diplomatic mission before opening another.": "Recall a diplomatic mission before opening another.",
+  "Insufficient political credit: need {0:0.##}, available {1:0.##}.": "Insufficient political credit: need {0:0.##}, available {1:0.##}.",
+  "Mission in progress: {0} days left, {1} paid weeks. Weekly: {2:0.##} political credit and {3}. Recall stops future payments; earned goodwill fades normally.": "Mission in progress: {0} days left, {1} paid weeks. Weekly: {2:0.##} political credit and {3}. Recall stops future payments; earned goodwill fades normally.",
+  "Legacy diplomacy: an immediate treasury-funded overture.": "Legacy diplomacy: an immediate treasury-funded overture.",
+  "A {0}-day mission, not an instant opinion boost. Start: {1:0.##} political credit and {2}. Weekly: {3:0.##} political credit and {4}. Goodwill ceiling: +{5:0.#}; tension and political distance slow progress. At most {6} concurrent missions.": "A {0}-day mission, not an instant opinion boost. Start: {1:0.##} political credit and {2}. Weekly: {3:0.##} political credit and {4}. Goodwill ceiling: +{5:0.#}; tension and political distance slow progress. At most {6} concurrent missions.",
+  "Recall diplomatic mission": "Recall diplomatic mission",
+  "Diplomatic mission dispatched. Goodwill grows gradually, not immediately.": "Diplomatic mission dispatched. Goodwill grows gradually, not immediately.",
+  "Diplomatic mission recalled. No further weekly payments.": "Diplomatic mission recalled. No further weekly payments.",
+  "Sustained diplomatic engagement": "Sustained diplomatic engagement",
+  "chronicle.diplomatic_mission_started": "{0} dispatches a sustained diplomatic mission to {1}.",
+  "chronicle.diplomatic_mission_ended": "The diplomatic mission from {0} to {1} ends."
+}

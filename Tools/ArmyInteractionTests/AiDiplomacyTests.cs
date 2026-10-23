@@ -84,7 +84,17 @@ static class AiDiplomacyTests
         OpinionSystem.Settle(c, bond);
         bond.Stance = DiplomaticStance.Rival;
         bond.LastActionDay = -9999;
-        Check(AiStatecraft.TryFriendlyMove(c, ai, partner) && bond.Stance == DiplomaticStance.Friendly,
+        // Improving relations is a paid diplomatic mission now (DiplomaticOutreach,
+        // docs/DIPLOMATIC_MISSIONS_ORGANIC_BLOCS_2026_10_20_RU.md): it costs political credit, of
+        // which a freshly loaded campaign has none, and a rivalry ends at the mission's first
+        // weekly payment rather than on the day it is sent.
+        ai.PoliticalPoints = 100;
+        Check(AiStatecraft.TryFriendlyMove(c, ai, partner) && DiplomaticOutreach.Of(bond, ai.Id) is not null &&
+              !bond.TradeAgreement,
+            "AI spends its one move on a goodwill mission to a rival whose opinion has recovered");
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, (long)(c.ElapsedDays + 7) * 24);
+        DiplomaticOutreach.Tick(c, bond);
+        Check(bond.Stance == DiplomaticStance.Friendly,
             "AI reconciles an old rivalry when sustained diplomacy has repaired opinion");
 
         humanBond.Reasons.Clear();

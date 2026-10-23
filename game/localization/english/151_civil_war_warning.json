@@ -5,7 +5,7 @@
   "An outbreak is possible. Restore institutional stability before the next weekly review.": "An outbreak is possible. Restore institutional stability before the next weekly review.",
   "No governed country selected.": "No governed country selected.",
   "Civil-war outbreaks are disabled.": "Civil-war outbreaks are disabled.",
-  "This actor is not an independent established government.": "This actor is not an independent established government.",
+  "Only an independent state can have a civil war.": "Only an independent state can have a civil war.",
   "Random outbreaks in player countries are disabled in campaign settings.": "Random outbreaks in player countries are disabled in campaign settings.",
   "The campaign is still in its initial protection period.": "The campaign is still in its initial protection period.",
   "The country is protected from another outbreak during recovery.": "The country is protected from another outbreak during recovery.",
@@ -13,5 +13,9 @@
   "Too few residents or governed regions for a territorial civil war.": "Too few residents or governed regions for a territorial civil war.",
   "Institutions remain above the civil-war instability threshold.": "Institutions remain above the civil-war instability threshold.",
   "Civil-war outbreaks in player countries": "Civil-war outbreaks in player countries",
-  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown."
+  "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.",
+  "The weekly chance starts from how far stability sits below the line.": "The weekly chance starts from how far stability sits below the line.",
+  "A recent military coup doubles that chance.": "A recent military coup doubles that chance.",
+  "A losing war abroad raises that chance.": "A losing war abroad raises that chance.",
+  "Imperial overstretch raises that chance.": "Imperial overstretch raises that chance."
 }

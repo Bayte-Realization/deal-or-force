@@ -3,16 +3,16 @@
 {
   // Transnistria: its own homeland, and under international law part of Moldova.
   "pmr_x01": {"cores": ["PMR", "MDA"]},
-  "ua_43": {"cores": ["UKR"]}, "ua_71": {"cores": ["UKR"]},
-  "ua_74": {"cores": ["UKR"]}, "ua_12": {"cores": ["UKR"]},
-  "ua_14": {"cores": ["UKR"]}, "ua_26": {"cores": ["UKR"]},
-  "ua_63": {"cores": ["UKR"]}, "ua_65": {"cores": ["UKR"]},
+  "ua_43": {"cores": ["UKR", "RUS"]}, "ua_71": {"cores": ["UKR"]},
+  "ua_74": {"cores": ["UKR"]}, "ua_12": {"cores": ["UKR"], "claims": ["RUS"]},
+  "ua_14": {"cores": ["UKR", "RUS"]}, "ua_26": {"cores": ["UKR"]},
+  "ua_63": {"cores": ["UKR"], "claims": ["RUS"]}, "ua_65": {"cores": ["UKR", "RUS"]},
   "ua_68": {"cores": ["UKR"]}, "ua_35": {"cores": ["UKR"]},
-  "ua_32": {"cores": ["UKR"]}, "ua_09": {"cores": ["UKR"]},
-  "ua_46": {"cores": ["UKR"]}, "ua_48": {"cores": ["UKR"]},
-  "ua_51": {"cores": ["UKR"]}, "ua_53": {"cores": ["UKR"]},
+  "ua_32": {"cores": ["UKR"]}, "ua_09": {"cores": ["UKR", "RUS"]},
+  "ua_46": {"cores": ["UKR"]}, "ua_48": {"cores": ["UKR"], "claims": ["RUS"]},
+  "ua_51": {"cores": ["UKR"], "claims": ["RUS"]}, "ua_53": {"cores": ["UKR"]},
   "ua_56": {"cores": ["UKR"]}, "ua_59": {"cores": ["UKR"]},
   "ua_61": {"cores": ["UKR"]}, "ua_05": {"cores": ["UKR"]},
   "ua_07": {"cores": ["UKR"]}, "ua_21": {"cores": ["UKR"]},
-  "ua_23": {"cores": ["UKR"]}, "ua_18": {"cores": ["UKR"]}
+  "ua_23": {"cores": ["UKR", "RUS"]}, "ua_18": {"cores": ["UKR"]}
 }
