@@ -137,6 +137,8 @@ public partial class DealOrForceGame
         var armies = _campaign.Armies.ToDictionary(army => army.Id);
         var attacking = ResolveBattleSide(battle.Attackers, armies);
         var defending = ResolveBattleSide(battle.Defenders, armies);
+        if (!battle.Ended)
+            defending = defending.Where(army => army.ProvinceId == battle.ProvinceId).ToList();
         AddBattleSide(sideRow, battle, true, attacker, attacking);
         AddBattleSide(sideRow, battle, false, defender, defending);
         if (battle.WithdrawnAttackers.Count + battle.WithdrawnDefenders.Count > 0)
@@ -145,8 +147,17 @@ public partial class DealOrForceGame
         _battleDetailControls.AddChild(new HSeparator());
         _battleDetailControls.AddChild(BattleText(Tr("Ground and fire"), 13, "text.accent"));
         var terrain = _campaign.ProvinceMap?.TerrainAt(battle.ProvinceId);
-        _battleDetailControls.AddChild(BattleText(Loc.Format("Terrain: {0} · frontage {1:0}/{2:0}",
-            Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth)));
+        // A report that says "19 formations" without saying how many of them are in the line
+        // is the report that hid the Kharkiv problem: the province held one formation, the
+        // panel counted nineteen, and four of them were shooting. The frontage line says
+        // which of the two numbers the fire belongs to.
+        var known = battle.AttackerInLine + battle.DefenderInLine > 0;
+        _battleDetailControls.AddChild(BattleText(known
+            ? Loc.Format("Terrain: {0} · frontage {1:0}/{2:0} · in line {3}/{4} vs {5}/{6}",
+                Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth,
+                battle.AttackerInLine, battle.Attackers.Count, battle.DefenderInLine, battle.Defenders.Count)
+            : Loc.Format("Terrain: {0} · frontage {1:0}/{2:0}",
+                Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth)));
         if (battle.RiverCrossingStrength > 0)
         {
             _battleDetailControls.AddChild(BattleText(Tr(battle.RiverCrossingStrength > .66f
@@ -213,7 +224,13 @@ public partial class DealOrForceGame
             AddBattleMeter(column, "Fighting strength", state.Strength, "combat.strength", "strength");
             AddBattleMeter(column, "Supply", state.Supply, "combat.supply", "supply");
             AddBattleMeter(column, "Cohesion", state.Cohesion, "combat.cohesion", "cohesion");
-            column.AddChild(BattleText(Loc.Format("{0:N0} men · {1} formations", state.Personnel, state.Formations), 11));
+            // The pile in the province is the whole force; the line is what is shooting. Say
+            // both when they differ, or the panel reports a reserve as if it were fighting.
+            var inLine = attacking ? battle.AttackerInLine : battle.DefenderInLine;
+            column.AddChild(BattleText(inLine > 0 && inLine < state.Formations
+                ? Loc.Format("{0:N0} men · {1} formations · {2} in the line",
+                    state.Personnel, state.Formations, inLine)
+                : Loc.Format("{0:N0} men · {1} formations", state.Personnel, state.Formations), 11));
         }
         column.AddChild(BattleText(Loc.Format("Losses: {0:N0}", attacking ? battle.AttackerLosses : battle.DefenderLosses),
             12, "state.warning"));
@@ -221,6 +238,13 @@ public partial class DealOrForceGame
         var limit = Math.Clamp((int)InterfaceSkin.Metric("combat.roster_rows", 6), 1, 30);
         foreach (var army in armies.Take(limit))
         {
+            var line = attacking ? battle.LastAttackerLine : battle.LastDefenderLine;
+            if (line.Count > 0)
+                column.AddChild(BattleText(Tr(line.Contains(army.Id) ? "In the firing line" : "Battle reserve"),
+                    10, line.Contains(army.Id) ? "text.accent" : "text.muted"));
+            if (army.PostBattleWaypoints.Count > 0)
+                column.AddChild(BattleText(Loc.Format("After battle: {0} waypoint(s). Halt cancels the queue.",
+                    army.PostBattleWaypoints.Count), 10, "state.warning"));
             var card = new VBoxContainer();
             var header = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             var caption = BattleText(army.Name, 11);
@@ -313,9 +337,12 @@ public partial class DealOrForceGame
     }
 
     private void WithdrawBattleFormation(int armyId, float share)
+        => ConfirmLastDefenderWithdrawal(new[] { armyId }, share, () => ApplyBattleWithdrawal(armyId, share));
+
+    private void ApplyBattleWithdrawal(int armyId, float share)
     {
         var army = _campaign.Armies.Find(a => a.Id == armyId);
-        if (army is null) return;
+        if (army is null || army.NationId != _campaign.Player.Id) return;
         var command = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = armyId, Share = share };
         _campaign.Commands.Enqueue(command);
         _campaign.Commands.ApplyAll(_campaign);
@@ -371,6 +398,8 @@ public partial class DealOrForceGame
             {
                 var targets = _campaign.Armies.Where(army => army.BattleId == battle.Id &&
                     army.NationId == _campaign.Player.Id).Select(army => army.Id).ToArray();
+                ConfirmLastDefenderWithdrawal(targets, 1f, () =>
+                {
                 var commands = targets.Select(id => new WithdrawArmyFromBattleCommand
                     { IssuerId = _campaign.Player.Id, ArmyId = id }).ToArray();
                 foreach (var command in commands) _campaign.Commands.Enqueue(command);
@@ -381,6 +410,7 @@ public partial class DealOrForceGame
                         commands.Count(command => command.Withdrawn), 0, commands.Count(command => !command.Withdrawn));
                 _battleDossierFingerprint = int.MinValue;
                 RefreshBattleDossier();
+                });
             }, 160, 32);
             leave.Name = "WithdrawBattleSide";
             leave.TooltipText = Ui.Tip(Tr("Withdraw our participants only. Defenders without a friendly retreat route remain in combat."));

@@ -58,19 +58,19 @@ public static class MoveBattlePreflightTests
         var defender = c.Armies.Single(a => a.NationId == 1);
         var retreat = new MoveArmyCommand { IssuerId = 1, ArmyId = defender.Id, TargetProvinceId = 3 };
         retreat.Apply(c);
-        Check(retreat.Result == ArmyMoveResult.WithdrawnAndMoving && !defender.InBattle && defender.ProvinceId == 3,
-            "a valid adjacent friendly withdrawal remains immediate");
-        Check(c.Battles.Single().Ended && c.ProvinceController[2] == 500 &&
-            defender.ReadyDay >= c.ElapsedDays + c.Defines.RestAfterRetreatDays,
-            "last defender still yields ground and keeps the recovery interval");
+        Check(retreat.Result == ArmyMoveResult.QueuedAfterBattle && defender.InBattle && defender.ProvinceId == 2,
+            "an adjacent map click queues rather than instantly withdrawing the last defender");
+        Check(!c.Battles.Single().Ended && c.ProvinceController[2] == 501 &&
+            defender.PostBattleWaypoints.SequenceEqual(new[] { 3 }),
+            "the battle and controller stay intact while the destination is saved separately");
 
         c = Fixture(); defender = c.Armies.Single(a => a.NationId == 1);
         var farther = new MoveArmyCommand { IssuerId = 1, ArmyId = defender.Id, TargetProvinceId = 4 };
         farther.Apply(c);
-        Check(farther.Result == ArmyMoveResult.WithdrawnAndMoving && defender.ProvinceId == 3 &&
-            defender.Route.SequenceEqual(new[] { 4 }) && defender.PlannedRoute.SequenceEqual(new[] { 4 }) &&
-            defender.DirectOrder && defender.OrderProvinceId == 4,
-            "a further friendly destination is routed from the actual retreat province");
+        Check(farther.Result == ArmyMoveResult.QueuedAfterBattle && defender.ProvinceId == 2 &&
+            defender.Route.Count == 0 && defender.PlannedRoute.SequenceEqual(new[] { 2 }) &&
+            defender.PostBattleWaypoints.SequenceEqual(new[] { 4 }),
+            "a further friendly destination does not rewrite the ongoing defence");
     }
 
     private static void ChangingAnAttackTargetStillWorks()
@@ -80,20 +80,23 @@ public static class MoveBattlePreflightTests
         c.ProvinceController[7] = 501;
         var attack = new MoveArmyCommand { IssuerId = 0, ArmyId = attacker.Id, TargetProvinceId = 7 };
         attack.Apply(c);
-        Check(attack.Result == ArmyMoveResult.WithdrawnAndMoving && !attacker.InBattle &&
-            attacker.DirectOrder && attacker.OrderKind == ArmyOrder.Spearhead &&
-            attacker.PlannedRoute.SequenceEqual(new[] { 2, 3, 7 }),
-            "an attacker can stop its current assault and order a different reachable enemy objective");
+        Check(attack.Result == ArmyMoveResult.QueuedAfterBattle && attacker.InBattle &&
+            attacker.PostBattleWaypoints.SequenceEqual(new[] { 7 }) &&
+            attacker.PlannedRoute.SequenceEqual(new[] { 2 }),
+            "a different enemy objective is queued without silently stopping the current assault");
 
         c = Fixture();
         var defender = c.Armies.Single(a => a.NationId == 1);
         var counter = new MoveArmyCommand { IssuerId = 1, ArmyId = defender.Id, TargetProvinceId = 7 };
         counter.Apply(c);
-        Check(counter.Result == ArmyMoveResult.WithdrawnAndMoving && !defender.InBattle &&
-            defender.ProvinceId == 3 && defender.DirectOrder && defender.OrderKind == ArmyOrder.Spearhead &&
-            defender.PlannedRoute.SequenceEqual(new[] { 7 }),
-            "a defender can retreat first and keep a valid enemy retarget order");
-        Check(AssaultReadiness.Assess(c, defender).Reason == AssaultReadiness.Reason.Recovering,
+        Check(counter.Result == ArmyMoveResult.QueuedAfterBattle && defender.InBattle &&
+            defender.ProvinceId == 2 && defender.PostBattleWaypoints.SequenceEqual(new[] { 7 }),
+            "a defender queues a counterattack without yielding its present province");
+        var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = 1, ArmyId = defender.Id };
+        withdrawal.Apply(c);
+        Check(withdrawal.Withdrawn && defender.PostBattleWaypoints.Count == 0,
+            "explicit retreat remains distinct and cancels the earlier future order");
+        Check(defender.ReadyDay > c.ElapsedDays && !AssaultReadiness.Assess(c, defender).Ready,
             "retargeting under a direct order does not bypass retreat recovery");
     }
 
@@ -108,9 +111,9 @@ public static class MoveBattlePreflightTests
         Check(order.Result == ArmyMoveResult.QueuedAfterBattle && defender.InBattle && defender.ProvinceId == 2 &&
             battle.Defenders.Contains(defender.Id) && !battle.Ended,
             "an encircled defender cannot cancel combat but may queue a legal breakout objective");
-        Check(defender.DirectOrder && defender.PlannedRoute.SequenceEqual(new[] { 3, 7 }) &&
+        Check(defender.PostBattleWaypoints.SequenceEqual(new[] { 7 }) && !defender.DirectOrder &&
             battle.AttackerLosses == 123 && battle.DefenderLosses == 456,
-            "queued breakout keeps the existing battle losses and its explicit corridor");
+            "queued breakout keeps the current orders and battle losses");
     }
 
     private static void AppendedOrdersDoNotDisengage()
@@ -122,11 +125,12 @@ public static class MoveBattlePreflightTests
         var command = new MoveArmyCommand { IssuerId = 0, ArmyId = attacker.Id, TargetProvinceId = 7, AppendWaypoint = true };
         command.Apply(c);
         Check(command.Result == ArmyMoveResult.QueuedAfterBattle && attacker.InBattle &&
-            attacker.PlannedRoute.SequenceEqual(new[] { 2, 3, 7 }) && !c.Battles.Single().Ended,
-            "Shift-queued waypoints extend the attack without withdrawing the formation");
+            attacker.PostBattleWaypoints.SequenceEqual(new[] { 7 }) &&
+            attacker.PlannedRoute.SequenceEqual(new[] { 2 }) && !c.Battles.Single().Ended,
+            "Shift queues a future waypoint separately without withdrawing the formation");
     }
 
-    private static Campaign Fixture()
+    internal static Campaign Fixture()
     {
         const int width = 96, height = 96;
         var states = new ushort[width * height];

@@ -15,6 +15,9 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--post-battle-orders-only")) { PostBattleOrderTests.Run(); return; }
+        if (args.Length == 0) PostBattleOrderTests.Run();
+        if (args.Contains("--battle-reinforcement-only")) { BattleReinforcementTests.RunFixture(); return; }
         if (args.Contains("--military-access-only")) { MilitaryAccessTests.Run(); return; }
         if (args.Length == 0) MilitaryAccessTests.Run();
         if (args.Contains("--capital-loss-only")) { CapitalLossTests.Run(); return; }
@@ -51,6 +54,8 @@ static class Program
         if (args.Contains("--features-only")) { FeatureTests.Run(); return; }
         if (args.Contains("--battle-readout-only")) { BattleReadoutTests.Run(); return; }
         if (args.Contains("--withdrawal-only")) { BattleWithdrawalTests.RunFixture(); return; }
+        if (args.Contains("--battle-reinforcement-only")) { BattleReinforcementTests.RunFixture(); return; }
+        BattleReinforcementTests.RunFixture();
         if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }

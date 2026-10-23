@@ -24,16 +24,20 @@ public static partial class Warfare
         side.Sum(army => army.Divisions * UnitTypeCatalog.Get(army.TemplateId).CombatWidth);
 
     /// <summary>
-    /// How much of a side is actually in the fight. Divisions past the frontage wait their
-    /// turn, and piling far more in than fits starts to cost the ones who are fighting -
-    /// men in the way of their own guns.
+    /// Overcrowding, for a side whose line is still wider than its ground - which now means
+    /// one formation wider than the province, because the rest are not in the line at all
+    /// (see <see cref="Frontage"/>).
+    ///
+    /// This used to be a multiplier on a whole side's fire, scaling it by the share of the
+    /// side that fitted. That read as "width limits numbers" but did the opposite: nineteen
+    /// divisions in a province all fought, all took losses and all counted as against the
+    /// attacker, and the fifth one made the first four shoot worse than four would have.
     /// </summary>
-    private static float Engagement(float committed, float wanted, float available, Defines defines)
+    private static float OverWidth(float held, float available, Defines defines)
     {
-        var share = M.Clamp(committed / M.Max(0.01f, wanted), 0.05f, 1f);
-        var over = M.Max(0f, wanted - available) / M.Max(0.01f, available);
-        var crowding = M.Clamp(1f - over * defines.OverWidthPenalty, defines.MinCrowdingFactor, 1f);
-        return share * crowding;
+        var over = M.Max(0f, held - available) / M.Max(0.01f, available);
+        return MathF.Min(1f, available / M.Max(.01f, held)) *
+            M.Clamp(1f - over * defines.OverWidthPenalty, defines.MinCrowdingFactor, 1f);
     }
 
     /// <summary>One plus what a formation's country adds to this: research, spirits, government (NationalModifiers).</summary>

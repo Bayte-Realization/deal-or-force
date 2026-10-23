@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -19,7 +20,21 @@ public static partial class Warfare
         {
             if (!army.InBattle) continue;
             if (AssignmentBattles.TryGetValue(army.BattleId, out var battle) && !battle.Ended &&
-                (battle.Attackers.Contains(army.Id) || battle.Defenders.Contains(army.Id))) continue;
+                (battle.Attackers.Contains(army.Id) || battle.Defenders.Contains(army.Id)))
+            {
+                var map = campaign.ProvinceMap;
+                var attacking = battle.Attackers.Contains(army.Id);
+                if (map is null || army.ProvinceId == battle.ProvinceId ||
+                    (attacking && army.ProvinceId > 0 && army.ProvinceId < map.Neighbors.Length &&
+                     map.Neighbors[army.ProvinceId].Contains(battle.ProvinceId))) continue;
+                // Legacy ghost reserves fought from a different province. Release the
+                // bogus assignment without teleportation, rest penalty or healing.
+                battle.Attackers.Remove(army.Id);
+                battle.Defenders.Remove(army.Id);
+                army.BattleId = -1;
+                repaired++;
+                continue;
+            }
             army.BattleId = -1;
             army.ReadyDay = Math.Max(army.ReadyDay, campaign.ElapsedDays +
                 Math.Max(1, campaign.Defines.RestAfterSpentAttackDays));

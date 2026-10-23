@@ -1,0 +1,14 @@
+{
+  "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.": "Остановлен марш или отменена очередь приказов: {0}. Участвующие в боях войска продолжают сражаться.",
+  "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.": "В бою: приказы по карте ждут его окончания. H отменяет очередь; «Отступить» выводит из боя.",
+  "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.": "H: остановить марш. В бою — отменить очередь приказов без отступления. Для отступления используйте «Выйти из боя».",
+  "Engaged in battle #{0} · {1} post-battle waypoint(s); Halt cancels the queue.": "В бою №{0} · точек маршрута после боя: {1}; «Стоп» отменяет очередь.",
+  "After battle: {0} waypoint(s). Halt cancels the queue.": "После боя: точек маршрута — {0}. «Стоп» отменяет очередь.",
+  "post-battle queue is full (32 waypoints)": "очередь после боя заполнена (32 точки)",
+  "Withdraw the last defenders?": "Вывести последних защитников?",
+  "This leaves the province without our defenders and may give it to the enemy. Ordinary map orders are queued until combat ends; they do not retreat.": "Провинция останется без наших защитников и может перейти врагу. Обычные приказы по карте ждут окончания боя и не вызывают отступления.",
+  "In the firing line": "На огневой линии",
+  "Battle reserve": "В резерве боя",
+  "Terrain: {0} · frontage {1:0}/{2:0} · in line {3}/{4} vs {5}/{6}": "Местность: {0} · ширина {1:0}/{2:0} · на линии {3}/{4} против {5}/{6}",
+  "{0:N0} men · {1} formations · {2} in the line": "{0:N0} чел. · формирований: {1} · на линии: {2}"
+}

@@ -74,7 +74,7 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback(Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+        SetArmyFeedback((army.InBattle ? Tr("In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
               "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
               "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
               "Ctrl+G guard an area · Ctrl+F plan cohesion."));
@@ -434,6 +434,7 @@ public partial class DealOrForceGame
         AddResult(parts, results, ArmyMoveResult.NotControlled, "not under your control");
         AddResult(parts, results, ArmyMoveResult.InvalidTarget, "invalid destination");
         AddResult(parts, results, ArmyMoveResult.ArmyNotFound, "formation no longer exists");
+        AddResult(parts, results, ArmyMoveResult.QueueFull, "post-battle queue is full (32 waypoints)");
         return Simulation.Loc.Format("Order to {0}: {1}", destination,
             parts.Count == 0 ? Simulation.Loc.Get("no eligible divisions.") : string.Join(" · ", parts));
     }
@@ -465,6 +466,19 @@ public partial class DealOrForceGame
     private void ProcessHaltSelected(bool battlesOnly)
     {
         var targets = SelectedPlayerDivisions().Where(army => !battlesOnly || army.InBattle).ToArray();
+        if (battlesOnly)
+        {
+            var ids = targets.Select(army => army.Id).ToArray();
+            ConfirmLastDefenderWithdrawal(ids, 1f, () => ProcessHaltTargets(ids, true));
+            return;
+        }
+        ProcessHaltTargets(targets.Select(army => army.Id).ToArray(), false);
+    }
+
+    private void ProcessHaltTargets(int[] ids, bool battlesOnly)
+    {
+        var targets = _campaign.Armies.Where(army => ids.Contains(army.Id) &&
+            army.NationId == _campaign.Player.Id && (!battlesOnly || army.InBattle)).ToArray();
         if (targets.Length == 0) return;
         var stopped = 0;
         var withdrawn = 0;
@@ -472,7 +486,7 @@ public partial class DealOrForceGame
         var pending = 0;
         foreach (var army in targets)
         {
-            if (army.InBattle)
+            if (battlesOnly && army.InBattle)
             {
                 var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
                 _campaign.Commands.Enqueue(withdrawal);
@@ -495,6 +509,12 @@ public partial class DealOrForceGame
         if (withdrawn > 0 || blocked > 0)
         {
             SetArmyFeedback(Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}", withdrawn, stopped, blocked));
+            RefreshBattleDossier();
+            return;
+        }
+        if (!battlesOnly && targets.Any(army => army.InBattle))
+        {
+            SetArmyFeedback(Loc.Format("Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.", stopped));
             RefreshBattleDossier();
             return;
         }

@@ -676,6 +676,13 @@ public static class CampaignFingerprint
             MixFloat(army.Strength);
             MixFloat(army.Entrenchment);
             Mix(army.Route.Count);
+            if (army.PostBattleWaypoints.Count > 0)
+            {
+                MixText("post_battle_orders");
+                Mix(army.PostBattleSupportAttack ? 1 : 0);
+                Mix(army.PostBattleWaypoints.Count);
+                foreach (var destination in army.PostBattleWaypoints) Mix(destination);
+            }
             if (army.InBattle || army.ReadyDay > 0)
             { MixText("battle_assignment"); Mix(army.BattleId); Mix(army.ReadyDay); }
             if (army.ContractUntilDay >= 0)

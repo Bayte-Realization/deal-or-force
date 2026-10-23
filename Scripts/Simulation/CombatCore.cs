@@ -516,8 +516,15 @@ public static partial class Warfare
             // Frontage. A province only has so much room, so numbers past the width
             // wait their turn - which is what lets a smaller, better force hold a line
             // against a larger one. Attacking from several provinces widens the front,
-            // the way it does in Hearts of Iron; cramming more than fits is a penalty
-            // rather than free strength.
+            // the way it does in Hearts of Iron.
+            //
+            // This is a filter now, and it used to be a multiplier. The multiplier scaled
+            // a whole side's fire by the share of it that fitted, which meant nineteen
+            // divisions in a province all fought, all took losses and all counted as
+            // being in the battle, while the fifth one made the first four shoot worse
+            // than four would have. What is past the width is simply not in the fight: it
+            // stands in reserve, takes the place of whoever is spent, and the next day's
+            // split decides that again.
             // ----------------------------------------------------------------------
             var defines = campaign.Defines;
             var terrain = campaign.ProvinceMap?.TerrainAt(battle.ProvinceId) ?? TerrainCatalog.Get("plains");
@@ -527,27 +534,37 @@ public static partial class Warfare
                 M.Clamp(directions - 1, 0, M.Max(0, defines.MaxAttackDirections - 1));
 
             var attackerWantedWidth = WantedWidth(attacking);
-            var defenderWantedWidth = WantedWidth(defending);
-            battle.AttackerWidth = MathF.Min(usableWidth, attackerWantedWidth);
-            battle.DefenderWidth = MathF.Min(baseWidth, defenderWantedWidth);
-            var attackerEngagement = Engagement(battle.AttackerWidth, attackerWantedWidth, usableWidth, defines);
-            var defenderEngagement = Engagement(battle.DefenderWidth, defenderWantedWidth, baseWidth, defines);
+            FrontageReady(attacking, usableWidth, AttackerLine, AttackerReserve, defines.BattleBreakOrganisation);
+            FrontageReady(defending, baseWidth, DefenderLine, DefenderReserve, defines.BattleBreakOrganisation);
+            battle.LastAttackerLine.Clear(); battle.LastDefenderLine.Clear();
+            foreach (var army in AttackerLine) battle.LastAttackerLine.Add(army.Id);
+            foreach (var army in DefenderLine) battle.LastDefenderLine.Add(army.Id);
+
+            // The ground each side actually holds, and how many formations hold it. The
+            // report reads these; everything below is fought over the line rather than over
+            // the province, so a reserve shoots at nothing and is shot at by almost nothing.
+            battle.AttackerWidth = WantedWidth(AttackerLine);
+            battle.DefenderWidth = WantedWidth(DefenderLine);
+            battle.AttackerInLine = AttackerLine.Count;
+            battle.DefenderInLine = DefenderLine.Count;
+            var attackerEngagement = OverWidth(battle.AttackerWidth, usableWidth, defines);
+            var defenderEngagement = OverWidth(battle.DefenderWidth, baseWidth, defines);
 
             // ----------------------------------------------------------------------
             // What each side is made of. Hardness decides which of an enemy's two
             // attack values it gets to use; armour against piercing decides how much
             // of that lands at all.
             // ----------------------------------------------------------------------
-            var attackerHardness = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
-            var defenderHardness = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
-            var attackerArmour = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
-            var defenderArmour = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
-            var attackerPiercing = Weighted(attacking, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
-            var defenderPiercing = Weighted(defending, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
+            var attackerHardness = Weighted(AttackerLine, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
+            var defenderHardness = Weighted(DefenderLine, army => UnitTypeCatalog.Get(army.TemplateId).Hardness);
+            var attackerArmour = Weighted(AttackerLine, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
+            var defenderArmour = Weighted(DefenderLine, army => UnitTypeCatalog.Get(army.TemplateId).Armour);
+            var attackerPiercing = Weighted(AttackerLine, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
+            var defenderPiercing = Weighted(DefenderLine, army => UnitTypeCatalog.Get(army.TemplateId).Piercing);
             var attackerPierces = ArmourFactor(attackerPiercing, defenderArmour, defines);
             var defenderPierces = ArmourFactor(defenderPiercing, attackerArmour, defines);
 
-            var attackerPlanning = WeightedPlanning(attacking);
+            var attackerPlanning = WeightedPlanning(AttackerLine);
             var riverAttackMultiplier = WaterConditions.AttackMultiplier(campaign, battle.RiverCrossingStrength, battle.ProvinceId);
 
             // ----------------------------------------------------------------------
@@ -561,6 +578,9 @@ public static partial class Warfare
             // the sweep overhead. Reaches the battle from bases within range, saturating,
             // and the enemy's sky and missile brigades take their cut of whatever the
             // other side managed to contribute - a wing over a defended front pays first.
+            // Support is asked of the countries in the battle, not of the formations in the
+            // line: a wing or a gun brigade is based far behind the province and reaches the
+            // battle whoever happens to be standing in the front rank today.
             var attackerNations = new HashSet<int>(attacking.Select(army => army.NationId));
             var defenderNations = new HashSet<int>(defending.Select(army => army.NationId));
             var (attackerFire, defenderFire, defenderStripped, attackerStripped,
@@ -569,24 +589,24 @@ public static partial class Warfare
             battle.AttackerSupport = attackerSupportShown;
             battle.DefenderSupport = defenderSupportShown;
 
-            var attackerOffence = attacking.Sum(army => M.Max(0.01f, army.Power) *
+            var attackerOffence = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
                     StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * attackerFire;
 
-            var defenderOffence = defending.Sum(army => M.Max(0.01f, army.Power) *
+            var defenderOffence = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
                     StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire;
 
-            var dugIn = defending.Average(army => army.Entrenchment);
-            var attackerSupply = Weighted(attacking, army => M.Clamp01(army.SupplyLevel));
-            var defenderSupply = Weighted(defending, army => M.Clamp01(army.SupplyLevel));
-            var attackerOrgBefore = AverageOrganisation(attacking);
-            var defenderOrgBefore = AverageOrganisation(defending);
+            var dugIn = DefenderLine.Average(army => army.Entrenchment);
+            var attackerSupply = Weighted(AttackerLine, army => M.Clamp01(army.SupplyLevel));
+            var defenderSupply = Weighted(DefenderLine, army => M.Clamp01(army.SupplyLevel));
+            var attackerOrgBefore = AverageOrganisation(AttackerLine);
+            var defenderOrgBefore = AverageOrganisation(DefenderLine);
 
             var isHomeProvince = campaign.ProvinceMap?.ProvinceToNation != null &&
                 battle.ProvinceId > 0 && battle.ProvinceId < campaign.ProvinceMap.ProvinceToNation.Length &&
@@ -604,14 +624,14 @@ public static partial class Warfare
 
             var effectiveDefenderStripped = M.Lerp(defenderStripped, 1f, dugIn * defines.EntrenchmentShellingResistance);
 
-            var defenderProtection = defending.Sum(army => M.Max(0.01f, army.Power) *
+            var defenderProtection = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
                 (1f + dugIn * defines.EntrenchmentBonus) * effectiveDefenderStripped *
                 homelandBonus * frontalBonus;
 
-            var attackerProtection = attacking.Sum(army => M.Max(0.01f, army.Power) *
+            var attackerProtection = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
                     MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
                 attackerEngagement * attackerStripped;
@@ -674,8 +694,8 @@ public static partial class Warfare
             // side loses in a day is held to at most this many times the other side's share.
             var defenderScale = 1f;
             var attackerScale = defines.AttackerCasualtyMultiplier;
-            var (defenderMen, defenderDead) = CasualtyTotals(campaign, defending, defenderOrgLoss, defenderScale);
-            var (attackerMen, attackerDead) = CasualtyTotals(campaign, attacking, attackerOrgLoss, attackerScale);
+            var (defenderMen, defenderDead) = CasualtyTotals(campaign, DefenderLine, defenderOrgLoss, defenderScale);
+            var (attackerMen, attackerDead) = CasualtyTotals(campaign, AttackerLine, attackerOrgLoss, attackerScale);
             var defenderRate = defenderMen > 1f ? defenderDead / defenderMen : 0f;
             var attackerRate = attackerMen > 1f ? attackerDead / attackerMen : 0f;
             var bleed = MathF.Max(1f, defines.MaxCasualtyRateRatio);
@@ -689,18 +709,38 @@ public static partial class Warfare
                 var cut = attackerRate * bleed / defenderRate;
                 defenderScale *= cut; defenderDead *= cut;
             }
-            // And in men, not only in shares: every formation in a stack takes at least the
-            // floor of organisation damage, so a big stack paid for its own size: in one bench
-            // war China lost twenty-seven men for each Burmese one. What a side can kill is bounded
-            // by what is shooting at it, however many stand in front of it.
+            // And in men, not only in shares. What a side can kill is bounded by what is
+            // shooting at it, however many stand in front of it: in one bench war China lost
+            // twenty-seven men for each Burmese one. The frontage filter does most of that
+            // work now, since a stack can only bring its line to bear, but the bound stays:
+            // a line of four against one is still four times the men.
             var trade = MathF.Max(1f, defines.MaxCasualtyExchange);
             if (defenderDead > 0f && attackerDead > defenderDead * trade)
                 attackerScale *= defenderDead * trade / attackerDead;
             else if (attackerDead > 0f && defenderDead > attackerDead * trade)
                 defenderScale *= attackerDead * trade / defenderDead;
-            var defenderLoss = ApplyDamage(campaign, defending, defenderOrgLoss, defenderScale, out var defenderKilled);
-            var attackerLoss = ApplyDamage(campaign, attacking, attackerOrgLoss, attackerScale, out var attackerKilled);
-            foreach (var army in attacking)
+            var defenderLoss = ApplyDamage(campaign, DefenderLine, defenderOrgLoss, defenderScale, out var defenderKilled);
+            var attackerLoss = ApplyDamage(campaign, AttackerLine, attackerOrgLoss, attackerScale, out var attackerKilled);
+            // The reserve is behind the line, not out of the war: the shelling and the
+            // mortars that miss the front find the queue standing in the same province. It
+            // costs a share (Defines.ReserveExposure), because nothing in that queue is
+            // answering back - which is why nineteen divisions waiting are worth far less
+            // than nineteen divisions in the line.
+            if (DefenderReserve.Count > 0)
+            {
+                defenderLoss += ApplyDamage(campaign, DefenderReserve,
+                    defenderOrgLoss * defines.ReserveExposure, defenderScale, out var defenderReserveKilled);
+                defenderKilled += defenderReserveKilled;
+            }
+            if (AttackerReserve.Count > 0)
+            {
+                attackerLoss += ApplyDamage(campaign, AttackerReserve,
+                    attackerOrgLoss * defines.ReserveExposure, attackerScale, out var attackerReserveKilled);
+                attackerKilled += attackerReserveKilled;
+            }
+            // Planning is spent by the formations that attacked, and only by them: a reserve
+            // that never left its start line still has its plan.
+            foreach (var army in AttackerLine)
                 army.Planning = M.Clamp01(army.Planning - campaign.Defines.PlanningBurnPerCombatDay);
             battle.AttackerLosses += attackerLoss;
             battle.DefenderLosses += defenderLoss;
@@ -712,8 +752,8 @@ public static partial class Warfare
             WarLosses.Record(war, battle.AttackerId, attackerKilled, attackerLoss - attackerKilled, 0f);
             WarLosses.Record(war, battle.DefenderId, defenderKilled, defenderLoss - defenderKilled, 0f);
 
-            var attackerOrg = AverageOrganisation(attacking);
-            var defenderOrg = AverageOrganisation(defending);
+            var attackerOrg = AverageOrganisation(AttackerLine);
+            var defenderOrg = AverageOrganisation(DefenderLine);
             if (DiagnosticLogs.Enabled)
                 DiagnosticLogs.Write("simulation", $"BATTLE_ROUND battle={battle.Id} war={battle.WarId} province={battle.ProvinceId} attacker={battle.AttackerId} defender={battle.DefenderId} attack_power={DiagnosticLogs.N(attackerOffence)} defense_power={DiagnosticLogs.N(defenderProtection)} attack_org={DiagnosticLogs.N(attackerOrg)} defense_org={DiagnosticLogs.N(defenderOrg)} attack_losses={DiagnosticLogs.N(attackerLoss)} defense_losses={DiagnosticLogs.N(defenderLoss)} river={DiagnosticLogs.N(battle.RiverCrossingStrength)} planning={DiagnosticLogs.N(attackerPlanning)}");
             battle.Rounds.Add(new LandBattle.Round
@@ -751,13 +791,15 @@ public static partial class Warfare
             });
             if (battle.Rounds.Count > 90) battle.Rounds.RemoveAt(0);
 
-            if (defenderOrg <= campaign.Defines.BattleBreakOrganisation)
+            if (defenderOrg <= campaign.Defines.BattleBreakOrganisation &&
+                !DefenderReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation))
             {
                 var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "won the battle");
                 Close(campaign, battle, battle.AttackerId, occupied ? "Defenders broke" : "Defenders broke; support did not occupy");
             }
-            else if (attackerOrg <= campaign.Defines.BattleBreakOrganisation)
+            else if (attackerOrg <= campaign.Defines.BattleBreakOrganisation &&
+                !AttackerReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation))
             {
                 var extraRest = counterattack > 0.30f ? 2 : 0;
                 foreach (var army in attacking)
@@ -814,23 +856,27 @@ public static partial class Warfare
 
     private static void ReinforceBattle(Campaign campaign, LandBattle battle)
     {
-        var topology = campaign.ProvinceMap;
-        if (topology is null) return;
+        if (campaign.ProvinceMap is null) return;
         var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
         if (war is null) return;
         EnsureIndexed(campaign);
-        var adjacent = topology.Neighbors[battle.ProvinceId];
         var attackerAdded = 0;
         var defenderAdded = 0;
 
-        // Reinforcements come from the province being fought over and the ones touching it,
-        // so they can be found by looking there rather than by reading the whole world's
-        // order of battle. The old form filtered all fourteen hundred divisions for every
-        // live battle every day - a hundred thousand tests to find at most a dozen - and
-        // then allocated a sorter, a key array and a buffer to put them in order.
+        // Reinforcements come from the province being fought over, and from nowhere else.
+        //
+        // A formation standing in a province next door used to join the battle there without
+        // marching - two a day, every day, for as long as the fight lasted. Nine days into an
+        // assault the defender of Kharkiv was nineteen formations strong in a province that
+        // had held one, and the attacker paid a day's casualties for the privilege of
+        // shooting into a queue that refilled itself behind his back.
+        //
+        // Help still arrives: it marches into the province and joins on the day it gets
+        // there, which is the road the attacker has to take as well. What is gone is the free
+        // passage into somebody else's battle. It also keeps this pass cheap - one province
+        // index instead of the province and each of its neighbours.
         Reinforcements.Clear();
         Consider(campaign, battle, battle.ProvinceId);
-        foreach (var neighbour in adjacent) Consider(campaign, battle, neighbour);
 
         // Strongest first, and by id where two are equally strong: a battle joined in a
         // different order on two machines is a battle that ends differently on them.

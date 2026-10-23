@@ -1,0 +1,14 @@
+{
+  "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.": "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.",
+  "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.": "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.",
+  "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.": "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.",
+  "Engaged in battle #{0} · {1} post-battle waypoint(s); Halt cancels the queue.": "Engaged in battle #{0} · {1} post-battle waypoint(s); Halt cancels the queue.",
+  "After battle: {0} waypoint(s). Halt cancels the queue.": "After battle: {0} waypoint(s). Halt cancels the queue.",
+  "post-battle queue is full (32 waypoints)": "post-battle queue is full (32 waypoints)",
+  "Withdraw the last defenders?": "Withdraw the last defenders?",
+  "This leaves the province without our defenders and may give it to the enemy. Ordinary map orders are queued until combat ends; they do not retreat.": "This leaves the province without our defenders and may give it to the enemy. Ordinary map orders are queued until combat ends; they do not retreat.",
+  "In the firing line": "In the firing line",
+  "Battle reserve": "Battle reserve",
+  "Terrain: {0} · frontage {1:0}/{2:0} · in line {3}/{4} vs {5}/{6}": "Terrain: {0} · frontage {1:0}/{2:0} · in line {3}/{4} vs {5}/{6}",
+  "{0:N0} men · {1} formations · {2} in the line": "{0:N0} men · {1} formations · {2} in the line"
+}

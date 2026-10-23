@@ -172,7 +172,7 @@ public partial class DealOrForceGame
         plans.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(plans);
         AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
-            "H: halt movement or leave the current battle. Attackers stop attacking; defenders need friendly ground to retreat.");
+            "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.");
         var leaveBattle = ArmyIconButton("Leave battle", WithdrawSelectedDivisions, 110, 36, false, "army_withdraw");
         _withdrawSelectedButton = leaveBattle;
         leaveBattle.Name = "WithdrawSelectedDivisions";

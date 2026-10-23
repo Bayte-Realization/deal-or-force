@@ -100,11 +100,12 @@ static class AssaultReadinessTests
 
     static void DefenceAndEmptyCountryRemainAvailable()
     {
+        // First: a reserve in the province next door does not join a battle it is not in.
         var c = Fixture();
         var attacker = Unit(c, 0, 0, 2, ArmyOrder.AdvanceFront);
         var defender = Unit(c, 1, 1, 3, ArmyOrder.DefendFront);
-        var defensiveReserve = Unit(c, 2, 1, 4, ArmyOrder.ReserveFront);
-        defensiveReserve.PlanActive = false;
+        var nextDoor = Unit(c, 2, 1, 4, ArmyOrder.ReserveFront);
+        nextDoor.PlanActive = false;
         var battle = new LandBattle { Id = 884, WarId = 883, ProvinceId = 3,
             AttackerId = 0, DefenderId = 1, StartedDay = c.ElapsedDays };
         battle.Attackers.Add(attacker.Id); battle.Defenders.Add(defender.Id);
@@ -113,8 +114,27 @@ static class AssaultReadinessTests
         c.Defines.AutonomousAssaultMinimumSupply = 1f;
         c.Defines.AutonomousAssaultMinimumOrganisation = 1f;
         Warfare.Tick(c);
+        Check(!battle.Defenders.Contains(nextDoor.Id) && !nextDoor.InBattle &&
+            battle.DefenderReinforcements == 0,
+            "a defensive reserve in the next province is not pulled into the battle");
+
+        // Second: the same reserve standing in the province being fought over answers even
+        // with a paused plan, because offensive floors do not gate a defence.
+        c = Fixture();
+        attacker = Unit(c, 0, 0, 2, ArmyOrder.AdvanceFront);
+        defender = Unit(c, 1, 1, 3, ArmyOrder.DefendFront);
+        var defensiveReserve = Unit(c, 2, 1, 3, ArmyOrder.ReserveFront);
+        defensiveReserve.PlanActive = false;
+        battle = new LandBattle { Id = 884, WarId = 883, ProvinceId = 3,
+            AttackerId = 0, DefenderId = 1, StartedDay = c.ElapsedDays };
+        battle.Attackers.Add(attacker.Id); battle.Defenders.Add(defender.Id);
+        attacker.BattleId = defender.BattleId = battle.Id;
+        c.Battles.Add(battle);
+        c.Defines.AutonomousAssaultMinimumSupply = 1f;
+        c.Defines.AutonomousAssaultMinimumOrganisation = 1f;
+        Warfare.Tick(c);
         Check(battle.Defenders.Contains(defensiveReserve.Id) && battle.DefenderReinforcements == 1,
-            "a paused defensive reserve still responds; offensive mod thresholds do not gate defence");
+            "a paused defensive reserve in the province still responds; offensive mod thresholds do not gate defence");
 
         c = Fixture();
         var marcher = Unit(c, 0, 0, 2, ArmyOrder.AdvanceFront);

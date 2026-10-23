@@ -187,6 +187,7 @@ public static partial class Warfare
 
         var participants = attacking ? battle.Attackers : battle.Defenders;
         participants.Remove(army.Id);
+        BattleMovementOrders.Clear(army);
         (attacking ? battle.WithdrawnAttackers : battle.WithdrawnDefenders).Add(army.Id);
         army.BattleId = -1;
         army.Route.Clear();

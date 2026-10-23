@@ -40,6 +40,11 @@ public sealed class DeleteBattlePlanCommand : ICampaignCommand
             army.SupportOnly = false;
             army.ObjectiveStateMapIndex = -1;
             new HaltArmyCommand { IssuerId = IssuerId, ArmyId = army.Id }.Apply(campaign);
+            // Explicitly erasing a plan also erases its future route. Unlike H, this is
+            // not merely "cancel my queued map order", and must work during combat too.
+            army.Route.Clear(); army.PlannedRoute.Clear(); army.MoveProgress = 0f;
+            army.OrderProvinceId = army.OrderStateMapIndex = -1;
+            army.OrderRouteSteps = army.OrderStepsCompleted = 0;
         }
         // Erasing a plan never teleports units or silently withdraws an ongoing battle.
     }

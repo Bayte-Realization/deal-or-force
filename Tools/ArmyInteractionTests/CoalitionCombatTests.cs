@@ -49,17 +49,23 @@ static class CoalitionCombatTests
         var c = Fixture();
         var attacker = Unit(c, 0, 0, 2, ArmyOrder.AdvanceFront);
         var defender = Unit(c, 1, 3, 3, ArmyOrder.DefendFront);
-        var alliedAttack = Unit(c, 2, 2, 2, ArmyOrder.Spearhead);
+        // Coalition help has to be in the province being fought over: a formation in the
+        // province next door joins on the day it marches in, not from where it stands.
+        // The route keeps the marching ally out of ResolveAdvances' initial join.
+        var alliedAttack = Unit(c, 2, 2, 3, ArmyOrder.Spearhead);
         // A marching reserve reaches the reinforcement path, not ResolveAdvances' initial join.
         alliedAttack.Route.Add(1);
-        var alliedDefence = Unit(c, 3, 1, 4, ArmyOrder.ReserveFront);
+        var alliedDefence = Unit(c, 3, 1, 3, ArmyOrder.ReserveFront);
         var unrelated = Unit(c, 4, 4, 3, ArmyOrder.DefendFront);
+        var nextDoor = Unit(c, 5, 1, 4, ArmyOrder.ReserveFront);
         var b = Battle(c, attacker, defender);
         Warfare.Tick(c);
         Check(b.Attackers.Contains(alliedAttack.Id) && b.Defenders.Contains(alliedDefence.Id),
             "both coalitions can reinforce a battle started by a different member");
         Check(b.AttackerReinforcements == 1 && b.DefenderReinforcements == 1,
             "reinforcement counters describe the actual coalition arrivals");
+        Check(!b.Defenders.Contains(nextDoor.Id) && !nextDoor.InBattle,
+            "an allied reserve in the province next door does not join from where it stands");
         Check(alliedAttack.Strength < 1 && alliedDefence.Strength < 1 && unrelated.Strength == 1 && !unrelated.InBattle,
             "both allies share the combat losses while a neutral co-located unit is excluded");
         Check(c.Wars[0].AttackerLosses > 0 && c.Wars[0].DefenderLosses > 0,

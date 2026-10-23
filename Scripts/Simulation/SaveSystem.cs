@@ -1190,6 +1190,7 @@ public static class SaveSystem
             // one derived under today's formulas before the player even advances time.
             if (campaign.Nations.All(nation => nation.Budget.Title.Length == 0 &&
                 nation.StabilityDrivers.Title.Length == 0)) EconomySystem.Explain(campaign);
+            BattleMovementOrders.Normalise(campaign);
             return campaign;
         }
 

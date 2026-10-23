@@ -46,7 +46,10 @@ public static class ArmyVocabulary
     public static string Situation(Campaign campaign, Army army)
     {
         if (army is null) return "";
-        if (army.InBattle) return Loc.Format("Engaged in battle #{0}", army.BattleId);
+        if (army.InBattle) return army.PostBattleWaypoints.Count > 0
+            ? Loc.Format("Engaged in battle #{0} · {1} post-battle waypoint(s); Halt cancels the queue.",
+                army.BattleId, army.PostBattleWaypoints.Count)
+            : Loc.Format("Engaged in battle #{0}", army.BattleId);
         if (army.EmbarkedFleetId >= 0) return Loc.Get("At sea under the fleet's orders.");
         if (campaign is not null && MilitaryAccess.MustReturn(campaign, army))
             return Loc.Get("Interned on neutral ground; awaiting a safe return home.");

@@ -27,9 +27,16 @@ public sealed class HaltArmyCommand : ICampaignCommand
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
 
+        if (army.InBattle)
+        {
+            Halted = army.PostBattleWaypoints.Count > 0;
+            BattleMovementOrders.Clear(army);
+            return;
+        }
         // A formation in a battle cannot walk away from it by being told to stop; that is
         // what retreat is, and retreat is the battle's decision rather than the map's.
-        Halted = army.Route.Count > 0 || army.OrderProvinceId >= 0;
+        Halted = army.Route.Count > 0 || army.OrderProvinceId >= 0 || army.PostBattleWaypoints.Count > 0;
+        BattleMovementOrders.Clear(army);
         if (army.DirectOrder)
         {
             army.OrderKind = ArmyOrder.Manual;
@@ -103,6 +110,7 @@ public sealed class ReturnArmyToPlanCommand : ICampaignCommand
         if (army is null || army.NationId != IssuerId) return;
 
         army.FrontLineId = FrontLineId;
+        BattleMovementOrders.Clear(army);
         // Holding the line is the answer that is never wrong. An advance is a decision, and
         // a formation handed back to the plan should not begin one on its own; if the
         // operation is executing, the planner will order it forward on its next pass.

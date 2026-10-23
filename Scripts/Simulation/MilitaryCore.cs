@@ -43,7 +43,8 @@ public enum ArmyMoveResult
     TargetNotControlled,
     NoLandRoute,
     RouteInterrupted,
-    WithdrawnAndMoving
+    WithdrawnAndMoving,
+    QueueFull
 }
 
 /// <summary>Organisational headquarters. Its divisions remain independent map entities.</summary>
@@ -263,25 +264,33 @@ public sealed class MoveArmyCommand : ICampaignCommand
             return;
         }
         var wasInBattle = army.InBattle;
-        if (wasInBattle && !AppendWaypoint)
+        if (wasInBattle)
         {
-            // Withdrawal can end a battle and yield ground. Reject a destination without
-            // military access or a real corridor BEFORE any such irreversible side effect.
-            // Defenders plan from the actual first retreat step; trapped formations still
-            // keep the existing option to queue a valid order while their battle continues.
+            // A map click is not consent to abandon the defence. Keep the current fight
+            // intact and record a distinct, saved order to execute after combat/recovery.
+            if (!AppendWaypoint && TargetProvinceId == army.ProvinceId)
+            {
+                var cancelled = army.PostBattleWaypoints.Count > 0;
+                BattleMovementOrders.Clear(army);
+                SetResult(army, campaign, cancelled ? ArmyMoveResult.OrderCancelled : ArmyMoveResult.AlreadyAtDestination);
+                return;
+            }
             if (!BattleDestinationAllowed(campaign, nation, army, controllers, out var refusal))
             {
                 Result = refusal;
                 return;
             }
-            if (Warfare.Withdraw(campaign, army, out _, TargetProvinceId))
+            if (AppendWaypoint && army.PostBattleWaypoints.Count >= BattleMovementOrders.MaxWaypoints)
             {
-                if (army.ProvinceId == TargetProvinceId)
-                {
-                    SetResult(army, campaign, ArmyMoveResult.WithdrawnAndMoving);
-                    return;
-                }
+                Result = ArmyMoveResult.QueueFull;
+                return;
             }
+            if (!AppendWaypoint) BattleMovementOrders.Clear(army);
+            if (army.PostBattleWaypoints.Count == 0 || army.PostBattleWaypoints[^1] != TargetProvinceId)
+                army.PostBattleWaypoints.Add(TargetProvinceId);
+            army.PostBattleSupportAttack = SupportAttack;
+            SetResult(army, campaign, ArmyMoveResult.QueuedAfterBattle);
+            return;
         }
         var routeStart = AppendWaypoint && army.PlannedRoute.Count > 0 ? army.PlannedRoute[^1]
             : AppendWaypoint && army.Route.Count > 0 ? army.Route[^1] : army.ProvinceId;
@@ -388,6 +397,7 @@ public sealed class MoveArmyCommand : ICampaignCommand
         var previousNextProvince = army.Route.Count > 0 ? army.Route[0] : -1;
         if (!AppendWaypoint)
         {
+            BattleMovementOrders.Clear(army);
             army.Route.Clear();
             army.PlannedRoute.Clear();
             army.OrderRouteSteps = 0;
@@ -437,14 +447,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
             return false;
         }
 
-        var from = army.ProvinceId;
-        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
-        if (battle is not null && !battle.Attackers.Contains(army.Id) && battle.Defenders.Contains(army.Id))
-        {
-            var battleWar = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
-            var retreat = Warfare.WithdrawalProvince(campaign, battleWar, army, TargetProvinceId);
-            if (retreat > 0) from = retreat;
-        }
+        var from = AppendWaypoint && army.PostBattleWaypoints.Count > 0
+            ? army.PostBattleWaypoints[^1] : army.ProvinceId;
         if (from == TargetProvinceId) return true;
         if (targetWar is not null)
             return WarCoalition.OperationalRoute(campaign, targetWar, nation.Id,
@@ -653,6 +657,14 @@ public static class MilitaryOperations
             }
 
             if (army.InBattle) continue;
+
+            // Resolve from the real post-battle position, never from an assumed retreat
+            // tile. While regrouping a pending order must not start an old route either.
+            if (army.PostBattleWaypoints.Count > 0)
+            {
+                if (army.ReadyDay > campaign.ElapsedDays) continue;
+                BattleMovementOrders.Resume(campaign, army);
+            }
 
             if (topology is null || army.Route.Count == 0)
             {

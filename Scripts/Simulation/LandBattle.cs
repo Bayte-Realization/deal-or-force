@@ -39,6 +39,15 @@ public sealed class LandBattle
     public float DefenderLosses;
     public float AttackerWidth;
     public float DefenderWidth;
+    /// <summary>How many formations were actually in the line on the last round, out of the
+    /// side's list. The rest are in reserve inside the province: they take casualties from
+    /// shelling, but they do not shoot and are not counted against the enemy's fire.</summary>
+    public int AttackerInLine;
+    public int DefenderInLine;
+    // Last-round telemetry only; selection is recomputed from physical participants.
+    // Empty in old saves and before the first round. Reading a dossier never fills it.
+    public readonly List<int> LastAttackerLine = new();
+    public readonly List<int> LastDefenderLine = new();
     public int AttackerReinforcements;
     public int DefenderReinforcements;
     public float RiverCrossingStrength;
