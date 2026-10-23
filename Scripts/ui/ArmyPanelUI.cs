@@ -172,7 +172,7 @@ public partial class DealOrForceGame
         plans.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(plans);
         AddOrderButton(plans, "army_halt", ArmyOrder.Manual, "Halt",
-            "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.");
+            "H: stop movement or leave battle immediately. RMB on the formation's current province does the same. Alt+H cancels only queued post-battle orders.");
         var leaveBattle = ArmyIconButton("Leave battle", WithdrawSelectedDivisions, 110, 36, false, "army_withdraw");
         _withdrawSelectedButton = leaveBattle;
         leaveBattle.Name = "WithdrawSelectedDivisions";
@@ -606,8 +606,10 @@ public partial class DealOrForceGame
                 army.Strength < 0.55f ? "state.warning" : "state.positive",
                 Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
                     army.Strength, army.Personnel, army.MaxPersonnel)));
-            line.AddChild(Bar(army.Equipment, 40, "combat.equipment",
-                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment)));
+            var equipmentBar = Bar(army.Equipment, 40, "combat.equipment",
+                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army));
+            equipmentBar.Name = "EquipmentBar_" + army.Id;
+            line.AddChild(equipmentBar);
             line.AddChild(StatusPip(army));
         }
 
@@ -689,6 +691,7 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("Manpower: {0:N0} of {1:N0}", army.Personnel, army.MaxPersonnel) + "\n" +
             Simulation.Loc.Format("Equipment: {0:P0} · experience: {1:P0}",
                 army.Equipment, army.Experience) + "\n" +
+            EquipmentLogistics.Description(_campaign, army) + "\n" +
             Simulation.Loc.Format("Supply: {0:P0}", army.SupplyLevel) +
             (army.CutOff ? " — " + Simulation.Loc.Get("CUT OFF") : "") + "\n" +
             Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n";

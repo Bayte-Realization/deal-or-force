@@ -15,6 +15,8 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--equipment-replenishment-only")) { EquipmentReplenishmentTests.Run(); return; }
+        if (args.Length == 0) EquipmentReplenishmentTests.Run();
         if (args.Contains("--post-battle-orders-only")) { PostBattleOrderTests.Run(); return; }
         if (args.Length == 0) PostBattleOrderTests.Run();
         if (args.Contains("--battle-reinforcement-only")) { BattleReinforcementTests.RunFixture(); return; }

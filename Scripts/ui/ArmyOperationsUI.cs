@@ -74,7 +74,7 @@ public partial class DealOrForceGame
         _selectedNation = _campaign.NationById(army.NationId);
         _globe.SelectArmy(army.Id);
         ShowSelectedArmy();
-        SetArmyFeedback((army.InBattle ? Tr("In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
+        SetArmyFeedback((army.InBattle ? Tr("In combat: H or RMB on the formation's current province leaves battle immediately. Other map orders wait; Alt+H cancels only the queue.") + " " : "") + Tr("RMB march or attack · Shift+RMB append a waypoint · Ctrl+RMB support the attack without taking " +
               "the ground · Shift+click adds a division, Ctrl+click removes one.  " +
               "H halt · Ctrl+H off the plan · Shift+H back on it · Ctrl+B rail them there · Ctrl+K consolidate · " +
               "Ctrl+G guard an area · Ctrl+F plan cohesion."));
@@ -367,6 +367,22 @@ public partial class DealOrForceGame
         // order rather than a queued one.
         var supporting = Input.IsKeyPressed(Key.Ctrl) && !append;
         var railing = _redeploymentArmed && !append && !supporting;
+        var withdrawalFeedback = "";
+        // Returning an order to the formation's own position is an explicit stop, like
+        // H, not a new destination. Only the selected formations on that tile leave;
+        // ordinary orders elsewhere still wait for combat to finish.
+        if (!append && !supporting && !railing)
+        {
+            var leaving = targets.Where(army => army.InBattle && army.ProvinceId == pick.ProvinceId)
+                .Select(army => army.Id).ToHashSet();
+            if (leaving.Count > 0)
+            {
+                ProcessHaltTargets(leaving.ToArray(), true);
+                withdrawalFeedback = _armyCommandFeedback?.Text ?? "";
+                targets = targets.Where(army => !leaving.Contains(army.Id)).ToArray();
+                if (targets.Length == 0) return;
+            }
+        }
         var results = new Dictionary<ArmyMoveResult, int>();
         foreach (var army in targets)
         {
@@ -409,7 +425,8 @@ public partial class DealOrForceGame
                 Simulation.Loc.Get("The host will confirm the route."));
             return;
         }
-        SetArmyFeedback(MoveResultSummary(results, pick, append) +
+        SetArmyFeedback((withdrawalFeedback.Length > 0 ? withdrawalFeedback + " · " : "") +
+                        MoveResultSummary(results, pick, append) +
                         (supporting && targets.Any(army => army.SupportOnly)
                             ? " · " + Simulation.Loc.Get("supporting: they will fight and hold their ground.") : "") +
                         (railing
@@ -463,6 +480,22 @@ public partial class DealOrForceGame
     private void WithdrawSelectedDivisions()
         => ProcessHaltSelected(true);
 
+    private void CancelSelectedQueuedOrders()
+    {
+        var cancelled = 0;
+        foreach (var army in SelectedPlayerDivisions().Where(army => army.InBattle))
+        {
+            var command = new HaltArmyCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (command.Halted) cancelled++;
+        }
+        ShowSelectedArmies();
+        RefreshBattleDossier();
+        SetArmyFeedback(IsNetworkClient ? Tr("Order sent to the host. Awaiting confirmation.") :
+            Loc.Format("Cancelled post-battle orders: {0}. Engaged formations keep fighting.", cancelled));
+    }
+
     private void ProcessHaltSelected(bool battlesOnly)
     {
         var targets = SelectedPlayerDivisions().Where(army => !battlesOnly || army.InBattle).ToArray();
@@ -486,7 +519,10 @@ public partial class DealOrForceGame
         var pending = 0;
         foreach (var army in targets)
         {
-            if (battlesOnly && army.InBattle)
+            // H/Stop is the player's explicit request to stop this fight. Keep the
+            // simulation's internal Halt command non-destructive: planners and the
+            // queue-only shortcut still use it without accidentally abandoning combat.
+            if (army.InBattle)
             {
                 var withdrawal = new WithdrawArmyFromBattleCommand { IssuerId = _campaign.Player.Id, ArmyId = army.Id };
                 _campaign.Commands.Enqueue(withdrawal);
@@ -509,12 +545,6 @@ public partial class DealOrForceGame
         if (withdrawn > 0 || blocked > 0)
         {
             SetArmyFeedback(Loc.Format("Left battle: {0} · stopped: {1} · no retreat route: {2}", withdrawn, stopped, blocked));
-            RefreshBattleDossier();
-            return;
-        }
-        if (!battlesOnly && targets.Any(army => army.InBattle))
-        {
-            SetArmyFeedback(Loc.Format("Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.", stopped));
             RefreshBattleDossier();
             return;
         }

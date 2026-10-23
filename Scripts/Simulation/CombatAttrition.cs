@@ -137,7 +137,7 @@ public static partial class Warfare
         var casualties = personnel * loss * defines.CasualtiesPerOrganisationPoint *
                          brokenExposure * casualtyScale *
                          MilitaryDoctrine.CasualtyExposure(army.Stance) *
-                         (army.CutOff ? defines.EncircledCasualtyMultiplier : 1f);
+                         (army.CutOff ? (defines.EncircledCasualtyMultiplier * (army.DaysCutOff > 3 ? 1.4f : 1.0f)) : 1f);
         return (personnel, casualties);
     }
 

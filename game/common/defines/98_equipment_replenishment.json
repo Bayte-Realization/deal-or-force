@@ -1,0 +1,6 @@
+{
+  "EquipmentReplenishmentEnabled": true,
+  "EquipmentReplenishmentPerDay": 0.02,
+  "EquipmentCombatDeliveryShare": 0.4,
+  "EquipmentMinimumSupply": 0.22
+}

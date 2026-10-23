@@ -126,6 +126,7 @@ public sealed partial class Army
     public int SupplySourceStateMapIndex = -1;
     public float SupplyCongestion = 1f;
     public bool CutOff;
+    public int DaysCutOff;
     public int BattleId = -1;
     public int ReadyDay;
 
@@ -588,6 +589,7 @@ public sealed class SplitArmyCommand : ICampaignCommand
             SupplySourceStateMapIndex = army.SupplySourceStateMapIndex,
             SupplyCongestion = army.SupplyCongestion,
             CutOff = army.CutOff,
+            DaysCutOff = army.DaysCutOff,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -697,6 +699,7 @@ public static class MilitaryOperations
             army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
                 MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
                 M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
+                (army.CutOff && army.DaysCutOff > 3 ? 0.35f : 1.0f) *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army) *
                 NationalModifiers.Factor(nation, "army_speed") *

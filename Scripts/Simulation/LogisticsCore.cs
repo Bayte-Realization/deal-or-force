@@ -171,6 +171,7 @@ public static class LogisticsSystem
             if (army.EmbarkedFleetId >= 0)
             {
                 army.CutOff = false;
+                army.DaysCutOff = 0;
                 army.SupplyDistance = 0;
                 army.SupplyCongestion = 1f;
                 continue;
@@ -212,6 +213,7 @@ public static class LogisticsSystem
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;
             army.CutOff = false;
+            army.DaysCutOff = 0;
             army.SupplyLevel = M.Lerp(army.SupplyLevel, target, 0.34f);
         }
 

@@ -47,7 +47,7 @@ public static class ArmyVocabulary
     {
         if (army is null) return "";
         if (army.InBattle) return army.PostBattleWaypoints.Count > 0
-            ? Loc.Format("Engaged in battle #{0} · {1} post-battle waypoint(s); Halt cancels the queue.",
+            ? Loc.Format("Engaged in battle #{0} · {1} post-battle waypoint(s); Alt+H cancels the queue; H leaves battle.",
                 army.BattleId, army.PostBattleWaypoints.Count)
             : Loc.Format("Engaged in battle #{0}", army.BattleId);
         if (army.EmbarkedFleetId >= 0) return Loc.Get("At sea under the fleet's orders.");

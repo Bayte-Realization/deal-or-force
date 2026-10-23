@@ -62,6 +62,13 @@ public sealed partial class Defines
     /// <summary>The share of a technology's cost stolen research is worth, plus more for a stronger network.</summary>
     public float CovertTheftShare { get; set; } = 0.25f;
     public float CovertTheftSharePerStrength { get; set; } = 0.35f;
+    /// <summary>How far funding a separatist cause moves one region away from its centre,
+    /// and how much it lowers that region's trust in the government and in the laws. Opinion
+    /// drifts back toward what the region lives through, so this hurts where the ground is soft.</summary>
+    public float CovertSeparatismDivergence { get; set; } = 0.06f;
+    public float CovertSeparatismDivergencePerStrength { get; set; } = 0.08f;
+    public float CovertSeparatismGovernment { get; set; } = 0.05f;
+    public float CovertSeparatismLaw { get; set; } = 0.03f;
     /// <summary>How often a government nobody plays considers an operation, and the chance it orders one when it does.</summary>
     public int CovertAiReviewDays { get; set; } = 28;
     public float CovertAiChance { get; set; } = 0.15f;
@@ -73,7 +80,7 @@ public sealed class CovertOperationDefinition
     public string Id = "";
     public string Name = "";
     public string Description = "";
-    /// <summary>What success does: "sabotage", "unrest", "opposition" or "theft".</summary>
+    /// <summary>What success does: "sabotage", "unrest", "opposition", "theft" or "separatism".</summary>
     public string Effect = "";
     /// <summary>The network strength it needs.</summary>
     public float MinimumStrength = 0.3f;
@@ -87,7 +94,7 @@ public sealed class CovertOperationDefinition
     public float Risk;
 
     /// <summary>Whether it is aimed at one region rather than the country.</summary>
-    public bool Regional => Effect is "sabotage" or "unrest";
+    public bool Regional => Effect is "sabotage" or "unrest" or "separatism";
 }
 
 /// <summary>
@@ -95,20 +102,27 @@ public sealed class CovertOperationDefinition
 ///
 /// A network (IntelNetworks) shows a rival's provinces and its forces. Once it is strong enough it
 /// can act: wreck the works of one region, stir one region's anger, fund the people who want the
-/// government gone, carry home research the country has paid for. An operation takes weeks to
+/// government gone, carry home research the country has paid for, or pay the people who want a
+/// region to leave. An operation takes weeks to
 /// prepare and costs a few times what founding the network did; when it comes due it works or it
 /// does not - a strong network against a careless state usually works, a young one against a
 /// police state usually does not - and either way it may be traced back. A traced operation costs
 /// half the network, a grievance that feeds the tension between the two countries, and the news.
 /// One that works unseen leaves the target a fire it cannot explain.
 ///
+/// Unrest and a separatist cause are deliberately different purchases. Unrest is the economic
+/// anger (radicalism) of one region; a separatist cause is the civic road - how far that region's
+/// opinion has left its centre, and whether it still trusts that centre's government and laws
+/// (PoliticalCohorts). A country can be quiet and still be pulled apart this way, which is what
+/// SecessionCore's federal road is built to read.
+///
 /// The kinds are data: a mod changes what one costs or how hard it hits, or adds another with one
-/// of the four effects, without code. Governments nobody plays use them too - on the enemy they
+/// of the five effects, without code. Governments nobody plays use them too - on the enemy they
 /// are at war with, the rival they fear, the neighbour they hate.
 /// </summary>
 public static class CovertOperations
 {
-    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft" };
+    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft", "separatism" };
     private static readonly Dictionary<string, CovertOperationDefinition> Entries = new(StringComparer.Ordinal);
 
     static CovertOperations() => ResetCatalog();
@@ -145,7 +159,7 @@ public static class CovertOperations
             var effect = Text("effect", entry.Effect);
             if (Array.IndexOf(Effects, effect) < 0)
             {
-                errors?.Add($"covert_operations: {property.Name} needs an effect of sabotage, unrest, opposition or theft");
+                errors?.Add($"covert_operations: {property.Name} needs an effect of sabotage, unrest, opposition, theft or separatism");
                 if (entry.Effect.Length == 0) continue;
             }
             else entry.Effect = effect;
@@ -212,6 +226,12 @@ public static class CovertOperations
         {
             if (region is null || region.NationMapIndex != target.MapIndex) return Loc.Get("Choose one of their regions.");
             if (definition.Effect == "sabotage" && region.WarDamage >= 0.35f) return Loc.Get("There is little left there to wreck.");
+            // The civic road needs the region's politics to exist at all: the opinion is read
+            // by PoliticalCohorts, and money aimed at a number nobody keeps would vanish.
+            if (definition.Effect == "separatism" && !c.FeatureEnabled("political_cohorts"))
+                return Loc.Get("Their regions' politics are not read in this world.");
+            if (definition.Effect == "separatism" && region.PoliticalDivergence < 0f)
+                return Loc.Get("Nothing has been read about that region's politics yet.");
         }
         if (definition.Effect == "theft" && !c.FeatureEnabled("research")) return Loc.Get("There is no research in this world.");
         if (definition.Effect == "theft" && TheftTarget(owner, target) is null) return Loc.Get("They know nothing we could use.");
@@ -266,6 +286,9 @@ public static class CovertOperations
         ("opposition", "exposed") => "covert_opposition_exposed",
         ("theft", "done") => "covert_theft_done",
         ("theft", "exposed") => "covert_theft_exposed",
+        ("separatism", "done") => "covert_separatism_done",
+        ("separatism", "suspected") => "covert_separatism_suspected",
+        ("separatism", "exposed") => "covert_separatism_exposed",
         _ => "covert_operation_failed"
     };
 
@@ -400,6 +423,20 @@ public static class CovertOperations
                 owner.ResearchProgress[technology.Id] = MathF.Min(cost, owner.ResearchProgress.GetValueOrDefault(technology.Id) + gain);
                 return technology.Name;
             }
+            case "separatism":
+            {
+                // A region whose politics have never been read has no opinion to move, and a
+                // negative seed is not zero: refuse rather than invent a starting point.
+                if (region.PoliticalDivergence < 0f || region.GovernmentApproval < 0f || region.LawApproval < 0f) return null;
+                // The civic road only: distance from the centre and trust in that centre's
+                // government and laws. Radicalism is left to unrest, so the two operations
+                // stay different tools and the player can tell which one he bought.
+                region.PoliticalDivergence = M.Clamp01(M.Clamp01(region.PoliticalDivergence) +
+                    power * (d.CovertSeparatismDivergence + d.CovertSeparatismDivergencePerStrength * strength));
+                region.GovernmentApproval = M.Clamp01(M.Clamp01(region.GovernmentApproval) - power * d.CovertSeparatismGovernment);
+                region.LawApproval = M.Clamp01(M.Clamp01(region.LawApproval) - power * d.CovertSeparatismLaw);
+                return definition.Name;
+            }
         }
         return null;
     }
@@ -472,6 +509,7 @@ public static class CovertOperations
                         "theft" => rival || hostile ? 2f : 1f,
                         "unrest" => atWar || rival ? 1f : 0.6f,
                         "opposition" => authoritarian && target.Stability < 0.55f ? 1.6f : 0f,
+                        "separatism" => rival ? (atWar ? 0.5f : 1.2f) : 0f,
                         _ => 0f
                     };
                     if (want <= 0f) continue;
@@ -492,7 +530,8 @@ public static class CovertOperations
         }
     }
 
-    /// <summary>Where a government nobody plays aims: the busiest region left standing for sabotage, the angriest for unrest.</summary>
+    /// <summary>Where a government nobody plays aims: the busiest region left standing for sabotage,
+    /// the angriest for unrest, the one furthest from its centre for a separatist cause.</summary>
     private static ScenarioState AiRegion(Campaign c, Nation target, CovertOperationDefinition kind)
     {
         ScenarioState best = null;
@@ -500,6 +539,15 @@ public static class CovertOperations
         foreach (var region in c.StatesOf(target))
         {
             if (region.Population <= 0) continue;
+            if (kind.Effect == "separatism")
+            {
+                // Money does not create a movement, it feeds one that exists: a region that has
+                // never been read, or still likes its government, is not worth the network.
+                if (region.PoliticalDivergence < 0.15f || region.GovernmentApproval < 0f) continue;
+                var split = M.Clamp01(region.PoliticalDivergence) * (1f - M.Clamp01(region.GovernmentApproval));
+                if (split > bestScore) { bestScore = split; best = region; }
+                continue;
+            }
             var score = kind.Effect == "sabotage"
                 ? (region.WarDamage >= 0.3f ? 0f : region.Population * (0.3f + region.Urbanization) * (1f - region.WarDamage))
                 : region.Population * (0.05f + region.Radicalism);

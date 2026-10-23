@@ -10,6 +10,10 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--equipment-replenishment-only")) { EquipmentReplenishmentTests.Run(); return; }
+        if (args.Length == 0) EquipmentReplenishmentTests.Run();
+        if (args.Contains("--covert-politics-only")) { CovertPoliticalTests.Run(); return; }
+        if (args.Length == 0) CovertPoliticalTests.Run();
         if (args.Contains("--inspect-save")) { InspectSave(args); return; }
         if (args.Contains("--paused-doctrines-only")) { PausedDoctrineTests.Run(); return; }
         if (args.Length == 0) PausedDoctrineTests.Run();

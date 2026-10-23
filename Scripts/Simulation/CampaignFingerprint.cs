@@ -64,6 +64,14 @@ public static class CampaignFingerprint
             Mix(campaign.Defines.FrontDisengagementMinimumBattleDays);
             MixFloat(campaign.Defines.FrontDisengagementMaximumShare); MixFloat(campaign.Defines.FrontDisengagementDefenceRatio);
         }
+        var equipmentRules = campaign.Defines;
+        if (!equipmentRules.EquipmentReplenishmentEnabled || equipmentRules.EquipmentReplenishmentPerDay != .02f ||
+            equipmentRules.EquipmentCombatDeliveryShare != .4f || equipmentRules.EquipmentMinimumSupply != .22f)
+        {
+            MixText("equipment_delivery_rules"); Mix(equipmentRules.EquipmentReplenishmentEnabled ? 1 : 0);
+            MixFloat(equipmentRules.EquipmentReplenishmentPerDay); MixFloat(equipmentRules.EquipmentCombatDeliveryShare);
+            MixFloat(equipmentRules.EquipmentMinimumSupply);
+        }
         var diplomacyRules = campaign.Defines;
         if (!diplomacyRules.AiFormableProclamations || diplomacyRules.AiFormableReviewDays != 30 ||
             diplomacyRules.AiFormableEarliestDay != 120 || diplomacyRules.AiFormableMinimumIntervalDays != 1825 ||
@@ -674,6 +682,8 @@ public static class CampaignFingerprint
             Mix(army.Personnel);
             MixFloat(army.Organisation);
             MixFloat(army.Strength);
+            if (army.Equipment != .88f)
+            { MixText("formation_equipment"); MixFloat(army.Equipment); }
             MixFloat(army.Entrenchment);
             Mix(army.Route.Count);
             if (army.PostBattleWaypoints.Count > 0)
@@ -713,7 +723,10 @@ public static class CampaignFingerprint
             }
         }
         foreach (var army in Ordered(campaign.Armies, a => a.Id))
+        {
+            if (army.DaysCutOff > 0) { MixText("days_cut_off"); Mix(army.Id); Mix(army.DaysCutOff); }
             if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
+        }
         foreach (var war in Ordered(campaign.Wars, war => war.Id))
         {
             Mix(war.Id);

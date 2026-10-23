@@ -12,18 +12,21 @@ static class ArmyCommandLocalizationTests
         try
         {
             Loc.Language = "russian";
-            using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
-                "localization", "russian", "140_army_commands.json")));
             var count = 0;
-            foreach (var entry in document.RootElement.EnumerateObject())
+            foreach (var file in new[] { "140_army_commands.json", "147_battle_orders.json" })
             {
-                if (string.IsNullOrWhiteSpace(Loc.TextIn("russian", entry.Name)) || Loc.Get(entry.Name) == entry.Name)
-                    throw new Exception("Army translation missing or overridden: " + entry.Name);
-                if (!Loc.Placeholders(entry.Name).SetEquals(Loc.Placeholders(entry.Value.GetString())))
-                    throw new Exception("Army translation placeholders differ: " + entry.Name);
-                if (string.IsNullOrWhiteSpace(Loc.TextIn("english", entry.Name)))
-                    throw new Exception("Army source key missing from English index: " + entry.Name);
-                count++;
+                using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
+                    "localization", "russian", file)));
+                foreach (var entry in document.RootElement.EnumerateObject())
+                {
+                    if (string.IsNullOrWhiteSpace(Loc.TextIn("russian", entry.Name)) || Loc.Get(entry.Name) == entry.Name)
+                        throw new Exception("Army translation missing or overridden: " + entry.Name);
+                    if (!Loc.Placeholders(entry.Name).SetEquals(Loc.Placeholders(entry.Value.GetString())))
+                        throw new Exception("Army translation placeholders differ: " + entry.Name);
+                    if (string.IsNullOrWhiteSpace(Loc.TextIn("english", entry.Name)))
+                        throw new Exception("Army source key missing from English index: " + entry.Name);
+                    count++;
+                }
             }
             Console.WriteLine($"PASS army localization: {count} commands, tabs and help texts resolve in Russian");
             Loc.Language = "english";

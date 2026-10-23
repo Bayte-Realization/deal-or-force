@@ -4,7 +4,9 @@
 //                      "unrest" (one region angrier and less orderly), "opposition" (the country
 //                      less stable, its capital angrier, its strongest movement funded - up to
 //                      CovertOppositionFundingCap of the target's own output),
-//                      "theft" (a large part of research the country has, carried home)
+//                      "theft" (a large part of research the country has, carried home),
+//                      "separatism" (one region drifts further from its centre and thinks worse
+//                      of that centre's government and laws - the civic road, not unrest)
 //   minimum_strength   the network strength it needs, 0 to 1
 //   days               how long it takes to prepare
 //   cost               what it costs, in multiples of founding a network
@@ -33,5 +35,10 @@
     "name": "Steal their research",
     "description": "A large part of what they have learned and we have not: the work we are on now, if they have it, or the most valuable of what we could start.",
     "effect": "theft", "minimum_strength": 0.45, "days": 56, "cost": 2.0, "risk": -0.05
+  },
+  "separatism": {
+    "name": "Fund a separatist cause",
+    "description": "Printers, lawyers and quiet money for the people who want the region to leave. It drifts further from the centre and thinks worse of the government and the laws it lives under. It does not make the region angrier - that is what stirring unrest is for.",
+    "effect": "separatism", "minimum_strength": 0.35, "days": 35, "cost": 1.8, "risk": 0.1
   }
 }

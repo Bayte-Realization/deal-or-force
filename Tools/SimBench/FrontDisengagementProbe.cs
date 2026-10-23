@@ -12,7 +12,8 @@ internal static class FrontDisengagementProbe
     {
         "front.world.topology", "front.world.day_completed", "front.world.simulation_fault", "front.world.tick_exception",
         "front.army.numeric", "front.army.province", "front.army.route", "front.army.planned_route",
-        "front.army.battle_reference", "front.army.unique_id", "front.battle.unique_id", "front.world.front_province"
+        "front.army.battle_reference", "front.army.unique_id", "front.battle.unique_id", "front.world.front_province",
+        "equipment.world.depots"
     };
 
     public static int Run(Campaign c, int days)
@@ -70,9 +71,9 @@ internal static class FrontDisengagementProbe
             {
                 if (!armyIds.Add(army.Id)) Fail(9, $"army={army.Id} nation={army.NationId}");
                 if (!Nonnegative(army.Divisions) || !Nonnegative(army.Organisation) || !Nonnegative(army.Strength) ||
-                    army.Personnel < 0 || !Nonnegative(army.Recovering))
+                    army.Personnel < 0 || !Nonnegative(army.Recovering) || !Nonnegative(army.Equipment) || army.Equipment > 1f)
                     Fail(4, $"army={army.Id} nation={army.NationId} divisions={army.Divisions:R} " +
-                        $"organisation={army.Organisation:R} strength={army.Strength:R} personnel={army.Personnel} recovering={army.Recovering:R}");
+                        $"organisation={army.Organisation:R} strength={army.Strength:R} personnel={army.Personnel} recovering={army.Recovering:R} equipment={army.Equipment:R}");
 
                 var onLand = army.EmbarkedFleetId < 0;
                 if (onLand ? !LandProvince(map, army.ProvinceId) : army.ProvinceId != 0)
@@ -97,6 +98,11 @@ internal static class FrontDisengagementProbe
                     LandProvince(map, army.OrderProvinceId))
                     marching.Add((army.NationId, army.OrderProvinceId));
             }
+
+            foreach (var nation in c.Nations)
+                foreach (var good in StrategicStockpiles.TrackedGoods)
+                    if (!Nonnegative(nation.Stockpiles.GetValueOrDefault(good)))
+                        Fail(12, $"nation={nation.Tag} good={good} stock={nation.Stockpiles.GetValueOrDefault(good):R}");
 
             // A coalition's front contains allied ground too. Only a country's own controllers
             // and its own formations count here, with a post shared by wars counted once.

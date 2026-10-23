@@ -1,4 +1,10 @@
 {
+  "Cancelled post-battle orders: {0}. Engaged formations keep fighting.": "Отменены приказы после боя: {0}. Участвующие в боях войска продолжают сражаться.",
+  "In combat: H or RMB on the formation's current province leaves battle immediately. Other map orders wait; Alt+H cancels only the queue.": "В бою: H или ПКМ по текущей провинции дивизии сразу выводит её из боя. Приказы в другие провинции ждут; Alt+H отменяет только очередь.",
+  "H: stop movement or leave battle immediately. RMB on the formation's current province does the same. Alt+H cancels only queued post-battle orders.": "H: остановить движение или сразу выйти из боя. ПКМ по текущей провинции дивизии делает то же самое. Alt+H отменяет только очередь приказов после боя.",
+  "Engaged in battle #{0} · {1} post-battle waypoint(s); Alt+H cancels the queue; H leaves battle.": "В бою №{0} · точек маршрута после боя: {1}; Alt+H отменяет очередь, H выводит из боя.",
+  "After battle: {0} waypoint(s). Alt+H cancels the queue; H leaves battle.": "После боя: точек маршрута — {0}. Alt+H отменяет очередь, H выводит из боя.",
+  "This leaves the province without our defenders and may give it to the enemy. H or RMB on the formation's current province also leaves battle. Orders to other provinces wait until combat ends.": "Провинция останется без наших защитников и может перейти врагу. H или ПКМ по текущей провинции дивизии также выводит её из боя. Приказы в другие провинции ждут окончания боя.",
   "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.": "Остановлен марш или отменена очередь приказов: {0}. Участвующие в боях войска продолжают сражаться.",
   "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.": "В бою: приказы по карте ждут его окончания. H отменяет очередь; «Отступить» выводит из боя.",
   "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.": "H: остановить марш. В бою — отменить очередь приказов без отступления. Для отступления используйте «Выйти из боя».",

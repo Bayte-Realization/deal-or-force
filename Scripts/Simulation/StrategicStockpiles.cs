@@ -351,6 +351,7 @@ public static class StrategicStockpiles
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
             nation.DailyStockpileBurn.Clear();
             nation.DailyStockpileGain.Clear();
+            nation.DailyEquipmentReplacement.Clear();
 
             var divs = totalDivs.GetValueOrDefault(nation.Id);
             var fighting = fightingDivs.GetValueOrDefault(nation.Id);
@@ -409,9 +410,10 @@ public static class StrategicStockpiles
             {
                 foreach (var army in campaign.Armies)
                 {
-                    if (army.NationId != nation.Id) continue;
+                    if (army.NationId != nation.Id || MilitaryAccess.MustReturn(campaign, army)) continue;
                     if (armsShort > 0f)
-                        army.Equipment = M.Clamp(army.Equipment - defines.StockpileShortArmsEquipmentLoss * armsShort, 0.20f, 1f);
+                        army.Equipment = MathF.Min(army.Equipment,
+                            M.Clamp(army.Equipment - defines.StockpileShortArmsEquipmentLoss * armsShort, 0.20f, 1f));
                     if (ammoShort > 0f && army.InBattle)
                         army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortAmmunitionOrganisationLoss * ammoShort);
                     if (oilShort > 0f && army.IsMoving)
@@ -436,6 +438,7 @@ public static class StrategicStockpiles
                 }
             }
         }
+        EquipmentLogistics.ReplenishDay(campaign);
     }
 
     /// <summary>The share of yesterday's need for a good that was met, 0 to 1.</summary>

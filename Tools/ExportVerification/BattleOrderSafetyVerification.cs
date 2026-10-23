@@ -38,12 +38,12 @@ public partial class ExportVerification
         var home = map.Neighbors[source].First(p => c.ProvinceController[p] == own.MapIndex && !map.IsWater(p));
         c.Armies.Clear(); c.Battles.Clear(); c.Wars.Clear(); c.FrontLines.Clear();
         c.Wars.Add(new StrategicWar { Id = 700, AttackerId = enemy.Id, DefenderId = own.Id });
-
-        foreach (var language in new[] { "english", "russian" })
-        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        (Army attacker, Army defender, LandBattle battle) ResetFight()
         {
-            Loc.Language = language; GetTree().Root.Size = size; game.Call("RefreshLocalisedText");
+            c.ConfigureSinglePlayer(own.Id); c.IsPaused = true;
             c.SetProvinceController(source, (ushort)own.MapIndex);
+            c.SetProvinceController(home, (ushort)own.MapIndex);
+            c.SetProvinceController(front, (ushort)enemy.MapIndex);
             c.Armies.Clear(); c.Battles.Clear();
             var attacker = new Army { Id = 8001, NationId = enemy.Id, ProvinceId = front,
                 StateMapIndex = map.ProvinceToState[front], BattleId = 9001, AssignedWarId = 700,
@@ -60,6 +60,14 @@ public partial class ExportVerification
                 AttackerId = enemy.Id, DefenderId = own.Id };
             battle.Attackers.Add(attacker.Id); battle.Defenders.Add(defender.Id); c.Battles.Add(battle);
             Warfare.Tick(c);
+            return (attacker, defender, battle);
+        }
+
+        foreach (var language in new[] { "english", "russian" })
+        foreach (var size in new[] { new Vector2I(1920, 1080), new Vector2I(1280, 720) })
+        {
+            Loc.Language = language; GetTree().Root.Size = size; game.Call("RefreshLocalisedText");
+            var (attacker, defender, battle) = ResetFight();
             var clock = c.ElapsedHours; var rng = c.Random.State;
             game.VerificationQueueBattleOrder(defender, home);
             Check(defender.InBattle && defender.ProvinceId == source && defender.PostBattleWaypoints.SequenceEqual(new[] { home }) &&
@@ -67,10 +75,9 @@ public partial class ExportVerification
                 "actual map-order handler queues without retreat while paused: " + language + size.X);
             await Wait(.2);
             GetViewport().GuiReleaseFocus();
-            GetViewport().PushInput(new InputEventKey { Keycode = Key.H, PhysicalKeycode = Key.H, Pressed = true }, true);
-            GetViewport().PushInput(new InputEventKey { Keycode = Key.H, PhysicalKeycode = Key.H, Pressed = false }, true);
+            BattleH(alt: true);
             Check(defender.InBattle && defender.PostBattleWaypoints.Count == 0 && !battle.Ended,
-                "actual H key cancels future movement, not the defence: " + language + size.X);
+                "actual Alt+H cancels future movement, not the defence: " + language + size.X);
             game.VerificationQueueBattleOrder(defender, home);
             var fp = CampaignFingerprint.Of(c);
             game.VerificationShowOrderBattle(battle);
@@ -101,7 +108,77 @@ public partial class ExportVerification
             await Wait(.2);
             Check(!defender.InBattle && battle.Ended && defender.ProvinceId != source && defender.PostBattleWaypoints.Count == 0,
                 "deliberately confirmed retreat leaves the defence and clears its queued orders: " + language + size.X);
+
+            foreach (var defending in new[] { true, false })
+            foreach (var ownTile in new[] { false, true })
+            {
+                (attacker, defender, battle) = ResetFight();
+                c.ConfigureSinglePlayer(defending ? own.Id : enemy.Id);
+                var selected = defending ? defender : attacker;
+                game.VerificationQueueBattleOrder(selected, defending ? home : source);
+                var organisation = selected.Organisation; var equipment = selected.Equipment;
+                var personnel = selected.Personnel; var hours = c.ElapsedHours;
+                GetViewport().GuiReleaseFocus();
+                if (ownTile) game.VerificationQueueBattleOrder(selected, selected.ProvinceId);
+                else BattleH();
+                var label = $"{language}{size.X} {(defending ? "defender" : "attacker")} {(ownTile ? "own-tile RMB" : "H")}";
+                Check(!selected.InBattle && battle.Ended && selected.PostBattleWaypoints.Count == 0 &&
+                    !game.GetChildren().OfType<ConfirmationDialog>().Any(d => d.Visible),
+                    "quick exit leaves battle immediately without confirmation: " + label);
+                Check(selected.Organisation == organisation && selected.Equipment == equipment &&
+                    selected.Personnel == personnel && c.ElapsedHours == hours && c.IsPaused &&
+                    (defending ? selected.ProvinceId != source && selected.ReadyDay > c.ElapsedDays :
+                        selected.ProvinceId == front && c.ProvinceController[source] == own.MapIndex),
+                    "quick exit uses normal retreat without healing or skipping time: " + label);
+                game.VerificationShowOrderBattle(battle);
+                await Wait(.15);
+                await Capture("battle-quick-exit-" + language + "-" + size.X + "-" + (defending ? "defender" : "attacker") +
+                    "-" + (ownTile ? "map" : "h"));
+            }
+
+            (attacker, defender, battle) = ResetFight();
+            var remaining = new Army { Id = 8003, NationId = own.Id, ProvinceId = source,
+                StateMapIndex = map.ProvinceToState[source], BattleId = battle.Id, AssignedWarId = 700,
+                Divisions = 1, Personnel = 15000, Organisation = .9f, Name = "Remaining defender" };
+            c.Armies.Add(remaining); battle.Defenders.Add(remaining.Id);
+            var idle = new Army { Id = 8004, NationId = own.Id, ProvinceId = home,
+                StateMapIndex = map.ProvinceToState[home], Divisions = 1, Personnel = 15000,
+                OrderProvinceId = source, DirectOrder = true, Name = "Marching formation" };
+            idle.Route.Add(source); c.Armies.Add(idle);
+            game.VerificationSelectBattleOrders(defender, idle);
+            GetViewport().GuiReleaseFocus(); BattleH();
+            Check(!defender.InBattle && remaining.InBattle && !battle.Ended &&
+                battle.Defenders.SequenceEqual(new[] { remaining.Id }) && c.ProvinceController[source] == own.MapIndex &&
+                idle.Route.Count == 0 && idle.OrderProvinceId < 0 && idle.ProvinceId == home && attacker.InBattle,
+                "H stops marching selection and withdraws selected combatants only: " + language + size.X);
+
+            (attacker, defender, battle) = ResetFight();
+            var neighbors = map.Neighbors[source].ToDictionary(p => p, p => c.ProvinceController[p]);
+            try
+            {
+                foreach (var neighbor in neighbors.Keys) c.SetProvinceController(neighbor, (ushort)enemy.MapIndex);
+                game.VerificationSelectBattleOrders(defender);
+                var before = CampaignFingerprint.Of(c);
+                GetViewport().GuiReleaseFocus(); BattleH();
+                Check(CampaignFingerprint.Of(c) == before && defender.InBattle && !battle.Ended,
+                    "H cannot teleport an encircled defender out of combat: " + language + size.X);
+                game.VerificationQueueBattleOrder(defender, source);
+                Check(CampaignFingerprint.Of(c) == before && defender.InBattle && !battle.Ended,
+                    "own-tile RMB cannot teleport an encircled defender out of combat: " + language + size.X);
+            }
+            finally
+            {
+                foreach (var pair in neighbors) c.SetProvinceController(pair.Key, pair.Value);
+            }
         }
+    }
+
+    private void BattleH(bool alt = false)
+    {
+        GetViewport().PushInput(new InputEventKey { Keycode = Key.H, PhysicalKeycode = Key.H,
+            AltPressed = alt, Pressed = true }, true);
+        GetViewport().PushInput(new InputEventKey { Keycode = Key.H, PhysicalKeycode = Key.H,
+            AltPressed = alt, Pressed = false }, true);
     }
 }
 
@@ -117,4 +194,9 @@ public partial class DealOrForceGame
             target, centre.Latitude, centre.Longitude));
     }
     internal void VerificationShowOrderBattle(LandBattle battle) => ShowBattleDetails(battle);
+    internal void VerificationSelectBattleOrders(params Army[] armies)
+    {
+        _observerMode = false; _campaign.ObserverMode = false; _campaign.IsPaused = true;
+        OnArmiesBoxPicked(armies);
+    }
 }

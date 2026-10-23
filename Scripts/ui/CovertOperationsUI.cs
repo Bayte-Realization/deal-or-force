@@ -68,6 +68,7 @@ public partial class DealOrForceGame
         "unrest" => "unrest",
         "opposition" => "movement_fundraise",
         "theft" => "research",
+        "separatism" => "movement_fundraise",
         _ => "search"
     };
 

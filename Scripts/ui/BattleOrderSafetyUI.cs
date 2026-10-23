@@ -20,7 +20,7 @@ public partial class DealOrForceGame
         if (GetChildren().OfType<ConfirmationDialog>().Any(dialog => dialog.Visible)) return;
         var confirm = new ConfirmationDialog { Name = "ConfirmLastDefenderWithdrawal",
             Title = Tr("Withdraw the last defenders?"),
-            DialogText = Tr("This leaves the province without our defenders and may give it to the enemy. Ordinary map orders are queued until combat ends; they do not retreat."),
+            DialogText = Tr("This leaves the province without our defenders and may give it to the enemy. H or RMB on the formation's current province also leaves battle. Orders to other provinces wait until combat ends."),
             Exclusive = true };
         var theme = ScenarioEditorTheme.Create();
         theme.SetStylebox("panel", "AcceptDialog", ScenarioEditorTheme.Surface("shell.background", "shell.border", 16));

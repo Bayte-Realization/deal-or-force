@@ -8,6 +8,8 @@
   "Money for those who want the government gone. The country grows less stable, and its strongest movement gets a share of the money.": "Деньги тем, кто хочет сменить власть. Страна теряет стабильность, а часть денег достаётся её сильнейшему движению.",
   "Steal their research": "Украсть исследования",
   "A large part of what they have learned and we have not: the work we are on now, if they have it, or the most valuable of what we could start.": "Большая часть того, что они уже знают, а мы ещё нет: работа, которой мы заняты сейчас, если она у них есть, или самое ценное из того, что мы могли бы начать.",
+  "Fund a separatist cause": "Финансировать сепаратистов",
+  "Printers, lawyers and quiet money for the people who want the region to leave. It drifts further from the centre and thinks worse of the government and the laws it lives under. It does not make the region angrier - that is what stirring unrest is for.": "Типографии, юристы и тихие деньги для тех, кто хочет, чтобы регион ушёл. Он сильнее расходится с центром и хуже думает о правительстве и о законах, по которым живёт. Злее регион от этого не становится — для этого есть раскачка волнений.",
   "Ran a covert operation against us": "Проводили против нас тайную операцию",
   "There are no intelligence services in this world.": "В этом мире нет разведслужб.",
   "There is no research in this world.": "В этом мире нет исследований.",
@@ -20,6 +22,8 @@
   "Choose one of their regions.": "Выберите один из их регионов.",
   "There is little left there to wreck.": "Там уже почти нечего ломать.",
   "They know nothing we could use.": "Они не знают ничего, что пригодилось бы нам.",
+  "Their regions' politics are not read in this world.": "В этом мире мнение их регионов по отдельности не учитывается.",
+  "Nothing has been read about that region's politics yet.": "О политике этого региона пока ничего не известно.",
   "COVERT OPERATIONS": "ТАЙНЫЕ ОПЕРАЦИИ",
   "Call off: {0}, {1} days left": "Отменить: {0}, осталось {1} дн.",
   "Call off: {0} in {1}, {2} days left": "Отменить: {0} ({1}), осталось {2} дн.",
@@ -38,6 +42,9 @@
   "chronicle.covert_sabotage_suspected": "Пожар на заводах в регионе {3}. Причина неизвестна.",
   "chronicle.covert_unrest_suspected": "Волнения в регионе {3} растут быстрее, чем можно объяснить обидами людей.",
   "chronicle.covert_opposition_suspected": "{0}: у оппозиции откуда-то появились деньги.",
+  "chronicle.covert_separatism_exposed": "{0}: выяснилось, что деньги её сепаратистам шли из страны {1}.",
+  "chronicle.covert_separatism_done": "Наши деньги дошли до тех, кто хочет, чтобы регион {3} вышел из состава страны {1}.",
+  "chronicle.covert_separatism_suspected": "В регион {3} идут деньги тем, кто хочет отделения. Кто платит — неизвестно.",
   "chronicle.covert_operation_failed": "Наша операция в стране {1} ничего не дала. Агенты ушли.",
   "chronicle.covert_operation_abandoned": "Наша операция в стране {1} брошена: сеть или регион потеряны до срока."
 }

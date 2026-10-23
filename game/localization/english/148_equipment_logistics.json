@@ -1,0 +1,14 @@
+{
+  "Equipment replacements are disabled.": "Equipment replacements are disabled.",
+  "Equipment establishment is complete.": "Equipment establishment is complete.",
+  "No funded national equipment delivery.": "No funded national equipment delivery.",
+  "Equipment deliveries resume after landing.": "Equipment deliveries resume after landing.",
+  "No supply route for equipment replacements.": "No supply route for equipment replacements.",
+  "Equipment and personnel are replaced separately. Ammunition is a consumable, not equipment completeness.": "Equipment and personnel are replaced separately. Ammunition is a consumable, not equipment completeness.",
+  "Equipment deliveries await depot materials: {0}.": "Equipment deliveries await depot materials: {0}.",
+  "Equipment delivery ceiling: +{0:0.0} percentage points/day; actual deliveries share depot stocks by reinforcement priority.": "Equipment delivery ceiling: +{0:0.0} percentage points/day; actual deliveries share depot stocks by reinforcement priority.",
+  "Durable materials at that ceiling: {0}.": "Durable materials at that ceiling: {0}.",
+  "Equipment deliveries continue in combat at a reduced rate.": "Equipment deliveries continue in combat at a reduced rate.",
+  "{0}: {1:0.###}": "{0}: {1:0.###}",
+  "{0} strategic depot: {1:0.0} of {2:0.0} capacity ({3:P0})\nDaily refill from industry & imports: +{4:0.00}\nDaily operations: -{5:0.00}\nDaily durable equipment replacements: -{6:0.00}\nPersonnel losses, durable equipment and ammunition are separate. Deliveries spend real depot materials.": "{0} strategic depot: {1:0.0} of {2:0.0} capacity ({3:P0})\nDaily refill from industry & imports: +{4:0.00}\nDaily operations: -{5:0.00}\nDaily durable equipment replacements: -{6:0.00}\nPersonnel losses, durable equipment and ammunition are separate. Deliveries spend real depot materials."
+}

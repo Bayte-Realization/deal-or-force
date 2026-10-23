@@ -259,13 +259,14 @@ public partial class DealOrForceGame
             var cap = StrategicStockpiles.Capacity(_campaign, player, goodId);
             var gain = player.DailyStockpileGain.GetValueOrDefault(goodId);
             var burn = player.DailyStockpileBurn.GetValueOrDefault(goodId);
+            var replacements = player.DailyEquipmentReplacement.GetValueOrDefault(goodId);
             var net = gain - burn;
             var fill = cap <= 0f ? 0f : have / cap;
             var token = have <= 0.1f ? "state.negative" : fill < 0.25f || net < -0.05f ? "state.warning" : "state.positive";
             var valText = $"{have:0.0}/{cap:0} ({net:+0.00;-0.00;0.00}/d)";
             var tip = Simulation.Loc.Format(
-                "{0} strategic depot: {1:0.0} of {2:0.0} capacity ({3:P0})\nDaily refill from industry & imports: +{4:0.00}\nDaily military & naval burn: -{5:0.00}\nWhen depleted (0.0), armies and fleets lose supply, equipment and combat effectiveness!",
-                Tr(goodId), have, cap, fill, gain, burn);
+                "{0} strategic depot: {1:0.0} of {2:0.0} capacity ({3:P0})\nDaily refill from industry & imports: +{4:0.00}\nDaily operations: -{5:0.00}\nDaily durable equipment replacements: -{6:0.00}\nPersonnel losses, durable equipment and ammunition are separate. Deliveries spend real depot materials.",
+                Tr(goodId), have, cap, fill, gain, Math.Max(0f, burn - replacements), replacements);
             stockCells.Add((Tr(goodId), valText, token, tip));
         }
         _recruitmentStockpileHost.AddChild(BuildGrandStrategyMetricsGrid(stockCells.ToArray()));

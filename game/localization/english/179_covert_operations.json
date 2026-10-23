@@ -8,6 +8,8 @@
   "Money for those who want the government gone. The country grows less stable, and its strongest movement gets a share of the money.": "Money for those who want the government gone. The country grows less stable, and its strongest movement gets a share of the money.",
   "Steal their research": "Steal their research",
   "A large part of what they have learned and we have not: the work we are on now, if they have it, or the most valuable of what we could start.": "A large part of what they have learned and we have not: the work we are on now, if they have it, or the most valuable of what we could start.",
+  "Fund a separatist cause": "Fund a separatist cause",
+  "Printers, lawyers and quiet money for the people who want the region to leave. It drifts further from the centre and thinks worse of the government and the laws it lives under. It does not make the region angrier - that is what stirring unrest is for.": "Printers, lawyers and quiet money for the people who want the region to leave. It drifts further from the centre and thinks worse of the government and the laws it lives under. It does not make the region angrier - that is what stirring unrest is for.",
   "Ran a covert operation against us": "Ran a covert operation against us",
   "There are no intelligence services in this world.": "There are no intelligence services in this world.",
   "There is no research in this world.": "There is no research in this world.",
@@ -20,6 +22,8 @@
   "Choose one of their regions.": "Choose one of their regions.",
   "There is little left there to wreck.": "There is little left there to wreck.",
   "They know nothing we could use.": "They know nothing we could use.",
+  "Their regions' politics are not read in this world.": "Their regions' politics are not read in this world.",
+  "Nothing has been read about that region's politics yet.": "Nothing has been read about that region's politics yet.",
   "COVERT OPERATIONS": "COVERT OPERATIONS",
   "Call off: {0}, {1} days left": "Call off: {0}, {1} days left",
   "Call off: {0} in {1}, {2} days left": "Call off: {0} in {1}, {2} days left",
@@ -38,6 +42,9 @@
   "chronicle.covert_sabotage_suspected": "A fire at the works in {3}. The cause is not known.",
   "chronicle.covert_unrest_suspected": "Unrest in {3} is spreading faster than its grievances explain.",
   "chronicle.covert_opposition_suspected": "The opposition in {0} has money from somewhere.",
+  "chronicle.covert_separatism_exposed": "{0} has traced money for its separatists back to {1}.",
+  "chronicle.covert_separatism_done": "Our money has reached the people who want {3} to leave {1}.",
+  "chronicle.covert_separatism_suspected": "Money is reaching the people in {3} who want to leave. Nobody knows whose.",
   "chronicle.covert_operation_failed": "Our operation in {1} came to nothing. The agents got away.",
   "chronicle.covert_operation_abandoned": "Our operation in {1} is abandoned: the network or the ground was lost before the day."
 }

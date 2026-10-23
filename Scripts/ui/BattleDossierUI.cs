@@ -243,7 +243,7 @@ public partial class DealOrForceGame
                 column.AddChild(BattleText(Tr(line.Contains(army.Id) ? "In the firing line" : "Battle reserve"),
                     10, line.Contains(army.Id) ? "text.accent" : "text.muted"));
             if (army.PostBattleWaypoints.Count > 0)
-                column.AddChild(BattleText(Loc.Format("After battle: {0} waypoint(s). Halt cancels the queue.",
+                column.AddChild(BattleText(Loc.Format("After battle: {0} waypoint(s). Alt+H cancels the queue; H leaves battle.",
                     army.PostBattleWaypoints.Count), 10, "state.warning"));
             var card = new VBoxContainer();
             var header = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -286,7 +286,8 @@ public partial class DealOrForceGame
             card.AddChild(bars);
             bars.AddChild(BattleGauge(army.Organisation, "combat.organisation"));
             bars.AddChild(BattleGauge(army.Equipment, "combat.equipment"));
-            bars.TooltipText = Ui.Tip(Loc.Format("Organisation {0:P0} · equipment {1:P0}", army.Organisation, army.Equipment));
+            bars.TooltipText = Ui.Tip(Loc.Format("Organisation {0:P0} · equipment {1:P0}", army.Organisation, army.Equipment) +
+                (army.NationId == _campaign.Player.Id ? "\n" + EquipmentLogistics.Description(_campaign, army) : ""));
             bars.MouseFilter = MouseFilterEnum.Stop;
             // Bars are for scanning; the actual percentages must also be readable
             // without hovering two narrow, previously unlabelled strips.

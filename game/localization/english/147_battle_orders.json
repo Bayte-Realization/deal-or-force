@@ -1,4 +1,10 @@
 {
+  "Cancelled post-battle orders: {0}. Engaged formations keep fighting.": "Cancelled post-battle orders: {0}. Engaged formations keep fighting.",
+  "In combat: H or RMB on the formation's current province leaves battle immediately. Other map orders wait; Alt+H cancels only the queue.": "In combat: H or RMB on the formation's current province leaves battle immediately. Other map orders wait; Alt+H cancels only the queue.",
+  "H: stop movement or leave battle immediately. RMB on the formation's current province does the same. Alt+H cancels only queued post-battle orders.": "H: stop movement or leave battle immediately. RMB on the formation's current province does the same. Alt+H cancels only queued post-battle orders.",
+  "Engaged in battle #{0} · {1} post-battle waypoint(s); Alt+H cancels the queue; H leaves battle.": "Engaged in battle #{0} · {1} post-battle waypoint(s); Alt+H cancels the queue; H leaves battle.",
+  "After battle: {0} waypoint(s). Alt+H cancels the queue; H leaves battle.": "After battle: {0} waypoint(s). Alt+H cancels the queue; H leaves battle.",
+  "This leaves the province without our defenders and may give it to the enemy. H or RMB on the formation's current province also leaves battle. Orders to other provinces wait until combat ends.": "This leaves the province without our defenders and may give it to the enemy. H or RMB on the formation's current province also leaves battle. Orders to other provinces wait until combat ends.",
   "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.": "Stopped movement or cancelled queued orders: {0}. Engaged formations keep fighting.",
   "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.": "In combat: map orders wait until the battle ends. H cancels queued orders; Retreat leaves combat.",
   "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.": "H: halt movement. During combat, cancel queued orders without retreating. Use Leave battle for an explicit withdrawal.",

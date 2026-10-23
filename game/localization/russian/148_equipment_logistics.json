@@ -1,0 +1,14 @@
+{
+  "Equipment replacements are disabled.": "Пополнение оснащения отключено.",
+  "Equipment establishment is complete.": "Штатная оснащённость полностью укомплектована.",
+  "No funded national equipment delivery.": "Нет финансируемой государством доставки оснащения.",
+  "Equipment deliveries resume after landing.": "Доставка оснащения возобновится после высадки.",
+  "No supply route for equipment replacements.": "Нет пути снабжения для пополнения оснащения.",
+  "Equipment and personnel are replaced separately. Ammunition is a consumable, not equipment completeness.": "Оснащение и личный состав пополняются отдельно. Боеприпасы — расходный материал, а не процент укомплектованности техникой.",
+  "Equipment deliveries await depot materials: {0}.": "Для доставки оснащения не хватает на складе: {0}.",
+  "Equipment delivery ceiling: +{0:0.0} percentage points/day; actual deliveries share depot stocks by reinforcement priority.": "Предел пополнения оснащения: +{0:0.0} п.п. в сутки. Реальная доставка делит запасы склада по приоритету пополнения.",
+  "Durable materials at that ceiling: {0}.": "Материалы для доставки по этому пределу: {0}.",
+  "Equipment deliveries continue in combat at a reduced rate.": "В бою доставка оснащения продолжается с пониженной скоростью.",
+  "{0}: {1:0.###}": "{0}: {1:0.###}",
+  "{0} strategic depot: {1:0.0} of {2:0.0} capacity ({3:P0})\nDaily refill from industry & imports: +{4:0.00}\nDaily operations: -{5:0.00}\nDaily durable equipment replacements: -{6:0.00}\nPersonnel losses, durable equipment and ammunition are separate. Deliveries spend real depot materials.": "Склад «{0}»: {1:0.0} из {2:0.0} ({3:P0})\nПополнение производством и импортом: +{4:0.00} в сутки\nРасход на текущие операции: −{5:0.00} в сутки\nЗамена утраченного оснащения: −{6:0.00} в сутки\nПотери людей, оснащение и боеприпасы считаются отдельно. Доставка действительно расходует материалы со склада."
+}

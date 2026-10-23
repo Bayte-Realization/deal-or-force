@@ -544,6 +544,7 @@ public partial class DealOrForceGame : Control
                 case Key.H:
                     if (Input.IsKeyPressed(Key.Ctrl)) DetachSelectedDivisions();
                     else if (Input.IsKeyPressed(Key.Shift)) ReturnSelectedDivisionsToPlan();
+                    else if (key.AltPressed || Input.IsKeyPressed(Key.Alt)) CancelSelectedQueuedOrders();
                     else HaltSelectedDivisions();
                     GetViewport().SetInputAsHandled();
                     return;
