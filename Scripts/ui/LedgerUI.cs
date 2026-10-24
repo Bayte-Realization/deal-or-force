@@ -275,6 +275,8 @@ public partial class DealOrForceGame
         foreach (var (tab, button) in _ledgerTabButtons)
             ApplyLedgerButtonState(button, tab == _ledgerTab);
 
+        MarkLedgerEvents(nation, days);
+
         switch (_ledgerTab)
         {
             case "Economy": ShowLedgerEconomy(nation, samples, days); break;
@@ -284,6 +286,30 @@ public partial class DealOrForceGame
             case "Rankings": ShowLedgerRankings(nation, samples, days); break;
             default: ShowLedgerOverview(nation, samples, days); break;
         }
+    }
+
+    /// <summary>
+    /// The marks on both history charts: what actually happened to this country, on the day it
+    /// happened, in the words the news rail would use.
+    ///
+    /// These are the chronicle's own entries, not a reading of the curve. A chart that decided
+    /// "this dip was the war" would be inventing history; a mark states only what was recorded
+    /// and lets the reader line it up with the dip. Colour is the feed's own importance, so a war
+    /// and a finished building are not drawn as equals.
+    /// </summary>
+    private void MarkLedgerEvents(Nation nation, IReadOnlyList<int> days)
+    {
+        var marks = new List<StrategicChartMark>();
+        foreach (var mark in ChartMarkers.For(_campaign, nation.Id, days))
+        {
+            var at = ChartMarkers.Position(days, mark.Day);
+            if (at < 0f) continue;
+            var colour = mark.Importance >= 3 ? Orange : mark.Importance == 2 ? Gold : Blue;
+            marks.Add(new StrategicChartMark(at, colour,
+                Simulation.Loc.Format("Day {0:N0} · {1}", mark.Day, mark.Text)));
+        }
+        _ledgerLineA.SetMarkers(marks);
+        _ledgerLineB.SetMarkers(marks);
     }
 
     private void ShowLedgerOverview(Nation nation, IReadOnlyList<NationHistorySample> samples, IReadOnlyList<int> days)

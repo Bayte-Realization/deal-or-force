@@ -142,22 +142,34 @@ public static class NewsFeed
             // A covert operation's outcome is private, and news to the one country it names first.
             var told = !entry.Public && entry.ActorId == campaign.Player.Id && CovertOperations.TellsActor(entry.Kind);
             if (!entry.Public && !told || entry.Sequence <= since) continue;
-            // Chronicle snapshots retain their historical text. Translate at read time,
-            // without rewriting the saved entry or renaming a historical identity.
-            string Country(int id, string recorded)
-            {
-                var nation = campaign.NationById(id);
-                return nation is not null && nation.Name == recorded ? nation.DisplayName : CountryNames.Recorded(recorded);
-            }
-            var subject = entry.Kind is "ultimatum_accepted" or "ultimatum_refused"
-                ? campaign.States.FirstOrDefault(state => state.Name == entry.Subject)?.DisplayName ??
-                  CountryNames.Recorded(entry.Subject)
-                : CountryNames.Recorded(entry.Subject);
-            var text = Loc.Format("chronicle." + entry.Kind,
-                Country(entry.ActorId, entry.ActorName), Country(entry.TargetId, entry.TargetName), subject,
-                CountryNames.Recorded(entry.Place));
-            yield return new Line(entry.Sequence, entry.Day, entry.Kind, text, entry.ActorId, entry.TargetId);
+            yield return new Line(entry.Sequence, entry.Day, entry.Kind, TextFor(campaign, entry), entry.ActorId, entry.TargetId);
             if (take > 0 && ++emitted >= take) yield break;
         }
+    }
+
+    /// <summary>
+    /// The sentence for one recorded entry, as the feed would print it.
+    ///
+    /// Public because more than the feed needs the same words: a history chart marks the day an
+    /// event happened and explains the mark in a tooltip, and a second translation path would
+    /// sooner or later disagree with the rail about what happened, or with history about who was
+    /// called what. Chronicle snapshots retain their historical text, so translate at read time
+    /// without rewriting the saved entry or renaming a historical identity.
+    /// </summary>
+    public static string TextFor(Campaign campaign, ChronicleEntry entry)
+    {
+        if (entry is null) return "";
+        string Country(int id, string recorded)
+        {
+            var nation = campaign?.NationById(id);
+            return nation is not null && nation.Name == recorded ? nation.DisplayName : CountryNames.Recorded(recorded);
+        }
+        var subject = entry.Kind is "ultimatum_accepted" or "ultimatum_refused"
+            ? campaign?.States.FirstOrDefault(state => state.Name == entry.Subject)?.DisplayName ??
+              CountryNames.Recorded(entry.Subject)
+            : CountryNames.Recorded(entry.Subject);
+        return Loc.Format("chronicle." + entry.Kind,
+            Country(entry.ActorId, entry.ActorName), Country(entry.TargetId, entry.TargetName), subject,
+            CountryNames.Recorded(entry.Place));
     }
 }

@@ -174,6 +174,7 @@ static class Program
         if (args.Length == 0) MovementPowerStagingTests.Run();
         if (args.Contains("--movement-power-fingerprint-only")) { MovementPowerFingerprintTests.Run(); return; }
         if (args.Contains("--feed-only")) { NewsFeedTests.Run(); return; }
+        if (args.Contains("--chart-marks-only")) { ChartMarkersTests.Run(); return; }
         if (args.Contains("--media-only")) { MediaLibraryTests.Run(); return; }
         if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
         if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
@@ -269,6 +270,7 @@ static class Program
         if (args.Contains("--reload-only")) { PresentationReloadTests.Run(); return; }
         if (args.Contains("--ultimatum-only")) { UltimatumTests.Run(); return; }
         if (args.Contains("--feed-only")) { NewsFeedTests.Run(); return; }
+        if (args.Contains("--chart-marks-only")) { ChartMarkersTests.Run(); return; }
         if (args.Contains("--presentation-diplomacy-only"))
         {
             PresentationReloadTests.Run();
@@ -321,6 +323,7 @@ static class Program
         WarEmergencyTests.Run();
         ForeignAssistanceTests.Run();
         NewsFeedTests.Run();
+        ChartMarkersTests.Run();
         TerrainCatalog.ResetCatalog();
         var terrainErrors = new List<string>();
         TerrainCatalog.ApplyDirectory(GameDataLoader.DataFolder().TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, terrainErrors);

@@ -11,6 +11,15 @@ public enum StrategicChartFormat { Number, MoneyBillions, Millions, Percent, Ind
 public sealed record StrategicChartSeries(string Name, Color Color, IReadOnlyList<float> Values);
 public sealed record StrategicBarEntry(string Name, float Value, Color Color, string Detail = "");
 
+/// <summary>
+/// One recorded event on a history chart's timeline: where it falls as a fraction of the plot's
+/// width, what colour its kind of news is, and the sentence that explains it when hovered.
+/// The fractions come from <see cref="Simulation.ChartMarkers.Position"/>, never from the panel,
+/// because history is sampled by age rather than evenly and a fraction of elapsed time would
+/// drift away from the curve beside it.
+/// </summary>
+public sealed record StrategicChartMark(float At, Color Colour, string Detail = "");
+
 /// <summary>A lightweight, allocation-conscious strategy ledger line chart.</summary>
 public sealed partial class StrategicLineChart : Control
 {
@@ -18,6 +27,7 @@ public sealed partial class StrategicLineChart : Control
     private string _subtitle = "";
     private IReadOnlyList<int> _days = Array.Empty<int>();
     private IReadOnlyList<StrategicChartSeries> _series = Array.Empty<StrategicChartSeries>();
+    private IReadOnlyList<StrategicChartMark> _marks = Array.Empty<StrategicChartMark>();
     private StrategicChartFormat _format;
     private int _hoverIndex = -1;
     private Rect2 _plot;
@@ -44,15 +54,36 @@ public sealed partial class StrategicLineChart : Control
         QueueRedraw();
     }
 
+    /// <summary>
+    /// The events this chart draws on its timeline. Kept apart from <see cref="SetData"/> because
+    /// the marks outlive a tab's series choice: the same war explains the GDP curve, the budget
+    /// curve and the population curve, and every one of them should say so.
+    /// </summary>
+    public void SetMarkers(IReadOnlyList<StrategicChartMark> marks)
+    {
+        _marks = marks ?? Array.Empty<StrategicChartMark>();
+        QueueRedraw();
+    }
+
     public override void _GuiInput(InputEvent inputEvent)
     {
         if (inputEvent is not InputEventMouseMotion motion || _days.Count == 0 || !_plot.HasPoint(motion.Position))
             return;
         var ratio = Mathf.Clamp((motion.Position.X - _plot.Position.X) / MathF.Max(1f, _plot.Size.X), 0f, 1f);
         _hoverIndex = Mathf.Clamp(Mathf.RoundToInt(ratio * (_days.Count - 1)), 0, _days.Count - 1);
-        TooltipText = Ui.Tip(Simulation.Loc.Format("Day {0:N0}\n", _days[_hoverIndex]) +
+        var reading = Simulation.Loc.Format("Day {0:N0}\n", _days[_hoverIndex]) +
                       string.Join("\n", _series.Select(series => Simulation.Loc.Format(
-                          "{0}: {1}", series.Name, Format(ValueAt(series, _hoverIndex), _format)))));
+                          "{0}: {1}", series.Name, Format(ValueAt(series, _hoverIndex), _format))));
+        // A mark is explained where the eye is: the column the pointer is in, not a legend
+        // somewhere else on the panel that would have to be counted against tick marks.
+        var window = MathF.Max(0.01f, _days.Count <= 1 ? 1f : 0.6f / (_days.Count - 1));
+        if (_marks.Count > 0)
+        {
+            var noted = _marks.Where(mark => mark.At >= 0f && MathF.Abs(mark.At - ratio) <= window)
+                .Select(mark => mark.Detail).Where(detail => !string.IsNullOrWhiteSpace(detail)).ToArray();
+            if (noted.Length > 0) reading += "\n" + string.Join("\n", noted.Select(detail => "• " + detail));
+        }
+        TooltipText = Ui.Tip(reading);
         QueueRedraw();
     }
 
@@ -144,6 +175,8 @@ public sealed partial class StrategicLineChart : Control
             }
         }
 
+        DrawMarks(font);
+
         var legendX = 12f;
         var legendY = Size.Y - legendHeight + 14f;
         foreach (var name in names)
@@ -172,6 +205,33 @@ public sealed partial class StrategicLineChart : Control
             var value = ValueAt(series, _hoverIndex);
             DrawCircle(new Vector2(hoverX, ValueY(value, minimum, maximum)), 3.2f, series.Color);
         }
+    }
+
+    /// <summary>
+    /// Recorded events, as a faint line down the plot and a tab at its top edge.
+    ///
+    /// A vertical line on its own reads as another grid line, which is exactly the confusion a
+    /// timeline mark must not cause; the tab says a thing happened here, and the tooltip says
+    /// which thing. Nothing is written across the plot: two events a week apart would otherwise
+    /// overprint each other, and the reader would be reading a fog of captions.
+    /// </summary>
+    private void DrawMarks(Font font)
+    {
+        if (_marks.Count == 0) return;
+        var drawn = 0;
+        foreach (var mark in _marks)
+        {
+            if (mark.At < 0f || mark.At > 1f) continue;
+            var x = _plot.Position.X + _plot.Size.X * mark.At;
+            DrawLine(new Vector2(x, _plot.Position.Y), new Vector2(x, _plot.End.Y),
+                new Color(mark.Colour, 0.32f), 1f);
+            DrawRect(new Rect2(x - 1.5f, _plot.Position.Y - 4f, 3f, 4f), mark.Colour, true);
+            drawn++;
+        }
+        if (drawn == 0) return;
+        DrawString(font, new Vector2(_plot.Position.X + 44, _plot.End.Y + 15),
+            drawn == 1 ? "▲ one recorded event" : $"▲ {drawn} recorded events",
+            HorizontalAlignment.Left, -1, 9, Ui.Colour("chart.tick"));
     }
 
     private Vector2 Point(int index, int count, float value, float minimum, float maximum) => new(
