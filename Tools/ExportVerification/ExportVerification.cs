@@ -311,6 +311,7 @@ public partial class ExportVerification : Node
                 }
                 Check(Loc.Get("chronicle.denunciation") != "chronicle.denunciation", "chronicle caption has a translation");
                 await Capture("map");
+                await VerifyLedgerCharts(game);
             }
         }
         catch (Exception error)
@@ -770,6 +771,52 @@ public partial class ExportVerification : Node
         diaspora.SubjectType = "";
     }
 
+    /// <summary>
+    /// The ledger's two history charts as a reader meets them: a curve of recorded weeks, the
+    /// chronicle's marks along it, and the caption underneath that says what one point is.
+    ///
+    /// The headless stand proves where a mark falls on an unevenly sampled series and what the
+    /// caption says about a forty-year window, and that is where those rules belong. What it
+    /// cannot say is whether the screen a player opens carries either of them, because the
+    /// drawing is the interface and the stand never runs it. So this walks the campaign forward
+    /// until history holds more than one point, opens the screen the Ledger button opens, and
+    /// asks two questions of it: is the curve drawn from many weeks rather than one, and is
+    /// every fact the chronicle recorded inside this window drawn as a mark.
+    ///
+    /// The step is deliberately short. A forty-year window would also exercise the three-speed
+    /// caption the stand already covers, but every day here is added to the release gate's own
+    /// clock, and a check that makes the gate slower is a check somebody disables.
+    /// </summary>
+    private async Task VerifyLedgerCharts(DealOrForceGame game)
+    {
+        var world = game.VerificationWorld;
+        var wasPaused = world.IsPaused;
+        world.IsPaused = true;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        game.Call("ConsoleAdvance", "60");
+        clock.Stop();
+        game.VerificationOpenLedger();
+        await Wait(.35);
+        var samples = world.History.ForNation(world.Player.Id);
+        var days = samples.Select(sample => sample.Day).ToArray();
+        GD.Print("EXPORT_VERIFY history: 60 days took " + clock.ElapsedMilliseconds + " ms, " +
+                 samples.Count + " weekly observation(s)");
+        Check(samples.Count > 1, "the ledger chart is drawn from more than one recorded week");
+        Check(game.VerificationLedgerChartsShown(), "both history charts are on the ledger's overview");
+        var expected = days.Length == 0 ? 0 : world.Chronicle
+            .Read(world.Player.Id, world.Player.Id, world: false)
+            .Count(entry => entry.Day >= days[0] && entry.Day <= days[^1] &&
+                            NewsFeed.Importance(entry.Kind) > 0);
+        var marks = ChartMarkers.For(world, world.Player.Id, days);
+        Check(marks.Count == Math.Min(expected, ChartMarkers.DefaultLimit),
+            "every recorded fact in the chart's window is a mark on it (" + marks.Count + " of " +
+            expected + ")");
+        await Capture("ledger-charts");
+        game.VerificationCloseLedger();
+        await Wait(.2);
+        world.IsPaused = wasPaused;
+    }
+
     private void Check(bool condition, string caption)
     {
         GD.Print((condition ? "PASS " : "FAIL ") + "EXPORT_VERIFY " + caption);
@@ -794,6 +841,13 @@ public partial class DealOrForceGame
 {
     // A narrow internal test seam; not a script-callable command or saved state.
     internal Campaign VerificationWorld => _campaign;
+    // The ledger's own screen and visibility, so the probe can photograph the history charts the
+    // Ledger button opens. Direct calls rather than `Call` names: a probe that reaches a private
+    // C# method by string turns a typo into a runtime error and then into a failed release gate.
+    internal void VerificationOpenLedger() => OpenLedger();
+    internal void VerificationCloseLedger() => CloseLedger();
+    internal bool VerificationLedgerChartsShown() =>
+        _ledgerLayer.Visible && _ledgerLineA.Visible && _ledgerLineB.Visible;
     internal void VerificationEnableFinancialOrders() { if (_observerMode) ToggleObserverMode(); }
     internal void VerificationShowMovement(Nation movement) => ShowMovement(movement);
     internal void VerificationCloseMovement() => _movementPanel.Visible = false;
