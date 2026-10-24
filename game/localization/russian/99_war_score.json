@@ -2,5 +2,6 @@
   "capitals {0}": "столицы {0}",
   "armies {0}": "армии {0}",
   "momentum {0}": "ход войны {0}",
-  "{0} has collapsed: the war is decided.": "{0} рухнула: исход войны решён."
+  "{0} has collapsed: the war is decided.": "{0} рухнула: исход войны решён.",
+  "No part of the war ledger is moving the score.": "Ни одна статья военного счёта сейчас его не двигает."
 }

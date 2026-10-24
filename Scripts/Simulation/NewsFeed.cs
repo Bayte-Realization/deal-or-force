@@ -172,4 +172,72 @@ public static class NewsFeed
             Country(entry.ActorId, entry.ActorName), Country(entry.TargetId, entry.TargetName), subject,
             CountryNames.Recorded(entry.Place));
     }
+
+    /// <summary>
+    /// One extra line for a rail tooltip. Empty below importance 2, and empty when the books
+    /// have nothing further to say. At most two facts already stored: the war ledger's largest
+    /// part, the crisis stage and tension the situation room already names, or the chronicle
+    /// subject and place. It does not record, spend, roll, or open a relation.
+    /// </summary>
+    public static string Context(Campaign campaign, Line line)
+    {
+        if (campaign is null || line is null || Importance(line.Kind) < 2) return "";
+        string first = null, second = null;
+        void Take(string fact)
+        {
+            if (string.IsNullOrEmpty(fact) || second is not null) return;
+            if (first is null) first = fact;
+            else second = fact;
+        }
+
+        if (line.ActorId >= 0 && line.TargetId >= 0 && line.ActorId != line.TargetId)
+        {
+            var war = LatestWar(campaign, line.ActorId, line.TargetId);
+            if (war is not null) Take(WarScoring.LeadingCause(war));
+            var relation = CampaignDiplomacy.Peek(campaign, line.ActorId, line.TargetId);
+            var stage = Escalation.StageOf(relation);
+            if (relation is not null && stage is TensionStage.Crisis or TensionStage.Clashes)
+            {
+                Take(Loc.Format("{0}: {1}.", Loc.Get("Stage"), Loc.Get(StageCaption(stage))));
+                Take(Loc.Format("{0}: {1}.", Loc.Get("Tension"),
+                    relation.Tension.ToString("0.0", Loc.Culture)));
+            }
+        }
+
+        var stored = Stored(campaign, line.Sequence);
+        if (stored is not null)
+        {
+            if (stored.Subject.Length > 0) Take(Loc.Get(stored.Subject));
+            if (stored.Place.Length > 0) Take(Loc.Get(stored.Place));
+        }
+
+        if (first is null) return "";
+        return second is null ? first : first + " " + second;
+    }
+
+    private static string StageCaption(TensionStage stage) => stage switch
+    {
+        TensionStage.Clashes => "Armed clashes",
+        TensionStage.Crisis => "Crisis",
+        _ => ""
+    };
+
+    private static StrategicWar LatestWar(Campaign campaign, int a, int b)
+    {
+        StrategicWar found = null;
+        foreach (var war in campaign.Wars)
+        {
+            if (war is null || !war.Opposes(a, b)) continue;
+            if (found is null || war.Id > found.Id) found = war;
+        }
+        return found;
+    }
+
+    private static ChronicleEntry Stored(Campaign campaign, long sequence)
+    {
+        var entries = campaign.Chronicle.Entries;
+        for (var index = entries.Count - 1; index >= 0; index--)
+            if (entries[index].Sequence == sequence) return entries[index];
+        return null;
+    }
 }

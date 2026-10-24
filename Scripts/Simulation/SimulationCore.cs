@@ -892,6 +892,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
             yield return 0;
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
+            using (SimProfiler.Measure("crisis ladder")) CrisisLadder.Tick(this);
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
             yield return 0;
             // A formation that has been cut off or is standing among its own people can

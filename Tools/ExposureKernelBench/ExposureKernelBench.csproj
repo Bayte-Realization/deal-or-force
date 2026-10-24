@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable><InvariantGlobalization>true</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks><UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Scripts/Simulation/**/*.cs" />
+    <Compile Include="../../Scripts/Modding/ModOperations.cs" />
+    <Compile Include="../../Scripts/Modding/ModContracts.cs" />
+    <Compile Include="../Shared/ExposureReadOracle.cs" />
+    <Compile Include="../FormableTests/ExposureBatchTests.cs" />
+  </ItemGroup>
+  <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
+</Project>

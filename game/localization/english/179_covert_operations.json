@@ -46,5 +46,15 @@
   "chronicle.covert_separatism_done": "Our money has reached the people who want {3} to leave {1}.",
   "chronicle.covert_separatism_suspected": "Money is reaching the people in {3} who want to leave. Nobody knows whose.",
   "chronicle.covert_operation_failed": "Our operation in {1} came to nothing. The agents got away.",
-  "chronicle.covert_operation_abandoned": "Our operation in {1} is abandoned: the network or the ground was lost before the day."
+  "chronicle.covert_operation_abandoned": "Our operation in {1} is abandoned: the network or the ground was lost before the day.",
+  "Arm insurgents": "Arm insurgents",
+  "Smuggle weapons, explosives and tactical radios to rebel cells, underground militias and partisans in the target region. Undermines state control and spurs violent resistance.": "Smuggle weapons, explosives and tactical radios to rebel cells, underground militias and partisans in the target region. Undermines state control and spurs violent resistance.",
+  "Cyber blackout": "Cyber blackout",
+  "Coordinated cyber assault targeting power grids, traffic networks, and municipal supervisory systems in the region. Disables infrastructure and temporarily blinds military logistics.": "Coordinated cyber assault targeting power grids, traffic networks, and municipal supervisory systems in the region. Disables infrastructure and temporarily blinds military logistics.",
+  "chronicle.covert_insurgents_armed": "Our weapons and supplies have reached insurgent cells in {3}, {1}.",
+  "chronicle.covert_insurgents_suspected": "Heavily armed rebel activity has spiked across {3}.",
+  "chronicle.covert_insurgents_exposed": "{0} has intercepted weapon shipments from {1} intended for insurgent groups in {3}.",
+  "chronicle.covert_cyber_blackout": "Our cyber strike has crippled power grids and command relays in {3}, {1}.",
+  "chronicle.covert_cyber_blackout_suspected": "A massive blackout and telemetry outage has paralyzed {3}.",
+  "chronicle.covert_cyber_blackout_exposed": "{0} has traced the cyber blackout in {3} back to military hackers from {1}."
 }

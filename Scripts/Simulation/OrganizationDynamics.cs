@@ -447,7 +447,7 @@ public static class OrganizationDynamics
 
     public static string DetermineOrganizationName(Campaign c, string charterId, Nation founder, Nation second, IReadOnlyList<Nation> members)
     {
-        var kind = charterId switch { "collective_defence" => "pact", "development" => "community", _ => "forum" };
+        var kind = charterId switch { "collective_defence" => "pact", "development" => "community", "commodity_cartel" => "cartel", _ => "forum" };
         var isGlobalOrCrossContinent = !string.Equals(founder.Continent, second.Continent, StringComparison.OrdinalIgnoreCase) ||
                                        founder.Gdp >= c.Defines.AiOrganizationGlobalGdp ||
                                        members.Select(m => m.Continent).Distinct().Count() > 1;
@@ -522,6 +522,16 @@ public static class OrganizationDynamics
                 !InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.eurasian_economic_council"))
             {
                 return "org.name.eurasian_economic_council";
+            }
+        }
+        else if (charterId == "commodity_cartel")
+        {
+            if (isGlobalOrCrossContinent)
+            {
+                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.petroleum_exporting_cartel"))
+                    return "org.name.petroleum_exporting_cartel";
+                if (!InternationalOrganizations.Active(c).Any(o => o.Name == "org.name.critical_minerals_cartel"))
+                    return "org.name.critical_minerals_cartel";
             }
         }
         else // "cooperation"

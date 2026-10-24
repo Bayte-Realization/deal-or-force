@@ -108,6 +108,20 @@ public partial class ExportVerification : Node
                     return;
                 }
                 var lateSaveAt = Array.IndexOf(args, "--verify-late-save");
+                if (developmentProbe && args.Contains("--verify-government-supply-only"))
+                {
+                    await VerifyGovernmentSupply(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-isolated-depot-only"))
+                {
+                    await VerifyIsolatedDepot(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-equipment-replenishment-only"))
                 {
                     await VerifyEquipmentReplenishment(game);

@@ -10,6 +10,7 @@
   "The size of the debt": "Размер долга",
   "The policy rate": "Ключевая ставка",
   "held at its limit": "упёрлось в предел",
+  "Government focus on national security": "Курс правительства на безопасность страны",
   "Policy interest rate": "Ключевая ставка",
   "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.": "Ставка центрального банка. Поднять её — значит замедлить рост цен, а вместе с ними и экономику; это же и цена собственного долга страны, так что занимавшее правительство платит за своё ужесточение дважды.",
 
@@ -19,5 +20,11 @@
   "Prices are rising at {0} a year": "Цены растут на {0} в год",
   "prices falling": "цены падают",
   "above the comfortable rate": "выше комфортного уровня",
-  "comfortable": "в норме"
+  "comfortable": "в норме",
+
+  "Nobody is selling it.": "Никто это не продаёт.",
+  "{0} sells it.": "Продаёт {0}.",
+  "Imports are {0} of supply.": "Импорт — {0} поставок.",
+  "The depot covers {0} days.": "Склада хватит на {0} дн.",
+  "The depot is not drawing it.": "Склад это не расходует."
 }

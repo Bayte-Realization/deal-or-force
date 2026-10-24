@@ -105,9 +105,7 @@ public static class WarWeariness
             {
                 var score = attacking ? war.WarScore : -war.WarScore;
                 var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
-                var mood = score <= defines.FrontCollapsingScore || occupied >= defines.FrontCollapsingOccupied ? "front_collapsing"
-                    : score <= defines.WarGoingBadlyScore || occupied >= defines.WarGoingBadlyOccupied ? "war_going_badly"
-                    : null;
+                var mood = HomeFrontMood(defines, score, occupied);
                 if (mood is null) continue;
                 foreach (var id in war.Side(attacking))
                     if (campaign.NationById(id) is { } side && side.Movement is null)
@@ -122,12 +120,27 @@ public static class WarWeariness
                 PeaceNegotiation.Resolve(campaign, war, war.AttackerId, PeaceTerms.WhitePeace);
                 if (war.Ended) continue;
             }
-            if (age >= defines.PeaceWearinessAfterDays)
+            var weight = LengthWeight(defines, age);
+            if (weight is not null)
             {
-                var weight = age >= defines.AiWearyDays ? "exhausted_by_war" : "long_war";
                 foreach (var id in war.Side(true).Concat(war.Side(false)))
                     if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
                         ModifierSystem.Grant(campaign, fighting, weight, defines.EconomyTickDays * 2);
+            }
+
+            // Anti-war exhaustion & civil pressure when public support collapses
+            foreach (var id in war.Side(true).Concat(war.Side(false)))
+            {
+                if (campaign.NationById(id) is { } fighting && fighting.Movement is null)
+                {
+                    var fatigue = NationalFatigue(campaign, fighting);
+                    if (fatigue > 0.65f)
+                    {
+                        ModifierSystem.Grant(campaign, fighting, "anti_war_protests", defines.EconomyTickDays * 2);
+                        if ((campaign.ElapsedDays + fighting.Id * 13) % 45 == 0)
+                            campaign.Chronicle.Record(campaign, "anti_war_protests", fighting.Id);
+                    }
+                }
             }
             // Whether it has moved: read every half year.
             if (war.ScoreBackDay < 0) { war.ScoreBack = war.WarScore; war.ScoreBackDay = campaign.ElapsedDays; }
@@ -138,8 +151,7 @@ public static class WarWeariness
                 war.ScoreBackDay = campaign.ElapsedDays;
             }
 
-            if (campaign.ElapsedDays - war.StartedDay < defines.PeaceForcedEndDays) continue;
-            if (PlayedByAnyone(campaign, war) || war.PendingOfferFromId >= 0) continue;
+            if (!ExhaustionPeaceDue(campaign, war)) continue;
             var proposer = war.WarScore >= 0f ? war.AttackerId : war.DefenderId;
             PeaceNegotiation.Resolve(campaign, war, proposer, StalemateTerms(campaign, war));
             if (war.Ended) war.PeaceSummary = Loc.Format("Ended of exhaustion after {0} years: {1}",
@@ -264,5 +276,135 @@ public static class WarWeariness
         var delay = Escalation.StalemateDelay(campaign, war);
         if (age >= defines.AiWearyDays + delay) return true;
         return !winning && war.Stalled && age >= defines.AiStalemateDays + delay;
+    }
+
+    /// <summary>The home-front modifier Tick grants a side, or null when the front is holding.</summary>
+    public static string HomeFrontMood(Defines defines, float score, float occupied)
+    {
+        if (defines is null) return null;
+        if (score <= defines.FrontCollapsingScore || occupied >= defines.FrontCollapsingOccupied)
+            return "front_collapsing";
+        if (score <= defines.WarGoingBadlyScore || occupied >= defines.WarGoingBadlyOccupied)
+            return "war_going_badly";
+        return null;
+    }
+
+    /// <summary>The length modifier Tick grants both sides, or null before the war is long.</summary>
+    public static string LengthWeight(Defines defines, int age)
+    {
+        if (defines is null || age < defines.PeaceWearinessAfterDays) return null;
+        return age >= defines.AiWearyDays ? "exhausted_by_war" : "long_war";
+    }
+
+    /// <summary>
+    /// The same faster call-up <see cref="Mobilise"/> applies once this country's own ground
+    /// is being taken and it still has room under the mobilisation ceiling.
+    /// </summary>
+    public static bool FasterCallUp(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.Movement is not null || nation.Population <= 0) return false;
+        if (!Overrun(campaign, nation)) return false;
+        var ceiling = nation.Population * campaign.Defines.MobilisationCeilingShare;
+        return nation.ManpowerReserve < ceiling;
+    }
+
+    /// <summary>The exhaustion end Tick writes when nobody being played is in the war.</summary>
+    public static bool ExhaustionPeaceDue(Campaign campaign, StrategicWar war)
+    {
+        if (campaign is null || war is null || war.Ended) return false;
+        if (campaign.ElapsedDays - war.StartedDay < campaign.Defines.PeaceForcedEndDays) return false;
+        return !PlayedByAnyone(campaign, war) && war.PendingOfferFromId < 0;
+    }
+
+    /// <summary>Whether Tick would end this war itself: no contact, or exhaustion with no player in it.</summary>
+    public static bool PeaceCanBeForced(Campaign campaign, StrategicWar war) =>
+        NoContactPeaceReady(campaign, war) || ExhaustionPeaceDue(campaign, war);
+
+    /// <summary>
+    /// The war-weariness sentences already decided for this country. Empty at peace.
+    /// Reading them does not grant a modifier, call anyone up, or end the war.
+    /// </summary>
+    public static string Explain(Campaign campaign, Nation nation) => Wear(campaign, nation).Text;
+
+    /// <summary>
+    /// What belongs beside the war-support percent: the weariness sentences, and one coup
+    /// line when <see cref="Coups.Notice"/> already has one. Defections expose no read-only
+    /// line, so nothing here predicts a desertion.
+    /// </summary>
+    public static (string Text, int Level) BesideWarSupport(Campaign campaign, Nation nation)
+    {
+        var wear = Wear(campaign, nation);
+        var coup = Coups.Notice(campaign, nation);
+        if (coup.Text.Length == 0) return wear;
+        if (wear.Text.Length == 0) return coup;
+        return (wear.Text + "\n" + coup.Text, wear.Level > coup.Level ? wear.Level : coup.Level);
+    }
+
+    static (string Text, int Level) Wear(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.Movement is not null) return ("", 0);
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) return ("", 0);
+        var defines = campaign.Defines;
+        string mood = null;
+        string length = null;
+        var forced = false;
+        var atWar = false;
+        var wars = campaign.Wars;
+        for (var i = 0; i < wars.Count; i++)
+        {
+            var war = wars[i];
+            if (war is null || war.Ended || !war.Involves(nation.Id)) continue;
+            atWar = true;
+            var attacking = war.IsAttacking(nation.Id);
+            var score = attacking ? war.WarScore : -war.WarScore;
+            var occupied = attacking ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
+            var nextMood = HomeFrontMood(defines, score, occupied);
+            if (Rank(nextMood) > Rank(mood)) mood = nextMood;
+            var nextLength = LengthWeight(defines, campaign.ElapsedDays - war.StartedDay);
+            if (Rank(nextLength) > Rank(length)) length = nextLength;
+            if (PeaceCanBeForced(campaign, war)) forced = true;
+        }
+        if (!atWar) return ("", 0);
+
+        var lines = new List<string>(4);
+        var level = 0;
+        void Add(string line, int rank)
+        {
+            if (line.Length == 0) return;
+            lines.Add(line);
+            if (rank > level) level = rank;
+        }
+        Add(Sentence(mood switch
+        {
+            "front_collapsing" => "The front is collapsing",
+            "war_going_badly" => "The war is going badly",
+            _ => ""
+        }), mood == "front_collapsing" ? 2 : 1);
+        Add(Sentence(length switch
+        {
+            "exhausted_by_war" => "Exhausted by war",
+            "long_war" => "A long war",
+            _ => ""
+        }), 1);
+        if (FasterCallUp(campaign, nation))
+            Add(Sentence("Its own ground is being taken, so call-up is running faster."), 1);
+        if (forced) Add(Sentence("A peace can be forced."), 1);
+        return lines.Count == 0 ? ("", 0) : (string.Join("\n", lines), level);
+    }
+
+    static int Rank(string mark) => mark switch
+    {
+        "front_collapsing" or "exhausted_by_war" => 2,
+        "war_going_badly" or "long_war" => 1,
+        _ => 0
+    };
+
+    static string Sentence(string key)
+    {
+        if (string.IsNullOrEmpty(key)) return "";
+        var text = Loc.Get(key);
+        if (text.Length == 0) return "";
+        var end = text[text.Length - 1];
+        return end is '.' or '!' or '?' or '…' ? text : text + ".";
     }
 }

@@ -634,6 +634,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:surface layout")) UpdateSurfaceCounterDensity();
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
+        using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
         if (_mapApplied && _campaign is not null &&

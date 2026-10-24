@@ -28,7 +28,8 @@ static class WorkerBackendTests
             : new[] { "--worker-fixture", kind };
         var good = new WorkerModBackend(path, Args("ok"), 2500, 7, logs.Add);
         good.Hook(c, "campaign_created");
-        Check(!good.Disabled && logs.Contains("fixture"), "real process receives a snapshot and responds");
+        Check(!good.Disabled && logs.Contains("fixture"), "real process receives a snapshot and responds: " +
+            string.Join(" | ", logs));
         Check(!c.FeatureEnabled("aviation"), "response queues, does not mutate mid-hook");
         c.Commands.ApplyAll(c);
         Check(c.FeatureEnabled("aviation"), "validated command applies on the campaign boundary");

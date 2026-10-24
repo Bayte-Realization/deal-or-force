@@ -1,0 +1,15 @@
+{
+  "PARLIAMENT & CAUCUSES": "ПАРЛАМЕНТ И ФРАКЦИИ",
+  "Ruling Majority": "Правящее большинство",
+  "Opposition Coalition": "Оппозиционная коалиция",
+  "Anti-War Caucus": "Антивоенная фракция",
+  "Peace Mandate Active": "Действует мирный мандат",
+  "Military Budget Restraint": "Ограничение военного бюджета",
+  "Parliamentary Discontent": "Недовольство парламента",
+  "Priority Demand: {0}": "Приоритетное требование: {0}",
+  "chronicle.parliament_peace_mandate": "{0}: Парламент принял антивоенную резолюцию с требованием немедленных мирных переговоров.",
+  "chronicle.parliament_minister_supported": "{0}: Парламент утвердил назначение в министерство ({3}) при поддержке большинства фракций.",
+  "chronicle.parliament_law_supported": "{0}: Парламент принял закон «{3}» на основе межфракционного консенсуса.",
+  "modifier.parliament_anti_war_budget": "Парламентское ограничение военного бюджета",
+  "modifier.parliament_peace_mandate": "Парламентский мирный мандат"
+}

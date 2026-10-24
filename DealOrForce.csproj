@@ -21,7 +21,7 @@
     -->
     <!-- The portable language kit contains independent examples and build/test hosts.
          Like Tools, it must not be globbed into the game's C# assembly or content. -->
-    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;LanguageKit\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**;Tools\**;LanguageKit\**;mods\**;addons\**;.godot\**;art\**;press\**;demo\**;**\.kilo\**;**\.fennara\**;**\.git\**;**\.devin\**;tmp_playtest\**;tmp_logs\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <!--

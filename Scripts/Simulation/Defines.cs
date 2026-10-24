@@ -1019,6 +1019,9 @@ public sealed partial class Defines
 	/// <summary>Maximum number of friendly provinces a land supply network can trace from home.</summary>
 	public int SupplyTraceRange { get; set; } = 20;
 
+	/// <summary>Days a cut-off grouping lives on what it carried before supply and organisation are spent.</summary>
+	public int SupplyCutoffDays { get; set; } = 14;
+
 	/// <summary>War score at which the losing side gives in.</summary>
 	// ---- Peace conference: what a demand costs against the war score that buys it ----
 

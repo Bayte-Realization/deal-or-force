@@ -1,5 +1,7 @@
 {
   "Chronicle": "Chronicle",
+  "Campaign chronicle": "Campaign chronicle",
+  "Nothing has been written yet.": "Nothing has been written yet.",
   "Vulnerabilities": "Vulnerabilities",
   "Recorded events in the world and this country.": "Recorded events in the world and this country.",
   "Import dependence and concentration of named suppliers.": "Import dependence and concentration of named suppliers.",
@@ -35,5 +37,6 @@
   "chronicle.deal_signed": "{0} strikes a bargain with {1}: {2}.",
   "chronicle.accession_signed": "{0} signs the accession treaty: {2}.",
   "chronicle.accession_declined": "{0} declines the invitation into {2}.",
-  "chronicle.shard_consolidated": "{0} unites with kindred state {2} into a single nation."
+  "chronicle.shard_consolidated": "{0} unites with kindred state {2} into a single nation.",
+  "chronicle.anti_war_protests": "Anti-war protests and strikes break out across {0} as casualties mount."
 }

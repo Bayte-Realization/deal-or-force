@@ -1,0 +1,8 @@
+{
+  "ParliamentEnabled": true,
+  "ParliamentReviewDays": 30,
+  "ParliamentAntiWarThreshold": 0.40,
+  "ParliamentPeaceMandateFatigue": 0.45,
+  "ParliamentBudgetCutShare": 0.15,
+  "ParliamentDiscontentStabilityPenalty": 0.015
+}

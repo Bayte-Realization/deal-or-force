@@ -80,5 +80,13 @@
   "chronicle.border_war": "Пограничная война: {0} нападает на страну {1} после месяцев перестрелок на границе.",
   "{0}–{1} Border War": "Пограничная война: {0} - {1}",
   "Border war: the ceasefire on the old lines falls due in {0} days.": "Пограничная война: перемирие на прежних линиях наступит через {0} дн.",
-  "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it.": "Пограничная война: её ведут только эти двое, союзников не зовут, и она кончается перемирием на прежних линиях в назначенный срок - если никто не откажется."
+  "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it.": "Пограничная война: её ведут только эти двое, союзников не зовут, и она кончается перемирием на прежних линиях в назначенный срок - если никто не откажется.",
+  "chronicle.crisis_mediated": "Великая держава {0} успешно выступила посредником между странами {1} и {2}, сняв остроту кризиса.",
+  "chronicle.great_power_intervened": "Великая держава {0} вмешалась в кризис между странами {1} и {2}, вынеся предупреждение о сдерживании.",
+  "Great Power mediation is under way.": "Идёт посредничество великой державы.",
+  "Only a recognized Great Power can mediate crises.": "Только признанная великая держава может быть посредником в кризисах.",
+  "Only a recognized Great Power can intervene in crises.": "Только признанная великая держава может вмешиваться в кризисы.",
+  "Great Power intervention is already active.": "Вмешательство великой державы уже активно.",
+  "Relations are not in crisis.": "Отношения не находятся в состоянии кризиса.",
+  "The last mediation ended too recently: {0} days to wait.": "Прошлое посредничество завершилось слишком недавно: осталось ждать {0} дн."
 }

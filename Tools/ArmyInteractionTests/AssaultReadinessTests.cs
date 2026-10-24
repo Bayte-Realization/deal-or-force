@@ -274,8 +274,15 @@ static class AssaultReadinessTests
             Strength = 1, Organisation = 1 });
         c.Wars.Add(new StrategicWar { Id = 12, AttackerId = 0, DefenderId = 1 });
         var actual = CampaignFingerprint.Of(c);
-        Check(actual == 0x0BEDBA3316932DC6UL,
+        // 24 October: the crisis feature and its two command registrations are hashed.
+        // The differential probe removes exactly those entries and restores the old value.
+        Check(actual == 0xA6BA8874BAC1AA0FUL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
+        c.Defines.Features.Remove("crisis_ladder");
+        c.Defines.FeatureCommands.Remove("MediateCrisisCommand");
+        c.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
+        Check(CampaignFingerprint.Of(c) == 0x0BEDBA3316932DC6UL,
+            "default assault floors retain the strict legacy golden without new crisis metadata");
     }
 
     static Army Unit(Campaign c, int id, int nation, int province, ArmyOrder order)

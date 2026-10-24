@@ -14,6 +14,8 @@
 
   // Supply
   "SupplyTraceRange": 20,
+  // Days a cut-off grouping lives on what it carried before supply and organisation are spent.
+  "SupplyCutoffDays": 14,
   "BaseStateSupplyThroughput": 6,
   "SupplyThroughputPerDivision": 0.12,
   "SupplyPerInfrastructure": 2.2,

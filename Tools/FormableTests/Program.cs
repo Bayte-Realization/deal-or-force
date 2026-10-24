@@ -10,11 +10,27 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--exposure-batch-only")) { ExposureBatchTests.Run(); return; }
+        if (args.Length == 0) ExposureBatchTests.Run();
         if (args.Contains("--equipment-replenishment-only")) { EquipmentReplenishmentTests.Run(); return; }
         if (args.Length == 0) EquipmentReplenishmentTests.Run();
         if (args.Contains("--covert-politics-only")) { CovertPoliticalTests.Run(); return; }
         if (args.Length == 0) CovertPoliticalTests.Run();
+        if (args.Contains("--government-supply-only")) { GovernmentSupplyTests.Run(); return; }
+        if (args.Length == 0) GovernmentSupplyTests.Run();
         if (args.Contains("--supply-network-only")) { SupplyNetworkTests.Run(); return; }
+        if (args.Contains("--isolated-depot-only")) { IsolatedDepotTests.Run(); return; }
+        if (args.Length == 0) IsolatedDepotTests.Run();
+        if (args.Contains("--supply-days-only")) { SupplyDaysTests.Run(); return; }
+        if (args.Length == 0) SupplyDaysTests.Run();
+        if (args.Contains("--news-facts-only")) { NewsFactTests.Run(); return; }
+        if (args.Length == 0) NewsFactTests.Run();
+        if (args.Contains("--campaign-chronicle-only")) { CampaignChronicleTests.Run(); return; }
+        if (args.Length == 0) CampaignChronicleTests.Run();
+        if (args.Contains("--strategic-cover-only")) { StrategicCoverTests.Run(); return; }
+        if (args.Length == 0) StrategicCoverTests.Run();
+        if (args.Contains("--war-rear-only")) { WarRearTests.Run(); return; }
+        if (args.Length == 0) WarRearTests.Run();
         if (args.Length == 0) SupplyNetworkTests.Run();
         if (args.Contains("--four-systems-only")) { FourSystemsIntegrationTests.RunAll(); return; }
         if (args.Length == 0) FourSystemsIntegrationTests.RunAll();
@@ -139,6 +155,18 @@ static class Program
         if (args.Length == 0) TerritorialDealProtectionTests.Run();
         if (args.Contains("--negotiations-only")) { DealNegotiationTests.Run(); return; }
         if (args.Contains("--situation-only")) { SituationReportTests.Run(); return; }
+        if (args.Contains("--situation-standoff-only")) { SituationStandoffTests.Run(); return; }
+        if (args.Length == 0) SituationStandoffTests.Run();
+        if (args.Contains("--hybrid-war-only")) { HybridWarBriefTests.Run(); return; }
+        if (args.Length == 0) HybridWarBriefTests.Run();
+        if (args.Contains("--crisis-ladder-only")) { CrisisLadderTests.Run(); return; }
+        if (args.Length == 0) CrisisLadderTests.Run();
+        if (args.Contains("--resource-cartel-only")) { ResourceCartelTests.Run(); return; }
+        if (args.Length == 0) ResourceCartelTests.Run();
+        if (args.Contains("--parliament-only")) { ParliamentaryPoliticsTests.Run(); return; }
+        if (args.Length == 0) ParliamentaryPoliticsTests.Run();
+        if (args.Contains("--peace-rules-only")) { PeaceRulesDifferentialTests.Run(); return; }
+        if (args.Length == 0) PeaceRulesDifferentialTests.Run();
         if (args.Contains("--crisis-grant-only")) { CrisisGrantTests.Run(); return; }
         if (args.Contains("--war-score-index-only")) { WarScoreIndexTests.Run(); return; }
         if (args.Contains("--supply-hedge-only")) { SupplyHedgeTests.Run(); return; }

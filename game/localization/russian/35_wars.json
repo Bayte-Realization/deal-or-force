@@ -49,5 +49,8 @@
   "Only two sides of the same war can exchange prisoners.": "Обмениваться пленными могут только противники в одной войне.",
   "The enemy holds none of our men.": "У противника нет наших пленных.",
   "We hold none of theirs to offer.": "Нам некого предложить взамен.",
-  "The last exchange was too recent; the next can be arranged in {0} day(s).": "Последний обмен был недавно; следующий возможен через {0} дн."
+  "The last exchange was too recent; the next can be arranged in {0} day(s).": "Последний обмен был недавно; следующий возможен через {0} дн.",
+  "War support does not apply while the country is at peace.": "Поддержка войны не действует, пока страна не воюет.",
+  "At war. This week's reasons for war support have not been drawn yet.": "Идёт война. Причины поддержки войны за эту неделю ещё не подведены.",
+  "War support, this week.": "Поддержка войны за эту неделю."
 }

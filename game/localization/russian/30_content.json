@@ -662,5 +662,9 @@
   "chronicle.culture_union": "{0} и {2} стали одной страной — по согласию обоих правительств.",
   "Unification Proposal from {0}": "Предложение об объединении от {0}",
   "{0} invites our kindred peoples to merge our lands, armed forces, and institutions into a single unified sovereign state.": "{0} приглашает наш родный народ слить наши земли, вооружённые силы и институты в единое суверенное государство.",
-  "Wartime government relocation": "Военная эвакуация правительства"
+  "Wartime government relocation": "Военная эвакуация правительства",
+  "chronicle.crisis_opened": "{0} и {1}: начинается дипломатический кризис.",
+  "chronicle.crisis_conference": "{3} созывает конференцию для урегулирования кризиса между {0} и {1}.",
+  "chronicle.crisis_compromise": "Кризис между {0} и {1} завершился компромиссом.",
+  "chronicle.crisis_guarantee": "{0} гарантирует безопасность {1} в ходе кризиса с {2}."
 }

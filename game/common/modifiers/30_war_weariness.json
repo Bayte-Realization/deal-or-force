@@ -47,5 +47,17 @@
       "output": -0.05,
       "recruitment_speed": -0.15
     }
+  },
+  "anti_war_protests": {
+    "name": "Anti-war protests and strikes",
+    "description": "Crowds in the capital demand an immediate ceasefire. Workers in key plants strike as public patience runs out.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.015,
+      "stability_weekly": -0.004,
+      "output": -0.08,
+      "recruitment_speed": -0.25
+    }
   }
 }

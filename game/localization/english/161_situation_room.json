@@ -101,6 +101,14 @@
   "Prolonged armed clashes can become a border war. Talks can reduce tension; success is not guaranteed.": "Prolonged armed clashes can become a border war. Talks can reduce tension; success is not guaranteed.",
   "Tension": "Tension",
   "Inspect escalation and talks": "Inspect escalation and talks",
+  "{0}: {1}.": "{0}: {1}.",
+  "Talks run for another {0} days.": "Talks run for another {0} days.",
+  "The last incident was {0}.": "The last incident was {0}.",
+  "Stage": "Stage",
+  "Talks": "Talks",
+  "Ceasefire due": "Ceasefire due",
+  "Last incident": "Last incident",
+  "Open the deal inbox": "Open the deal inbox",
   "Construction capacity is idle": "Construction capacity is idle",
   "No construction project is running in your country.": "No construction project is running in your country.",
   "Nothing is being built.": "Nothing is being built.",
@@ -128,5 +136,5 @@
   "Open the responsible screen to review actions. Esc returns to this room.": "Open the responsible screen to review actions. Esc returns to this room.",
   "The responsible screen is disabled by this scenario or interface configuration.": "The responsible screen is disabled by this scenario or interface configuration.",
   "handbook.situation_room.title": "Situation room",
-  "handbook.situation_room.body": "The situation room connects current problems and opportunities to the screens where you can respond.\n\n## Reading the assessment\n- Critical: consequences are already present, or a real response deadline is near.\n- Warning: a risk or deteriorating condition, not a guaranteed event.\n- Awaiting your answer: an offer or vote that needs your choice.\n- Opportunity: unused capacity, not a crisis.\n\nEach issue shows recorded causes, current figures and possible consequences. The bottom action opens the responsible screen; it never signs, spends or votes by itself. Esc returns from that screen to the room. With a search field focused, the first Esc releases focus.\n\nLetters and votes have actual deadlines. A civil-war chance is a weekly risk, and cash runway is an estimate at the unchanged current budget without further borrowing. Neither is a guaranteed event date.\n\nA new critical condition produces one quiet cue. Existing problems on load, language changes and changing figures do not create another alarm. Thresholds, layout, audio and this article are moddable."
+  "handbook.situation_room.body": "The situation room connects current problems and opportunities to the screens where you can respond.\n\n## Reading the assessment\n- Critical: consequences are already present, or a real response deadline is near.\n- Warning: a risk or deteriorating condition, not a guaranteed event.\n- Awaiting your answer: an offer or vote that needs your choice.\n- Opportunity: unused capacity, not a crisis.\n\nEach issue shows recorded causes, current figures and possible consequences. The bottom action opens the responsible screen. It does not sign a treaty or cast a vote. A standoff's Hold talks button spends the talks cost and starts that round; every other button only opens a screen. Esc returns from that screen to the room. With a search field focused, the first Esc releases focus.\n\nLetters and votes have actual deadlines. A civil-war chance is a weekly risk, and cash runway is an estimate at the unchanged current budget without further borrowing. Neither is a guaranteed event date.\n\nA new critical condition produces one quiet cue. Existing problems on load, language changes and changing figures do not create another alarm. Thresholds, layout, audio and this article are moddable."
 }

@@ -80,5 +80,13 @@
   "chronicle.border_war": "Border war: {0} attacks {1} after months of shooting along the border.",
   "{0}–{1} Border War": "{0}–{1} Border War",
   "Border war: the ceasefire on the old lines falls due in {0} days.": "Border war: the ceasefire on the old lines falls due in {0} days.",
-  "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it.": "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it."
+  "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it.": "A border war: fought by the two of them alone, with nobody's allies called, and ended by a ceasefire on the old lines when it falls due - unless somebody refuses it.",
+  "chronicle.crisis_mediated": "Great Power {0} successfully mediates between {1} and {2}, de-escalating the crisis.",
+  "chronicle.great_power_intervened": "Great Power {0} intervenes in the crisis between {1} and {2}, issuing a deterrence warning.",
+  "Great Power mediation is under way.": "Great Power mediation is under way.",
+  "Only a recognized Great Power can mediate crises.": "Only a recognized Great Power can mediate crises.",
+  "Only a recognized Great Power can intervene in crises.": "Only a recognized Great Power can intervene in crises.",
+  "Great Power intervention is already active.": "Great Power intervention is already active.",
+  "Relations are not in crisis.": "Relations are not in crisis.",
+  "The last mediation ended too recently: {0} days to wait.": "The last mediation ended too recently: {0} days to wait."
 }

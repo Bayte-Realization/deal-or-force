@@ -68,6 +68,49 @@ static class WarScoreIndexTests
         Check(war.Collapsed == 1 && war.WarScore == campaign.Defines.WarScoreMax && Near(war.OccupationScore, 50f),
             "occupying the defender's own ground, and not the neutral pore, collapses the score to the ceiling");
         Check(WarScoring.StateIndexBuilds == built + 4, "a new occupation rebuilds the lists once, not once per province of the world");
+        FSharpDifferentialTests();
+    }
+
+    static void FSharpDifferentialTests()
+    {
+        Check(WarScoreRulesHook.IsInstalled, "F# war score rules hook is installed");
+        var defines = new Defines();
+        var occupations = new[] { 0f, 0.25f, 0.59f, 0.60f, 0.89f, 0.90f, 1.0f };
+        var strengths = new[] { 0f, 0.10f, 0.15f, 0.16f, 0.50f, 1.0f };
+        var scores = new[] { -150f, -100f, -50f, 0f, 25f, 100f, 150f };
+
+        var cases = 0;
+        foreach (var defOcc in occupations)
+        foreach (var defStr in strengths)
+        foreach (var atkOcc in occupations)
+        foreach (var atkStr in strengths)
+        foreach (var sc in scores)
+        {
+            cases++;
+            // C# baseline evaluation
+            var expectedDefCollapsed = defOcc >= defines.WarScoreCollapseOccupation ||
+                (defOcc >= defines.WarScoreCollapseOccupationBroken && defStr <= defines.WarScoreCollapseArmy);
+            var expectedAtkCollapsed = atkOcc >= defines.WarScoreCollapseOccupation ||
+                (atkOcc >= defines.WarScoreCollapseOccupationBroken && atkStr <= defines.WarScoreCollapseArmy);
+            var expectedCollapsed = expectedDefCollapsed ? 1 : expectedAtkCollapsed ? -1 : 0;
+            var low = MathF.Min(defines.WarScoreMin, defines.WarScoreMax);
+            var high = MathF.Max(defines.WarScoreMin, defines.WarScoreMax);
+            var expectedScore = expectedCollapsed > 0 ? high : expectedCollapsed < 0 ? low : WarScoring.ClampScore(defines, sc);
+
+            // F# evaluation
+            var ok = WarScoreRulesHook.TryEvaluate(
+                sc, 0f, 0f, 0f, 0f, 0f, 0f,
+                defOcc, defStr, atkOcc, atkStr,
+                defines.WarScoreCollapseOccupation, defines.WarScoreCollapseOccupationBroken, defines.WarScoreCollapseArmy,
+                defines.WarScoreMin, defines.WarScoreMax,
+                out var collapsed, out var actualScore);
+
+            if (!ok || collapsed != expectedCollapsed || MathF.Abs(actualScore - expectedScore) > 0.0001f)
+            {
+                throw new Exception($"F# WarScore mismatch at case {cases}: expected ({expectedCollapsed}, {expectedScore}), got ({collapsed}, {actualScore})");
+            }
+        }
+        Check(cases > 10000, $"F# war score rules match C# across {cases} combinations");
     }
 
     static bool Near(float value, float expected) => MathF.Abs(value - expected) < 0.05f;

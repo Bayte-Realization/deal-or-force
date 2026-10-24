@@ -185,7 +185,7 @@ public static class MilitaryAccess
 
     internal static void Provision(Army army)
     {
-        army.CutOff = false; army.SupplyDistance = 0; army.SupplySourceStateMapIndex = -1;
+        army.CutOff = false; army.DaysCutOff = 0; army.SupplyDistance = 0; army.SupplySourceStateMapIndex = -1;
         army.SupplyCongestion = 1f; army.SupplyLevel = MathF.Max(army.SupplyLevel, .65f);
     }
 

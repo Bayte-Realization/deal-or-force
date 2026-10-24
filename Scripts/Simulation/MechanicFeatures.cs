@@ -19,7 +19,7 @@ public sealed partial class Defines
         ["historical_norms"] = true, ["public_reputation"] = true, ["seasons"] = true, ["seasonal_water"] = true, ["seasonal_roads"] = true, ["weather"] = true, ["movement_lifecycle"] = true,
         ["public_debt"] = true, ["laws"] = true, ["political_agendas"] = true, ["national_courses"] = true, ["deals"] = true,
         ["resident_awareness"] = true, ["domestic_crises"] = true, ["political_cohorts"] = true, ["federal_fracture"] = true, ["organizations"] = true,
-        ["escalation"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true, ["coups"] = true,
+        ["escalation"] = true, ["crisis_ladder"] = true, ["proxy_wars"] = true, ["de_facto_factions"] = true, ["coups"] = true,
         ["foreign_assistance"] = true, ["government_promises"] = true, ["strategic_goals"] = true, ["state_identity"] = true,
         ["tactical_doctrines"] = true, ["strategic_doctrines"] = true,
         // The union and demographic cycles ship enabled; the data files 78 and 79 declare
@@ -154,7 +154,7 @@ public static class MechanicFeatures
         Bind("war_damage", "RebuildRegionCommand");
         Bind("public_reputation", "StartPublicOutreachCommand");
         Bind("public_debt", "ManageDebtCommand");
-        Bind("escalation", "HoldTalksCommand");
+        Bind("escalation", "HoldTalksCommand", "MediateCrisisCommand", "InterveneCrisisCommand");
         Bind("proxy_wars", "SponsorWarCommand");
         Bind("deals", "ProposeDealCommand", "RespondDealCommand", "AskForCorridorCommand");
         Bind("foreign_assistance", "RequestForeignAssistanceCommand", "RespondForeignAssistanceCommand");

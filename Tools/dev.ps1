@@ -22,6 +22,10 @@
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File Tools\dev.ps1 -Game -CaptureDirectory C:\shots
     Play the scripted campaign in a real window and write screenshots to C:\shots.
+
+.EXAMPLE
+    ./Tools/dev.ps1 -Game -GameArgs '--verify-isolated-depot-only' -CaptureDirectory build/depot-probe
+    Run a narrow development probe through the same engine/version and result checks.
 #>
 param(
     [switch]$Build,
@@ -29,6 +33,7 @@ param(
     [string]$TestArgs = '',
     [switch]$Import,
     [switch]$Game,
+    [string[]]$GameArgs = @(),
     [switch]$Headless,
     [string]$CaptureDirectory,
     [string]$Godot,
@@ -132,6 +137,7 @@ function Invoke-Game {
     $arguments = @('--path', $project)
     if ($Headless) { $arguments = @('--headless') + $arguments }
     $arguments += @('--', '--verify-build', '--verify-development', '--verify-build-output', $captures)
+    $arguments += $GameArgs
     $log = Join-Path $captures 'run.log'
     $exit = Invoke-LoggedNative (Find-MatchingGodot) $arguments $log
     $result = Select-String -Path $log -Pattern 'EXPORT_VERIFY failures=(\d+)' | Select-Object -Last 1

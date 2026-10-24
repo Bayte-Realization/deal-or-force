@@ -112,6 +112,9 @@ public partial class DealOrForceGame
                 : _campaign.Chronicle.Entries[^1].Sequence));
         if (fingerprint == _strategicHudFingerprint) return;
         _strategicHudFingerprint = fingerprint;
+        // The chronicle's newest sequence is in the fingerprint, so a stop-press entry is
+        // always news by the time this runs.
+        RefreshTeletype();
         if (_outliner.FindChild("OutlinerToggle", true, false) is Button toggle)
             toggle.Text = Tr("Situation report") + (_outlinerCollapsed ? "  +" : "  −");
 
@@ -216,9 +219,12 @@ public partial class DealOrForceGame
                      (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 3), 1, 12)))
         {
             NewsFeed.Line captured = line;
-            AddOutlinerButton(line.Text, () => FocusNews(captured),
-                line.Text + System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day)
-                + System.Environment.NewLine + Tr("Show it on the map."));
+            var facts = NewsFeed.Context(_campaign, captured);
+            var tip = line.Text;
+            if (facts.Length > 0) tip += System.Environment.NewLine + facts;
+            tip += System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day)
+                + System.Environment.NewLine + Tr("Show it on the map.");
+            AddOutlinerButton(line.Text, () => FocusNews(captured), tip);
             if (_outlinerGroupRows.GetChild(_outlinerGroupRows.GetChildCount() - 1) is Button news)
             {
                 news.Name = "WorldNews_" + line.Sequence;

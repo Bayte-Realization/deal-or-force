@@ -46,5 +46,15 @@
   "chronicle.covert_separatism_done": "Наши деньги дошли до тех, кто хочет, чтобы регион {3} вышел из состава страны {1}.",
   "chronicle.covert_separatism_suspected": "В регион {3} идут деньги тем, кто хочет отделения. Кто платит — неизвестно.",
   "chronicle.covert_operation_failed": "Наша операция в стране {1} ничего не дала. Агенты ушли.",
-  "chronicle.covert_operation_abandoned": "Наша операция в стране {1} брошена: сеть или регион потеряны до срока."
+  "chronicle.covert_operation_abandoned": "Наша операция в стране {1} брошена: сеть или регион потеряны до срока.",
+  "Arm insurgents": "Вооружение повстанцев",
+  "Smuggle weapons, explosives and tactical radios to rebel cells, underground militias and partisans in the target region. Undermines state control and spurs violent resistance.": "Контрабанда оружия, взрывчатки и средств связи ячейкам повстанцев, подпольным ополчениям и партизанам в регионе. Подрывает государственный контроль и разжигает вооружённое сопротивление.",
+  "Cyber blackout": "Киберотключение",
+  "Coordinated cyber assault targeting power grids, traffic networks, and municipal supervisory systems in the region. Disables infrastructure and temporarily blinds military logistics.": "Скоординированная кибератака на электросети, транспортную инфраструктуру и диспетчерские системы региона. Выводит из строя инфраструктуру и парализует военную логистику.",
+  "chronicle.covert_insurgents_armed": "Наше оружие и снаряжение доставлены повстанческим ячейкам в регионе {3} ({1}).",
+  "chronicle.covert_insurgents_suspected": "В регионе {3} зафиксирован резкий всплеск активности хорошо вооружённых повстанцев.",
+  "chronicle.covert_insurgents_exposed": "{0}: перехвачены поставки оружия от страны {1}, предназначавшиеся повстанцам в регионе {3}.",
+  "chronicle.covert_cyber_blackout": "Наша кибератака вывела из строя энергосети и узлы связи в регионе {3} ({1}).",
+  "chronicle.covert_cyber_blackout_suspected": "Масштабный блэкаут и отказ систем телеметрии парализовали регион {3}.",
+  "chronicle.covert_cyber_blackout_exposed": "{0}: расследование установило, что за масштабным блэкаутом в регионе {3} стоят военные хакеры страны {1}."
 }

@@ -405,8 +405,9 @@ public static class StrategicStockpiles
             var ammoShort = 1f - Coverage(nation, "Ammunition");
             var oilShort = 1f - Coverage(nation, "Oil");
             var foodShort = 1f - Coverage(nation, "Food");
+            var electronicsShort = 1f - Coverage(nation, "Electronics");
 
-            if (divs > 0f && (armsShort > 0f || ammoShort > 0f || oilShort > 0f || foodShort > 0f))
+            if (divs > 0f && (armsShort > 0f || ammoShort > 0f || oilShort > 0f || foodShort > 0f || electronicsShort > 0f))
             {
                 foreach (var army in campaign.Armies)
                 {
@@ -423,10 +424,12 @@ public static class StrategicStockpiles
                         army.Organisation = M.Clamp01(army.Organisation - defines.StockpileShortFoodOrganisationLoss * foodShort);
                         army.Cohesion = M.Clamp01(army.Cohesion - defines.StockpileShortFoodCohesionLoss * foodShort);
                     }
+                    if (electronicsShort > 0f)
+                        army.Recon = M.Clamp01(army.Recon - 0.01f * electronicsShort);
                 }
             }
 
-            if (afloat > 0 && (oilShort > 0f || ammoShort > 0f))
+            if (afloat > 0 && (oilShort > 0f || ammoShort > 0f || electronicsShort > 0f))
             {
                 foreach (var fleet in campaign.Fleets)
                 {
@@ -435,6 +438,8 @@ public static class StrategicStockpiles
                         fleet.Supply = M.Clamp01(fleet.Supply - 0.03f * oilShort);
                     if (ammoShort > 0f && fleet.InAction)
                         fleet.Organisation = M.Clamp01(fleet.Organisation - 0.04f * ammoShort);
+                    if (electronicsShort > 0f && fleet.InAction)
+                        fleet.Strength = M.Clamp01(fleet.Strength - 0.01f * electronicsShort);
                 }
             }
         }
@@ -444,6 +449,26 @@ public static class StrategicStockpiles
     /// <summary>The share of yesterday's need for a good that was met, 0 to 1.</summary>
     public static float Coverage(Nation nation, string goodId) =>
         nation is not null && nation.StockpileCoverage.TryGetValue(goodId, out var met) ? M.Clamp01(met) : 1f;
+
+    /// <summary>
+    /// Whole days the depot still covers at yesterday's draw: stock divided by
+    /// <see cref="Nation.DailyStockpileBurn"/>. Null when nothing is being drawn, so a quiet
+    /// depot is not reported as an endless stock. Coverage is the share of a need already
+    /// met; it is not a second clock. This only reads the two dictionaries.
+    /// </summary>
+    public static int? DaysOnHand(Nation nation, string goodId)
+    {
+        if (nation is null || string.IsNullOrEmpty(goodId)) return null;
+        if (!nation.DailyStockpileBurn.TryGetValue(goodId, out var burn) ||
+            !float.IsFinite(burn) || burn <= 0.00001f)
+            return null;
+        var stock = nation.Stockpiles.GetValueOrDefault(goodId);
+        if (!float.IsFinite(stock) || stock <= 0f) return 0;
+        var days = stock / burn;
+        if (!float.IsFinite(days) || days <= 0f) return 0;
+        if (days >= int.MaxValue) return int.MaxValue;
+        return (int)MathF.Floor(days);
+    }
 
     /// <summary>
     /// Combat effectiveness from the munitions that reached the guns: full while the depots

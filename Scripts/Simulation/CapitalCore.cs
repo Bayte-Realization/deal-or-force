@@ -230,6 +230,39 @@ public static class CapitalCore
         return Usable(campaign, nation, province) ? province : 0;
     }
 
+    /// <summary>
+    /// One supply origin, at the government's usable seat. Logistics runs before the daily
+    /// evacuation pass: when no recorded seat is usable yet, predict that pass's choice
+    /// without moving the government or applying its political consequences here.
+    /// </summary>
+    public static int SupplyOriginProvinceId(Campaign campaign, Nation nation)
+    {
+        if (nation is null || campaign?.ProvinceMap is not { } topology) return 0;
+        var effective = EffectiveProvinceId(campaign, nation);
+        if (effective > 0) return effective;
+
+        // Legacy maps may know a capital region but not its precise province. This is not
+        // a licence to use a remnant of the region after a placed capital has been captured.
+        if (nation.CapitalProvinceId <= 0 && nation.CapitalStateMapIndex > 0)
+        {
+            var region = campaign.States.Find(s => s.MapIndex == nation.CapitalStateMapIndex);
+            if (region is not null)
+            {
+                var legacy = Seat(campaign, nation, region);
+                if (legacy > 0) return legacy;
+            }
+        }
+
+        // Only countries awaiting evacuation need this scan; healthy capitals return above.
+        // Use exactly the capital system's ownership, destroyed-ground and safety rules.
+        var available = new HashSet<int>();
+        for (var province = 1; province <= topology.ProvinceCount; province++)
+            if (GroundAvailable(campaign, nation, province))
+                available.Add(topology.ProvinceToState[province]);
+        BestSeat(campaign, nation, available, out _, out var seat);
+        return seat;
+    }
+
     /// <summary>The effective seat's localized city or region name, or empty when there is no usable seat.</summary>
     public static string EffectiveName(Campaign campaign, Nation nation)
     {

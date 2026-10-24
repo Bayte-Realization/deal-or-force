@@ -22,6 +22,7 @@ public partial class ExportVerification
             SupplyLevel = 1, Equipment = .2f, Name = "1. POL Division" };
         (army.Latitude, army.Longitude) = c.ProvinceMap.CenterOf(province);
         c.Armies.Add(army);
+        game.VerificationFocusAdministration(poland);
         poland.MilitarySpending = c.Defines.BaselineMilitarySpending;
         poland.StockpilesSeeded = true;
 
@@ -46,7 +47,10 @@ public partial class ExportVerification
             Check(bar is not null && bar.IsVisibleInTree() && bar.Size.X >= 30,
                 "equipment bar remains visible and usable: " + language + size.X);
             if (bar is null) continue;
-            Check(bar.TooltipText.Contains(Loc.Get("Equipment and personnel are replaced separately. Ammunition is a consumable, not equipment completeness.")) &&
+            // Ui.Tip deliberately inserts word-wrap newlines. Verify every word,
+            // independent of the selected language's line length and user measure.
+            var readable = string.Join(" ", bar.TooltipText.Split((char[])null, StringSplitOptions.RemoveEmptyEntries));
+            Check(readable.Contains(Loc.Get("Equipment and personnel are replaced separately. Ammunition is a consumable, not equipment completeness.")) &&
                 bar.TooltipText.Contains(Loc.Get("Arms")), "equipment hover explains distinction and material bill: " + language + size.X);
             before = CampaignFingerprint.Of(c);
             GetViewport().NotifyMouseExited(); GetViewport().NotifyMouseEntered();

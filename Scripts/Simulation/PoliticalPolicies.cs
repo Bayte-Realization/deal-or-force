@@ -98,6 +98,7 @@ public static class PoliticalPolicies
         else n.Laws[Slot(p, target, region)] = new AdoptedLaw { Id = p.Id, TargetTag = target, Region = region, AdoptedDay = c.ElapsedDays };
         NationalModifiers.Invalidate(n);
         c.Chronicle.Record(c, agenda ? "agenda_announced" : "law_enacted", n.Id, c.NationByTag(target)?.Id ?? -1, p.Name);
+        ParliamentaryPolitics.OnLawAdopted(c, n, p);
         c.MarkStrategicChange(); return true;
     }
 

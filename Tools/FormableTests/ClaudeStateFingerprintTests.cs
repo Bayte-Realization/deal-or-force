@@ -94,9 +94,20 @@ public static class ClaudeStateFingerprintTests
         // Re-recorded again 21 October 2026 (0xE51AA42BB91EDE15 -> 0x0BEDBA3316932DC6): the system
         // table maps the new FormableProclamationAi to formable_nations, and the fingerprint mixes
         // that table on purpose. Removing only that one entry restores 0xE51AA42BB91EDE15 exactly.
+        // 24 October: crisis_ladder and two mediation/intervention command bindings are
+        // new authoritative catalogue entries. Frozen pre-logistics and current binaries
+        // reproduce A8D091ED052E70D3 and A6BA8874BAC1AA0F respectively. Removing exactly
+        // these three entries restores 0BEDBA3316932DC6 in both, with no world tick.
+        // Keep both strict checks: new metadata is visible and old state defaults leak no bytes.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0x0BEDBA3316932DC6UL,
-            $"new fields at their legacy defaults retain the pre-fix golden fingerprint (got 0x{fixture:X16})");
+        Check(fixture == 0xA6BA8874BAC1AA0FUL,
+            $"registered crisis metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        var legacyMetadata = Fixture();
+        legacyMetadata.Defines.Features.Remove("crisis_ladder");
+        legacyMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");
+        legacyMetadata.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
+        Check(CampaignFingerprint.Of(legacyMetadata) == 0x0BEDBA3316932DC6UL,
+            "removing exactly the new crisis registrations restores the strict legacy golden");
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();
         DictionaryOrderIsNotAuthoritative();

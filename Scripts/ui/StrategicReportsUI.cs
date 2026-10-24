@@ -10,9 +10,6 @@ public partial class DealOrForceGame
     private Control _ledgerGrid;
     private ScrollContainer _ledgerReportScroll;
     private VBoxContainer _ledgerReportRows;
-    private bool _chronicleWorld;
-    private int _chroniclePage;
-    private int _chronicleCountry = -1;
 
     private void BuildStrategicReports(VBoxContainer rows)
     {
@@ -29,69 +26,39 @@ public partial class DealOrForceGame
     {
         ClearRuntimeChildren(_ledgerReportRows);
         if (_ledgerTab == "Vulnerabilities") { ShowEconomicExposure(nation); return; }
-        _ledgerSummary.Text = Tr("What has happened. Other countries' internal decisions and building are not shown.");
-        if (_chronicleCountry != nation.Id) { _chronicleCountry = nation.Id; _chroniclePage = 0; }
-        var filters = new HBoxContainer();
-        _ledgerReportRows.AddChild(filters);
-        foreach (var world in new[] { false, true })
+        ShowCampaignChronicle(nation);
+    }
+
+    /// <summary>
+    /// The ledger's chronicle tab: the latest lines for this country and the wars it is in.
+    /// Fixed rows inside the scroll that was already here. Reading does not record.
+    /// </summary>
+    private void ShowCampaignChronicle(Nation nation)
+    {
+        _ledgerSummary.Text = Tr(CampaignChronicle.Title);
+        _ledgerSummary.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
+        var lines = CampaignChronicle.Read(_campaign, nation, _campaign.Player);
+        for (var index = 0; index < lines.Count; index++)
         {
-            var selected = world;
-            filters.AddChild(ActionButton(world ? "World events" : "Country events", () =>
-            { _chronicleWorld = selected; _chroniclePage = 0; _ledgerReportScroll.ScrollVertical = 0; RefreshLedger(); }, 150, 32, world == _chronicleWorld));
-        }
-        var entries = _campaign.Chronicle.Read(_campaign.Player.Id, nation.Id, _chronicleWorld);
-        var size = (int)Math.Clamp(InterfaceSkin.Metric("chronicle.page_size", 30), 5, 100);
-        _chroniclePage = Math.Clamp(_chroniclePage, 0, Math.Max(0, (entries.Length - 1) / size));
-        _ledgerReportRows.AddChild(Title(Simulation.Loc.Format("Recorded: {0} · retained limit: {1}", entries.Length, WorldChronicle.Capacity), 12, Ui.Colour("text.caption")));
-        if (entries.Length == 0) _ledgerReportRows.AddChild(Title("Nothing has happened yet.", 15, Ui.Colour("text.body_soft")));
-        foreach (var entry in entries.Skip(_chroniclePage * size).Take(size))
-        {
-            var card = WorkbenchCard(_ledgerReportRows);
-            card.AddChild(Title($"{entry.Date.Day:D2}.{entry.Date.Month:D2}.{entry.Date.Year} · {entry.Date.Hour:D2}:00", 12, Ui.Colour("text.accent_dim")));
-            var key = "chronicle." + entry.Kind;
-            card.AddChild(Title(Simulation.Loc.Format(key, Tr(entry.ActorName), Tr(entry.TargetName), Tr(entry.Subject), Tr(entry.Place)), 15, Ui.Colour("text.body")));
-            var actions = new HBoxContainer();
-            actions.AddThemeConstantOverride("separation", 8);
-            var actor = _campaign.NationById(entry.ActorId);
-            if (actor is not null) actions.AddChild(ActionButton("Locate country", () =>
-            { CloseLedger(); _globe.SetMapModeSubject(actor); _globe.FocusOn(actor.CapitalLatitude, actor.CapitalLongitude, 6.8f); }, 150, 30));
-            var target = _campaign.NationById(entry.TargetId);
-            if (target is not null && target.Id != entry.ActorId)
-                actions.AddChild(ActionButton("Locate counterpart", () =>
-                { CloseLedger(); _globe.SetMapModeSubject(target); _globe.FocusOn(target.CapitalLatitude, target.CapitalLongitude, 6.8f); }, 165, 30));
-            if (!string.IsNullOrWhiteSpace(entry.Place))
+            var line = lines[index];
+            var empty = line.Sequence == 0 && line.Kind.Length == 0;
+            var label = Fixed(Title(empty ? CampaignChronicle.Empty : line.Text, 14,
+                Ui.Colour(empty ? "text.body_soft" : "text.body")));
+            label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            label.CustomMinimumSize = new Vector2(0, 22);
+            if (!empty)
             {
-                var region = _campaign.States.FirstOrDefault(s =>
-                    string.Equals(s.Name, entry.Place, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(s.DisplayName, entry.Place, StringComparison.OrdinalIgnoreCase));
-                if (region is not null && _campaign.ProvinceMap is not null)
-                {
-                    var prov = Enumerable.Range(1, _campaign.ProvinceMap.ProvinceCount)
-                        .FirstOrDefault(p => _campaign.ProvinceMap.ProvinceToState[p] == region.MapIndex);
-                    if (prov > 0)
-                    {
-                        var center = _campaign.ProvinceMap.CenterOf(prov);
-                        actions.AddChild(ActionButton("Jump to hotspot", () =>
-                        {
-                            CloseLedger();
-                            _selectedState = region;
-                            _globe.FocusOn(center.Latitude, center.Longitude, 7.5f);
-                        }, 155, 30));
-                    }
-                }
+                label.TooltipText = Ui.Tip(line.Text);
+                label.MouseFilter = MouseFilterEnum.Stop;
             }
-            if (actions.GetChildCount() > 0) card.AddChild(actions);
+            _ledgerReportRows.AddChild(label);
         }
-        var paging = new HBoxContainer();
-        _ledgerReportRows.AddChild(paging);
-        if (_chroniclePage > 0) paging.AddChild(ActionButton("Newer events", () =>
-        { _chroniclePage--; _ledgerReportScroll.ScrollVertical = 0; RefreshLedger(); }, 160, 32));
-        if ((_chroniclePage + 1) * size < entries.Length) paging.AddChild(ActionButton("Older events", () =>
-        { _chroniclePage++; _ledgerReportScroll.ScrollVertical = 0; RefreshLedger(); }, 160, 32));
     }
 
     private void ShowEconomicExposure(Nation nation)
     {
+        _ledgerSummary.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
         _ledgerSummary.Text = Tr("Physical import exposure in the latest market figures. This is not a forecast of prices, GDP or replacement suppliers.");
         var ready = _campaign.TradeRoutesDay >= 0;
         _ledgerReportRows.AddChild(Title(ready

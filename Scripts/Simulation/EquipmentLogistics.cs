@@ -38,7 +38,10 @@ public static class EquipmentLogistics
         if (Blocker(c, army).Length > 0) return 0f;
         var n = c.NationById(army.NationId);
         var funding = Math.Clamp(n.MilitarySpending / MathF.Max(.01f, c.Defines.BaselineMilitarySpending), 0f, 2.5f);
-        var limit = Math.Max(0, c.Defines.EquipmentReplenishmentPerDay) * funding *
+        var electronicsFactor = 1f;
+        if (c.Defines.StrategicStockpilesEnabled && n.Market.TryGetValue(Commodity.Electronics, out var eq))
+            electronicsFactor = Math.Clamp(0.35f + 0.65f * eq.Satisfaction, 0.35f, 1f);
+        var limit = Math.Max(0, c.Defines.EquipmentReplenishmentPerDay) * funding * electronicsFactor *
             Math.Clamp(army.SupplyLevel, 0f, 1f) * ReinforcementDoctrine.Weight(army.ReinforcementPriority) *
             (army.InBattle ? Math.Clamp(c.Defines.EquipmentCombatDeliveryShare, 0f, 1f) : 1f);
         return float.IsFinite(limit) ? Math.Min(1f - army.Equipment, limit) : 0f;
@@ -75,10 +78,26 @@ public static class EquipmentLogistics
         if (!c.Defines.EquipmentReplenishmentEnabled) return;
         var kits = new Dictionary<string, float[]>(StringComparer.OrdinalIgnoreCase);
         var byNation = new Dictionary<int, List<Request>>();
+        var blocked = 0;
+        var blockedReason = "";
         foreach (var army in c.Armies)
         {
             var limit = DailyLimit(c, army);
-            if (limit <= 0f) continue;
+            if (limit <= 0f)
+            {
+                // One line a day, per nation, on demand: why a funded army at 0.2 equipment
+                // with full depots is not being refilled. The first blocker names the class.
+                if (Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1" &&
+                    army.Equipment < 0.95f && blockedReason.Length == 0)
+                {
+                    blocked++;
+                    blockedReason = Blocker(c, army);
+                    if (blockedReason.Length == 0) blockedReason = $"limit={limit:0.000}";
+                    Console.WriteLine($"EQUIPMENT_REFILL_BLOCKED nation={c.NationById(army.NationId)?.Tag} army={army.Id} tpl={army.TemplateId} eq={army.Equipment:0.00} why={blockedReason}");
+                    blockedReason = "*"; // one line per nation per day
+                }
+                continue;
+            }
             var key = army.TemplateId ?? "";
             if (!kits.TryGetValue(key, out var kit)) kits[key] = kit = KitOf(army);
             if (!kit.Any(v => v > 0f)) continue; // A malformed free bill cannot mint kit.
@@ -116,6 +135,11 @@ public static class EquipmentLogistics
                 }
                 for (var g = 0; g < Goods.Length; g++) stock[g] = Math.Max(0, stock[g] - spent[g]);
                 if (progress <= 1e-10) break;
+            }
+            if (Environment.GetEnvironmentVariable("DOF_TRACE_EQUIP") == "1" && requests.Count > 0)
+            {
+                var delivered = 0d; foreach (var r in requests) delivered += r.Given;
+                Console.WriteLine($"EQUIPMENT_REFILL_RESULT nation={n.Tag} requests={requests.Count} delivered={delivered:0.0000} firstArmy={requests[0].Army.Id} firstEq={requests[0].Army.Equipment:0.00}");
             }
             Array.Clear(spent);
             foreach (var r in requests)

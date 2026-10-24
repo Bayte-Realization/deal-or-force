@@ -69,6 +69,14 @@ public sealed partial class Defines
     public float CovertSeparatismDivergencePerStrength { get; set; } = 0.08f;
     public float CovertSeparatismGovernment { get; set; } = 0.05f;
     public float CovertSeparatismLaw { get; set; } = 0.03f;
+    /// <summary>What arming insurgents does to a region's order and radicalism.</summary>
+    public float CovertArmInsurgentsOrder { get; set; } = 0.14f;
+    public float CovertArmInsurgentsOrderPerStrength { get; set; } = 0.18f;
+    public float CovertArmInsurgentsRadicalism { get; set; } = 0.08f;
+    public float CovertArmInsurgentsRadicalismPerStrength { get; set; } = 0.12f;
+    /// <summary>What a cyber blackout does: temporary infrastructure devastation and stability loss.</summary>
+    public float CovertCyberBlackoutDamage { get; set; } = 0.06f;
+    public float CovertCyberBlackoutDamagePerStrength { get; set; } = 0.08f;
     /// <summary>How often a government nobody plays considers an operation, and the chance it orders one when it does.</summary>
     public int CovertAiReviewDays { get; set; } = 28;
     public float CovertAiChance { get; set; } = 0.15f;
@@ -94,7 +102,7 @@ public sealed class CovertOperationDefinition
     public float Risk;
 
     /// <summary>Whether it is aimed at one region rather than the country.</summary>
-    public bool Regional => Effect is "sabotage" or "unrest" or "separatism";
+    public bool Regional => Effect is "sabotage" or "unrest" or "separatism" or "arm_insurgents" or "cyber_blackout";
 }
 
 /// <summary>
@@ -122,7 +130,7 @@ public sealed class CovertOperationDefinition
 /// </summary>
 public static class CovertOperations
 {
-    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft", "separatism" };
+    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft", "separatism", "arm_insurgents", "cyber_blackout" };
     private static readonly Dictionary<string, CovertOperationDefinition> Entries = new(StringComparer.Ordinal);
 
     static CovertOperations() => ResetCatalog();
@@ -289,6 +297,12 @@ public static class CovertOperations
         ("separatism", "done") => "covert_separatism_done",
         ("separatism", "suspected") => "covert_separatism_suspected",
         ("separatism", "exposed") => "covert_separatism_exposed",
+        ("arm_insurgents", "done") => "covert_insurgents_armed",
+        ("arm_insurgents", "suspected") => "covert_insurgents_suspected",
+        ("arm_insurgents", "exposed") => "covert_insurgents_exposed",
+        ("cyber_blackout", "done") => "covert_cyber_blackout",
+        ("cyber_blackout", "suspected") => "covert_cyber_blackout_suspected",
+        ("cyber_blackout", "exposed") => "covert_cyber_blackout_exposed",
         _ => "covert_operation_failed"
     };
 
@@ -364,7 +378,7 @@ public static class CovertOperations
     }
 
     /// <summary>What success does. The chronicle's subject for it, or null when there was nothing to take.</summary>
-    private static string Strike(Campaign c, Nation owner, Nation target, CovertOperationDefinition definition, ScenarioState region, float strength, float spent)
+    internal static string Strike(Campaign c, Nation owner, Nation target, CovertOperationDefinition definition, ScenarioState region, float strength, float spent)
     {
         var d = c.Defines;
         var power = definition.Power;
@@ -435,6 +449,37 @@ public static class CovertOperations
                     power * (d.CovertSeparatismDivergence + d.CovertSeparatismDivergencePerStrength * strength));
                 region.GovernmentApproval = M.Clamp01(M.Clamp01(region.GovernmentApproval) - power * d.CovertSeparatismGovernment);
                 region.LawApproval = M.Clamp01(M.Clamp01(region.LawApproval) - power * d.CovertSeparatismLaw);
+                return definition.Name;
+            }
+            case "arm_insurgents":
+            {
+                region.Radicalism = M.Clamp01(region.Radicalism + power * (d.CovertArmInsurgentsRadicalism + d.CovertArmInsurgentsRadicalismPerStrength * strength));
+                region.Stability = M.Clamp01(region.Stability - power * (d.CovertArmInsurgentsOrder + d.CovertArmInsurgentsOrderPerStrength * strength));
+                if (target.IsSubject)
+                {
+                    target.LibertyDesire = M.Clamp01(target.LibertyDesire + 0.20f * power);
+                    target.SubjectLibertyModifier = MathF.Min(0.95f, target.SubjectLibertyModifier + 0.20f * power);
+                    if (!target.SubjectForeignBackers.Contains(owner.Id)) target.SubjectForeignBackers.Add(owner.Id);
+                }
+                var movement = StrongestMovementIn(c, target);
+                if (movement is not null)
+                {
+                    movement.Treasury += MathF.Min(spent * 0.6f, MathF.Max(0f, target.Gdp) * 0.003f);
+                    if (movement.Movement is not null)
+                    {
+                        movement.Movement.Militancy = M.Clamp01(MathF.Max(0f, movement.Movement.Militancy) + 0.15f * power);
+                        movement.Movement.Cadres += 250f * power;
+                    }
+                }
+                return definition.Name;
+            }
+            case "cyber_blackout":
+            {
+                region.WarDamage = MathF.Max(region.WarDamage,
+                    MathF.Min(0.7f, region.WarDamage + power * (d.CovertCyberBlackoutDamage + d.CovertCyberBlackoutDamagePerStrength * strength)));
+                region.Stability = M.Clamp01(region.Stability - 0.10f * power);
+                region.Radicalism = M.Clamp01(region.Radicalism + 0.08f * power);
+                target.Stability = M.Clamp01(target.Stability - 0.02f * power);
                 return definition.Name;
             }
         }
@@ -510,6 +555,8 @@ public static class CovertOperations
                         "unrest" => atWar || rival ? 1f : 0.6f,
                         "opposition" => authoritarian && target.Stability < 0.55f ? 1.6f : 0f,
                         "separatism" => rival ? (atWar ? 0.5f : 1.2f) : 0f,
+                        "arm_insurgents" => atWar ? 2.5f : rival ? 1.4f : 0f,
+                        "cyber_blackout" => atWar ? 2.8f : rival ? 1.0f : 0f,
                         _ => 0f
                     };
                     if (want <= 0f) continue;
@@ -548,7 +595,7 @@ public static class CovertOperations
                 if (split > bestScore) { bestScore = split; best = region; }
                 continue;
             }
-            var score = kind.Effect == "sabotage"
+            var score = kind.Effect == "sabotage" || kind.Effect == "cyber_blackout"
                 ? (region.WarDamage >= 0.3f ? 0f : region.Population * (0.3f + region.Urbanization) * (1f - region.WarDamage))
                 : region.Population * (0.05f + region.Radicalism);
             if (score > bestScore) { bestScore = score; best = region; }

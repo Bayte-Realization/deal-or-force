@@ -7,8 +7,7 @@ using DealOrForce.Simulation;
 /// Supply starts at a root and travels over ground the country controls. These tests pin the
 /// difference between owning a province and being able to feed it: a formation circled on its
 /// own soil is cut off, a formation with a corridor behind it is not, an island of one's own is
-/// reached by the sea lane, and a country whose capital has fallen still eats until its depots
-/// are gone.
+/// reached by the sea lane, and an evacuated government retains one connected rear.
 /// </summary>
 public static class SupplyNetworkTests
 {
@@ -112,22 +111,21 @@ public static class SupplyNetworkTests
         Check(pocket.SupplySourceStateMapIndex==1005 && pocket.SupplyDistance==0,
             "the pocket is fed by its own region once the road is open");
 
-        // A capital taken while depots remain: the depots are the roots, and the pocket, having
-        // neither capital nor barracks, is on its own.
+        // A capital taken: the first equally populous safe region is the provisional rear.
+        // Its barracks is useful, but a disconnected pocket is not another national root.
         c=Rack(101);
         c.ProvinceController[1]=101;
         c.States[1].Buildings[BuildingKind.Barracks]=1;
         LogisticsSystem.Tick(c);
-        Check(!c.Armies[0].CutOff,"a barracks the country still holds replaces the lost capital as a root");
+        Check(!c.Armies[0].CutOff,"the chosen replacement rear and its barracks supply the connected formation");
         Check(c.Armies[1].CutOff,"a pocket without the capital and without a depot is still cut off");
 
-        // A capital taken and nothing else left standing: the ground itself is the depot, because
-        // a state pushed off its roads should be in trouble, not out of supply the same afternoon.
+        // No barracks is required for a replacement rear. Here the surviving land is connected.
         c=Rack(100);
         c.ProvinceController[1]=101;
         LogisticsSystem.Tick(c);
         Check(!c.Armies[0].CutOff && !c.Armies[1].CutOff,
-            "a country that has lost its capital and holds no depot still eats off the land it stands on");
+            "a country without barracks still supplies its connected rear after capital loss");
 
         // An island is ground no road reaches, but the sea lane is a road.
         c=Island();

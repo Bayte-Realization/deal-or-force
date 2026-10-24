@@ -80,6 +80,11 @@ public sealed partial class Defines
     public float CivilWarWinnerResolve { get; set; } = 1.2f;
     /// <summary>The call-up of a total war: extra men a week as a share of the people, while under the ceiling.</summary>
     public float TotalWarMobilisation { get; set; } = 0.0002f;
+    /// <summary>Great Power mediation and intervention settings during international crises.</summary>
+    public int CrisisMediationCooldownDays { get; set; } = 90;
+    public float CrisisMediationCost { get; set; } = 0.5f;
+    public float CrisisMediationTensionReduction { get; set; } = 20f;
+    public float CrisisInterventionDeterrenceBonus { get; set; } = 1.5f;
 }
 
 /// <summary>What stands between two countries, beyond the opinion they hold of each other.</summary>
@@ -120,6 +125,12 @@ public sealed partial class DiplomaticRelation
     public int TalksBy = -1;
     public int TalksUntilDay = -1;
     public int LastTalksDay = -9999;
+    /// <summary>Great Power mediation and intervention during an international crisis.</summary>
+    public int MediatorId = -1;
+    public int LastMediationDay = -9999;
+    public int InterveningPowerId = -1;
+    public int InterventionTargetId = -1;
+    public int InterventionUntilDay = -1;
 
     public float GrievanceOf(int holderId) => holderId == A ? GrievanceA : holderId == B ? GrievanceB : 0f;
 }
@@ -304,6 +315,7 @@ public static class Escalation
         {
             GrowWars(c, every);
             EndBorderWars(c, every);
+            ReviewCrises(c, every);
         }
     }
 
@@ -786,9 +798,20 @@ public static class Escalation
         return true;
     }
 
-    private static bool CanFace(Campaign c, Nation attacker, Nation defender, bool refreshAssessment = true) =>
-        AiStatecraft.CachedStrength(c, attacker) >=
-        c.Defines.BorderWarStrengthRatio * AiStatecraft.Deterrence(c, attacker, defender, refreshAssessment);
+    private static bool CanFace(Campaign c, Nation attacker, Nation defender, bool refreshAssessment = true)
+    {
+        var relation = CampaignDiplomacy.Peek(c, attacker.Id, defender.Id);
+        var extraDeterrence = 0f;
+        if (relation is not null && relation.InterveningPowerId >= 0 && relation.InterventionUntilDay > c.ElapsedDays &&
+            relation.InterventionTargetId == attacker.Id)
+        {
+            var power = c.NationById(relation.InterveningPowerId);
+            if (power is not null && power.Population > 0 && AllianceSystem.GreatPowers(c).Contains(power.Id))
+                extraDeterrence = AiStatecraft.CachedStrength(c, power) * c.Defines.CrisisInterventionDeterrenceBonus;
+        }
+        return AiStatecraft.CachedStrength(c, attacker) >=
+            c.Defines.BorderWarStrengthRatio * (AiStatecraft.Deterrence(c, attacker, defender, refreshAssessment) + extraDeterrence);
+    }
 
     /// <summary>The defender's region on the shared border with the most people: what a border war is about.</summary>
     private static int BorderRegion(Campaign c, Nation attacker, Nation defender)
@@ -873,6 +896,157 @@ public static class Escalation
     }
 
     /// <summary>The tensest pairs in the world, for the screen that watches them.</summary>
+
+    /// <summary>Whether this Great Power can offer mediation in a crisis between A and B.</summary>
+    public static string MediationBlock(Campaign c, Nation mediator, Nation a, Nation b)
+    {
+        if (c is null || mediator is null || a is null || b is null) return Loc.Get("Choose another country.");
+        if (!MechanicFeatures.SystemEnabled(c, nameof(Escalation))) return Loc.Get("Escalation is disabled.");
+        if (mediator.Id == a.Id || mediator.Id == b.Id || a.Id == b.Id) return Loc.Get("Choose another country.");
+        if (!AllianceSystem.GreatPowers(c).Contains(mediator.Id))
+            return Loc.Get("Only a recognized Great Power can mediate crises.");
+        if (CampaignDiplomacy.AtWar(c, mediator.Id, a.Id) || CampaignDiplomacy.AtWar(c, mediator.Id, b.Id))
+            return Loc.Get("At war: talks are a peace negotiation now.");
+        if (CampaignDiplomacy.AtWar(c, a.Id, b.Id))
+            return Loc.Get("At war: talks are a peace negotiation now.");
+
+        var relation = CampaignDiplomacy.Peek(c, a.Id, b.Id);
+        if (relation is null || relation.Tension < c.Defines.TensionCrisisAt)
+            return Loc.Get("Relations are not in crisis.");
+        if (relation.TalksUntilDay > c.ElapsedDays)
+            return Loc.Get("Talks are already under way.");
+        if (c.ElapsedDays - relation.LastMediationDay < c.Defines.CrisisMediationCooldownDays)
+            return Loc.Format("The last mediation ended too recently: {0} days to wait.",
+                c.Defines.CrisisMediationCooldownDays - (c.ElapsedDays - relation.LastMediationDay));
+        if (mediator.Treasury < c.Defines.CrisisMediationCost)
+            return Loc.Get("Not enough money in the treasury.");
+        return "";
+    }
+
+    public static bool StartMediation(Campaign c, Nation mediator, Nation a, Nation b)
+    {
+        if (MediationBlock(c, mediator, a, b).Length > 0) return false;
+        var relation = CampaignDiplomacy.Get(c, a.Id, b.Id);
+        mediator.Treasury -= c.Defines.CrisisMediationCost;
+        relation.MediatorId = mediator.Id;
+        relation.LastMediationDay = c.ElapsedDays;
+        relation.TalksBy = mediator.Id;
+        relation.TalksUntilDay = c.ElapsedDays + Math.Max(14, c.Defines.TalksDays);
+        relation.Tension = MathF.Max(0f, relation.Tension - c.Defines.CrisisMediationTensionReduction);
+
+        var relA = CampaignDiplomacy.Get(c, mediator.Id, a.Id);
+        if (relA is not null) OpinionSystem.Remember(c, relA, "held_talks");
+        var relB = CampaignDiplomacy.Get(c, mediator.Id, b.Id);
+        if (relB is not null) OpinionSystem.Remember(c, relB, "held_talks");
+
+        c.Chronicle.Record(c, "crisis_mediated", mediator.Id, a.Id, b.Name);
+        DiagnosticLogs.Write("simulation", $"CRISIS_MEDIATED mediator={mediator.Tag} between={a.Tag} and={b.Tag} tension={relation.Tension:0.0}");
+        return true;
+    }
+
+    /// <summary>Whether this Great Power can intervene in a crisis to deter an aggressor against a protege.</summary>
+    public static string InterventionBlock(Campaign c, Nation power, Nation protege, Nation aggressor)
+    {
+        if (c is null || power is null || protege is null || aggressor is null) return Loc.Get("Choose another country.");
+        if (!MechanicFeatures.SystemEnabled(c, nameof(Escalation))) return Loc.Get("Escalation is disabled.");
+        if (power.Id == protege.Id || power.Id == aggressor.Id || protege.Id == aggressor.Id) return Loc.Get("Choose another country.");
+        if (!AllianceSystem.GreatPowers(c).Contains(power.Id))
+            return Loc.Get("Only a recognized Great Power can intervene in crises.");
+        if (CampaignDiplomacy.AtWar(c, power.Id, protege.Id) || CampaignDiplomacy.AtWar(c, power.Id, aggressor.Id) ||
+            CampaignDiplomacy.AtWar(c, protege.Id, aggressor.Id))
+            return Loc.Get("At war: talks are a peace negotiation now.");
+
+        var relation = CampaignDiplomacy.Peek(c, protege.Id, aggressor.Id);
+        if (relation is null || relation.Tension < c.Defines.TensionCrisisAt)
+            return Loc.Get("Relations are not in crisis.");
+        if (relation.InterveningPowerId >= 0 && relation.InterventionUntilDay > c.ElapsedDays)
+            return Loc.Get("Great Power intervention is already active.");
+        return "";
+    }
+
+    public static bool InterveneInCrisis(Campaign c, Nation power, Nation protege, Nation aggressor)
+    {
+        if (InterventionBlock(c, power, protege, aggressor).Length > 0) return false;
+        var relation = CampaignDiplomacy.Get(c, protege.Id, aggressor.Id);
+        relation.InterveningPowerId = power.Id;
+        relation.InterventionTargetId = aggressor.Id;
+        relation.InterventionUntilDay = c.ElapsedDays + 180;
+        relation.Tension = MathF.Min(relation.Tension, c.Defines.TensionClashesAt - 1.5f);
+
+        var relP = CampaignDiplomacy.Get(c, power.Id, protege.Id);
+        if (relP is not null) OpinionSystem.Remember(c, relP, "held_talks");
+
+        c.Chronicle.Record(c, "great_power_intervened", power.Id, aggressor.Id, protege.Name);
+        DiagnosticLogs.Write("simulation", $"CRISIS_INTERVENED power={power.Tag} protege={protege.Tag} aggressor={aggressor.Tag}");
+        return true;
+    }
+
+    private static void ReviewCrises(Campaign c, int days)
+    {
+        var powers = AllianceSystem.GreatPowers(c);
+        if (powers.Count == 0) return;
+        var hot = Hottest(c, c.Defines.TensionCrisisAt).Take(8).ToList();
+        if (hot.Count == 0) return;
+
+        foreach (var relation in hot)
+        {
+            var a = c.NationById(relation.A);
+            var b = c.NationById(relation.B);
+            if (a is null || b is null || a.Population <= 0 || b.Population <= 0) continue;
+
+            foreach (var powerId in powers)
+            {
+                if (powerId == a.Id || powerId == b.Id) continue;
+                var power = c.NationById(powerId);
+                if (power is null || power.IsHuman || power.Movement is not null || power.Population <= 0) continue;
+
+                var relA = CampaignDiplomacy.Peek(c, power.Id, a.Id);
+                var relB = CampaignDiplomacy.Peek(c, power.Id, b.Id);
+                var backsA = relA is not null && (relA.Stance == DiplomaticStance.Allied || relA.GuaranteedBy(power.Id));
+                var backsB = relB is not null && (relB.Stance == DiplomaticStance.Allied || relB.GuaranteedBy(power.Id));
+                var powerA = a.Gdp + a.MilitarySpending * 1000f;
+                var powerB = b.Gdp + b.MilitarySpending * 1000f;
+                if (!backsA && !backsB)
+                {
+                    if (powerA < powerB * 0.75f && relA is not null && !relA.GuaranteedBy(power.Id) &&
+                        (relA.Opinion >= 10f || (relB is not null && relB.Opinion <= -10f)) &&
+                        InterventionBlock(c, power, a, b).Length == 0)
+                    {
+                        new GuaranteeCommand { IssuerId = power.Id, TargetId = a.Id, Guarantee = true }.Apply(c);
+                        c.Chronicle.Record(c, "crisis_guarantee", power.Id, a.Id, b.Name);
+                        InterveneInCrisis(c, power, a, b);
+                        break;
+                    }
+                    if (powerB < powerA * 0.75f && relB is not null && !relB.GuaranteedBy(power.Id) &&
+                        (relB.Opinion >= 10f || (relA is not null && relA.Opinion <= -10f)) &&
+                        InterventionBlock(c, power, b, a).Length == 0)
+                    {
+                        new GuaranteeCommand { IssuerId = power.Id, TargetId = b.Id, Guarantee = true }.Apply(c);
+                        c.Chronicle.Record(c, "crisis_guarantee", power.Id, b.Id, a.Name);
+                        InterveneInCrisis(c, power, b, a);
+                        break;
+                    }
+                }
+                if (backsA && !backsB && InterventionBlock(c, power, a, b).Length == 0)
+                {
+                    InterveneInCrisis(c, power, a, b);
+                    break;
+                }
+                if (backsB && !backsA && InterventionBlock(c, power, b, a).Length == 0)
+                {
+                    InterveneInCrisis(c, power, b, a);
+                    break;
+                }
+                if (MediationBlock(c, power, a, b).Length == 0 &&
+                    AiStatecraft.Restraint(c, power) >= 0.35f)
+                {
+                    StartMediation(c, power, a, b);
+                    break;
+                }
+            }
+        }
+    }
+
     public static IEnumerable<DiplomaticRelation> Hottest(Campaign c, float above = 0f)
     {
         if (c is null) return Array.Empty<DiplomaticRelation>();
@@ -896,5 +1070,37 @@ public sealed class HoldTalksCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(c, this)) return;
         Started = Escalation.StartTalks(c, c.NationById(IssuerId), c.NationById(TargetId));
+    }
+}
+
+/// <summary>Great Power mediation in an international crisis.</summary>
+public sealed class MediateCrisisCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int MediatorId { get; init; }
+    public int TargetAId { get; init; }
+    public int TargetBId { get; init; }
+    public bool Mediated { get; private set; }
+
+    public void Apply(Campaign c)
+    {
+        if (!MechanicFeatures.Allows(c, this)) return;
+        Mediated = Escalation.StartMediation(c, c.NationById(MediatorId), c.NationById(TargetAId), c.NationById(TargetBId));
+    }
+}
+
+/// <summary>Great Power intervention in an international crisis.</summary>
+public sealed class InterveneCrisisCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int PowerId { get; init; }
+    public int ProtegeId { get; init; }
+    public int AggressorId { get; init; }
+    public bool Intervened { get; private set; }
+
+    public void Apply(Campaign c)
+    {
+        if (!MechanicFeatures.Allows(c, this)) return;
+        Intervened = Escalation.InterveneInCrisis(c, c.NationById(PowerId), c.NationById(ProtegeId), c.NationById(AggressorId));
     }
 }

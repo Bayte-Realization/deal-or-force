@@ -393,9 +393,9 @@ public partial class DealOrForceGame
                 ownDeath > ownBirth ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability), null,
                 nation.Stability < 0.35f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "text.bright");
-            CardRow(_countryCardRows, "War support", Fmt.Percent(nation.WarSupport));
-            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
+            AddWarSupportRow(nation, wars);
+            CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
             }
             if (_countryDossierTab == "Government")
@@ -745,11 +745,32 @@ public partial class DealOrForceGame
 
     // ------------------------------------------------------------------ rows
 
+    /// <summary>
+    /// The percent, then one fixed line of the facts already computed behind it.
+    /// The line is clipped. The tooltip carries every sentence.
+    /// </summary>
+    private void AddWarSupportRow(Nation nation, int wars)
+    {
+        var notice = Simulation.WarWeariness.BesideWarSupport(_campaign, nation);
+        var tip = EconomySystem.DescribeWarSupport(_campaign, nation);
+        if (notice.Text.Length > 0)
+            tip = tip.Length == 0 ? notice.Text : tip + "\n" + notice.Text;
+        var tone = wars == 0 ? "text.muted"
+            : nation.WarSupport < 0.25f ? "state.negative"
+            : nation.WarSupport < 0.45f ? "state.warning" : "text.bright";
+        if (notice.Level >= 2) tone = "state.negative";
+        else if (notice.Level >= 1 && (tone == "text.bright" || tone == "text.muted")) tone = "state.warning";
+        CardRow(_countryCardRows, "War support", Fmt.Percent(nation.WarSupport), tip, tone);
+        if (notice.Text.Length == 0) return;
+        CardRow(_countryCardRows, "Rear", notice.Text.Replace("\n", " · "), notice.Text,
+            notice.Level >= 2 ? "state.negative" : "state.warning", true);
+    }
+
     private void CardRow(VBoxContainer parent, string caption, string value, string tooltip = null,
-        string valueToken = "text.bright")
+        string valueToken = "text.bright", bool clipValue = false)
     {
         if (parent == _countryCardRows)
-        { RepaintCountryFact(caption, value, tooltip, valueToken); return; }
+        { RepaintCountryFact(caption, value, tooltip, valueToken, clipValue); return; }
         var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
         row.AddThemeConstantOverride("separation", 8);
         row.CustomMinimumSize = new Vector2(0, 21);
@@ -768,11 +789,18 @@ public partial class DealOrForceGame
         label.MouseFilter = Control.MouseFilterEnum.Ignore;
         row.AddChild(label);
         // Room for a lone digit: a "0" is narrower than anything the layout audit accepts as shown.
+        if (clipValue) label.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
         var figure = new Label
         {
-            Text = value ?? "", HorizontalAlignment = HorizontalAlignment.Right,
+            Text = value ?? "",
+            HorizontalAlignment = clipValue ? HorizontalAlignment.Left : HorizontalAlignment.Right,
             CustomMinimumSize = new Vector2(24, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = value ?? ""
+            AutowrapMode = clipValue ? TextServer.AutowrapMode.Off : TextServer.AutowrapMode.WordSmart,
+            ClipText = clipValue,
+            TextOverrunBehavior = clipValue
+                ? TextServer.OverrunBehavior.TrimEllipsis
+                : TextServer.OverrunBehavior.NoTrimming,
+            TooltipText = value ?? ""
         };
         figure.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.body", 13));
         figure.AddThemeColorOverride("font_color", Ui.Colour(valueToken));

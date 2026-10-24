@@ -82,18 +82,46 @@ public static class EconomicExposure
     public static Row[] Read(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return Array.Empty<Row>();
-        var routes = campaign.TradeRoutesDay < 0 ? Array.Empty<TradeRoute>() : TradeNetwork.RoutesTouching(campaign, nation.Id)
-            .Where(r => r.BuyerId == nation.Id && r.SellerId != nation.Id && campaign.NationById(r.SellerId) is not null &&
-                float.IsFinite(r.Volume) && r.Volume > 0).ToArray();
-        return nation.Market.Values.Where(q => float.IsFinite(q.Demand) && q.Demand > .001f &&
-                float.IsFinite(q.Imports) && q.Imports > .001f)
-            .Select(q =>
+        // One attribution pass, not a filtered route array and a GroupBy for every good.
+        // Keep double accumulators: LINQ Sum(float selector) also sums in double before
+        // rounding once to float. Float += here would silently change supplier ties.
+        var totals = new Dictionary<Commodity, Dictionary<int, double>>();
+        if (campaign.TradeRoutesDay >= 0)
+            foreach (var route in TradeNetwork.RoutesTouching(campaign, nation.Id))
             {
-                var suppliers = routes.Where(r => r.Commodity == q.Commodity).GroupBy(r => r.SellerId)
-                    .Select(g => new Supplier(g.Key, g.Sum(r => r.Volume)))
-                    .OrderByDescending(s => s.Volume).ThenBy(s => s.NationId).ToArray();
-                return new Row(q.Commodity, q.Demand, q.Imports, q.Satisfaction,
-                    Math.Max(0, q.Imports - suppliers.Sum(s => s.Volume)), suppliers);
-            }).OrderByDescending(r => r.LargestDemandShare).ThenByDescending(r => r.ImportShare).ThenBy(r => r.Good).ToArray();
+                if (route.BuyerId != nation.Id || route.SellerId == nation.Id ||
+                    campaign.NationById(route.SellerId) is null || !float.IsFinite(route.Volume) || route.Volume <= 0) continue;
+                if (!totals.TryGetValue(route.Commodity, out var sellers))
+                    totals[route.Commodity] = sellers = new Dictionary<int, double>();
+                sellers[route.SellerId] = sellers.GetValueOrDefault(route.SellerId) + route.Volume;
+            }
+        var rows = new List<Row>();
+        foreach (var quote in nation.Market.Values)
+        {
+            if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
+                !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
+            var suppliers = Array.Empty<Supplier>();
+            if (totals.TryGetValue(quote.Commodity, out var sellers))
+            {
+                suppliers = new Supplier[sellers.Count];
+                var at = 0;
+                foreach (var seller in sellers) suppliers[at++] = new Supplier(seller.Key, (float)seller.Value);
+                Array.Sort(suppliers, SupplierOrder);
+            }
+            // Same sorted float inputs and double accumulation as the former LINQ sum.
+            double named = 0;
+            foreach (var supplier in suppliers) named += supplier.Volume;
+            rows.Add(new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
+                Math.Max(0, quote.Imports - (float)named), suppliers));
+        }
+        // Preserve stable ordering even for hand-authored markets with duplicate goods.
+        return rows.OrderByDescending(r => r.LargestDemandShare).ThenByDescending(r => r.ImportShare)
+            .ThenBy(r => r.Good).ToArray();
     }
+
+    private static readonly IComparer<Supplier> SupplierOrder = Comparer<Supplier>.Create((left, right) =>
+    {
+        var byVolume = right.Volume.CompareTo(left.Volume);
+        return byVolume != 0 ? byVolume : left.NationId.CompareTo(right.NationId);
+    });
 }

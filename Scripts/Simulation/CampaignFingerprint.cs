@@ -72,6 +72,11 @@ public static class CampaignFingerprint
             MixFloat(equipmentRules.EquipmentReplenishmentPerDay); MixFloat(equipmentRules.EquipmentCombatDeliveryShare);
             MixFloat(equipmentRules.EquipmentMinimumSupply);
         }
+        if (campaign.Defines.SupplyCutoffDays != 14)
+        {
+            MixText("supply_cutoff_days");
+            Mix(campaign.Defines.SupplyCutoffDays);
+        }
         var diplomacyRules = campaign.Defines;
         if (!diplomacyRules.AiFormableProclamations || diplomacyRules.AiFormableReviewDays != 30 ||
             diplomacyRules.AiFormableEarliestDay != 120 || diplomacyRules.AiFormableMinimumIntervalDays != 1825 ||
@@ -290,6 +295,8 @@ public static class CampaignFingerprint
             // How close the two are to fighting, and what they hold against each other (Escalation).
             MixFloat(r.Tension); MixFloat(r.StructuralTension); MixFloat(r.TensionBaseline); MixFloat(r.TensionAnchor); MixFloat(r.GrievanceA); MixFloat(r.GrievanceB);
             Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);
+            Mix(r.MediatorId); Mix(r.LastMediationDay); Mix(r.InterveningPowerId); Mix(r.InterventionTargetId); Mix(r.InterventionUntilDay);
+            if (r.CrisisOpenedDay >= 0) { MixText("crisis_opened"); Mix(r.CrisisOpenedDay); }
         }
         // Who is arming whom in other people's wars (ProxyWars).
         Mix(campaign.NextOrganizationId);
@@ -371,6 +378,20 @@ public static class CampaignFingerprint
             { MixText("political_scandal"); Mix(nation.LastPoliticalScandalDay); }
             if (nation.LastMilitaryCoupDay >= 0)
             { MixText("last_military_coup"); Mix(nation.LastMilitaryCoupDay); }
+            if (nation.Parliament is { } parl && (parl.PeaceMandateActive || parl.MilitaryBudgetCutActive || parl.LastReviewDay >= 0))
+            {
+                MixText("parliament_state");
+                MixFloat(parl.RulingBlocShare);
+                MixFloat(parl.OppositionShare);
+                MixFloat(parl.DovishShare);
+                Mix(parl.PeaceMandateActive ? 1 : 0);
+                Mix(parl.PeaceMandateDay);
+                Mix(parl.MilitaryBudgetCutActive ? 1 : 0);
+                Mix(parl.LastReviewDay);
+                MixFloat(parl.FactionDiscontent);
+                MixText(parl.FavoredPortfolio ?? "");
+                MixText(parl.FavoredLawCategory ?? "");
+            }
             var grantClocks = 0;
             foreach (var clock in nation.DecisionAvailableDay)
                 if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal)) grantClocks++;
@@ -724,6 +745,7 @@ public static class CampaignFingerprint
         }
         foreach (var army in Ordered(campaign.Armies, a => a.Id))
         {
+            if (army.CutOff) { MixText("cut_off"); Mix(army.Id); }
             if (army.DaysCutOff > 0) { MixText("days_cut_off"); Mix(army.Id); Mix(army.DaysCutOff); }
             if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
         }

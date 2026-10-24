@@ -1,5 +1,7 @@
 {
   "Chronicle": "Хроника",
+  "Campaign chronicle": "Летопись кампании",
+  "Nothing has been written yet.": "Пока ничего не написано.",
   "Vulnerabilities": "Уязвимости",
   "Recorded events in the world and this country.": "События мира и выбранной страны.",
   "Import dependence and concentration of named suppliers.": "Зависимость от импорта и конкретных поставщиков.",
@@ -35,5 +37,6 @@
   "chronicle.deal_signed": "{0} заключает сделку с {1}: {2}.",
   "chronicle.accession_signed": "{0} подписывает договор о присоединении: {2}.",
   "chronicle.accession_declined": "{0} отклоняет приглашение в {2}.",
-  "chronicle.shard_consolidated": "{0} объединяется с братским регионом {2} в единое государство."
+  "chronicle.shard_consolidated": "{0} объединяется с братским регионом {2} в единое государство.",
+  "chronicle.anti_war_protests": "По стране {0} прокатилась волна антивоенных протестов и забастовок из-за растущих потерь."
 }

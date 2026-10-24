@@ -325,6 +325,9 @@ public static partial class AiStatecraft
         // The trade we lose on the morning of the declaration. For a country that runs half
         // its economy through its neighbour this is the whole argument.
         price += Part(parts, "trade", nation.TradeDependenceOn(other.Id) * defines.AiTradeLossWeight);
+        var commodityVulnerability = CommodityLeverage.StrategicVulnerability(campaign, nation, other);
+        if (commodityVulnerability > 0.02f)
+            price += Part(parts, "strategic dependence", commodityVulnerability * defines.AiTradeLossWeight * 0.75f);
 
         // Everybody who arrives with them. Each is a separate war on a separate front, and
         // since the call to arms became real this is no longer a hypothetical. Soft-saturated
@@ -749,8 +752,8 @@ public static partial class AiStatecraft
 
         // Sanctions, if we can stand to lose the trade and they cannot. A country that runs
         // more of its economy through us than we do through it is a country we can squeeze.
-        var theirDependence = rival.TradeDependenceOn(nation.Id);
-        var ourDependence = nation.TradeDependenceOn(rival.Id);
+        var theirDependence = rival.TradeDependenceOn(nation.Id) + CommodityLeverage.Calculate(campaign, nation, rival) * 0.5f;
+        var ourDependence = nation.TradeDependenceOn(rival.Id) + CommodityLeverage.Calculate(campaign, rival, nation) * 0.5f;
         if (!relation.EmbargoBy(nation.Id) && relation.Opinion <= campaign.Defines.AiRivalryThreshold &&
             theirDependence > ourDependence + campaign.Defines.AiEmbargoLeverage)
         {

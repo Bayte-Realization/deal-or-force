@@ -137,13 +137,15 @@ public static partial class Ultimatum
             receive.ReleaseRegions ? Array.Empty<int>() : receive.Regions, give.Regions);
         // A promise received is worth what its maker's name can carry.
         var trust = 1f - M.Clamp01(counterparty.Notoriety / 100f) * .5f;
+        var partnerLeverage = CommodityLeverage.Calculate(c, counterparty, recipient);
+        var ourLeverage = CommodityLeverage.Calculate(c, recipient, counterparty);
         var treaties = 0f;
         if (receive.NonAggression) treaties += 10f * trust;
-        if (receive.TradeAgreement) treaties += 8f * trust;
-        if (receive.LiftEmbargo) treaties += 5f;
+        if (receive.TradeAgreement) treaties += (8f + partnerLeverage * 12f) * trust;
+        if (receive.LiftEmbargo) treaties += 5f + partnerLeverage * 10f;
         if (give.NonAggression) treaties -= 10f;
-        if (give.TradeAgreement) treaties -= 8f;
-        if (give.LiftEmbargo) treaties -= 5f;
+        if (give.TradeAgreement) treaties -= 8f + ourLeverage * 6f;
+        if (give.LiftEmbargo) treaties -= 5f + ourLeverage * 8f;
         return new(cash, land, treaties, borders);
     }
 

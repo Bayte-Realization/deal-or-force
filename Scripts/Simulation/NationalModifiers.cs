@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -99,6 +99,7 @@ public static class NationalModifiers
         foreach (var source in DemographicCycle.Sources(nation)) yield return source;
         foreach (var source in TacticalDoctrines.Sources(nation)) yield return source;
         foreach (var source in StrategicDoctrines.Sources(nation)) yield return source;
+        foreach (var source in ParliamentaryPolitics.Sources(nation)) yield return source;
         foreach (var source in PoliticalPolicies.Sources(nation)) yield return source;
         foreach (var source in Rulers.Sources(nation)) yield return source;
         foreach (var id in nation.Technologies)
@@ -142,6 +143,7 @@ public static class NationalModifiers
         foreach (var (_, modifiers) in DemographicCycle.Sources(nation)) Add(totals, modifiers);
         foreach (var (_, modifiers) in TacticalDoctrines.Sources(nation)) Add(totals, modifiers);
         if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
+        foreach (var (_, modifiers) in ParliamentaryPolitics.Sources(nation)) Add(totals, modifiers);
         if (nation.LawsActive)
             foreach (var category in PoliticalPolicyCatalog.NationalCategories)
                 if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
@@ -166,6 +168,7 @@ public static class NationalModifiers
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(NationalModifiers))) return;
         PoliticalPolicies.Tick(campaign);
+        ParliamentaryPolitics.Tick(campaign);
         foreach (var nation in campaign.Nations)
         {
             // Rebuild into the country's own dictionary rather than dropping it: same sums,

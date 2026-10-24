@@ -40,5 +40,15 @@
     "name": "Fund a separatist cause",
     "description": "Printers, lawyers and quiet money for the people who want the region to leave. It drifts further from the centre and thinks worse of the government and the laws it lives under. It does not make the region angrier - that is what stirring unrest is for.",
     "effect": "separatism", "minimum_strength": 0.35, "days": 35, "cost": 1.8, "risk": 0.1
+  },
+  "arm_insurgents": {
+    "name": "Arm insurgents",
+    "description": "Smuggle weapons, explosives and tactical radios to rebel cells, underground militias and partisans in the target region. Undermines state control and spurs violent resistance.",
+    "effect": "arm_insurgents", "minimum_strength": 0.35, "days": 35, "cost": 2.0, "risk": 0.10
+  },
+  "cyber_blackout": {
+    "name": "Cyber blackout",
+    "description": "Coordinated cyber assault targeting power grids, traffic networks, and municipal supervisory systems in the region. Disables infrastructure and temporarily blinds military logistics.",
+    "effect": "cyber_blackout", "minimum_strength": 0.40, "days": 28, "cost": 2.2, "risk": 0.05
   }
 }

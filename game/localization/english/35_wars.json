@@ -49,5 +49,8 @@
   "Only two sides of the same war can exchange prisoners.": "Only two sides of the same war can exchange prisoners.",
   "The enemy holds none of our men.": "The enemy holds none of our men.",
   "We hold none of theirs to offer.": "We hold none of theirs to offer.",
-  "The last exchange was too recent; the next can be arranged in {0} day(s).": "The last exchange was too recent; the next can be arranged in {0} day(s)."
+  "The last exchange was too recent; the next can be arranged in {0} day(s).": "The last exchange was too recent; the next can be arranged in {0} day(s).",
+  "War support does not apply while the country is at peace.": "War support does not apply while the country is at peace.",
+  "At war. This week's reasons for war support have not been drawn yet.": "At war. This week's reasons for war support have not been drawn yet.",
+  "War support, this week.": "War support, this week."
 }

@@ -51,5 +51,13 @@
   "Never": "Never",
   "Rarely": "Rarely",
   "Normally": "Normally",
-  "Often": "Often"
+  "Often": "Often",
+  "Arming {0}: {1}.": "Arming {0}: {1}.",
+  "Armed by {0}: {1}.": "Armed by {0}: {1}.",
+  "Operation against {0}: {1}.": "Operation against {0}: {1}.",
+  "Operation by {0}: {1}.": "Operation by {0}: {1}.",
+  "Open the conflicts screen": "Open the conflicts screen",
+  "Open covert operations": "Open covert operations",
+  "Opens the conflicts screen, where a sponsorship is reviewed. Opening it does not start one.": "Opens the conflicts screen, where a sponsorship is reviewed. Opening it does not start one.",
+  "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one.": "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one."
 }

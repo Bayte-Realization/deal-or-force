@@ -20,6 +20,7 @@
     "election_suspended": "news_election",
     "election_postponed": "news_election",
     "general_strike": "news_strike",
+    "anti_war_protests": "news_strike",
     "march_concessions": "news_strike",
     "political_scandal": "news_scandal",
     "spy_network_exposed": "news_scandal",

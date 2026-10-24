@@ -607,7 +607,7 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Fighting strength {0:P0} — {1:N0} of {2:N0} men",
                     army.Strength, army.Personnel, army.MaxPersonnel)));
             var equipmentBar = Bar(army.Equipment, 40, "combat.equipment",
-                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army));
+                Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army), tooltipMeasure: 72);
             equipmentBar.Name = "EquipmentBar_" + army.Id;
             line.AddChild(equipmentBar);
             line.AddChild(StatusPip(army));
@@ -623,7 +623,7 @@ public partial class DealOrForceGame
     /// "84 % / 61 %", and forty of them read faster still. The fill is anchored rather
     /// than sized, so the proportion is the layout instead of a number recomputed by hand.
     /// </summary>
-    private Control Bar(float value, int width, string fillToken, string tooltip)
+    private Control Bar(float value, int width, string fillToken, string tooltip, int tooltipMeasure = 0)
     {
         var frame = new Control
         {
@@ -632,7 +632,7 @@ public partial class DealOrForceGame
             SizeFlagsVertical = SizeFlags.ShrinkCenter,
             SizeFlagsHorizontal = SizeFlags.ShrinkCenter,
             MouseFilter = MouseFilterEnum.Stop,
-            TooltipText = Ui.Tip(tooltip)
+            TooltipText = tooltipMeasure > 0 ? Ui.Tip(tooltip, Mathf.Min(Ui.TooltipMeasure, tooltipMeasure)) : Ui.Tip(tooltip)
         };
 
         var back = new ColorRect { Color = Ui.Colour("surface.inset"), MouseFilter = MouseFilterEnum.Ignore };
@@ -656,9 +656,10 @@ public partial class DealOrForceGame
     private Control StatusPip(Army army)
     {
         var (glyph, token, help) =
-            army.CutOff ? ("⊘", "state.negative", "Cut off from supply") :
+            army.CutOff ? ("⊘", "state.negative", LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.InBattle ? ("⚔", "state.warning", "In battle") :
             army.LastMoveResult == ArmyMoveResult.RouteInterrupted ? ("!", "state.warning", "Route interrupted by changed territorial control. Issue a new destination.") :
+            army.SupplyCongestion < 0.999f ? ("△", "state.warning", LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.SupplyLevel < 0.45f ? ("△", "state.warning", "Short of supply") :
             army.Organisation < 0.35f ? ("↓", "state.critical", "Organisation is spent") :
             army.IsMoving ? ("→", "state.info", "On the march") :
@@ -667,9 +668,10 @@ public partial class DealOrForceGame
             ("▪", "text.faint", "Holding");
 
         var pip = Title(glyph, 12, Ui.Colour(token));
+        pip.Name = "SupplyStatus_" + army.Id;
         pip.CustomMinimumSize = new Vector2(16, 0);
         pip.HorizontalAlignment = HorizontalAlignment.Center;
-        pip.TooltipText = Ui.Tip(help);
+        pip.TooltipText = Ui.Tip(help, Mathf.Min(Ui.TooltipMeasure, 72));
         pip.MouseFilter = MouseFilterEnum.Stop;
         return pip;
     }
@@ -692,8 +694,8 @@ public partial class DealOrForceGame
             Simulation.Loc.Format("Equipment: {0:P0} · experience: {1:P0}",
                 army.Equipment, army.Experience) + "\n" +
             EquipmentLogistics.Description(_campaign, army) + "\n" +
-            Simulation.Loc.Format("Supply: {0:P0}", army.SupplyLevel) +
-            (army.CutOff ? " — " + Simulation.Loc.Get("CUT OFF") : "") + "\n" +
+            Simulation.Loc.Format("Supply: {0:P0}", army.SupplyLevel) + "\n" +
+            LogisticsSystem.DescribeSupply(_campaign, army) + "\n" +
             Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n";
         if (IsOffensive(army))
             text += Simulation.Loc.Format("Plan preparation: {0:P0} (up to +{1:P0} attack)",

@@ -1,0 +1,15 @@
+{
+  "PARLIAMENT & CAUCUSES": "PARLIAMENT & CAUCUSES",
+  "Ruling Majority": "Ruling Majority",
+  "Opposition Coalition": "Opposition Coalition",
+  "Anti-War Caucus": "Anti-War Caucus",
+  "Peace Mandate Active": "Peace Mandate Active",
+  "Military Budget Restraint": "Military Budget Restraint",
+  "Parliamentary Discontent": "Parliamentary Discontent",
+  "Priority Demand: {0}": "Priority Demand: {0}",
+  "chronicle.parliament_peace_mandate": "{0}: Parliament passes an anti-war resolution demanding immediate peace negotiations.",
+  "chronicle.parliament_minister_supported": "{0}: Parliament confirms the appointment to {3} with cross-bench support.",
+  "chronicle.parliament_law_supported": "{0}: Parliament enacts {3} following consensus with legislative caucuses.",
+  "modifier.parliament_anti_war_budget": "Parliamentary Military Budget Restraint",
+  "modifier.parliament_peace_mandate": "Parliamentary Peace Mandate"
+}

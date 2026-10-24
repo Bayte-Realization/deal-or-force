@@ -72,7 +72,7 @@ function Assert-BuildChild([string]$Target) {
 function Copy-PlayerTree([string]$Source, [string]$Destination, [string[]]$ExcludedNames = @()) {
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     foreach ($item in Get-ChildItem -LiteralPath $Source -Force) {
-        if ($item.Name -in @('bin', 'obj', 'build', 'bridge.local.json') -or $item.Name -in $ExcludedNames -or
+        if ($item.Name -in @('bin', 'obj', 'build', 'tmp', 'tmp_logs', 'bridge.local.json') -or $item.Name -in $ExcludedNames -or
             ($item.Name.StartsWith('.') -and $item.Name -ne '.gdignore') -or
             ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
         $target = Join-Path $Destination $item.Name

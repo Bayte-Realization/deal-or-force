@@ -170,6 +170,8 @@ public static class InternationalOrganizations
                 return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
             return Doctrine("integrated_command") is not null ? "integrated_command" : "sovereign_equality";
         }
+        if (o.CharterId == "commodity_cartel")
+            return Doctrine("cartel_quotas") is not null ? "cartel_quotas" : "sovereign_equality";
         if (o.CharterId == "development" || n.NationalCourse.Dominant is "global_integration" or "market_reform")
             return Doctrine("common_market") is not null ? "common_market" : "sovereign_equality";
         if (n.NationalCourse.Dominant is "sovereign_autonomy" || n.Ideology is "nationalism" or "traditionalism")

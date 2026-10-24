@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 using Godot;
@@ -118,8 +119,26 @@ public partial class DealOrForceGame
         {
             var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Opposes(player.Id, target.Id));
             if (war is not null)
+            {
                 rows.AddChild(Title(Simulation.Loc.Format("{0} · {1} {2:0.0}",
                     WarNames.Of(_campaign, war), Tr("War score"), war.WarScore), 10, Ui.Colour("text.body_soft")));
+                var attacker = _campaign.NationById(war.AttackerId);
+                var defender = _campaign.NationById(war.DefenderId);
+                var cause = war.Collapsed != 0
+                    ? Simulation.Loc.Format("{0} has collapsed: the war is decided.",
+                        (war.Collapsed > 0 ? defender : attacker)?.DisplayName ?? Tr("nobody"))
+                    : WarScoring.LeadingCause(war);
+                var causeLine = Title(cause, 10, Ui.Colour("text.body_soft"));
+                causeLine.CustomMinimumSize = new Vector2(200, 0);
+                causeLine.ClipText = true;
+                causeLine.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+                causeLine.MouseFilter = MouseFilterEnum.Stop;
+                var parts = new List<string>();
+                foreach (var (format, value) in WarScoring.Parts(war))
+                    parts.Add(Simulation.Loc.Format(format, value.ToString("+0.0;-0.0;0.0")));
+                causeLine.TooltipText = Ui.Tip(string.Join("\n", parts));
+                rows.AddChild(causeLine);
+            }
         }
 
         // --- Influence ---

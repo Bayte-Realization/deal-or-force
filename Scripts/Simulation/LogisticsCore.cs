@@ -49,7 +49,10 @@ public static class LogisticsSystem
         // stepping an hour at a time rebuilt the whole supply network twenty-four times on
         // the third day and not at all on the other two.
         if (!campaign.StepOpensNewDay) return;
-        if (campaign.ElapsedDays > 1 && campaign.ElapsedDays % 3 != 0) return;
+        // Every third day the roads are traced again. The days inside a pocket are still
+        // days, so the clock below runs on the days the trace sits out as well.
+        if (campaign.ElapsedDays <= 1 || campaign.ElapsedDays % 3 == 0)
+        {
 
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -91,6 +94,9 @@ public static class LogisticsSystem
             if (!ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
             UpdateNation(campaign, nation, armies, Controlled.GetValueOrDefault((ushort)nation.MapIndex));
         }
+        } // The trace above is every third day. The clock below is every day.
+
+        AgeCutOff(campaign);
     }
 
     private static void UpdateNation(Campaign campaign, Nation nation, List<Army> armies, List<int> territory)
@@ -118,7 +124,7 @@ public static class LogisticsSystem
         // hold a depot, which is a different question from which ground it owns - see
         // CollectRoots and TraceNetwork.
         var reach = _reach;
-        CollectRoots(nation, territory, topology, controllers);
+        CollectRoots(campaign, nation);
         TraceNetwork(nation, topology, controllers, generation);
 
         HubByState.Clear();
@@ -130,15 +136,20 @@ public static class LogisticsSystem
             if (topology.IsWater(province)) continue;
             var isConnected = reach[province] == generation;
             var state = topology.ProvinceToState[province];
-            if (!isConnected)
+            if (isConnected)
             {
-                // Isolated enclaves without capital land/port access have degraded depot capacity
-                // and require an established local barracks/depot to serve as an emergency hub.
-                if (!StateById.TryGetValue(state, out var st) || st.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0)
-                    continue;
-                IsIsolatedHub[state] = true;
+                // A region may straddle a pocket. Prefer its connected depot regardless
+                // of province order; an isolated fragment must not cut off the whole region.
+                if (!HubByState.ContainsKey(state) || IsIsolatedHub.GetValueOrDefault(state))
+                    HubByState[state] = province;
+                IsIsolatedHub[state] = false;
+                continue;
             }
-            if (!HubByState.ContainsKey(state)) HubByState[state] = province;
+            if (HubByState.ContainsKey(state)) continue;
+            if (!StateById.TryGetValue(state, out var st) || st.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0)
+                continue;
+            IsIsolatedHub[state] = true;
+            HubByState[state] = province;
         }
 
         Frontier.Clear();
@@ -237,6 +248,13 @@ public static class LogisticsSystem
             army.SupplyDistance = distance[province];
             army.SupplySourceStateMapIndex = sourceState;
             army.SupplyCongestion = congestion;
+            // Disconnected local stores buy time; they cannot draw from national depots.
+            // Only a restored route may reset the daily reserve clock.
+            if (IsIsolatedHub.GetValueOrDefault(sourceState))
+            {
+                army.CutOff = true;
+                continue;
+            }
             army.CutOff = false;
             army.DaysCutOff = 0;
             army.SupplyLevel = M.Lerp(army.SupplyLevel, target, 0.34f);
@@ -290,7 +308,8 @@ public static class LogisticsSystem
             {
                 ports = new List<int>();
                 foreach (var coast in SeaLanes.CoastalProvinces(topology))
-                    if (coast < stamp.Length && stamp[coast] == generation && controllers[coast] == nation.MapIndex)
+                    if (coast < stamp.Length && stamp[coast] == generation && controllers[coast] == nation.MapIndex &&
+                        !IsIsolatedHub.GetValueOrDefault(_source[coast]))
                         ports.Add(coast);
             }
 
@@ -313,8 +332,8 @@ public static class LogisticsSystem
     }
 
     /// <summary>
-    /// Where a country's supply network begins: the capital, or, when the capital has fallen,
-    /// the depots the country still holds, or, in the last case, the ground itself.
+    /// Where a country's supply network begins: one usable government seat. After the
+    /// capital falls this is its evacuated rear, not every disconnected barracks at once.
     ///
     /// A province used to be a source of supply the moment the country owned it, at distance
     /// zero. Two things followed, and a player feels both. A division encircled on a scrap of
@@ -324,48 +343,11 @@ public static class LogisticsSystem
     /// still a source of its own. Supply begins at a root and travels over ground the country
     /// controls, which is what makes a corridor worth taking.
     /// </summary>
-    private static void CollectRoots(Nation nation, List<int> territory, ProvinceTopology topology,
-        ushort[] controllers)
+    private static void CollectRoots(Campaign campaign, Nation nation)
     {
         Roots.Clear();
-        var capital = nation.CapitalProvinceId;
-        if (capital > 0 && capital < controllers.Length && controllers[capital] == nation.MapIndex &&
-            !topology.IsWater(capital))
-        {
-            Roots.Add(capital);
-            return;
-        }
-        var capitalState = nation.CapitalStateMapIndex;
-        if (capitalState > 0)
-        {
-            foreach (var province in territory)
-            {
-                if (topology.ProvinceToState[province] != capitalState) continue;
-                if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
-                if (topology.IsWater(province)) continue;
-                Roots.Add(province);
-                return;
-            }
-        }
-        // The capital is gone. A state keeps its stores in a barracks, so the depots that are
-        // still standing are the roots - and if not one of them is, the ground the country
-        // stands on is: a state pushed off its own roads should be in trouble, not out of
-        // supply the same afternoon.
-        foreach (var province in territory)
-        {
-            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
-            if (topology.IsWater(province)) continue;
-            if (!StateById.TryGetValue(topology.ProvinceToState[province], out var state)) continue;
-            if (state.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0) continue;
-            Roots.Add(province);
-        }
-        if (Roots.Count > 0) return;
-        foreach (var province in territory)
-        {
-            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
-            if (topology.IsWater(province)) continue;
-            Roots.Add(province);
-        }
+        var origin = CapitalCore.SupplyOriginProvinceId(campaign, nation);
+        if (origin > 0) Roots.Add(origin);
     }
 
     /// <summary>
@@ -376,13 +358,9 @@ public static class LogisticsSystem
     /// still a trace - and spending it here would cut every country wider than twenty provinces
     /// in half on the first day of the campaign.
     ///
-    /// A sea lane is a road, and for the same reason: without it an island of one's own is cut
-    /// off from its capital the moment the campaign begins. That is the starvation SupplyBySea
-    /// repairs, one formation at a time, for ground no road reaches. The basin two shores
-    /// share is not asked here because the thing that would have to ask it is a navy, and the
-    /// navy is already modelled: a fleet off the coast charges that coast a blockade penalty when
-    /// its supply arrives. Asking the basin would instead have starved every overseas garrison
-    /// in the game, which is the worse guess of the two.
+    /// A held coast in the same sea basin is another entry into the land network. Flood
+    /// inland from that entry as well: an island depot behind its harbour is connected,
+    /// not an isolated emergency depot. Blockade still reduces the delivered throughput.
     /// </summary>
     private static void TraceNetwork(Nation nation, ProvinceTopology topology, ushort[] controllers,
         int generation)
@@ -420,19 +398,34 @@ public static class LogisticsSystem
         if (openBasins.Count == 0) return;
         foreach (var coast in coasts)
         {
-            if (controllers[coast] == nation.MapIndex && openBasins.Contains(SeaLanes.HarbourBasin(topology, coast)))
+            if (reach[coast] != generation && controllers[coast] == nation.MapIndex &&
+                openBasins.Contains(SeaLanes.HarbourBasin(topology, coast)))
+            {
                 reach[coast] = generation;
+                Frontier.Enqueue(coast);
+            }
+        }
+        while (Frontier.Count > 0)
+        {
+            var province = Frontier.Dequeue();
+            foreach (var neighbor in topology.Neighbors[province])
+            {
+                if (reach[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
+                reach[neighbor] = generation;
+                Frontier.Enqueue(neighbor);
+            }
         }
     }
 
     private static void SetStranded(Army army)
     {
         army.CutOff = true;
-        army.DaysCutOff++;
         army.SupplyDistance = -1;
         army.SupplySourceStateMapIndex = -1;
         army.SupplyCongestion = 0f;
-        army.SupplyLevel = M.Lerp(army.SupplyLevel, 0.06f, 0.38f);
+        // The stores and the organisation fall on the daily clock (AgeCutOff), not on this
+        // trace. The trace only says the road is gone. Counting a day here as well made
+        // every third day worth two, and a lerp toward empty ignored the dry-out define.
     }
 
     private static bool ProvisionVisitor(Campaign c, Nation nation, Army army)
@@ -446,5 +439,100 @@ public static class LogisticsSystem
         // this is not a friendly land trace into an enemy pocket.
         MilitaryAccess.Provision(army);
         return true;
+    }
+
+    /// <summary>
+    /// One campaign day inside a closed pocket. Supply and organisation close on the floor
+    /// across <see cref="Defines.SupplyCutoffDays"/>; the formation is not removed.
+    /// </summary>
+    private static void AgeCutOff(Campaign campaign)
+    {
+        var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
+        var add = Math.Max(1, campaign.TickHours / 24);
+        var orgFloor = campaign.Defines.BattleBreakOrganisation;
+        foreach (var army in campaign.Armies)
+        {
+            if (!army.CutOff || army.Divisions <= 0f || army.EmbarkedFleetId >= 0) continue;
+            if (MilitaryAccess.MustReturn(campaign, army)) continue;
+            var before = army.DaysCutOff;
+            army.DaysCutOff = before + add;
+            if (before >= span)
+            {
+                army.SupplyLevel = 0f;
+                if (army.Organisation > orgFloor) army.Organisation = orgFloor;
+                continue;
+            }
+            var close = Math.Clamp(add / (float)(span - before), 0f, 1f);
+            army.SupplyLevel = BleedDown(army.SupplyLevel, 0f, close);
+            army.Organisation = BleedDown(army.Organisation, orgFloor, close);
+        }
+    }
+
+    /// <summary>
+    /// Keep a closed pocket from climbing back above the dry-out. Recovery and a delivery
+    /// both run after the morning clock; neither may put a spent grouping back into an attack.
+    /// </summary>
+    public static void HoldCauldron(Campaign campaign, Army army)
+    {
+        if (campaign is null || army is null || !army.CutOff || army.DaysCutOff <= 0) return;
+        var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
+        var spent = Math.Clamp(army.DaysCutOff / (float)span, 0f, 1f);
+        var orgFloor = campaign.Defines.BattleBreakOrganisation;
+        var orgCeiling = orgFloor + (1f - orgFloor) * (1f - spent);
+        var supplyCeiling = 1f - spent;
+        if (army.Organisation > orgCeiling) army.Organisation = orgCeiling;
+        if (army.SupplyLevel > supplyCeiling) army.SupplyLevel = supplyCeiling;
+    }
+
+    /// <summary>Move toward a lower target. A value already under the target stays there.</summary>
+    private static float BleedDown(float current, float floor, float close)
+    {
+        var next = current + (floor - current) * close;
+        return next < current ? next : current;
+    }
+
+    /// <summary>
+    /// What a player reads about one formation's supply. A pure read: it does not trace,
+    /// spend, or write the campaign.
+    /// </summary>
+    public static string DescribeSupply(Campaign campaign, Army army)
+    {
+        if (army is null) return "";
+        var span = Math.Max(1, campaign?.Defines.SupplyCutoffDays ?? 14);
+        if (army.CutOff)
+        {
+            var days = Loc.Format("Days in the cauldron: {0}.", army.DaysCutOff);
+            var head = Loc.Get("Cut off.") + " " + Loc.Get("No path to a supply hub.") + " " + days;
+            var stores = DepotDays(campaign, army);
+            if (stores.Length > 0) head += " " + stores;
+            if (army.DaysCutOff >= span)
+                return head + " " + Loc.Get("Organisation is spent and it cannot keep attacking.");
+            return head + " " + Loc.Format("{0} days until supply and organisation are spent.",
+                Math.Max(0, span - army.DaysCutOff));
+        }
+        if (army.SupplyCongestion < 0.999f)
+            return Loc.Get("Thinning.") + " " + Loc.Get("The supply hub is over capacity.");
+        return Loc.Get("Fed.") + " " + Loc.Get("The supply line reaches a hub.");
+    }
+
+    /// <summary>
+    /// Ammunition and oil still in the national depot, at yesterday's draw. Shown with the
+    /// cauldron clock. A read: it does not seed the depot or spend it.
+    /// </summary>
+    private static string DepotDays(Campaign campaign, Army army)
+    {
+        if (campaign is null || army is null || !campaign.Defines.StrategicStockpilesEnabled) return "";
+        var nation = campaign.NationById(army.NationId);
+        if (nation is null) return "";
+        return OnHand(nation, "Ammunition",
+                "Ammunition in the depot lasts {0} days.", "The depot is not drawing ammunition.")
+            + " " + OnHand(nation, "Oil",
+                "Oil in the depot lasts {0} days.", "The depot is not drawing oil.");
+    }
+
+    private static string OnHand(Nation nation, string good, string lasts, string idle)
+    {
+        var days = StrategicStockpiles.DaysOnHand(nation, good);
+        return days is int n ? Loc.Format(lasts, n) : Loc.Get(idle);
     }
 }

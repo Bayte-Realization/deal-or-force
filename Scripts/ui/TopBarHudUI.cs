@@ -180,6 +180,15 @@ public partial class DealOrForceGame
                 ? Simulation.Loc.Format("{0} a week", Fmt.MoneyExact(player.WeeklyBalance))
                 : Tr("The first economic week has not closed yet."),
             balanced ? Tr("a week") : "", balanced ? Fmt.Direction(player.WeeklyBalance, 0.005d) : 0);
+        if (_stability is not null)
+        {
+            var rear = player.WarSupport > 0f
+                ? Simulation.WarWeariness.BesideWarSupport(_campaign, player).Text
+                : "";
+            _stability.DeltaHover = rear.Length == 0
+                ? ""
+                : Simulation.Loc.Format("war support {0}", Fmt.Percent(player.WarSupport)) + "\n" + rear;
+        }
         WriteStat(_stability, Fmt.Percent(player.Stability),
             Simulation.Loc.Format("Stability {0:P1}", player.Stability),
             player.WarSupport > 0f
@@ -259,6 +268,8 @@ public partial class DealOrForceGame
         internal string CaptionKey = "";
         internal string FullDelta = "";
         internal string ShortDelta = "";
+        /// <summary>Tooltip for the movement line when it already shows a war-support percent.</summary>
+        internal string DeltaHover = "";
         internal ExplainedStat Box;
         /// <summary>Half a year of the figure under it (Sparkline).</summary>
         internal Sparkline Spark;
@@ -472,7 +483,7 @@ public partial class DealOrForceGame
         }
         stat.Spark.AllowLayout(graph);
         FitHudLine(stat.Delta, shown, shown, width - (graph ? graphWidth : 0), 11, 10);
-        stat.Delta.TooltipText = Ui.Tip(full);
+        stat.Delta.TooltipText = Ui.Tip(string.IsNullOrEmpty(stat.DeltaHover) ? full : stat.DeltaHover);
         stat.Caption.TooltipText = Ui.Tip(caption);
         stat.Caption.MouseFilter = MouseFilterEnum.Stop;
     }

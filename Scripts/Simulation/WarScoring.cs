@@ -283,6 +283,20 @@ public static class WarScoring
                     war.ObjectiveScore + war.TickingScore + war.SupportScore;
 
         // ---- collapse ---------------------------------------------------------------------
+        if (WarScoreRulesHook.TryEvaluate(
+                war.OccupationScore, war.CapitalScore, war.ArmyScore,
+                war.BattleScore, war.ObjectiveScore, war.TickingScore, war.SupportScore,
+                war.DefenderOccupiedValue, war.DefenderStrengthLeft,
+                war.AttackerOccupiedValue, war.AttackerStrengthLeft,
+                defines.WarScoreCollapseOccupation, defines.WarScoreCollapseOccupationBroken, defines.WarScoreCollapseArmy,
+                defines.WarScoreMin, defines.WarScoreMax,
+                out var collapsed, out var finalScore))
+        {
+            war.Collapsed = collapsed;
+            war.WarScore = finalScore;
+            return;
+        }
+
         war.Collapsed = HasCollapsed(defines, war.DefenderOccupiedValue, war.DefenderStrengthLeft) ? 1 :
                         HasCollapsed(defines, war.AttackerOccupiedValue, war.AttackerStrengthLeft) ? -1 : 0;
         // A collapse is the ceiling or the floor, whichever the campaign declares. Ordinary
@@ -311,6 +325,27 @@ public static class WarScoring
         yield return ("objective {0}", war.ObjectiveScore);
         yield return ("momentum {0}", war.TickingScore);
         yield return ("home support {0}", war.SupportScore);
+    }
+
+    /// <summary>
+    /// The largest piece of <see cref="Parts"/>, in the war ledger's own words.
+    /// Attacker-positive, the same sign as <see cref="StrategicWar.WarScore"/>.
+    /// A flat ledger says so, so a menu does not have to show a bare percent.
+    /// </summary>
+    public static string LeadingCause(StrategicWar war)
+    {
+        if (war is null) return "";
+        string name = null;
+        var value = 0f;
+        foreach (var part in Parts(war))
+        {
+            if (name is not null && Math.Abs(part.Value) <= Math.Abs(value)) continue;
+            name = part.Name;
+            value = part.Value;
+        }
+        if (name is null || Math.Abs(value) < 0.05f)
+            return Loc.Get("No part of the war ledger is moving the score.");
+        return Loc.Format(name, value.ToString("+0.0;-0.0;0.0"));
     }
 
     private static bool HasCollapsed(Defines defines, float occupied, float strengthLeft) =>
@@ -381,5 +416,48 @@ public static class WarScoring
             step = war.DefenderOccupiedValue < 0.02f ? -defines.WarScoreTickingPerMonth :
                    war.DefenderOccupiedValue > 0.25f ? defines.WarScoreTickingPerMonth : 0f;
         war.TickingScore = M.Clamp(war.TickingScore + step * months, -defines.WarScoreTickingMax, defines.WarScoreTickingMax);
+    }
+}
+
+
+public static class WarScoreRulesHook
+{
+    public delegate bool Evaluator(
+        float occupationScore, float capitalScore, float armyScore,
+        float battleScore, float objectiveScore, float tickingScore, float supportScore,
+        float defenderOccupied, float defenderStrengthLeft,
+        float attackerOccupied, float attackerStrengthLeft,
+        float collapseOccupation, float collapseOccupationBroken, float collapseArmy,
+        float minScore, float maxScore,
+        out int collapsed, out float finalScore);
+
+    private static Evaluator _hook;
+    public static void Install(Evaluator hook) => _hook = hook;
+    public static void Uninstall() => _hook = null;
+    public static bool IsInstalled => _hook is not null;
+
+    public static bool TryEvaluate(
+        float occupationScore, float capitalScore, float armyScore,
+        float battleScore, float objectiveScore, float tickingScore, float supportScore,
+        float defenderOccupied, float defenderStrengthLeft,
+        float attackerOccupied, float attackerStrengthLeft,
+        float collapseOccupation, float collapseOccupationBroken, float collapseArmy,
+        float minScore, float maxScore,
+        out int collapsed, out float finalScore)
+    {
+        if (_hook is null)
+        {
+            collapsed = 0;
+            finalScore = 0f;
+            return false;
+        }
+        return _hook(
+            occupationScore, capitalScore, armyScore,
+            battleScore, objectiveScore, tickingScore, supportScore,
+            defenderOccupied, defenderStrengthLeft,
+            attackerOccupied, attackerStrengthLeft,
+            collapseOccupation, collapseOccupationBroken, collapseArmy,
+            minScore, maxScore,
+            out collapsed, out finalScore);
     }
 }

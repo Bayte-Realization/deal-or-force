@@ -790,6 +790,69 @@ public static class EconomySystem
         }
     }
 
+    /// <summary>
+    /// The country-card line under the war-support percent. Peace says the figure does not
+    /// apply. A war names the largest pieces already on <see cref="Nation.WarSupportDrivers"/>.
+    /// Reading it does not refill the breakdown or move the number.
+    /// </summary>
+    public static string DescribeWarSupport(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return "";
+        var atWar = false;
+        var wars = campaign.Wars;
+        for (var i = 0; i < wars.Count; i++)
+        {
+            var war = wars[i];
+            if (war is not null && !war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+        }
+        if (!atWar)
+            return Loc.Get("War support does not apply while the country is at peace.");
+
+        var drivers = nation.WarSupportDrivers;
+        if (drivers is null || !drivers.HasEntries)
+            return Loc.Get("At war. This week's reasons for war support have not been drawn yet.");
+
+        var entries = drivers.Entries;
+        var first = -1;
+        var second = -1;
+        var third = -1;
+        var firstMag = -1f;
+        var secondMag = -1f;
+        var thirdMag = -1f;
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var magnitude = MathF.Abs(entries[i].Value);
+            if (magnitude < 0.0000005f) continue;
+            if (magnitude > firstMag)
+            {
+                third = second; thirdMag = secondMag;
+                second = first; secondMag = firstMag;
+                first = i; firstMag = magnitude;
+            }
+            else if (magnitude > secondMag)
+            {
+                third = second; thirdMag = secondMag;
+                second = i; secondMag = magnitude;
+            }
+            else if (magnitude > thirdMag)
+            {
+                third = i; thirdMag = magnitude;
+            }
+        }
+
+        var lines = new List<string>(4) { Loc.Get("War support, this week.") };
+        void Line(int index)
+        {
+            if (index < 0) return;
+            var entry = entries[index];
+            lines.Add(Loc.Get(entry.Source) + " " + Fmt.PercentDelta(entry.Value));
+        }
+        Line(first);
+        Line(second);
+        Line(third);
+        return string.Join("\n", lines);
+    }
+
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in TickStages(campaign)) { }
@@ -957,9 +1020,12 @@ public static class EconomySystem
             nation.StandardOfLiving = M.Clamp01(nation.StandardOfLiving +
                 (anchor - nation.StandardOfLiving) * campaign.Defines.LivingReversionPerWeek);
             var focusLiteracy = cabinet.Literacy + government.Literacy + ideology.Literacy;
-            nation.Literacy = M.Clamp(nation.Literacy + budget.Literacy + focusLiteracy,
-                0.05f, 0.999f);
-            var productivityTarget = 0.72f + nation.HumanCapital * 0.50f + cabinet.ProductivityTarget;
+            var highTechModifier = 1f;
+            if (nation.Market.TryGetValue(Commodity.Electronics, out var electQuote) && electQuote.Demand > 0.05f)
+                highTechModifier *= (0.88f + 0.12f * Math.Clamp(electQuote.Satisfaction, 0f, 1f));
+            if (nation.Market.TryGetValue(Commodity.RareEarths, out var reQuote) && reQuote.Demand > 0.05f)
+                highTechModifier *= (0.90f + 0.10f * Math.Clamp(reQuote.Satisfaction, 0f, 1f));
+            var productivityTarget = (0.72f + nation.HumanCapital * 0.50f + cabinet.ProductivityTarget) * highTechModifier;
             nation.Productivity = M.Lerp(nation.Productivity, productivityTarget, 0.015f);
             // How a country is governed does not settle it this week; it builds up, slowly
             // and only so far. Government, ideology, cabinet and budget keep the accumulating

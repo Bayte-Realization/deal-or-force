@@ -132,9 +132,19 @@ public static class Attrition
         var captured = M.Clamp01(defines.EncircledLossCapturedShare);
         foreach (var army in campaign.Armies)
         {
-            if (!army.CutOff || army.Divisions <= 0f) continue;
-            if (MilitaryAccess.MustReturn(campaign, army)) { MilitaryAccess.Provision(army); continue; }
-            var pressed = (army.InBattle ? defines.EncircledUnderAttack : 1f) * scale;
+            if (!army.CutOff || army.Divisions <= 0f)
+            {
+                if (!army.CutOff) army.DaysCutOff = 0;
+                continue;
+            }
+            if (MilitaryAccess.MustReturn(campaign, army)) { MilitaryAccess.Provision(army); army.DaysCutOff = 0; continue; }
+            // The day count is advanced once, by the supply pass, earlier on this step.
+            // Counting it again made every retraced day two days older than the calendar.
+
+            var dayFactor = army.DaysCutOff <= 3 ? 1.0f :
+                            army.DaysCutOff <= 9 ? 1.0f + (army.DaysCutOff - 3) * 0.15f :
+                            1.6f + MathF.Min(1.0f, (army.DaysCutOff - 9) * 0.2f);
+            var pressed = (army.InBattle ? defines.EncircledUnderAttack : 1f) * scale * dayFactor;
             var before = army.Strength;
             army.Strength = M.Clamp01(army.Strength - defines.EncircledStrengthLoss * pressed);
             army.Organisation = M.Clamp01(army.Organisation - defines.EncircledOrganisationLoss * pressed);

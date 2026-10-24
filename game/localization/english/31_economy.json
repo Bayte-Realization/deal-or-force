@@ -10,6 +10,7 @@
   "The size of the debt": "The size of the debt",
   "The policy rate": "The policy rate",
   "held at its limit": "held at its limit",
+  "Government focus on national security": "Government focus on national security",
   "Policy interest rate": "Policy interest rate",
   "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.": "What the central bank charges. Raising it slows prices and slows the economy with them; it is also what the country's own debt costs, so a government that has borrowed pays for its own tightening twice.",
 
@@ -19,5 +20,11 @@
   "Prices are rising at {0} a year": "Prices are rising at {0} a year",
   "prices falling": "prices falling",
   "above the comfortable rate": "above the comfortable rate",
-  "comfortable": "comfortable"
+  "comfortable": "comfortable",
+
+  "Nobody is selling it.": "Nobody is selling it.",
+  "{0} sells it.": "{0} sells it.",
+  "Imports are {0} of supply.": "Imports are {0} of supply.",
+  "The depot covers {0} days.": "The depot covers {0} days.",
+  "The depot is not drawing it.": "The depot is not drawing it."
 }

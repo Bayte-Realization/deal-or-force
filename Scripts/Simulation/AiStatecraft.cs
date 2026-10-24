@@ -1014,7 +1014,8 @@ public static partial class AiStatecraft
                 // hand the ground back: it concedes the line, and the line is the de facto border.
                 PeaceOffers.Put(campaign, war, nation, opponent,
                     war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
-            else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim)
+            else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim ||
+                (nation.Parliament is { PeaceMandateActive: true } && campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
             return;
         }

@@ -644,9 +644,14 @@ public static class MilitaryOperations
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
                     NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery");
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
+                // A closed pocket is living on what it carried. Rest would put the day's
+                // organisation straight back, and the dry-out would never arrive.
+                if (army.CutOff) recovery = 0f;
                 army.Organisation = M.Clamp01(army.Organisation + recovery);
                 Reinforce(campaign, army, reinforcementWeights.GetValueOrDefault(army.NationId, 1f));
             }
+
+            if (army.CutOff) LogisticsSystem.HoldCauldron(campaign, army);
 
             // By the hour. These were written as a step's worth when a step was a day, and the
             // pockets that surrender when they starve were built and measured once the step
@@ -699,7 +704,7 @@ public static class MilitaryOperations
             army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
                 MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
                 M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
-                (army.CutOff && army.DaysCutOff > 3 ? 0.35f : 1.0f) *
+                (army.CutOff && army.DaysCutOff > 3 ? (army.DaysCutOff >= 10 ? 0.20f : 0.35f) : 1.0f) *
                 topology.TerrainAt(nextProvince).MovementSpeed *
                 StrategicRedeployment.DayOf(campaign, army) *
                 NationalModifiers.Factor(nation, "army_speed") *

@@ -101,6 +101,9 @@ public partial class DealOrForceGame
             button.Name = "Nav" + item.Screen.Replace(" ", "");
             button.SetMeta("navigation_short", item.Short);
             button.SetMeta("icon_above", true); button.ClipText = true;
+            // The rail is ninety pixels and the caption is the whole destination: a cut
+            // with no ellipsis reads as a word nobody wrote. Same cure as the outliner.
+            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10));
             button.AddThemeConstantOverride("icon_max_width", 23);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;

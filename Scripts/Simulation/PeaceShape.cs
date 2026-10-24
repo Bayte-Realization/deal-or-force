@@ -764,9 +764,12 @@ public static class PeaceShape
         }
     }
 
+
     /// <summary>Whether giving this region back leaves the rest of what is taken still joined to the winner.</summary>
     private static bool Leaf(Regions graph, HashSet<int> chosen, HashSet<int> anchors, int region)
     {
+        if (PeaceRulesHook.TryLeaf(r => Touching(graph, r), chosen, anchors, region, out var res))
+            return res;
         var rest = chosen.Where(other => other != region).ToHashSet();
         if (rest.Count == 0) return true;
         var reached = new HashSet<int>();
@@ -781,6 +784,8 @@ public static class PeaceShape
     /// <summary>The connected pieces a set of regions falls into, by land.</summary>
     private static List<HashSet<int>> Parts(Regions graph, HashSet<int> regions)
     {
+        if (PeaceRulesHook.TryParts(r => Touching(graph, r), regions, out var partsArray))
+            return partsArray.Select(p => new HashSet<int>(p)).ToList();
         var parts = new List<HashSet<int>>();
         var seen = new HashSet<int>();
         foreach (var start in regions)
@@ -883,5 +888,42 @@ public static class PeaceShape
             .Where(province => losers.Contains(topology.ProvinceToNation[province]))
             .Distinct()
             .ToList();
+    }
+}
+
+public static class PeaceRulesHook
+{
+    public delegate bool LeafDelegate(Func<int, IEnumerable<int>> adjacency, ISet<int> chosen, ISet<int> anchors, int region);
+    public delegate int[][] PartsDelegate(Func<int, IEnumerable<int>> adjacency, IEnumerable<int> nodes);
+
+    private static LeafDelegate _leaf;
+    private static PartsDelegate _parts;
+
+    public static void Install(LeafDelegate leaf, PartsDelegate parts)
+    {
+        _leaf = leaf;
+        _parts = parts;
+    }
+
+    public static bool TryLeaf(Func<int, IEnumerable<int>> adjacency, ISet<int> chosen, ISet<int> anchors, int region, out bool result)
+    {
+        if (_leaf is not null)
+        {
+            result = _leaf(adjacency, chosen, anchors, region);
+            return true;
+        }
+        result = false;
+        return false;
+    }
+
+    public static bool TryParts(Func<int, IEnumerable<int>> adjacency, IEnumerable<int> nodes, out int[][] parts)
+    {
+        if (_parts is not null)
+        {
+            parts = _parts(adjacency, nodes);
+            return true;
+        }
+        parts = null;
+        return false;
     }
 }

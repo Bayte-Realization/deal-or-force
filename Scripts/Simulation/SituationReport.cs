@@ -222,15 +222,50 @@ public static class SituationReport
 
         if (c.FeatureEnabled("escalation"))
         {
-            var hot = Escalation.Hottest(c, d.TensionCrisisAt).FirstOrDefault(r => (r.A == n.Id || r.B == n.Id) &&
-                !CampaignDiplomacy.AtWar(c, r.A, r.B));
+            // One pair: the hottest crisis or clashes this country is in. A limited war past
+            // that list still counts, because its ceasefire day is already on the war.
+            // A full war is a peace conference, and a calm world adds nothing.
+            var hot = PlayerEscalation(c, n);
             if (hot is not null && c.NationById(hot.A == n.Id ? hot.B : hot.A) is { } rival)
-                items.Add(new("standoff:" + rival.Id, (TensionStage)hot.TensionStage >= TensionStage.Clashes
-                        ? SituationPriority.Critical : SituationPriority.Warning, SituationArea.Foreign,
-                    Loc.Format("Dangerous standoff: {0}", rival.DisplayName), T("Tension has reached the crisis stage or beyond."),
-                    new[] { T("Hostility, old grievances, disputed land and rivalry all raise tension.") },
+            {
+                var stage = Escalation.StageOf(hot);
+                var stageName = T(EscalationStageName(stage));
+                var war = CampaignDiplomacy.WarBetween(c, hot.A, hot.B);
+                int? ceasefire = war is { Limited: true, LimitedUntilDay: >= 0 }
+                    ? Math.Max(0, war.LimitedUntilDay - c.ElapsedDays) : null;
+                int? talks = hot.TalksUntilDay > c.ElapsedDays ? hot.TalksUntilDay - c.ElapsedDays : null;
+                var incident = IncidentText(hot);
+                var summary = Loc.Format("{0}: {1}.", rival.DisplayName, stageName);
+                if (talks is int talkDays)
+                    summary += " " + Loc.Format("Talks run for another {0} days.", talkDays);
+                if (ceasefire is int due)
+                    summary += " " + Loc.Format("Border war: the ceasefire on the old lines falls due in {0} days.", due);
+                if (incident.Length > 0)
+                    summary += " " + Loc.Format("The last incident was {0}.", incident);
+                var facts = new List<SituationFact> { F("Stage", stageName), F("Tension", hot.Tension.ToString("N1")) };
+                if (talks is int talkLeft) facts.Add(F("Talks", Loc.Format("{0} days", talkLeft)));
+                if (ceasefire is int ceasefireLeft) facts.Add(F("Ceasefire due", ceasefireLeft.ToString()));
+                if (incident.Length > 0) facts.Add(F("Last incident", incident));
+                var causes = new List<string> { T("Hostility, old grievances, disputed land and rivalry all raise tension.") };
+                if (incident.Length > 0) causes.Add(Loc.Format("The last incident was {0}.", incident));
+                // Hold talks spends the existing talks cost. The room only offers it when that
+                // command would succeed. Otherwise the paper goes to the deal inbox.
+                var canTalk = !observer && Escalation.TalksBlock(c, n, rival).Length == 0;
+                var deadline = talks is int ? hot.TalksUntilDay : war is { Limited: true } ? war.LimitedUntilDay : -1;
+                items.Add(new("standoff:" + rival.Id,
+                    stage >= TensionStage.Clashes || ceasefire is not null
+                        ? SituationPriority.Critical : SituationPriority.Warning,
+                    SituationArea.Foreign,
+                    Loc.Format("Dangerous standoff: {0}", rival.DisplayName),
+                    summary,
+                    causes.ToArray(),
                     new[] { T("Prolonged armed clashes can become a border war. Talks can reduce tension; success is not guaranteed.") },
-                    new[] { F("Tension", hot.Tension.ToString("N1")) }, SituationRoute.Conflict, T("Inspect escalation and talks"), rival.Id));
+                    facts.ToArray(),
+                    canTalk || observer ? SituationRoute.Conflict : SituationRoute.Inbox,
+                    canTalk ? Loc.Format("Hold talks ({0})", Fmt.Money(c.Defines.TalksCost))
+                        : observer ? T("Inspect escalation and talks") : T("Open the deal inbox"),
+                    rival.Id, DeadlineDay: deadline));
+            }
         }
 
         if (n.Movement is not { Landless: true } && c.Defines.BrainDrainEnabled)
@@ -485,6 +520,54 @@ public static class SituationReport
     }
 
     private static float Threshold(float value, float fallback) => float.IsFinite(value) ? Math.Clamp(value, 0, 1) : fallback;
+
+    /// <summary>
+    /// The player's hottest crisis or armed clashes, or the limited war whose ceasefire
+    /// is soonest when no such pair is on the tension list. Never creates a relation.
+    /// </summary>
+    private static DiplomaticRelation PlayerEscalation(Campaign c, Nation n)
+    {
+        var hot = Escalation.Hottest(c, c.Defines.TensionCrisisAt).FirstOrDefault(relation =>
+            (relation.A == n.Id || relation.B == n.Id) &&
+            Escalation.StageOf(relation) is TensionStage.Crisis or TensionStage.Clashes &&
+            !FullWar(c, relation));
+        if (hot is not null) return hot;
+        StrategicWar soonest = null;
+        foreach (var war in c.Wars)
+        {
+            if (war.Ended || !war.Limited || war.LimitedUntilDay < 0) continue;
+            if (war.AttackerId != n.Id && war.DefenderId != n.Id) continue;
+            if (soonest is null || war.LimitedUntilDay < soonest.LimitedUntilDay ||
+                (war.LimitedUntilDay == soonest.LimitedUntilDay && war.Id < soonest.Id))
+                soonest = war;
+        }
+        if (soonest is null) return null;
+        var other = soonest.AttackerId == n.Id ? soonest.DefenderId : soonest.AttackerId;
+        return CampaignDiplomacy.Peek(c, n.Id, other);
+    }
+
+    private static bool FullWar(Campaign c, DiplomaticRelation relation)
+    {
+        var war = CampaignDiplomacy.WarBetween(c, relation.A, relation.B);
+        return war is not null && !war.Limited;
+    }
+
+    private static string EscalationStageName(TensionStage stage) => stage switch
+    {
+        TensionStage.Clashes => "Armed clashes",
+        TensionStage.Crisis => "Crisis",
+        TensionStage.Friction => "Friction",
+        TensionStage.War => "At war",
+        _ => "Calm"
+    };
+
+    private static string IncidentText(DiplomaticRelation relation)
+    {
+        if (relation?.LastIncident is not { Length: > 0 } id) return "";
+        var found = IncidentCatalog.Find(id);
+        var name = found is null || found.Name.Length == 0 ? id : found.Name;
+        return Loc.Get(name);
+    }
 }
 
 /// <summary>UI-local attention memory: changing a number or language is not a new emergency.</summary>

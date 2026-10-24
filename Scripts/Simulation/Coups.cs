@@ -172,6 +172,20 @@ public static class Coups
         return chance <= 0f ? "none" : chance < c.Defines.CoupBaseChance * 0.25f ? "low" : "high";
     }
 
+    /// <summary>
+    /// One line for the country card, from <see cref="Outlook"/>. A faint chance stays quiet,
+    /// the same as the alert rail. This does not roll a plot and does not start one.
+    /// </summary>
+    public static (string Text, int Level) Notice(Campaign c, Nation nation)
+    {
+        switch (Outlook(c, nation))
+        {
+            case "plot": return (Loc.Get("Officers are plotting against the government."), 2);
+            case "high": return (Loc.Get("A coup is possible."), 1);
+            default: return ("", 0);
+        }
+    }
+
     private static bool LosingAWar(Campaign c, Nation nation)
     {
         foreach (var war in c.Wars)

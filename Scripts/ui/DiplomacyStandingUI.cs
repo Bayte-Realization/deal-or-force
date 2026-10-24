@@ -120,8 +120,43 @@ public partial class DealOrForceGame
             }
         }
 
+        // Sponsorships the player is in, and covert operations by or against the player,
+        // as sentences. The chip row below keeps everyone else's backers. A sponsorship
+        // already said in a sentence is not chipped again.
+        var player = c.Player;
+        var hybrid = player is null
+            ? Array.Empty<HybridWarRow>()
+            : HybridWarBrief.Read(c, player, nation);
+        var toldSponsorships = new HashSet<int>();
+        foreach (var row in hybrid)
+            if (row.SponsorshipId > 0) toldSponsorships.Add(row.SponsorshipId);
+        if (hybrid.Count > 0)
+        {
+            var proxy = false;
+            foreach (var row in hybrid)
+            {
+                if (!row.Covert) proxy = true;
+                var line = Fixed(text(row.Sentence, 12, Ui.Colour(row.Incoming ? "state.warning" : "text.body")), 120);
+                line.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+                line.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+                line.MouseFilter = MouseFilterEnum.Stop;
+                line.TooltipText = Ui.Tip(row.Sentence);
+                box.AddChild(line);
+            }
+            var subjectId = nation.Id;
+            var caption = proxy ? "Open the conflicts screen" : "Open covert operations";
+            var help = proxy
+                ? "Opens the conflicts screen, where a sponsorship is reviewed. Opening it does not start one."
+                : "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one.";
+            var open = ActionButton(caption, () => OpenHybridPressure(subjectId), 240, 28);
+            open.Name = "HybridWarOpen";
+            open.ClipText = true;
+            open.TooltipText = Ui.Tip(Tr(help));
+            box.AddChild(open);
+        }
+
         // ---- who arms whom.
-        var backings = c.Sponsorships.Where(s => !s.Ended).ToList();
+        var backings = c.Sponsorships.Where(s => !s.Ended && !toldSponsorships.Contains(s.Id)).ToList();
         string Level(Sponsorship s) => "  " + Simulation.Loc.Format("level {0}", s.Level);
         var backers = backings.Where(s => s.ClientId == nation.Id).ToList();
         Chips("Armed by", backers.Select(s => c.NationById(s.SponsorId)),
@@ -176,5 +211,66 @@ public partial class DealOrForceGame
             Chips("Movements inside", c.Nations.Where(m => m.Movement is { Dissolved: false } movement &&
                 movement.Support.Any(pair => pair.Value > 0.05f && ownIds.Contains(pair.Key))));
         }
+    }
+
+    /// <summary>
+    /// The one navigation off the hybrid-war sentences. A sponsorship opens the conflicts
+    /// screen. A covert operation opens that country's province card, where an operation
+    /// already under way can be called off. Neither path orders a new one.
+    /// </summary>
+    private void OpenHybridPressure(int subjectId)
+    {
+        var player = _campaign?.Player;
+        var subject = _campaign?.NationById(subjectId);
+        if (player is null || subject is null) return;
+        var rows = HybridWarBrief.Read(_campaign, player, subject);
+        if (rows.Count == 0) return;
+        var proxy = false;
+        foreach (var row in rows)
+            if (!row.Covert) proxy = true;
+        if (proxy)
+        {
+            var wars = new HashSet<int>();
+            foreach (var row in rows)
+                if (!row.Covert && row.WarId >= 0) wars.Add(row.WarId);
+            _conflictPair = -1;
+            _conflictWar = wars.Count == 1 ? System.Linq.Enumerable.First(wars) : -1;
+            _conflictTab = _conflictWar >= 0 ? 1 : 2;
+            CloseDiplomacyScreen();
+            OpenScreen("Conflicts");
+            return;
+        }
+        OpenCovertCard(rows[0]);
+    }
+
+    private void OpenCovertCard(HybridWarRow row)
+    {
+        var foreign = _campaign.NationById(row.OtherId);
+        if (foreign is null) return;
+        ScenarioState region = null;
+        if (row.RegionMapIndex >= 0)
+        {
+            var aimed = _campaign.States.Find(state => state.MapIndex == row.RegionMapIndex);
+            if (aimed is not null && aimed.NationMapIndex == foreign.MapIndex) region = aimed;
+        }
+        region ??= _campaign.StatesOf(foreign).FirstOrDefault();
+        var province = region is null ? 0 : FirstProvinceIn(region.MapIndex);
+        if (region is not null && province > 0 && _campaign.ProvinceMap is not null)
+        {
+            CloseDiplomacyScreen();
+            var holder = _campaign.Nations.Find(nation => nation.MapIndex == region.NationMapIndex) ?? foreign;
+            BuildProvinceCard(new GlobePick(holder, region, province, 0f, 0f), holder, holder, GetViewport().GetMousePosition());
+            return;
+        }
+        SelectDiplomacyNation(foreign);
+    }
+
+    private int FirstProvinceIn(int stateMapIndex)
+    {
+        var map = _campaign?.ProvinceMap;
+        if (map?.ProvinceToState is null || stateMapIndex < 0) return 0;
+        for (var province = 1; province <= map.ProvinceCount; province++)
+            if (map.ProvinceToState[province] == stateMapIndex) return province;
+        return 0;
     }
 }

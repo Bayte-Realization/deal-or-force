@@ -44,6 +44,42 @@ powershell -ExecutionPolicy Bypass -File Tools\build.ps1 -Godot "C:\GodotEngineN
     --export-release "Windows Desktop" "D:\Godot Projects\deal-or-force-godot-4-8\build\<новый-билд>\Deal or Force\Deal or Force.exe"
 ```
 
+## Нужно ли закрывать редактор
+
+Компиляция — не строго. Обычный `dotnet build` при открытом редакторе проходит, но редактор
+держит `DealOrForce.runtimeconfig.json` в `.godot\mono\temp\bin\Debug`, и тогда сборка падает
+на `MSB4018`, хотя компилятор уже прошёл; лечится выносом выхода
+(`-p:BaseOutputPath=tmp_logs\dealout\ -p:BaseIntermediateOutputPath=tmp_logs\dealobj\`, см.
+`docs/LEDGER_EVENT_MARKS_2026_10_24_RU.md`). `build.ps1` тоже рассчитан на открытый
+редактор — он копирует проект в `build\.export-*` и правит `project.godot` только в копии.
+
+Экспорт — да, закрывать стоит. 24 октября при открытом редакторе `build.ps1` умер на шаге
+подготовки экспортной конфигурации: `EXPORT_EXIT=-1`, в логе ни ошибки, ни строки
+`EXPORT_CONFIG`, а в журнале Windows — `Godot_v4.8-beta1_mono_win64.exe` terminated due to an
+unhandled .NET exception (faulting module `ntdll.dll`). С закрытым редактором тот же скрипт дал
+`EXPORT_EXIT=0` и `EXPORT_VERIFY failures=0`.
+
+Причина не в блокировке файлов и не в порте. `Tools\prepare_export_project.gd` поднимает
+headless-копию живого проекта, её автозагрузки стартуют `MCPRuntimeServer`, и тот спокойно
+уходит на следующий свободный порт: при искусственно занятом 6570 он пишет
+`listening on 127.0.0.1:6571` и завершается с `PREPARE_EXIT=0`. Прямого доказательства, откуда
+пришло падение, нет; известно только, что в те же полторы минуты умер и чужой
+`FormableTests.exe` (18:49:29), а сам PowerShell вышел кодом −1 без сообщения, — машина была
+занята другими сессиями (девять MCP-мостов `godot-ai.exe`, параллельные прогоны).
+
+Практический вывод: редактор закрывают не из-за сборки, а потому что unattended-экспорт идёт
+пять-шесть минут и, упав молча, не оставляет ничего читаемого. Закрывай перед `build.ps1`,
+`dev.ps1 -Import` и запуском игры вторым инстансом; компилировать можно и при открытом, с
+оговоркой про `MSB4018` выше.
+
+Если экспорт упал молча, смотреть надо не лог:
+
+- `Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-15)}`
+  — падения .NET-процессов в это окно;
+- есть ли `EXPORT_CONFIG result=0 development_autoloads_removed=7` в логе: нет строки — шаг
+  подготовки не доехал;
+- `Get-NetTCPConnection -LocalPort 6570 -State Listen` — кто держит порт MCP.
+
 ### Пресет экспорта и шаблоны модов
 
 После сборки можно проверить именно экспортированный EXE, не исходный проект:

@@ -1009,6 +1009,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
             AppointedDay = campaign.ElapsedDays
         };
         nation.LastCabinetChangeDay = campaign.ElapsedDays;
+        ParliamentaryPolitics.OnMinisterAppointed(campaign, nation, PortfolioId);
         NationalModifiers.Invalidate(nation);
         campaign.MarkStrategicChange();
     }
@@ -1068,6 +1069,7 @@ public sealed class RecruitPoliticianCommand : ICampaignCommand
                 Name = candidate.Name, BirthYear = candidate.BirthYear,
                 TraitId = candidate.TraitId, AppointedDay = campaign.ElapsedDays
             };
+            ParliamentaryPolitics.OnMinisterAppointed(campaign, nation, candidate.PortfolioId);
         }
         nation.RulerGeneration++;
         nation.LastCabinetChangeDay = campaign.ElapsedDays;

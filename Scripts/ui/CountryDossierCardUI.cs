@@ -24,7 +24,7 @@ public partial class DealOrForceGame
             { _countryCardRows.RemoveChild(child); child.QueueFree(); }
     }
 
-    private void RepaintCountryFact(string caption, string value, string tooltip, string token)
+    private void RepaintCountryFact(string caption, string value, string tooltip, string token, bool clipValue = false)
     {
         if (_countryFactCursor == _countryFactPool.Count)
         {
@@ -49,6 +49,13 @@ public partial class DealOrForceGame
         item.Caption.Text = Tr(caption); item.Value.Text = value ?? "";
         item.Caption.SetMeta(LocSourceMeta, caption); item.Caption.SetMeta(LocAppliedMeta, item.Caption.Text);
         item.Caption.TooltipText = Tr(caption);
+        item.Caption.SizeFlagsHorizontal = clipValue ? SizeFlags.ShrinkBegin : SizeFlags.ExpandFill;
+        item.Value.AutowrapMode = clipValue ? TextServer.AutowrapMode.Off : TextServer.AutowrapMode.WordSmart;
+        item.Value.ClipText = clipValue;
+        item.Value.TextOverrunBehavior = clipValue
+            ? TextServer.OverrunBehavior.TrimEllipsis
+            : TextServer.OverrunBehavior.NoTrimming;
+        item.Value.HorizontalAlignment = clipValue ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         item.Value.AddThemeColorOverride("font_color", Ui.Colour(token));
         item.Row.TooltipText = Ui.Tip(string.IsNullOrEmpty(tooltip) ? Tr(caption) + ": " + value : tooltip);
         _countryCardRows.MoveChild(item.Row, _countryCardRows.GetChildCount() - 1);

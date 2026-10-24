@@ -108,8 +108,14 @@ public sealed partial class StrategicLineChart : Control
             if (used > 0f && used + name.Width > room) { rows++; used = 0f; }
             used += name.Width;
         }
+        // The legend sits under the axis captions, and those captions are two rows of their own:
+        // the day ticks with the recorded-event count, then the span caption. Reserving the legend
+        // rows alone put `day 0` and `one point a week` on top of the series names, which the
+        // exported ledger screenshot showed as one unreadable smear.
         var legendHeight = rows * legendLine + 8f;
-        _plot = new Rect2(58, 56, MathF.Max(40, Size.X - 74), MathF.Max(36, Size.Y - 64f - legendHeight));
+        const float captionHeight = 40f;
+        _plot = new Rect2(58, 56, MathF.Max(40, Size.X - 74),
+            MathF.Max(36, Size.Y - 64f - legendHeight - captionHeight));
         if (_days.Count == 0 || _series.Count == 0 || _series.All(series => series.Values.Count == 0))
         {
             DrawString(font, _plot.GetCenter(), "History will appear after the first simulation week.",
@@ -237,9 +243,11 @@ public sealed partial class StrategicLineChart : Control
             drawn++;
         }
         if (drawn == 0) return;
-        DrawString(font, new Vector2(_plot.Position.X + 44, _plot.End.Y + 15),
-            drawn == 1 ? "▲ one recorded event" : $"▲ {drawn} recorded events",
-            HorizontalAlignment.Left, -1, 9, Ui.Colour("chart.tick"));
+        // On the span row, right-aligned: the day ticks own the row above, and the count of
+        // recorded events beside `day 0` ran into it as soon as the day number had four digits.
+        var caption = drawn == 1 ? "▲ one recorded event" : $"▲ {drawn} recorded events";
+        DrawString(font, new Vector2(_plot.End.X - 160, _plot.End.Y + 27), caption,
+            HorizontalAlignment.Right, 160, 9, Ui.Colour("chart.tick"));
     }
 
     private Vector2 Point(int index, int count, float value, float minimum, float maximum) => new(

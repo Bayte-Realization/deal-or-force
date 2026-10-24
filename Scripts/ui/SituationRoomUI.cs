@@ -325,6 +325,28 @@ public partial class DealOrForceGame
             UpdateScreenButtons();
             return;
         }
+        if (item.Id.StartsWith("standoff:", StringComparison.Ordinal) && !_observerMode)
+        {
+            var rival = _campaign.NationById(item.TargetId);
+            if (rival is not null && Escalation.TalksBlock(_campaign, _campaign.Player, rival).Length == 0)
+            {
+                var command = new HoldTalksCommand { IssuerId = _campaign.Player.Id, TargetId = rival.Id };
+                Submit(command);
+                if (command.Started)
+                {
+                    SetArmyFeedback(Tr("Talks opened. They take tension off every week while they last."));
+                    RefreshSituationRoom(force: true);
+                    return;
+                }
+            }
+            _assistanceInboxSelected = -1;
+            _dealInboxSelected = -1;
+            _situationLayer.Visible = false;
+            _situationReturn = "Inbox";
+            OpenDealInbox();
+            UpdateScreenButtons();
+            return;
+        }
         if (item.Id.StartsWith("ultimatum:", StringComparison.Ordinal))
         {
             _ultimatumInboxSelected = item.TargetId;

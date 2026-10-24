@@ -53,6 +53,8 @@ perf.log
 /bench*.log
 # Local compiler/probe scratch, not language-kit sources or reproducible reports.
 /Scripts/Rules/tmp/
+/Scripts/Rules/tmp_logs/
+/tmp_logs/
 /tmp_*.log
 /tmp_*.cmd
 /tmp_verify_headless*/

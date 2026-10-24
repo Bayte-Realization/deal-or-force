@@ -41,6 +41,17 @@ public static class AssaultReadiness
     {
         if (campaign is null || army is null)
             return new(false, Reason.Unavailable, 0, .16f, 0, .20f, 0);
+        // A grouping that has eaten through its cauldron is on the organisation floor.
+        // A direct order does not buy it another attack: player and AI share the dry-out.
+        var cutoffDays = Math.Max(1, campaign.Defines.SupplyCutoffDays);
+        if (army.CutOff && army.DaysCutOff >= cutoffDays)
+        {
+            var minimumOrganisation = campaign.Defines.AutonomousAssaultMinimumOrganisation;
+            var minimumSupply = campaign.Defines.AutonomousAssaultMinimumSupply;
+            return new(false, Reason.LowOrganisation, army.Organisation,
+                minimumOrganisation > 0f ? minimumOrganisation : MinimumOrganisation,
+                army.SupplyLevel, minimumSupply > 0f ? minimumSupply : MinimumSupply, 0);
+        }
         // The authoritative rule lives in Rules/AssaultRules.fs. It is a pure predicate over
         // primitives, so the C# side keeps the campaign, the clock and the fallback; if the
         // managed rule ever cannot be loaded or throws, the identical managed path below

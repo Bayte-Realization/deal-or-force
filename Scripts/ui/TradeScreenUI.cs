@@ -71,6 +71,7 @@ public partial class DealOrForceGame
     private const int PartnerBoughtWidth = 130;
     private const int PartnerBalanceWidth = 100;
 
+    private Label[] _tradeCoverLines = Array.Empty<Label>();
     private readonly List<TradeScreenRow> _tradeScreenRows = new();
     private readonly List<TradePartnerRow> _tradePartnerRowList = new();
     private readonly List<Commodity> _tradeScreenOrder = new();
@@ -107,6 +108,24 @@ public partial class DealOrForceGame
         _tradeScreenSummary = Title("", 13, Ui.Colour("text.body_soft"));
         _tradeScreenSummary.CustomMinimumSize = new Vector2(0, 22);
         rows.AddChild(_tradeScreenSummary);
+
+        // Three strategic goods already on the market and in the depot. Fixed lines: a wrapping
+        // label with no width would stretch this modal to the screen. The whole sentence is
+        // also the tooltip, so a clipped tail is still readable.
+        var cover = new VBoxContainer();
+        cover.AddThemeConstantOverride("separation", 1);
+        rows.AddChild(cover);
+        _tradeCoverLines = new Label[CommodityLeverage.ReportedGoods.Length];
+        for (var index = 0; index < _tradeCoverLines.Length; index++)
+        {
+            var label = Fixed(Title("", 12, Ui.Colour("text.body")));
+            label.Name = "StrategicCover_" + CommodityLeverage.ReportedGoods[index];
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            label.CustomMinimumSize = new Vector2(0, 18);
+            label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            cover.AddChild(label);
+            _tradeCoverLines[index] = label;
+        }
 
         // ------------------------------------------------------------------ the policy
         // The same three stances, moved here from State Affairs: they are trade, and a
@@ -278,12 +297,26 @@ public partial class DealOrForceGame
                     player.MarketAccess)
                 : " · " + Tr("The first economic week has not closed yet."));
 
+        RefreshStrategicCover(player);
+
         foreach (var (policy, button) in _tradePolicyButtons)
             ApplyLedgerButtonState(button, policy == player.TradePolicy);
 
         RefreshTradeMatrix(settled);
         RefreshTradePartners();
         RefreshTradeInstructions();
+    }
+
+    private void RefreshStrategicCover(Nation player)
+    {
+        if (_tradeCoverLines is null || _tradeCoverLines.Length == 0 || player is null) return;
+        var lines = CommodityLeverage.CoverLines(_campaign, player);
+        for (var index = 0; index < _tradeCoverLines.Length; index++)
+        {
+            var text = index < lines.Length ? lines[index] : "";
+            _tradeCoverLines[index].Text = text;
+            _tradeCoverLines[index].TooltipText = text.Length == 0 ? "" : Ui.Tip(text);
+        }
     }
 
     // ------------------------------------------------------------------ the matrix

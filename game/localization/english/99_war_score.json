@@ -2,5 +2,6 @@
   "capitals {0}": "capitals {0}",
   "armies {0}": "armies {0}",
   "momentum {0}": "momentum {0}",
-  "{0} has collapsed: the war is decided.": "{0} has collapsed: the war is decided."
+  "{0} has collapsed: the war is decided.": "{0} has collapsed: the war is decided.",
+  "No part of the war ledger is moving the score.": "No part of the war ledger is moving the score."
 }
