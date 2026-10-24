@@ -28,14 +28,18 @@ public static class LogisticsSystem
     private static int[] _distance = Array.Empty<int>();
     private static int[] _source = Array.Empty<int>();
     private static int[] _stamp = Array.Empty<int>();
+    // Which provinces the network reaches from its roots, stamped like the trace below.
+    private static int[] _reach = Array.Empty<int>();
     private static int _generation;
 
     private static readonly Queue<int> Frontier = new();
+    private static readonly List<int> Roots = new();
     private static readonly Dictionary<int, int> HubByState = new();
     private static readonly Dictionary<int, float> DemandBySource = new();
     private static readonly Dictionary<int, ScenarioState> StateById = new();
     private static readonly Dictionary<ushort, List<int>> Controlled = new();
     private static readonly Dictionary<int, List<Army>> ArmiesByNation = new();
+    private static readonly Dictionary<int, bool> IsIsolatedHub = new();
 
     public static void Tick(Campaign campaign)
     {
@@ -78,6 +82,7 @@ public static class LogisticsSystem
             _distance = new int[length];
             _source = new int[length];
             _stamp = new int[length];
+            _reach = new int[length];
             _generation = 0;
         }
 
@@ -102,22 +107,39 @@ public static class LogisticsSystem
         StateById.Clear();
         foreach (var state in campaign.StatesOf(nation)) StateById[state.MapIndex] = state;
 
-        HubByState.Clear();
-        foreach (var province in territory)
-        {
-            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
-            // A lake keeps no depot, however much of it a country owns.
-            if (topology.IsWater(province)) continue;
-            var state = topology.ProvinceToState[province];
-            if (!HubByState.ContainsKey(state)) HubByState[state] = province;
-        }
-
         // A new generation is this nation's claim on the scratch: an entry counts as
         // written only if it carries the number below. Nothing has to be cleared.
         var generation = ++_generation;
         var distance = _distance;
         var source = _source;
         var stamp = _stamp;
+
+        // Which of the country's ground the network actually reaches. Only that ground can
+        // hold a depot, which is a different question from which ground it owns - see
+        // CollectRoots and TraceNetwork.
+        var reach = _reach;
+        CollectRoots(nation, territory, topology, controllers);
+        TraceNetwork(nation, topology, controllers, generation);
+
+        HubByState.Clear();
+        IsIsolatedHub.Clear();
+        foreach (var province in territory)
+        {
+            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            // A lake keeps no depot, however much of it a country owns.
+            if (topology.IsWater(province)) continue;
+            var isConnected = reach[province] == generation;
+            var state = topology.ProvinceToState[province];
+            if (!isConnected)
+            {
+                // Isolated enclaves without capital land/port access have degraded depot capacity
+                // and require an established local barracks/depot to serve as an emergency hub.
+                if (!StateById.TryGetValue(state, out var st) || st.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0)
+                    continue;
+                IsIsolatedHub[state] = true;
+            }
+            if (!HubByState.ContainsKey(state)) HubByState[state] = province;
+        }
 
         Frontier.Clear();
         foreach (var (state, province) in HubByState)
@@ -192,9 +214,12 @@ public static class LogisticsSystem
             // is what a player builds to widen this, so it carries the most weight.
             // Winter narrows the same road. It does not invent a second supply network.
             var centre = topology.CenterOf(province);
+            var damageFactor = state is not null ? (1f - MathF.Min(0.85f, state.WarDamage * 0.9f)) : 1f;
+            var enclaveFactor = IsIsolatedHub.GetValueOrDefault(sourceState) ? 0.35f : 1f;
             var capacity = (campaign.Defines.BaseStateSupplyThroughput +
                            infrastructure * campaign.Defines.SupplyPerInfrastructure +
                            barracks * campaign.Defines.SupplyPerBarracks) *
+                          damageFactor * enclaveFactor *
                           WaterConditions.RoadThroughput(campaign, centre.Latitude);
             var demand = MathF.Max(0.01f, DemandBySource.GetValueOrDefault(sourceState));
             var congestion = M.Clamp(capacity / demand, 0.08f, 1f);
@@ -287,9 +312,123 @@ public static class LogisticsSystem
         }
     }
 
+    /// <summary>
+    /// Where a country's supply network begins: the capital, or, when the capital has fallen,
+    /// the depots the country still holds, or, in the last case, the ground itself.
+    ///
+    /// A province used to be a source of supply the moment the country owned it, at distance
+    /// zero. Two things followed, and a player feels both. A division encircled on a scrap of
+    /// national soil was fed from that scrap for as long as it stood there, so closing a pocket
+    /// bought nothing until the ground itself fell; and cutting the corridor between a capital
+    /// and its front cost the enemy nothing at all, because every province behind the cut was
+    /// still a source of its own. Supply begins at a root and travels over ground the country
+    /// controls, which is what makes a corridor worth taking.
+    /// </summary>
+    private static void CollectRoots(Nation nation, List<int> territory, ProvinceTopology topology,
+        ushort[] controllers)
+    {
+        Roots.Clear();
+        var capital = nation.CapitalProvinceId;
+        if (capital > 0 && capital < controllers.Length && controllers[capital] == nation.MapIndex &&
+            !topology.IsWater(capital))
+        {
+            Roots.Add(capital);
+            return;
+        }
+        var capitalState = nation.CapitalStateMapIndex;
+        if (capitalState > 0)
+        {
+            foreach (var province in territory)
+            {
+                if (topology.ProvinceToState[province] != capitalState) continue;
+                if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+                if (topology.IsWater(province)) continue;
+                Roots.Add(province);
+                return;
+            }
+        }
+        // The capital is gone. A state keeps its stores in a barracks, so the depots that are
+        // still standing are the roots - and if not one of them is, the ground the country
+        // stands on is: a state pushed off its own roads should be in trouble, not out of
+        // supply the same afternoon.
+        foreach (var province in territory)
+        {
+            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            if (topology.IsWater(province)) continue;
+            if (!StateById.TryGetValue(topology.ProvinceToState[province], out var state)) continue;
+            if (state.Buildings.GetValueOrDefault(BuildingKind.Barracks) <= 0) continue;
+            Roots.Add(province);
+        }
+        if (Roots.Count > 0) return;
+        foreach (var province in territory)
+        {
+            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            if (topology.IsWater(province)) continue;
+            Roots.Add(province);
+        }
+    }
+
+    /// <summary>
+    /// The ground the network reaches from its roots: over land the country controls, and then,
+    /// if it holds a port, along its own coast.
+    ///
+    /// No hop budget here. The budget belongs to distance - a trace twenty provinces long is
+    /// still a trace - and spending it here would cut every country wider than twenty provinces
+    /// in half on the first day of the campaign.
+    ///
+    /// A sea lane is a road, and for the same reason: without it an island of one's own is cut
+    /// off from its capital the moment the campaign begins. That is the starvation SupplyBySea
+    /// repairs, one formation at a time, for ground no road reaches. The basin two shores
+    /// share is not asked here because the thing that would have to ask it is a navy, and the
+    /// navy is already modelled: a fleet off the coast charges that coast a blockade penalty when
+    /// its supply arrives. Asking the basin would instead have starved every overseas garrison
+    /// in the game, which is the worse guess of the two.
+    /// </summary>
+    private static void TraceNetwork(Nation nation, ProvinceTopology topology, ushort[] controllers,
+        int generation)
+    {
+        var reach = _reach;
+        Frontier.Clear();
+        foreach (var root in Roots)
+        {
+            if (reach[root] == generation) continue;
+            reach[root] = generation;
+            Frontier.Enqueue(root);
+        }
+        while (Frontier.Count > 0)
+        {
+            var province = Frontier.Dequeue();
+            foreach (var neighbor in topology.Neighbors[province])
+            {
+                if (reach[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
+                reach[neighbor] = generation;
+                Frontier.Enqueue(neighbor);
+            }
+        }
+
+        var coasts = SeaLanes.CoastalProvinces(topology);
+        if (coasts.Count == 0) return;
+        var openBasins = new HashSet<int>();
+        foreach (var coast in coasts)
+        {
+            if (reach[coast] == generation && controllers[coast] == nation.MapIndex)
+            {
+                var basin = SeaLanes.HarbourBasin(topology, coast);
+                if (basin >= 0) openBasins.Add(basin);
+            }
+        }
+        if (openBasins.Count == 0) return;
+        foreach (var coast in coasts)
+        {
+            if (controllers[coast] == nation.MapIndex && openBasins.Contains(SeaLanes.HarbourBasin(topology, coast)))
+                reach[coast] = generation;
+        }
+    }
+
     private static void SetStranded(Army army)
     {
         army.CutOff = true;
+        army.DaysCutOff++;
         army.SupplyDistance = -1;
         army.SupplySourceStateMapIndex = -1;
         army.SupplyCongestion = 0f;

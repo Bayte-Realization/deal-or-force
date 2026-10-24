@@ -14,6 +14,10 @@ static class Program
         if (args.Length == 0) EquipmentReplenishmentTests.Run();
         if (args.Contains("--covert-politics-only")) { CovertPoliticalTests.Run(); return; }
         if (args.Length == 0) CovertPoliticalTests.Run();
+        if (args.Contains("--supply-network-only")) { SupplyNetworkTests.Run(); return; }
+        if (args.Length == 0) SupplyNetworkTests.Run();
+        if (args.Contains("--four-systems-only")) { FourSystemsIntegrationTests.RunAll(); return; }
+        if (args.Length == 0) FourSystemsIntegrationTests.RunAll();
         if (args.Contains("--inspect-save")) { InspectSave(args); return; }
         if (args.Contains("--paused-doctrines-only")) { PausedDoctrineTests.Run(); return; }
         if (args.Length == 0) PausedDoctrineTests.Run();

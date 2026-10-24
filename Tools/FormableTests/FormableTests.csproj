@@ -12,6 +12,8 @@
   <ItemGroup><Compile Include="../Shared/ArmyOrderObservation.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/EquipmentReplenishmentTests.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/CovertPoliticalTests.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/SupplyNetworkTests.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../Shared/FourSystemsIntegrationTests.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/AssaultRulesFSharpBoot.cs"/></ItemGroup>
   <!-- The managed F# pure rule is part of the game now; the test stand references the same
        net8.0 target the simulation sources compile against. -->
