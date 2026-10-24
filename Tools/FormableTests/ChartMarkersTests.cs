@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 
@@ -14,6 +15,7 @@ static class ChartMarkersTests
     {
         PositionFollowsTheSamplesNotTheCalendar();
         MarksAreRecordedFactsAndNothingElse();
+        TheScaleIsExplainedFromTheStamps();
     }
 
     /// <summary>
@@ -99,5 +101,42 @@ static class ChartMarkersTests
         Check(described.StartsWith("• ", StringComparison.Ordinal), "a tooltip lists marks as bullets");
         Check(described.Split('\n').Length == 1, "the tooltip respects its own line limit");
         Check(ChartMarkers.Describe(Array.Empty<ChartMarkers.Mark>()) == "", "no marks, no tooltip lines");
+    }
+
+    /// <summary>
+    /// History is kept weekly for three years, four-weekly to ten, quarterly to forty, so a long
+    /// curve has three spacings across it and a young one has a single spacing. The chart says
+    /// which, in the words the reader would use, and reads it off the stamps it is drawing rather
+    /// than off a promise about the storage rule.
+    /// </summary>
+    private static void TheScaleIsExplainedFromTheStamps()
+    {
+        Check(ChartSpan.Caption(Array.Empty<int>()) == "", "no points, nothing to explain");
+        Check(ChartSpan.Caption(new[] { 5 }) == "", "one point is not an axis");
+
+        var weekly = new[] { 0, 7, 14, 21, 28 };
+        Check(ChartSpan.Caption(weekly) == "one point a week", "a young campaign says its points are weeks");
+
+        var quarterly = new[] { 0, 91, 182, 273 };
+        Check(ChartSpan.Caption(quarterly) == "one point a quarter", "a quarterly window says so");
+
+        var unnamed = new[] { 0, 30, 60 };
+        Check(ChartSpan.Caption(unnamed) == "one point every 30 days",
+            "a spacing without a name is given its number instead of a wrong word");
+
+        var repeated = new[] { 0, 7, 7, 14 };
+        Check(ChartSpan.Caption(repeated) == "one point a week",
+            "a day recorded twice does not invent a second spacing");
+
+        // The real rule, read off CampaignHistory itself: weekly to three years, four-weekly to
+        // ten, quarterly beyond. Change the thinning and this line changes with it.
+        var days = new List<int>();
+        for (var day = 0; day <= CampaignHistory.WeeklyDays; day += 7) days.Add(day);
+        for (var day = CampaignHistory.WeeklyDays + 28; day <= CampaignHistory.MonthlyDays; day += 28) days.Add(day);
+        for (var day = CampaignHistory.MonthlyDays + 91; day <= CampaignHistory.KeptDays; day += 91) days.Add(day);
+        Check(ChartSpan.Caption(days) == "a week, then every fourth week, then a quarter",
+            "a forty-year window names its three spacings once, in the order they cover");
+        Check(ChartSpan.Caption(days.Where(day => day <= CampaignHistory.WeeklyDays).ToArray()) == "one point a week",
+            "the same campaign early on is still simply weekly");
     }
 }

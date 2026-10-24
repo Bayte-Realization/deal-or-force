@@ -196,6 +196,14 @@ public sealed partial class StrategicLineChart : Control
             HorizontalAlignment.Left, -1, 9, Ui.Colour("chart.tick"));
         DrawString(font, new Vector2(_plot.End.X - 90, _plot.End.Y + 15), $"day {_days[^1]:N0}",
             HorizontalAlignment.Right, 90, 9, Ui.Colour("chart.tick"));
+        // What a point is, under the axis it belongs to: history is kept weekly, then every
+        // fourth week, then quarterly, so the spacing changes across a long curve. The row below
+        // the day ticks is empty, and the caption is a day-by-day fact about the drawn stamps
+        // rather than a promise about the storage rule.
+        var span = ChartSpan.Caption(_days);
+        if (span.Length > 0)
+            DrawString(font, new Vector2(_plot.Position.X, _plot.End.Y + 27), span,
+                HorizontalAlignment.Left, -1, 9, Ui.Colour("chart.tick"));
 
         if (_hoverIndex < 0) return;
         var hoverX = _plot.Position.X + _plot.Size.X * (_days.Count == 1 ? 0f : _hoverIndex / (float)(_days.Count - 1));
