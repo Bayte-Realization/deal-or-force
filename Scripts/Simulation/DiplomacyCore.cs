@@ -79,6 +79,17 @@ public sealed partial class DiplomaticRelation
     /// <summary>When a trade agreement or a pact was last asked for and refused - see AgreementSystem.</summary>
     public int AgreementRefusedDay = -9999;
 
+    /// <summary>
+    /// An offer of one, waiting on an answer - -1 is nobody.
+    ///
+    /// Read exactly the way AllianceOfferedBy is (AllianceCore.OfferedTo): the offer is on the
+    /// table until it is answered or lapses, and the date is what the offer is, not a flag beside
+    /// it. A save written before this field existed loads as -1, which is "no offer".
+    /// </summary>
+    public int AgreementOfferedBy = -1;
+    public AgreementKind AgreementOfferedKind = AgreementKind.TradeAgreement;
+    public int AgreementOfferedDay = -9999;
+
     /// <summary>When the last aid package went between the two.</summary>
     public int AidSentDay = -9999;
 
@@ -618,6 +629,13 @@ public sealed class GuaranteeCommand : ICampaignCommand
         if (IssuerId == relation.A) relation.GuaranteeByA = Guarantee;
         else relation.GuaranteeByB = Guarantee;
         relation.LastActionDay = campaign.ElapsedDays;
+        // A promise given to the country that asked for it is that question answered: nobody is
+        // still waiting, and leaving the request standing would block the next one for a month.
+        if (Guarantee && relation.GuaranteeRequestedBy == TargetId)
+        {
+            relation.GuaranteeRequestedBy = -1;
+            relation.GuaranteeRequestedDay = -9999;
+        }
         if (Guarantee) OpinionSystem.Remember(campaign, relation, "guaranteed_us");
         else OpinionSystem.Forget(campaign, relation, "guaranteed_us");
         campaign.MarkStrategicChange();

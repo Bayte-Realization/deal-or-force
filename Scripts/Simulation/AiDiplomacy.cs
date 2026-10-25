@@ -180,10 +180,21 @@ public static partial class AiStatecraft
         }
 
         if (TryAid(campaign, nation, friend, relation)) return true;
-        if (relation.Stance == DiplomaticStance.Neutral)
+        // Warming a tie into friendship is a real move with a real price, and the price is the
+        // player's: the same overture ImproveRelationsCommand charges for - money out of the
+        // treasury, a fortnight's silence, and an opinion high enough to carry it. Setting the
+        // stance here for nothing let the computer buy, with air, what a player has to buy with
+        // a mission. With missions enabled there is no immediate route for either side at all:
+        // the mission is the route, and it pays out on its own schedule
+        // (DiplomaticOutreach.Advance), which the computer already uses above.
+        if (!defines.DiplomaticMissionsEnabled && relation.Stance == DiplomaticStance.Neutral &&
+            opinion >= 35f && campaign.ElapsedDays - relation.LastActionDay >= 14 && nation.Treasury >= 0.1f)
         {
+            nation.Treasury -= 0.1f;
+            relation.LastActionDay = campaign.ElapsedDays;
             relation.Stance = DiplomaticStance.Friendly;
             campaign.MarkStrategicChange();
+            Count("stance_warmed");
             return true;
         }
         return false;
@@ -191,9 +202,22 @@ public static partial class AiStatecraft
 
     private static bool TryAgreement(Campaign campaign, Nation asking, Nation asked, AgreementKind kind)
     {
-        // An AI has no authority to sign for a player. The command also guards this, but
-        // checking before answering avoids burning a turn on an impossible offer.
         if (!AgreementSystem.CanPropose(campaign, asking, asked, kind, out _)) return false;
+        // A player answers for themselves: the offer goes on their table and waits, and the
+        // computer spends its move on it exactly as it does on an offer to another computer. It
+        // used to be that the computer never asked a player for anything short of an alliance,
+        // so the whole of ordinary diplomacy ran one way.
+        if (asked.IsHuman)
+        {
+            var request = new ProposeAgreementCommand
+            {
+                IssuerId = asking.Id, TargetId = asked.Id, Kind = kind
+            };
+            request.Apply(campaign);
+            if (request.Result != AgreementResult.Offered) return false;
+            Count("agreement_offered");
+            return true;
+        }
         if (AgreementSystem.Willingness(campaign, asked, asking, kind) < AgreementSystem.Needed(campaign, kind))
             return false;
         var offer = new ProposeAgreementCommand

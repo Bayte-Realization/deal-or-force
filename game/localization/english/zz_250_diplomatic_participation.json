@@ -1,0 +1,18 @@
+{
+  "New organization…": "New organization…",
+  "Invalid political capital or founding cost.": "Invalid political capital or founding cost.",
+  "Not enough political capital to found an organization.": "Not enough political capital to found an organization.",
+  "Another membership application can be submitted in {0} days.": "Another membership application can be submitted in {0} days.",
+  "Your country has no pending membership application here.": "Your country has no pending membership application here.",
+  "Founding cost: {0} into the common fund and {1:0.#} political capital.": "Founding cost: {0} into the common fund and {1:0.#} political capital.",
+  "Observer mode cannot issue diplomatic orders.": "Observer mode cannot issue diplomatic orders.",
+  "Your membership application is awaiting the assembly. Voting closes in {0} days.": "Your membership application is awaiting the assembly. Voting closes in {0} days.",
+  "Apply for membership to start an assembly vote. Approval gives an invitation, not automatic membership; you can then accept or decline.": "Apply for membership to start an assembly vote. Approval gives an invitation, not automatic membership; you can then accept or decline.",
+  "Withdraw application": "Withdraw application",
+  "Apply for membership": "Apply for membership",
+  "A Great Power can mediate this crisis or deter an aggressor by backing either side. Intervention is not a declaration of war.": "A Great Power can mediate this crisis or deter an aggressor by backing either side. Intervention is not a declaration of war.",
+  "Offer mediation ({0})": "Offer mediation ({0})",
+  "Mediation opened. Its cost was paid and tensions were reduced.": "Mediation opened. Its cost was paid and tensions were reduced.",
+  "Deter aggression against {0}": "Deter aggression against {0}",
+  "Great Power intervention recorded. No war was declared.": "Great Power intervention recorded. No war was declared."
+}

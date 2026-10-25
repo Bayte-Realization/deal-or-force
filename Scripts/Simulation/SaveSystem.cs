@@ -64,7 +64,7 @@ public readonly record struct SaveLoadResult(Campaign Campaign, SaveMetadata Met
 public static class SaveSystem
 {
     public const int FormatVersion = 2;
-    public const string GameVersion = "0.8.1";
+    public const string GameVersion = GameBuildInfo.Version;
     // Bumped whenever provinces.png is recut: a save's province ids mean nothing on another cut.
     public const string MapDataVersion = "2024.10.06-a";
     public const string QuickSlot = "quicksave";

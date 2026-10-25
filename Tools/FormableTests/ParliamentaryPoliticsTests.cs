@@ -22,6 +22,7 @@ public static class ParliamentaryPoliticsTests
         PeacefulBaselineAndApproval();
         WarWearinessAndAntiWarExpansion();
         SevereExhaustionPeaceMandate();
+        ExhaustedParliamentKeepsValidShares();
         FactionalMinisterLobbying();
         FactionalLawLobbying();
         FingerprintPreservationAndSerialization();
@@ -204,6 +205,39 @@ public static class ParliamentaryPoliticsTests
         ParliamentaryPolitics.Review(c, dem);
         Check(!parl.PeaceMandateActive, "peace mandate disengages when peace returns");
         Check(!parl.MilitaryBudgetCutActive, "military budget restraint lifts when war ends");
+    }
+
+    private static void ExhaustedParliamentKeepsValidShares()
+    {
+        // The day-199 diagnostic had a dovish share of .8586627, leaving only
+        // .09133728 after reserving the opposition's five percent. A fixed ten
+        // percent ruling floor made Math.Clamp throw and stopped the whole world.
+        foreach (var initial in new[] { .10f, .75f, .80f, .8190364f, .85f, .88f, 1f })
+        {
+            var c = World();
+            var dem = c.NationById(0);
+            c.Wars.Add(new StrategicWar { Id = 8, AttackerId = 1, DefenderId = 0 });
+            dem.WarSupport = .20f;
+            dem.ShortageIndex = .30f;
+            dem.DebtCondition = DebtCondition.Stressed;
+            dem.Parliament = new ParliamentState { DovishShare = initial };
+            SetElapsedDays(c, 199);
+            var random = c.Random.State;
+            for (var review = 0; review < 24; review++)
+            {
+                ParliamentaryPolitics.Review(c, dem);
+                var p = dem.Parliament;
+                Check(float.IsFinite(p.RulingBlocShare) && p.RulingBlocShare >= 0 &&
+                    p.OppositionShare >= .05f && p.DovishShare <= .88f &&
+                    Math.Abs(p.RulingBlocShare + p.OppositionShare + p.DovishShare - 1) < .000001f,
+                    $"exhausted shares stay finite and sum to one (initial {initial}, review {review})");
+            }
+            Check(dem.Parliament.DovishShare > .85f && dem.Parliament.PeaceMandateActive &&
+                dem.Parliament.MilitaryBudgetCutActive, "high anti-war support is preserved, not capped to conceal the crash");
+            Check(c.Chronicle.Entries.Count(e => e.Kind == "parliament_peace_mandate" && e.ActorId == dem.Id) == 1,
+                "repeated exhausted reviews record only one peace mandate");
+            Check(c.Random.State == random, "seat allocation consumes no random draws");
+        }
     }
 
     private static void FactionalMinisterLobbying()

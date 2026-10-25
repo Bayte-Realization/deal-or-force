@@ -45,8 +45,11 @@ public partial class DealOrForceGame
     private Button _diplomacyDenounceButton = null!;
     private Button _diplomacyAllianceButton = null!;
     private Button _diplomacyGuaranteeButton = null!;
+    private Button _diplomacyGuaranteeRequestButton = null!;
     private Button _diplomacyWarButton = null!;
     private Button _diplomacyUltimatumButton = null!;
+    private Button _diplomacyPartitionButton = null!;
+    private int _diplomacyPendingPartitionTarget = -1;
     private Button _diplomacyDealButton = null!;
     private Button _diplomacyPeaceButton = null!;
     private Button _diplomacyTradeButton = null!;
@@ -248,6 +251,9 @@ public partial class DealOrForceGame
             ToggleDiplomacyAlliance);
         _diplomacyGuaranteeButton = AddDiplomacyAction("AGREEMENTS", "Guarantee",
             ToggleDiplomacyGuarantee);
+        _diplomacyGuaranteeRequestButton = AddDiplomacyAction("AGREEMENTS", "Request guarantee",
+            () => RequestGuaranteeFrom(DiplomacyTarget(), _diplomacyFeedback));
+        _diplomacyGuaranteeRequestButton.Name = "WideRequestGuarantee";
         _diplomacyTradeButton = AddDiplomacyAction("AGREEMENTS", "Trade agreement",
             () => ToggleAgreement(AgreementKind.TradeAgreement, DiplomacyTarget(), _diplomacyFeedback));
         _diplomacyPactButton = AddDiplomacyAction("AGREEMENTS", "Non-aggression pact",
@@ -294,6 +300,13 @@ public partial class DealOrForceGame
         _diplomacyUltimatumButton.Name = "IssueUltimatumWide";
         _diplomacyUltimatumButton.TooltipText = Ui.Tip(Tr(
             "Compose territorial, financial and treaty demands. Review before sending."));
+        _diplomacyPartitionButton = AddDiplomacyAction("War and peace", "Divide them with allies",
+            ConfirmOrProposePartition);
+        _diplomacyPartitionButton.Name = "ProposePartitionWide";
+        _diplomacyPartitionButton.TooltipText = Ui.Tip(Tr(
+            "Agree with your allies on a weak neighbour and have each of you demand, the same day, " +
+            "the region that touches your own border. Every slice is an ultimatum; the victim " +
+            "answers them one by one."));
 
         _diplomacySubjectActions = new VBoxContainer { Visible = false };
         _diplomacySubjectActions.AddThemeConstantOverride("separation", 6);
@@ -735,7 +748,7 @@ public partial class DealOrForceGame
 
         RebuildDiplomacyList();
         MarkDiplomacySelection();
-        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}|{_diplomacyDossierPage}|{Loc.Language}";
+        var key = $"{nation.Id}|{_campaign.ElapsedDays}|{_diplomacyPendingWarTarget}|{_diplomacyPendingPartitionTarget}|{_diplomacyDossierPage}|{Loc.Language}";
         if (key == _diplomacyPageKey) return;
         _diplomacyPageKey = key;
         var scrollY = _diplomacyDossierScroll.ScrollVertical;
@@ -1172,6 +1185,12 @@ public partial class DealOrForceGame
         }
         if (AllianceSystem.OfferedTo(_campaign, nation) is { } offered && offered.Id == player.Id)
             Pact(Tr("Alliance"), Tr("they have offered; answer it here"), "state.info");
+        // The same courtesy for the two offers that used to have no direction but one.
+        if (AgreementSystem.OfferedBy(_campaign, player, nation.Id, out var pendingKind))
+            Pact(pendingKind == AgreementKind.TradeAgreement ? Tr("Trade agreement") : Tr("Non-aggression pact"),
+                Tr("they have offered; answer it here"), "state.info");
+        if (relation.GuaranteeRequestedBy == nation.Id && Guarantee.Pending(_campaign, relation))
+            Pact(Tr("Guarantee"), Tr("they have asked you to stand behind them"), "state.warning");
         if (relation.NonAggressionPact)
             Pact(Tr("Non-aggression pact"), Tr("signed with you"));
         if (relation.GuaranteedBy(player.Id))
@@ -1264,11 +1283,17 @@ public partial class DealOrForceGame
         }
 
         var guaranteed = relation.GuaranteedBy(player.Id);
-        _diplomacyGuaranteeButton.Text = guaranteed ? Tr("Withdraw guarantee") : Tr("Guarantee");
+        var asked = Guarantee.RequesterTo(_campaign, player) is { } asking && asking.Id == nation.Id;
+        _diplomacyGuaranteeButton.Text = guaranteed
+            ? Tr("Withdraw guarantee")
+            : asked ? Tr("Grant guarantee") : Tr("Guarantee");
         _diplomacyGuaranteeButton.Disabled = relation.Stance == DiplomaticStance.AtWar;
         _diplomacyGuaranteeButton.TooltipText = Ui.Tip(guaranteed
             ? Tr("Take back the promise. They will notice.")
-            : Tr("Promise to fight for them if they are attacked. It costs nothing until it costs everything."));
+            : asked
+                ? Tr("They have asked you to stand behind them. Answering here is a yes.")
+                : Tr("Promise to fight for them if they are attacked. It costs nothing until it costs everything."));
+        RefreshGuaranteeRequestButton(_diplomacyGuaranteeRequestButton, nation);
 
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, player.Id, nation.Id, out var reason);
         _diplomacyWarButton.Disabled = !canDeclare;
@@ -1283,6 +1308,7 @@ public partial class DealOrForceGame
             : Tr("Compose territorial, financial and treaty demands. Review before sending."));
         StyleButton(_diplomacyUltimatumButton, false);
         _diplomacyUltimatumButton.Text = Tr("Issue ultimatum");
+        RefreshPartitionButton(player, nation);
         var canDeal = Ultimatum.CanNegotiateDeal(_campaign, player, nation, out var dealRefusal);
         _diplomacyDealButton.Disabled = !canDeal;
         _diplomacyDealButton.TooltipText = Ui.Tip(!canDeal ? dealRefusal : nation.IsHuman
@@ -1423,6 +1449,71 @@ public partial class DealOrForceGame
     }
 
     private void ConfirmOrIssueUltimatum() => OpenUltimatumComposer(DiplomacyTarget());
+
+    /// <summary>
+    /// The player's half of the instrument the computer has always had
+    /// (AiStatecraft.TryCoordinatePartition): the same question, about a victim the player picked
+    /// on this screen, answered by the same allies on the same die - and it says who would join,
+    /// and for what, before anything is sent.
+    /// </summary>
+    private void RefreshPartitionButton(Nation player, Nation nation)
+    {
+        _diplomacyPartitionButton.Visible = _campaign.Defines.AiMayCoordinatePartitions && nation != player;
+        if (!_diplomacyPartitionButton.Visible) return;
+        var confirming = _diplomacyPendingPartitionTarget == nation.Id;
+        var ready = PartitionCoordination.Project(_campaign, player, nation, out var takers, out var refusal);
+        if (!ready && confirming) _diplomacyPendingPartitionTarget = -1;
+        _diplomacyPartitionButton.Text = confirming
+            ? Simulation.Loc.Format("CONFIRM THE DIVISION ({0} demands)", takers.Count)
+            : Tr("Divide them with allies");
+        _diplomacyPartitionButton.Disabled = !ready;
+        if (!ready)
+        {
+            _diplomacyPartitionButton.TooltipText = Ui.Tip(refusal);
+        }
+        else
+        {
+            var names = string.Join(", ", takers.Take(4).Select(taker => taker.DisplayName));
+            if (takers.Count > 4) names += ", …";
+            _diplomacyPartitionButton.TooltipText = Ui.Tip(confirming
+                ? Simulation.Loc.Format("{0} government(s) demand their slices the same day: {1}.",
+                    takers.Count, names)
+                : Simulation.Loc.Format("They would be divided by {0} government(s): {1}.",
+                    takers.Count, names));
+        }
+        StyleButton(_diplomacyPartitionButton, confirming);
+    }
+
+    private void ConfirmOrProposePartition() => ConfirmOrProposePartition(DiplomacyTarget(), _diplomacyFeedback);
+
+    private void ConfirmOrProposePartition(Nation target, Label feedback)
+    {
+        if (target is null || _campaign?.Player is null) return;
+        var player = _campaign.Player;
+        if (!PartitionCoordination.Project(_campaign, player, target, out var takers, out var refusal))
+        {
+            feedback.Text = refusal;
+            _diplomacyPendingPartitionTarget = -1;
+            ForceDiplomacyRefresh();
+            return;
+        }
+        if (_diplomacyPendingPartitionTarget != target.Id)
+        {
+            _diplomacyPendingPartitionTarget = target.Id;
+            feedback.Text = Simulation.Loc.Format(
+                "Click again to divide {0}: {1} demands will go out the same day.",
+                target.DisplayName, takers.Count);
+            ForceDiplomacyRefresh();
+            return;
+        }
+        var command = new ProposePartitionCommand { IssuerId = player.Id, VictimId = target.Id };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+        _diplomacyPendingPartitionTarget = -1;
+        feedback.Text = command.Note;
+        if (command.Coordinated) PlayStrategicCue("war_declared");
+        ForceDiplomacyRefresh();
+    }
 
     private void ConfirmOrProposeDeal()
     {

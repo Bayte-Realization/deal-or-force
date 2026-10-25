@@ -381,6 +381,7 @@ public partial class DealOrForceGame
             var diplomacy = ActionButton("Open diplomacy", () => { _selectedNation = other; CloseConflictsScreen(); OpenDiplomacyScreen(); }, 0, 34);
             _conflictsPage.AddChild(diplomacy);
         }
+        else AddThirdPartyCrisisActions(a, b);
     }
 
     private void ShowWarPage(StrategicWar war)

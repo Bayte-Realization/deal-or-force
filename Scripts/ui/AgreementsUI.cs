@@ -16,6 +16,7 @@ public partial class DealOrForceGame
     private Button _pactButton = null!;
     private Button _aidButton = null!;
     private Button _embargoButton = null!;
+    private Button _guaranteeRequestButton = null!;
 
     private void BuildAgreementControls(VBoxContainer parent)
     {
@@ -37,6 +38,10 @@ public partial class DealOrForceGame
         row.AddChild(deal);
         row.AddChild(_aidButton);
         row.AddChild(_embargoButton);
+        // The half of a guarantee only the computer used to be able to ask for: finding a patron.
+        _guaranteeRequestButton = ActionButton("Request guarantee", RequestSelectedGuarantee, 0, 32);
+        _guaranteeRequestButton.Name = "RequestGuaranteeQuick";
+        row.AddChild(_guaranteeRequestButton);
     }
 
     private void ProposeDealToSelected()
@@ -54,6 +59,60 @@ public partial class DealOrForceGame
     private void RefreshAgreementButtons(Nation nation)
         => RefreshAgreementButtons(nation, _tradeAgreementButton, _pactButton, _aidButton, _embargoButton);
 
+    /// <summary>
+    /// Ask somebody to promise to fight for you - the move a small country actually needs, and
+    /// the one only the computer used to have (Guarantee.Ask). It is answered on the spot by a
+    /// country the computer speaks for, and left on their table when it is a player's.
+    /// </summary>
+    private void RequestSelectedGuarantee() => RequestGuaranteeFrom(_selectedNation, _countryActionFeedback);
+
+    private void RequestGuaranteeFrom(Nation target, Label feedback)
+    {
+        if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
+        var request = new RequestGuaranteeCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id };
+        _campaign.Commands.Enqueue(request);
+        _campaign.Commands.ApplyAll(_campaign);
+        feedback.Text = request.Granted
+            ? Simulation.Loc.Format("{0} guarantees {1}.", target.DisplayName, _campaign.Player.DisplayName)
+            : request.Answer;
+        RefreshDiplomaticActionViews();
+    }
+
+    /// <summary>Says what they would answer before the player asks, the way every other button does.</summary>
+    private void RefreshGuaranteeRequestButton(Button button, Nation nation)
+    {
+        if (button is null || _campaign?.Player is null || nation is null || nation == _campaign.Player) return;
+        var player = _campaign.Player;
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
+        if (relation.GuaranteedBy(nation.Id))
+        {
+            button.Text = Tr("Guaranteed by them");
+            button.Disabled = true;
+            button.TooltipText = Ui.Tip(Tr("They have already promised to fight for you."));
+            return;
+        }
+        button.Text = Tr("Request guarantee");
+        var refusal = Guarantee.Refusal(_campaign, player, nation);
+        button.Disabled = refusal.Length != 0;
+        if (refusal.Length != 0)
+        {
+            button.TooltipText = Ui.Tip(refusal);
+            return;
+        }
+        var why = new Simulation.Breakdown();
+        var willingness = Guarantee.Willingness(_campaign, nation, player, why);
+        var needed = _campaign.Defines.GuaranteeWillingness;
+        var parts = why.Entries
+            .OrderByDescending(entry => System.Math.Abs(entry.Value))
+            .Take(4)
+            .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.00;-0.00;0.00}");
+        button.TooltipText = Ui.Tip(
+            (willingness >= needed
+                ? Simulation.Loc.Format("They would promise: {0} against {1} needed.", $"{willingness:0.00}", $"{needed:0.00}")
+                : Simulation.Loc.Format("They would refuse: {0} against {1} needed.", $"{willingness:0.00}", $"{needed:0.00}")) +
+            "\n" + string.Join("\n", parts));
+    }
+
     private void RefreshAgreementButtons(Nation nation, Button _tradeAgreementButton, Button _pactButton,
         Button _aidButton, Button _embargoButton)
     {
@@ -61,6 +120,7 @@ public partial class DealOrForceGame
         if (_tradeAgreementButton is null || _campaign?.Player is null || nation == _campaign.Player) return;
         var player = _campaign.Player;
         var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, nation.Id);
+        RefreshGuaranteeRequestButton(_guaranteeRequestButton, nation);
 
         RefreshAgreementButton(_tradeAgreementButton, nation, relation, AgreementKind.TradeAgreement,
             "Propose trade agreement", "Cancel trade agreement",
@@ -99,6 +159,21 @@ public partial class DealOrForceGame
             button.Text = Tr(cancel);
             button.Disabled = false;
             button.TooltipText = Ui.Tip(cancelTip);
+            return;
+        }
+        // They asked. The button is the answer, and leaving it alone is also an answer: the
+        // offer lapses on its own and nothing is signed either way.
+        if (AgreementSystem.OfferedBy(_campaign, player, nation.Id, out var offered) && offered == kind)
+        {
+            var waited = _campaign.ElapsedDays - relation.AgreementOfferedDay;
+            var left = System.Math.Max(0, _campaign.Defines.AgreementReplyDays - waited);
+            button.Text = kind == AgreementKind.TradeAgreement
+                ? Tr("Accept trade agreement")
+                : Tr("Accept non-aggression pact");
+            button.Disabled = false;
+            button.TooltipText = Ui.Tip(Simulation.Loc.Format(
+                "They asked {0} day(s) ago. Signing it takes effect at once; leaving it unanswered lets it lapse in {1} day(s).",
+                waited, left));
             return;
         }
         button.Text = Tr(propose);
@@ -143,15 +218,27 @@ public partial class DealOrForceGame
         }
         else
         {
-            var propose = new ProposeAgreementCommand { IssuerId = player.Id, TargetId = target.Id, Kind = kind };
-            _campaign.Commands.Enqueue(propose);
-            _campaign.Commands.ApplyAll(_campaign);
-            feedback.Text = propose.Result switch
+            // An offer waiting on this player is answered, not proposed over: two offers on one
+            // tie at once is a conversation neither side can follow.
+            if (AgreementSystem.OfferedBy(_campaign, player, target.Id, out var offered) && offered == kind)
             {
-                AgreementResult.Signed => Simulation.Loc.Format("{0} signed the {1}.", target.DisplayName, name),
-                AgreementResult.Refused => Simulation.Loc.Format("{0} declined the {1}.", target.DisplayName, name),
-                _ => propose.Reason
-            };
+                var answer = new AnswerAgreementCommand { IssuerId = player.Id, TargetId = target.Id, Accept = true };
+                _campaign.Commands.Enqueue(answer);
+                _campaign.Commands.ApplyAll(_campaign);
+                feedback.Text = answer.Reason;
+            }
+            else
+            {
+                var propose = new ProposeAgreementCommand { IssuerId = player.Id, TargetId = target.Id, Kind = kind };
+                _campaign.Commands.Enqueue(propose);
+                _campaign.Commands.ApplyAll(_campaign);
+                feedback.Text = propose.Result switch
+                {
+                    AgreementResult.Signed => Simulation.Loc.Format("{0} signed the {1}.", target.DisplayName, name),
+                    AgreementResult.Refused => Simulation.Loc.Format("{0} declined the {1}.", target.DisplayName, name),
+                    _ => propose.Reason
+                };
+            }
         }
         RefreshDiplomaticActionViews();
     }

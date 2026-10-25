@@ -1,0 +1,18 @@
+{
+  "New organization…": "Новая организация…",
+  "Invalid political capital or founding cost.": "Некорректные политические очки или стоимость учреждения.",
+  "Not enough political capital to found an organization.": "Для учреждения организации не хватает политических очков.",
+  "Another membership application can be submitted in {0} days.": "Повторную заявку на вступление можно подать через {0} дн.",
+  "Your country has no pending membership application here.": "У вашей страны нет рассматриваемой заявки на вступление в эту организацию.",
+  "Founding cost: {0} into the common fund and {1:0.#} political capital.": "Учреждение: {0} в общий фонд и {1:0.#} полит. очков.",
+  "Observer mode cannot issue diplomatic orders.": "В режиме наблюдателя нельзя отдавать дипломатические распоряжения.",
+  "Your membership application is awaiting the assembly. Voting closes in {0} days.": "Ассамблея рассматривает вашу заявку на вступление. До конца голосования: {0} дн.",
+  "Apply for membership to start an assembly vote. Approval gives an invitation, not automatic membership; you can then accept or decline.": "Подайте заявку на вступление, чтобы начать голосование ассамблеи. Одобрение даёт приглашение, а не членство: его можно принять или отклонить.",
+  "Withdraw application": "Отозвать заявку",
+  "Apply for membership": "Подать заявку на вступление",
+  "A Great Power can mediate this crisis or deter an aggressor by backing either side. Intervention is not a declaration of war.": "Великая держава может стать посредником в этом кризисе или поддержать одну из сторон для сдерживания агрессора. Вмешательство не объявляет войну.",
+  "Offer mediation ({0})": "Предложить посредничество ({0})",
+  "Mediation opened. Its cost was paid and tensions were reduced.": "Посредничество начато: расходы оплачены, напряжённость снижена.",
+  "Deter aggression against {0}": "Поддержать сторону: {0}",
+  "Great Power intervention recorded. No war was declared.": "Вмешательство великой державы зафиксировано. Война не объявлена."
+}

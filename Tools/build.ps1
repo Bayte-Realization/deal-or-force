@@ -30,7 +30,9 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot 'PlayerModPackaging.ps1')
 . (Join-Path $PSScriptRoot 'PackInspection.ps1')
+. (Join-Path $PSScriptRoot 'PlayerNotices.ps1')
 $project = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Test-ReleaseVersion.ps1') -ProjectRoot $project
 # The folder that ships, named the way it should look on somebody else's desktop. It is also
 # the folder that goes into the archive whole - an archive whose entries sit at its root
 # empties 572 files into whatever directory it is opened next to, which is a poor first
@@ -152,7 +154,7 @@ if (Test-Path -LiteralPath $stagedMapData) {
 # It is compiled into the assembly, so the staged copy the export builds from has to carry it,
 # or the staged project would not compile and the release gate would fail for the wrong reason.
 Copy-PlayerTree (Join-Path $project 'Tools\ExportVerification') (Join-Path $stage 'Tools\ExportVerification')
-foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
+foreach ($file in @('DealOrForce.csproj', 'DealOrForce.sln', 'GameVersion.props', 'export_presets.cfg', 'icon.ico', 'icon_small.png')) {
     Copy-Item -LiteralPath (Join-Path $project $file) -Destination $stage
 }
 foreach ($file in @('NuGet.Config', 'nuget.config', 'global.json', 'Directory.Build.props', 'Directory.Build.targets')) {
@@ -254,18 +256,6 @@ if (Test-Path $modsSource) {
 # there - so the day there is something to sell, one line here puts it back.
 & (Join-Path $PSScriptRoot "build-launcher.ps1") -OutputDirectory $out
 
-# An opt-in native Luau adapter is exported by Godot, not by the .NET
-# Content globs. Its redistribution notices must travel with the binary too.
-if (Test-Path -LiteralPath (Join-Path $out 'libluau-script.windows.editor.x86_64.dll')) {
-    $adapterNotices = Join-Path $out 'licenses\godot-luau-script'
-    New-Item -ItemType Directory -Force -Path $adapterNotices | Out-Null
-    foreach ($notice in @('LICENSE.txt', 'COPYRIGHT.txt')) {
-        $noticeSource = Join-Path $project "game\extensions\luau\$notice"
-        if (-not (Test-Path -LiteralPath $noticeSource)) { throw "Native adapter is missing its redistribution notice: $notice" }
-        Copy-Item -LiteralPath $noticeSource -Destination $adapterNotices -Force
-    }
-}
-
 # ---------------------------------------------------------------- one folder of each
 # What .NET leaves behind is a folder of assemblies with the game's entire world inside it,
 # because the csproj copies `game/**` into the publish output and Godot puts that output in
@@ -313,12 +303,8 @@ Write-Host "== checking the data came with it ==" -ForegroundColor Cyan
 foreach ($notice in @('LICENSE', 'LICENSE-EXCEPTIONS.md', 'README.md', 'README.ru.md')) {
     Copy-Item -LiteralPath (Join-Path $project $notice) -Destination $out
 }
-# Ship redistribution notices, not the development documentation tree. Keeping this
-# register one directory below the root also preserves its ../README and ../game links.
-$licenseDirectory = Join-Path $out 'licenses'
-New-Item -ItemType Directory -Path $licenseDirectory -Force | Out-Null
-Copy-Item -LiteralPath (Join-Path $project 'docs/THIRD_PARTY_MEDIA.md') -Destination $licenseDirectory
-Copy-PlayerTree (Join-Path $project 'docs/art_sources') (Join-Path $licenseDirectory 'art_sources')
+# Keep attribution, including an opt-in native adapter, in one readable file.
+Write-PlayerNotices -ProjectRoot $project -OutputDirectory $out
 
 # Where the game will look: its own folder, then up to seven parents. Anything below the
 # build folder counts, because that is what ships.
@@ -333,8 +319,7 @@ $needed = @(
     "game\map_data\default.map",
     "LICENSE",
     "LICENSE-EXCEPTIONS.md",
-    "licenses\THIRD_PARTY_MEDIA.md",
-    "licenses\art_sources",
+    "THIRD_PARTY_NOTICES.md",
     "README.md",
     "README.ru.md",
     "mods"
@@ -345,6 +330,7 @@ $needed = @(
 # is why it needs asking about explicitly rather than being left to whoever reads the folder.
 $forbidden = @(
     @{ Path = "docs"; Why = "development documentation does not belong in the player package" },
+    @{ Path = "licenses"; Why = "redistribution notices belong in THIRD_PARTY_NOTICES.md" },
     @{ Path = "dlc"; Why = "unreleased content pack and its entitlement switch" },
     @{ Path = "LAUNCHER_RU.md"; Why = "internal documentation, and Russian-only at that" },
     @{ Path = ".kilo"; Why = "private nested source checkouts" },

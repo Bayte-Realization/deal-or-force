@@ -1,0 +1,10 @@
+<Project>
+  <!-- Shared by the game, production rules library and standalone launcher. -->
+  <PropertyGroup>
+    <Version>0.8.2</Version>
+    <AssemblyVersion>$(Version).0</AssemblyVersion>
+    <FileVersion>$(Version).0</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

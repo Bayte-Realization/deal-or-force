@@ -37,8 +37,19 @@ static class AgreementTests
         // --- A: who may be asked -------------------------------------------------------------
         Check(AgreementSystem.CanPropose(c, player, other, AgreementKind.TradeAgreement, out var refusal),
             $"the player may ask {other.Tag} for a trade agreement ({refusal})");
-        Check(!AgreementSystem.CanPropose(c, other, player, AgreementKind.TradeAgreement, out _),
-            "a player answers for themselves");
+        Check(AgreementSystem.CanPropose(c, other, player, AgreementKind.TradeAgreement, out _),
+            "a player may receive an agreement offer and answers for themselves");
+        var incoming = new ProposeAgreementCommand { IssuerId = other.Id, TargetId = player.Id, Kind = AgreementKind.TradeAgreement };
+        incoming.Apply(c);
+        Check(incoming.Result == AgreementResult.Offered && !relation.TradeAgreement && relation.AgreementOfferedBy == other.Id,
+            "an offer to a player never signs an agreement without consent");
+        var decline = new AnswerAgreementCommand { IssuerId = player.Id, TargetId = other.Id, Accept = false };
+        decline.Apply(c);
+        Check(decline.Result == AgreementResult.Refused && !relation.TradeAgreement && relation.AgreementOfferedBy < 0,
+            "the player can decline the incoming offer without being committed");
+        // The remaining cases independently exercise the outgoing proposal and its cooldown.
+        relation.AgreementRefusedDay = -9999;
+        relation.LastActionDay = -9999;
 
         // --- B: the terms are named, and an enemy says no ------------------------------------
         relation.Opinion = -60f;

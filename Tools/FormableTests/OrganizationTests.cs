@@ -9,7 +9,7 @@ static class OrganizationTests
     {
         var c = new Campaign(82);
         for (var i = 0; i < 4; i++) c.Nations.Add(new Nation { Id = i, MapIndex = 500+i, Tag = "O"+i,
-            Name = "Country " + i, Population = 1000000, Treasury = 20, Gdp = 100, IsHuman = true });
+            Name = "Country " + i, Population = 1000000, Treasury = 20, PoliticalPoints = 100, Gdp = 100, IsHuman = true });
         c.ScenarioId = "org_fixture";
         foreach (var n in c.Nations) c.States.Add(new ScenarioState { MapIndex = 3001 + n.Id, Id = "org_" + n.Id, Name = "Region " + n.Id,
             NationMapIndex = n.MapIndex, NationId = n.Tag, Population = n.Population });

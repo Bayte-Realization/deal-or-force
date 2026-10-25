@@ -88,7 +88,12 @@ public static class ParliamentaryPolitics
             var targetDovish = Math.Clamp(0.12f + fatigue * 0.75f + debtStress + shortageStress, 0.05f, 0.88f);
             p.DovishShare = Math.Clamp(p.DovishShare + (targetDovish - p.DovishShare) * 0.65f, 0.05f, 0.88f);
             var rem = 1.0f - p.DovishShare;
-            p.RulingBlocShare = Math.Clamp(rem * approval, 0.10f, rem - 0.05f);
+            // A caucus above 85% leaves less than the usual 10% ruling floor plus
+            // 5% opposition. Keep the anti-war vote and opposition reserve; the
+            // ruling floor must fit the actual seats, not reverse Clamp's bounds.
+            var rulingCeiling = rem - 0.05f;
+            var rulingFloor = Math.Min(0.10f, rulingCeiling);
+            p.RulingBlocShare = Math.Clamp(rem * approval, rulingFloor, rulingCeiling);
             p.OppositionShare = Math.Max(0.05f, 1.0f - p.RulingBlocShare - p.DovishShare);
 
             p.MilitaryBudgetCutActive = p.DovishShare >= campaign.Defines.ParliamentAntiWarThreshold;

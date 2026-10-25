@@ -1328,9 +1328,13 @@ public static partial class AiStatecraft
         var bestAnswer = float.MinValue;
         foreach (var other in Circle)
         {
-            // A human decides whether their country guarantees somebody. An AI plea
-            // cannot create that commitment on the player's behalf.
-            if (other.Id == rival.Id || other.Id == nation.Id || other.IsSubject || other.IsHuman) continue;
+            // A human decides whether their country guarantees somebody, so a plea to a player
+            // is a request that waits for them (Guarantee.Ask) rather than a promise made on
+            // their behalf - and it is not put to a player already holding as many as they
+            // should. This used to skip players altogether, which meant the countries best able
+            // to shelter anybody could never be asked.
+            if (other.Id == rival.Id || other.Id == nation.Id || other.IsSubject) continue;
+            if (other.IsHuman && Guarantee.Refusal(campaign, nation, other).Length != 0) continue;
 
             var ours = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
             if (ours.GuaranteedBy(other.Id) || ours.Stance == DiplomaticStance.AtWar) continue;
@@ -1364,6 +1368,21 @@ public static partial class AiStatecraft
         }
 
         if (best is null || bestAnswer < defines.AiShelterWillingness) return false;
+
+        if (best.IsHuman)
+        {
+            // The question is the move. Nothing is promised on a player's behalf; it lands on
+            // their table, it is answered there or it lapses, and the country that asked has
+            // still spent its week asking (Guarantee.Ask bounds the repeat).
+            Guarantee.Ask(campaign, nation, best, out _);
+            if (CampaignDiplomacy.Peek(campaign, nation.Id, best.Id) is not { } asked ||
+                !Guarantee.Pending(campaign, asked)) return false;
+            Count("shelter_asked");
+            DiagnosticLogs.Write("simulation",
+                $"SHELTER_ASK {nation.Tag} asks {best.Tag} against {rival.Tag} " +
+                $"answer={bestAnswer:0.00} day={campaign.ElapsedDays}");
+            return true;
+        }
 
         new GuaranteeCommand { IssuerId = best.Id, TargetId = nation.Id, Guarantee = true }
             .Apply(campaign);
@@ -1454,7 +1473,9 @@ public static partial class AiStatecraft
     /// Off in the shipped scenario, because a treaty partition of a sovereign is a pre-UN
     /// norm and the base world is 2024: <see cref="Defines.AiMayCoordinatePartitions"/>.
     /// A mod for an imperial age switches it on with one row of data, which is exactly the
-    /// room-for-modders rule this repository runs on.
+    /// room-for-modders rule this repository runs on. The same switch lights the player's button
+    /// (PartitionCoordination.ProposePartitionCommand), because a rule only the computer may use
+    /// is not a rule.
     /// </summary>
     internal static bool TryCoordinatePartition(Campaign campaign, Nation nation)
     {
@@ -1464,8 +1485,9 @@ public static partial class AiStatecraft
         if (nation.DecisionAvailableDay.GetValueOrDefault("partition") > campaign.ElapsedDays) return false;
 
         // The coalition: ourselves and every allied government the computer plays. A human
-        // ally counts towards the weight of the agreement but is not handed a slice - a
-        // player's demands go through the player's own screen.
+        // ally counts towards the weight of the agreement but is not handed a slice - a human's
+        // demands are their own to make (PartitionCoordination.ProposePartitionCommand), so the
+        // instrument is one rule with two callers and not two rules.
         var coalition = new List<Nation> { nation };
         foreach (var other in campaign.Nations)
         {
@@ -1481,7 +1503,7 @@ public static partial class AiStatecraft
         var bestTakers = 0;
         foreach (var candidate in campaign.Nations)
         {
-            if (candidate is null || candidate.IsHuman || candidate.Movement is not null) continue;
+            if (candidate is null || candidate.Movement is not null) continue;
             var inCoalition = false;
             foreach (var member in coalition) if (member.Id == candidate.Id) { inCoalition = true; break; }
             if (inCoalition || !campaign.HasOwnedLand(candidate)) continue;
@@ -1524,10 +1546,10 @@ public static partial class AiStatecraft
 
         // A government does not carve up a neighbour every time it could. The die is the
         // campaign's own: same seed, same day, same answer on every machine.
-        nation.DecisionAvailableDay["partition"] = campaign.ElapsedDays + M.Max(7, defines.AiPartitionCadenceDays);
+        nation.DecisionAvailableDay[PartitionCoordination.CadenceKey] =
+            campaign.ElapsedDays + M.Max(7, defines.AiPartitionCadenceDays);
         Count("partition_attempted");
-        if (Roll(campaign.Seed, nation.Id, campaign.ElapsedDays) >= M.Clamp(defines.AiPartitionAppetite, 0f, 1f))
-            return false;
+        if (!PartitionAppetiteFavours(campaign, nation)) return false;
 
         var slices = 0;
         foreach (var member in coalition)
@@ -1544,32 +1566,49 @@ public static partial class AiStatecraft
     }
 
     /// <summary>
+    /// The die a government throws before it agrees to carve up a neighbour.
+    ///
+    /// Thrown for itself when it is the one proposing, and thrown again for every ally a player's
+    /// proposal puts to - one place, so that an invitation from a human is answered on the same
+    /// arithmetic the computer uses for its own plans and not on a rule written later beside it.
+    /// Same campaign, same day, same answer on every machine.
+    /// </summary>
+    internal static bool PartitionAppetiteFavours(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null) return false;
+        return Roll(campaign.Seed, nation.Id, campaign.ElapsedDays) <
+            M.Clamp(campaign.Defines.AiPartitionAppetite, 0f, 1f);
+    }
+
+    /// <summary>
     /// One taker's slice: the most populous of the victim's regions that touches the
     /// taker's own ground and can still be demanded. No case is required - the agreement
     /// is the case, and the notoriety of a demand nobody can justify is priced by the same
-    /// ultimatum path as any other.
+    /// ultimatum path as any other. The slice is chosen by PartitionCoordination, the player's
+    /// half of the same instrument, because a distinct rule for a human's slice would be a
+    /// second partition.
     /// </summary>
-    private static bool PartitionDemand(Campaign campaign, Nation member, Nation victim)
+    internal static bool PartitionDemand(Campaign campaign, Nation member, Nation victim)
     {
         if (Ultimatum.PendingBetween(campaign, member.Id, victim.Id)) return false;
         var key = "ultimatum/" + victim.Id;
         if (member.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
-        if (campaign.ProvinceMap is null) return false;
-
-        ScenarioState best = null;
-        var bestPopulation = 0L;
-        foreach (var state in campaign.StatesOf(victim))
-        {
-            if (state.Population <= 0) continue;
-            if (!Ultimatum.CanDemand(campaign, victim, state.MapIndex)) continue;
-            if (!TerritorialCoherence.TouchesOwnedGround(campaign, member, state.MapIndex)) continue;
-            if (state.Population <= bestPopulation) continue;
-            bestPopulation = state.Population;
-            best = state;
-        }
+        var best = PartitionCoordination.Slice(campaign, member, victim);
         if (best is null) return false;
 
         var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
+        // A player is never answered for: the demand is delivered rather than assessed, so a
+        // victim who plays keeps the same right to refuse that a computer government exercises
+        // here. This used to be the one hole in the instrument - an AI coalition could divide
+        // every neighbour except one with a human in it.
+        if (victim.IsHuman)
+        {
+            if (!Ultimatum.ValidateTerms(campaign, member, victim, demand, out _)) return false;
+            member.DecisionAvailableDay[key] = campaign.ElapsedDays + M.Max(30, campaign.Defines.AiUltimatumIntervalDays);
+            if (!Ultimatum.Deliver(campaign, member, victim, demand).Accepted) return false;
+            Count("partition_slice_delivered");
+            return true;
+        }
         var assessment = Ultimatum.Assess(campaign, member, victim, demand);
         if (!assessment.Valid) return false;
         member.DecisionAvailableDay[key] = campaign.ElapsedDays + M.Max(30, campaign.Defines.AiUltimatumIntervalDays);

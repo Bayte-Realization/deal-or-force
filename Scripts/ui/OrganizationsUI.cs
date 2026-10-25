@@ -22,6 +22,10 @@ public partial class DealOrForceGame
         var hash = new HashCode();
         hash.Add(Loc.Language); hash.Add(_campaign.Player.Id); hash.Add(_selectedOrganization);
         hash.Add(_campaign.Defines.OrganizationFoundingDeposit);
+        var politicalCost = InternationalOrganizations.FoundingPoliticalCost(_campaign);
+        hash.Add(politicalCost); hash.Add(_observerMode);
+        hash.Add(_campaign.Player.PoliticalPoints >= politicalCost);
+        hash.Add(_campaign.Player.Treasury >= Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit));
         foreach (var o in InternationalOrganizations.Active(_campaign).OrderBy(o => o.Id))
         {
             hash.Add(o.Id); hash.Add(InternationalOrganizations.DisplayName(_campaign, o)); hash.Add(o.CharterId);
@@ -46,6 +50,14 @@ public partial class DealOrForceGame
     }
     private void ListOrganizations()
     {
+        var newOrganization = ActionButton("New organization…", () =>
+        {
+            if (_conflictsList.FindChild("OrganizationName", true, false) is LineEdit input)
+            { _conflictsListScroll.EnsureControlVisible(input); input.GrabFocus(); }
+        }, 0, 34, iconPath: Icon("decisions"));
+        newOrganization.Name = "BeginOrganizationFounding";
+        newOrganization.Disabled = _observerMode;
+        _conflictsList.AddChild(newOrganization);
         _conflictsList.AddChild(Caption("INTERNATIONAL ORGANIZATIONS"));
         var listed = InternationalOrganizations.Active(_campaign)
             .OrderByDescending(o => o.Members.Contains(_campaign.Player.Id))
@@ -92,16 +104,29 @@ public partial class DealOrForceGame
         if (draftIndex >= 0) charter.Select(draftIndex);
         _conflictsList.AddChild(charter);
         var explanation = WrappedUltimatumText("", 14); _conflictsList.AddChild(explanation);
-        void Explain() => explanation.Text = charters.Length == 0 ? Tr("No organization charters are available.") :
-            Tr(charters[charter.Selected].Description) + "\n" + Loc.Format("Founding deposit into common fund: {0}.",
-                Fmt.Money(Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit)));
-        charter.ItemSelected += _ => { _organizationDraftCharter = charters[charter.Selected].Id; Explain(); }; Explain();
         var create = ActionButton("Found organization", () => {
             if (charters.Length == 0) return;
             var cmd = new OrganizationCommand { IssuerId = _campaign.Player.Id, Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id };
             OrganizationAction(cmd, "found:" + name.Text + ":" + cmd.CharterId);
         }, 0, 36, iconPath: "res://game/gfx/interface/icons/icon_decisions.png");
         create.Name = "CreateOrganization"; _conflictsList.AddChild(create);
+        void Explain()
+        {
+            explanation.Text = charters.Length == 0 ? Tr("No organization charters are available.") :
+                Tr(charters[charter.Selected].Description) + "\n" + Loc.Format(
+                    "Founding cost: {0} into the common fund and {1:0.#} political capital.",
+                    Fmt.Money(Math.Max(0, _campaign.Defines.OrganizationFoundingDeposit)),
+                    InternationalOrganizations.FoundingPoliticalCost(_campaign));
+            var refusal = charters.Length == 0 ? Tr("No organization charters are available.") :
+                InternationalOrganizations.Refusal(_campaign, new OrganizationCommand { IssuerId = _campaign.Player.Id,
+                    Action = "create", Name = name.Text, CharterId = charters[charter.Selected].Id });
+            if (_observerMode) refusal = Tr("Observer mode cannot issue diplomatic orders.");
+            create.Disabled = refusal.Length > 0;
+            create.TooltipText = Ui.Tip(refusal.Length > 0 ? refusal : Tr("Press again to confirm."));
+        }
+        name.TextChanged += _ => Explain();
+        charter.ItemSelected += _ => { _organizationDraftCharter = charters[charter.Selected].Id; Explain(); };
+        Explain();
     }
 
     /// <summary>A defence bloc carries a shield, an economic union the industry mark, a council the handshake.</summary>
@@ -115,6 +140,7 @@ public partial class DealOrForceGame
 
     private void OrganizationAction(OrganizationCommand command, string confirmation = "")
     {
+        if (_observerMode) { _conflictsFeedback.Text = Tr("Observer mode cannot issue diplomatic orders."); return; }
         var refusal = InternationalOrganizations.Refusal(_campaign, command);
         if (refusal.Length > 0) { _organizationConfirmation = ""; _conflictsFeedback.Text = refusal; return; }
         if (confirmation.Length > 0 && _organizationConfirmation != confirmation)
@@ -189,7 +215,27 @@ public partial class DealOrForceGame
         }
         if (o.LastOutcome.Length > 0) _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Last vote: {0} of {1} yes · {2}", o.LastYes, o.LastVoters,
             Tr(o.LastOutcome.EndsWith("_passed", StringComparison.Ordinal) ? "Motion passed." : "Motion did not pass.")), 13));
-        if (!o.Members.Contains(player.Id)) return;
+        if (!o.Members.Contains(player.Id))
+        {
+            if (!o.Invitations.Contains(player.Id))
+            {
+                var pending = o.Motion is { Kind: "admission" } application &&
+                    application.ProposerId == player.Id && application.TargetId == player.Id;
+                _conflictsPage.AddChild(WrappedUltimatumText(pending
+                    ? Loc.Format("Your membership application is awaiting the assembly. Voting closes in {0} days.", Math.Max(0, o.Motion.EndsDay - _campaign.ElapsedDays))
+                    : Tr("Apply for membership to start an assembly vote. Approval gives an invitation, not automatic membership; you can then accept or decline."), 14));
+                var command = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id,
+                    Action = pending ? "withdraw_application" : "request_membership" };
+                var refusal = _observerMode ? Tr("Observer mode cannot issue diplomatic orders.") : InternationalOrganizations.Refusal(_campaign, command);
+                var apply = ActionButton(pending ? "Withdraw application" : "Apply for membership", () =>
+                    OrganizationAction(command, command.Action + ":" + o.Id), 0, 36, iconPath: Icon("diplomacy"));
+                apply.Name = pending ? "WithdrawOrganizationApplication" : "RequestOrganizationMembership";
+                apply.Disabled = refusal.Length > 0; apply.TooltipText = Ui.Tip(refusal);
+                _conflictsPage.AddChild(apply);
+                if (refusal.Length > 0) _conflictsPage.AddChild(WrappedUltimatumText(refusal, 13));
+            }
+            return;
+        }
         foreach (var war in _campaign.Wars.Where(w => !w.Ended && !w.Involves(player.Id) && o.Members.Any(w.IsDefending)))
         {
             var command = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "defend", WarId = war.Id };

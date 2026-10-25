@@ -212,6 +212,10 @@ static class Program
         if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
         if (args.Contains("--snapshot-delivery-only")) { NetworkSnapshotDeliveryTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
+        if (args.Contains("--diplomatic-participation-only")) { DiplomaticParticipationTests.Run(); return; }
+        if (args.Length == 0) DiplomaticParticipationTests.Run();
+        if (args.Contains("--diplomatic-symmetry-only")) { DiplomaticSymmetryTests.Run(); return; }
+        if (args.Length == 0) DiplomaticSymmetryTests.Run();
         if (args.Contains("--organizations-only")) { OrganizationTests.Run(); return; }
         if (args.Contains("--households-only")) { HouseholdTests.Run(); return; }
         if (args.Contains("--brain-drain-only")) { BrainDrainTests.Run(); return; }

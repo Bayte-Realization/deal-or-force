@@ -49,6 +49,88 @@ static class PartitionTests
         few.Defines.AiPartitionMinimumDemanders = 4;
         Check(!AiStatecraft.TryCoordinatePartition(few, few.Nations[0]),
             "fewer takers than the minimum is acession, not a partition");
+
+        PlayerProposition();
+    }
+
+    /// <summary>
+    /// The player's half of the same instrument. The gate is the computer's gate - nobody
+    /// outside the coalition stands behind the victim, enough takers, overwhelming weight - asked
+    /// about a victim the player picked; the allies answer on the same die they throw for their
+    /// own plans; and each slice moves through the same AiStatecraft.PartitionDemand. So the
+    /// tests here are the ones above with the chairs swapped, which is the whole point.
+    /// </summary>
+    static void PlayerProposition()
+    {
+        {
+            // The switch that lights the button must also be the switch the command obeys: a
+            // hidden button is a courtesy, and a rule that a caller can walk around is not a rule.
+            var c = World(out var a, out _, out _, out var victim, 0);
+            c.Defines.AiMayCoordinatePartitions = false;
+            var command = new ProposePartitionCommand { IssuerId = a.Id, VictimId = victim.Id };
+            c.Commands.Enqueue(command); c.Commands.ApplyAll(c);
+            Check(!command.Coordinated && command.Slices == 0 && command.Note.Length > 0,
+                "with the rule off a player cannot divide a neighbour either");
+        }
+
+        {
+            var c = World(out var a, out _, out _, out var victim, 0);
+            var command = new ProposePartitionCommand { IssuerId = a.Id, VictimId = victim.Id };
+            c.Commands.Enqueue(command); c.Commands.ApplyAll(c);
+            Check(command.Coordinated && command.Slices == 3,
+                "a player proposes the carve-up and the allies answer it on the same day");
+            Check(c.States.Find(s => s.MapIndex == 3004).NationMapIndex == 501,
+                "the player's own slice follows the player's border");
+            Check(c.States.Find(s => s.MapIndex == 3007).NationMapIndex == 502 &&
+                c.States.Find(s => s.MapIndex == 3008).NationMapIndex == 503,
+                "the allies take theirs on the same day");
+            Check(c.States.Find(s => s.MapIndex == 3006).NationMapIndex == 504,
+                "the victim keeps its capital: a partition is not an execution");
+
+            var again = new ProposePartitionCommand { IssuerId = a.Id, VictimId = victim.Id };
+            c.Commands.Enqueue(again); c.Commands.ApplyAll(c);
+            Check(!again.Coordinated && again.Slices == 0 && again.Note.Length > 0,
+                "the same government does not carve up the same neighbour again the next morning");
+        }
+
+        {
+            // The allies are not more eager because a human asked: the die decides, as it does
+            // when the computer proposes to itself.
+            var c = World(out var a, out _, out _, out var victim, 0);
+            c.Defines.AiPartitionAppetite = 0f;
+            var command = new ProposePartitionCommand { IssuerId = a.Id, VictimId = victim.Id };
+            c.Commands.Enqueue(command); c.Commands.ApplyAll(c);
+            Check(!command.Coordinated && command.Slices == 0,
+                "with no appetite among the allies a player's proposal is a demand, not a partition");
+            Check(c.States.Find(s => s.MapIndex == 3004).NationMapIndex == 504,
+                "nothing moved: the refusal is a refusal, not a half-done carve-up");
+        }
+
+        {
+            var c = World(out var a, out _, out _, out var victim, 0);
+            var guard = new Nation { Tag = "PGU", MapIndex = 505, Population = 5_000_000, Gdp = 50, Treasury = 5, OutputScale = 1 };
+            c.AddNation(guard);
+            CampaignDiplomacy.Get(c, guard.Id, victim.Id).Stance = DiplomaticStance.Allied;
+            var command = new ProposePartitionCommand { IssuerId = a.Id, VictimId = victim.Id };
+            c.Commands.Enqueue(command); c.Commands.ApplyAll(c);
+            Check(!command.Coordinated && c.States.Find(s => s.MapIndex == 3004).NationMapIndex == 504,
+                "a player cannot divide a country somebody outside the coalition stands behind");
+        }
+
+        {
+            // And the other chair: an AI coalition may put the same demands to a player, who
+            // answers them. Before this, a victim with a human in it was simply skipped.
+            var plays = World(out _, out _, out _, out var human, 3);
+            Check(human.IsHuman, "fixture: the victim is the country a player holds");
+            Check(AiStatecraft.TryCoordinatePartition(plays, plays.Nations[0]),
+                "a coalition proposes the carve-up to a player instead of skipping them");
+            Check(plays.UltimatumPapers.Count == 3 && plays.UltimatumPapers.All(paper => paper.Pending),
+                "each taker's slice is a paper on the player's desk, not an answer given for them");
+            Check(plays.States.Find(s => s.MapIndex == 3004).NationMapIndex == 504 &&
+                plays.States.Find(s => s.MapIndex == 3007).NationMapIndex == 504 &&
+                plays.States.Find(s => s.MapIndex == 3008).NationMapIndex == 504,
+                "land moves only when the player answers, so nothing has moved yet");
+        }
     }
 
     /// <summary>
@@ -56,7 +138,7 @@ static class PartitionTests
     /// band in one region against each of them, and the victim's capital band behind that,
     /// touching no taker - the shape Poland had, minus the sea.
     /// </summary>
-    static Campaign World(out Nation a, out Nation b, out Nation cc, out Nation victim)
+    static Campaign World(out Nation a, out Nation b, out Nation cc, out Nation victim, int playerId = -1)
     {
         var defines = new Defines { AiMayCoordinatePartitions = true, AiPartitionAppetite = 1f };
         var c = new Campaign(824, defines) { ScenarioId = "partition_fixture" };
@@ -86,6 +168,7 @@ static class PartitionTests
         CampaignDiplomacy.Get(c, a.Id, b.Id).Stance = DiplomaticStance.Allied;
         CampaignDiplomacy.Get(c, a.Id, cc.Id).Stance = DiplomaticStance.Allied;
         CampaignDiplomacy.Get(c, b.Id, cc.Id).Stance = DiplomaticStance.Allied;
+        if (playerId >= 0) c.ConfigureSinglePlayer(playerId);
         SetDay(c, 7);
         return c;
     }

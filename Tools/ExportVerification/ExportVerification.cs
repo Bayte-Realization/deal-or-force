@@ -40,6 +40,12 @@ public partial class ExportVerification : Node
             Check(pureRule.Ready && typeof(Rules.AssaultRules).Assembly.GetName().Name == "DealOrForce.Rules",
                 "production F# rules load and execute inside Godot");
             var tree = GetTree();
+            Check(ProjectSettings.GetSetting("application/config/version").AsString() == GameBuildInfo.Version &&
+                SaveSystem.GameVersion == GameBuildInfo.Version,
+                "project, menu and new-save release versions agree: " + GameBuildInfo.Version);
+            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0" &&
+                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0",
+                "game and production rules assembly versions agree");
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();
             var languageAt = Array.IndexOf(args, "--verify-language");
@@ -68,6 +74,13 @@ public partial class ExportVerification : Node
                 if (!developmentProbe && key.StartsWith("autoload/", StringComparison.Ordinal))
                     Check(!ProjectSettings.GetSetting(key).AsString().TrimStart('*').StartsWith("res://addons/", StringComparison.Ordinal),
                         "export autoload is not editor tooling: " + key);
+            }
+            if (args.Contains("--verify-release-only"))
+            {
+                await VerifyReleaseMenu((MainMenuScene)tree.CurrentScene);
+                GD.Print($"EXPORT_VERIFY failures={_failures}");
+                GetTree().Quit(_failures == 0 ? 0 : 1);
+                return;
             }
             await Capture("menu");
             Check(tree.ChangeSceneToFile("res://Scenes/Main.tscn") == Error.Ok, "campaign scene opens from the pack");
@@ -108,6 +121,13 @@ public partial class ExportVerification : Node
                     return;
                 }
                 var lateSaveAt = Array.IndexOf(args, "--verify-late-save");
+                if (developmentProbe && args.Contains("--verify-diplomatic-participation-only"))
+                {
+                    await VerifyDiplomaticParticipation(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-government-supply-only"))
                 {
                     await VerifyGovernmentSupply(game);

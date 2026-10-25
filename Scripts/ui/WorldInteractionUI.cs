@@ -279,11 +279,17 @@ public partial class DealOrForceGame
         }
 
         var guaranteed = relation.GuaranteedBy(_campaign.Player.Id);
-        _guaranteeButton.Text = guaranteed ? Tr("Withdraw guarantee") : Tr("Guarantee");
+        var asked = !guaranteed && Guarantee.RequesterTo(_campaign, _campaign.Player) is { } asking &&
+            asking.Id == nation.Id;
+        _guaranteeButton.Text = guaranteed
+            ? Tr("Withdraw guarantee")
+            : asked ? Tr("Grant guarantee") : Tr("Guarantee");
         _guaranteeButton.Disabled = relation.Stance == DiplomaticStance.AtWar;
         _guaranteeButton.TooltipText = Ui.Tip(guaranteed
             ? Tr("Take back the promise. They will notice.")
-            : Tr("Promise to fight for them if they are attacked. It costs nothing until it costs everything."));
+            : asked
+                ? Tr("They have asked you to stand behind them. Answering here is a yes.")
+                : Tr("Promise to fight for them if they are attacked. It costs nothing until it costs everything."));
     }
 
     /// <summary>Let one go, or take it in - the two ends an arrangement has.</summary>

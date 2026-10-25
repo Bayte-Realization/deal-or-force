@@ -159,6 +159,9 @@ public partial class DealOrForceGame
             Tr("Propose a mutual defence pact."));
         AddMapDiplomacyAction(rows, Tr("Guarantee"), "AGREEMENTS", ToggleDiplomacyGuarantee,
             Tr("Guarantee their independence; an attack on them is an attack on us."));
+        AddMapDiplomacyAction(rows, Tr("Request guarantee"), "AGREEMENTS",
+            () => RequestGuaranteeFrom(DiplomacyTarget(), _mapDiplomacyFeedback),
+            Tr("Ask them to promise to fight for us. It costs them nothing until it costs everything."));
         AddMapDiplomacyAction(rows, Tr("Trade agreement"), "AGREEMENTS",
             () => ToggleAgreement(AgreementKind.TradeAgreement, DiplomacyTarget(), _mapDiplomacyFeedback),
             Tr("Open a trade agreement."));
@@ -183,6 +186,10 @@ public partial class DealOrForceGame
                 Tr("Begin an immediate land war."));
             AddMapDiplomacyAction(rows, Tr("Issue ultimatum"), "War and peace", ConfirmOrIssueUltimatum,
                 Tr("Issue an ultimatum with demands."));
+            if (_campaign.Defines.AiMayCoordinatePartitions)
+                AddMapDiplomacyAction(rows, Tr("Divide them with allies"), "War and peace",
+                    () => ConfirmOrProposePartition(DiplomacyTarget(), _mapDiplomacyFeedback),
+                    Tr("Agree with your allies to demand slices of them on the same day."));
         }
 
         _mapDiplomacyFeedback = new Label { Text = "", AutowrapMode = TextServer.AutowrapMode.WordSmart };

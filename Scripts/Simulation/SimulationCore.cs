@@ -872,6 +872,9 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
+            // Offers and requests that nobody answered stop occupying the tie. Both are state
+            // that travels in a save, so both have to expire somewhere.
+            using (SimProfiler.Measure("diplomatic_offers")) { Guarantee.Tick(this); AgreementSystem.Tick(this); }
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);

@@ -269,6 +269,19 @@ public static class CampaignFingerprint
             }
             Mix((int)r.Stance); MixFloat(r.Opinion); MixFloat(r.AllianceCohesion);
             Mix(r.AidSentDay);
+            // A question waiting on somebody's answer is state: two worlds that disagree about
+            // whether a request is pending will disagree about what both sides do next. Mixed
+            // only when it is set, so a world with no offers keeps the fingerprint it had.
+            if (r.GuaranteeRequestedBy >= 0)
+            {
+                MixText("guarantee_request_v1");
+                Mix(r.GuaranteeRequestedBy); Mix(r.GuaranteeRequestedDay);
+            }
+            if (r.AgreementOfferedBy >= 0)
+            {
+                MixText("agreement_offer_v1");
+                Mix(r.AgreementOfferedBy); Mix((int)r.AgreementOfferedKind); Mix(r.AgreementOfferedDay);
+            }
             Mix(r.AllianceAssessmentDay); Mix(r.AllianceStrainedDays); Mix(r.AllianceReaffirmedDay);
             Mix(r.AllianceRefusedDay); Mix(r.AllianceSinceDay);
             foreach (var character in r.AllianceProgram ?? "") Mix(character);

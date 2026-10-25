@@ -51,6 +51,7 @@ public sealed partial class Defines
 {
     public float OrganizationFoundingDeposit { get; set; } = .25f;
     public int OrganizationMembershipLimit { get; set; } = 6;
+    public int OrganizationApplicationCooldownDays { get; set; } = 30;
     public float OrganizationArrearsCohesionLoss { get; set; } = .012f;
     public int OrganizationDepartureTruceDays { get; set; } = 180;
     public bool AiMayFoundOrganizations { get; set; } = true;
@@ -246,6 +247,13 @@ public static class InternationalOrganizations
         c.Organizations.Add(org); InvalidateDefencePartners(); return org;
     }
 
+    // Keep the existing define name for saved rules/mods, but apply the same
+    // price to every founder. The AI wrapper must not charge it a second time.
+    public static float FoundingPoliticalCost(Campaign c) => c.Defines.OrganicOrganizationReachEnabled
+        ? c.Defines.AiOrganizationFoundingPoliticalCost : 0f;
+
+    private static string ApplicationKey(int organizationId) => "organization_application/" + organizationId;
+
     public static string Refusal(Campaign c, OrganizationCommand cmd)
     {
         if (c is null || !c.FeatureEnabled("organizations")) return Loc.Get("International organizations are disabled.");
@@ -255,16 +263,37 @@ public static class InternationalOrganizations
         if (cmd.Action == "create")
         {
             if (!float.IsFinite(n.Treasury) || !float.IsFinite(c.Defines.OrganizationFoundingDeposit)) return Loc.Get("Invalid treasury or deposit.");
+            var politicalCost = FoundingPoliticalCost(c);
+            if (!float.IsFinite(politicalCost) || politicalCost < 0 || !float.IsFinite(n.PoliticalPoints))
+                return Loc.Get("Invalid political capital or founding cost.");
             if (Charter(cmd.CharterId) is null) return Loc.Get("Choose an organization charter.");
             if (string.IsNullOrWhiteSpace(cmd.Name) || cmd.Name.Trim().Length > 80 || cmd.Name.Any(char.IsControl)) return Loc.Get("Use a name of 1 to 80 characters.");
             if (Active(c).Any(o => string.Equals(o.Name, cmd.Name.Trim(), StringComparison.OrdinalIgnoreCase))) return Loc.Get("An organization already uses that name.");
             if (ownCount >= Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30)) return Loc.Get("This country's organization membership limit is reached.");
             if (n.Treasury < Math.Max(0, c.Defines.OrganizationFoundingDeposit)) return Loc.Get("Not enough treasury for the founding deposit.");
+            if (n.PoliticalPoints < politicalCost) return Loc.Get("Not enough political capital to found an organization.");
             return "";
         }
         var org = Active(c).FirstOrDefault(o => o.Id == cmd.OrganizationId);
         if (org is null || Charter(org.CharterId) is null) return Loc.Get("That organization no longer exists.");
         var member = org.Members.Contains(n.Id);
+        if (cmd.Action == "request_membership")
+        {
+            if (member || org.Invitations.Contains(n.Id)) return Loc.Get("That country is already a member or invited.");
+            if (ownCount >= Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30)) return Loc.Get("This country's organization membership limit is reached.");
+            if (org.Members.Any(id => CampaignDiplomacy.AtWar(c, n.Id, id))) return Loc.Get("A country cannot join while fighting a member.");
+            if (org.Motion is not null) return Loc.Get("Finish the current assembly vote first.");
+            var ready = n.DecisionAvailableDay.GetValueOrDefault(ApplicationKey(org.Id));
+            if (ready > c.ElapsedDays) return Loc.Format("Another membership application can be submitted in {0} days.", ready - c.ElapsedDays);
+            return "";
+        }
+        if (cmd.Action == "withdraw_application")
+        {
+            if (member || org.Motion is not { Kind: "admission" } application ||
+                application.ProposerId != n.Id || application.TargetId != n.Id)
+                return Loc.Get("Your country has no pending membership application here.");
+            return application.EndsDay <= c.ElapsedDays ? Loc.Get("That assembly vote is closed.") : "";
+        }
         if (cmd.Action is "join" or "decline")
         {
             if (member || !org.Invitations.Contains(n.Id)) return Loc.Get("There is no approved invitation to answer.");
@@ -323,20 +352,31 @@ public static class InternationalOrganizations
 
     public static void Apply(Campaign c, OrganizationCommand cmd)
     {
+        cmd.Changed = false;
         if (Refusal(c, cmd).Length > 0) return;
         var n = c.NationById(cmd.IssuerId);
         if (cmd.Action == "create")
         {
             var deposit = Math.Max(0, c.Defines.OrganizationFoundingDeposit);
             n.Treasury -= deposit;
+            n.PoliticalPoints -= FoundingPoliticalCost(c);
             c.Organizations.Add(new InternationalOrganization { Id = c.NextOrganizationId++, FounderId = n.Id,
                 Name = cmd.Name.Trim(), CharterId = cmd.CharterId, FoundedDay = c.ElapsedDays, Members = new() { n.Id }, Budget = deposit });
+            c.Chronicle.Record(c, "organization_founded", n.Id, -1, DisplayName(c, c.Organizations.Last()));
         }
         else
         {
             var org = c.Organizations.First(o => o.Id == cmd.OrganizationId);
             switch (cmd.Action)
             {
+                case "request_membership":
+                    // Applicants ask the assembly; they are not a member and receive no vote.
+                    org.Motion = new OrganizationMotion { Id = org.NextMotionId++, ProposerId = n.Id,
+                        TargetId = n.Id, Kind = "admission", EndsDay = c.ElapsedDays + Charter(org.CharterId).VoteDays };
+                    n.DecisionAvailableDay[ApplicationKey(org.Id)] = org.Motion.EndsDay +
+                        Math.Clamp(c.Defines.OrganizationApplicationCooldownDays, 1, 3650);
+                    break;
+                case "withdraw_application": org.Motion = null; break;
                 case "join": org.Invitations.Remove(n.Id); org.Members.Add(n.Id); org.Members.Sort(); break;
                 case "decline": org.Invitations.Remove(n.Id); break;
                 case "leave":
@@ -591,7 +631,7 @@ public sealed class FoundCooperationForumCommand : ICampaignCommand
         Changed=false;
         if (!MechanicFeatures.Allows(c,this) || !c.FeatureEnabled("organizations")) return;
         var n=c.NationById(IssuerId); var friend=c.NationById(TargetId);
-        var price=c.Defines.OrganicOrganizationReachEnabled ? c.Defines.AiOrganizationFoundingPoliticalCost : 0;
+        var price=InternationalOrganizations.FoundingPoliticalCost(c);
         if (n is null || friend is null || n.Id==friend.Id || !InternationalOrganizations.Eligible(c,friend) ||
             !float.IsFinite(price) || price<0 || !float.IsFinite(n.PoliticalPoints) || n.PoliticalPoints<price ||
             CampaignDiplomacy.AtWar(c,n.Id,friend.Id) || !OrganizationDynamics.FoundingRelevant(c,n,friend)) return;
@@ -601,17 +641,12 @@ public sealed class FoundCooperationForumCommand : ICampaignCommand
             : OrganizationName;
         var create=new OrganizationCommand { IssuerId=n.Id,Action="create",Name=orgName,CharterId=charter };
         create.Apply(c); if (!create.Changed) return;
-        n.PoliticalPoints-=price;
         var org=c.Organizations.Last();
         if (string.IsNullOrEmpty(OrganizationName) && orgName.StartsWith("Council "))
             org.GeneratedCountryTag=n.Tag;
         new OrganizationCommand { IssuerId=n.Id,OrganizationId=org.Id,Action="propose",Kind="admission",TargetId=friend.Id }.Apply(c);
-        if (charter == "collective_defence")
-        {
-            var rel = CampaignDiplomacy.Get(c, n.Id, friend.Id);
-            if (rel.Stance != DiplomaticStance.Allied) rel.Stance = DiplomaticStance.Allied;
-        }
-        c.Chronicle.Record(c,"organization_founded",n.Id,friend.Id,InternationalOrganizations.DisplayName(c,org));
+        // The invitation is not membership or a bilateral alliance. The partner
+        // keeps the same right to decline as when a player founds the institution.
         Changed=true; c.MarkStrategicChange();
     }
 }

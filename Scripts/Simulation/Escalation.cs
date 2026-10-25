@@ -1084,7 +1084,8 @@ public sealed class MediateCrisisCommand : ICampaignCommand
 
     public void Apply(Campaign c)
     {
-        if (!MechanicFeatures.Allows(c, this)) return;
+        Mediated = false;
+        if (IssuerId != MediatorId || !MechanicFeatures.Allows(c, this)) return;
         Mediated = Escalation.StartMediation(c, c.NationById(MediatorId), c.NationById(TargetAId), c.NationById(TargetBId));
     }
 }
@@ -1100,7 +1101,8 @@ public sealed class InterveneCrisisCommand : ICampaignCommand
 
     public void Apply(Campaign c)
     {
-        if (!MechanicFeatures.Allows(c, this)) return;
+        Intervened = false;
+        if (IssuerId != PowerId || !MechanicFeatures.Allows(c, this)) return;
         Intervened = Escalation.InterveneInCrisis(c, c.NationById(PowerId), c.NationById(ProtegeId), c.NationById(AggressorId));
     }
 }

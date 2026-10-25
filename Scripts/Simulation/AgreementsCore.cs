@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
@@ -31,6 +32,15 @@ public sealed partial class Defines
     /// <summary>How long a country will not be asked again - by the same country - after saying no.</summary>
     public int AgreementRefusalDays { get; set; } = 180;
 
+    /// <summary>
+    /// How long an offer waits on a player's table before it lapses.
+    ///
+    /// The same thirty days an alliance offer gets (AllianceOfferDays): a question a player never
+    /// got round to answering should stop occupying the tie, and the offer is not a refusal, so
+    /// nothing is held against them for it.
+    /// </summary>
+    public int AgreementReplyDays { get; set; } = 30;
+
     /// <summary>What breaking a non-aggression pact does to the breaker's name with everybody else.</summary>
     public float NonAggressionPactBreakNotoriety { get; set; } = 8f;
 
@@ -55,7 +65,9 @@ public enum AgreementResult
     NotAsked,
     Signed,
     Refused,
-    NotAllowed
+    NotAllowed,
+    /// <summary>Put on a player's table. Nobody has signed anything; they answer it themselves.</summary>
+    Offered
 }
 
 /// <summary>
@@ -72,6 +84,10 @@ public enum AgreementResult
 /// the one the computer signs its own at, so a player gets the same answer it would. Breaking
 /// is always possible and never free: the opinion the agreement bought goes, a grudge comes,
 /// and breaking a promise not to attack costs the breaker's name with everybody.
+///
+/// The other direction is the same offer. A computer that wants an agreement with a country a
+/// player answers for does not sign it and does not silently lose the turn: the offer goes on
+/// that player's table and waits (AgreementResult.Offered), the way an alliance offer does.
 ///
 /// Aid is the third thing a player can do here: money from the treasury for goodwill, scaled to
 /// what the money is to the country receiving it.
@@ -95,8 +111,16 @@ public static class AgreementSystem
             : CampaignDiplomacy.Get(campaign, asking.Id, asked.Id);
         if (relation.Stance == DiplomaticStance.AtWar) { reason = Loc.Get("Already at war."); return false; }
         if (Signed(relation, kind)) { reason = Loc.Get("Already signed."); return false; }
-        // Somebody playing answers for themselves, and there is no table to put it on yet.
-        if (asked.IsHuman) { reason = Loc.Get("They answer for themselves."); return false; }
+        // An offer on a player's table is a question, not a signature. It blocks a second ask -
+        // from either side, which is what stops a computer and a player asking each other in
+        // circles - and it lapses on its own (AgreementReplyDays).
+        if (OfferPending(campaign, relation))
+        {
+            reason = relation.AgreementOfferedBy == asking.Id
+                ? Loc.Get("They have not answered the last offer yet.")
+                : Loc.Get("They have an offer on your table; answer that one first.");
+            return false;
+        }
         var since = campaign.ElapsedDays - relation.AgreementRefusedDay;
         if (since < campaign.Defines.AgreementRefusalDays)
         {
@@ -186,6 +210,102 @@ public static class AgreementSystem
         campaign.MarkStrategicChange();
     }
 
+    /// <summary>Whether an offer is still on this tie, from either side.</summary>
+    public static bool OfferPending(Campaign campaign, DiplomaticRelation relation) =>
+        campaign is not null && relation is not null && relation.AgreementOfferedBy >= 0 &&
+        campaign.ElapsedDays - relation.AgreementOfferedDay < Math.Max(1, campaign.Defines.AgreementReplyDays);
+
+    /// <summary>The offer one country has on another's table, if it is still waiting.</summary>
+    public static bool OfferedBy(Campaign campaign, Nation asked, int proposerId, out AgreementKind kind)
+    {
+        kind = AgreementKind.TradeAgreement;
+        if (campaign is null || asked is null) return false;
+        var relation = CampaignDiplomacy.Peek(campaign, asked.Id, proposerId);
+        if (relation is null || relation.AgreementOfferedBy != proposerId) return false;
+        if (!OfferPending(campaign, relation)) return false;
+        kind = relation.AgreementOfferedKind;
+        return true;
+    }
+
+    /// <summary>The offers waiting on this country's table, oldest first.</summary>
+    public static List<(Nation Proposer, AgreementKind Kind)> OfferedTo(Campaign campaign, Nation asked)
+    {
+        var found = new List<(Nation, AgreementKind)>();
+        if (campaign is null || asked is null) return found;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.A != asked.Id && relation.B != asked.Id) continue;
+            var proposerId = relation.AgreementOfferedBy;
+            if (proposerId < 0 || proposerId == asked.Id) continue;
+            if (!OfferPending(campaign, relation)) continue;
+            var proposer = campaign.NationById(proposerId);
+            if (proposer is null) continue;
+            found.Add((proposer, relation.AgreementOfferedKind));
+        }
+        return found;
+    }
+
+    /// <summary>
+    /// Answer one. Accepting is the player's own signature, so it is the same <see cref="Sign"/>
+    /// the computer would have made - after checking the tie is still askable at all, since they
+    /// may have gone to war with each other while the offer sat there.
+    /// </summary>
+    public static AgreementResult Answer(Campaign campaign, Nation answering, int proposerId, bool accept,
+        out string outcome)
+    {
+        outcome = "";
+        if (!OfferedBy(campaign, answering, proposerId, out var kind))
+        {
+            outcome = Loc.Get("They have not offered anything.");
+            return AgreementResult.NotAsked;
+        }
+        var relation = CampaignDiplomacy.Get(campaign, answering.Id, proposerId);
+        relation.AgreementOfferedBy = -1;
+        relation.AgreementOfferedKind = AgreementKind.TradeAgreement;
+        relation.AgreementOfferedDay = -9999;
+        relation.LastActionDay = campaign.ElapsedDays;
+
+        var proposer = campaign.NationById(proposerId);
+        var name = kind == AgreementKind.TradeAgreement ? Loc.Get("trade agreement") : Loc.Get("non-aggression pact");
+        if (!accept)
+        {
+            // A refusal, not a grudge: asking is not an insult. It does buy the asker the same
+            // silence a refusal always buys it.
+            relation.AgreementRefusedDay = campaign.ElapsedDays;
+            campaign.MarkStrategicChange();
+            outcome = Loc.Format("{0} declined the {1}.", answering.DisplayName, name);
+            DiagnosticLogs.Write("simulation",
+                $"AGREEMENT_REFUSED by={answering.Tag} from={proposer?.Tag} kind={kind} day={campaign.ElapsedDays}");
+            return AgreementResult.Refused;
+        }
+
+        if (relation.Stance == DiplomaticStance.AtWar || Signed(relation, kind))
+        {
+            campaign.MarkStrategicChange();
+            outcome = Loc.Get("The offer no longer stands.");
+            return AgreementResult.NotAllowed;
+        }
+        Sign(campaign, relation, kind);
+        outcome = Loc.Format("{0} signed the {1}.", answering.DisplayName, name);
+        DiagnosticLogs.Write("simulation",
+            $"AGREEMENT_SIGNED by={answering.Tag} with={proposer?.Tag} kind={kind} day={campaign.ElapsedDays}");
+        return AgreementResult.Signed;
+    }
+
+    /// <summary>Let the unanswered ones lapse. A lapsed offer is not a refusal and costs nobody anything.</summary>
+    public static void Tick(Campaign campaign)
+    {
+        if (campaign is null) return;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            if (relation.AgreementOfferedBy < 0) continue;
+            if (OfferPending(campaign, relation)) continue;
+            relation.AgreementOfferedBy = -1;
+            relation.AgreementOfferedKind = AgreementKind.TradeAgreement;
+            relation.AgreementOfferedDay = -9999;
+        }
+    }
+
     /// <summary>What an aid package from this country to that one would be worth, or zero if it cannot be sent.</summary>
     public static float AidAmount(Campaign campaign, Nation giving, Nation receiving, out string reason, bool preview = false)
     {
@@ -238,6 +358,21 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
             return;
         }
         var relation = CampaignDiplomacy.Get(campaign, IssuerId, TargetId);
+        // A player signs for themselves. The offer is put on their table and waits, and this
+        // command's one action is spent either way - the same turn an offer to a computer costs.
+        if (asked.IsHuman)
+        {
+            relation.AgreementOfferedBy = IssuerId;
+            relation.AgreementOfferedKind = Kind;
+            relation.AgreementOfferedDay = campaign.ElapsedDays;
+            relation.LastActionDay = campaign.ElapsedDays;
+            campaign.MarkStrategicChange();
+            Result = AgreementResult.Offered;
+            Reason = Loc.Format("{0} will consider it.", asked.DisplayName);
+            DiagnosticLogs.Write("simulation",
+                $"AGREEMENT_OFFER from={asking.Tag} to={asked.Tag} kind={Kind} day={campaign.ElapsedDays}");
+            return;
+        }
         if (AgreementSystem.Willingness(campaign, asked, asking, Kind) >= AgreementSystem.Needed(campaign, Kind))
         {
             AgreementSystem.Sign(campaign, relation, Kind);
@@ -248,6 +383,26 @@ public sealed class ProposeAgreementCommand : ICampaignCommand
         relation.AgreementRefusedDay = campaign.ElapsedDays;
         relation.LastActionDay = campaign.ElapsedDays;
         Result = AgreementResult.Refused;
+    }
+}
+
+/// <summary>Answer an offer that is on your table. Nothing is signed until somebody says yes.</summary>
+public sealed class AnswerAgreementCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; }
+    public bool Accept { get; init; }
+
+    public AgreementResult Result { get; private set; } = AgreementResult.NotAsked;
+    public string Reason { get; private set; } = "";
+
+    public void Apply(Campaign campaign)
+    {
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        var answering = campaign.NationById(IssuerId);
+        if (answering is null || campaign.NationById(TargetId) is null) return;
+        Result = AgreementSystem.Answer(campaign, answering, TargetId, Accept, out var outcome);
+        Reason = outcome;
     }
 }
 
