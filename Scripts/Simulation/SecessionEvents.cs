@@ -549,49 +549,10 @@ public static class SecessionEvents
     private static SecessionOutcome Ask(Campaign campaign, Nation parent, Nation born,
         IReadOnlyList<SecessionPiece> leaving, long people, long was, out string reason)
     {
-        var share = was <= 0 ? 0f : people / (float)was;
         var names = string.Join(", ", leaving.Take(4).Select(piece => piece.Name));
         if (leaving.Count > 4) names += $" and {leaving.Count - 4} more";
-
-        campaign.PendingEvents.Add(new PendingCampaignEvent
-        {
-            Id = campaign.ElapsedDays * 1000 + parent.Id,
-            NationId = parent.Id,
-            Title = Loc.Format("{0} has declared independence", born.Name),
-            Description = Loc.Format(
-                "{0} has proclaimed itself out of {1}, taking {2} and {3} people - {4} of the " +
-                "country. Militia are already under arms there. The cabinet is waiting.",
-                born.Name, parent.Name, names, people.ToString("N0"), share.ToString("P0")),
-            CreatedDay = campaign.ElapsedDays,
-            ExpiresDay = campaign.ElapsedDays + 60,
-            Options = new[]
-            {
-                new CampaignEventOption
-                {
-                    Title = "Recognise the new border",
-                    Consequence = "The war nobody wanted does not happen. The country is " +
-                                  "smaller, and every other region has watched it work.",
-                    Effect = ScriptedEffects.From(("stability", 0.03f), ("war_support", -0.05f))
-                },
-                new CampaignEventOption
-                {
-                    Title = "Refuse to recognise it",
-                    Consequence = "No war, no acceptance. The claim stands and so does the " +
-                                  "resentment on both sides of it.",
-                    Effect = ScriptedEffects.From(("stability", -0.02f), ("war_support", 0.04f))
-                },
-                new CampaignEventOption
-                {
-                    Title = "Send the army",
-                    Consequence = "War, against a state that has just raised militia on its " +
-                                  "own ground and has nothing left to lose.",
-                    Effect = ScriptedEffects.From(("war_support", 0.08f), ("stability", -0.05f)),
-                    DeclareWarOn = born.Id
-                }
-            }
-        });
-
-        reason = $"put to the player ({share:P0} of the country going)";
+        SecessionResponse.Ask(campaign, parent, born, names, people, was);
+        reason = "put to the player";
         return SecessionOutcome.Accepted;
     }
 
@@ -649,6 +610,9 @@ public static class SecessionEvents
         List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false)
     {
         if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
+        leaving = leaving.Where(piece => RevoltRecovery.DaysLeft(campaign, parent,
+            campaign.States.Find(s => s.MapIndex == piece.MapIndex)) == 0).ToList();
+        if (leaving.Count == 0) return null;
         // Political succession cannot repaint a third party's military occupation.
         // Do this before creating a tag, transferring accounts, or drawing a response.
         var provinces = RevoltTerritory.Select(campaign, parent, ref leaving);
@@ -765,13 +729,14 @@ public static class SecessionEvents
         // playing is asked, because this is the largest thing that happens to a state and
         // rolling for it is the game playing that turn instead of the player.
         var reason = "";
-        var outcome = fight ? SecessionOutcome.Contested : parent.IsHuman
+        SecessionResponse.Begin(campaign, parent, born);
+        var outcome = parent.IsHuman && !campaign.ObserverMode
             ? Ask(campaign, parent, born, leaving, people, was, out reason)
-            : SecessionCore.Response(campaign, parent, leaving, out reason);
+            : fight ? SecessionOutcome.Contested : SecessionCore.Response(campaign, parent, leaving, out reason);
         if (outcome == SecessionOutcome.Contested)
         {
             var war = CampaignDiplomacy.DeclareWar(campaign, parent.Id, born.Id,
-                leaving[0].MapIndex, fight ? "uprising" : "secession", onOwnInitiative: !fight);
+                leaving[0].MapIndex, fight ? "uprising" : "secession", onOwnInitiative: false);
             // Refused, and unable to do anything about it - a truce, an alliance, no way to
             // reach them. That is an acceptance whatever the cabinet thinks, and recording
             // it as one keeps the state of the world honest.
@@ -803,7 +768,9 @@ public static class SecessionEvents
                 DiagnosticLogs.Write("simulation",
                     $"SECESSION_PEACEFUL_DEFECTION born={born.Tag} formations={defected}");
         }
-        if (outcome == SecessionOutcome.Accepted)
+        if (outcome == SecessionOutcome.Accepted && (!parent.IsHuman || campaign.ObserverMode))
+            parent.DecisionAvailableDay.Remove(SecessionResponse.Prefix + born.Id);
+        if (outcome == SecessionOutcome.Accepted && (!parent.IsHuman || campaign.ObserverMode))
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
         OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, parent.Id, born.Id), "seceded_from_us");
 

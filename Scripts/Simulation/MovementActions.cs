@@ -218,6 +218,8 @@ public static class MovementActions
             }
             case "rise":
             {
+                var recovery = RevoltRecovery.DaysLeft(campaign, MovementRules.OwnerOf(campaign, region), region);
+                if (recovery > 0) return Loc.Format("This region is recovering from reconquest: {0} days remain.", recovery);
                 if (region.NationMapIndex == nation.MapIndex) return Loc.Get("The region is already its own.");
                 if (!MovementReach.CanClaimTerritory(campaign, nation, region))
                     return Loc.Get("Offices and foreign support do not grant a territorial mandate here.");

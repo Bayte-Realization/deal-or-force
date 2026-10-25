@@ -1159,6 +1159,7 @@ public static class SaveSystem
             // The state list was just replaced wholesale, so the ownership index built
             // against the bootstrap campaign no longer describes it.
             campaign.InvalidateStateIndex();
+            RevoltRecovery.RestoreLegacy(campaign);
             // Only the books of a save from before public debt need opening. A country whose
             // books are open was saved as it stood - an overdraft between two weekly
             // settlements included - and moving that overdraft into debt here made a loaded

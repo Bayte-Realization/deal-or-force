@@ -1,0 +1,4 @@
+{
+  "ReintegrationRecoveryDays": 730,
+  "SecessionResponseDays": 60
+}

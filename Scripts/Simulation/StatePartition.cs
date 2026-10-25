@@ -80,6 +80,13 @@ public static class StatePartition
         }
         if (moved == 0) return Array.Empty<ScenarioState>();
 
+        foreach (var (stateIndex, holder) in previousHolder)
+        {
+            var former = campaign.Nations.Find(n => n.MapIndex == holder);
+            if (!asConquest && !Reintegration.IsBreakawayOf(former, newOwner)) continue;
+            RevoltRecovery.Protect(campaign, newOwner, campaign.States.Find(s => s.MapIndex == stateIndex), campaign.ElapsedDays);
+        }
+
         // What the neighbours make of it. Scaled by people rather than provinces, because a
         // hundred square kilometres of tundra is not what makes a neighbourhood nervous.
         if (asConquest) Statecraft.RecordAnnexation(campaign, newOwner, peopleTaken);

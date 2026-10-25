@@ -83,6 +83,8 @@ static class RevoltOccupationTests
         var civil = Fixture(); var civilParent = civil.Nations[0];
         var rising = SecessionEvents.Uprising(civil, civilParent,
             new[] { civil.States.Single(s => s.MapIndex == 3002) }, _ => {});
+        var response = civil.PendingEvents.Single(e => e.NationId == civilParent.Id);
+        new ResolveCampaignEventCommand { IssuerId = civilParent.Id, EventId = response.Id, OptionIndex = 2 }.Apply(civil);
         Check(rising?.Seceded is not null && civil.Wars.Any(w => !w.Ended && w.Opposes(civilParent.Id, rising.Seceded.Id)) &&
             civil.ProvinceController[3] == 502 && civil.ProvinceMap.ProvinceToNation[3] == 501,
             "civil wars use the same occupation protection and still fight their parent");

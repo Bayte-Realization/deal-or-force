@@ -168,6 +168,8 @@ static class MovementZoneTests
             "the holder's ground the claim does not name stays where it is");
         Check(Movements.StateById(c, "z_4").NationMapIndex == 502,
             "a homeland chunk another country holds is another war, for another day");
+        var question = c.PendingEvents.Single(e => e.NationId == parent.Id);
+        new ResolveCampaignEventCommand { IssuerId = parent.Id, EventId = question.Id, OptionIndex = 2 }.Apply(c);
         Check(c.Wars.Count(w => !w.Ended && w.Involves(rising.Id)) == warsBefore + 1,
             "one uprising declares one war, however many regions rose");
         Check(c.Armies.Count(a => a.NationId == rising.Id) <= c.Defines.MovementUprisingMilitiaMax,

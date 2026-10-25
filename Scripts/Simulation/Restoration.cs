@@ -101,6 +101,19 @@ public static class Restoration
             return Loc.Get("Invalid simulation values prevent this action. Pause and inspect the campaign.");
         if (!Controls(campaign, nation, region) && !Consents(campaign, nation, holder))
             return Loc.Get("The holder will not hand it back, and we do not hold it.");
+        // Ground taken back from a rising is not handed straight to the government that lost
+        // it. This is the half of the reconquest clock a rising cannot check (RevoltRecovery
+        // stops uprisings and secessions; a return is neither), and without it an exile was
+        // walking home three days after losing the war - by permission of a holder that never
+        // gave one, or by a negotiation its own army had just lost - and came back holding
+        // three regions under a peace treaty that then forbade the state it left from
+        // answering. A country that has just been thrown out of a region does not get it back
+        // until the region has stopped being a battlefield.
+        var recovery = Controls(campaign, nation, region)
+            ? 0
+            : RevoltRecovery.DaysLeft(campaign, holder, region);
+        if (recovery > 0)
+            return Loc.Format("This ground was retaken too recently: {0} days must pass before it can change hands again.", recovery);
         return "";
     }
 

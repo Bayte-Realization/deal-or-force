@@ -226,6 +226,7 @@ public static class CivilWarOutbreak
             d.CivilWarRebelShareMin < 0f || d.CivilWarRebelShareMax > .6f ||
             d.CivilWarRebelShareMin > d.CivilWarRebelShareMax) return new();
         var owned = c.StatesOf(nation).Where(s => s.Population > 0 && s.MapIndex != nation.CapitalStateMapIndex &&
+            RevoltRecovery.DaysLeft(c, nation, s) == 0 &&
             float.IsFinite(s.Stability) && float.IsFinite(s.Radicalism)).ToList();
         if (owned.Count < 2) return new();
         float Grievance(ScenarioState s) => s.Stability - 0.6f * s.Radicalism;

@@ -227,6 +227,7 @@ public static class SecessionCore
     /// </summary>
     public static float Pressure(Campaign campaign, Nation owner, ScenarioState state)
     {
+        if (RevoltRecovery.DaysLeft(campaign, owner, state) > 0) return 0f;
         if (campaign is null || owner is null || state is null) return 0f;
         var weights = Weights;
 

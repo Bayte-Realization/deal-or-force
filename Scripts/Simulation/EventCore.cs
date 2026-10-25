@@ -57,6 +57,9 @@ public sealed class CampaignEventOption
     public int UnionFounderId { get; init; }
     public string UnionFormableId { get; init; } = "";
     public int ShardConsolidateFounderId { get; init; } = -1;
+    /// <summary>Saved recipient and explicit choice of the secession response. -1 is no response, so nation zero is valid.</summary>
+    public int SecessionTargetId { get; init; } = -1;
+    public string SecessionChoice { get; init; } = "";
 
     /// <summary>Falls back to a generated summary when content shipped no prose.</summary>
     public string ConsequenceText => string.IsNullOrWhiteSpace(Consequence) ? Effect.Describe() : Consequence;
@@ -563,6 +566,13 @@ public static class EventSystem
         optionIndex = M.Clamp(optionIndex, 0, item.Options.Length - 1);
         var option = item.Options[optionIndex];
         var nation = campaign.NationById(item.NationId);
+        if (option.SecessionTargetId >= 0)
+        {
+            var rebel = campaign.NationById(option.SecessionTargetId);
+            if (rebel is null || !campaign.HasOwnedLand(rebel) || !Reintegration.IsBreakawayOf(rebel, nation))
+            { campaign.PendingEvents.Remove(item); campaign.MarkStrategicChange(); return; }
+            if (!SecessionResponse.Resolve(campaign, nation, option)) return;
+        }
         if (!string.IsNullOrEmpty(option.UnionFormableId) && item.ExpiresDay > campaign.ElapsedDays)
             PeacefulFormation.Accept(campaign, campaign.NationById(option.UnionFounderId), nation,
                 FormableNations.Find(option.UnionFormableId));

@@ -222,10 +222,18 @@ public static class CampaignDiplomacy
         }
         if (AtWar(campaign, attackerId, defenderId)) { reason = Loc.Get("Already at war."); return false; }
         var relation = Peek(campaign, attackerId, defenderId);
-        if (relation?.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
-        if (relation?.NonAggressionPact == true) { reason = Loc.Get("A non-aggression pact is active."); return false; }
-        if (relation?.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
-        if (InternationalOrganizations.DefencePartners(campaign, attackerId).Contains(defenderId))
+        // Two different questions share one answer here. `responding` is the fresh window in
+        // which the cabinet is asked about a break that has just happened; `reclaiming` is the
+        // standing right of a state to its own breakaway, which no peace it signed while the
+        // rebels held the ground can extinguish (SecessionResponse.Reclaiming). Both mean the
+        // same thing to every treaty check below: paper between two countries does not decide
+        // whose ground this is.
+        var responding = SecessionResponse.CanContest(campaign, attacker, defender);
+        var reclaiming = responding || SecessionResponse.Reclaiming(attacker, defender);
+        if (!reclaiming && relation?.Stance == DiplomaticStance.Allied) { reason = Loc.Get("Break the alliance first."); return false; }
+        if (!reclaiming && relation?.NonAggressionPact == true) { reason = Loc.Get("A non-aggression pact is active."); return false; }
+        if (!reclaiming && relation?.TruceUntil > campaign.ElapsedDays) { reason = Loc.Format("Truce: {0} days remain.", relation.TruceUntil - campaign.ElapsedDays); return false; }
+        if (!reclaiming && InternationalOrganizations.DefencePartners(campaign, attackerId).Contains(defenderId))
         { reason = Loc.Get("Leave the shared collective-defence organization first."); return false; }
         if (attacker.IsSubject)
         {
@@ -250,7 +258,7 @@ public static class CampaignDiplomacy
         // through that occupier or let ordinary declarations bypass military reach.
         var newbornUprising = !onOwnInitiative && defender.SecededFromId == attacker.Id &&
             defender.LastSecessionDay == campaign.ElapsedDays;
-        if (!newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
+        if (!responding && !newbornUprising && !SharesLandBorder(campaign, attacker.MapIndex, defender.MapIndex))
         {
             // Force can be projected across water by a country that has ships to project it
             // with. This used to be a flat refusal, which made every island in the world
@@ -334,6 +342,16 @@ public static class CampaignDiplomacy
         var attacker = campaign.NationById(attackerId);
         var defender = campaign.NationById(defenderId);
         var relation = Get(campaign, attackerId, defenderId);
+        if (SecessionResponse.CanContest(campaign, attacker, defender) || SecessionResponse.Reclaiming(attacker, defender))
+        {
+            // A war for your own breakaway voids the peace signed while it held the ground:
+            // a dead truce left on the pair would keep blocking the next declaration with a
+            // treaty nobody is honouring any more.
+            relation.NonAggressionPact = false;
+            relation.TruceUntil = 0;
+            attacker.DecisionAvailableDay.Remove(SecessionResponse.Prefix + defender.Id);
+            campaign.PendingEvents.RemoveAll(e => e.NationId == attacker.Id && e.Options.Any(o => o.SecessionTargetId == defender.Id));
+        }
         relation.Stance = DiplomaticStance.AtWar;
         OpinionSystem.Remember(campaign, relation, "declared_war_on_us");
         OpinionSystem.Remember(campaign, relation, "fought_a_war");

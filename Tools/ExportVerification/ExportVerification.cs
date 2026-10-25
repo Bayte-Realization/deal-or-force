@@ -128,6 +128,13 @@ public partial class ExportVerification : Node
                     GetTree().Quit(_failures == 0 ? 0 : 1);
                     return;
                 }
+                if (developmentProbe && args.Contains("--verify-secession-response-only"))
+                {
+                    await VerifySecessionResponse(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-government-supply-only"))
                 {
                     await VerifyGovernmentSupply(game);

@@ -35,6 +35,9 @@ static class Program
         if (args.Contains("--four-systems-only")) { FourSystemsIntegrationTests.RunAll(); return; }
         if (args.Length == 0) FourSystemsIntegrationTests.RunAll();
         if (args.Contains("--inspect-save")) { InspectSave(args); return; }
+        if (args.Contains("--revolt-save")) { RebellionRecoveryTests.InspectSave(args); return; }
+        if (args.Contains("--revolt-recovery-only")) { RebellionRecoveryTests.Run(); return; }
+        if (args.Length == 0) RebellionRecoveryTests.Run();
         if (args.Contains("--paused-doctrines-only")) { PausedDoctrineTests.Run(); return; }
         if (args.Length == 0) PausedDoctrineTests.Run();
         if (args.Contains("--geopolitical-dynamics-only")) { GeopoliticalDynamicsTests.Run(); return; }

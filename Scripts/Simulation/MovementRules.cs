@@ -636,6 +636,7 @@ public static class MovementRules
     /// <summary>The chance an uprising in this region succeeds now, 0 to 1.</summary>
     public static float UprisingChance(Campaign campaign, Nation nation, ScenarioState region)
     {
+        if (RevoltRecovery.DaysLeft(campaign, OwnerOf(campaign, region), region) > 0) return 0f;
         var state = nation.Movement;
         var definition = Movements.DefinitionOf(nation);
         if (state is null || definition is null || region is null || !MovementMethods.WillRise(campaign, nation, definition) ||
@@ -784,6 +785,7 @@ public static class MovementRules
     /// </summary>
     private static bool CanCarry(Campaign campaign, Nation nation, ScenarioState region, Nation owner)
     {
+        if (RevoltRecovery.DaysLeft(campaign, owner, region) > 0) return false;
         var def = Movements.DefinitionOf(nation);
         var isHomeland = def is not null && MovementReach.IsHomeland(campaign, def, region);
         if (!isHomeland && UprisingChance(campaign, nation, region) <= 0f) return false;
@@ -905,6 +907,7 @@ public static class MovementRules
         // it is neither a referendum (peaceful) nor an uprising (armed). Restoration guards it.
         // Whole-region movement settlements must not overwrite a third party's occupation,
         // including restorations and peaceful referendums. They need an actual military settlement.
+        if (!peacefully && !restoration && RevoltRecovery.DaysLeft(campaign, owner, region) > 0) return false;
         if (RevoltTerritory.HasForeignOccupation(campaign, owner, nation, region)) return false;
         if (settle)
         {
@@ -1082,11 +1085,15 @@ public static class MovementRules
 
         if (owner is not null && !peacefully && !restoration)
         {
-            if (nation.SecededFromId < 0) nation.SecededFromId = owner.Id;
+            SecessionResponse.Begin(campaign, owner, nation);
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, owner.Id, nation.Id), "rose_against_us");
             // It holds ground of its own since this morning, which the day's border table cannot know.
             CampaignDiplomacy.ForgetBorders();
-            CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
+            if (owner.IsHuman && !campaign.ObserverMode)
+                SecessionResponse.Ask(campaign, owner, nation,
+                    string.Join(", ", gained.Take(4).Select(r => r.DisplayName)), gained.Sum(r => r.Population), owner.Population + nation.Population);
+            else
+                CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
         }
         // Remember the newly liberated regions as the nation's homeland so restorations and title checks recognize them.
         if (!campaign.Homelands.TryGetValue(nation.Id, out var homes))

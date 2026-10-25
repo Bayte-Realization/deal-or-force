@@ -406,6 +406,10 @@ public static class CampaignFingerprint
                 MixText(parl.FavoredLawCategory ?? "");
             }
             var grantClocks = 0;
+            foreach (var clock in nation.DecisionAvailableDay.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                if (clock.Key.StartsWith(RevoltRecovery.Prefix, StringComparison.Ordinal) ||
+                    clock.Key.StartsWith(SecessionResponse.Prefix, StringComparison.Ordinal))
+                { MixText(clock.Key); Mix(clock.Value); }
             foreach (var clock in nation.DecisionAvailableDay)
                 if (clock.Key.StartsWith("crisis_grant/", StringComparison.Ordinal)) grantClocks++;
             if (grantClocks > 0)
@@ -762,6 +766,12 @@ public static class CampaignFingerprint
             if (army.DaysCutOff > 0) { MixText("days_cut_off"); Mix(army.Id); Mix(army.DaysCutOff); }
             if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
         }
+        foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
+            if (item.Options.Any(o => o.SecessionTargetId >= 0))
+            {
+                MixText("secession_response_event"); Mix(item.Id); Mix(item.NationId); Mix(item.CreatedDay); Mix(item.ExpiresDay);
+                foreach (var option in item.Options) { Mix(option.SecessionTargetId); MixText(option.SecessionChoice); }
+            }
         foreach (var war in Ordered(campaign.Wars, war => war.Id))
         {
             Mix(war.Id);
