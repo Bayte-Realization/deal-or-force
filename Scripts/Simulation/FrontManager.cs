@@ -86,6 +86,7 @@ public static class FrontManager
     private static readonly HashSet<int> Refused = new();
     private static readonly Dictionary<int, int> DonorComponents = new();
     private static readonly Queue<int> DonorFrontier = new();
+    private static readonly List<DrawnFrontLine> Lines = new();
 
     /// <summary>Re-postings made since the campaign began, for the bench and the console.</summary>
     public static int Reposts { get; private set; }
@@ -101,11 +102,20 @@ public static class FrontManager
             if (war.Ended) continue;
             Balance(campaign, war);
         }
-        foreach (var line in campaign.FrontLines)
+        // A full withdrawal may detach the last formation and prune empty plans.
+        // Walk this look's roster, not the live list that those commands can edit.
+        Lines.Clear();
+        Lines.AddRange(campaign.FrontLines);
+        try
         {
-            if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
-            else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+            foreach (var line in Lines)
+            {
+                if (!campaign.FrontLines.Contains(line)) continue;
+                if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
+                else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
+            }
         }
+        finally { Lines.Clear(); }
     }
 
     private static readonly List<Army> Idle = new();

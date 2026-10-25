@@ -107,6 +107,7 @@ public static class FrontDisengagement
         }
         if (best is null) return false;
         var objective = line?.Objectives.GetValueOrDefault(best.Id, -1) ?? -1;
+        var lineIndex = line is null ? -1 : c.FrontLines.IndexOf(line);
         var order = new WithdrawArmyFromBattleCommand
         { IssuerId = nation.Id, ArmyId = best.Id, TargetProvinceId = bestRetreat, Share = bestShare };
         context?.Dispose();
@@ -130,6 +131,11 @@ public static class FrontDisengagement
         moving.OrderStepsCompleted = 0;
         if (line is not null)
         {
+            // The generic whole-formation withdrawal detaches its old plan, pruning it
+            // if this was its last member. The staff is moving within that SAME plan,
+            // not cancelling it: restore the live roster entry before reassigning it.
+            if (lineIndex >= 0 && !c.FrontLines.Contains(line))
+                c.FrontLines.Insert(Math.Min(lineIndex, c.FrontLines.Count), line);
             if (!line.ArmyIds.Contains(moving.Id)) line.ArmyIds.Add(moving.Id);
             line.Posts[moving.Id] = hole;
             if (objective > 0) line.Objectives[moving.Id] = objective;

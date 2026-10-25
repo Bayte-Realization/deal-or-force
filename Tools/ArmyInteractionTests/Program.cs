@@ -15,6 +15,9 @@ static class Program
 
     static void Main(string[] args)
     {
+        if (args.Contains("--front-staff-mutation-only")) { FrontStaffMutationTests.Run(); return; }
+        if (args.Contains("--front-staff-save")) { FrontStaffMutationTests.Replay(args); return; }
+        if (args.Length == 0) FrontStaffMutationTests.Run();
         if (args.Contains("--equipment-replenishment-only")) { EquipmentReplenishmentTests.Run(); return; }
         if (args.Length == 0) EquipmentReplenishmentTests.Run();
         if (args.Contains("--four-systems-only")) { FourSystemsIntegrationTests.RunAll(); return; }
