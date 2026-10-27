@@ -545,6 +545,54 @@ public static class Program
             return 0;
         }
 
+        // `--growth <days> [every]`: whether the world grows richer - world output, people and output
+        // per head, year by year, with the ten largest economies and the mean secular drift. Run it
+        // with --define SecularFrontierGrowth=0 for the world as it was before the frontier moved.
+        var growthAt = Array.IndexOf(args, "--growth");
+        if (growthAt >= 0)
+        {
+            var growthDays = growthAt + 1 < args.Length && int.TryParse(args[growthAt + 1], out var gd) ? gd : 3650;
+            var growthEvery = growthAt + 2 < args.Length && int.TryParse(args[growthAt + 2], out var ge) ? ge : 365;
+            campaign.IsPaused = false;
+            double WorldGdp() => campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp);
+            long WorldPeople() => campaign.Nations.Where(n => n.Population > 0).Sum(n => n.Population);
+            var startGdp = WorldGdp();
+            var startPeople = WorldPeople();
+            void Report()
+            {
+                var gdp = WorldGdp();
+                var people = WorldPeople();
+                var years = MathF.Max(1f / 365f, campaign.ElapsedDays / 365f);
+                var perHead = gdp * 1e9 / Math.Max(1, people);
+                var startPerHead = startGdp * 1e9 / Math.Max(1, startPeople);
+                var alive = campaign.Nations.Where(n => n.Population > 0 && n.Gdp > 0f).ToList();
+                Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
+                                  $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
+                                  $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                Console.WriteLine("   top: " + string.Join(", ", alive.OrderByDescending(n => n.Gdp).Take(10)
+                    .Select(n => $"{n.Tag} {n.Gdp:N0} ({n.Gdp * 1e9 / Math.Max(1, n.Population):N0}/head)")));
+                // What a country's output is made of: GDP = gross output x 52 x output scale, the
+                // scale drifting with the secular cycle and the output with productivity and work.
+                foreach (var tag in (Environment.GetEnvironmentVariable("DOF_GROWTH_TAGS") ?? "USA,CHN,IND,ITA,FRA,DEU,JPN,RUS")
+                             .Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var n = campaign.NationByTag(tag.Trim());
+                    if (n is null || n.Population <= 0) continue;
+                    Console.WriteLine($"   {n.Tag}: gdp {n.Gdp:N0}, gross {n.GrossOutput:0.###}, scale {n.OutputScale:0.####}, " +
+                                      $"real {n.Market.Values.Sum(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice):0.###}, " +
+                                      $"productivity {n.Productivity:0.###}, employed {n.EmployedShare:P0}, drift {n.SecularDrift * 100:+0.00;-0.00}%, " +
+                                      $"pop {n.Population / 1e6:0.0}M, stab {n.Stability:0.00}, hc {n.HumanCapital:0.00}, debt {n.DebtCondition}");
+                }
+            }
+            Report();
+            for (var day = 1; day <= growthDays; day++)
+            {
+                campaign.TickDay();
+                if (day % growthEvery == 0 || day == growthDays) Report();
+            }
+            return 0;
+        }
+
         // `--pulse <days>`: how lively the world is - every kind of chronicle entry, counted year by
         // year, with the wars between states begun and the largest war of each year.
         var pulseAt = Array.IndexOf(args, "--pulse");

@@ -178,11 +178,11 @@ public partial class DealOrForceGame
     /// picker has seventeen rows - and is the only thing that keeps "Agricultural complex"
     /// from sitting in the middle of a Russian screen.
     /// </summary>
-    private static string BuildingPickerItem(BuildingKind kind)
+    private string BuildingPickerItem(BuildingKind kind)
     {
         var definition = BuildingCatalog.Get(kind);
         return Simulation.Loc.Format("{0} · {1}",
-            Simulation.Loc.Get(definition.Name), Fmt.Money(definition.Cost));
+            Simulation.Loc.Get(definition.Name), Fmt.Money(ConstructionCost.Of(_campaign, _campaign?.Player, kind)));
     }
 
     /// <summary>Put the picker back into the player's language, keeping what was chosen.</summary>
@@ -513,7 +513,7 @@ public partial class DealOrForceGame
         var definition = BuildingCatalog.Get(kind);
 
         var running = _campaign.Construction.Count(project => project.NationId == nation.Id);
-        var slots = _campaign.Defines.MaxConstructionProjects;
+        var slots = ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects);
         if (running >= slots)
         {
             _stateFiscalFeedback.Text = Simulation.Loc.Format(
@@ -521,9 +521,9 @@ public partial class DealOrForceGame
                 slots);
             return;
         }
-        if (nation.Treasury < MathF.Min(0.05f, definition.Cost))
+        if (nation.Treasury < MathF.Min(0.05f, ConstructionCost.Of(_campaign, nation, kind)))
         {
-            _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(definition.Cost));
+            _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)));
             return;
         }
         var dry = Waterfront.Refusal(_campaign, stateMapIndex, kind);
@@ -542,11 +542,11 @@ public partial class DealOrForceGame
             Waterfront.NeedsWater(kind)
             ? Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(definition.Cost), definition.Days,
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days,
                 Fmt.Percent(Waterfront.Yield(_campaign, WaterAccess.Inland)))
             : Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(definition.Cost), definition.Days);
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days);
         RefreshStateAffairs();
     }
     /// <summary>
@@ -600,11 +600,11 @@ public partial class DealOrForceGame
         {
             _stateConstructionQueue.Text = Simulation.Loc.Format(
                 "Nothing under construction. {0} sites may run at once.",
-                _campaign.Defines.MaxConstructionProjects);
+                ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects));
             return;
         }
         _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites running",
-            projects.Count, _campaign.Defines.MaxConstructionProjects);
+            projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects));
         foreach (var project in projects.OrderByDescending(project => project.Progress))
         {
             var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);

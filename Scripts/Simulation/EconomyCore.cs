@@ -331,7 +331,7 @@ public sealed class QueueConstructionCommand : ICampaignCommand
         foreach (var project in campaign.Construction)
         {
             if (project.Id > highest) highest = project.Id;
-            if (project.NationId == nation.Id && ++running >= campaign.Defines.MaxConstructionProjects) return;
+            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, campaign.Defines.MaxConstructionProjects)) return;
         }
 
         // A wharf needs water. The AI never orders one and the player's button now says
@@ -341,16 +341,17 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             Waterfront.OfRegion(campaign, state) == WaterAccess.None) return;
 
         var definition = BuildingCatalog.Get(Building);
-        if (nation.Treasury < Math.Min(0.05f, definition.Cost)) return;
+        var cost = ConstructionCost.Of(campaign, nation, Building);
+        if (nation.Treasury < Math.Min(0.05f, cost)) return;
         campaign.Construction.Add(new ConstructionProject
         {
             Id = highest + 1,
             NationId = nation.Id,
             StateMapIndex = state.MapIndex,
             Building = Building,
-            // What the country's modifiers make of it: cheaper, and quicker, while a
-            // construction drive or a war economy lasts (NationalModifiers).
-            Cost = definition.Cost * NationalModifiers.Factor(nation, "construction_cost"),
+            // What building costs in this country (ConstructionCost), and what its modifiers make
+            // of it: cheaper, and quicker, while a construction drive or a war economy lasts.
+            Cost = cost,
             DurationDays = Math.Max(1, (int)MathF.Round(definition.Days / NationalModifiers.Factor(nation, "construction_speed")))
         });
         campaign.MarkStrategicChange();
@@ -397,7 +398,7 @@ public sealed class DemolishBuildingCommand : ICampaignCommand
 
         nation.Gdp = MathF.Max(0.01f, nation.Gdp - definition.GdpGain * yield);
         nation.ConstructionCapacity = MathF.Max(0f, nation.ConstructionCapacity - definition.CapacityGain * yield);
-        nation.Treasury += definition.Cost * campaign.Defines.DemolitionRefund;
+        nation.Treasury += ConstructionCost.Of(campaign, nation, Building) * campaign.Defines.DemolitionRefund;
 
         if (Building == BuildingKind.University)
         {

@@ -43,6 +43,25 @@ static class ModifierTests
         Check(fast.DurationDays < slow.DurationDays,
             $"a factory ordered during the drive takes {fast.DurationDays} days against {slow.DurationDays} without it");
 
+        // --- what building costs where (ConstructionCost) -----------------------------------
+        // A factory is dearer where labour and land are dear, and a larger economy runs more
+        // sites at once; the project is charged exactly what the screens say it costs.
+        var india = c.NationByTag("IND");
+        var italy = c.NationByTag("ITA");
+        var china = c.NationByTag("CHN");
+        Check(ConstructionCost.PriceLevel(c, india) < 1f && ConstructionCost.PriceLevel(c, italy) > 1f,
+            $"building is cheaper in India ({ConstructionCost.PriceLevel(c, india):0.00}) than in Italy ({ConstructionCost.PriceLevel(c, italy):0.00})");
+        Check(ConstructionCost.Limit(c, china, c.Defines.MaxConstructionProjects) > ConstructionCost.Limit(c, italy, c.Defines.MaxConstructionProjects),
+            "China runs more building sites at once than Italy");
+        Check(MathF.Abs(slow.Cost - ConstructionCost.Of(c, germany, BuildingKind.CivilianIndustry)) < 0.0001f,
+            "a project is charged what ConstructionCost says it costs");
+        c.Defines.ConstructionPriceLevelEnabled = false;
+        Check(ConstructionCost.Of(c, india, BuildingKind.CivilianIndustry) ==
+              BuildingCatalog.Get(BuildingKind.CivilianIndustry).Cost * NationalModifiers.Factor(india, "construction_cost") &&
+              ConstructionCost.Limit(c, china, c.Defines.MaxConstructionProjects) == c.Defines.MaxConstructionProjects,
+            "ConstructionPriceLevelEnabled off restores the flat catalogue price and limit");
+        c.Defines.ConstructionPriceLevelEnabled = true;
+
         // --- training --------------------------------------------------------------------
         var template = UnitTypeCatalog.Get("line_infantry");
         var usual = RecruitmentSystem.TrainingDaysOf(germany, template);

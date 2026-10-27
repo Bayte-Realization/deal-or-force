@@ -1364,6 +1364,10 @@ public sealed partial class Campaign
                 nation.CapitalName = state.Name;
             }
         }
+        // A landless headquarters stands at its host's capital or its region's main city
+        // (Movements.Place), so it moves when they do. Left until the next load it kept the old
+        // spot, and a save read back a different headquarters from the one it wrote.
+        Movements.Place(this);
     }
 
     private ushort[] _pendingProvinceOwner;

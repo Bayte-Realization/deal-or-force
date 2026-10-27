@@ -85,37 +85,55 @@ public static partial class AiStatecraft
     }
 
     /// <summary>
+    /// A month's building: one project for an economy of the reference size, more for a larger one
+    /// (ConstructionCost.Size) - China does not build what Italy builds - each still only if the
+    /// treasury allows it.
+    /// </summary>
+    private static void Build(Campaign campaign, Nation nation, bool atWar)
+    {
+        var starts = Math.Max(1, (int)MathF.Round(ConstructionCost.Size(campaign, nation) / 2f));
+        for (var i = 0; i < starts; i++)
+            if (!BuildOne(campaign, nation, atWar, i)) return;
+    }
+
+    /// <summary>
     /// One project a month, in the region that most needs it. What a country builds says
     /// what it thinks is wrong with itself: an army that cannot be fed builds roads, a
     /// country at war builds guns, and a country at peace builds the thing that makes it
     /// richer next year.
     /// </summary>
-    private static void Build(Campaign campaign, Nation nation, bool atWar)
+    private static bool BuildOne(Campaign campaign, Nation nation, bool atWar, int slot)
     {
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiBuildTreasuryFloor);
-        if (!fiscal.CanSpend) { Count("construction_fiscal_" + fiscal.Reason); return; }
+        if (!fiscal.CanSpend) { Count("construction_fiscal_" + fiscal.Reason); return false; }
         var running = 0;
         foreach (var project in campaign.Construction)
-            if (project.NationId == nation.Id && ++running >= defines.AiMaxConcurrentProjects) return;
+            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, defines.AiMaxConcurrentProjects)) return false;
 
         var states = campaign.StatesOf(nation);
-        if (states.Length == 0) return;
+        if (states.Length == 0) return false;
 
         var congested = false;
         foreach (var army in campaign.Armies)
             if (army.NationId == nation.Id && army.SupplyCongestion < 0.75f) { congested = true; break; }
+        // A poor country's needs are schools and fields, but not only: one project in three goes
+        // to them and the rest to what makes it richer. Answering every month with a university
+        // while literacy stood under 0.72 kept India, Nigeria and Brazil building nothing that
+        // produces anything for ten years, while the rich world built factories.
+        var needsTurn = (campaign.ElapsedDays / 30 + slot) % 3 == 0;
+        var mature = nation.Literacy >= .72f && nation.StandardOfLiving >= .55f;
         var wanted =
             congested ? BuildingKind.Infrastructure :
             atWar ? BuildingKind.ArmsIndustry :
-            nation.Literacy < 0.72f ? BuildingKind.University :
-            nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
+            !mature && needsTurn && nation.Literacy < 0.72f ? BuildingKind.University :
+            !mature && needsTurn && nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
             BuildingKind.CivilianIndustry;
 
         ScenarioState target = null;
         // The production-chain planner already understands recipes, deposits and
-        // water access. Let a mature peaceful economy actually use it.
-        if (!congested && !atWar && nation.Literacy >= .72f && nation.StandardOfLiving >= .55f)
+        // water access. Let a peaceful economy actually use it.
+        if (!congested && !atWar && (mature || !needsTurn))
             AiBuilder.Choose(campaign, nation, states, out wanted, out target);
 
         // Put a generic priority where there is most to gain. A specialized market
@@ -129,9 +147,9 @@ public static partial class AiStatecraft
             bestScore = score;
             target = state;
         }
-        if (target is null) return;
+        if (target is null) return false;
         if (!AiFiscalPolicy.CanStartProject(campaign, nation, wanted, fiscal))
-        { Count("construction_operating_buffer"); return; }
+        { Count("construction_operating_buffer"); return false; }
 
         new QueueConstructionCommand
         {
@@ -139,5 +157,6 @@ public static partial class AiStatecraft
             StateMapIndex = target.MapIndex,
             Building = wanted
         }.Apply(campaign);
+        return true;
     }
 }

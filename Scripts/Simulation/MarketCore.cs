@@ -348,7 +348,14 @@ public static class MarketSystem
             // derives GDP from it, so output is a consequence of buildings, workers and
             // prices rather than a number that grows on its own beside them.
             var grossOutput = 0f;
-            foreach (var quote in nation.Market.Values) grossOutput += quote.Production * quote.Price;
+            // At base price plus a share of the difference (Defines.GdpPriceShare): real output with
+            // the terms of trade in it, not every shortage in the world counted as growth.
+            var priceShare = M.Clamp01(campaign.Defines.GdpPriceShare);
+            foreach (var quote in nation.Market.Values)
+            {
+                var basePrice = CommodityCatalog.Get(quote.Commodity).BasePrice;
+                grossOutput += quote.Production * (basePrice + priceShare * (quote.Price - basePrice));
+            }
             nation.GrossOutput = grossOutput;
 
             nation.ShortageIndex = weight <= 0f ? 0f : M.Clamp01(shortages / weight);

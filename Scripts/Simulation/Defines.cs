@@ -431,6 +431,15 @@ public sealed partial class Defines
 	/// <summary>How fast prices chase their target. 0 freezes them, 1 snaps instantly.</summary>
 	public float PriceAdjustSpeed { get; set; } = 0.25f;
 
+	/// <summary>
+	/// How much of a price's distance from its base a country's GDP counts. What a country makes is
+	/// valued at base price plus this share of the difference: the oil exporter still gains when oil
+	/// is dear (the terms of trade), but a shortage that doubles the price of steel does not double
+	/// the output of every mill. At 1 GDP was nominal with no deflator, and a world of rising
+	/// scarcity read as a boom - 8 % world growth in the first year, Italy doubling in a decade.
+	/// </summary>
+	public float GdpPriceShare { get; set; } = 0.35f;
+
 	/// <summary>Share of a shortfall a country can cover by importing from the world market.</summary>
 	public float WorldMarketAccess { get; set; } = 0.80f;
 
