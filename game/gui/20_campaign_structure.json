@@ -6,7 +6,7 @@
     "navigation": [
       {"screen": "Situation", "label": "Situation room", "short": "Situation", "group": "COUNTRY", "icon": "ledger", "help": "Inspect causes, consequences and available responses."},
       {"screen": "Nation", "short": "Country", "group": "COUNTRY", "icon": "nation", "help": "Capital, people and institutions."},
-      {"screen": "State Affairs", "short": "Budget", "group": "COUNTRY", "icon": "state_affairs", "help": "Taxes, spending, the central bank and the government."},
+      {"screen": "State Affairs", "label": "State Affairs", "short": "State Affairs", "group": "COUNTRY", "icon": "state_affairs", "help": "The government, the cabinet and the people waiting to join it; the form of the state and what it stands for; taxes, spending and the central bank."},
       {"screen": "Laws", "short": "Laws", "group": "COUNTRY", "icon": "laws", "help": "National laws, regional measures, foreign doctrines and political agendas."},
       {"screen": "Decisions", "short": "Decisions", "group": "COUNTRY", "icon": "decisions", "help": "National decisions and formable nations."},
       {"screen": "Economy", "short": "Economy", "group": "ECONOMY", "icon": "economy", "help": "Budget, markets and construction."},

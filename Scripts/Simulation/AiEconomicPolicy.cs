@@ -109,7 +109,8 @@ public static partial class AiStatecraft
         if (!fiscal.CanSpend) { Count("construction_fiscal_" + fiscal.Reason); return false; }
         var running = 0;
         foreach (var project in campaign.Construction)
-            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, defines.AiMaxConcurrentProjects)) return false;
+            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, defines.AiMaxConcurrentProjects))
+            { Count("construction_sites_full"); return false; }
 
         var states = campaign.StatesOf(nation);
         if (states.Length == 0) return false;
@@ -157,6 +158,7 @@ public static partial class AiStatecraft
             StateMapIndex = target.MapIndex,
             Building = wanted
         }.Apply(campaign);
+        Count("construction_started_" + wanted);
         return true;
     }
 }

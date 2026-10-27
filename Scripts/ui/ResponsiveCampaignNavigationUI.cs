@@ -105,6 +105,7 @@ public partial class DealOrForceGame
             // with no ellipsis reads as a word nobody wrote. Same cure as the outliner.
             button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10));
+            FitNavigationCaption(button, (int)Ui.Metric("ui.font.navigation", 10));
             button.AddThemeConstantOverride("icon_max_width", 23);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.RemoveMeta("icon_caption_minimum"); button.CustomMinimumSize = new(0, 50);

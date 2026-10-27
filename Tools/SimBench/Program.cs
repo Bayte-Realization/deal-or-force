@@ -581,14 +581,25 @@ public static class Program
                     Console.WriteLine($"   {n.Tag}: gdp {n.Gdp:N0}, gross {n.GrossOutput:0.###}, scale {n.OutputScale:0.####}, " +
                                       $"real {n.Market.Values.Sum(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice):0.###}, " +
                                       $"productivity {n.Productivity:0.###}, employed {n.EmployedShare:P0}, drift {n.SecularDrift * 100:+0.00;-0.00}%, " +
-                                      $"pop {n.Population / 1e6:0.0}M, stab {n.Stability:0.00}, hc {n.HumanCapital:0.00}, debt {n.DebtCondition}");
+                                      $"pop {n.Population / 1e6:0.0}M, stab {n.Stability:0.00}, hc {n.HumanCapital:0.00}, debt {n.DebtCondition}, " +
+                                      $"sites {campaign.Construction.Count(p => p.NationId == n.Id)}/{ConstructionCost.Limit(campaign, n, campaign.Defines.MaxConstructionProjects)}, " +
+                                      $"treasury {n.Treasury:0.0}, capacity {n.ConstructionCapacity:0.00}, literacy {n.Literacy:0.00}, sol {n.StandardOfLiving:0.00}, " +
+                                      $"price level {ConstructionCost.PriceLevel(campaign, n):0.00}");
                 }
+            }
+            void Tallies()
+            {
+                // Why the AI did or did not build this year, summed over every country.
+                var built = AiStatecraft.Tally.Where(p => p.Key.StartsWith("construction", StringComparison.Ordinal))
+                    .OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value}");
+                Console.WriteLine("   construction tally: " + string.Join(", ", built));
+                AiStatecraft.Tally.Clear();
             }
             Report();
             for (var day = 1; day <= growthDays; day++)
             {
                 campaign.TickDay();
-                if (day % growthEvery == 0 || day == growthDays) Report();
+                if (day % growthEvery == 0 || day == growthDays) { Report(); Tallies(); }
             }
             return 0;
         }
