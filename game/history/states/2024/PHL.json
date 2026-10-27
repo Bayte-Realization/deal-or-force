@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2020 census by mother tongue and region.
 {
   // Abra
   "ph_abr": {
     "population": 3146371,
     "urbanization": 0.49,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "ilocano": 0.8002, "tagalog": 0.1, "cebuano": 0.0557, "javanese": 0.0136, "melanesian": 0.0102, "papuan": 0.0068, "polynesian": 0.0068, "chinese_diaspora": 0.0034, "american": 0.0011, "indian_diaspora": 0.0011, "spanish": 0.0011 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.696, "Coal": 0.259, "Oil": 0.316, "IronOre": 0.133, "RareEarths": 0.051, "NaturalGas": 0.414, "Timber": 3.224, "Bauxite": 0.037, "Uranium": 0.004 }
   },
@@ -23,7 +24,7 @@
   "ph_ags": {
     "population": 2748354,
     "urbanization": 0.22,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "cebuano": 0.8499, "tagalog": 0.0744, "ilocano": 0.0239, "javanese": 0.0159, "melanesian": 0.012, "papuan": 0.008, "polynesian": 0.008, "chinese_diaspora": 0.004, "american": 0.0013, "indian_diaspora": 0.0013, "spanish": 0.0013 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.234, "Coal": 0.333, "Oil": 0.408, "IronOre": 0.445, "RareEarths": 0.107, "NaturalGas": 0.857, "Timber": 1.968, "Bauxite": 0.093, "Uranium": 0.013 }
   },
@@ -31,7 +32,7 @@
   "ph_aur": {
     "population": 4126711,
     "urbanization": 0.19,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "tagalog": 0.4501, "bikol": 0.45, "cebuano": 0.0462, "ilocano": 0.017, "javanese": 0.0113, "melanesian": 0.0085, "papuan": 0.0057, "polynesian": 0.0057, "chinese_diaspora": 0.0028, "american": 0.0009, "indian_diaspora": 0.0009, "spanish": 0.0009 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 0.952, "Coal": 0.214, "Oil": 0.339, "IronOre": 0.095, "RareEarths": 0.036, "NaturalGas": 0.259, "Timber": 0.987, "Bauxite": 0.062, "Uranium": 0.004 }
   },
@@ -39,7 +40,7 @@
   "ph_buk": {
     "population": 5558266,
     "urbanization": 0.63,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "cebuano": 0.8001, "tagalog": 0.0991, "ilocano": 0.0318, "javanese": 0.0212, "melanesian": 0.0159, "papuan": 0.0106, "polynesian": 0.0106, "chinese_diaspora": 0.0053, "american": 0.0018, "indian_diaspora": 0.0018, "spanish": 0.0018 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.739, "Coal": 0.149, "Oil": 0.18, "IronOre": 0.19, "RareEarths": 0.025, "NaturalGas": 0.165, "Timber": 3.38, "Bauxite": 0.037, "Uranium": 0.007 }
   },
@@ -47,7 +48,7 @@
   "ph_cag": {
     "population": 1240200,
     "urbanization": 0.2,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "ilocano": 0.7501, "tagalog": 0.1, "cebuano": 0.0835, "javanese": 0.0204, "melanesian": 0.0154, "papuan": 0.0102, "polynesian": 0.0102, "chinese_diaspora": 0.0051, "american": 0.0017, "indian_diaspora": 0.0017, "spanish": 0.0017 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.051, "Coal": 0.258, "Oil": 0.436, "IronOre": 0.179, "RareEarths": 0.11, "NaturalGas": 0.661, "Timber": 0.993, "Bauxite": 0.068, "Uranium": 0.007 }
   },
@@ -55,7 +56,7 @@
   "ph_dao": {
     "population": 5322361,
     "urbanization": 0.57,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "cebuano": 0.8499, "tagalog": 0.0744, "ilocano": 0.0239, "javanese": 0.0159, "melanesian": 0.012, "papuan": 0.008, "polynesian": 0.008, "chinese_diaspora": 0.004, "american": 0.0013, "indian_diaspora": 0.0013, "spanish": 0.0013 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.474, "Coal": 0.254, "Oil": 0.237, "IronOre": 0.19, "RareEarths": 0.046, "NaturalGas": 0.385, "Timber": 2.948, "Bauxite": 0.085, "Uranium": 0.01 }
   },
@@ -63,7 +64,7 @@
   "ph_ili": {
     "population": 7039195,
     "urbanization": 0.15,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "hiligaynon": 0.8499, "tagalog": 0.0519, "cebuano": 0.0454, "ilocano": 0.0167, "javanese": 0.0111, "melanesian": 0.0083, "papuan": 0.0056, "polynesian": 0.0056, "chinese_diaspora": 0.0028, "american": 0.0009, "indian_diaspora": 0.0009, "spanish": 0.0009 },
     "buildings": { "Agriculture": 4, "Infrastructure": 1 },
     "resources": { "Food": 0.971, "Coal": 0.163, "Oil": 0.144, "IronOre": 0.05, "RareEarths": 0.034, "NaturalGas": 0.238, "Timber": 3.132, "Bauxite": 0.021, "Uranium": 0.004 }
   },
@@ -71,7 +72,7 @@
   "ph_nec": {
     "population": 5119123,
     "urbanization": 0.53,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "hiligaynon": 0.6499, "cebuano": 0.25, "tagalog": 0.0496, "ilocano": 0.0159, "javanese": 0.0106, "melanesian": 0.008, "papuan": 0.0053, "polynesian": 0.0053, "chinese_diaspora": 0.0027, "american": 0.0009, "indian_diaspora": 0.0009, "spanish": 0.0009 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.181, "Coal": 0.285, "Oil": 0.466, "IronOre": 0.152, "RareEarths": 0.076, "NaturalGas": 0.585, "Timber": 1.699, "Bauxite": 0.069, "Uranium": 0.01 }
   },
@@ -79,7 +80,7 @@
   "ph_plw": {
     "population": 6985184,
     "urbanization": 0.31,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "cebuano": 0.7, "tagalog": 0.15, "ilocano": 0.0474, "javanese": 0.0316, "melanesian": 0.0237, "papuan": 0.0158, "polynesian": 0.0158, "chinese_diaspora": 0.0079, "american": 0.0026, "indian_diaspora": 0.0026, "spanish": 0.0026 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.412, "Coal": 0.411, "Oil": 0.374, "IronOre": 0.245, "RareEarths": 0.053, "NaturalGas": 0.472, "Timber": 3.174, "Bauxite": 0.084, "Uranium": 0.013 }
   },
@@ -87,7 +88,7 @@
   "ph_que": {
     "population": 29352597,
     "urbanization": 0.62,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "tagalog": 0.8501, "bikol": 0.05, "cebuano": 0.0462, "ilocano": 0.017, "javanese": 0.0113, "melanesian": 0.0085, "papuan": 0.0057, "polynesian": 0.0057, "chinese_diaspora": 0.0028, "american": 0.0009, "indian_diaspora": 0.0009, "spanish": 0.0009 },
     "buildings": { "Agriculture": 7, "CivilianIndustry": 2, "Infrastructure": 2 },
     "resources": { "Food": 2.108, "Coal": 0.446, "Oil": 0.662, "IronOre": 0.313, "RareEarths": 0.05, "NaturalGas": 0.716, "Timber": 1.615, "Bauxite": 0.071, "Uranium": 0.01 }
   },
@@ -95,7 +96,7 @@
   "ph_wsa": {
     "population": 4229825,
     "urbanization": 0.27,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "waray": 0.8512, "cebuano": 0.1, "tagalog": 0.0248, "ilocano": 0.008, "javanese": 0.0053, "melanesian": 0.004, "papuan": 0.0027, "polynesian": 0.0027, "chinese_diaspora": 0.0013 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.855, "Coal": 0.44, "Oil": 0.611, "IronOre": 0.3, "RareEarths": 0.076, "NaturalGas": 0.899, "Timber": 2.18, "Bauxite": 0.07, "Uranium": 0.02 }
   },
@@ -111,7 +112,7 @@
   "ph_zmb": {
     "population": 21877851,
     "urbanization": 0.54,
-    "cultures": { "tagalog": 0.2979, "cebuano": 0.2606, "malay": 0.1383, "ilocano": 0.0957, "javanese": 0.0638, "melanesian": 0.0479, "papuan": 0.0319, "polynesian": 0.0319, "chinese_diaspora": 0.016, "american": 0.0053, "indian_diaspora": 0.0053, "spanish": 0.0053 },
+    "cultures": { "tagalog": 0.5999, "ilocano": 0.2, "cebuano": 0.1114, "javanese": 0.0273, "melanesian": 0.0205, "papuan": 0.0136, "polynesian": 0.0136, "chinese_diaspora": 0.0068, "american": 0.0023, "indian_diaspora": 0.0023, "spanish": 0.0023 },
     "buildings": { "Agriculture": 6, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.987, "Coal": 0.148, "Oil": 0.359, "IronOre": 0.108, "RareEarths": 0.06, "NaturalGas": 0.214, "Timber": 1.389, "Bauxite": 0.066, "Uranium": 0.006 }
   },
