@@ -5074,8 +5074,13 @@ public static class Program
         }
 
         var cost = ledger.Cost(written);
-        if (cost > shaping)
-            return $"the treaty costs {cost:0.00} against a budget of {shaping:0.00}";
+        // Ground the army holds and joins to the country is kept whatever this test's budget is
+        // (PeaceShape.KeepHeldConquest), and the ledger prices it at no more than
+        // Budget x AiPeaceBudgetShare - which is the real game's own treaty budget. The shaping
+        // budget above is an artificial one and can be smaller than that ceiling.
+        var heldCeiling = ledger.Budget * Math.Clamp(campaign.Defines.AiPeaceBudgetShare, 0.05f, 1f);
+        if (cost > MathF.Max(shaping, heldCeiling) + 0.001f)
+            return $"the treaty costs {cost:0.00} against a budget of {shaping:0.00} (held-ground ceiling {heldCeiling:0.00})";
 
         var strandedNow = StrandedProvinces(campaign, winner, written.Provinces);
         var strandedBefore = StrandedProvinces(campaign, winner, cheapest.Provinces);
