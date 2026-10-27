@@ -128,8 +128,14 @@ static class AiWarTests
                 var relation = CampaignDiplomacy.Get(c, parent.Id, report.Seceded.Id);
                 foreach (var w in c.Wars) w.Ended = true;
                 relation.Stance = DiplomaticStance.Neutral; relation.TruceUntil = c.ElapsedDays + 100;
-                Check(CampaignDiplomacy.DeclareWar(c, parent.Id, report.Seceded.Id, -1, "secession") == null,
-                    "secession justification cannot bypass a later truce");
+                // The truce binds the breakaway that signed it, not the state it left
+                // (SecessionResponse.Reclaiming, 2026-10-25): the state may always take its own
+                // ground back, and the reclaiming war clears the truce it no longer honours.
+                Check(!CampaignDiplomacy.CanDeclareWar(c, report.Seceded.Id, parent.Id, out _),
+                    "a later truce still binds the breakaway");
+                Check(CampaignDiplomacy.DeclareWar(c, parent.Id, report.Seceded.Id, -1, "secession") != null &&
+                      relation.TruceUntil == 0,
+                    "the state it left may reclaim it through the truce, and the truce is void");
             }
             else if (accept) Check(war == null && report.Outcome == SecessionOutcome.Accepted, "AI may accept secession peacefully");
             else

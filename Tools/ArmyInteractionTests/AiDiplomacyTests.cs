@@ -26,8 +26,20 @@ static class AiDiplomacyTests
         AiStatecraft.TryFriendlyMove(c, ai, player);
         Check(!humanBond.TradeAgreement && !humanBond.NonAggressionPact,
             "AI cannot sign a trade agreement or pact for a human");
+        // Ordinary diplomacy runs both ways now (AiDiplomacy.TryAgreement): the computer's first
+        // move to a friendly player is a trade offer that waits on their table, and the alliance
+        // comes once trade and a pact are in place - the same order it follows with a computer.
+        Check(humanBond.AgreementOfferedBy == ai.Id && humanBond.AgreementOfferedKind == AgreementKind.TradeAgreement &&
+              humanBond.AgreementOfferedDay == c.ElapsedDays,
+            "AI sends an answerable trade offer to a human");
+        humanBond.TradeAgreement = true;
+        humanBond.NonAggressionPact = true;
+        humanBond.LastActionDay = -9999;
+        AiStatecraft.TryFriendlyMove(c, ai, player);
         Check(humanBond.AllianceOfferedBy == ai.Id && humanBond.AllianceOfferedDay == c.ElapsedDays,
             "AI sends an answerable alliance offer to a human");
+        humanBond.TradeAgreement = false;
+        humanBond.NonAggressionPact = false;
 
         var partner = c.Nations.First(n => n.Id != ai.Id && n.Id != player.Id && !n.IsHuman &&
             !n.IsSubject && n.Population > 0 && !CampaignDiplomacy.AtWar(c, n.Id, ai.Id));
