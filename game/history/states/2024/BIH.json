@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2013 census by entity and canton.
 {
   // Banja Luka
   "ba_x02": {
     "population": 1032920,
     "urbanization": 0.36,
-    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "cultures": { "serbian": 0.8001, "bosniak": 0.12, "croatian": 0.06, "romani": 0.0076, "montenegrin": 0.0048, "albanian": 0.0028, "turkish": 0.0028, "ukrainian": 0.0019 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.172, "Coal": 0.395, "Oil": 0.326, "IronOre": 0.323, "RareEarths": 0.062, "NaturalGas": 0.674, "Timber": 1.72, "Bauxite": 0.084, "Uranium": 0.013 }
   },
@@ -23,7 +24,7 @@
   "ba_bih": {
     "population": 467340,
     "urbanization": 0.39,
-    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "cultures": { "croatian": 0.5501, "bosniak": 0.42, "serbian": 0.02, "romani": 0.0038, "montenegrin": 0.0024, "albanian": 0.0014, "turkish": 0.0014, "ukrainian": 0.0009 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.646, "Coal": 0.281, "Oil": 0.353, "IronOre": 0.268, "RareEarths": 0.064, "NaturalGas": 0.555, "Timber": 1.681, "Bauxite": 0.051, "Uranium": 0.01 }
   },
@@ -31,7 +32,7 @@
   "ba_bih_889": {
     "population": 1800740,
     "urbanization": 0.61,
-    "cultures": { "bosniak": 0.5111, "serbian": 0.3128, "croatian": 0.1549, "romani": 0.0081, "montenegrin": 0.0051, "albanian": 0.003, "turkish": 0.003, "ukrainian": 0.002 },
+    "cultures": { "bosniak": 0.74, "serbian": 0.1, "croatian": 0.1, "romani": 0.0229, "montenegrin": 0.0144, "albanian": 0.0085, "turkish": 0.0085, "ukrainian": 0.0057 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.009, "Coal": 0.633, "Oil": 0.631, "IronOre": 0.487, "RareEarths": 0.133, "NaturalGas": 0.57, "Timber": 0.757, "Bauxite": 0.145, "Uranium": 0.02 }
   }

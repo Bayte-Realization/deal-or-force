@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2022 census self-identification by province.
 {
   // Azuay
   "ec_a": {
     "population": 858401,
     "urbanization": 0.7,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.8078, "quechua": 0.08, "african_american": 0.0561, "native_american": 0.0337, "colombian": 0.0112, "venezuelan": 0.0112 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.286, "Coal": 0.117, "Oil": 0.331, "IronOre": 0.107, "RareEarths": 0.027, "NaturalGas": 0.25, "Timber": 2.389, "Bauxite": 0.057, "Uranium": 0.004 }
   },
@@ -23,7 +24,7 @@
   "ec_e": {
     "population": 1555820,
     "urbanization": 0.4,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.505, "african_american": 0.45, "native_american": 0.021, "quechua": 0.01, "colombian": 0.007, "venezuelan": 0.007 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.409, "Coal": 0.412, "Oil": 0.499, "IronOre": 0.37, "RareEarths": 0.11, "NaturalGas": 0.352, "Timber": 2.974, "Bauxite": 0.108, "Uranium": 0.018 }
   },
@@ -31,7 +32,7 @@
   "ec_g": {
     "population": 5415000,
     "urbanization": 0.83,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.879, "african_american": 0.04, "native_american": 0.0366, "quechua": 0.02, "colombian": 0.0122, "venezuelan": 0.0122 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 2.313, "Coal": 0.282, "Oil": 0.876, "IronOre": 0.453, "RareEarths": 0.107, "NaturalGas": 1.017, "Timber": 1.447, "Bauxite": 0.139, "Uranium": 0.012 }
   },
@@ -39,7 +40,7 @@
   "ec_l": {
     "population": 940318,
     "urbanization": 0.66,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.843, "african_american": 0.0585, "quechua": 0.04, "native_american": 0.0351, "colombian": 0.0117, "venezuelan": 0.0117 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.549, "Coal": 0.157, "Oil": 0.212, "IronOre": 0.135, "RareEarths": 0.034, "NaturalGas": 0.211, "Timber": 1.738, "Bauxite": 0.049, "Uranium": 0.003 }
   },
@@ -47,7 +48,7 @@
   "ec_r": {
     "population": 723054,
     "urbanization": 0.46,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.8884, "native_american": 0.037, "african_american": 0.03, "quechua": 0.02, "colombian": 0.0123, "venezuelan": 0.0123 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.66, "Coal": 0.172, "Oil": 0.145, "IronOre": 0.079, "RareEarths": 0.031, "NaturalGas": 0.271, "Timber": 1.897, "Bauxite": 0.067, "Uranium": 0.006 }
   },
@@ -55,7 +56,7 @@
   "ec_m": {
     "population": 2295318,
     "urbanization": 0.35,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.907, "native_american": 0.0378, "african_american": 0.02, "colombian": 0.0126, "venezuelan": 0.0126, "quechua": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.065, "Coal": 0.109, "Oil": 0.147, "IronOre": 0.111, "RareEarths": 0.023, "NaturalGas": 0.159, "Timber": 1.645, "Bauxite": 0.054, "Uranium": 0.004 }
   },
@@ -63,7 +64,7 @@
   "ec_s": {
     "population": 747735,
     "urbanization": 0.52,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.4739, "native_american": 0.45, "african_american": 0.0329, "quechua": 0.03, "colombian": 0.0066, "venezuelan": 0.0066 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.784, "Coal": 0.118, "Oil": 0.465, "IronOre": 0.124, "RareEarths": 0.06, "NaturalGas": 0.464, "Timber": 2.332, "Bauxite": 0.04, "Uranium": 0.006 }
   },
@@ -71,7 +72,7 @@
   "ec_d": {
     "population": 92473,
     "urbanization": 0.05,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.5925, "quechua": 0.3, "native_american": 0.05, "african_american": 0.0411, "colombian": 0.0082, "venezuelan": 0.0082 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.425, "Coal": 0.4, "Oil": 0.779, "IronOre": 0.442, "RareEarths": 0.101, "NaturalGas": 1.058, "Timber": 1.353, "Bauxite": 0.081, "Uranium": 0.013 }
   },
@@ -79,7 +80,7 @@
   "ec_y": {
     "population": 235713,
     "urbanization": 0.18,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.5012, "native_american": 0.35, "quechua": 0.1, "african_american": 0.0348, "colombian": 0.007, "venezuelan": 0.007 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.572, "Coal": 0.605, "Oil": 0.812, "IronOre": 0.177, "RareEarths": 0.126, "NaturalGas": 0.749, "Timber": 1.747, "Bauxite": 0.145, "Uranium": 0.017 }
   },
@@ -87,7 +88,7 @@
   "ec_p": {
     "population": 3474212,
     "urbanization": 0.83,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.7727, "quechua": 0.12, "african_american": 0.0537, "native_american": 0.0322, "colombian": 0.0107, "venezuelan": 0.0107 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.858, "Coal": 0.177, "Oil": 0.53, "IronOre": 0.116, "RareEarths": 0.086, "NaturalGas": 0.372, "Timber": 1.868, "Bauxite": 0.05, "Uranium": 0.009 }
   },
@@ -95,7 +96,7 @@
   "ec_u": {
     "population": 192170,
     "urbanization": 0.05,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.7565, "quechua": 0.12, "african_american": 0.0525, "native_american": 0.05, "colombian": 0.0105, "venezuelan": 0.0105 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 0.938, "Coal": 0.209, "Oil": 0.371, "IronOre": 0.176, "RareEarths": 0.054, "NaturalGas": 0.377, "Timber": 1.515, "Bauxite": 0.043, "Uranium": 0.008 }
   },
@@ -103,7 +104,7 @@
   "ec_t": {
     "population": 843448,
     "urbanization": 0.62,
-    "cultures": { "ecuadorian": 0.72, "quechua": 0.18, "african_american": 0.05, "native_american": 0.03, "colombian": 0.01, "venezuelan": 0.01 },
+    "cultures": { "ecuadorian": 0.5708, "quechua": 0.35, "african_american": 0.0396, "native_american": 0.0238, "colombian": 0.0079, "venezuelan": 0.0079 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.793, "Coal": 0.528, "Oil": 0.518, "IronOre": 0.215, "RareEarths": 0.148, "NaturalGas": 0.922, "Timber": 0.996, "Bauxite": 0.104, "Uranium": 0.01 }
   }

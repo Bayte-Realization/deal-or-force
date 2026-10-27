@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2012 census: Tamils and Moors by province.
 {
   // Anuradhapura
   "lk_71": {
     "population": 11655081,
     "urbanization": 0.14,
-    "cultures": { "sinhalese": 0.745, "tamil": 0.152, "arab_levantine": 0.055, "malayali": 0.02, "hindustani": 0.01, "bengali": 0.005, "maldivian": 0.005, "telugu": 0.005, "english": 0.003 },
+    "cultures": { "sinhalese": 0.7037, "tamil": 0.17, "sri_lankan_moor": 0.1, "hindustani": 0.0094, "bengali": 0.0047, "maldivian": 0.0047, "telugu": 0.0047, "english": 0.0028 },
     "buildings": { "Agriculture": 4, "Infrastructure": 1 },
     "resources": { "Food": 1.257, "Coal": 0.077, "Oil": 0.089, "IronOre": 0.09, "RareEarths": 0.021, "NaturalGas": 0.202, "Timber": 1.653, "Bauxite": 0.037, "Uranium": 0.003 }
   },
@@ -23,7 +24,7 @@
   "lk_82": {
     "population": 3212178,
     "urbanization": 0.15,
-    "cultures": { "sinhalese": 0.745, "tamil": 0.152, "arab_levantine": 0.055, "malayali": 0.02, "hindustani": 0.01, "bengali": 0.005, "maldivian": 0.005, "telugu": 0.005, "english": 0.003 },
+    "cultures": { "sinhalese": 0.771, "tamil": 0.14, "sri_lankan_moor": 0.06, "hindustani": 0.0103, "bengali": 0.0052, "maldivian": 0.0052, "telugu": 0.0052, "english": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.85, "Coal": 0.273, "Oil": 0.873, "IronOre": 0.314, "RareEarths": 0.056, "NaturalGas": 0.693, "Timber": 2.377, "Bauxite": 0.118, "Uranium": 0.015 }
   },
@@ -31,7 +32,7 @@
   "lk_91": {
     "population": 6935741,
     "urbanization": 0.29,
-    "cultures": { "sinhalese": 0.745, "tamil": 0.152, "arab_levantine": 0.055, "malayali": 0.02, "hindustani": 0.01, "bengali": 0.005, "maldivian": 0.005, "telugu": 0.005, "english": 0.003 },
+    "cultures": { "sinhalese": 0.771, "tamil": 0.12, "sri_lankan_moor": 0.08, "hindustani": 0.0103, "bengali": 0.0052, "maldivian": 0.0052, "telugu": 0.0052, "english": 0.0031 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 2.464, "Coal": 0.525, "Oil": 0.753, "IronOre": 0.328, "RareEarths": 0.064, "NaturalGas": 0.786, "Timber": 2.14, "Bauxite": 0.097, "Uranium": 0.009 }
   }

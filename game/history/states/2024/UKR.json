@@ -10,6 +10,7 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Russians by oblast, 2001 census.
 {
   // Autonomous Republic of Crimea
   "ua_43": {
@@ -23,7 +24,7 @@
   "ua_71": {
     "population": 596723,
     "urbanization": 0.6,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9327, "russian": 0.054, "belarusian": 0.0073, "greek": 0.0024, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.216, "Coal": 0.127, "Oil": 0.492, "IronOre": 0.158, "RareEarths": 0.07, "NaturalGas": 0.588, "Timber": 2.214, "Bauxite": 0.081, "Uranium": 0.039 }
   },
@@ -31,7 +32,7 @@
   "ua_74": {
     "population": 794949,
     "urbanization": 0.49,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9367, "russian": 0.05, "belarusian": 0.0073, "greek": 0.0024, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.464, "Coal": 0.127, "Oil": 0.77, "IronOre": 0.158, "RareEarths": 0.074, "NaturalGas": 0.602, "Timber": 2.123, "Bauxite": 0.074, "Uranium": 0.039 }
   },
@@ -39,7 +40,7 @@
   "ua_12": {
     "population": 2296524,
     "urbanization": 0.74,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8126, "russian": 0.176, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2, "ArmsIndustry": 1 },
     "resources": { "Food": 2.026, "Coal": 8.84, "Oil": 0.807, "IronOre": 50.652, "RareEarths": 0.067, "NaturalGas": 0.747, "Timber": 2.039, "Bauxite": 0.188, "Uranium": 5.42 }
   },
@@ -55,7 +56,7 @@
   "ua_26": {
     "population": 675826,
     "urbanization": 0.74,
-    "cultures": { "ukrainian": 0.7402, "russian": 0.1662, "romanian": 0.0831, "belarusian": 0.0057, "greek": 0.0019, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8716, "romanian": 0.0979, "russian": 0.018, "belarusian": 0.0067, "greek": 0.0022, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.696, "Coal": 0.127, "Oil": 0.177, "IronOre": 0.158, "RareEarths": 0.033, "NaturalGas": 0.196, "Timber": 2.96, "Bauxite": 0.027, "Uranium": 0.039 }
   },
@@ -63,7 +64,7 @@
   "ua_63": {
     "population": 1964792,
     "urbanization": 0.73,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.7337, "russian": 0.256, "belarusian": 0.0057, "greek": 0.0019, "jewish": 0.0009, "polish": 0.0009, "romani": 0.0009 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.913, "Coal": 0.127, "Oil": 0.411, "IronOre": 0.158, "RareEarths": 0.034, "NaturalGas": 0.452, "Timber": 1.734, "Bauxite": 0.086, "Uranium": 0.039 }
   },
@@ -71,7 +72,7 @@
   "ua_65": {
     "population": 584564,
     "urbanization": 0.51,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8472, "russian": 0.141, "belarusian": 0.0066, "greek": 0.0022, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.809, "Coal": 0.127, "Oil": 0.39, "IronOre": 0.158, "RareEarths": 0.05, "NaturalGas": 0.338, "Timber": 2.5, "Bauxite": 0.078, "Uranium": 0.039 }
   },
@@ -79,7 +80,7 @@
   "ua_68": {
     "population": 739577,
     "urbanization": 0.64,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9505, "russian": 0.036, "belarusian": 0.0074, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.899, "Coal": 0.127, "Oil": 0.274, "IronOre": 0.158, "RareEarths": 0.052, "NaturalGas": 0.431, "Timber": 1.768, "Bauxite": 0.101, "Uranium": 0.039 }
   },
@@ -87,7 +88,7 @@
   "ua_35": {
     "population": 516399,
     "urbanization": 0.45,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9122, "russian": 0.075, "belarusian": 0.0071, "greek": 0.0024, "jewish": 0.0011, "polish": 0.0011, "romani": 0.0011 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.692, "Coal": 0.127, "Oil": 0.464, "IronOre": 3.765, "RareEarths": 0.087, "NaturalGas": 0.76, "Timber": 1.68, "Bauxite": 0.11, "Uranium": 10.801 }
   },
@@ -95,7 +96,7 @@
   "ua_32": {
     "population": 3365443,
     "urbanization": 0.82,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8875, "russian": 0.1, "belarusian": 0.0069, "greek": 0.0023, "jewish": 0.0011, "polish": 0.0011, "romani": 0.0011 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3, "ArmsIndustry": 1 },
     "resources": { "Food": 0.847, "Coal": 0.127, "Oil": 0.823, "IronOre": 0.158, "RareEarths": 0.064, "NaturalGas": 0.824, "Timber": 2.37, "Bauxite": 0.173, "Uranium": 0.039 }
   },
@@ -111,7 +112,7 @@
   "ua_46": {
     "population": 1115787,
     "urbanization": 0.77,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9505, "russian": 0.036, "belarusian": 0.0074, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 2.251, "Coal": 0.127, "Oil": 0.789, "IronOre": 0.158, "RareEarths": 0.093, "NaturalGas": 0.664, "Timber": 2.317, "Bauxite": 0.098, "Uranium": 0.039 }
   },
@@ -119,7 +120,7 @@
   "ua_48": {
     "population": 832450,
     "urbanization": 0.62,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8472, "russian": 0.141, "belarusian": 0.0066, "greek": 0.0022, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.36, "Coal": 0.127, "Oil": 0.295, "IronOre": 0.158, "RareEarths": 0.031, "NaturalGas": 0.304, "Timber": 1.114, "Bauxite": 0.051, "Uranium": 1.833 }
   },
@@ -135,7 +136,7 @@
   "ua_53": {
     "population": 841870,
     "urbanization": 0.6,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9152, "russian": 0.072, "belarusian": 0.0071, "greek": 0.0024, "jewish": 0.0011, "polish": 0.0011, "romani": 0.0011 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.959, "Coal": 0.127, "Oil": 0.279, "IronOre": 14.585, "RareEarths": 0.069, "NaturalGas": 0.53, "Timber": 2.502, "Bauxite": 0.063, "Uranium": 0.039 }
   },
@@ -143,7 +144,7 @@
   "ua_56": {
     "population": 348019,
     "urbanization": 0.71,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9604, "russian": 0.026, "belarusian": 0.0075, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.11, "Coal": 0.127, "Oil": 0.288, "IronOre": 0.158, "RareEarths": 0.015, "NaturalGas": 0.231, "Timber": 0.697, "Bauxite": 0.054, "Uranium": 0.039 }
   },
@@ -151,7 +152,7 @@
   "ua_59": {
     "population": 695475,
     "urbanization": 0.66,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.8934, "russian": 0.094, "belarusian": 0.007, "greek": 0.0023, "jewish": 0.0011, "polish": 0.0011, "romani": 0.0011 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.887, "Coal": 0.127, "Oil": 0.878, "IronOre": 0.158, "RareEarths": 0.067, "NaturalGas": 0.896, "Timber": 2.867, "Bauxite": 0.088, "Uranium": 0.039 }
   },
@@ -159,7 +160,7 @@
   "ua_61": {
     "population": 419064,
     "urbanization": 0.54,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9743, "russian": 0.012, "belarusian": 0.0076, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.161, "Coal": 0.127, "Oil": 0.4, "IronOre": 0.158, "RareEarths": 0.13, "NaturalGas": 0.727, "Timber": 3.167, "Bauxite": 0.134, "Uranium": 0.039 }
   },
@@ -167,7 +168,7 @@
   "ua_05": {
     "population": 609511,
     "urbanization": 0.53,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9485, "russian": 0.038, "belarusian": 0.0074, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.211, "Coal": 0.127, "Oil": 0.491, "IronOre": 0.158, "RareEarths": 0.083, "NaturalGas": 0.403, "Timber": 3.102, "Bauxite": 0.111, "Uranium": 0.039 }
   },
@@ -175,7 +176,7 @@
   "ua_07": {
     "population": 365664,
     "urbanization": 0.69,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1813, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9624, "russian": 0.024, "belarusian": 0.0075, "greek": 0.0025, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.294, "Coal": 0.127, "Oil": 0.747, "IronOre": 0.158, "RareEarths": 0.062, "NaturalGas": 0.452, "Timber": 2.097, "Bauxite": 0.172, "Uranium": 0.039 }
   },
@@ -191,7 +192,7 @@
   "ua_23": {
     "population": 1375809,
     "urbanization": 0.72,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.7426, "russian": 0.247, "belarusian": 0.0058, "greek": 0.0019, "jewish": 0.0009, "polish": 0.0009, "romani": 0.0009 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.026, "Coal": 0.127, "Oil": 0.926, "IronOre": 3.765, "RareEarths": 0.068, "NaturalGas": 0.474, "Timber": 1.434, "Bauxite": 0.151, "Uranium": 0.039 }
   },
@@ -199,7 +200,7 @@
   "ua_18": {
     "population": 589851,
     "urbanization": 0.56,
-    "cultures": { "ukrainian": 0.8073, "russian": 0.1812, "belarusian": 0.0063, "greek": 0.0021, "jewish": 0.001, "polish": 0.001, "romani": 0.001 },
+    "cultures": { "ukrainian": 0.9367, "russian": 0.05, "belarusian": 0.0073, "greek": 0.0024, "jewish": 0.0012, "polish": 0.0012, "romani": 0.0012 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.877, "Coal": 0.127, "Oil": 0.451, "IronOre": 0.158, "RareEarths": 0.047, "NaturalGas": 0.41, "Timber": 2.618, "Bauxite": 0.105, "Uranium": 0.039 }
   }

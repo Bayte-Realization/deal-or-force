@@ -1843,9 +1843,31 @@ public static class Program
         var trace = new List<int>();
         var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
         var traceFront = Environment.GetEnvironmentVariable("DOF_TRACE_FRONT") == "1";
+        var ukraineId = campaign.NationByTag("UKR")?.Id ?? -1;
+        long seenEntry = 0;
+        var lastHeld = ukraineIndex >= 0 ? HeldBy(campaign, ukraineIndex) : 0;
         for (var day = 0; day < days; day++)
         {
             campaign.TickDay();
+            if (traceFront && ukraineIndex >= 0)
+            {
+                // What happened to Ukraine today, and any day its holding jumps: a country that
+                // lost everything and came back with more than it started with is a peace or a
+                // restoration somebody has to be able to name.
+                var entries = campaign.Chronicle.Entries;
+                for (var i = entries.Count - 1; i >= 0 && entries[i].Sequence > seenEntry; i--)
+                {
+                    var e = entries[i];
+                    if (e.ActorId == ukraineId || e.TargetId == ukraineId)
+                        Console.WriteLine($"  UKR day {e.Day}: {e.Kind} {e.ActorName} -> {e.TargetName} {e.Subject} {e.Place}");
+                }
+                if (entries.Count > 0) seenEntry = Math.Max(seenEntry, entries[^1].Sequence);
+                var held = HeldBy(campaign, ukraineIndex);
+                if (Math.Abs(held - lastHeld) >= 20)
+                    Console.WriteLine($"  UKR day {day + 1}: holding {lastHeld} -> {held}, wars open: " +
+                        string.Join("; ", campaign.Wars.Where(w => !w.Ended && w.Involves(ukraineId)).Select(w => w.Name)));
+                lastHeld = held;
+            }
             if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
                 trace.Add(HeldBy(campaign, ukraineIndex));
             if (traceFront && day % 30 == 0) TraceFront(campaign, day);

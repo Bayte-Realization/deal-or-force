@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2010 census by region.
 {
   // districts of Republican Subordination
   "tj_x01": {
     "population": 2231497,
     "urbanization": 0.52,
-    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "cultures": { "tajik": 0.8992, "uzbek": 0.07, "kyrgyz": 0.0085, "pashtun": 0.0053, "persian": 0.0053, "russian": 0.0053, "tatar": 0.0032, "turkmen": 0.0032 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.143, "Coal": 0.538, "Oil": 0.421, "IronOre": 0.241, "RareEarths": 0.09, "NaturalGas": 0.787, "Timber": 1.346, "Bauxite": 0.114, "Uranium": 0.01 }
   },
@@ -23,7 +24,7 @@
   "tj_gb": {
     "population": 441765,
     "urbanization": 0.07,
-    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "cultures": { "tajik": 0.9464, "kyrgyz": 0.03, "pashtun": 0.0056, "persian": 0.0056, "russian": 0.0056, "tatar": 0.0034, "turkmen": 0.0034 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.448, "Coal": 0.222, "Oil": 0.887, "IronOre": 0.203, "RareEarths": 0.113, "NaturalGas": 0.553, "Timber": 1.251, "Bauxite": 0.142, "Uranium": 0.011 }
   },
@@ -31,7 +32,7 @@
   "tj_kt": {
     "population": 3602362,
     "urbanization": 0.14,
-    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "cultures": { "tajik": 0.8703, "uzbek": 0.1, "kyrgyz": 0.0082, "pashtun": 0.0051, "persian": 0.0051, "russian": 0.0051, "tatar": 0.0031, "turkmen": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.809, "Coal": 0.103, "Oil": 0.109, "IronOre": 0.097, "RareEarths": 0.018, "NaturalGas": 0.194, "Timber": 0.93, "Bauxite": 0.052, "Uranium": 0.006 }
   },
@@ -39,7 +40,7 @@
   "tj_su": {
     "population": 3045394,
     "urbanization": 0.31,
-    "cultures": { "tajik": 0.845, "uzbek": 0.121, "kyrgyz": 0.008, "arab_levantine": 0.005, "pashtun": 0.005, "persian": 0.005, "russian": 0.005, "tatar": 0.003, "turkmen": 0.003 },
+    "cultures": { "tajik": 0.754, "uzbek": 0.22, "kyrgyz": 0.0071, "pashtun": 0.0045, "persian": 0.0045, "russian": 0.0045, "tatar": 0.0027, "turkmen": 0.0027 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.801, "Coal": 0.237, "Oil": 0.393, "IronOre": 0.21, "RareEarths": 0.044, "NaturalGas": 0.214, "Timber": 1.888, "Bauxite": 0.042, "Uranium": 0.006 }
   }
