@@ -194,6 +194,16 @@ public partial class LoadingScreen : Control
     /// </summary>
     private static Texture2D NextScene()
     {
+        var paths = IllustrationPaths();
+        if (paths.Length == 0) return null;
+        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % paths.Length) : (_sceneTurn + 1) % paths.Length;
+        return Picture(paths[_sceneTurn]);
+    }
+
+    /// <summary>Every loading_* illustration, base game and mods alike, in name order; none when the player turned them off.</summary>
+    internal static string[] IllustrationPaths()
+    {
+        if (Plain()) return System.Array.Empty<string>();
         string[] paths;
         try
         {
@@ -205,14 +215,12 @@ public partial class LoadingScreen : Control
                     .Where(f => f.EndsWith(".jpg") || f.EndsWith(".png") || f.EndsWith(".webp"))
                     .OrderBy(f => f, System.StringComparer.Ordinal).Select(f => SceneFolder + f).ToArray();
         }
-        catch (System.Exception) { return null; }
-        if (paths.Length == 0) return null;
-        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % paths.Length) : (_sceneTurn + 1) % paths.Length;
-        return Picture(paths[_sceneTurn]);
+        catch (System.Exception) { return System.Array.Empty<string>(); }
+        return paths;
     }
 
     /// <summary>An imported picture, or a mod's loose file read as it is.</summary>
-    private static Texture2D Picture(string path)
+    internal static Texture2D Picture(string path)
     {
         if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
         var loose = path.StartsWith("res://", System.StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;

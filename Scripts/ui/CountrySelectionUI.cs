@@ -81,7 +81,7 @@ public partial class DealOrForceGame
         _pickerMovementsBox.AddChild(withoutLand);
         var movementScroll = new ScrollContainer
         {
-            CustomMinimumSize = new Vector2(0, 62),
+            CustomMinimumSize = new Vector2(0, 96),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
         _pickerMovementsBox.AddChild(movementScroll);
@@ -403,6 +403,8 @@ public partial class DealOrForceGame
                 movement == _pickerNation);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.ClipText = true;
+            // Clipped mid-word read as a typo ("Ambazonia Interi"); an ellipsis reads as "more".
+            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             // Its own flag on the button, the way a country in the list is known by its flag.
             // Read now rather than left to the background loader: the list is built the moment
             // the picker opens, before the loader has reached six flags nobody has asked for yet.
@@ -415,7 +417,9 @@ public partial class DealOrForceGame
             // The width cap scales it down to a small flag instead, and counts in the minimum.
             button.ExpandIcon = false;
             button.AddThemeConstantOverride("icon_max_width", 24);
-            button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(movement)?.Description ?? ""));
+            // The full name first, since the button may show only part of it.
+            button.TooltipText = Ui.Tip(movement.DisplayName + "\n" +
+                Simulation.Loc.Get(Movements.DefinitionOf(movement)?.Description ?? ""));
             _pickerMovements.AddChild(button);
         }
     }

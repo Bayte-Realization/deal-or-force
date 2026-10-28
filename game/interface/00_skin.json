@@ -134,6 +134,10 @@
     // the backdrop is art we ship, and without this line nothing ever asked for it. Set it
     // to 0 for the flat colour.
     "shell.space_texture": 1,
-    "news.feed_rows": 3
+    "news.feed_rows": 3,
+
+    // How bright the illustrations behind the main menu are (MenuIllustrations): 1 as painted,
+    // lower to sink them under the grid and the logo.
+    "menu.backdrop_brightness": 0.42
   }
 }

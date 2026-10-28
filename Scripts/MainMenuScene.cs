@@ -108,6 +108,8 @@ public partial class MainMenuScene : Control
         MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
 
         AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
+        // The illustrations over the drawn ground, dimmed so the grid and the logo still lead.
+        AddChild(new MenuIllustrations());
 
         var panel = new PanelContainer();
         panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
