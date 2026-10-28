@@ -1,0 +1,23 @@
+// Commanders and their battles (Generals.cs, common/generals).
+{
+  "chronicle.mass_desertion": "{0}: массовое дезертирство — {2} человек за неделю.",
+  "{0} ({1}, skill {2:0}%, {3} won / {4} lost)": "{0} ({1}, мастерство {2:0}%, побед {3} / поражений {4})",
+  "chronicle.great_battle": "{3}: крупное сражение выиграла сторона {0} против {1}, командовал {2}.",
+  "chronicle.general_fallen": "Командующий {2} ({0}) убит, пленён или смещён после разгрома — {3}.",
+  "Steady": "Надёжный",
+  "Thruster": "Таранный",
+  "Stonewall": "Каменная стена",
+  "Reckless": "Безрассудный",
+  "Cautious": "Осторожный",
+  "Inspiring": "Вдохновляющий",
+  "Political appointee": "Политический назначенец",
+  "Master of manoeuvre": "Мастер манёвра",
+  "Does what the doctrine says and does it competently. Most armies are led by one.": "Делает то, что велит устав, и делает это грамотно. Так командует большинство армий.",
+  "Pushes for the breakthrough and keeps pushing: a commander who wins ground and spends men for it.": "Рвётся к прорыву и продолжает давить: берёт землю и платит за неё людьми.",
+  "Digs in and will not be moved. Slow to attack, very hard to dislodge.": "Зарывается в землю и не сдвигается. Медлителен в атаке, очень упорен в обороне.",
+  "Brave, impatient and careless of the flanks: brilliant when it works, a rout when it does not.": "Храбр, нетерпелив и небрежен к флангам: блестяще, когда получается, и разгром, когда нет.",
+  "Never loses an army and seldom wins a war. Waits for the odds to be certain.": "Никогда не теряет армию и редко выигрывает войну. Ждёт, пока шансы станут верными.",
+  "The troops would follow this commander anywhere, and in the end they do.": "За таким командиром войска пойдут куда угодно — и в конце концов идут.",
+  "Owes the command to the palace rather than the staff college, and the army knows it.": "Обязан назначением дворцу, а не академии генштаба, и армия это знает.",
+  "One in a generation: reads the ground, finds the seam, and is somewhere else when the blow lands.": "Такой бывает раз в поколение: читает местность, находит стык и уходит прежде, чем падает удар."
+}

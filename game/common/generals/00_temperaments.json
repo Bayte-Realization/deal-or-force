@@ -1,0 +1,50 @@
+// Commanders' temperaments (Generals.cs). Every army group's commander has one, drawn from the
+// campaign seed by weight when they are appointed.
+//
+//   name, description   what the army panel calls it
+//   attack, defence     factors on the weight of the formations under them (0.5 to 1.5)
+//   weight              how common it is among commanders
+//
+// Later files win, key by key: a mod adds a temperament with a key of its own.
+{
+  "steady": {
+    "name": "Steady",
+    "description": "Does what the doctrine says and does it competently. Most armies are led by one.",
+    "attack": 1.0, "defence": 1.0, "weight": 4
+  },
+  "thruster": {
+    "name": "Thruster",
+    "description": "Pushes for the breakthrough and keeps pushing: a commander who wins ground and spends men for it.",
+    "attack": 1.12, "defence": 0.97, "weight": 2
+  },
+  "stonewall": {
+    "name": "Stonewall",
+    "description": "Digs in and will not be moved. Slow to attack, very hard to dislodge.",
+    "attack": 0.95, "defence": 1.12, "weight": 2
+  },
+  "reckless": {
+    "name": "Reckless",
+    "description": "Brave, impatient and careless of the flanks: brilliant when it works, a rout when it does not.",
+    "attack": 1.18, "defence": 0.88, "weight": 1.2
+  },
+  "cautious": {
+    "name": "Cautious",
+    "description": "Never loses an army and seldom wins a war. Waits for the odds to be certain.",
+    "attack": 0.92, "defence": 1.07, "weight": 2
+  },
+  "inspiring": {
+    "name": "Inspiring",
+    "description": "The troops would follow this commander anywhere, and in the end they do.",
+    "attack": 1.07, "defence": 1.07, "weight": 1.2
+  },
+  "political": {
+    "name": "Political appointee",
+    "description": "Owes the command to the palace rather than the staff college, and the army knows it.",
+    "attack": 0.9, "defence": 0.93, "weight": 1.5
+  },
+  "master": {
+    "name": "Master of manoeuvre",
+    "description": "One in a generation: reads the ground, finds the seam, and is somewhere else when the blow lands.",
+    "attack": 1.15, "defence": 1.12, "weight": 0.35
+  }
+}

@@ -597,7 +597,12 @@ public static class Factions
     /// </summary>
     public static bool FightsOn(Campaign campaign, Nation faction, float held)
     {
-        if (campaign is null || Of(faction) is not { Insurgency: true }) return false;
+        // Every rising and breakaway, not only the insurgencies the 2024 history names: a war
+        // of the weak is not given up because the strong hold the towns (GuerrillaWar).
+        if (campaign is null || faction is null) return false;
+        if (Of(faction) is not { Insurgency: true } &&
+            !(campaign.Defines.RisingsFightOn && (faction.SecededFromId >= 0 || !string.IsNullOrEmpty(faction.FoundedInRevolt) ||
+                                                  faction.Name.StartsWith("rising:", StringComparison.Ordinal)))) return false;
         if (held >= 0.999f && faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
         if (faction.WarSupport <= campaign.Defines.FactionFightOnSupport) return false;
         var standing = 0;

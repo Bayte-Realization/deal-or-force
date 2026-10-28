@@ -71,7 +71,7 @@
   "pl_op": {
     "population": 1182765,
     "urbanization": 0.22,
-    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "cultures": { "polish": 0.7944, "silesian": 0.09, "german": 0.06, "ukrainian": 0.0439, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.401, "Coal": 0.123, "Oil": 0.194, "IronOre": 0.115, "RareEarths": 0.031, "NaturalGas": 0.115, "Timber": 2.333, "Bauxite": 0.042, "Uranium": 0.003 }
   },
@@ -103,7 +103,7 @@
   "pl_sl": {
     "population": 6891565,
     "urbanization": 0.89,
-    "cultures": { "polish": 0.9405, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
+    "cultures": { "polish": 0.8205, "silesian": 0.12, "ukrainian": 0.0439, "german": 0.0039, "belarusian": 0.0029, "romani": 0.002, "russian": 0.002, "vietnamese": 0.002, "jewish": 0.001, "lithuanian": 0.001, "slovak": 0.001 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.37, "Coal": 28.058, "Oil": 0.358, "IronOre": 0.409, "RareEarths": 0.13, "NaturalGas": 0.46, "Timber": 2.118, "Bauxite": 0.121, "Uranium": 0.015 }
   },

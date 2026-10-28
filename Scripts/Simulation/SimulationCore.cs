@@ -901,6 +901,7 @@ public sealed partial class Campaign
             // A formation that has been cut off or is standing among its own people can
             // change sides. Monthly, deterministic, and only after the fighting has moved.
             using (SimProfiler.Measure("defections")) Defections.Tick(this);
+            using (SimProfiler.Measure("desertion")) Desertion.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
             yield return 0;

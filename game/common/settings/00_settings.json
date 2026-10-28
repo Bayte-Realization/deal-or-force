@@ -44,7 +44,7 @@
     "category": "game", "scope": "campaign", "order": 104, "kind": "toggle",
     "name": "Civil-war outbreaks in player countries",
     "description": "Permit the same weekly instability-driven civil-war outbreaks in your country as in other states. The Laws and agendas crisis workspace shows the exact current risk and recovery protection. This is not a guaranteed countdown.",
-    "default": false
+    "default": true
   },
   "peace_by_provinces": {
     "category": "game", "scope": "campaign", "order": 105, "kind": "toggle",

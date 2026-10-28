@@ -145,13 +145,22 @@ public static class NationNaming
         if (anyLand is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(anyLand)))
             return ("land", anyLand.Id);
 
-        // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.).
+        // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.)
+        //    - one nobody already wears: Nigeria's Niger State does not found a second Niger, it
+        //    looks to the next region of the rising, as four Nigerian risings in one bench run
+        //    each called themselves the Republic of Niger beside the real one.
         if (region is not null)
         {
-            var place = StripAdministrativeSuffix(RegionNames.Resolve(region));
-            if (place.Length > 0 && CompassDirection(place).Length == 0 &&
-                !string.Equals(place, parent?.Name, StringComparison.OrdinalIgnoreCase))
-                return ("region", region.Id);
+            var wanted = new HashSet<int>(regions ?? Array.Empty<int>());
+            foreach (var candidate in campaign.States.Where(s => wanted.Contains(s.MapIndex) || s == region)
+                         .OrderByDescending(s => s == region).ThenByDescending(s => s.Population).ThenBy(s => s.MapIndex))
+            {
+                var place = StripAdministrativeSuffix(RegionNames.Resolve(candidate));
+                if (place.Length > 0 && CompassDirection(place).Length == 0 &&
+                    !string.Equals(place, parent?.Name, StringComparison.OrdinalIgnoreCase) &&
+                    !NameAlreadyTaken(campaign, place))
+                    return ("region", candidate.Id);
+            }
         }
 
         // 9. Region fallback: authentic regional identity rather than an occupier's compass direction.
@@ -474,7 +483,7 @@ public static class NationNaming
     /// Highlands calling itself Scotland would be the second thing with that name, which is
     /// exactly the duplication this is written against.
     /// </summary>
-    private static bool NameAlreadyTaken(Campaign campaign, string name)
+    internal static bool NameAlreadyTaken(Campaign campaign, string name)
     {
         if (campaign is null || string.IsNullOrWhiteSpace(name)) return false;
         foreach (var nation in campaign.Nations)

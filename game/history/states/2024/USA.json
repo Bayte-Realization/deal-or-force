@@ -88,7 +88,7 @@
   "us_hi": {
     "population": 1372803,
     "urbanization": 0.95,
-    "cultures": { "american": 0.7149, "hispanic_american": 0.11, "african_american": 0.02, "chinese_diaspora": 0.0186, "indian_diaspora": 0.0175, "native_american": 0.0137, "german": 0.0099, "irish": 0.0099, "tagalog": 0.0099, "arab_levantine": 0.0087, "italian": 0.0087, "jewish": 0.0087, "cuban": 0.0074, "korean": 0.0074, "puerto_rican": 0.0074, "vietnamese": 0.0074, "polish": 0.005, "haitian": 0.0038, "jamaican": 0.0038, "russian": 0.0038, "japanese": 0.0025, "ukrainian": 0.001 },
+    "cultures": { "american": 0.39, "tagalog": 0.16, "japanese": 0.13, "hawaiian": 0.1, "hispanic_american": 0.1, "chinese_diaspora": 0.04, "samoan": 0.025, "korean": 0.02, "african_american": 0.02, "micronesian": 0.01, "vietnamese": 0.005 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.21, "Coal": 0.161, "Oil": 0.399, "IronOre": 0.153, "RareEarths": 0.13, "NaturalGas": 0.366, "Timber": 2.005, "Bauxite": 0.043, "Uranium": 0.038 }
   },

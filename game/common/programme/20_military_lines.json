@@ -1,0 +1,9 @@
+{
+  "lines": {
+    "Tanks": { "pool": "military" },
+    "Drones": { "pool": "military" },
+    "CombatAircraft": { "pool": "military" },
+    "Missiles": { "pool": "military" },
+    "Artillery": { "pool": "military" }
+  }
+}

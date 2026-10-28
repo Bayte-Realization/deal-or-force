@@ -610,14 +610,18 @@ public static partial class Warfare
             var attackerOffence = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
-                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
+                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId)) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Attack) *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * attackerFire;
 
             var defenderOffence = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
-                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
+                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId)) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Attack) *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire;
 
             var dugIn = DefenderLine.Average(army => army.Entrenchment);
@@ -644,15 +648,26 @@ public static partial class Warfare
 
             var defenderProtection = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense") *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Defence) *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
                 (1f + dugIn * defines.EntrenchmentBonus) * effectiveDefenderStripped *
                 homelandBonus * frontalBonus;
 
             var attackerProtection = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense") *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Defence) *
                 attackerEngagement * attackerStripped;
+
+            // The war of the weak (GuerrillaWar): a rising or a small country defending rough
+            // ground of its own against a far stronger enemy stays in the fight longer, and gives
+            // ground without dying for it - it melts away and fights again.
+            var guerrillaCover = GuerrillaWar.Cover(campaign, defenderNation, campaign.NationById(battle.AttackerId),
+                battle.ProvinceId, terrain);
+            defenderProtection *= 1f + defines.GuerrillaDefence * guerrillaCover;
 
             // The fortunes of war (Defines.CombatFortune): each side's day runs a little above or
             // below what its numbers say - the weather, a commander's call, a bridge that held -
@@ -700,6 +715,9 @@ public static partial class Warfare
                 attackerOrgLoss *= 1f + counterattack * defines.CounterattackOrganisationBonus;
                 defenderOrgLoss *= 1f - counterattack * defines.CounterattackDefenderRelief;
             }
+            // Ambushes: an attack into guerrilla cover is bled on its way in, by the side roads,
+            // the mines and the villages it has to pass (GuerrillaWar).
+            attackerOrgLoss *= 1f + defines.GuerrillaAmbush * guerrillaCover;
             // However badly a battle goes, it is still two sides shooting at each other: the
             // worse-off side's daily loss per formation is at most this many times the other's.
             // The bounds above allowed seventeen to one, and ten years of it put seven million
@@ -710,7 +728,7 @@ public static partial class Warfare
             // And the same for the dead. Thin templates, a broken line and an aggressive stance
             // each multiply a side's casualties after the cap above, so the share of its men a
             // side loses in a day is held to at most this many times the other side's share.
-            var defenderScale = 1f;
+            var defenderScale = 1f - M.Clamp01(defines.GuerrillaEvasion * guerrillaCover);
             var attackerScale = defines.AttackerCasualtyMultiplier;
             var (defenderMen, defenderDead) = CasualtyTotals(campaign, DefenderLine, defenderOrgLoss, defenderScale);
             var (attackerMen, attackerDead) = CasualtyTotals(campaign, AttackerLine, attackerOrgLoss, attackerScale);
@@ -978,6 +996,9 @@ public static partial class Warfare
         battle.Ended = true;
         battle.WinnerId = winnerId;
         battle.Outcome = outcome;
+        // Who won it, who lost it, and whether the world will remember its name (Generals).
+        Generals.AfterBattle(campaign, battle, winnerId,
+            outcome.StartsWith("Defenders broke", StringComparison.Ordinal) || outcome.StartsWith("Attack repelled", StringComparison.Ordinal));
         foreach (var army in campaign.Armies)
             if (army.BattleId == battle.Id) army.BattleId = -1;
     }

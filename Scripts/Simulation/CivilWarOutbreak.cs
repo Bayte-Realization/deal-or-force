@@ -27,9 +27,10 @@ public sealed partial class Defines
     /// <summary>How much of the country the rising takes, as a share of its people.</summary>
     public float CivilWarRebelShareMin { get; set; } = 0.15f;
     public float CivilWarRebelShareMax { get; set; } = 0.40f;
-    /// <summary>Whether a country somebody plays can have one. Off: a player's state falls
-    /// apart by its own choices, not by a roll it was never shown.</summary>
-    public bool CivilWarStrikesPlayers { get; set; } = false;
+    /// <summary>Whether a country somebody plays can have one. On by default: a player's
+    /// country and the computer's live by the same rules. Off is the campaign option for a
+    /// player who wants its state to fall apart only by its own choices.</summary>
+    public bool CivilWarStrikesPlayers { get; set; } = true;
     /// <summary>How much faster a state's minorities leave while it fights a civil war.</summary>
     public float SecessionCivilWarMultiplier { get; set; } = 3f;
     /// <summary>How much imperial overstretch amplifies secession pressure across foreign regions.</summary>

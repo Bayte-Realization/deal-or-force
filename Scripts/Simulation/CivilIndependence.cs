@@ -15,6 +15,12 @@ public sealed partial class Defines
     public int CivilReferendumDays { get; set; } = 180;
     public int CivilReferendumConsentDays { get; set; } = 365;
     public int CivilReferendumTruceDays { get; set; } = 365;
+    /// <summary>
+    /// The share of carried votes counted region by region, each region going only if its own
+    /// residents voted yes; the rest are one question for the whole homeland the government
+    /// holds, and carry all of it (MovementRules.ZoneOf).
+    /// </summary>
+    public float CivilReferendumByRegionShare { get; set; } = 0.25f;
 }
 
 /// <summary>Political aspirations are not a synonym for poverty or armed revolt.</summary>

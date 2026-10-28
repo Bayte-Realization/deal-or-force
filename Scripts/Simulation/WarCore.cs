@@ -212,9 +212,18 @@ public static class WarNames
             return Loc.Format("{0} Civil War", rising.DisplayName);
         // A secession is the same war seen from the other side: the parent state and the
         // province that left it. Naming it after both countries reads as a tautology -
-        // "Gulf Union-Republic of East War" - when it is one country's civil war.
+        // "Gulf Union-Republic of East War" - when it is one country's civil war. Unless the
+        // side that left was a country before it was anybody's subject: China throwing off
+        // an American protectorate is not the American civil war, it is China's war of
+        // independence.
         if (SeniorSide(war, attacker, defender) is { } senior)
-            return Loc.Format("{0} Civil War", senior.DisplayName);
+        {
+            var leaver = senior.Id == attacker.Id ? defender : attacker;
+            return leaver.SecededFromId == senior.Id && string.IsNullOrEmpty(leaver.FoundedInRevolt) &&
+                   leaver.Movement is null && string.IsNullOrEmpty(leaver.FactionId)
+                ? Loc.Format("{0} War of Independence", leaver.DisplayName)
+                : Loc.Format("{0} Civil War", senior.DisplayName);
+        }
         // A pair name is rebuilt from today's names, not today's spellings of yesterday's.
         if (IsPairName(war.Name) || NationNaming.LooksLikeKey(war.Name))
             return Loc.Format(war.Name.EndsWith(" Border War", StringComparison.Ordinal)

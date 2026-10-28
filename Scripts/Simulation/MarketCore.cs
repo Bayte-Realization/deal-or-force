@@ -359,7 +359,12 @@ public static class MarketSystem
                 // GDP in two years - the United States reached two fifths of the world economy.
                 var band = MathF.Max(0f, campaign.Defines.GdpPriceBand);
                 var price = M.Clamp(quote.Price, basePrice * MathF.Max(0f, 1f - band), basePrice * (1f + band));
-                grossOutput += quote.Production * (basePrice + priceShare * (price - basePrice));
+                // What was sold, not what was made: the country's own use of its own goods and what
+                // it sent abroad. A mine working a deposit nobody wants piles up ore, not income -
+                // the United States mined rare earths it had no buyer for, at the world's floor
+                // price, until they were half its economy.
+                var sold = MathF.Min(quote.Production, MathF.Max(0f, quote.Demand - quote.Imports) + quote.Exports);
+                grossOutput += sold * (basePrice + priceShare * (price - basePrice));
             }
             nation.GrossOutput = grossOutput;
 

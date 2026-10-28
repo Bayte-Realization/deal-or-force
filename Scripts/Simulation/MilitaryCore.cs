@@ -55,6 +55,12 @@ public sealed class ArmyGroup
     public string Name = "";
     public string Commander = "Unassigned staff";
     public float StaffSkill = 0.45f;
+    /// <summary>The commander's temperament (common/generals), their record, when they took the group, and how many before them fell (Generals).</summary>
+    public string CommanderTrait = "";
+    public int Victories;
+    public int Defeats;
+    public int CommanderSinceDay = -1;
+    public int CommandersLost;
 }
 
 /// <summary>
@@ -1425,6 +1431,7 @@ public static class MilitaryBootstrap
                     StaffSkill = 0.38f + ((nation.MapIndex * 13 + groupIndex * 17) % 28) / 100f
                 };
                 campaign.ArmyGroups.Add(group);
+                Generals.Appoint(campaign, group);
                 nationGroups.Add(group);
             }
 

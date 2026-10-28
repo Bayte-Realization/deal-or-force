@@ -2,7 +2,7 @@
 
 The current shipped set is authored as simple geometry in `minimal-icons.json`
 and exported to **individual transparent 96 × 96 PNGs**. Their authored palette
-is dark gold `#b48732` for **all 34 goods and resources**, and `#e7bd69` for
+is dark gold `#b48732` for **all 39 goods and resources**, and `#e7bd69` for
 commands and the supply mark, including when opened outside the game. No gradients, metallic
 highlights, dark outlines, text, or decorative frames are baked into these icons.
 Commodity icons combine slender contours and selective solid faces in one shade.
@@ -18,7 +18,9 @@ after presentation hot reload. `minimal_palette.json` declares the authored
 double gold tint. Another skin can still recolour these PNGs. Steel is a faceted
 I-beam with the underside of its upper flange; IndustrialMaterials uses stacked
 construction blocks, not a second I-beam. Arms use a connected rifle with balanced
-stock, receiver, barrel and magazine proportions.
+stock, receiver, barrel and magazine proportions. The arsenal goods are side or top
+silhouettes: a tank on its tracks, a quadcopter, a swept-wing jet, a finned missile and a
+towed gun on its wheel.
 
 ## Reproduce / extend the current artwork
 

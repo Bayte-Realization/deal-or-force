@@ -69,6 +69,10 @@ public static class MovementReach
         MovementDefinition definition, long own, long faithful, Nation owner = null)
     {
         if (!CanOperate(campaign, nation, region, definition, owner)) return 0f;
+        // A campaign for one region's charter is a campaign in that region: the Silesian
+        // autonomists had a following among the Poles of Grodno and Kaliningrad, and the
+        // Texan nationalists would have had one in California.
+        if (definition.Has("civic_independence") && !IsHomeland(campaign, definition, region)) return 0f;
         if (own > 0) return MovementRules.MaxSupport;
         // The shared faith supplies a small sympathetic audience, not a territorial mandate.
         return faithful > 0 ? .04f : 0f;

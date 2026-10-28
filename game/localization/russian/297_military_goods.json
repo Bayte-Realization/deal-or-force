@@ -1,0 +1,14 @@
+// The arsenal goods (common/goods/20_military_industry.json).
+{
+  "Tanks": "Танки",
+  "Armoured fighting vehicles: steel, engines and fire control. An army without them holds ground but cannot take it.": "Бронетехника: сталь, двигатели и системы управления огнём. Без неё армия удержит землю, но не возьмёт.",
+  "Drones": "Дроны",
+  "Unmanned aircraft, from the hobby quadcopter with a grenade to the strike drone. Cheap, numerous and devoured by a war.": "Беспилотники — от любительского квадрокоптера с гранатой до ударного дрона. Дешёвые, многочисленные и пожираемые войной.",
+  "Combat aircraft": "Боевые самолёты",
+  "Fighters and bombers: aluminium, precision engineering and the most demanding electronics a country makes.": "Истребители и бомбардировщики: алюминий, точное машиностроение и самая требовательная электроника страны.",
+  "CombatAircraft": "Боевые самолёты",
+  "Missiles": "Ракеты",
+  "Guided munitions for air defence, ships and long-range strikes.": "Управляемое оружие для ПВО, флота и дальних ударов.",
+  "Artillery": "Артиллерия",
+  "Guns and rocket launchers. Barrels wear out: a war at full intensity eats them as it eats shells.": "Орудия и реактивные системы. Стволы изнашиваются: война в полную силу пожирает их, как снаряды."
+}

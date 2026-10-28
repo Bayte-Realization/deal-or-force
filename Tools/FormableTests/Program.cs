@@ -152,6 +152,12 @@ static class Program
         if (args.Contains("--secession-colours-only")) { SecessionColourTests.Run(); return; }
         if (args.Length == 0) SecessionColourTests.Run();
         if (args.Contains("--occupied-uprising-only")) { RevoltOccupationTests.Run(); return; }
+        if (args.Contains("--overrun-war-only")) { OverrunWarTests.Run(); return; }
+        if (args.Contains("--generals-only")) { GeneralsTests.Run(); return; }
+        if (args.Length == 0) GeneralsTests.Run();
+        if (args.Contains("--desertion-only")) { DesertionTests.Run(); return; }
+        if (args.Length == 0) DesertionTests.Run();
+        if (args.Length == 0) OverrunWarTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();
         if (args.Length == 0) RevoltOccupationTests.Run();

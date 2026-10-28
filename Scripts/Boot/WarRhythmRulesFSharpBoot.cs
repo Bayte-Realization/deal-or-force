@@ -4,7 +4,7 @@ using DealOrForce.Simulation;
 
 namespace DealOrForce;
 
-/// <summary>Installs the F# war rhythm and battle fortune rules (Scripts/Rules/WarRhythmRules.fs) into WarRhythm.</summary>
+/// <summary>Installs the F# war rules (Scripts/Rules/WarRhythmRules.fs) into WarRhythm: rhythm, fortune, spirit and guerrilla cover.</summary>
 internal static class WarRhythmRulesFSharpBoot
 {
     [ModuleInitializer]
@@ -13,6 +13,8 @@ internal static class WarRhythmRulesFSharpBoot
         try
         {
             WarRhythm.Install(DealOrForce.Rules.WarRhythmRules.OffensivePulse, DealOrForce.Rules.WarRhythmRules.BattleFortune);
+            WarRhythm.Install(DealOrForce.Rules.WarRhythmRules.FightingSpirit, DealOrForce.Rules.WarRhythmRules.GuerrillaCover);
+            WarRhythm.Install(DealOrForce.Rules.WarRhythmRules.DesertionRate);
             DiagnosticLogs.Write("simulation", "RULES_BACKEND fsharp installed=war_rhythm");
         }
         catch (Exception error)

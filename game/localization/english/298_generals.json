@@ -1,0 +1,23 @@
+// Commanders and their battles (Generals.cs, common/generals).
+{
+  "chronicle.mass_desertion": "{0}: soldiers are deserting by the thousand - {2} in a week.",
+  "{0} ({1}, skill {2:0}%, {3} won / {4} lost)": "{0} ({1}, skill {2:0}%, {3} won / {4} lost)",
+  "chronicle.great_battle": "Battle of {3}: {0} defeats {1}, with {2} in command.",
+  "chronicle.general_fallen": "{2}, a commander of {0}, is killed, captured or relieved after the rout at {3}.",
+  "Steady": "Steady",
+  "Thruster": "Thruster",
+  "Stonewall": "Stonewall",
+  "Reckless": "Reckless",
+  "Cautious": "Cautious",
+  "Inspiring": "Inspiring",
+  "Political appointee": "Political appointee",
+  "Master of manoeuvre": "Master of manoeuvre",
+  "Does what the doctrine says and does it competently. Most armies are led by one.": "Does what the doctrine says and does it competently. Most armies are led by one.",
+  "Pushes for the breakthrough and keeps pushing: a commander who wins ground and spends men for it.": "Pushes for the breakthrough and keeps pushing: a commander who wins ground and spends men for it.",
+  "Digs in and will not be moved. Slow to attack, very hard to dislodge.": "Digs in and will not be moved. Slow to attack, very hard to dislodge.",
+  "Brave, impatient and careless of the flanks: brilliant when it works, a rout when it does not.": "Brave, impatient and careless of the flanks: brilliant when it works, a rout when it does not.",
+  "Never loses an army and seldom wins a war. Waits for the odds to be certain.": "Never loses an army and seldom wins a war. Waits for the odds to be certain.",
+  "The troops would follow this commander anywhere, and in the end they do.": "The troops would follow this commander anywhere, and in the end they do.",
+  "Owes the command to the palace rather than the staff college, and the army knows it.": "Owes the command to the palace rather than the staff college, and the army knows it.",
+  "One in a generation: reads the ground, finds the seam, and is somewhere else when the blow lands.": "One in a generation: reads the ground, finds the seam, and is somewhere else when the blow lands."
+}

@@ -23,6 +23,8 @@ public sealed partial class Defines
     public float SecessionDefectionShare { get; set; } = 0.45f;
     /// <summary>A de facto faction that has lost most of its ground fights on while it keeps this many formations and this much war support.</summary>
     public int FactionFightOnFormations { get; set; } = 2;
+    /// <summary>Whether every rising and breakaway fights on while it has formations and the will, as the named insurgencies do.</summary>
+    public bool RisingsFightOn { get; set; } = true;
     public float FactionFightOnSupport { get; set; } = 0.2f;
     /// <summary>How long a faction's "seasoned insurgency" lasts from the first day.</summary>
     public int FactionSeasonedDays { get; set; } = 1460;

@@ -185,6 +185,10 @@ public static class DemographicCycle
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
         Assimilate(campaign, state, groups);
+        // A group everybody has left or assimilated out of is nobody. Kept, they piled up -
+        // every migration and every assimilation leaves its emptied group behind - and every
+        // weekly walk over the region's people walked them too.
+        groups.RemoveAll(static group => group.Size <= 0);
     }
 
     private static readonly Dictionary<string, long> PeopleHere = new(StringComparer.OrdinalIgnoreCase);

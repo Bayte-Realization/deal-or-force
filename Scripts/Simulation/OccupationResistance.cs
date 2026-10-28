@@ -34,7 +34,7 @@ public static class OccupationResistance
     /// </summary>
     public static float Slip(float occupation, float radicalism, float garrisonPower, Defines defines)
     {
-        if (defines is null || !defines.OccupationResistanceEnabled) return 0f;
+        if (defines is null || !(defines.OccupationResistanceEnabled || defines.OccupationResistanceInCivilWars)) return 0f;
         if (occupation <= 0f) return 0f;
         var appetite = 0.25f + Math.Clamp(radicalism, 0f, 1f) * Math.Max(0f, defines.OccupationRadicalismWeight);
         var suppression = 1f / (1f + Math.Max(0f, garrisonPower) / Math.Max(0.01f, defines.OccupationGarrisonScale));
@@ -50,7 +50,7 @@ public static class OccupationResistance
     /// </summary>
     public static float PartisanCasualties(float personnel, float radicalism, float occupation, Defines defines)
     {
-        if (defines is null || !defines.OccupationResistanceEnabled) return 0f;
+        if (defines is null || !(defines.OccupationResistanceEnabled || defines.OccupationResistanceInCivilWars)) return 0f;
         if (personnel <= 0f) return 0f;
         var intensity = Math.Clamp(radicalism, 0f, 1f) * Math.Clamp(occupation, 0f, 1f);
         return Math.Min(personnel, personnel * Math.Max(0f, defines.OccupationPartisanLossWeekly) * intensity);
@@ -66,7 +66,7 @@ public static class OccupationResistance
     /// </summary>
     public static float Collaboration(ScenarioState state, string occupierTag, Defines defines)
     {
-        if (defines is null || !defines.OccupationResistanceEnabled) return 0f;
+        if (defines is null || !(defines.OccupationResistanceEnabled || defines.OccupationResistanceInCivilWars)) return 0f;
         if (state is null || state.PopulationGroups.Count == 0) return 0f;
         var own = 1f - EconomySystem.ForeignShare(state, occupierTag);
         return Math.Clamp(own, 0f, 1f) * Math.Clamp(defines.OccupationCollaborationWeight, 0f, 1f);
@@ -117,7 +117,7 @@ public static class OccupationResistance
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.Defines.OccupationResistanceEnabled) return;
+        if (campaign is null || !(campaign.Defines.OccupationResistanceEnabled || campaign.Defines.OccupationResistanceInCivilWars)) return;
         if (campaign.ElapsedDays % 7 != 5) return;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
@@ -130,6 +130,7 @@ public static class OccupationResistance
         foreach (var war in campaign.Wars)
         {
             if (war is null || war.Ended) continue;
+            if (!campaign.Defines.OccupationResistanceEnabled && !war.CivilConflict) continue;
             foreach (var pair in war.OriginalController)
             {
                 var province = pair.Key;
@@ -211,6 +212,12 @@ public sealed partial class Defines
 {
     /// <summary>Whether unheld occupation slips away week by week instead of lasting forever.</summary>
     public bool OccupationResistanceEnabled { get; set; } = false;
+
+    /// <summary>
+    /// The same resistance in civil wars only, whatever OccupationResistanceEnabled says: the war
+    /// of the weak is the one where a held town is not a held country (GuerrillaWar).
+    /// </summary>
+    public bool OccupationResistanceInCivilWars { get; set; } = true;
 
     /// <summary>
     /// The share of a province's occupation one week takes at baseline (calm people, no

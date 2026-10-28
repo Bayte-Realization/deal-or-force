@@ -713,6 +713,13 @@ public static class CampaignFingerprint
             foreach (var tag in state.Claims.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) MixText(tag);
             Mix(-19);
         }
+        // The army groups and their commanders (Generals): who leads, how well, and their record.
+        foreach (var group in Ordered(campaign.ArmyGroups, group => group.Id))
+        {
+            MixText("army_group"); Mix(group.Id); Mix(group.NationId); MixText(group.Commander);
+            MixFloat(group.StaffSkill); MixText(group.CommanderTrait); Mix(group.Victories);
+            Mix(group.Defeats); Mix(group.CommanderSinceDay); Mix(group.CommandersLost);
+        }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {
             Mix(army.Id);

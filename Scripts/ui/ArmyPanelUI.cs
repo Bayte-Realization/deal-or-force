@@ -498,9 +498,11 @@ public partial class DealOrForceGame
         _armyPanelSubtitle.Text = divisions.Count == 1
             ? OneLineSummary(divisions[0])
             : Simulation.Loc.Format("{0} · {1:N0} men · {2:N0} headquarters",
-                Tr(group?.Commander ?? "No commander assigned"),
+                CommanderCaption(group),
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
+        _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
+            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description)));
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
         // Selection counts are localised; a fixed English-sized slot clips Russian.
         _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(84,
@@ -783,4 +785,11 @@ public partial class DealOrForceGame
         _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
         RefreshArmyPanel();
     }
+
+    /// <summary>The commander of a group as the panel names them: name, temperament, skill and record.</summary>
+    private string CommanderCaption(ArmyGroup group) =>
+        group is null || group.Commander == Simulation.Generals.Unassigned || group.CommanderTrait.Length == 0
+            ? Tr(group?.Commander ?? "No commander assigned")
+            : Simulation.Loc.Format("{0} ({1}, skill {2:0}%, {3} won / {4} lost)", group.Commander,
+                Tr(Simulation.Generals.Trait(group.CommanderTrait).Name), group.StaffSkill * 100f, group.Victories, group.Defeats);
 }

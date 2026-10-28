@@ -1,0 +1,44 @@
+// The arsenal's chains. Every one is made in an arms industry out of the second tier, so a country
+// that wants tanks needs steel and engines, and one that wants drones needs chips and batteries -
+// the chain is what makes an arms embargo bite. Output-to-upkeep ratios follow the ammunition chain
+// (10_strategic_industry), scaled until the world makes about 1.1-1.3 times what it asks for at
+// the 2024 start (SimBench --world-balance). Drones and missiles are consumed out of proportion in war.
+{
+  "tank_chain": {
+    "good": "Tanks", "output": { "ArmsIndustry": 0.47 },
+    "needs": { "Steel": 0.70, "Machinery": 0.65, "PrecisionComponents": 0.80, "Rubber": 0.85 }
+  },
+  "drone_chain": {
+    "good": "Drones", "output": { "ArmsIndustry": 0.46, "ElectronicsPlant": 0.17 },
+    "needs": { "Semiconductors": 0.70, "Batteries": 0.75, "Aluminium": 0.80 }
+  },
+  "combat_aircraft_chain": {
+    "good": "CombatAircraft", "output": { "ArmsIndustry": 0.31 },
+    "needs": { "Aluminium": 0.70, "PrecisionComponents": 0.70, "Semiconductors": 0.75, "Machinery": 0.75 }
+  },
+  "missile_chain": {
+    "good": "Missiles", "output": { "ArmsIndustry": 0.28 },
+    "needs": { "Semiconductors": 0.70, "Chemicals": 0.65, "PrecisionComponents": 0.75 }
+  },
+  "artillery_chain": {
+    "good": "Artillery", "output": { "ArmsIndustry": 0.43 },
+    "needs": { "Steel": 0.65, "Machinery": 0.70 }
+  },
+
+  "army_tank_bill": { "scope": "nation", "good": "Tanks", "demand": { "divisions": 0.0032, "divisions_at_war": 0.0096 } },
+  "army_drone_bill": { "scope": "nation", "good": "Drones", "demand": { "divisions": 0.0024, "divisions_at_war": 0.0144 } },
+  "army_aircraft_bill": { "scope": "nation", "good": "CombatAircraft", "demand": { "divisions": 0.0016, "divisions_at_war": 0.0048, "hulls": 0.0008 } },
+  "army_missile_bill": { "scope": "nation", "good": "Missiles", "demand": { "divisions": 0.0008, "divisions_at_war": 0.0060, "hulls": 0.0010 } },
+  "army_artillery_bill": { "scope": "nation", "good": "Artillery", "demand": { "divisions": 0.0032, "divisions_at_war": 0.0096 } },
+
+  "arsenal_input_bill": { "good": "Batteries", "demand": { "ArmsIndustry": 0.03 } },
+  "arsenal_chip_bill": { "good": "Semiconductors", "demand": { "ArmsIndustry": 0.05 } },
+  "arsenal_machinery_bill": { "good": "Machinery", "demand": { "ArmsIndustry": 0.06 } },
+  "arsenal_precision_bill": { "good": "PrecisionComponents", "demand": { "ArmsIndustry": 0.30, "ElectronicsPlant": 0.10 } },
+
+  // Shells: the 2024 world asked for about one and a half times what its arms plants made.
+  "ammunition_chain": {
+    "good": "Ammunition", "output": { "ArmsIndustry": 2.75 },
+    "needs": { "Steel": 0.65, "Chemicals": 0.55, "Copper": 0.80 }
+  }
+}

@@ -1028,7 +1028,9 @@ public static class SecessionEvents
                 n != parent &&
                 string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
                 campaign.StatesOf(n).Length > 0);
-            if (!homeland || exists)
+            // The seat's own name, unless a country already wears it: Nigeria's Niger State
+            // does not found a second Niger beside the real one.
+            if ((!homeland || exists) && !WornByAState(campaign, StripAdministrativeSuffix(seat)))
                 return StripAdministrativeSuffix(seat);
         }
         var state = campaign.States.Find(candidate =>
@@ -1048,6 +1050,18 @@ public static class SecessionEvents
         if (!string.IsNullOrWhiteSpace(seat)) return StripAdministrativeSuffix(seat);
         var people = DemographyCatalog.CultureKey(culture);
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
+    }
+
+    /// <summary>Whether a country that holds ground already goes by this name. A movement that only hopes to does not count.</summary>
+    private static bool WornByAState(Campaign campaign, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        foreach (var nation in campaign.Nations)
+            if (nation.Movement is null && campaign.StatesOf(nation).Length > 0 &&
+                (string.Equals(CountryNames.Resolve(nation, false), name, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(CountryNames.Resolve(nation, true), name, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        return false;
     }
 
     internal static string StripAdministrativeSuffix(string name)

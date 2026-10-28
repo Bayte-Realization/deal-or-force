@@ -55,6 +55,66 @@ static class WarRhythmRulesTests
         }
         Check(fortunes > 50000, $"battle fortune: F# and C# agree bit for bit on {fortunes:N0} inputs");
 
+        float[] chances2 = { -0.1f, 0f, 0.06f, 0.5f, 1.2f };
+        float[] swings2 = { -0.2f, 0f, 0.35f, 1.5f };
+        var spirits = 0;
+        foreach (var spread in new[] { -0.1f, 0f, 0.12f, 0.8f })
+        foreach (var a in rolls)
+        foreach (var b in rolls)
+        foreach (var tail in rolls)
+        foreach (var surprise in chances2)
+        foreach (var collapse in chances2)
+        foreach (var swing in swings2)
+        {
+            var reference = WarRhythm.ReferenceSpirit(spread, a, b, tail, surprise, collapse, swing, 1f - swing);
+            var fsharp = WarRhythmRules.FightingSpirit(spread, a, b, tail, surprise, collapse, swing, 1f - swing);
+            if (BitConverter.SingleToInt32Bits(reference) != BitConverter.SingleToInt32Bits(fsharp))
+                throw new Exception($"war rhythm rules: spirit differs at {spread}/{a}/{b}/{tail}/{surprise}/{collapse}/{swing}: {reference} vs {fsharp}");
+            spirits++;
+        }
+        Check(spirits > 50000, $"fighting spirit: F# and C# agree bit for bit on {spirits:N0} inputs");
+        var covers = 0;
+        float[] unit = { -0.5f, 0f, 0.2f, 0.5f, 0.8f, 1f, 1.7f };
+        foreach (var asymmetry in unit)
+        foreach (var rough in unit)
+        foreach (var home in unit)
+        {
+            var reference = WarRhythm.ReferenceCover(asymmetry, rough, home);
+            var fsharp = WarRhythmRules.GuerrillaCover(asymmetry, rough, home);
+            if (BitConverter.SingleToInt32Bits(reference) != BitConverter.SingleToInt32Bits(fsharp))
+                throw new Exception($"war rhythm rules: cover differs at {asymmetry}/{rough}/{home}: {reference} vs {fsharp}");
+            covers++;
+        }
+        Check(covers == 343, "guerrilla cover: F# and C# agree bit for bit on every input");
+        Check(WarRhythm.ReferenceSpirit(0f, .5f, .5f, 0.01f, 0.06f, 0.03f, 0.35f, 0.4f) == 1.35f &&
+              WarRhythm.ReferenceSpirit(0f, .5f, .5f, 0.99f, 0.06f, 0.03f, 0.35f, 0.4f) == 0.6f &&
+              WarRhythm.ReferenceSpirit(0f, .5f, .5f, 0.5f, 0.06f, 0.03f, 0.35f, 0.4f) == 1f,
+            "a few side-years surprise, a few break, and the rest fight as their numbers say");
+        Check(WarRhythm.ReferenceCover(0f, 1f, 1f) == 0f && WarRhythm.ReferenceCover(1f, 1f, 1f) == 1f &&
+              WarRhythm.ReferenceCover(1f, 0f, 1f) == 0.5f, "an even war gives no cover; a lopsided one on rough home ground all of it");
+
+        var desertions = 0;
+        float[] levels = { -0.2f, 0f, 0.15f, 0.4f, 0.7f, 1f, 1.3f };
+        foreach (var support in levels)
+        foreach (var cohesion in levels)
+        foreach (var supply in levels)
+        foreach (var organisation in new[] { 0f, 0.2f, 0.6f })
+        foreach (var unpaid in new[] { 0f, 1f })
+        foreach (var spirit in new[] { 0.6f, 1f, 1.35f })
+        foreach (var cap in new[] { 0f, 0.03f, 1f })
+        {
+            var reference = WarRhythm.ReferenceDesertion(support, cohesion, supply, organisation, unpaid, spirit, 0.002f, cap);
+            var fsharp = WarRhythmRules.DesertionRate(support, cohesion, supply, organisation, unpaid, spirit, 0.002f, cap);
+            if (BitConverter.SingleToInt32Bits(reference) != BitConverter.SingleToInt32Bits(fsharp))
+                throw new Exception($"war rhythm rules: desertion differs at {support}/{cohesion}/{supply}/{organisation}/{unpaid}/{spirit}/{cap}: {reference} vs {fsharp}");
+            desertions++;
+        }
+        Check(desertions > 10000, $"desertion: F# and C# agree bit for bit on {desertions:N0} inputs");
+        Check(WarRhythm.ReferenceDesertion(1f, 1f, 1f, 1f, 0f, 1.2f, 0.002f, 0.03f) == 0f &&
+              WarRhythm.ReferenceDesertion(0.1f, 0.2f, 0.1f, 0.1f, 1f, 0.6f, 0.002f, 0.03f) > 0.02f &&
+              WarRhythm.ReferenceDesertion(0f, 0f, 0f, 0f, 1f, 0.2f, 0.002f, 0.03f) == 0.03f,
+            "nobody leaves a fed army in a popular war; a starving, unpaid, beaten one loses two or three in a hundred a week");
+
         Check(WarRhythm.ReferencePulse(0.6f, 0f, 0f, 0) == 1.6f && WarRhythm.ReferencePulse(0.6f, 0f, 0.8f, 0) == 1f - 0.6f * 0.4f,
             "an offensive season sends 1 + strength forward, a lull 1 - 0.4 strength");
         Check(WarRhythm.ReferenceFortune(0f, 0.9f, 0.9f, 0.22f, 0.9f, 0.9f, 0f, 1f, 0f, 0f) > 1.15f,

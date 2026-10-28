@@ -38,3 +38,47 @@ type WarRhythmRules private () =
                 if swingRoll < 0.5f then whole * (1.0f - swing) else whole * (1.0f + swing)
             else whole
         today * turned
+
+    /// A side's fighting spirit in one year of a war: steady at 1 +/- spread, triangular - and,
+    /// for a few, the year it turns out to be something nobody counted on. surpriseChance of
+    /// them fight far above their weight (Finland in 1939, Ukraine in 2022) by surpriseSwing;
+    /// collapseChance of them break (the Afghan army in 2021, Iraq's in Mosul in 2014) by
+    /// collapseSwing. tailRoll decides which, once per side and year.
+    static member FightingSpirit(spread: single, rollA: single, rollB: single, tailRoll: single,
+                                 surpriseChance: single, collapseChance: single,
+                                 surpriseSwing: single, collapseSwing: single) : single =
+        let clamp (low: single) (high: single) (value: single) = max low (min high value)
+        let spread = clamp 0.0f 0.5f spread
+        let steady = 1.0f + spread * (rollA + rollB - 1.0f)
+        let surprise = clamp 0.0f 1.0f surpriseChance
+        let collapse = clamp 0.0f (1.0f - surprise) collapseChance
+        if tailRoll < surprise then steady * (1.0f + clamp 0.0f 0.9f surpriseSwing)
+        elif tailRoll >= 1.0f - collapse then steady * (1.0f - clamp 0.0f 0.9f collapseSwing)
+        else steady
+
+    /// How much ground a side fighting the war of the weak can hide in, 0 to 1: how lopsided
+    /// the war is against it (asymmetry), how rough the province is (roughness), and whether it
+    /// is fighting among its own people (homeGround) - each 0 to 1. The Hussites behind their
+    /// wagons, the Taliban in the valleys: neither term alone, both together.
+    static member GuerrillaCover(asymmetry: single, roughness: single, homeGround: single) : single =
+        let clamp01 (value: single) = max 0.0f (min 1.0f value)
+        clamp01 asymmetry * (0.5f * clamp01 roughness + 0.5f * clamp01 homeGround)
+
+    /// The share of a formation's soldiers who desert in a week, 0 to cap: base times the square
+    /// of the pressure on them - a war nobody at home believes in (1 - warSupport), a unit that
+    /// has stopped being one (1 - cohesion), hunger below half supply, the shock of a broken
+    /// line below 0.3 organisation, pay that has stopped (unpaid, 0 or 1), and a side whose
+    /// spirit has gone below its own weight. A well-fed army in a popular war loses nobody.
+    static member DesertionRate(warSupport: single, cohesion: single, supply: single,
+                                organisation: single, unpaid: single, spirit: single,
+                                baseRate: single, cap: single) : single =
+        let clamp01 (value: single) = max 0.0f (min 1.0f value)
+        let pressure =
+            (1.0f - clamp01 warSupport) * 0.9f
+            + (1.0f - clamp01 cohesion) * 0.6f
+            + max 0.0f (0.5f - clamp01 supply) * 1.6f
+            + max 0.0f (0.3f - clamp01 organisation)
+            + clamp01 unpaid * 0.5f
+            + max 0.0f (1.0f - spirit) * 1.5f
+        max 0.0f (min (max 0.0f cap) (max 0.0f baseRate * pressure * pressure))
+

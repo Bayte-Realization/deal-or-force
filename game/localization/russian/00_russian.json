@@ -527,6 +527,7 @@
   "DESYNCHRONISED on day {0:N0} · asking the host for the world": "РАССИНХРОНИЗАЦИЯ на день {0:N0} · запрашиваем мир у хоста",
   "Education set to {0:P1} of weekly output.": "Образование: {0:P1} от недельного выпуска.",
   "Everyone else · {0}": "Все остальные · {0}",
+  "Everyone else · {0} ({1} more)": "Все остальные · {0} (ещё {1})",
   "Focused on {0}.": "Камера наведена на {0}.",
   "Hosting on UDP {0}. Share this machine's LAN/Radmin IPv4 address.": "Сервер поднят на UDP {0}. Сообщите остальным адрес IPv4 этой машины в локальной сети или Radmin.",
   "NATIONAL LEDGER · {0}": "НАЦИОНАЛЬНЫЙ РЕЕСТР · {0}",
