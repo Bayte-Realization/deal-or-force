@@ -11,7 +11,7 @@ public sealed partial class Defines
     /// <summary>How often the officers of every country are asked whether they have had enough, in days.</summary>
     public int CoupReviewDays { get; set; } = 30;
     /// <summary>Stability at and above which nobody plots; below it the risk grows with how far below.</summary>
-    public float CoupStabilityThreshold { get; set; } = 0.35f;
+    public float CoupStabilityThreshold { get; set; } = 0.42f;
     /// <summary>The chance of a plot in a review for a country at no stability at all, before its government and its neighbours.</summary>
     public float CoupBaseChance { get; set; } = 0.04f;
     /// <summary>How long a plot is in the making: a government that is stable again by then has seen it off.</summary>

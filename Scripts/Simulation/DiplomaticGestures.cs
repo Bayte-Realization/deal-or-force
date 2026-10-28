@@ -1,0 +1,282 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace DealOrForce.Simulation;
+
+public sealed partial class Defines
+{
+    /// <summary>A state visit: what it costs, how long before the same two meet again.</summary>
+    public float StateVisitPoliticalCost { get; set; } = 10f;
+    public float StateVisitCash { get; set; } = 0.05f;
+    public int StateVisitCooldownDays { get; set; } = 365;
+    /// <summary>A show of force on their border: what it costs, how angry it makes them, how long before the next.</summary>
+    public float ShowOfForceCash { get; set; } = 0.1f;
+    public float ShowOfForceGrievance { get; set; } = 6f;
+    public float ShowOfForceWarSupport { get; set; } = 0.03f;
+    public int ShowOfForceCooldownDays { get; set; } = 180;
+    /// <summary>Mediating somebody else's war: the political credit it costs, and how ready both sides must be (peace acceptance, 0-100).</summary>
+    public float MediationPoliticalCost { get; set; } = 15f;
+    public float MediationAcceptance { get; set; } = 45f;
+    public int MediationCooldownDays { get; set; } = 180;
+    /// <summary>A development loan: its size as a share of the lender's GDP, its interest, its term in weeks, and the missed weeks that make a default.</summary>
+    public float LoanShareOfGdp { get; set; } = 0.004f;
+    public float LoanInterest { get; set; } = 0.12f;
+    public int LoanWeeks { get; set; } = 104;
+    public int LoanDefaultWeeks { get; set; } = 8;
+}
+
+public sealed partial class DiplomaticRelation
+{
+    /// <summary>A development loan between the two (DiplomaticGestures): who lent, what is still owed, the weekly instalment, the weeks missed.</summary>
+    public int LoanLender = -1;
+    public float LoanOutstanding;
+    public float LoanWeekly;
+    public int LoanMissedWeeks;
+}
+
+/// <summary>
+/// The gestures between governments that are not treaties: a state visit, a show of force on
+/// the border, mediation in somebody else's war, a development loan.
+///
+/// The game had the instruments - missions that build goodwill slowly, denunciations, treaties,
+/// ultimatums - and none of the moments: the visit that turns a cold neighbour warm in a week,
+/// the exercise on the border that tells a neighbour what a crisis would look like, the third
+/// country that brings two others to a ceasefire, the loan that makes a poor country a friend
+/// and a debtor. Each has a price, a visible result and a line in the chronicle, and each is
+/// the same for every government: the AI makes them on the same terms, through the same
+/// command, as a player does.
+/// </summary>
+public static class DiplomaticGestures
+{
+    public static readonly string[] All = { "state_visit", "show_of_force", "mediate", "loan" };
+
+    private static string Key(string gesture, int target) => $"gesture:{gesture}:{target}";
+
+    /// <summary>Why this government cannot make this gesture to that one now, or empty.</summary>
+    public static string Refusal(Campaign c, int issuerId, int targetId, string gesture)
+    {
+        var issuer = c?.NationById(issuerId);
+        var target = c?.NationById(targetId);
+        if (issuer is null || target is null || issuer.Id == target.Id || issuer.Movement is not null || target.Movement is not null ||
+            issuer.Population <= 0 || target.Population <= 0 || c.Fallen.Contains(issuerId) || c.Fallen.Contains(targetId))
+            return Loc.Get("Choose an existing foreign country.");
+        if (issuer.DecisionAvailableDay.GetValueOrDefault(Key(gesture, targetId)) > c.ElapsedDays)
+            return Loc.Format("Not again so soon: available in {0} days.", issuer.DecisionAvailableDay[Key(gesture, targetId)] - c.ElapsedDays);
+        var d = c.Defines;
+        var relation = CampaignDiplomacy.Peek(c, issuerId, targetId);
+        var atWar = CampaignDiplomacy.AtWar(c, issuerId, targetId);
+        switch (gesture)
+        {
+            case "state_visit":
+                if (atWar) return Loc.Get("Not with a country we are at war with.");
+                if (relation is not null && relation.Opinion < -30f) return Loc.Get("Relations are too poor for a visit to be received.");
+                if (issuer.PoliticalPoints < d.StateVisitPoliticalCost)
+                    return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.StateVisitPoliticalCost, issuer.PoliticalPoints);
+                return issuer.Treasury < d.StateVisitCash ? Loc.Get("The treasury cannot pay for it.") : "";
+            case "show_of_force":
+                if (atWar) return Loc.Get("We are already at war with them.");
+                if (relation is { Stance: DiplomaticStance.Allied }) return Loc.Get("Not against an ally.");
+                if (!CampaignDiplomacy.SharesLandBorder(c, issuer.MapIndex, target.MapIndex))
+                    return Loc.Get("Only on a border we share with them.");
+                return issuer.Treasury < d.ShowOfForceCash ? Loc.Get("The treasury cannot pay for it.") : "";
+            case "mediate":
+                var war = MediableWar(c, issuer, target);
+                if (war is null) return Loc.Get("They are not at war with anybody we are not fighting ourselves.");
+                if (issuer.PoliticalPoints < d.MediationPoliticalCost)
+                    return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.MediationPoliticalCost, issuer.PoliticalPoints);
+                foreach (var side in new[] { war.AttackerId, war.DefenderId })
+                    if (CampaignDiplomacy.Peek(c, issuerId, side) is { Opinion: < 0f })
+                        return Loc.Get("Both sides must think well enough of us to listen.");
+                return "";
+            case "loan":
+                if (atWar) return Loc.Get("Not with a country we are at war with.");
+                if (relation is { LoanLender: >= 0, LoanOutstanding: > 0f }) return Loc.Get("A loan between us is still being repaid.");
+                var amount = LoanSize(c, issuer, target);
+                if (amount <= 0f) return Loc.Get("The treasury cannot pay for it.");
+                return issuer.Treasury < amount * 2f ? Loc.Get("The treasury cannot spare it.") : "";
+            default:
+                return Loc.Get("This cannot be done.");
+        }
+    }
+
+    /// <summary>The war of theirs we could mediate: one they lead or fight in that we are not part of, the oldest first.</summary>
+    public static StrategicWar MediableWar(Campaign c, Nation issuer, Nation target) =>
+        c.Wars.Where(w => !w.Ended && w.Involves(target.Id) && !w.Involves(issuer.Id))
+            .OrderBy(w => w.StartedDay).ThenBy(w => w.Id).FirstOrDefault();
+
+    /// <summary>What a development loan from this lender to this borrower would be, in billions.</summary>
+    public static float LoanSize(Campaign c, Nation lender, Nation borrower)
+    {
+        var amount = MathF.Max(0f, lender.Gdp) * MathF.Max(0f, c.Defines.LoanShareOfGdp);
+        amount = MathF.Min(amount, MathF.Max(0f, borrower.Gdp) * 0.05f);
+        return float.IsFinite(amount) && amount >= 0.01f ? MathF.Round(amount, 3) : 0f;
+    }
+
+    /// <summary>Make the gesture. True when it was made; a refused mediation still costs the effort and is not made.</summary>
+    public static bool Perform(Campaign c, int issuerId, int targetId, string gesture)
+    {
+        if (Refusal(c, issuerId, targetId, gesture).Length > 0) return false;
+        var d = c.Defines;
+        var issuer = c.NationById(issuerId);
+        var target = c.NationById(targetId);
+        var relation = CampaignDiplomacy.Get(c, issuerId, targetId);
+        int cooldown;
+        switch (gesture)
+        {
+            case "state_visit":
+                issuer.PoliticalPoints -= d.StateVisitPoliticalCost;
+                issuer.Treasury -= d.StateVisitCash;
+                OpinionSystem.Remember(c, relation, "state_visit");
+                if (relation.Opinion >= 35f && relation.Stance is DiplomaticStance.Neutral or DiplomaticStance.Rival)
+                    relation.Stance = DiplomaticStance.Friendly;
+                c.Chronicle.Record(c, "state_visit", issuerId, targetId);
+                cooldown = d.StateVisitCooldownDays;
+                break;
+            case "show_of_force":
+                issuer.Treasury -= d.ShowOfForceCash;
+                OpinionSystem.Remember(c, relation, "show_of_force");
+                if (relation.A == targetId) relation.GrievanceA = MathF.Min(100f, relation.GrievanceA + d.ShowOfForceGrievance);
+                else relation.GrievanceB = MathF.Min(100f, relation.GrievanceB + d.ShowOfForceGrievance);
+                issuer.WarSupport = M.Clamp01(issuer.WarSupport + d.ShowOfForceWarSupport);
+                target.WarSupport = M.Clamp01(target.WarSupport + d.ShowOfForceWarSupport * 0.5f);
+                c.Chronicle.Record(c, "show_of_force", issuerId, targetId);
+                cooldown = d.ShowOfForceCooldownDays;
+                break;
+            case "mediate":
+                issuer.PoliticalPoints -= d.MediationPoliticalCost;
+                var war = MediableWar(c, issuer, target);
+                var ready = PeaceNegotiation.Acceptance(c, war, war.AttackerId, PeaceTerms.Ceasefire) >= d.MediationAcceptance &&
+                            PeaceNegotiation.Acceptance(c, war, war.DefenderId, PeaceTerms.Ceasefire) >= d.MediationAcceptance;
+                issuer.DecisionAvailableDay[Key(gesture, targetId)] = c.ElapsedDays + Math.Max(1, d.MediationCooldownDays);
+                if (!ready)
+                {
+                    c.Chronicle.Record(c, "mediation_failed", issuerId, targetId, WarNames.Of(c, war), isPublic: false);
+                    return false;
+                }
+                var attacker = war.AttackerId;
+                var defender = war.DefenderId;
+                var name = WarNames.Of(c, war);
+                PeaceNegotiation.Resolve(c, war, attacker, PeaceTerms.Ceasefire);
+                if (!war.Ended) return false;
+                foreach (var side in new[] { attacker, defender })
+                    OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, issuerId, side), "mediated_peace");
+                c.Chronicle.Record(c, "peace_mediated", issuerId, target.Id, name);
+                return true;
+            case "loan":
+                var amount = LoanSize(c, issuer, target);
+                issuer.Treasury -= amount;
+                target.Treasury += amount;
+                relation.LoanLender = issuerId;
+                relation.LoanOutstanding = MathF.Round(amount * (1f + MathF.Max(0f, d.LoanInterest)), 4);
+                relation.LoanWeekly = relation.LoanOutstanding / Math.Max(1, d.LoanWeeks);
+                relation.LoanMissedWeeks = 0;
+                OpinionSystem.Remember(c, relation, "development_loan");
+                c.Chronicle.Record(c, "development_loan", issuerId, targetId, Fmt.Money(amount));
+                cooldown = 0;
+                break;
+            default:
+                return false;
+        }
+        if (cooldown > 0) issuer.DecisionAvailableDay[Key(gesture, targetId)] = c.ElapsedDays + cooldown;
+        relation.LastActionDay = c.ElapsedDays;
+        c.MarkStrategicChange();
+        return true;
+    }
+
+    /// <summary>
+    /// The week's instalments on every loan. A borrower whose treasury is empty misses one; a
+    /// borrower that misses LoanDefaultWeeks in a row has defaulted - the rest is written off,
+    /// and the lender does not forget it.
+    /// </summary>
+    public static void Tick(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 6) return;
+        foreach (var relation in c.Relations.Values)
+        {
+            if (relation.LoanLender < 0 || relation.LoanOutstanding <= 0f) continue;
+            var lender = c.NationById(relation.LoanLender);
+            var borrower = c.NationById(relation.LoanLender == relation.A ? relation.B : relation.A);
+            if (lender is null || borrower is null || borrower.Population <= 0)
+            {
+                relation.LoanLender = -1; relation.LoanOutstanding = 0f; relation.LoanWeekly = 0f;
+                continue;
+            }
+            var due = MathF.Min(relation.LoanWeekly, relation.LoanOutstanding);
+            if (borrower.Treasury >= due)
+            {
+                borrower.Treasury -= due;
+                lender.Treasury += due;
+                relation.LoanOutstanding = MathF.Max(0f, relation.LoanOutstanding - due);
+                relation.LoanMissedWeeks = 0;
+                if (relation.LoanOutstanding <= 0.0001f) { relation.LoanLender = -1; relation.LoanOutstanding = 0f; relation.LoanWeekly = 0f; }
+                continue;
+            }
+            if (++relation.LoanMissedWeeks < Math.Max(1, c.Defines.LoanDefaultWeeks)) continue;
+            OpinionSystem.Remember(c, relation, "defaulted_on_loan");
+            c.Chronicle.Record(c, "loan_default", borrower.Id, lender.Id, Fmt.Money(relation.LoanOutstanding));
+            relation.LoanLender = -1; relation.LoanOutstanding = 0f; relation.LoanWeekly = 0f; relation.LoanMissedWeeks = 0;
+        }
+    }
+
+    /// <summary>
+    /// The computer's governments make the same gestures, once a month each, on its own day:
+    /// a visit to the partner it values and does not yet love, a show of force at the rival it is
+    /// closest to a crisis with, mediation by a great power in a long war between two countries
+    /// it gets on with, and a loan from a rich treasury to a poor friend.
+    /// </summary>
+    public static void AiTick(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0) return;
+        foreach (var nation in c.Nations)
+        {
+            if (nation.Movement is not null || nation.Population <= 0 || c.Fallen.Contains(nation.Id)) continue;
+            if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
+            if ((c.ElapsedDays + nation.Id * 7) % 30 != 0) continue;
+            float Roll(int salt) => Escalation.Roll(c.Seed, nation.Id, 0x6E5, c.ElapsedDays, salt);
+            var relations = c.Relations.Values.Where(r => r.A == nation.Id || r.B == nation.Id).ToList();
+            int Other(DiplomaticRelation r) => r.A == nation.Id ? r.B : r.A;
+
+            if (Roll(1) < 0.12f && relations.Where(r => r.Stance is DiplomaticStance.Allied or DiplomaticStance.Friendly || r.TradeAgreement)
+                    .Where(r => r.Opinion is > 0f and < 45f).OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } partner)
+                Perform(c, nation.Id, Other(partner), "state_visit");
+
+            if (Roll(2) < 0.15f && relations.Where(r => r.Tension >= c.Defines.TensionCrisisAt && r.Stance != DiplomaticStance.AtWar)
+                    .OrderByDescending(r => r.Tension).ThenBy(Other).FirstOrDefault() is { } rival)
+                Perform(c, nation.Id, Other(rival), "show_of_force");
+
+            if (Roll(3) < 0.10f && AllianceSystem.GreatPowers(c).Contains(nation.Id))
+                foreach (var war in c.Wars.Where(w => !w.Ended && !w.Involves(nation.Id) && c.ElapsedDays - w.StartedDay > 180).OrderBy(w => w.Id))
+                    if (Refusal(c, nation.Id, war.DefenderId, "mediate").Length == 0)
+                    {
+                        Perform(c, nation.Id, war.DefenderId, "mediate");
+                        break;
+                    }
+
+            if (Roll(4) < 0.05f && nation.Gdp > 500f &&
+                relations.Where(r => r.Opinion >= 30f && c.NationById(Other(r)) is { } poor && poor.Gdp < nation.Gdp * 0.05f)
+                    .OrderByDescending(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } friend)
+                Perform(c, nation.Id, Other(friend), "loan");
+        }
+    }
+}
+
+/// <summary>A diplomatic gesture made by a government (DiplomaticGestures): state_visit, show_of_force, mediate or loan.</summary>
+public sealed class DiplomaticGestureCommand : ICampaignCommand
+{
+    public int IssuerId { get; init; }
+    public int TargetId { get; init; }
+    public string Gesture { get; init; } = "";
+    public bool Done { get; private set; }
+    public string Refusal { get; private set; } = "";
+
+    public void Apply(Campaign campaign)
+    {
+        Done = false;
+        if (!MechanicFeatures.Allows(campaign, this)) return;
+        Refusal = DiplomaticGestures.Refusal(campaign, IssuerId, TargetId, Gesture);
+        if (Refusal.Length > 0) return;
+        Done = DiplomaticGestures.Perform(campaign, IssuerId, TargetId, Gesture);
+        if (!Done && Gesture == "mediate") Refusal = Loc.Get("Neither side is ready to stop yet; the effort is spent.");
+    }
+}

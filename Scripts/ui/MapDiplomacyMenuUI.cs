@@ -153,6 +153,10 @@ public partial class DealOrForceGame
         RefreshOutreachButton(missionButton,target);
         AddMapDiplomacyAction(rows, Tr("Denounce"), "INFLUENCE", DenounceDiplomacyTarget,
             Tr("Publicly denounce them, lowering opinion and raising tension."));
+        AddGestureAction(rows, target, "state_visit", "State visit", "INFLUENCE");
+        AddGestureAction(rows, target, "show_of_force", "Show of force", "INFLUENCE");
+        AddGestureAction(rows, target, "loan", "Development loan", "AGREEMENTS");
+        if (!atWar) AddGestureAction(rows, target, "mediate", "Mediate their war", "War and peace");
 
         // --- Agreements ---
         AddMapDiplomacyAction(rows, Tr("Propose alliance"), "AGREEMENTS", ToggleDiplomacyAlliance,
@@ -206,5 +210,44 @@ public partial class DealOrForceGame
         var x = Math.Clamp(at.X + 14f, 8f, MathF.Max(8f, screen.X - width - 8f));
         var y = Math.Clamp(at.Y + 10f, 8f, MathF.Max(8f, screen.Y - height - 8f));
         _mapDiplomacyMenu.Position = new Vector2(x, y);
+    }
+
+    /// <summary>A diplomatic gesture on the map menu (DiplomaticGestures): disabled with the reason when it cannot be made.</summary>
+    private void AddGestureAction(VBoxContainer rows, Nation target, string gesture, string caption, string iconRole)
+    {
+        Button button = null;
+        button = AddMapDiplomacyAction(rows, Tr(caption), iconRole, () =>
+        {
+            var command = new DiplomaticGestureCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id, Gesture = gesture };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (_mapDiplomacyFeedback is not null)
+                _mapDiplomacyFeedback.Text = command.Done ? Tr(caption) + " ✓" : command.Refusal;
+            RefreshGestureButton(button, target, gesture);
+        }, "");
+        RefreshGestureButton(button, target, gesture);
+    }
+
+    private void RefreshGestureButton(Button button, Nation target, string gesture)
+    {
+        if (button is null || target is null) return;
+        var player = _campaign.Player;
+        var d = _campaign.Defines;
+        var refusal = DiplomaticGestures.Refusal(_campaign, player.Id, target.Id, gesture);
+        var war = gesture == "mediate" ? DiplomaticGestures.MediableWar(_campaign, player, target) : null;
+        var description = gesture switch
+        {
+            "state_visit" => Simulation.Loc.Format("A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.",
+                d.StateVisitPoliticalCost, Fmt.Money(d.StateVisitCash)),
+            "show_of_force" => Simulation.Loc.Format("Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.",
+                Fmt.Money(d.ShowOfForceCash)),
+            "mediate" => Simulation.Loc.Format("Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.",
+                war is null ? "" : WarNames.Of(_campaign, war), d.MediationPoliticalCost),
+            "loan" => Simulation.Loc.Format("Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.",
+                Fmt.Money(DiplomaticGestures.LoanSize(_campaign, player, target)), d.LoanInterest * 100f, d.LoanWeeks),
+            _ => ""
+        };
+        button.Disabled = refusal.Length > 0;
+        button.TooltipText = Ui.Tip(description + (refusal.Length == 0 ? "" : "\n\n" + refusal));
     }
 }

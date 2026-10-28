@@ -305,6 +305,10 @@ public static class CampaignFingerprint
                     MixFloat(mission.WeeklyPoliticalCost); MixFloat(mission.WeeklyCash); MixFloat(mission.WeeklyOpinion); MixFloat(mission.OpinionCap);
                 }
             }
+            if (r.LoanLender >= 0)
+            {
+                MixText("development_loan"); Mix(r.LoanLender); MixFloat(r.LoanOutstanding); MixFloat(r.LoanWeekly); Mix(r.LoanMissedWeeks);
+            }
             // How close the two are to fighting, and what they hold against each other (Escalation).
             MixFloat(r.Tension); MixFloat(r.StructuralTension); MixFloat(r.TensionBaseline); MixFloat(r.TensionAnchor); MixFloat(r.GrievanceA); MixFloat(r.GrievanceB);
             Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);

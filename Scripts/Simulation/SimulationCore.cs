@@ -875,6 +875,8 @@ public sealed partial class Campaign
             // Offers and requests that nobody answered stop occupying the tie. Both are state
             // that travels in a save, so both have to expire somewhere.
             using (SimProfiler.Measure("diplomatic_offers")) { Guarantee.Tick(this); AgreementSystem.Tick(this); }
+            // Visits, shows of force, mediation and loans (DiplomaticGestures): the instalments weekly, the computer's choices monthly.
+            using (SimProfiler.Measure("diplomatic_gestures")) { DiplomaticGestures.Tick(this); DiplomaticGestures.AiTick(this); }
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);

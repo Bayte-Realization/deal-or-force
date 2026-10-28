@@ -143,3 +143,67 @@ static class WorldLayersTests
         Check(WorldLayers.On("trade_traffic"), "and a reload restores the shipped layers");
     }
 }
+
+/// <summary>Diplomatic gestures (DiplomaticGestures.cs): visits, shows of force, mediation and loans.</summary>
+static class DiplomaticGestureTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("diplomatic gestures: " + note); Console.WriteLine("PASS diplomatic gestures: " + note); }
+
+    public static void Run()
+    {
+        var c = Campaign.CreateBootstrap(20261028);
+        MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
+        Check(MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+            WorldMapSource.Width, WorldMapSource.Height, out var map, out var message), message);
+        c.AttachProvinceTopology(map);
+        var france = c.NationByTag("FRA"); var germany = c.NationByTag("DEU");
+        france.PoliticalPoints = 100f; france.Treasury = 100f;
+
+        var before = CampaignDiplomacy.Get(c, france.Id, germany.Id).Opinion;
+        var visit = new DiplomaticGestureCommand { IssuerId = france.Id, TargetId = germany.Id, Gesture = "state_visit" };
+        visit.Apply(c);
+        Check(visit.Done && CampaignDiplomacy.Get(c, france.Id, germany.Id).Opinion > before && france.PoliticalPoints < 100f,
+            "a state visit costs political credit and warms the relation");
+        Check(DiplomaticGestures.Refusal(c, france.Id, germany.Id, "state_visit").Length > 0, "and is not repeated the next day");
+        Check(c.Chronicle.Entries.Any(e => e.Kind == "state_visit" && e.ActorId == france.Id), "the visit is news");
+
+        Check(DiplomaticGestures.Refusal(c, france.Id, c.NationByTag("JPN").Id, "show_of_force").Length > 0,
+            "troops can only be massed on a border we share");
+
+        var poor = c.NationByTag("MDA") ?? c.NationByTag("ALB");
+        CampaignDiplomacy.Get(c, germany.Id, poor.Id).Opinion = 40f;
+        germany.Treasury = 500f;
+        var amount = DiplomaticGestures.LoanSize(c, germany, poor);
+        var poorCash = poor.Treasury;
+        Check(DiplomaticGestures.Perform(c, germany.Id, poor.Id, "loan") && poor.Treasury > poorCash && amount > 0f,
+            "a loan moves money from the lender's treasury to the borrower's");
+        var relation = CampaignDiplomacy.Get(c, germany.Id, poor.Id);
+        Check(relation.LoanLender == germany.Id && relation.LoanOutstanding > amount, "and is owed back with interest");
+        poor.Treasury = 100f;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 6L * 24);
+        var owed = relation.LoanOutstanding;
+        DiplomaticGestures.Tick(c);
+        Check(relation.LoanOutstanding < owed, "an instalment is paid each week");
+        poor.Treasury = -1f;
+        for (var week = 1; week <= c.Defines.LoanDefaultWeeks; week++)
+        {
+            typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, (6L + 7L * week) * 24);
+            DiplomaticGestures.Tick(c);
+        }
+        Check(relation.LoanLender < 0 && c.Chronicle.Entries.Any(e => e.Kind == "loan_default" && e.ActorId == poor.Id),
+            "an empty treasury for weeks on end is a default the lender remembers");
+
+        var russia = c.NationByTag("RUS"); var ukraine = c.NationByTag("UKR"); var turkey = c.NationByTag("TUR");
+        turkey.PoliticalPoints = 100f;
+        CampaignDiplomacy.Get(c, turkey.Id, russia.Id).Opinion = 20f;
+        CampaignDiplomacy.Get(c, turkey.Id, ukraine.Id).Opinion = 20f;
+        Check(DiplomaticGestures.MediableWar(c, turkey, ukraine) is not null &&
+              DiplomaticGestures.Refusal(c, turkey.Id, ukraine.Id, "mediate").Length == 0,
+            "a country both sides think well of may offer to mediate their war");
+        var mediation = new DiplomaticGestureCommand { IssuerId = turkey.Id, TargetId = ukraine.Id, Gesture = "mediate" };
+        mediation.Apply(c);
+        Check(turkey.PoliticalPoints < 100f && (mediation.Done || mediation.Refusal.Length > 0),
+            "the offer is made and paid for, whether or not the sides are ready");
+    }
+}

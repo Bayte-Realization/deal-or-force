@@ -161,6 +161,8 @@ static class Program
         if (args.Length == 0) CoupCivilWarTests.Run();
         if (args.Contains("--world-layers-only")) { WorldLayersTests.Run(); return; }
         if (args.Length == 0) WorldLayersTests.Run();
+        if (args.Contains("--gestures-only")) { DiplomaticGestureTests.Run(); return; }
+        if (args.Length == 0) DiplomaticGestureTests.Run();
         if (args.Length == 0) OverrunWarTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();

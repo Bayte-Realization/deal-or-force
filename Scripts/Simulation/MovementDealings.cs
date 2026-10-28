@@ -379,6 +379,9 @@ public static class MovementDealings
             {
                 if (acted) break;
                 var state = movement.Movement;
+                // The list is the day's; a movement can win its country or break up within the
+                // day (a carried vote, a rising, a fall), and is not a movement any more.
+                if (state is null || state.Dissolved) continue;
                 // Relations nobody has yet are not made here just to be read: they are neutral.
                 var opinion = Opinion(campaign, country.Id, movement.Id);
                 var claimant = opinion <= -30f || HoldsItsClaim(campaign, country, movement);

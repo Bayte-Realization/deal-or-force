@@ -140,7 +140,9 @@
   // stability below which they plot, the chance of a plot at no stability at all (it falls in
   // proportion to how far below the line a country is), and how long a plot takes to ripen.
   "CoupReviewDays": 30,
-  "CoupStabilityThreshold": 0.35,
+  // 0.42 since 2026-10-28: the Sahel's juntas and Sudan's generals took power in states the
+  // simulation holds at 0.33 to 0.41, and at 0.35 a decade had three coups in the world.
+  "CoupStabilityThreshold": 0.42,
   "CoupBaseChance": 0.04,
   "CoupPlotDays": 60,
   // A coup next door for three years after it, and a war being lost, make it likelier.

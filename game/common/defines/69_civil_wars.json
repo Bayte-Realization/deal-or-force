@@ -19,9 +19,11 @@
   "CivilWarOutbreaks": true,
 
   // The line. Institutions above it are simply not coming apart, and no roll is made.
-  // Deliberately low: 0.32 is a state that has already lost most of its consent, not a state
-  // having a bad year.
-  "CivilWarStabilityThreshold": 0.32,
+  // 0.42 since 2026-10-28: the states actually at war with themselves in 2024 - Mali, the
+  // Central African Republic, Ethiopia, Chad, Burkina Faso, South Sudan, Mozambique - sit at
+  // 0.33 to 0.41 in the simulation, and at 0.32 not one of them could ever have the war it was
+  // already having. The chance still scales with how far below the line a state is.
+  "CivilWarStabilityThreshold": 0.42,
 
   // A week's chance for a country at ZERO stability, scaled by how far below the line it
   // actually is. A country halfway to zero gets half of this. At the floor of its stability

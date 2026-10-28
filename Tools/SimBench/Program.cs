@@ -670,6 +670,22 @@ public static class Program
 
         // `--pulse <days>`: how lively the world is - every kind of chronicle entry, counted year by
         // year, with the wars between states begun and the largest war of each year.
+        // `--civil-war-probe <days>`: plays the days, then lists the twenty least stable countries with
+        // why each can or cannot have a civil war today, and the weekly chance.
+        var probeAt = Array.IndexOf(args, "--civil-war-probe");
+        if (probeAt >= 0)
+        {
+            var probeDays = probeAt + 1 < args.Length && int.TryParse(args[probeAt + 1], out var pdays) ? pdays : 365;
+            campaign.IsPaused = false;
+            for (var day = 0; day < probeDays; day++) campaign.TickDay();
+            Console.WriteLine($"CIVIL WAR PROBE day {campaign.ElapsedDays}: starts in the last year {CivilWarOutbreak.StartsInLastYear(campaign)} of {campaign.Defines.CivilWarWorldPerYear}");
+            foreach (var nation in campaign.Nations.Where(n => n.Movement is null && n.Population > 0 && campaign.StatesOf(n).Length > 0)
+                         .OrderBy(n => n.Stability).Take(20))
+                Console.WriteLine($"  {nation.Tag} stability {nation.Stability:0.00} regions {campaign.StatesOf(nation).Length} " +
+                                  $"chance {CivilWarOutbreak.Chance(campaign, nation):0.0000} last {nation.LastCivilWarDay}: " +
+                                  $"{CivilWarOutbreak.EligibilityReason(campaign, nation)}");
+            return 0;
+        }
         var pulseAt = Array.IndexOf(args, "--pulse");
         if (pulseAt >= 0)
         {
