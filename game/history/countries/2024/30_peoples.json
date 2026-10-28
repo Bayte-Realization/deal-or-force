@@ -87,7 +87,7 @@
   "ESH": { "primary_cultures": ["arab_maghrebi"] },
   "ESP": { "primary_cultures": ["spanish"] },
   "EST": { "primary_cultures": ["estonian"] },
-  "ETH": { "primary_cultures": ["oromo", "amhara", "acholi"] },
+  "ETH": { "primary_cultures": ["oromo", "amhara", "tigrayan", "sidama"] },
   "FIN": { "primary_cultures": ["finnish"] },
   "FJI": { "primary_cultures": ["fijian"] },
   "FLK": { "primary_cultures": ["english"] },

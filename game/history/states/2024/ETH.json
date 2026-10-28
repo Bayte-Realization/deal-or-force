@@ -10,6 +10,7 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2007 census, ethnicity by region.
 {
   // Afar
   "et_af": {
@@ -23,7 +24,7 @@
   "et_am": {
     "population": 18434343,
     "urbanization": 0.16,
-    "cultures": { "amhara": 0.97, "acholi": 0.006, "kalenjin": 0.006, "luo": 0.006, "maasai": 0.004, "swahili": 0.004, "arab_sudanese": 0.002, "beja": 0.002 },
+    "cultures": { "amhara": 0.92, "oromo": 0.03, "tigrayan": 0.02, "maasai": 0.01, "swahili": 0.01, "arab_sudanese": 0.005, "beja": 0.005 },
     "buildings": { "Agriculture": 6, "Infrastructure": 1 },
     "resources": { "Food": 1.784, "Coal": 0.444, "Oil": 0.748, "IronOre": 0.388, "RareEarths": 0.148, "NaturalGas": 1.099, "Timber": 1.094, "Bauxite": 0.177, "Uranium": 0.011 }
   },
@@ -31,7 +32,7 @@
   "et_be": {
     "population": 2924512,
     "urbanization": 0.05,
-    "cultures": { "dinka": 0.3067, "acholi": 0.1387, "kalenjin": 0.1387, "luo": 0.1387, "maasai": 0.0924, "swahili": 0.0924, "arab_sudanese": 0.0462, "beja": 0.0462 },
+    "cultures": { "berta": 0.25, "gumuz": 0.21, "amhara": 0.21, "oromo": 0.13, "maasai": 0.0667, "swahili": 0.0667, "arab_sudanese": 0.0333, "beja": 0.0333 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.287, "Coal": 0.362, "Oil": 0.659, "IronOre": 0.291, "RareEarths": 0.111, "NaturalGas": 0.501, "Timber": 3.101, "Bauxite": 0.143, "Uranium": 0.01 }
   },
@@ -39,7 +40,7 @@
   "et_ga": {
     "population": 470343,
     "urbanization": 0.05,
-    "cultures": { "nuer": 0.97, "acholi": 0.006, "kalenjin": 0.006, "luo": 0.006, "maasai": 0.004, "swahili": 0.004, "arab_sudanese": 0.002, "beja": 0.002 },
+    "cultures": { "nuer": 0.46, "anuak": 0.21, "amhara": 0.08, "maasai": 0.0667, "swahili": 0.0667, "oromo": 0.05, "arab_sudanese": 0.0333, "beja": 0.0333 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.511, "Coal": 0.13, "Oil": 0.129, "IronOre": 0.089, "RareEarths": 0.022, "NaturalGas": 0.249, "Timber": 1.737, "Bauxite": 0.026, "Uranium": 0.006 }
   },
@@ -47,7 +48,7 @@
   "et_or": {
     "population": 59340953,
     "urbanization": 0.31,
-    "cultures": { "oromo": 0.5366, "acholi": 0.0927, "kalenjin": 0.0927, "luo": 0.0927, "maasai": 0.0618, "swahili": 0.0618, "arab_sudanese": 0.0309, "beja": 0.0309 },
+    "cultures": { "oromo": 0.8, "amhara": 0.12, "gurage": 0.03, "maasai": 0.0167, "swahili": 0.0167, "arab_sudanese": 0.0083, "beja": 0.0083 },
     "buildings": { "Agriculture": 17, "CivilianIndustry": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.342, "Coal": 0.176, "Oil": 0.249, "IronOre": 0.211, "RareEarths": 0.069, "NaturalGas": 0.39, "Timber": 2.088, "Bauxite": 0.077, "Uranium": 0.011 }
   },
@@ -63,7 +64,7 @@
   "et_sn": {
     "population": 8521741,
     "urbanization": 0.19,
-    "cultures": { "sidama": 0.421, "acholi": 0.1158, "kalenjin": 0.1158, "luo": 0.1158, "maasai": 0.0772, "swahili": 0.0772, "arab_sudanese": 0.0386, "beja": 0.0386 },
+    "cultures": { "sidama": 0.3, "wolaita": 0.2, "gurage": 0.15, "hadiya": 0.15, "amhara": 0.05, "oromo": 0.05, "maasai": 0.0333, "swahili": 0.0333, "arab_sudanese": 0.0167, "beja": 0.0167 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.158, "Coal": 0.239, "Oil": 0.262, "IronOre": 0.187, "RareEarths": 0.05, "NaturalGas": 0.628, "Timber": 1.518, "Bauxite": 0.065, "Uranium": 0.009 }
   },

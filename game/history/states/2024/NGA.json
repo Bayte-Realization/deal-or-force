@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Ethnographic estimates by state (Nigeria's census does not ask ethnicity).
 {
   // Adamawa State
   "ng_ad": {
     "population": 4915362,
     "urbanization": 0.22,
-    "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
+    "cultures": { "fulani": 0.45, "hausa": 0.3, "ewe": 0.0599, "kanuri": 0.05, "tiv": 0.05, "songhai": 0.0401, "igbo": 0.03, "yoruba": 0.02 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 2.075, "Coal": 0.155, "Oil": 0.365, "IronOre": 0.106, "RareEarths": 0.042, "NaturalGas": 0.396, "Timber": 0.71, "Bauxite": 0.065, "Uranium": 0.007 }
   },
@@ -23,7 +24,7 @@
   "ng_ba": {
     "population": 8360118,
     "urbanization": 0.15,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.65, "fulani": 0.25, "kanuri": 0.03, "yoruba": 0.02, "igbo": 0.02, "ewe": 0.018, "songhai": 0.012 },
     "buildings": { "Agriculture": 5, "Infrastructure": 1 },
     "resources": { "Food": 1.734, "Coal": 0.485, "Oil": 0.365, "IronOre": 0.192, "RareEarths": 0.092, "NaturalGas": 0.396, "Timber": 1.676, "Bauxite": 0.095, "Uranium": 0.019 }
   },
@@ -31,7 +32,7 @@
   "ng_be": {
     "population": 1235507,
     "urbanization": 0.79,
-    "cultures": { "tiv": 0.561, "akan": 0.0836, "bassa": 0.0836, "mossi": 0.0836, "senufo": 0.0836, "ewe": 0.0627, "songhai": 0.0418 },
+    "cultures": { "tiv": 0.6, "idoma": 0.25, "igbo": 0.05, "ewe": 0.042, "hausa": 0.03, "songhai": 0.028 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.708, "Coal": 0.161, "Oil": 0.365, "IronOre": 0.164, "RareEarths": 0.029, "NaturalGas": 0.396, "Timber": 2.531, "Bauxite": 0.041, "Uranium": 0.008 }
   },
@@ -47,7 +48,7 @@
   "ng_cr": {
     "population": 2167576,
     "urbanization": 0.58,
-    "cultures": { "igbo": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
+    "cultures": { "ibibio": 0.7, "igbo": 0.2, "ewe": 0.0358, "songhai": 0.0242, "yoruba": 0.02, "hausa": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.891, "Coal": 0.342, "Oil": 9.727, "IronOre": 0.197, "RareEarths": 0.071, "NaturalGas": 8.524, "Timber": 2.12, "Bauxite": 0.089, "Uranium": 0.01 }
   },
@@ -55,7 +56,7 @@
   "ng_de": {
     "population": 4615777,
     "urbanization": 0.67,
-    "cultures": { "ijaw": 0.6042, "akan": 0.0754, "bassa": 0.0754, "mossi": 0.0754, "senufo": 0.0754, "ewe": 0.0565, "songhai": 0.0377 },
+    "cultures": { "urhobo": 0.35, "ijaw": 0.25, "igbo": 0.2, "edo": 0.1, "yoruba": 0.05, "ewe": 0.03, "songhai": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.305, "Coal": 0.566, "Oil": 65.899, "IronOre": 0.374, "RareEarths": 0.138, "NaturalGas": 71.516, "Timber": 2.29, "Bauxite": 0.095, "Uranium": 0.013 }
   },
@@ -63,7 +64,7 @@
   "ng_ed": {
     "population": 4434585,
     "urbanization": 0.73,
-    "cultures": { "igbo": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
+    "cultures": { "edo": 0.7, "igbo": 0.1, "yoruba": 0.08, "hausa": 0.03, "urhobo": 0.03, "ewe": 0.0239, "igala": 0.02, "songhai": 0.0161 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.623, "Coal": 0.138, "Oil": 15.344, "IronOre": 0.133, "RareEarths": 0.03, "NaturalGas": 16.652, "Timber": 1.083, "Bauxite": 0.045, "Uranium": 0.002 }
   },
@@ -79,7 +80,7 @@
   "ng_go": {
     "population": 3933274,
     "urbanization": 0.21,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.45, "fulani": 0.35, "tiv": 0.05, "kanuri": 0.05, "ewe": 0.0359, "songhai": 0.0241, "igbo": 0.02, "yoruba": 0.02 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 2.335, "Coal": 0.285, "Oil": 0.365, "IronOre": 0.284, "RareEarths": 0.12, "NaturalGas": 0.396, "Timber": 2.311, "Bauxite": 0.076, "Uranium": 0.013 }
   },
@@ -87,7 +88,7 @@
   "ng_ji": {
     "population": 1273536,
     "urbanization": 0.05,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.85, "fulani": 0.12, "kanuri": 0.02, "ewe": 0.006, "songhai": 0.004 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.65, "Coal": 0.358, "Oil": 0.365, "IronOre": 0.114, "RareEarths": 0.051, "NaturalGas": 0.396, "Timber": 1.743, "Bauxite": 0.085, "Uranium": 0.004 }
   },
@@ -95,7 +96,7 @@
   "ng_kd": {
     "population": 21475885,
     "urbanization": 0.3,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.55, "fulani": 0.1, "igbo": 0.08, "yoruba": 0.08, "tiv": 0.05, "berom": 0.04, "nupe": 0.03, "ewe": 0.03, "igala": 0.02, "songhai": 0.02 },
     "buildings": { "Agriculture": 10, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.994, "Coal": 0.498, "Oil": 0.365, "IronOre": 0.359, "RareEarths": 0.139, "NaturalGas": 0.396, "Timber": 1.072, "Bauxite": 0.159, "Uranium": 0.016 }
   },
@@ -111,7 +112,7 @@
   "ng_kt": {
     "population": 5309440,
     "urbanization": 0.31,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.85, "fulani": 0.13, "ewe": 0.012, "songhai": 0.008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.263, "Coal": 0.209, "Oil": 0.365, "IronOre": 0.21, "RareEarths": 0.063, "NaturalGas": 0.396, "Timber": 1.749, "Bauxite": 0.088, "Uranium": 0.008 }
   },
@@ -119,7 +120,7 @@
   "ng_ke": {
     "population": 2818050,
     "urbanization": 0.13,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.75, "fulani": 0.2, "yoruba": 0.02, "ewe": 0.018, "songhai": 0.012 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.344, "Coal": 0.103, "Oil": 0.365, "IronOre": 0.116, "RareEarths": 0.027, "NaturalGas": 0.396, "Timber": 1.142, "Bauxite": 0.051, "Uranium": 0.006 }
   },
@@ -127,7 +128,7 @@
   "ng_ko": {
     "population": 1166435,
     "urbanization": 0.33,
-    "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
+    "cultures": { "igala": 0.45, "yoruba": 0.2, "ewe": 0.09, "songhai": 0.06, "nupe": 0.05, "igbo": 0.05, "hausa": 0.05, "idoma": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.4, "Coal": 0.343, "Oil": 0.365, "IronOre": 0.197, "RareEarths": 0.09, "NaturalGas": 0.396, "Timber": 1.505, "Bauxite": 0.044, "Uranium": 0.011 }
   },
@@ -135,7 +136,7 @@
   "ng_kw": {
     "population": 3158307,
     "urbanization": 0.66,
-    "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
+    "cultures": { "yoruba": 0.75, "nupe": 0.15, "fulani": 0.04, "hausa": 0.03, "ewe": 0.018, "songhai": 0.012 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.147, "Coal": 0.449, "Oil": 0.365, "IronOre": 0.344, "RareEarths": 0.124, "NaturalGas": 0.396, "Timber": 1.077, "Bauxite": 0.15, "Uranium": 0.017 }
   },
@@ -143,7 +144,7 @@
   "ng_na": {
     "population": 2985928,
     "urbanization": 0.72,
-    "cultures": { "akan": 0.1905, "bassa": 0.1905, "mossi": 0.1905, "senufo": 0.1905, "ewe": 0.1429, "songhai": 0.0952 },
+    "cultures": { "hausa": 0.25, "tiv": 0.15, "idoma": 0.1, "fulani": 0.1, "ewe": 0.09, "songhai": 0.06, "igala": 0.05, "igbo": 0.05, "yoruba": 0.05, "nupe": 0.05, "berom": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.269, "Coal": 0.106, "Oil": 0.365, "IronOre": 0.077, "RareEarths": 0.039, "NaturalGas": 0.396, "Timber": 2.874, "Bauxite": 0.023, "Uranium": 0.005 }
   },
@@ -151,7 +152,7 @@
   "ng_ni": {
     "population": 10572796,
     "urbanization": 0.39,
-    "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
+    "cultures": { "nupe": 0.4, "hausa": 0.3, "fulani": 0.15, "yoruba": 0.05, "ewe": 0.0419, "igbo": 0.03, "songhai": 0.0281 },
     "buildings": { "Agriculture": 4, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.025, "Coal": 0.142, "Oil": 0.365, "IronOre": 0.114, "RareEarths": 0.028, "NaturalGas": 0.396, "Timber": 3.176, "Bauxite": 0.047, "Uranium": 0.003 }
   },
@@ -159,7 +160,7 @@
   "ng_og": {
     "population": 31120488,
     "urbanization": 0.91,
-    "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
+    "cultures": { "yoruba": 0.8, "igbo": 0.1, "hausa": 0.04, "edo": 0.02, "ewe": 0.018, "songhai": 0.012, "ijaw": 0.01 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 3, "Infrastructure": 3 },
     "resources": { "Food": 1.709, "Coal": 0.149, "Oil": 0.365, "IronOre": 0.118, "RareEarths": 0.041, "NaturalGas": 0.396, "Timber": 3.273, "Bauxite": 0.112, "Uranium": 0.011 }
   },
@@ -167,7 +168,7 @@
   "ng_on": {
     "population": 7753749,
     "urbanization": 0.82,
-    "cultures": { "yoruba": 0.5003, "akan": 0.0952, "bassa": 0.0952, "mossi": 0.0952, "senufo": 0.0952, "ewe": 0.0714, "songhai": 0.0476 },
+    "cultures": { "yoruba": 0.9, "ijaw": 0.04, "igbo": 0.03, "hausa": 0.02, "ewe": 0.006, "songhai": 0.004 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.224, "Coal": 0.106, "Oil": 13.472, "IronOre": 0.089, "RareEarths": 0.024, "NaturalGas": 10.556, "Timber": 1.922, "Bauxite": 0.046, "Uranium": 0.005 }
   },
@@ -183,7 +184,7 @@
   "ng_pl": {
     "population": 4978260,
     "urbanization": 0.43,
-    "cultures": { "tiv": 0.561, "akan": 0.0836, "bassa": 0.0836, "mossi": 0.0836, "senufo": 0.0836, "ewe": 0.0627, "songhai": 0.0418 },
+    "cultures": { "berom": 0.35, "hausa": 0.2, "tiv": 0.1, "fulani": 0.1, "ewe": 0.072, "igbo": 0.05, "yoruba": 0.05, "songhai": 0.048, "idoma": 0.03 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.395, "Coal": 0.257, "Oil": 0.365, "IronOre": 0.19, "RareEarths": 0.041, "NaturalGas": 0.396, "Timber": 2.595, "Bauxite": 0.043, "Uranium": 0.006 }
   },
@@ -191,7 +192,7 @@
   "ng_ri": {
     "population": 11566073,
     "urbanization": 0.7,
-    "cultures": { "igbo": 0.4, "ijaw": 0.4, "yoruba": 0.09, "hausa": 0.055, "fulani": 0.03, "tiv": 0.025 },
+    "cultures": { "ijaw": 0.4, "igbo": 0.4, "ibibio": 0.05, "yoruba": 0.05, "hausa": 0.04, "fulani": 0.0327, "tiv": 0.0273 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.391, "Coal": 0.261, "Oil": 75.261, "IronOre": 0.369, "RareEarths": 0.082, "NaturalGas": 91.836, "Timber": 2.522, "Bauxite": 0.174, "Uranium": 0.009 }
   },
@@ -199,7 +200,7 @@
   "ng_so": {
     "population": 4234690,
     "urbanization": 0.47,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.7, "fulani": 0.28, "ewe": 0.012, "songhai": 0.008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.417, "Coal": 0.548, "Oil": 0.365, "IronOre": 0.277, "RareEarths": 0.051, "NaturalGas": 0.396, "Timber": 2.511, "Bauxite": 0.097, "Uranium": 0.011 }
   },
@@ -207,7 +208,7 @@
   "ng_ta": {
     "population": 2969182,
     "urbanization": 0.19,
-    "cultures": { "fulani": 0.9066, "akan": 0.0178, "bassa": 0.0178, "mossi": 0.0178, "senufo": 0.0178, "ewe": 0.0133, "songhai": 0.0089 },
+    "cultures": { "jukun": 0.25, "fulani": 0.25, "hausa": 0.2, "tiv": 0.15, "ewe": 0.0719, "songhai": 0.0481, "igbo": 0.03 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 0.856, "Coal": 0.15, "Oil": 0.365, "IronOre": 0.139, "RareEarths": 0.062, "NaturalGas": 0.396, "Timber": 3.128, "Bauxite": 0.109, "Uranium": 0.008 }
   },
@@ -215,7 +216,7 @@
   "ng_yo": {
     "population": 5269945,
     "urbanization": 0.3,
-    "cultures": { "kanuri": 0.97, "akan": 0.0057, "bassa": 0.0057, "mossi": 0.0057, "senufo": 0.0057, "ewe": 0.0043, "songhai": 0.0029 },
+    "cultures": { "kanuri": 0.6, "hausa": 0.2, "fulani": 0.17, "ewe": 0.0179, "songhai": 0.0121 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.959, "Coal": 0.208, "Oil": 0.365, "IronOre": 0.337, "RareEarths": 0.055, "NaturalGas": 0.396, "Timber": 3.159, "Bauxite": 0.122, "Uranium": 0.015 }
   },
@@ -223,7 +224,7 @@
   "ng_za": {
     "population": 4691150,
     "urbanization": 0.13,
-    "cultures": { "hausa": 0.803, "akan": 0.0375, "bassa": 0.0375, "mossi": 0.0375, "senufo": 0.0375, "ewe": 0.0281, "songhai": 0.0188 },
+    "cultures": { "hausa": 0.8, "fulani": 0.18, "ewe": 0.012, "songhai": 0.008 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.257, "Coal": 0.161, "Oil": 0.365, "IronOre": 0.105, "RareEarths": 0.028, "NaturalGas": 0.396, "Timber": 2.883, "Bauxite": 0.025, "Uranium": 0.005 }
   }
