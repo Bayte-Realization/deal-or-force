@@ -116,7 +116,7 @@
   "HRV": { "primary_cultures": ["croatian"] },
   "HTI": { "primary_cultures": ["haitian"] },
   "HUN": { "primary_cultures": ["hungarian"] },
-  "IDN": { "primary_cultures": ["javanese", "sundanese"] },
+  "IDN": { "primary_cultures": ["javanese", "sundanese", "madurese"] },
   "IMN": { "primary_cultures": ["manx", "english"] },
   "IND": { "primary_cultures": ["hindustani", "bengali", "marathi", "telugu", "tamil", "gujarati", "kannada", "malayali", "odia", "punjabi", "rajasthani", "assamese"] },
   "IOA": { "primary_cultures": ["australian"] },

@@ -165,6 +165,7 @@
   "waray": { "name": "Waray", "group": "austronesian", "colour": "#4f9387", "religion": "catholic" },
   "bikol": { "name": "Bikol", "group": "austronesian", "colour": "#63a88d", "religion": "catholic" },
   "sri_lankan_moor": { "name": "Sri Lankan Moor", "group": "dravidian", "colour": "#7a9a6a", "religion": "sunni" },
+  "madurese": { "name": "Madurese", "group": "austronesian", "colour": "#7fae6b", "religion": "sunni" },
   "kachin": { "name": "Kachin", "country": "Kachinland", "group": "tibeto_burman", "colour": "#ca7c58", "religion": "protestant" },
   "kalenjin": { "name": "Kalenjin", "group": "nilotic", "colour": "#5da340", "religion": "protestant" },
   "kalmyk": { "country": "Kalmykia", "name": "Kalmyk", "group": "mongolic", "colour": "#84a665", "religion": "buddhist" },
