@@ -58,9 +58,9 @@
   "CHN": { "primary_cultures": ["han"] },
   "CIV": { "primary_cultures": ["baoule", "senufo"] },
   "CLP": { "primary_cultures": ["french"] },
-  "CMR": { "primary_cultures": ["fang", "tiv"] },
+  "CMR": { "primary_cultures": ["beti", "bamileke", "kirdi", "grassfields"] },
   "CNM": { "primary_cultures": ["greek"] },
-  "COD": { "primary_cultures": ["luba", "bakongo", "mongo", "tonga"] },
+  "COD": { "primary_cultures": ["luba", "bakongo", "mongo", "lunda", "tetela"] },
   "COG": { "primary_cultures": ["bakongo"] },
   "COK": { "primary_cultures": ["polynesian"] },
   "COL": { "primary_cultures": ["colombian"] },
@@ -268,7 +268,7 @@
   "WSB": { "primary_cultures": ["english"] },
   "WSM": { "primary_cultures": ["samoan"] },
   "YEM": { "primary_cultures": ["arab_yemeni"] },
-  "ZAF": { "primary_cultures": ["zulu", "xhosa", "afrikaner"] },
+  "ZAF": { "primary_cultures": ["zulu", "xhosa", "afrikaner", "pedi", "cape_coloured"] },
   "ZMB": { "primary_cultures": ["bemba", "tonga", "ndebele"] },
   "ZWE": { "primary_cultures": ["shona"] }
 }
