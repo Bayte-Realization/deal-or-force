@@ -642,6 +642,13 @@ public static class Program
                                       $"sites {campaign.Construction.Count(p => p.NationId == n.Id)}/{ConstructionCost.Limit(campaign, n, campaign.Defines.MaxConstructionProjects)}, " +
                                       $"treasury {n.Treasury:0.0}, capacity {n.ConstructionCapacity:0.00}, literacy {n.Literacy:0.00}, sol {n.StandardOfLiving:0.00}, " +
                                       $"price level {ConstructionCost.PriceLevel(campaign, n):0.00}");
+                    // What its real output is made of, and what it has built.
+                    Console.WriteLine("      goods: " + string.Join(", ", n.Market.Values
+                        .OrderByDescending(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice).Take(6)
+                        .Select(q => $"{q.Commodity} {q.Production * CommodityCatalog.Get(q.Commodity).BasePrice:0.0} (sat {q.Satisfaction:P0}, price x{q.Price / MathF.Max(0.01f, CommodityCatalog.Get(q.Commodity).BasePrice):0.00})")));
+                    Console.WriteLine("      buildings: " + string.Join(", ", campaign.StatesOf(n).SelectMany(s => s.Buildings)
+                        .GroupBy(p => p.Key).Select(g => (g.Key, Count: g.Sum(p => p.Value))).OrderByDescending(g => g.Count)
+                        .Select(g => $"{g.Key} {g.Count}")) + $"; output factor {NationalModifiers.Factor(n, "output"):0.00}");
                 }
             }
             void Tallies()

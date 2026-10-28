@@ -15,5 +15,6 @@
     <Compile Include="CatalogueWindow.fs" />
     <Compile Include="WarScoreRules.fs" />
     <Compile Include="PeaceRules.fs" />
+    <Compile Include="WarRhythmRules.fs" />
   </ItemGroup>
 </Project>

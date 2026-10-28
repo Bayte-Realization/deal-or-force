@@ -19,6 +19,7 @@
   <ItemGroup><Compile Include="../../Scripts/Boot/AssaultRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/WarScoreRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/PeaceRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/WarRhythmRulesFSharpBoot.cs"/></ItemGroup>
   <!-- The managed F# pure rule is part of the game now; the test stand references the same
        net8.0 target the simulation sources compile against. -->
   <ItemGroup><ProjectReference Include="../../Scripts/Rules/DealOrForce.Rules.fsproj" /></ItemGroup>

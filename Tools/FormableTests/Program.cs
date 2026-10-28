@@ -172,9 +172,10 @@ static class Program
         if (args.Length == 0) PeaceRulesDifferentialTests.Run();
         if (args.Contains("--crisis-grant-only")) { CrisisGrantTests.Run(); return; }
         if (args.Contains("--war-score-index-only")) { WarScoreIndexTests.Run(); return; }
+        if (args.Contains("--war-rhythm-only")) { WarRhythmRulesTests.Run(); return; }
         if (args.Contains("--supply-hedge-only")) { SupplyHedgeTests.Run(); return; }
         if (args.Contains("--exposure-only")) { StrategicReportsTests.Run(); SupplyStressTests.Run(); return; }
-        if (args.Length == 0) { CrisisGrantTests.Run(); WarScoreIndexTests.Run(); SupplyHedgeTests.Run(); }
+        if (args.Length == 0) { CrisisGrantTests.Run(); WarScoreIndexTests.Run(); WarRhythmRulesTests.Run(); SupplyHedgeTests.Run(); }
         if (args.Contains("--music-only")) { MusicSituationTests.Run(); return; }
         if (args.Contains("--music-transition-only")) { MusicTransitionTests.Run(); return; }
         if (args.Contains("--weather-only")) { WeatherReadabilityTests.Run(); return; }

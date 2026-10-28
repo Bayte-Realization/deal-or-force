@@ -487,22 +487,15 @@ public static partial class Warfare
     /// <summary>One side's fortune for today's fighting: the day's, 1 ± Defines.CombatFortune, triangular, times the battle's; from the seed.</summary>
     private static float Fortune(Campaign campaign, LandBattle battle, int side)
     {
-        var spread = M.Clamp(campaign.Defines.CombatFortune, 0f, 0.6f);
-        if (spread <= 0f) return 1f;
-        var first = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F7);
-        var second = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F8);
-        var today = 1f + spread * (first + second - 1f);
-        // And the battle's own fortune, the same every day of it (Defines.CombatBattleFortune),
-        // and now and then the one moment the whole battle turns on (CombatDecisiveChance).
-        var battleSpread = M.Clamp(campaign.Defines.CombatBattleFortune, 0f, 0.6f);
-        var whole = 1f + battleSpread * (Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6F9) +
-                                         Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FA) - 1f);
-        if (Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FB) < M.Clamp01(campaign.Defines.CombatDecisiveChance))
-        {
-            var swing = M.Clamp(campaign.Defines.CombatDecisiveSwing, 0f, 0.9f);
-            whole *= Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FC) < 0.5f ? 1f - swing : 1f + swing;
-        }
-        return today * whole;
+        // The day's rolls change daily; the battle's (Defines.CombatBattleFortune) and its one
+        // decisive moment (CombatDecisiveChance) are rolled on the day it began. The formula is
+        // WarRhythm's.
+        var defines = campaign.Defines;
+        float Day(int salt) => Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, salt);
+        float Battle(int salt) => Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, salt);
+        return WarRhythm.Fortune(defines.CombatFortune, Day(0x6F7), Day(0x6F8),
+            defines.CombatBattleFortune, Battle(0x6F9), Battle(0x6FA),
+            defines.CombatDecisiveChance, Battle(0x6FB), defines.CombatDecisiveSwing, Battle(0x6FC));
     }
 
     private static void ResolveBattles(Campaign campaign)

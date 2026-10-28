@@ -385,7 +385,19 @@ public static class MarketSystem
         state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry) * 0.55f +
         state.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry) * 0.60f +
         state.Buildings.GetValueOrDefault(BuildingKind.PowerPlant) * 0.22f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * 0.30f;
+        state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * 0.30f +
+        // The second tier needs hands too. It did not: refineries, smelters, chemical and
+        // electronics plants, yards, ports and railways employed nobody, so a rich country that
+        // built them grew without ever running short of people - the United States doubled its
+        // real output in two years at 86 % employment and reached two fifths of the world economy.
+        state.Buildings.GetValueOrDefault(BuildingKind.Refinery) * 0.35f +
+        state.Buildings.GetValueOrDefault(BuildingKind.ChemicalPlant) * 0.45f +
+        state.Buildings.GetValueOrDefault(BuildingKind.Smelter) * 0.50f +
+        state.Buildings.GetValueOrDefault(BuildingKind.ElectronicsPlant) * 0.60f +
+        state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) * 0.55f +
+        state.Buildings.GetValueOrDefault(BuildingKind.Port) * 0.20f +
+        state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork) * 0.25f +
+        state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.15f;
 
     /// <summary>
     /// Workers a state can actually put in those jobs, in millions. Not everyone alive is

@@ -616,15 +616,10 @@ public static partial class FrontPlanner
     /// </summary>
     internal static float OffensivePulse(Campaign c, StrategicWar war, Nation nation)
     {
-        var strength = c.Defines.AiOffensivePulseStrength;
-        if (strength <= 0f || war is null || nation is null) return 1f;
-        var period = 90f + 90f * Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F1);
-        var phase = Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F2);
-        var t = (c.ElapsedDays - war.StartedDay) / period + phase;
-        t -= MathF.Floor(t);
-        if (t < 0.32f) return 1f + strength;
-        if (t > 0.75f) return MathF.Max(0.3f, 1f - strength * 0.4f);
-        return 1f;
+        if (war is null || nation is null) return 1f;
+        return WarRhythm.Pulse(c.Defines.AiOffensivePulseStrength,
+            Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F1), Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F2),
+            c.ElapsedDays - war.StartedDay);
     }
 
     /// <summary>
