@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: peoples by state (estimates; no recent census of ethnicity).
 {
   // Al Jazirah
   "sd_gz": {
     "population": 8716382,
     "urbanization": 0.1,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.88, "fulani": 0.04, "nubian": 0.03, "nuba": 0.03, "fur": 0.02 },
     "buildings": { "Agriculture": 4, "Infrastructure": 1 },
     "resources": { "Food": 1.581, "Coal": 0.247, "Oil": 0.385, "IronOre": 0.215, "RareEarths": 0.038, "NaturalGas": 0.54, "Timber": 0.766, "Bauxite": 0.083, "Uranium": 0.01 }
   },
@@ -23,7 +24,7 @@
   "sd_gd": {
     "population": 1850701,
     "urbanization": 0.18,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.7, "beja": 0.1, "fulani": 0.1, "nuba": 0.05, "fur": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.389, "Coal": 0.377, "Oil": 0.609, "IronOre": 0.189, "RareEarths": 0.091, "NaturalGas": 0.474, "Timber": 1.179, "Bauxite": 0.109, "Uranium": 0.014 }
   },
@@ -31,7 +32,7 @@
   "sd_nb": {
     "population": 1500863,
     "urbanization": 0.21,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.45, "nuba": 0.3, "fulani": 0.15, "dinka": 0.05, "nuer": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.321, "Coal": 0.472, "Oil": 0.432, "IronOre": 0.332, "RareEarths": 0.055, "NaturalGas": 0.553, "Timber": 1.805, "Bauxite": 0.121, "Uranium": 0.012 }
   },
@@ -39,7 +40,7 @@
   "sd_de": {
     "population": 755176,
     "urbanization": 0.05,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "fur": 0.6, "arab_sudanese": 0.3, "masalit": 0.05, "zaghawa": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 0.814, "Coal": 0.341, "Oil": 1.029, "IronOre": 0.465, "RareEarths": 0.055, "NaturalGas": 1.07, "Timber": 3.324, "Bauxite": 0.186, "Uranium": 0.011 }
   },
@@ -47,7 +48,7 @@
   "sd_ds_858": {
     "population": 834060,
     "urbanization": 0.05,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.7, "fur": 0.15, "zaghawa": 0.05, "dinka": 0.05, "fulani": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.244, "Coal": 0.515, "Oil": 0.923, "IronOre": 0.221, "RareEarths": 0.118, "NaturalGas": 0.583, "Timber": 2.128, "Bauxite": 0.112, "Uranium": 0.014 }
   },
@@ -55,7 +56,7 @@
   "sd_ka": {
     "population": 685816,
     "urbanization": 0.97,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "beja": 0.55, "arab_sudanese": 0.35, "fulani": 0.05, "nubian": 0.05 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 2.018, "Coal": 0.447, "Oil": 0.686, "IronOre": 0.453, "RareEarths": 0.119, "NaturalGas": 0.64, "Timber": 3.067, "Bauxite": 0.19, "Uranium": 0.019 }
   },
@@ -63,7 +64,7 @@
   "sd_kh": {
     "population": 7609170,
     "urbanization": 0.97,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.78, "nubian": 0.06, "fur": 0.03, "beja": 0.03, "nuba": 0.03, "dinka": 0.03, "zaghawa": 0.02, "nuer": 0.02 },
     "buildings": { "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.494, "Coal": 0.562, "Oil": 0.951, "IronOre": 0.386, "RareEarths": 0.063, "NaturalGas": 0.764, "Timber": 1.229, "Bauxite": 0.091, "Uranium": 0.016 }
   },
@@ -71,7 +72,7 @@
   "sd_dn": {
     "population": 1668114,
     "urbanization": 0.25,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.35, "zaghawa": 0.3, "fur": 0.25, "masalit": 0.05, "bedouin": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.674, "Coal": 0.547, "Oil": 0.715, "IronOre": 0.324, "RareEarths": 0.065, "NaturalGas": 0.895, "Timber": 2.122, "Bauxite": 0.141, "Uranium": 0.017 }
   },
@@ -79,7 +80,7 @@
   "sd_kn": {
     "population": 3706701,
     "urbanization": 0.31,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.82, "nuba": 0.1, "fur": 0.05, "bedouin": 0.03 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.175, "Coal": 0.143, "Oil": 0.324, "IronOre": 0.102, "RareEarths": 0.026, "NaturalGas": 0.208, "Timber": 1.429, "Bauxite": 0.067, "Uranium": 0.004 }
   },
@@ -87,7 +88,7 @@
   "sd_no": {
     "population": 116486,
     "urbanization": 0.83,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "nubian": 0.65, "arab_sudanese": 0.35 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.709, "Coal": 0.483, "Oil": 0.699, "IronOre": 0.26, "RareEarths": 0.147, "NaturalGas": 0.907, "Timber": 1.722, "Bauxite": 0.195, "Uranium": 0.014 }
   },
@@ -95,7 +96,7 @@
   "sd_rs": {
     "population": 4307367,
     "urbanization": 0.23,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "beja": 0.72, "arab_sudanese": 0.22, "nubian": 0.03, "bedouin": 0.03 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.038, "Coal": 0.182, "Oil": 0.398, "IronOre": 0.203, "RareEarths": 0.061, "NaturalGas": 0.499, "Timber": 2.369, "Bauxite": 0.128, "Uranium": 0.01 }
   },
@@ -103,7 +104,7 @@
   "sd_nr": {
     "population": 709964,
     "urbanization": 0.95,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.7, "nubian": 0.27, "beja": 0.03 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 2.14, "Coal": 0.171, "Oil": 0.265, "IronOre": 0.069, "RareEarths": 0.038, "NaturalGas": 0.275, "Timber": 1.717, "Bauxite": 0.026, "Uranium": 0.005 }
   },
@@ -111,7 +112,7 @@
   "sd_si": {
     "population": 1046841,
     "urbanization": 0.21,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.82, "fulani": 0.08, "nuba": 0.05, "fur": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.632, "Coal": 0.447, "Oil": 0.443, "IronOre": 0.137, "RareEarths": 0.048, "NaturalGas": 0.537, "Timber": 1.77, "Bauxite": 0.141, "Uranium": 0.012 }
   },
@@ -119,7 +120,7 @@
   "sd_ds": {
     "population": 3792578,
     "urbanization": 0.17,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "arab_sudanese": 0.55, "fur": 0.25, "fulani": 0.1, "zaghawa": 0.05, "masalit": 0.05 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 2.062, "Coal": 0.178, "Oil": 0.571, "IronOre": 0.205, "RareEarths": 0.067, "NaturalGas": 0.454, "Timber": 2.653, "Bauxite": 0.059, "Uranium": 0.01 }
   },
@@ -127,7 +128,7 @@
   "sd_ks": {
     "population": 3030514,
     "urbanization": 0.12,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "nuba": 0.6, "arab_sudanese": 0.3, "dinka": 0.05, "fulani": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.369, "Coal": 0.302, "Oil": 0.474, "IronOre": 0.124, "RareEarths": 0.027, "NaturalGas": 0.281, "Timber": 1.972, "Bauxite": 0.079, "Uranium": 0.007 }
   },
@@ -135,7 +136,7 @@
   "sd_dw": {
     "population": 1047493,
     "urbanization": 0.26,
-    "cultures": { "arab_sudanese": 0.7, "fur": 0.07, "beja": 0.06, "nubian": 0.06, "zaghawa": 0.03, "bedouin": 0.02, "dinka": 0.02, "fulani": 0.02, "nuer": 0.02 },
+    "cultures": { "masalit": 0.4, "arab_sudanese": 0.35, "fur": 0.15, "zaghawa": 0.1 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.923, "Coal": 0.313, "Oil": 0.457, "IronOre": 0.15, "RareEarths": 0.03, "NaturalGas": 0.37, "Timber": 2.24, "Bauxite": 0.097, "Uranium": 0.009 }
   },
