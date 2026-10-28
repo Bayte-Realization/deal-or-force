@@ -603,8 +603,11 @@ public partial class DealOrForceGame
                 ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects));
             return;
         }
-        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites running",
-            projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects));
+        // Open is not the same as worked: a country's economy works only so many sites at once
+        // (ConstructionCost.WorkingSites) and the rest wait, oldest first.
+        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites open · {2} worked at a time",
+            projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects),
+            ConstructionCost.WorkingSites(_campaign, nation));
         foreach (var project in projects.OrderByDescending(project => project.Progress))
         {
             var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);

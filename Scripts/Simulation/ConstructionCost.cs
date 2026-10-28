@@ -21,6 +21,19 @@ public sealed partial class Defines
     /// </summary>
     public float ConstructionReferenceOutput { get; set; } = 12f;
     public float ConstructionSizeCap { get; set; } = 12f;
+
+    /// <summary>
+    /// Whether every open site works each day (true) or only a country's oldest one, the queue
+    /// the construction system ran until 28 October 2026.
+    /// </summary>
+    public bool ConstructionSitesInParallel { get; set; } = true;
+
+    /// <summary>
+    /// How many sites work at once, per economy of the reference size (ConstructionCost.Size); at
+    /// least one. All of them at once made the world grow ten per cent a year - nothing wears
+    /// out and labour never runs short, so capacity compounded without limit.
+    /// </summary>
+    public float ConstructionParallelPerEconomy { get; set; } = 0.5f;
 }
 
 /// <summary>
@@ -93,6 +106,14 @@ public static class ConstructionCost
     }
 
     /// <summary>A per-country project limit, scaled to the size of the economy.</summary>
+    /// <summary>How many of a country's open sites work each day.</summary>
+    public static int WorkingSites(Campaign campaign, Nation nation)
+    {
+        var defines = campaign?.Defines;
+        if (defines is null || !defines.ConstructionSitesInParallel) return 1;
+        return Math.Max(1, (int)MathF.Round(Size(campaign, nation) * MathF.Max(0f, defines.ConstructionParallelPerEconomy)));
+    }
+
     public static int Limit(Campaign campaign, Nation nation, int perEconomy) =>
         Math.Max(perEconomy, (int)MathF.Round(perEconomy * Size(campaign, nation)));
 }

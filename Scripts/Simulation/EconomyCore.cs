@@ -1508,38 +1508,50 @@ public static class ConstructionSystem
         // it is not the one this is.
         if (!campaign.StepOpensNewDay) return;
 
-        // The oldest unfinished project each country has, found by hand. Where().OrderBy()
-        // .FirstOrDefault() built a closure, an enumerator, a sorter and its key buffer for
-        // every one of the two hundred and sixty-one countries every single day, to pick
-        // one item out of a list that is usually a few hundred long.
+        // The oldest sites a country has open work today - as many as the size of its economy
+        // runs (ConstructionCost.WorkingSites) - while the treasury pays for them. Only the oldest
+        // single project used to move: a country with forty-eight sites finished one at a time, so
+        // India and China completed what Malta did, a building or two a year, and their real
+        // output stood still for a decade. ConstructionSitesInParallel false is the old queue.
+        Working.Clear();
+        foreach (var item in campaign.Construction)
+        {
+            if (!Working.TryGetValue(item.NationId, out var list)) Working[item.NationId] = list = new List<ConstructionProject>();
+            list.Add(item);
+        }
         foreach (var nation in campaign.Nations)
         {
-            ConstructionProject project = null;
-            foreach (var item in campaign.Construction)
+            if (!Working.TryGetValue(nation.Id, out var sites) || sites.Count == 0) continue;
+            sites.Sort((a, b) => a.Id.CompareTo(b.Id));
+            var working = ConstructionCost.WorkingSites(campaign, nation);
+            foreach (var project in sites)
             {
-                if (item.NationId != nation.Id) continue;
-                if (project is null || item.Id < project.Id) project = item;
+                if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
+                    !float.IsFinite(project.Paid) || project.Paid < 0 ||
+                    !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) break;
+                var required = project.Cost / Math.Max(1, project.DurationDays);
+                var outstanding = Math.Max(0f, project.Cost - project.Paid);
+                var paid = Math.Min(outstanding,
+                    Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
+                // Capacity can fund a site before its work time is complete. Continue that
+                // work, but never charge beyond the contract or require fresh cash for a
+                // fully funded site. Old overpayments are not refunded or rewritten here.
+                // A site the treasury cannot pay today waits, and so does every newer one.
+                if (outstanding > 0f && paid <= 0f) break;
+                nation.Treasury -= paid;
+                project.Paid += paid;
+                project.ProgressDays++;
+                if (project.Progress >= 0.999f)
+                {
+                    Complete(campaign, nation, project);
+                    campaign.Construction.Remove(project);
+                }
+                if (--working <= 0) break;
             }
-            if (project is null) continue;
-            if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
-                !float.IsFinite(project.Paid) || project.Paid < 0 ||
-                !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) continue;
-            var required = project.Cost / Math.Max(1, project.DurationDays);
-            var outstanding = Math.Max(0f, project.Cost - project.Paid);
-            var paid = Math.Min(outstanding,
-                Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
-            // Capacity can fund a site before its work time is complete. Continue that
-            // work, but never charge beyond the contract or require fresh cash for a
-            // fully funded site. Old overpayments are not refunded or rewritten here.
-            if (outstanding > 0f && paid <= 0f) continue;
-            nation.Treasury -= paid;
-            project.Paid += paid;
-            project.ProgressDays++;
-            if (project.Progress < 0.999f) continue;
-            Complete(campaign, nation, project);
-            campaign.Construction.Remove(project);
         }
     }
+
+    private static readonly Dictionary<int, List<ConstructionProject>> Working = new();
 
     private static void Complete(Campaign campaign, Nation nation, ConstructionProject project)
     {
