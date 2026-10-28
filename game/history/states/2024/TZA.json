@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: main peoples of each region (no ethnic census since 1967); Swahili stands for the coast and the small peoples of the centre.
 {
   // Arusha
   "tz_01": {
     "population": 3400544,
     "urbanization": 0.27,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.45, "maasai": 0.3, "chagga": 0.2, "sukuma": 0.04, "indian_diaspora": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.197, "Coal": 0.104, "Oil": 0.326, "IronOre": 0.093, "RareEarths": 0.019, "NaturalGas": 0.314, "Timber": 3.358, "Bauxite": 0.059, "Uranium": 0.005 }
   },
@@ -23,7 +24,7 @@
   "tz_03": {
     "population": 2554078,
     "urbanization": 0.24,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "gogo": 0.65, "swahili": 0.3, "sukuma": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.853, "Coal": 0.193, "Oil": 0.214, "IronOre": 0.115, "RareEarths": 0.065, "NaturalGas": 0.336, "Timber": 0.881, "Bauxite": 0.066, "Uranium": 0.007 }
   },
@@ -31,7 +32,7 @@
   "tz_27": {
     "population": 718952,
     "urbanization": 0.13,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "sukuma": 0.7, "swahili": 0.17, "haya": 0.08, "ha": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.319, "Coal": 0.093, "Oil": 0.139, "IronOre": 0.106, "RareEarths": 0.015, "NaturalGas": 0.209, "Timber": 2.135, "Bauxite": 0.026, "Uranium": 0.003 }
   },
@@ -39,7 +40,7 @@
   "tz_04": {
     "population": 1662718,
     "urbanization": 0.17,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "hehe": 0.78, "swahili": 0.2, "gogo": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.025, "Coal": 0.288, "Oil": 0.386, "IronOre": 0.141, "RareEarths": 0.038, "NaturalGas": 0.198, "Timber": 1.416, "Bauxite": 0.048, "Uranium": 0.004 }
   },
@@ -47,7 +48,7 @@
   "tz_05": {
     "population": 969242,
     "urbanization": 0.31,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "haya": 0.78, "swahili": 0.14, "hutu": 0.04, "ha": 0.04 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.407, "Coal": 0.469, "Oil": 0.763, "IronOre": 0.261, "RareEarths": 0.117, "NaturalGas": 0.907, "Timber": 2.332, "Bauxite": 0.143, "Uranium": 0.01 }
   },
@@ -55,7 +56,7 @@
   "tz_28": {
     "population": 1844104,
     "urbanization": 0.13,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.75, "nyamwezi": 0.15, "ha": 0.05, "sukuma": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.6, "Coal": 0.324, "Oil": 0.555, "IronOre": 0.354, "RareEarths": 0.08, "NaturalGas": 0.545, "Timber": 0.995, "Bauxite": 0.076, "Uranium": 0.011 }
   },
@@ -63,7 +64,7 @@
   "tz_08": {
     "population": 2694915,
     "urbanization": 0.3,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "ha": 0.85, "swahili": 0.1, "hutu": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.21, "Coal": 0.35, "Oil": 0.772, "IronOre": 0.22, "RareEarths": 0.063, "NaturalGas": 0.34, "Timber": 1.327, "Bauxite": 0.066, "Uranium": 0.015 }
   },
@@ -71,7 +72,7 @@
   "tz_09": {
     "population": 2915287,
     "urbanization": 0.65,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "chagga": 0.8, "swahili": 0.15, "maasai": 0.05 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.734, "Coal": 0.294, "Oil": 0.359, "IronOre": 0.33, "RareEarths": 0.081, "NaturalGas": 0.666, "Timber": 3.226, "Bauxite": 0.089, "Uranium": 0.009 }
   },
@@ -79,7 +80,7 @@
   "tz_12": {
     "population": 977227,
     "urbanization": 0.11,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.45, "makonde": 0.35, "makua": 0.2 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.969, "Coal": 0.359, "Oil": 0.515, "IronOre": 0.392, "RareEarths": 0.082, "NaturalGas": 0.429, "Timber": 3.225, "Bauxite": 0.162, "Uranium": 0.012 }
   },
@@ -87,7 +88,7 @@
   "tz_26": {
     "population": 2667653,
     "urbanization": 0.05,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.65, "maasai": 0.2, "gogo": 0.1, "chagga": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.59, "Coal": 0.233, "Oil": 0.341, "IronOre": 0.341, "RareEarths": 0.105, "NaturalGas": 0.623, "Timber": 3.241, "Bauxite": 0.098, "Uranium": 0.017 }
   },
@@ -95,7 +96,7 @@
   "tz_13": {
     "population": 744706,
     "urbanization": 0.46,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.5, "luo": 0.3, "sukuma": 0.15, "maasai": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.435, "Coal": 0.079, "Oil": 0.187, "IronOre": 0.077, "RareEarths": 0.017, "NaturalGas": 0.212, "Timber": 1.449, "Bauxite": 0.042, "Uranium": 0.004 }
   },
@@ -103,7 +104,7 @@
   "tz_14": {
     "population": 4416341,
     "urbanization": 0.27,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.85, "hehe": 0.1, "sukuma": 0.05 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.616, "Coal": 0.097, "Oil": 0.147, "IronOre": 0.148, "RareEarths": 0.04, "NaturalGas": 0.261, "Timber": 1.064, "Bauxite": 0.051, "Uranium": 0.003 }
   },
@@ -111,7 +112,7 @@
   "tz_16": {
     "population": 4920243,
     "urbanization": 0.22,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.85, "hehe": 0.05, "gogo": 0.05, "maasai": 0.05 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 0.962, "Coal": 0.439, "Oil": 0.655, "IronOre": 0.316, "RareEarths": 0.051, "NaturalGas": 0.699, "Timber": 1.268, "Bauxite": 0.122, "Uranium": 0.015 }
   },
@@ -119,7 +120,7 @@
   "tz_17": {
     "population": 837531,
     "urbanization": 0.41,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "makonde": 0.6, "makua": 0.2, "swahili": 0.2 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.142, "Coal": 0.343, "Oil": 0.33, "IronOre": 0.268, "RareEarths": 0.04, "NaturalGas": 0.612, "Timber": 1.14, "Bauxite": 0.073, "Uranium": 0.006 }
   },
@@ -127,7 +128,7 @@
   "tz_18": {
     "population": 1822673,
     "urbanization": 0.7,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "sukuma": 0.8, "swahili": 0.13, "haya": 0.04, "nyamwezi": 0.03 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.486, "Coal": 0.083, "Oil": 0.182, "IronOre": 0.146, "RareEarths": 0.045, "NaturalGas": 0.297, "Timber": 2.407, "Bauxite": 0.038, "Uranium": 0.006 }
   },
@@ -135,7 +136,7 @@
   "tz_29": {
     "population": 1375457,
     "urbanization": 0.09,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "hehe": 0.65, "swahili": 0.35 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.877, "Coal": 0.536, "Oil": 0.964, "IronOre": 0.484, "RareEarths": 0.106, "NaturalGas": 0.389, "Timber": 2.961, "Bauxite": 0.098, "Uranium": 0.02 }
   },
@@ -143,7 +144,7 @@
   "tz_19": {
     "population": 10772900,
     "urbanization": 0.74,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.58, "chagga": 0.07, "sukuma": 0.06, "makonde": 0.05, "nyamwezi": 0.04, "haya": 0.04, "hehe": 0.04, "gogo": 0.03, "maasai": 0.02, "ha": 0.02, "somali": 0.02, "indian_diaspora": 0.01, "arab_yemeni": 0.01, "comorian": 0.01 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.974, "Coal": 0.321, "Oil": 0.48, "IronOre": 0.197, "RareEarths": 0.091, "NaturalGas": 0.478, "Timber": 1.805, "Bauxite": 0.099, "Uranium": 0.016 }
   },
@@ -151,7 +152,7 @@
   "tz_20": {
     "population": 1277348,
     "urbanization": 0.18,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.85, "nyamwezi": 0.05, "ha": 0.05, "sukuma": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.832, "Coal": 0.131, "Oil": 0.136, "IronOre": 0.079, "RareEarths": 0.02, "NaturalGas": 0.245, "Timber": 1.142, "Bauxite": 0.031, "Uranium": 0.002 }
   },
@@ -159,7 +160,7 @@
   "tz_21": {
     "population": 2194720,
     "urbanization": 0.16,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.75, "makua": 0.1, "makonde": 0.1, "hehe": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.432, "Coal": 0.109, "Oil": 0.2, "IronOre": 0.091, "RareEarths": 0.014, "NaturalGas": 0.147, "Timber": 2.25, "Bauxite": 0.022, "Uranium": 0.005 }
   },
@@ -167,7 +168,7 @@
   "tz_22": {
     "population": 859293,
     "urbanization": 0.43,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "sukuma": 0.82, "swahili": 0.1, "nyamwezi": 0.08 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.305, "Coal": 0.385, "Oil": 0.399, "IronOre": 0.148, "RareEarths": 0.074, "NaturalGas": 0.511, "Timber": 3.126, "Bauxite": 0.049, "Uranium": 0.012 }
   },
@@ -175,7 +176,7 @@
   "tz_30": {
     "population": 415559,
     "urbanization": 0.1,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "sukuma": 0.88, "swahili": 0.12 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.401, "Coal": 0.106, "Oil": 0.21, "IronOre": 0.109, "RareEarths": 0.024, "NaturalGas": 0.344, "Timber": 1.911, "Bauxite": 0.057, "Uranium": 0.006 }
   },
@@ -183,7 +184,7 @@
   "tz_23": {
     "population": 897522,
     "urbanization": 0.24,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.8, "sukuma": 0.1, "gogo": 0.05, "nyamwezi": 0.05 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.791, "Coal": 0.238, "Oil": 0.523, "IronOre": 0.209, "RareEarths": 0.047, "NaturalGas": 0.599, "Timber": 2.474, "Bauxite": 0.122, "Uranium": 0.006 }
   },
@@ -191,7 +192,7 @@
   "tz_24": {
     "population": 4727198,
     "urbanization": 0.38,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "nyamwezi": 0.7, "sukuma": 0.15, "swahili": 0.15 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 2.294, "Coal": 0.228, "Oil": 0.282, "IronOre": 0.19, "RareEarths": 0.063, "NaturalGas": 0.39, "Timber": 2.584, "Bauxite": 0.063, "Uranium": 0.007 }
   },
@@ -199,7 +200,7 @@
   "tz_25": {
     "population": 2339252,
     "urbanization": 0.31,
-    "cultures": { "sukuma": 0.16, "swahili": 0.15, "bemba": 0.06, "chewa": 0.06, "ganda": 0.06, "chagga": 0.055, "tonga": 0.055, "kamba": 0.05, "kikuyu": 0.05, "makua": 0.05, "luhya": 0.045, "luo": 0.04, "nyankole": 0.04, "hutu": 0.03, "luba": 0.03, "maasai": 0.03, "arab_yemeni": 0.01, "comorian": 0.01, "somali": 0.01, "indian_diaspora": 0.005 },
+    "cultures": { "swahili": 0.88, "maasai": 0.05, "chagga": 0.04, "sukuma": 0.02, "somali": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.772, "Coal": 0.12, "Oil": 0.129, "IronOre": 0.079, "RareEarths": 0.038, "NaturalGas": 0.158, "Timber": 0.983, "Bauxite": 0.033, "Uranium": 0.003 }
   }

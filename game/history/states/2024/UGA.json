@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2014 census by sub-region.
 {
   // Adjumani
   "ug_301": {
     "population": 5669699,
     "urbanization": 0.19,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "lugbara": 0.45, "alur": 0.15, "acholi": 0.15, "dinka": 0.06, "lango": 0.04, "ganda": 0.04, "nuer": 0.03, "nyankole": 0.03, "teso": 0.03, "kiga": 0.02 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.908, "Coal": 0.207, "Oil": 0.22, "IronOre": 0.177, "RareEarths": 0.046, "NaturalGas": 0.517, "Timber": 2.28, "Bauxite": 0.072, "Uranium": 0.01 }
   },
@@ -23,7 +24,7 @@
   "ug_219": {
     "population": 9630918,
     "urbanization": 0.28,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "soga": 0.35, "teso": 0.2, "luhya": 0.15, "luo": 0.08, "ganda": 0.06, "lango": 0.05, "karamojong": 0.03, "kalenjin": 0.03, "nyankole": 0.03, "acholi": 0.02 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.607, "Coal": 0.28, "Oil": 0.681, "IronOre": 0.215, "RareEarths": 0.049, "NaturalGas": 0.613, "Timber": 2.936, "Bauxite": 0.086, "Uranium": 0.006 }
   },
@@ -31,7 +32,7 @@
   "ug_120": {
     "population": 1912252,
     "urbanization": 0.6,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "ganda": 0.85, "soga": 0.1, "nyankole": 0.03, "luo": 0.02 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 0.752, "Coal": 0.47, "Oil": 0.533, "IronOre": 0.153, "RareEarths": 0.063, "NaturalGas": 0.493, "Timber": 2.803, "Bauxite": 0.104, "Uranium": 0.014 }
   },
@@ -39,7 +40,7 @@
   "ug_413": {
     "population": 3036550,
     "urbanization": 0.11,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "toro": 0.4, "kiga": 0.25, "nyankole": 0.15, "hutu": 0.06, "ganda": 0.06, "tutsi": 0.03, "lugbara": 0.03, "alur": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.251, "Coal": 0.244, "Oil": 0.447, "IronOre": 0.13, "RareEarths": 0.073, "NaturalGas": 0.246, "Timber": 0.878, "Bauxite": 0.094, "Uranium": 0.005 }
   },
@@ -47,7 +48,7 @@
   "ug_306": {
     "population": 676858,
     "urbanization": 0.05,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "karamojong": 0.9, "teso": 0.03, "acholi": 0.03, "turkana": 0.02, "ganda": 0.02 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.238, "Coal": 0.308, "Oil": 0.776, "IronOre": 0.318, "RareEarths": 0.071, "NaturalGas": 0.479, "Timber": 1.009, "Bauxite": 0.118, "Uranium": 0.009 }
   },
@@ -55,7 +56,7 @@
   "ug_327": {
     "population": 1521749,
     "urbanization": 0.4,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "acholi": 0.9, "lango": 0.03, "dinka": 0.03, "lugbara": 0.02, "ganda": 0.02 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.941, "Coal": 0.212, "Oil": 0.227, "IronOre": 0.204, "RareEarths": 0.029, "NaturalGas": 0.227, "Timber": 1.856, "Bauxite": 0.062, "Uranium": 0.006 }
   },
@@ -63,7 +64,7 @@
   "ug_410": {
     "population": 4016674,
     "urbanization": 0.16,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "nyankole": 0.8, "kiga": 0.1, "ganda": 0.04, "tutsi": 0.03, "hutu": 0.02, "toro": 0.01 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.336, "Coal": 0.457, "Oil": 0.682, "IronOre": 0.258, "RareEarths": 0.106, "NaturalGas": 0.881, "Timber": 2.045, "Bauxite": 0.146, "Uranium": 0.013 }
   },
@@ -71,7 +72,7 @@
   "ug_107": {
     "population": 10446924,
     "urbanization": 0.44,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "ganda": 0.7, "nyankole": 0.06, "soga": 0.04, "kiga": 0.04, "toro": 0.03, "acholi": 0.03, "tutsi": 0.02, "hutu": 0.02, "lugbara": 0.02, "teso": 0.02, "indian_diaspora": 0.01, "luhya": 0.01 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.087, "Coal": 0.362, "Oil": 0.481, "IronOre": 0.129, "RareEarths": 0.062, "NaturalGas": 0.416, "Timber": 2.398, "Bauxite": 0.089, "Uranium": 0.006 }
   },
@@ -79,7 +80,7 @@
   "ug_328": {
     "population": 7357970,
     "urbanization": 0.06,
-    "cultures": { "ganda": 0.165, "nyankole": 0.1, "acholi": 0.095, "kikuyu": 0.07, "luo": 0.07, "sukuma": 0.07, "chagga": 0.06, "kamba": 0.06, "luhya": 0.06, "dinka": 0.05, "kalenjin": 0.05, "nuer": 0.05, "hutu": 0.04, "swahili": 0.03, "tutsi": 0.03 },
+    "cultures": { "lango": 0.4, "teso": 0.35, "karamojong": 0.1, "acholi": 0.07, "ganda": 0.03, "kalenjin": 0.03, "soga": 0.02 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 2.304, "Coal": 0.101, "Oil": 0.353, "IronOre": 0.155, "RareEarths": 0.041, "NaturalGas": 0.201, "Timber": 1.112, "Bauxite": 0.03, "Uranium": 0.004 }
   }
