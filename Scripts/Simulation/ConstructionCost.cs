@@ -33,7 +33,7 @@ public sealed partial class Defines
     /// least one. All of them at once made the world grow ten per cent a year - nothing wears
     /// out and labour never runs short, so capacity compounded without limit.
     /// </summary>
-    public float ConstructionParallelPerEconomy { get; set; } = 0.5f;
+    public float ConstructionParallelPerEconomy { get; set; } = 0.7f;
 }
 
 /// <summary>

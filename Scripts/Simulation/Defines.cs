@@ -1172,7 +1172,7 @@ public sealed partial class Defines
 	public float AiPeacetimeArmsFocus { get; set; } = 0.04f;
 	public float AiStabilityConcern { get; set; } = 0.52f;
 	public float AiSocialStep { get; set; } = 0.006f;
-	public float AiBuildTreasuryFloor { get; set; } = 0.03f;
+	public float AiBuildTreasuryFloor { get; set; } = 0.01f;
 	public int AiMaxConcurrentProjects { get; set; } = 4;
 
 	/// <summary>How much each existing building of a kind discourages another one there.</summary>

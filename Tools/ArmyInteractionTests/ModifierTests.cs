@@ -62,6 +62,33 @@ static class ModifierTests
             "ConstructionPriceLevelEnabled off restores the flat catalogue price and limit");
         c.Defines.ConstructionPriceLevelEnabled = true;
 
+        // --- plant wears out (CapitalDepreciation) -------------------------------------------
+        int Productive() => c.States.Sum(s => s.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) +
+                                             s.Buildings.GetValueOrDefault(BuildingKind.Agriculture));
+        int Schools() => c.States.Sum(s => s.Buildings.GetValueOrDefault(BuildingKind.University));
+        var hoursBefore = c.ElapsedHours;
+        void Weeks(int count)
+        {
+            for (var w = 1; w <= count; w++)
+            {
+                typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, (long)(w * 7) * 24);
+                CapitalDepreciation.Week(c);
+            }
+        }
+        var plantBefore = Productive();
+        var schoolsBefore = Schools();
+        var stream = c.Random.State;
+        c.Defines.BuildingDepreciationPerYear = 0f;
+        Weeks(52);
+        Check(Productive() == plantBefore, "with depreciation off nothing wears out");
+        c.Defines.BuildingDepreciationPerYear = 0.5f;
+        Weeks(52);
+        Check(Productive() < plantBefore && Schools() == schoolsBefore,
+            $"at half a year's wear plant goes out of service ({plantBefore} -> {Productive()}) and schools do not");
+        Check(c.Random.State == stream, "wear draws nothing from the campaign's random stream");
+        c.Defines.BuildingDepreciationPerYear = 0.02f;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, hoursBefore);
+
         // --- training --------------------------------------------------------------------
         var template = UnitTypeCatalog.Get("line_infantry");
         var usual = RecruitmentSystem.TrainingDaysOf(germany, template);

@@ -192,7 +192,9 @@ static class AiFiscalPolicyTests
     private static void ProjectAffordability()
     {
         var (c, n, _) = Fixture();
-        n.Treasury = 3.06f;
+        // A token above the reserve, whatever the reserve rule is: the floor was 3 % of GDP when
+        // this was written (3.06 against 100), and is 1 % since 28 October 2026.
+        n.Treasury = n.Gdp * c.Defines.AiBuildTreasuryFloor + 0.06f;
         var reserve = AiFiscalPolicy.Assess(c, n, c.Defines.AiBuildTreasuryFloor);
         Check(reserve.CanSpend && !AiFiscalPolicy.CanStartProject(c, n, BuildingKind.CivilianIndustry, reserve),
             "a token deposit does not authorize a capital queue with no money for its near-term payments");

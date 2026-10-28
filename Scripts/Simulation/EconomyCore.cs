@@ -1508,6 +1508,9 @@ public static class ConstructionSystem
         // it is not the one this is.
         if (!campaign.StepOpensNewDay) return;
 
+        // Plant wears out, once a week (CapitalDepreciation).
+        CapitalDepreciation.Week(campaign);
+
         // The oldest sites a country has open work today - as many as the size of its economy
         // runs (ConstructionCost.WorkingSites) - while the treasury pays for them. Only the oldest
         // single project used to move: a country with forty-eight sites finished one at a time, so

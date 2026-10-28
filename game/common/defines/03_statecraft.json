@@ -68,7 +68,7 @@
   "AiPeacetimeArmsFocus": 0.04,
   "AiStabilityConcern": 0.52,
   "AiSocialStep": 0.006,
-  "AiBuildTreasuryFloor": 0.03,
+  "AiBuildTreasuryFloor": 0.01,
   "AiMaxConcurrentProjects": 4,
   "AiBuildSaturation": 2.5,
   "AiEconomicWeight": 0.004,
