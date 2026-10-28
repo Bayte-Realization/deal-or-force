@@ -98,6 +98,14 @@ static class Program
         loaded.PendingEvents.Add(expired);
         EventSystem.Resolve(loaded, expired, 0);
         Check(!PeacefulFormation.Consented(loaded, humanFounder, humanPartner, definition), "an expired human proposal cannot grant consent");
+        // An observer watches: nobody sits at the desk to answer, so the country decides as a
+        // government nobody plays and no window is put on a table nobody looks at.
+        loaded.ObserverMode = true;
+        var eventsBefore = loaded.PendingEvents.Count;
+        PeacefulFormation.Invite(loaded, humanFounder, humanPartner, definition);
+        Check(loaded.PendingEvents.Count == eventsBefore, "an observer is not handed a union invitation");
+        loaded.ObserverMode = false;
+        humanPartner.DecisionAvailableDay.Clear();
         var humanRefusal = PeacefulFormation.Refusal(loaded, humanFounder, humanPartner, definition);
         Check(PeacefulFormation.Invite(loaded, humanFounder, humanPartner, definition), "a human receives a proposal instead of automatic consent: " + humanRefusal);
         var proposal = loaded.PendingEvents.Single(e => e.Options.Any(o => o.UnionFounderId == humanFounder.Id));

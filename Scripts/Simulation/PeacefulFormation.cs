@@ -32,8 +32,12 @@ public static class PeacefulFormation
     private static bool AtPeace(Campaign campaign, Nation nation) =>
         !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
 
+    // An observer watches; nobody sits at the country's desk to answer an invitation, so the
+    // country answers it the way any government nobody plays would. Asked, it was handed a
+    // window it could not see - and observer mode then took the first option, which signed
+    // Spain into a Mexican union nobody had chosen.
     private static bool HumanControlled(Campaign campaign, Nation nation) =>
-        nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id);
+        !campaign.ObserverMode && (nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id));
 
     public static bool Consented(Campaign campaign, Nation founder, Nation partner, FormableNation definition) =>
         definition.PeacefulAccession && partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until)

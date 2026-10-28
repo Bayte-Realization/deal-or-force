@@ -552,12 +552,38 @@ public static class EventSystem
 
         // And anything already on the table is decided rather than left waiting, so turning
         // the mode on in the middle of a campaign does not leave a window behind it.
+        // A union or a merger is the one question the first answer must not settle: it is
+        // "yes". Those are answered the way a government nobody plays would answer them.
         if (campaign.ObserverMode)
             foreach (var item in campaign.PendingEvents.ToArray())
-                Resolve(campaign, item, 0);
+                Resolve(campaign, item, ObserverAnswer(campaign, item));
 
         foreach (var item in campaign.PendingEvents.Where(item => item.ExpiresDay <= campaign.ElapsedDays).ToArray())
             Resolve(campaign, item, 1);
+    }
+
+    /// <summary>The option observer mode takes: the first, except for a union or a merger, which the
+    /// country takes only if it would have as a government nobody plays, and declines otherwise.</summary>
+    private static int ObserverAnswer(Campaign campaign, PendingCampaignEvent item)
+    {
+        var nation = campaign.NationById(item.NationId);
+        var decline = Math.Max(0, item.Options.Length - 1);
+        foreach (var option in item.Options)
+        {
+            if (!string.IsNullOrEmpty(option.UnionFormableId))
+            {
+                var founder = campaign.NationById(option.UnionFounderId);
+                return founder is not null && nation is not null &&
+                       PeacefulFormation.Willingness(campaign, founder, nation) >= campaign.Defines.UnionAiAcceptance ? 0 : decline;
+            }
+            if (option.ShardConsolidateFounderId > 0)
+            {
+                var founder = campaign.NationById(option.ShardConsolidateFounderId);
+                return founder is not null && nation is not null &&
+                       Consolidation.ShardWillingness(campaign, founder, nation) >= campaign.Defines.ShardConsolidationAcceptance ? 0 : decline;
+            }
+        }
+        return 0;
     }
 
     public static void Resolve(Campaign campaign, PendingCampaignEvent item, int optionIndex)
