@@ -159,6 +159,19 @@ public static class QualityProfiles
         return null;
     }
 
+    /// <summary>
+    /// The cheapest tier the automatic governor may step down to from this start: the last one
+    /// (the processor tier) only when the machine started there, otherwise the one before it.
+    /// </summary>
+    public static int AutomaticFloor(QualityProfile start)
+    {
+        EnsureLoaded();
+        if (Loaded.Count == 0 || start is null) return int.MaxValue;
+        var last = Loaded[^1].Order;
+        if (start.Order >= last) return last;
+        return Loaded.Count >= 2 ? Loaded[^2].Order : last;
+    }
+
     /// <summary>The next better tier, or null when this is already the best picture.</summary>
     public static QualityProfile Previous(QualityProfile current)
     {
@@ -200,7 +213,12 @@ public static class QualityProfiles
 public sealed class FrameRateGovernor
 {
     private readonly Queue<double> _window = new();
+    private readonly Queue<double> _gpuWindow = new();
     private readonly int _windowFrames;
+    // The cheapest tier the governor may reach by itself: the processor tier only for a machine
+    // that started there. A real graphics card that is merely busy never falls to half the
+    // pixels and the flat raster, the picture people called "soap".
+    private readonly int _floorOrder;
     private double _slowFor;
     private double _fastFor;
     private double _sinceChange;
@@ -215,6 +233,7 @@ public sealed class FrameRateGovernor
         Profile = start ?? throw new ArgumentNullException(nameof(start));
         Automatic = automatic;
         _windowFrames = Math.Clamp(windowFrames, 12, 600);
+        _floorOrder = QualityProfiles.AutomaticFloor(start);
     }
 
     /// <summary>
@@ -224,7 +243,12 @@ public sealed class FrameRateGovernor
     /// update - and is ignored: one 900 ms frame must not convince the game it is running on a
     /// processor.
     /// </summary>
-    public QualityProfile Sample(double frameMilliseconds)
+    /// <param name="gpuMilliseconds">
+    /// What the graphics card spent drawing the map this frame, or below zero when unknown. A
+    /// slow frame with an idle card is a busy processor - the simulation, a save, another program
+    /// - and fewer pixels would not make it a millisecond faster; it only blurred the map.
+    /// </param>
+    public QualityProfile Sample(double frameMilliseconds, double gpuMilliseconds = -1)
     {
         if (!Automatic || frameMilliseconds <= 0 || double.IsNaN(frameMilliseconds)) return null;
         if (frameMilliseconds > QualityProfiles.SlowFrameMs * 4) return null;
@@ -233,19 +257,34 @@ public sealed class FrameRateGovernor
         // take a minute to collect enough frames to admit it.
         _window.Enqueue(frameMilliseconds);
         while (_window.Count > _windowFrames) _window.Dequeue();
+        if (gpuMilliseconds >= 0 && !double.IsNaN(gpuMilliseconds))
+        {
+            _gpuWindow.Enqueue(gpuMilliseconds);
+            while (_gpuWindow.Count > _windowFrames) _gpuWindow.Dequeue();
+        }
         if (_window.Count < _windowFrames) return null;
 
         var ordered = _window.ToArray();
         Array.Sort(ordered);
         var median = ordered[ordered.Length / 2];
         var windowSeconds = ordered.Sum() / 1000.0;
+        var gpuKnown = _gpuWindow.Count >= _windowFrames / 2;
+        var gpuMedian = 0.0;
+        if (gpuKnown)
+        {
+            var gpu = _gpuWindow.ToArray();
+            Array.Sort(gpu);
+            gpuMedian = gpu[gpu.Length / 2];
+        }
+        var cardBound = !gpuKnown || gpuMedian > QualityProfiles.SlowFrameMs * 0.6;
+        var cardIdle = gpuKnown && gpuMedian < QualityProfiles.SlowFrameMs * 0.35;
 
-        if (median > QualityProfiles.SlowFrameMs)
+        if (median > QualityProfiles.SlowFrameMs && cardBound)
         {
             _slowFor += windowSeconds;
             _fastFor = 0;
         }
-        else if (median < QualityProfiles.FastFrameMs)
+        else if (median < QualityProfiles.FastFrameMs || cardIdle && Profile.Order > 0)
         {
             _fastFor += windowSeconds;
             _slowFor = 0;
@@ -260,7 +299,7 @@ public sealed class FrameRateGovernor
         {
             _slowFor = 0;
             var cheaper = QualityProfiles.Next(Profile);
-            if (cheaper is not null) return Adopt(cheaper);
+            if (cheaper is not null && cheaper.Order <= _floorOrder) return Adopt(cheaper);
         }
         else if (_fastFor >= QualityProfiles.StepUpSeconds && _sinceChange >= QualityProfiles.StepUpSeconds)
         {

@@ -545,6 +545,63 @@ public static class Program
             return 0;
         }
 
+        // `--mobility <days> [every]`: how much fronts move, all wars together - provinces that changed
+        // controller in the period, wars with land fighting and how many of those stood still for
+        // ninety days, battles ended and how they ended. "Static" answered with numbers.
+        var mobilityAt = Array.IndexOf(args, "--mobility");
+        if (mobilityAt >= 0)
+        {
+            var mobilityDays = mobilityAt + 1 < args.Length && int.TryParse(args[mobilityAt + 1], out var mdays) ? mdays : 365;
+            var mobilityEvery = mobilityAt + 2 < args.Length && int.TryParse(args[mobilityAt + 2], out var mevery) ? mevery : 30;
+            campaign.IsPaused = false;
+            var previous = (ushort[])campaign.ProvinceController.Clone();
+            var lastMove = new Dictionary<int, int>();
+            var seenBattles = new HashSet<int>();
+            var movedTotal = 0;
+            Warfare.OutcomeTally.Clear();
+            for (var day = 1; day <= mobilityDays; day++)
+            {
+                campaign.TickDay();
+                var control = campaign.ProvinceController;
+                for (var p = 1; p < control.Length && p < previous.Length; p++)
+                {
+                    if (control[p] == previous[p]) continue;
+                    movedTotal++;
+                    foreach (var war in campaign.Wars)
+                        if (!war.Ended && war.OriginalController.ContainsKey(p)) lastMove[war.Id] = day;
+                    previous[p] = control[p];
+                }
+                if (day % mobilityEvery != 0 && day != mobilityDays) continue;
+                var fighting = campaign.Wars.Where(w => !w.Ended && campaign.Armies.Any(a => a.AssignedWarId == w.Id)).ToList();
+                var stalled = fighting.Count(w => day - lastMove.GetValueOrDefault(w.Id, 0) >= 90 &&
+                                                  campaign.ElapsedDays - w.StartedDay >= 90);
+                var ended = campaign.Battles.Where(b => b.Ended && seenBattles.Add(b.Id)).ToList();
+                var attackerWins = ended.Count(b => b.WinnerId == b.AttackerId);
+                Console.WriteLine($"FRONTS day {campaign.ElapsedDays}: provinces changed hands {movedTotal:N0} in the period, " +
+                                  $"wars with armies in the field {fighting.Count} ({stalled} still for 90+ days), " +
+                                  $"battles ended {ended.Count} (attacker won {attackerWins}), open {campaign.Battles.Count(b => !b.Ended)}; " +
+                                  "outcomes " + string.Join(", ", Warfare.OutcomeTally.OrderByDescending(p => p.Value).Take(6).Select(p => $"{p.Key} {p.Value}")));
+                // The largest war by divisions, side by side: who is on the advance, in battle,
+                // resting after a spent attack, marching, and how ready they are.
+                var largest = fighting.OrderByDescending(w => campaign.Armies.Count(a => a.AssignedWarId == w.Id)).FirstOrDefault();
+                if (largest is not null)
+                    foreach (var sideId in new[] { largest.AttackerId, largest.DefenderId })
+                    {
+                        var side = campaign.Armies.Where(a => a.AssignedWarId == largest.Id && a.NationId == sideId && a.TemplateId != MilitiaCore.TemplateId).ToList();
+                        if (side.Count == 0) continue;
+                        Console.WriteLine($"   {campaign.NationById(sideId)?.Tag} in {largest.Name}: {side.Count} div, " +
+                                          $"advance {side.Count(a => a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)}, " +
+                                          $"defend {side.Count(a => a.OrderKind == ArmyOrder.DefendFront)}, reserve {side.Count(a => a.OrderKind == ArmyOrder.ReserveFront)}, " +
+                                          $"in battle {side.Count(a => a.InBattle)}, resting {side.Count(a => a.ReadyDay > campaign.ElapsedDays)}, " +
+                                          $"marching {side.Count(a => a.Route.Count > 0)}, org {side.Average(a => a.Organisation):0.00}, " +
+                                          $"planning {side.Average(a => a.Planning):0.00}, readiness {FrontPlanner.Readiness(campaign, largest, campaign.NationById(sideId)):0.00}");
+                    }
+                movedTotal = 0;
+                Warfare.OutcomeTally.Clear();
+            }
+            return 0;
+        }
+
         // `--growth <days> [every]`: whether the world grows richer - world output, people and output
         // per head, year by year, with the ten largest economies and the mean secular drift. Run it
         // with --define SecularFrontierGrowth=0 for the world as it was before the frontier moved.

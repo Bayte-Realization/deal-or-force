@@ -730,7 +730,7 @@ public static class Factions
                 var war = new StrategicWar
                 {
                     Id = campaign.Wars.Count == 0 ? 0 : campaign.Wars.Max(other => other.Id) + 1,
-                    Name = definition.WarName.Length > 0 ? definition.WarName : $"{parent.Name}–{born.Name} War",
+                    Name = definition.WarName.Length > 0 ? definition.WarName : $"{parent.DisplayName}–{born.DisplayName} War",
                     AttackerId = parent.Id,
                     DefenderId = born.Id,
                     StartedDay = campaign.ElapsedDays,

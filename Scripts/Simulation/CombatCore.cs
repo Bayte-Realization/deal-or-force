@@ -12,6 +12,20 @@ public sealed partial class Defines
     /// a fifth softer, rarely both at once; zero makes every battle a sum, as it was.
     /// </summary>
     public float CombatFortune { get; set; } = 0.18f;
+
+    /// <summary>
+    /// The fortune of a whole battle for one side, 1 ± this, triangular, rolled once when it
+    /// begins: the weather that holds, the commander who reads the ground, the bridge that was
+    /// not blown. A day's fortune averages out over a battle of twenty days; this does not, and
+    /// it is what lets an outnumbered side win a battle it should have lost.
+    /// </summary>
+    public float CombatBattleFortune { get; set; } = 0.22f;
+
+    /// <summary>The share of battles that turn on one decisive moment - a brilliant stroke or a blunder.</summary>
+    public float CombatDecisiveChance { get; set; } = 0.06f;
+
+    /// <summary>How far that moment swings the side it falls to, up or down.</summary>
+    public float CombatDecisiveSwing { get; set; } = 0.35f;
 }
 
 public static partial class Warfare
@@ -470,14 +484,25 @@ public static partial class Warfare
         return $"{landed.Count:N0} formation(s) landed into a contested beach";
     }
 
-    /// <summary>One side's fortune for today's fighting: 1 ± Defines.CombatFortune, triangular, from the seed.</summary>
+    /// <summary>One side's fortune for today's fighting: the day's, 1 ± Defines.CombatFortune, triangular, times the battle's; from the seed.</summary>
     private static float Fortune(Campaign campaign, LandBattle battle, int side)
     {
         var spread = M.Clamp(campaign.Defines.CombatFortune, 0f, 0.6f);
         if (spread <= 0f) return 1f;
         var first = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F7);
         var second = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F8);
-        return 1f + spread * (first + second - 1f);
+        var today = 1f + spread * (first + second - 1f);
+        // And the battle's own fortune, the same every day of it (Defines.CombatBattleFortune),
+        // and now and then the one moment the whole battle turns on (CombatDecisiveChance).
+        var battleSpread = M.Clamp(campaign.Defines.CombatBattleFortune, 0f, 0.6f);
+        var whole = 1f + battleSpread * (Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6F9) +
+                                         Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FA) - 1f);
+        if (Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FB) < M.Clamp01(campaign.Defines.CombatDecisiveChance))
+        {
+            var swing = M.Clamp(campaign.Defines.CombatDecisiveSwing, 0f, 0.9f);
+            whole *= Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, 0x6FC) < 0.5f ? 1f - swing : 1f + swing;
+        }
+        return today * whole;
     }
 
     private static void ResolveBattles(Campaign campaign)

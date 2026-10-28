@@ -78,7 +78,9 @@
   // one counts towards stepping back up. 34 ms is twenty-nine frames a second, which is where
   // a map that is being dragged stops feeling like a map.
   "slow_frame_ms": 34.0,
-  "fast_frame_ms": 11.0,
+  // Eleven was ninety frames a second for twenty seconds, which this map almost never shows:
+  // a game stepped down once stayed blurred. Eighteen is fifty-five frames.
+  "fast_frame_ms": 18.0,
   "step_down_seconds": 4.0,
   "step_up_seconds": 20.0
 }

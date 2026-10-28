@@ -978,6 +978,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _globeMaterial.SetShaderParameter("selected_region_id", (float)rawRegion);
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);
+            SelectedRegionMembers(provinceId > 0 && _campaign?.ProvinceMap is not null ? regionMapIndex : -1);
         }
         pick = new GlobePick(nation, state, provinceId, latitude, longitude);
         return true;
@@ -1809,6 +1810,44 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _globeMaterial?.SetShaderParameter("selection_active", 0f);
         _globeMaterial?.SetShaderParameter("selected_region_id", -1f);
         _globeMaterial?.SetShaderParameter("selected_province_id", -1f);
+        _globeMaterial?.SetShaderParameter("selected_region_live", 0f);
+    }
+
+    private Image _selectedRegionImage;
+    private ImageTexture _selectedRegionTexture;
+    private readonly byte[] _selectedRegionPixels = new byte[256 * 256];
+
+    /// <summary>
+    /// Light the live region the player picked, every province of it. The tint used to follow
+    /// the authored raster, so a region a border had cut lit up as the whole region it had been
+    /// in 2024 - and a region stitched together from pieces lit up as only the piece clicked.
+    /// One byte per province, read by the shader the way the front membership is.
+    /// </summary>
+    private void SelectedRegionMembers(int liveRegion)
+    {
+        if (_globeMaterial is null) return;
+        var map = _campaign?.ProvinceMap;
+        if (liveRegion < 0 || map is null)
+        {
+            _globeMaterial.SetShaderParameter("selected_region_live", 0f);
+            return;
+        }
+        Array.Clear(_selectedRegionPixels);
+        var states = map.ProvinceToState;
+        for (var province = 1; province < states.Length && province < _selectedRegionPixels.Length; province++)
+            if (states[province] == liveRegion) _selectedRegionPixels[province] = 255;
+        if (_selectedRegionTexture is null)
+        {
+            _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+            _selectedRegionTexture = ImageTexture.CreateFromImage(_selectedRegionImage);
+            _globeMaterial.SetShaderParameter("selected_region_members", _selectedRegionTexture);
+        }
+        else
+        {
+            _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+            _selectedRegionTexture.Update(_selectedRegionImage);
+        }
+        _globeMaterial.SetShaderParameter("selected_region_live", 1f);
     }
 
     public override string _GetTooltip(Vector2 atPosition)
@@ -1960,6 +1999,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private TextureRect _picture = null!;
 
+    private bool _measuringGpu;
+
+    /// <summary>
+    /// What the graphics card spent on the globe's last frame, in milliseconds; below zero until
+    /// the first measurement. The quality governor reads it to tell a busy card, which fewer
+    /// pixels help, from a busy processor, which they do not.
+    /// </summary>
+    public double MeasuredGpuMs
+    {
+        get
+        {
+            if (!IsInstanceValid(_viewport)) return -1;
+            var rid = _viewport.GetViewportRid();
+            if (!_measuringGpu)
+            {
+                RenderingServer.ViewportSetMeasureRenderTime(rid, true);
+                _measuringGpu = true;
+                return -1;
+            }
+            return RenderingServer.ViewportGetMeasuredRenderTimeGpu(rid);
+        }
+    }
+
     /// <summary>
     /// What share of the window's pixels the globe's 3D is drawn at, set from the video
     /// settings (`render_scale`): 1 is native, and a weaker graphics card can draw fewer and
@@ -2085,6 +2147,10 @@ uniform float selection_active = 0.0;
 uniform float highlighted_nation = -1.0;
 uniform float selected_region_id = -1.0;
 uniform float selected_province_id = -1.0;
+// The live region the player picked, province by province (SelectedRegionMembers): a region a border
+// has cut or a treaty has stitched together is no longer the region the raster was drawn with.
+uniform sampler2D selected_region_members : filter_nearest, repeat_disable;
+uniform float selected_region_live = 0.0;
 uniform float detail_mix = 0.0;
 uniform float province_detail = 0.0;
 uniform float map_mode = 0.0;
@@ -2407,6 +2473,11 @@ vec4 map_mode_color(float nation) {
     float low = mod(nation, 256.0);
     float high = floor(nation / 256.0);
     return texture(map_mode_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
+}
+float selected_member(float province) {
+    float low = mod(province, 256.0);
+    float high = floor(province / 256.0);
+    return texture(selected_region_members, (vec2(low, high) + vec2(0.5)) / 256.0).r;
 }
 vec3 front_data(float province) {
     float low = mod(province, 256.0);
@@ -2775,6 +2846,16 @@ void fragment() {
     float region_selected = (abs(near_region - selected_region_id) < 0.5 ? region_cover
         : abs(other_region_id - selected_region_id) < 0.5 ? 1.0 - region_cover : 0.0)
         * selection_active * political.a;
+    // The whole live region, by its provinces, and its outline where membership changes - not the
+    // authored region the raster still remembers.
+    float near_member = selected_member(near_province);
+    float other_member = selected_member(other_province_id);
+    float live_selected = ((near_member > 0.5 ? province_cover : 0.0) + (other_member > 0.5 ? 1.0 - province_cover : 0.0))
+        * selection_active * political.a;
+    float live_edge = (1.0 - smoothstep(0.0, border_pixels, province_reach / province_aa))
+        * step(0.5, abs(near_member - other_member));
+    region_selected = mix(region_selected, live_selected, step(0.5, selected_region_live));
+    region_edge = mix(region_edge, live_edge, step(0.5, selected_region_live));
     float province_selected = (abs(near_province - selected_province_id) < 0.5 ? province_cover
         : abs(other_province_id - selected_province_id) < 0.5 ? 1.0 - province_cover : 0.0)
         * selection_active * political.a;

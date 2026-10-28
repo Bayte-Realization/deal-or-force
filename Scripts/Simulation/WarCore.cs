@@ -601,7 +601,30 @@ public static partial class FrontPlanner
         // month. Below the readiness line the share falls away - an operational pause, for either
         // side - and comes back as the divisions recover.
         share *= Readiness(c, war, nation);
+        share = MathF.Min(0.92f, share * OffensivePulse(c, war, nation));
         return share;
+    }
+
+    /// <summary>
+    /// The rhythm of a war, for one side: offensives and pauses rather than the same pressure
+    /// every day. Every side of every war has a cycle of its own, ninety to a hundred and eighty
+    /// days long with a phase drawn from the seed; for about a third of it the general staff
+    /// throws its weight forward (AiOffensivePulseStrength more of the army on the advance), for
+    /// a quarter it rests and refits. Two sides seldom peak together, so a front moves in waves -
+    /// one side's offensive, the other's counter-blow - and no two campaigns move alike. Readiness
+    /// still applies under it: a broken army does not attack because it is the season to.
+    /// </summary>
+    internal static float OffensivePulse(Campaign c, StrategicWar war, Nation nation)
+    {
+        var strength = c.Defines.AiOffensivePulseStrength;
+        if (strength <= 0f || war is null || nation is null) return 1f;
+        var period = 90f + 90f * Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F1);
+        var phase = Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F2);
+        var t = (c.ElapsedDays - war.StartedDay) / period + phase;
+        t -= MathF.Floor(t);
+        if (t < 0.32f) return 1f + strength;
+        if (t > 0.75f) return MathF.Max(0.3f, 1f - strength * 0.4f);
+        return 1f;
     }
 
     /// <summary>

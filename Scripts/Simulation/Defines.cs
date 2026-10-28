@@ -438,7 +438,10 @@ public sealed partial class Defines
 	/// the output of every mill. At 1 GDP was nominal with no deflator, and a world of rising
 	/// scarcity read as a boom - 8 % world growth in the first year, Italy doubling in a decade.
 	/// </summary>
-	public float GdpPriceShare { get; set; } = 0.35f;
+	public float GdpPriceShare { get; set; } = 0.25f;
+
+	/// <summary>How far above or below its base a price may count towards GDP, as a share of the base.</summary>
+	public float GdpPriceBand { get; set; } = 0.6f;
 
 	/// <summary>Share of a shortfall a country can cover by importing from the world market.</summary>
 	public float WorldMarketAccess { get; set; } = 0.80f;

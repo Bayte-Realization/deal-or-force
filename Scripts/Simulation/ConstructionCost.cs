@@ -12,7 +12,7 @@ public sealed partial class Defines
     public bool ConstructionPriceLevelEnabled { get; set; } = true;
     /// <summary>The cheapest and dearest a country's price level can make a building, against the world's.</summary>
     public float ConstructionPriceFloor { get; set; } = 0.25f;
-    public float ConstructionPriceCeiling { get; set; } = 2.5f;
+    public float ConstructionPriceCeiling { get; set; } = 4f;
 
     /// <summary>
     /// The weekly output (Nation.GrossOutput) one economy's worth of building is sized for. A

@@ -1112,7 +1112,7 @@ public static class SaveSystem
             Replace(campaign.Wars, Wars);
             Replace(campaign.Sponsorships, Sponsorships);
             Replace(campaign.Organizations, Organizations ?? new());
-            DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId);
+            DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId, ElapsedDays);
             Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());

@@ -354,7 +354,12 @@ public static class MarketSystem
             foreach (var quote in nation.Market.Values)
             {
                 var basePrice = CommodityCatalog.Get(quote.Commodity).BasePrice;
-                grossOutput += quote.Production * (basePrice + priceShare * (quote.Price - basePrice));
+                // And within GdpPriceBand of the base: a world short of everything put prices at
+                // their cap of nearly three times, and the country making those goods doubled its
+                // GDP in two years - the United States reached two fifths of the world economy.
+                var band = MathF.Max(0f, campaign.Defines.GdpPriceBand);
+                var price = M.Clamp(quote.Price, basePrice * MathF.Max(0f, 1f - band), basePrice * (1f + band));
+                grossOutput += quote.Production * (basePrice + priceShare * (price - basePrice));
             }
             nation.GrossOutput = grossOutput;
 
