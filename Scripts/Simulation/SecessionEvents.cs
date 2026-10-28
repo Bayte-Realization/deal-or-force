@@ -1067,11 +1067,11 @@ public static class SecessionEvents
     internal static string StripAdministrativeSuffix(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "";
-        var trimmed = name.Trim();
+        var trimmed = NationNaming.StripRepublicPrefix(name.Trim());
         foreach (var suffix in new[]
         {
             " Governorate", " Oblast", " Krai", " Province", " Prefecture",
-            " Department", " Region", " District", " Voivodeship", " County"
+            " Department", " Region", " District", " Voivodeship", " County", " Republic"
         })
         {
             if (trimmed.Length > suffix.Length + 2 &&

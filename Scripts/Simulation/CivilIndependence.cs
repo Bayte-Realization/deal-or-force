@@ -21,6 +21,17 @@ public sealed partial class Defines
     /// holds, and carry all of it (MovementRules.ZoneOf).
     /// </summary>
     public float CivilReferendumByRegionShare { get; set; } = 0.25f;
+    /// <summary>
+    /// The residents' support at which a vote may be held at all, and how far the count may land
+    /// from it either way: a campaign at 47 % can win (Montenegro, 2006: 55.5 % against a 55 %
+    /// bar) and one at 53 % can lose (Quebec, 1995: 49.4 %).
+    /// </summary>
+    public float CivilReferendumHoldAt { get; set; } = 0.42f;
+    public float CivilReferendumSwing { get; set; } = 0.06f;
+    /// <summary>A lost vote: the standing it costs, the share of the following that drifts away, and how long until the question can be asked again.</summary>
+    public float CivilReferendumLostLegitimacy { get; set; } = 0.12f;
+    public float CivilReferendumLostSupportKept { get; set; } = 0.85f;
+    public int CivilReferendumRetryDays { get; set; } = 1825;
 }
 
 /// <summary>Political aspirations are not a synonym for poverty or armed revolt.</summary>
@@ -85,7 +96,9 @@ public static class CivilIndependence
         if (held.Length <= 1 || region.Population > owner.Population * 0.5)
             return Loc.Get("The settlement cannot dissolve the parent state.");
         var votes = ResidentSupport(movement, region);
-        if (votes <= c.Defines.CivilReferendumMajority) return Loc.Get("A majority of all residents must support independence.");
+        if (movement.Movement.ReadyOnDay.GetValueOrDefault("referendum_lost", -1) > c.ElapsedDays)
+            return Loc.Get("The question was asked and lost; it cannot be asked again so soon.");
+        if (votes < c.Defines.CivilReferendumHoldAt) return Loc.Get("Too few residents support independence to hold a vote.");
         if (movement.Movement.Legitimacy < c.Defines.CivilReferendumLegitimacy)
             return Loc.Get("The movement needs greater public standing.");
         return ParentConsents(c, movement, owner) ? "" : Loc.Get("The parent must authorise a referendum in the movements panel.");
@@ -96,6 +109,21 @@ public static class CivilIndependence
         if (Refusal(c, movement, region).Length != 0) return false;
         var owner = c.Nations.First(n => n.MapIndex == region.NationMapIndex);
         var place = region.DisplayName;
+        // The count: what the residents think, give or take what the campaign's last weeks do.
+        var swing = c.Defines.CivilReferendumSwing * (2f * Escalation.Roll(c.Seed, movement.Id, region.MapIndex, c.ElapsedDays, 0x7E1) - 1f);
+        var result = M.Clamp01(ResidentSupport(movement, region) + swing);
+        if (result <= c.Defines.CivilReferendumMajority)
+        {
+            var state = movement.Movement;
+            state.Legitimacy = M.Clamp01(state.Legitimacy - c.Defines.CivilReferendumLostLegitimacy);
+            foreach (var key in state.Support.Keys.ToList())
+                state.Support[key] *= M.Clamp01(c.Defines.CivilReferendumLostSupportKept);
+            state.ReadyOnDay["referendum_lost"] = c.ElapsedDays + Math.Max(1, c.Defines.CivilReferendumRetryDays);
+            state.ReadyOnDay.Remove(ConsentKey(owner.Id));
+            state.LastReport = Loc.Format("The vote in {0} was lost: {1} for independence.", place, Fmt.Percent(result));
+            c.Chronicle.Record(c, "referendum_lost", movement.Id, owner.Id, Fmt.Percent(result), place);
+            return false;
+        }
         // A question that carried once is not re-asked county by county for a decade: the
         // rest of the movement's homeland this same government controls votes with it, and
         // every region whose own majority carried comes along. Regions below the majority

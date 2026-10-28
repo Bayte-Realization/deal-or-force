@@ -163,8 +163,15 @@ public static class NationNaming
             }
         }
 
-        // 9. Region fallback: authentic regional identity rather than an occupier's compass direction.
-        if (region is not null) return ("region", region.Id);
+        // 9. Region fallback: authentic regional identity rather than an occupier's compass direction -
+        //    unless a country already wears the region's name, when the people who live there name
+        //    it instead (Nigeria's Niger State was founding a second Niger beside the real one).
+        if (region is not null)
+        {
+            var place = StripAdministrativeSuffix(RegionNames.Resolve(region));
+            if (NameAlreadyTaken(campaign, place) && HasIdentity(groundPeople)) return PeopleBase(campaign, groundPeople);
+            return ("region", region.Id);
+        }
         if (!string.IsNullOrWhiteSpace(culture)) return ("culture", culture);
         return parent is null ? ("literal", "") : IdentitySource(parent);
     }
@@ -553,7 +560,7 @@ public static class NationNaming
     public static string StripAdministrativeSuffix(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return name ?? "";
-        var trimmed = name.TrimEnd();
+        var trimmed = StripRepublicPrefix(name.TrimEnd());
         foreach (var (suffix, cut) in AdministrativeSuffixes)
         {
             if (!trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
@@ -572,8 +579,21 @@ public static class NationNaming
         (" Department", 11), (" Oblast", 7), (" Region", 7), (" County", 7),
         (" State", 6), (" District", 9), (" Territory", 10), (" Municipality", 13),
         (" Воеводство", 10), (" Провинция", 10), (" Префектура", 11), (" Губерния", 9),
-        (" Область", 8), (" Регион", 7), (" Округ", 6), (" Район", 6)
+        (" Область", 8), (" Регион", 7), (" Округ", 6), (" Район", 6),
+        // Russia's republics are regions called "Mari El Republic" or "Republic of Dagestan":
+        // a state founded on one was "Republic of Mari El Republic".
+        (" Republic", 9), (" Республика", 11)
     };
+
+    /// <summary>A leading "Republic of" ("Республика"), which the state's own form will say again.</summary>
+    public static string StripRepublicPrefix(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return name ?? "";
+        foreach (var prefix in new[] { "Republic of ", "Республика " })
+            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length - prefix.Length >= 3)
+                return name[prefix.Length..].TrimStart();
+        return name;
+    }
 
     /// <summary>The short name of a people's state for a map label: "Ukraine", "Kurdistan".</summary>
     private static string ShortPeopleName(string culture, string adjective)

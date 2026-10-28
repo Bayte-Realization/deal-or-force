@@ -31,5 +31,10 @@
   "A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.": "Визит нашего главы государства: {0:0.##} полит. капитала и {1}. Мнение +20 на четыре года; нейтрала делает другом.",
   "Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.": "Манёвры у их границы: {0}. Их мнение -15 и обида на нас; наша поддержка войны растёт, их — немного.",
   "Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.": "Предложить посредничество ({0}): {1:0.##} полит. капитала. Если обе стороны готовы — перемирие, и обе запомнят, кто его принёс.",
-  "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.": "Дать им {0} на развитие с возвратом под {1:0}% за {2} нед. Мнение +15; дефолт лишит их нашего доверия на десять лет."
+  "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.": "Дать им {0} на развитие с возвратом под {1:0}% за {2} нед. Мнение +15; дефолт лишит их нашего доверия на десять лет.",
+  "The question was asked and lost; it cannot be asked again so soon.": "Вопрос уже задавали, и он проиграл; задать его снова так скоро нельзя.",
+  "Too few residents support independence to hold a vote.": "Слишком мало жителей поддерживают независимость, чтобы проводить голосование.",
+  "The vote in {0} was lost: {1} for independence.": "Голосование в регионе {0} проиграно: {1} за независимость.",
+  "chronicle.referendum_lost": "{0} проигрывает голосование о независимости от страны {1} в регионе {3}: {2} «за».",
+  "Region": "Регион"
 }

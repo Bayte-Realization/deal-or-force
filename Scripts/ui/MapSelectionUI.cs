@@ -583,8 +583,7 @@ public partial class DealOrForceGame
         _regionCardTitle.Text = state?.DisplayName ?? Tr("Unmapped land");
         var isCapital = owner is not null && state.MapIndex == owner.CapitalStateMapIndex;
         _regionCardCaption.Text = state is null ? "" :
-            Simulation.Loc.Format("{0} of {1}", Tr(state.Kind), owner?.DisplayName ?? Tr("an unknown state")) +
-            (isCapital ? " · " + Tr("the capital") : "");
+            RegionOfCaption(state, owner) + (isCapital ? " · " + Tr("the capital") : "");
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
         var visible = state is not null && (owner is null || CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
@@ -815,5 +814,19 @@ public partial class DealOrForceGame
             parent.RemoveChild(child);
             child.QueueFree();
         }
+    }
+
+    /// <summary>
+    /// "Oblast of Russia", "Province of China" - unless the country's own name already says the
+    /// kind: a Russian republic that became a state was "Republic of Republic of Dagestan".
+    /// Then it is a region of that country.
+    /// </summary>
+    private string RegionOfCaption(ScenarioState state, Nation owner)
+    {
+        var kind = Tr(state.Kind);
+        var country = owner?.DisplayName ?? Tr("an unknown state");
+        if (owner is not null && kind.Length > 0 && country.Contains(kind, StringComparison.OrdinalIgnoreCase))
+            kind = Tr("Region");
+        return Simulation.Loc.Format("{0} of {1}", kind, country);
     }
 }

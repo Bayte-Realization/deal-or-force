@@ -99,8 +99,7 @@ public partial class DealOrForceGame
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
         var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
-        _sideBody.Text = Simulation.Loc.Format("{0} of {1}",
-                             Tr(_selectedState.Kind), owner?.DisplayName ?? Tr("an unknown state")) +
+        _sideBody.Text = RegionOfCaption(_selectedState, owner) +
                          (owned ? "" : Tr(" · foreign ground, read-only"));
 
         DetailHeading("PEOPLE");

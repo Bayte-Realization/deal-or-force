@@ -2703,7 +2703,10 @@ void fragment() {
     political.rgb = mix(political.rgb, live_control.rgb * political_light, treaty);
     political.rgb = occupation_ribbons(political.rgb, live_control.rgb, UV,
         province_detail, occupied);
-    vec4 strategic = map_mode_color(nation);
+    // The map modes colour the country that owns this ground now (near_nation reads the moved
+    // owners), not the one the raster was painted with: the diplomatic view of 2039 drew the
+    // borders of 2024, Belarus annexed and all.
+    vec4 strategic = map_mode_color(near_nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
     vec2 resource_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;

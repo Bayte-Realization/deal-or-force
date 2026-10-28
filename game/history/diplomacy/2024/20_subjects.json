@@ -2,8 +2,9 @@
 // dependency from common/subjects. A later file naming the same subject replaces the row.
 {
   "subjects": [
-    // The Baikonur Cosmodrome and its town, leased by Russia from Kazakhstan.
-    { "overlord": "RUS", "subject": "KAB", "type": "leased_territory" },
+    // The Baikonur Cosmodrome and its town are Kazakh ground leased by Russia, not a country:
+    // drawn as one, it was a Russian subject that ended up governing Belarus. They are
+    // Kazakhstan's (history/provinces/ownership.csv).
 
     // The Compacts of Free Association.
     { "overlord": "USA", "subject": "MHL", "type": "associated_state" },

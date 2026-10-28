@@ -31,5 +31,10 @@
   "A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.": "A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.",
   "Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.": "Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.",
   "Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.": "Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.",
-  "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.": "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years."
+  "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.": "Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.",
+  "The question was asked and lost; it cannot be asked again so soon.": "The question was asked and lost; it cannot be asked again so soon.",
+  "Too few residents support independence to hold a vote.": "Too few residents support independence to hold a vote.",
+  "The vote in {0} was lost: {1} for independence.": "The vote in {0} was lost: {1} for independence.",
+  "chronicle.referendum_lost": "{0} loses its vote on independence from {1} in {3}: {2} in favour.",
+  "Region": "Region"
 }

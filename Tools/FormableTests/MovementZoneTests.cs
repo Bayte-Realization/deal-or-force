@@ -221,6 +221,26 @@ static class MovementZoneTests
               Movements.StateById(oneVote, "z_1").NationMapIndex == scots.MapIndex,
             "a vote carried across the homeland takes the region that voted no along with the rest");
 
+        // ---- and a vote can be lost ------------------------------------------------------
+        var lostVote = Fixture(true);
+        Movements.Activate(lostVote, MovementCatalog.Of(CivicId));
+        var hopefuls = lostVote.NationByTag("ZTC");
+        var state = lostVote.Nations[0];
+        hopefuls.Movement.Legitimacy = 0.9f;
+        foreach (var index in new[] { 3001, 3002, 3003 }) hopefuls.Movement.Support[index] = 0.45f;
+        hopefuls.Movement.ReadyOnDay[CivilIndependence.ConsentKey(state.Id)] = lostVote.ElapsedDays + 500;
+        lostVote.Defines.CivilReferendumSwing = 0f;
+        var asked = Movements.StateById(lostVote, "z_0");
+        Check(CivilIndependence.ResidentSupport(hopefuls, asked) is > 0.42f and < 0.5f &&
+              CivilIndependence.Refusal(lostVote, hopefuls, asked).Length == 0,
+            "a campaign short of a majority may still hold its vote");
+        var legitimacy = hopefuls.Movement.Legitimacy;
+        Check(!CivilIndependence.Ratify(lostVote, hopefuls, asked) && asked.NationMapIndex == state.MapIndex,
+            "and lose it: the region stays");
+        Check(hopefuls.Movement.Legitimacy < legitimacy && CivilIndependence.Refusal(lostVote, hopefuls, asked).Length > 0 &&
+              lostVote.Chronicle.Entries.Any(e => e.Kind == "referendum_lost"),
+            "a lost vote costs the campaign standing and closes the question for years");
+
 
         // ---- an exile comes home to its whole homeland -------------------------------------
         var home = Fixture(false);

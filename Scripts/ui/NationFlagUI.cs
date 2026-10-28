@@ -639,16 +639,14 @@ public partial class DealOrForceGame
         }
     }
 
-    private static Color ShadeFabric(Color color, int x, int y, int width, int height)
-    {
-        var wave = Mathf.Sin(x * 0.045f + y * 0.015f) * 0.025f;
-        var edge = 1f - 0.06f * Mathf.Pow(2f * (x / (float)width - 0.5f), 2f) - 0.06f * Mathf.Pow(2f * (y / (float)height - 0.5f), 2f);
-        return new Color(
-            Mathf.Clamp((color.R + wave) * edge, 0f, 1f),
-            Mathf.Clamp((color.G + wave) * edge, 0f, 1f),
-            Mathf.Clamp((color.B + wave) * edge, 0f, 1f),
-            1f);
-    }
+    /// <summary>
+    /// A field colour as it is painted: flat. It used to ripple the cloth and darken the edges,
+    /// and the provisional flags of new countries read as embossed and muddy beside the flat flags
+    /// every other country flies (the user, 2026-10-28). Kept as one door so a mod that wants the
+    /// cloth back has one place to put it.
+    /// </summary>
+    private static Color ShadeFabric(Color color, int x, int y, int width, int height) =>
+        new(Mathf.Clamp(color.R, 0f, 1f), Mathf.Clamp(color.G, 0f, 1f), Mathf.Clamp(color.B, 0f, 1f), 1f);
 
     private static void DrawEightPointStar(Image image, int width, int height, Vector2 centre, float radius, Color fill)
     {
