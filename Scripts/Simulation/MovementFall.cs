@@ -197,6 +197,9 @@ public static class MovementFall
     /// into armed struggle. Nothing about it is a country any more; everything about it can
     /// rise again, once the victor's hold on the ground has stopped being new (RevoltRecovery).
     /// </summary>
+    /// <summary>This session's count of risings that went underground, for the bench. Not campaign state.</summary>
+    public static int WentUnderground;
+
     public static void GoUnderground(Campaign campaign, Nation nation)
     {
         var defines = campaign.Defines;
@@ -246,6 +249,7 @@ public static class MovementFall
         nation.ManpowerReserve = state.Cadres;
         if (state.Peoples.Count > 0 && nation.FoundedCultures.Count == 0) nation.FoundedCultures.AddRange(state.Peoples);
         state.LastReport = Loc.Format("Beaten in the field, it has gone underground in {0}.", seat.DisplayName);
+        WentUnderground++;
         campaign.Chronicle.Record(campaign, "went_underground", nation.Id,
             MovementRules.OwnerOf(campaign, seat)?.Id ?? -1, place: seat.DisplayName);
         Movements.Place(campaign);

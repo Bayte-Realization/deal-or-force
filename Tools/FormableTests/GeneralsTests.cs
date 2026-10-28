@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using DealOrForce.Simulation;
 
@@ -82,5 +83,63 @@ static class DesertionTests
         var civil = new StrategicWar { CivilConflict = true, AttackerId = russia.Id, DefenderId = ukraine.Id };
         Check(Desertion.ShareToEnemy(c, civil, russia, ukraine) > Desertion.ShareToEnemy(c, war, russia, ukraine),
             "in a civil war deserters cross to the other side far more readily");
+    }
+}
+
+/// <summary>A coup can split the army into a civil war, whatever the stability (CivilWarOutbreak.FromCoup).</summary>
+static class CoupCivilWarTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("coup civil war: " + note); Console.WriteLine("PASS coup civil war: " + note); }
+
+    static Campaign Fixture()
+    {
+        var c = new Campaign(20261028) { ScenarioId = "coup_civil_war_fixture" };
+        var parent = new Nation { Id = 0, MapIndex = 500, Tag = "TST", Name = "Test country", Population = 20_000_000,
+            Treasury = 20, Gdp = 100, OutputScale = 1f, Stability = .6f, CapitalStateMapIndex = 3001 };
+        c.Nations.Add(parent);
+        for (var i = 0; i < 4; i++)
+            c.States.Add(new ScenarioState { MapIndex = 3001 + i, Id = "coup_" + i, Name = "Region " + i,
+                NationMapIndex = parent.MapIndex, NationId = parent.Tag, Population = 5_000_000,
+                StandardOfLiving = .4f, Literacy = .8f, Urbanization = .5f, Radicalism = .4f });
+        var cells = Enumerable.Range(0, 8192).Select(i => (ushort)(3001 + i % 128 / 32)).ToArray();
+        var flags = Enumerable.Repeat((ushort)500, 8192).ToArray();
+        c.AttachProvinceTopology(ProvinceTopology.Build(cells, flags, 128, 64, _ => false));
+        SovereignFinance.NormalizeAccounts(c);
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, (long)(c.Defines.CivilWarEarliestDay + 10) * 24);
+        return c;
+    }
+
+    public static void Run()
+    {
+        var c = Fixture();
+        var nation = c.Nations[0];
+        Check(CivilWarOutbreak.EligibilityReason(c, nation).Length > 0, "the country is above the stability line");
+        Check(CivilWarOutbreak.FromCoup(c, nation, 0f, 1) is null, "a coup that takes the army whole starts no war");
+        var report = CivilWarOutbreak.FromCoup(c, nation, 1f, 1);
+        Check(report?.Seceded is not null && c.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id)),
+            "a split army is a civil war from that day, above the stability line too");
+        Check(c.Chronicle.Entries.Any(e => e.Kind == "coup_civil_war" && e.ActorId == nation.Id), "and the world hears the army has split");
+        Check(CivilWarOutbreak.FromCoup(c, nation, 1f, 1) is null, "one civil war at a time");
+    }
+}
+
+/// <summary>World layers (common/world_layers): every layer on unless a file says otherwise, unknown keys reported.</summary>
+static class WorldLayersTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("world layers: " + note); Console.WriteLine("PASS world layers: " + note); }
+
+    public static void Run()
+    {
+        var errors = new List<string>();
+        WorldLayers.ResetCatalog(errors);
+        Check(errors.Count == 0 && WorldLayers.Known.Keys.All(WorldLayers.On), "the shipped file names only real layers, all on");
+        using (var document = System.Text.Json.JsonDocument.Parse("{\"trade_traffic\": false, \"steam_trains\": true, \"weather\": 3}"))
+            WorldLayers.Merge(document.RootElement, errors);
+        Check(!WorldLayers.On("trade_traffic") && WorldLayers.On("weather"), "a mod switches a layer off by naming it");
+        Check(errors.Count == 2, "a layer nobody draws and a value that is not true or false are reported");
+        WorldLayers.ResetCatalog();
+        Check(WorldLayers.On("trade_traffic"), "and a reload restores the shipped layers");
     }
 }

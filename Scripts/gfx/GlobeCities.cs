@@ -138,6 +138,7 @@ public sealed partial class GlobePresentation
     private void UpdateCityLabels(double delta)
     {
         if (!IsInstanceValid(_cityRoot) || !IsInstanceValid(_camera)) return;
+        if (!Simulation.WorldLayers.On("city_labels")) { _cityRoot.Visible = false; return; }
         var map = _campaign?.ProvinceMap;
         if (map is not null && (!ReferenceEquals(map, _cityAnchorMap) || _cityAnchors.Length != _cities.Count))
         {

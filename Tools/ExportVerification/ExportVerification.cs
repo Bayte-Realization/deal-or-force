@@ -43,8 +43,8 @@ public partial class ExportVerification : Node
             Check(ProjectSettings.GetSetting("application/config/version").AsString() == GameBuildInfo.Version &&
                 SaveSystem.GameVersion == GameBuildInfo.Version,
                 "project, menu and new-save release versions agree: " + GameBuildInfo.Version);
-            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0" &&
-                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0",
+            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version &&
+                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version,
                 "game and production rules assembly versions agree");
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();

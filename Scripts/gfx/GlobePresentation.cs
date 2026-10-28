@@ -606,7 +606,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (MilitaryMarkersEnabled && _mapApplied)
             using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
         if (visualDue)
-            UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f, CityHorizon());
+            UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
         var armyLod = _flatMap || ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
@@ -1015,7 +1015,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public bool MilitaryMarkersEnabled
     {
-        get => _militaryMarkersEnabled;
+        // A game without counters (common/world_layers) has none to switch on.
+        get => _militaryMarkersEnabled && Simulation.WorldLayers.On("military_counters");
         set
         {
             if (_militaryMarkersEnabled == value) return;
@@ -4686,7 +4687,7 @@ void fragment() {
     private void UpdateCountryLabelVisibility()
     {
         if (!IsInstanceValid(_countryLabelRoot) || !IsInstanceValid(_camera)) return;
-        if (!CountryLabelsEnabled) { _countryLabelRoot.Visible = false; return; }
+        if (!CountryLabelsEnabled || !Simulation.WorldLayers.On("country_labels")) { _countryLabelRoot.Visible = false; return; }
         // At tactical zoom, country names yield to states/provinces and unit
         // counters. Keeping continent-scale typography there would cover the map.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap

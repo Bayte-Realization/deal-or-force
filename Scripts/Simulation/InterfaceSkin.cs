@@ -313,7 +313,7 @@ public static class InterfaceSkin
         ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
         ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -126f, 638f, -18f)),
         ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
-        ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
+        ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -315f, 310f, 315f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
         ("modal.ultimatum",    new PanelRect(0.22f, 0.13f, 0.79f, 0.89f, 0f, 0f, 0f, 0f)),
         ("modal.deal",         new PanelRect(0f, 0.115f, 0.945f, 0.9f,  92f, 0f, 0f, 0f)),

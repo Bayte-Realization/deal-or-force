@@ -13,7 +13,7 @@ public sealed partial class Defines
     public float GeneralVictorySkill { get; set; } = 0.012f;
     public float GeneralDefeatSkill { get; set; } = 0.006f;
     /// <summary>The chance a commander whose side broke is killed, captured or sacked for it.</summary>
-    public float GeneralFallChance { get; set; } = 0.05f;
+    public float GeneralFallChance { get; set; } = 0.03f;
     /// <summary>The men lost on both sides that make a battle one the world hears of by name.</summary>
     public float GreatBattleLosses { get; set; } = 15000f;
 }
@@ -40,6 +40,9 @@ public sealed record GeneralTrait(string Id, string Name, string Description, fl
 public static class Generals
 {
     public const string Unassigned = "Unassigned staff";
+
+    /// <summary>This session's count of named battles and fallen commanders, for the bench. Not campaign state.</summary>
+    public static int GreatBattles, CommandersFallen;
 
     private static readonly List<GeneralTrait> Traits = new();
     private static float _weights;
@@ -206,6 +209,7 @@ public static class Generals
             if (!broken || Escalation.Roll(campaign.Seed, battle.Id, group.Id, campaign.ElapsedDays, 0x6E4) >= defines.GeneralFallChance)
                 continue;
             campaign.Chronicle.Record(campaign, "general_fallen", group.NationId, winnerId, group.Commander, place);
+            CommandersFallen++;
             group.CommandersLost++;
             Appoint(campaign, group);
         }
@@ -213,6 +217,7 @@ public static class Generals
         var victor = winningGroups.OrderByDescending(group => group.Victories).ThenBy(group => group.Id).FirstOrDefault();
         var loserId = attackerWon ? battle.DefenderId : battle.AttackerId;
         campaign.Chronicle.Record(campaign, "great_battle", winnerId, loserId, victor?.Commander ?? "", place);
+        GreatBattles++;
     }
 
     /// <summary>The town a battle is named for, or its region.</summary>

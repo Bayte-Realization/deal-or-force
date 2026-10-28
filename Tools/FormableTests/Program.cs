@@ -157,6 +157,10 @@ static class Program
         if (args.Length == 0) GeneralsTests.Run();
         if (args.Contains("--desertion-only")) { DesertionTests.Run(); return; }
         if (args.Length == 0) DesertionTests.Run();
+        if (args.Contains("--coup-war-only")) { CoupCivilWarTests.Run(); return; }
+        if (args.Length == 0) CoupCivilWarTests.Run();
+        if (args.Contains("--world-layers-only")) { WorldLayersTests.Run(); return; }
+        if (args.Length == 0) WorldLayersTests.Run();
         if (args.Length == 0) OverrunWarTests.Run();
         if (args.Contains("--territorial-front-only")) { TerritorialFrontTests.Run(); return; }
         if (args.Length == 0) TerritorialFrontTests.Run();

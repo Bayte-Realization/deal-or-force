@@ -27,7 +27,7 @@
   // actually is. A country halfway to zero gets half of this. At the floor of its stability
   // and left alone, this is a country that comes apart in months; at 0.30 it is measured in
   // decades.
-  "CivilWarWeeklyChance": 0.012,
+  "CivilWarWeeklyChance": 0.016,
 
   // The most civil wars the whole world begins in a year.
   //
@@ -35,8 +35,14 @@
   // failure rather than a preference: a century-old campaign whose stability had drifted
   // down everywhere began thirteen in one year - Japan and Spain among them - and that is a
   // world shredding itself, not a world with politics in it. Raise it for a bloodier
-  // century; set it to 0 to freeze the map.
-  "CivilWarWorldPerYear": 3,
+  // century; set it to 0 to freeze the map. Five since 2026-10-28: at three, a decade had
+  // a dozen countries below the line at any time and full civil wars were a rarity.
+  "CivilWarWorldPerYear": 5,
+
+  // The chance a coup splits the army instead of taking it, and a plot found out turns into a
+  // civil war - Spain 1936, Sudan 2023. Neither waits for the stability line.
+  "CivilWarFromCoupChance": 0.3,
+  "CivilWarFromFoiledPlotChance": 0.12,
 
   // How long a coup stays in the country's memory for this purpose. A state whose army has
   // just decided something is a state where it can decide something again.

@@ -14,7 +14,7 @@ public partial class ExportVerification
         foreach (var file in new[] { "Deal or Force.exe", "Deal or Force Launcher.exe" })
         {
             var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(Path.Combine(root, file));
-            Check(version.FileVersion == GameBuildInfo.Version + ".0" &&
+            Check(version.FileVersion == GameBuildInfo.Version &&
                 (version.ProductVersion == GameBuildInfo.Version || version.ProductVersion == GameBuildInfo.Version + ".0"),
                 file + " Windows file/product version is " + GameBuildInfo.Version);
         }

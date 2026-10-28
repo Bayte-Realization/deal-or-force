@@ -129,9 +129,13 @@ public static class Coups
                 {
                     nation.CoupPlotDay = -1;
                     c.Chronicle.Record(c, "coup_foiled", nation.Id, isPublic: false);
+                    // Officers found out have nothing left to lose: some take their units with them.
+                    CivilWarOutbreak.FromCoup(c, nation, defines.CivilWarFromFoiledPlotChance, 2);
                     continue;
                 }
                 Seize(c, nation);
+                // And some coups split the army instead of taking it.
+                CivilWarOutbreak.FromCoup(c, nation, defines.CivilWarFromCoupChance, 1);
                 continue;
             }
 

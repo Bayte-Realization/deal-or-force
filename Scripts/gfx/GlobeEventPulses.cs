@@ -144,6 +144,7 @@ void fragment() {
     {
         if (_pulseRoot is null || !IsInstanceValid(_pulseRoot) || _campaign is null) return;
         if (!_mapApplied) return;
+        if (!Simulation.WorldLayers.On("event_pulses")) { _pulseRoot.Visible = false; return; }
         TakeNewEvents();
         var today = _campaign.ElapsedDays;
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);

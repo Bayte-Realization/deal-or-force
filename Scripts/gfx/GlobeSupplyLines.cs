@@ -32,7 +32,8 @@ public sealed partial class GlobePresentation
     private void UpdateSupplyLines()
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
-        if (!Simulation.MechanicFeatures.SystemEnabled(_campaign, nameof(Simulation.LogisticsSystem)))
+        if (!Simulation.MechanicFeatures.SystemEnabled(_campaign, nameof(Simulation.LogisticsSystem)) ||
+            !Simulation.WorldLayers.On("supply_lines"))
         {
             if (IsInstanceValid(_supplyLinePreview)) _supplyLinePreview.Visible = false;
             return;

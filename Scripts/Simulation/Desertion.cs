@@ -42,6 +42,9 @@ public sealed partial class Defines
 /// </summary>
 public static class Desertion
 {
+    /// <summary>This session's deserters and those the enemy took in, for the bench. Not campaign state.</summary>
+    public static double Deserted, Recruited;
+
     private static readonly Dictionary<int, float> LostThisWeek = new();
     private static readonly Dictionary<int, float> Strength = new();
 
@@ -72,6 +75,8 @@ public static class Desertion
             var enemy = campaign.NationById(war.EnemyLeaderOf(nation.Id));
             var toEnemy = enemy is null ? 0f : ShareToEnemy(campaign, war, nation, enemy) * men;
             if (enemy is not null) enemy.ManpowerReserve += toEnemy;
+            Deserted += men;
+            Recruited += toEnemy;
             nation.ManpowerReserve += (men - toEnemy) * defines.DesertionHomeReturn;
             WarLosses.Record(war, nation.Id, 0f, 0f, men);
         }

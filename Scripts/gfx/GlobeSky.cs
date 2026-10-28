@@ -109,7 +109,7 @@ void fragment() {
         if (_cloudLayer is null) return;
         if (_campaign is null || !_campaign.IsPaused) _cloudWind += delta * .007;
         _cloudLayer.Rotation = new Vector3(0, (float)_cloudWind, .12f);
-        _cloudLayer.Visible = CloudsEnabled && !_flatMap;
+        _cloudLayer.Visible = CloudsEnabled && !_flatMap && Simulation.WorldLayers.On("sky_clouds");
         var lightDirection = _daySun.GlobalBasis.Z;
         ((ShaderMaterial)_cloudLayer.MaterialOverride).SetShaderParameter("sun_direction", lightDirection);
     }

@@ -31,7 +31,7 @@ public sealed partial class Defines
     /// goes home at each look, and only when the treasury cannot pay that surplus. A country
     /// still fighting is not disarmed by a peace it has not made.
     /// </summary>
-    public float ArmyPeaceDisbandMargin { get; set; } = 1.25f;
+    public float ArmyPeaceDisbandMargin { get; set; } = 1.05f;
 }
 
 public sealed partial class Nation

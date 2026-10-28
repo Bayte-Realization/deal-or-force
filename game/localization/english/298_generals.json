@@ -1,5 +1,6 @@
 // Commanders and their battles (Generals.cs, common/generals).
 {
+  "chronicle.coup_civil_war": "The army of {0} has split: the officers who would not follow hold part of the country, and {1} is at war with its own government.",
   "chronicle.mass_desertion": "{0}: soldiers are deserting by the thousand - {2} in a week.",
   "{0} ({1}, skill {2:0}%, {3} won / {4} lost)": "{0} ({1}, skill {2:0}%, {3} won / {4} lost)",
   "chronicle.great_battle": "Battle of {3}: {0} defeats {1}, with {2} in command.",

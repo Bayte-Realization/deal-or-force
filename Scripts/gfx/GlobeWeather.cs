@@ -134,6 +134,13 @@ public sealed partial class GlobePresentation
     private void UpdateWeather(double delta)
     {
         if (_cloudMaterial is null || _mistMaterial is null) return;
+        // A game without weather (common/world_layers) draws none of it.
+        if (!Simulation.WorldLayers.On("weather"))
+        {
+            foreach (var layer in new[] { _cloudDeck, _cloudShade, _mistShell, _airGlow })
+                if (IsInstanceValid(layer)) layer.Visible = false;
+            return;
+        }
         var defines = _campaign?.Defines;
         var distance = ViewDistance;
 
