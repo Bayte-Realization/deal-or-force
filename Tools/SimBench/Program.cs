@@ -626,6 +626,13 @@ public static class Program
                 Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                // How much of its workforce each country's buildings ask for (MarketSystem.CapitalReturns).
+                var intensities = alive.Select(n => (n.Tag, Jobs: campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded),
+                        Workers: campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)))
+                    .Where(x => x.Workers > 0.01f).Select(x => (x.Tag, Ratio: x.Jobs / x.Workers)).OrderByDescending(x => x.Ratio).ToList();
+                Console.WriteLine($"   jobs per worker: median {intensities[intensities.Count / 2].Ratio:0.00}, " +
+                                  $"{alive.Count(n => n.CapitalIntensityReference > 0f && campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded) / Math.Max(0.01f, campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)) > n.CapitalIntensityReference * campaign.Defines.CapitalDeepeningHeadroom)} past their headroom; highest " +
+                                  string.Join(", ", intensities.Take(12).Select(x => $"{x.Tag} {x.Ratio:0.00}")));
                 Console.WriteLine("   top: " + string.Join(", ", alive.OrderByDescending(n => n.Gdp).Take(10)
                     .Select(n => $"{n.Tag} {n.Gdp:N0} ({n.Gdp * 1e9 / Math.Max(1, n.Population):N0}/head)")));
                 // What a country's output is made of: GDP = gross output x 52 x output scale, the
@@ -637,7 +644,7 @@ public static class Program
                     if (n is null || n.Population <= 0) continue;
                     Console.WriteLine($"   {n.Tag}: gdp {n.Gdp:N0}, gross {n.GrossOutput:0.###}, scale {n.OutputScale:0.####}, " +
                                       $"real {n.Market.Values.Sum(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice):0.###}, " +
-                                      $"productivity {n.Productivity:0.###}, employed {n.EmployedShare:P0}, drift {n.SecularDrift * 100:+0.00;-0.00}%, " +
+                                      $"productivity {n.Productivity:0.###}, employed {n.EmployedShare:P0} (jobs {campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded):0.0}M of {campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable):0.0}M, returns {MarketSystem.CapitalReturns(campaign, n, campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded), campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)):0.00}), drift {n.SecularDrift * 100:+0.00;-0.00}%, " +
                                       $"pop {n.Population / 1e6:0.0}M, stab {n.Stability:0.00}, hc {n.HumanCapital:0.00}, debt {n.DebtCondition}, " +
                                       $"sites {campaign.Construction.Count(p => p.NationId == n.Id)}/{ConstructionCost.Limit(campaign, n, campaign.Defines.MaxConstructionProjects)}, " +
                                       $"treasury {n.Treasury:0.0}, capacity {n.ConstructionCapacity:0.00}, literacy {n.Literacy:0.00}, sol {n.StandardOfLiving:0.00}, " +

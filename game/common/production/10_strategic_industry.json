@@ -6,19 +6,19 @@
 {
   "copper_chain": {
     "good": "Copper", "output": { "deposit:Copper*extraction_efficiency": 1.0 },
-    "demand": { "ElectronicsPlant": 0.32, "CivilianIndustry": 0.10, "ArmsIndustry": 0.12, "PowerPlant": 0.12 }
+    "demand": { "ElectronicsPlant": 0.238, "CivilianIndustry": 0.074, "ArmsIndustry": 0.089, "PowerPlant": 0.089 }
   },
   "lithium_chain": {
     "good": "Lithium", "output": { "deposit:Lithium*extraction_efficiency": 1.0 },
-    "demand": { "ElectronicsPlant": 0.08, "CivilianIndustry": 0.025 }
+    "demand": { "ElectronicsPlant": 0.235, "CivilianIndustry": 0.073 }
   },
   "nickel_chain": {
     "good": "Nickel", "output": { "deposit:Nickel*extraction_efficiency": 1.0 },
-    "demand": { "Smelter": 0.20, "CivilianIndustry": 0.04, "ElectronicsPlant": 0.06 }
+    "demand": { "Smelter": 0.221, "CivilianIndustry": 0.045, "ElectronicsPlant": 0.066 }
   },
   "cobalt_chain": {
     "good": "Cobalt", "output": { "deposit:Cobalt*extraction_efficiency": 1.0 },
-    "demand": { "ElectronicsPlant": 0.04, "CivilianIndustry": 0.015 }
+    "demand": { "ElectronicsPlant": 0.058, "CivilianIndustry": 0.022 }
   },
   "phosphates_chain": {
     "good": "Phosphates", "output": { "deposit:Phosphates*extraction_efficiency": 1.0 },
@@ -26,19 +26,19 @@
   },
   "silica_chain": {
     "good": "Silica", "output": { "deposit:Silica*extraction_efficiency": 1.0 },
-    "demand": { "ElectronicsPlant": 0.24, "CivilianIndustry": 0.04 }
+    "demand": { "ElectronicsPlant": 0.474, "CivilianIndustry": 0.079 }
   },
   "rubber_chain": {
     "good": "Rubber", "output": { "deposit:Rubber*timber_yield": 0.8, "deposit:Rubber*Agriculture": 0.12 },
-    "demand": { "CivilianIndustry": 0.07, "ArmsIndustry": 0.08 }
+    "demand": { "CivilianIndustry": 0.105, "ArmsIndustry": 0.12 }
   },
   "sulfur_chain": {
     "good": "Sulfur", "output": { "deposit:Sulfur*extraction_efficiency": 1.0, "Refinery": 0.30 },
-    "demand": { "ChemicalPlant": 0.24, "ArmsIndustry": 0.10 }
+    "demand": { "ChemicalPlant": 0.279, "ArmsIndustry": 0.116 }
   },
   "steel_chain": {
     "good": "Steel", "output": { "Smelter": 2.0, "CivilianIndustry": 0.50 },
-    "demand": { "CivilianIndustry": 0.065, "ArmsIndustry": 0.18, "Shipyard": 0.26 },
+    "demand": { "CivilianIndustry": 0.077, "ArmsIndustry": 0.213, "Shipyard": 0.306 },
     "needs": { "IronOre": 0.50, "Coal": 0.65, "Energy": 0.60 }
   },
   "battery_chain": {
@@ -48,12 +48,12 @@
   },
   "semiconductor_chain": {
     "good": "Semiconductors", "output": { "ElectronicsPlant": 1.20, "CivilianIndustry": 0.35 },
-    "demand": { "ElectronicsPlant": 0.35, "CivilianIndustry": 0.08, "ArmsIndustry": 0.14, "ResearchLab": 0.20 },
+    "demand": { "ElectronicsPlant": 0.796, "CivilianIndustry": 0.182, "ArmsIndustry": 0.318, "ResearchLab": 0.455 },
     "needs": { "Silica": 0.55, "Chemicals": 0.65, "Energy": 0.55 }
   },
   "motor_vehicle_chain": {
     "good": "MotorVehicles", "output": { "CivilianIndustry": 0.65 },
-    "demand": { "population*urbanization": 0.036, "raw:Infrastructure": 0.02 },
+    "demand": { "population*urbanization": 0.027, "raw:Infrastructure": 0.015 },
     "needs": { "Steel": 0.60, "Rubber": 0.65, "Batteries": 0.85, "Semiconductors": 0.75 }
   },
   "ammunition_chain": {
@@ -62,15 +62,15 @@
   },
   "precision_component_chain": {
     "good": "PrecisionComponents", "output": { "ElectronicsPlant": 0.65, "CivilianIndustry": 0.30 },
-    "demand": { "CivilianIndustry": 0.06, "ArmsIndustry": 0.14, "ResearchLab": 0.16, "Shipyard": 0.10 },
+    "demand": { "CivilianIndustry": 0.133, "ArmsIndustry": 0.31, "ResearchLab": 0.354, "Shipyard": 0.221 },
     "needs": { "Semiconductors": 0.55, "Copper": 0.75, "Aluminium": 0.75 }
   },
-  "strategic_ore_bill": { "good": "IronOre", "demand": { "Smelter": 0.40 } },
-  "steel_energy_bill": { "good": "Coal", "demand": { "Smelter": 0.24 } },
-  "precision_chemical_bill": { "good": "Chemicals", "demand": { "ElectronicsPlant": 0.18, "ArmsIndustry": 0.12 } },
+  "strategic_ore_bill": { "good": "IronOre", "demand": { "Smelter": 0.605 } },
+  "steel_energy_bill": { "good": "Coal", "demand": { "Smelter": 0.601 } },
+  "precision_chemical_bill": { "good": "Chemicals", "demand": { "ElectronicsPlant": 0.255, "ArmsIndustry": 0.17 } },
   "phosphate_fertiliser_link": { "good": "Fertiliser", "output": { "ChemicalPlant": 0.30 }, "needs": { "Phosphates": 0.45, "Sulfur": 0.65 } },
   "electronics_chip_dependency": { "good": "Electronics", "output": { "ElectronicsPlant": 0.25 }, "shortfall": { "Semiconductors": 0.75 } },
-  "construction_steel_bill": { "scope": "nation", "good": "Steel", "demand": { "projects": 0.29 } },
+  "construction_steel_bill": { "scope": "nation", "good": "Steel", "demand": { "projects": 0.342 } },
   "army_ammunition_bill": { "scope": "nation", "good": "Ammunition", "demand": { "divisions": 0.016, "divisions_at_war": 0.048, "hulls": 0.004 } },
-  "army_transport_bill": { "scope": "nation", "good": "MotorVehicles", "demand": { "divisions": 0.01, "divisions_at_war": 0.02 } }
+  "army_transport_bill": { "scope": "nation", "good": "MotorVehicles", "demand": { "divisions": 0.008, "divisions_at_war": 0.015 } }
 }

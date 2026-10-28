@@ -73,6 +73,27 @@ public sealed class CommodityDefinition
         (Name, Icon, BasePrice, EssentialWeight, Description) = (name, icon, basePrice, essentialWeight, description);
 }
 
+public sealed partial class Defines
+{
+    /// <summary>
+    /// How households' appetite follows their income: demand terms written with "income" grow as
+    /// the country's real output per head rises above where it started, to this power, within
+    /// these bounds. Below one, as consumption is: a country twice as rich does not eat twice as
+    /// much, but it buys a good deal more of almost everything else.
+    /// </summary>
+    public float IncomeDemandElasticity { get; set; } = 0.85f;
+    public float IncomeFactorMinimum { get; set; } = 0.5f;
+    public float IncomeFactorMaximum { get; set; } = 3f;
+
+    /// <summary>
+    /// How many times its first jobs per worker a country may build to before more buildings
+    /// add less, and the power its plant yields at past that (MarketSystem.CapitalReturns):
+    /// diminishing returns to capital. 0 turns them off.
+    /// </summary>
+    public float CapitalDeepeningHeadroom { get; set; } = 1.3f;
+    public float CapitalDeepeningShare { get; set; } = 0.4f;
+}
+
 public static class CommodityCatalog
 {
     private static readonly Dictionary<Commodity, CommodityDefinition> Defaults = new()
@@ -367,6 +388,7 @@ public static class MarketSystem
                 grossOutput += sold * (basePrice + priceShare * (price - basePrice));
             }
             nation.GrossOutput = grossOutput;
+            MeasureIncome(campaign, nation);
 
             nation.ShortageIndex = weight <= 0f ? 0f : M.Clamp01(shortages / weight);
             nation.MarketAccess = 1f - nation.ShortageIndex;
@@ -409,7 +431,7 @@ public static class MarketSystem
     /// available: children, the retired and the unemployable are already priced out by the
     /// working-age share, and the pop groups carry their own employment level on top.
     /// </summary>
-    private static float WorkersAvailable(ScenarioState state)
+    internal static float WorkersAvailable(ScenarioState state)
     {
         const float WorkingAgeShare = 0.62f;
         if (state.PopulationGroups.Count == 0) return state.Population / 1_000_000f * WorkingAgeShare;
@@ -512,6 +534,10 @@ public static class MarketSystem
         nation.EmployedShare = demandedJobs <= 0.001f
             ? 1f
             : M.Clamp(availableWorkers / demandedJobs, 0.25f, 1f);
+        // The jobs per worker it is measured against from now on: its first market's
+        // (CapitalReturns), and a country born later starts from its own.
+        if (nation.CapitalIntensityReference <= 0f && demandedJobs > 0.001f && availableWorkers > 0.001f)
+            nation.CapitalIntensityReference = demandedJobs / availableWorkers;
 
         // Productivity is the other half: literacy, education policy and the government's
         // focus all reach production through this one multiplier rather than being applied
@@ -519,7 +545,8 @@ public static class MarketSystem
         // And what its technologies, spirits and government add (NationalModifiers): a share
         // on top, not a new input.
         var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
-                           NationalModifiers.Factor(nation, "output");
+                           NationalModifiers.Factor(nation, "output") *
+                           CapitalReturns(campaign, nation, demandedJobs, availableWorkers);
 
         var allocation = ProductionProgramme.Allocate(states, nation);
         ProductionProgramme.MigrateLegacy(nation, allocation);
@@ -533,5 +560,50 @@ public static class MarketSystem
         var tallies = Tallies(campaign, nation.Id);
         ProductionChains.RunNation(nation, tallies.Projects, tallies.Divisions, tallies.Hulls,
             tallies.AtWar);
+    }
+
+    /// <summary>
+    /// A country's households' appetite against its income. The market made more and more of
+    /// everything while what a head of the people wanted stayed where it was in 2024, so a
+    /// decade later consumer goods, energy and materials sat at the floor price everywhere and
+    /// no factory anywhere was worth building - India's industry shrank while its mines grew.
+    /// Real output per head at base prices, against the first week's, to Defines.IncomeDemandElasticity.
+    /// </summary>
+    /// <summary>
+    /// What one more building adds once a country has more of them for each worker than it
+    /// began with. Up to CapitalDeepeningHeadroom times its first measured jobs per worker
+    /// (Nation.CapitalIntensityReference) every building adds its full output; past it the
+    /// country's plant as a whole yields as its size to the power CapitalDeepeningShare - a
+    /// second steelworks for the same workers is worth less than the first. Nothing else
+    /// stopped a rich country compounding: labour never bound, and the United States
+    /// multiplied its real output by half in eight years. Against the country's own start,
+    /// because the jobs a region's buildings ask for are a coarse count - the median country
+    /// asks for 0.95 workers per worker it has and Greenland for 130 - not a census.
+    /// </summary>
+    internal static float CapitalReturns(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers)
+    {
+        var headroom = campaign.Defines.CapitalDeepeningHeadroom;
+        var reference = nation.CapitalIntensityReference;
+        if (headroom <= 0f || reference <= 0f || availableWorkers <= 0.001f || demandedJobs <= 0.001f) return 1f;
+        var deepening = demandedJobs / availableWorkers / (reference * headroom);
+        if (!float.IsFinite(deepening) || deepening <= 1f) return 1f;
+        var share = M.Clamp01(campaign.Defines.CapitalDeepeningShare);
+        return M.Clamp(MathF.Pow(deepening, share - 1f), 0.1f, 1f);
+    }
+
+    private static void MeasureIncome(Campaign campaign, Nation nation)
+    {
+        var people = nation.Population / 1_000_000f;
+        if (people <= 0.001f) return;
+        var real = 0f;
+        foreach (var quote in nation.Market.Values)
+            real += quote.Production * CommodityCatalog.Get(quote.Commodity).BasePrice;
+        var perHead = real / people;
+        if (!float.IsFinite(perHead) || perHead <= 0f) return;
+        if (nation.IncomeBaseline <= 0f) { nation.IncomeBaseline = perHead; nation.IncomeFactor = 1f; return; }
+        var d = campaign.Defines;
+        var factor = MathF.Pow(perHead / nation.IncomeBaseline, MathF.Max(0f, d.IncomeDemandElasticity));
+        if (float.IsFinite(factor))
+            nation.IncomeFactor = M.Clamp(factor, MathF.Max(0.01f, d.IncomeFactorMinimum), MathF.Max(1f, d.IncomeFactorMaximum));
     }
 }

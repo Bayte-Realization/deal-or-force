@@ -502,6 +502,11 @@ public static class CampaignFingerprint
             MixFloat(nation.ManpowerReserve);
             // When it last came apart, which is what decides whether it may again.
             Mix(nation.LastSecessionDay);
+            // How far its households' appetite has grown with their income; a country the
+            // market has not measured yet carries no bytes.
+            if (nation.IncomeBaseline != 0f || nation.IncomeFactor != 1f)
+            { MixText("income"); MixFloat(nation.IncomeBaseline); MixFloat(nation.IncomeFactor); }
+            if (nation.CapitalIntensityReference != 0f) { MixText("capital"); MixFloat(nation.CapitalIntensityReference); }
             Mix(nation.LastCivilWarDay);
             Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);

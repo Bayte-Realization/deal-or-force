@@ -972,6 +972,13 @@ public static class EconomySystem
             // the drags of war and empire (SecularCycle) - the only thing that lets the order of
             // 2024 change.
             SecularCycle.Week(campaign, nation, atWar);
+            // The spin-up (Defines.OutputSpinUpDays): the market is still settling, so the
+            // calibration follows it and GDP stays where the scenario put it.
+            if (campaign.ElapsedDays < campaign.Defines.OutputSpinUpDays && nation.GrossOutput > 0f && nation.Gdp > 0f)
+            {
+                var spun = nation.Gdp / (nation.GrossOutput * 52d);
+                if (double.IsFinite(spun) && spun > 0d && spun < float.MaxValue) nation.OutputScale = (float)spun;
+            }
             if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
             {
                 // Multiply in double: finite operands can overflow an intermediate float

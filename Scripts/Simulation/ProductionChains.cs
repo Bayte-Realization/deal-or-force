@@ -60,7 +60,9 @@ public static class ProductionChains
     /// </summary>
     private const int SlotTimberYield = 11;
     private const int SlotProductionCapacity = 12;
-    private const int FixedSlots = 13;
+    /// <summary>How far the country's households' appetite has grown with its income (Nation.IncomeFactor).</summary>
+    private const int SlotIncome = 13;
+    private const int FixedSlots = 14;
 
     // Sized for what a mod might add rather than for what the enums name, because a good or
     // a building declared in data is a number past the last one the enum has a name for, and
@@ -393,6 +395,7 @@ public static class ProductionChains
             case "gdp": return SlotGdp;
             case "production_capacity": return SlotProductionCapacity;
             case "arms_productivity": return SlotArmsProductivity;
+            case "income": return SlotIncome;
         }
 
         if (name.StartsWith("deposit:", StringComparison.OrdinalIgnoreCase) &&
@@ -464,6 +467,7 @@ public static class ProductionChains
         slots[SlotUrbanization] = state.Urbanization;
         slots[SlotStandardOfLiving] = state.StandardOfLiving;
         slots[SlotOutputFactor] = outputFactor;
+        slots[SlotIncome] = nation is not null && float.IsFinite(nation.IncomeFactor) && nation.IncomeFactor > 0f ? nation.IncomeFactor : 1f;
 
         foreach (var kind in UsedBuildingsRaw)
             slots[FixedSlots + BuildingKinds + kind] = state.Buildings.GetValueOrDefault((BuildingKind)kind);

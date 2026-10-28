@@ -124,9 +124,12 @@ public static partial class AiStatecraft
         // produces anything for ten years, while the rich world built factories.
         var needsTurn = (campaign.ElapsedDays / 30 + slot) % 3 == 0;
         var mature = nation.Literacy >= .72f && nation.StandardOfLiving >= .55f;
+        // A country at war builds guns while it is short of them, and otherwise what it would
+        // build at peace.
+        var armsTurn = atWar && AiBuilder.ShortOfArms(campaign, nation);
         var wanted =
             congested ? BuildingKind.Infrastructure :
-            atWar ? BuildingKind.ArmsIndustry :
+            armsTurn ? BuildingKind.ArmsIndustry :
             !mature && needsTurn && nation.Literacy < 0.72f ? BuildingKind.University :
             !mature && needsTurn && nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
             BuildingKind.CivilianIndustry;
@@ -134,7 +137,7 @@ public static partial class AiStatecraft
         ScenarioState target = null;
         // The production-chain planner already understands recipes, deposits and
         // water access. Let a peaceful economy actually use it.
-        if (!congested && !atWar && (mature || !needsTurn))
+        if (!congested && !armsTurn && (mature || !needsTurn))
             AiBuilder.Choose(campaign, nation, states, out wanted, out target);
 
         // Put a generic priority where there is most to gain. A specialized market

@@ -38,6 +38,9 @@
 //                         as the peacetime weight plus the difference
 //   hulls                 warship hulls
 //   gdp                   the country's GDP
+//   income                how far the country's real output per head has grown since the
+//                         campaign began, to the power Defines.IncomeDemandElasticity - one at
+//                         the start; households' appetite for what is written with it grows
 //   production_capacity   scenario-scaled physical capacity, adjusted for actual population;
 //                         use this in output, not GDP (which is derived from that output)
 //   arms_productivity     productivity, clamped to the range an arms industry can use
@@ -69,19 +72,19 @@
   "consumer_goods_manufacture": {
     "good": "ConsumerGoods",
     "output": { "population": 0.28, "population*urbanization": 1.50, "CivilianIndustry": 6.00 },
-    "demand": { "population": 0.42, "population*standard_of_living": 0.46 }
+    "demand": { "population*income": 0.807, "population*standard_of_living*income": 0.884 }
   },
 
   "industrial_materials_works": {
     "good": "IndustrialMaterials",
     "output": { "CivilianIndustry": 5.00, "raw:Infrastructure": 1.50 },
-    "demand": { "population": 0.18 }
+    "demand": { "population": 0.435 }
   },
 
   "energy_household": {
     "good": "Energy",
     "output": { "population": 0.53, "raw:Infrastructure": 2.00 },
-    "demand": { "population": 0.54, "population*urbanization": 0.34, "CivilianIndustry": 0.45 }
+    "demand": { "population*income": 0.977, "population*urbanization*income": 0.615, "CivilianIndustry": 0.814 }
   },
 
   "arms_workshops": {
@@ -92,7 +95,7 @@
   "coal_mining": {
     "good": "Coal",
     "output": { "deposit:Coal*extraction_efficiency": 1.00 },
-    "demand": { "CivilianIndustry": 0.52, "PowerPlant": 0.85 }
+    "demand": { "CivilianIndustry": 1.302, "PowerPlant": 2.129 }
   },
 
   "oil_extraction": {
@@ -104,7 +107,7 @@
   "iron_mining": {
     "good": "IronOre",
     "output": { "deposit:IronOre*extraction_efficiency": 1.00 },
-    "demand": { "CivilianIndustry": 0.72, "raw:ExtractionIndustry": 0.16 }
+    "demand": { "CivilianIndustry": 1.089, "raw:ExtractionIndustry": 0.242 }
   },
 
   // Eight countries have these and everyone's electronics need them. Raise the demand and
@@ -119,7 +122,7 @@
   "machinery_manufacture": {
     "good": "Machinery",
     "output": { "CivilianIndustry": 1.45, "urbanization": 0.25 },
-    "demand": { "raw:ExtractionIndustry": 0.45, "Agriculture": 0.12 }
+    "demand": { "raw:ExtractionIndustry": 0.408, "Agriculture": 0.109 }
   },
 
   "energy_generation": {
@@ -158,7 +161,7 @@
     "good": "NaturalGas",
     "output": { "deposit:NaturalGas*extraction_efficiency": 1.00 },
     "demand": {
-      "population": 0.13, "PowerPlant": 0.62, "ChemicalPlant": 1.05, "CivilianIndustry": 0.16
+      "population": 0.175, "PowerPlant": 0.836, "ChemicalPlant": 1.415, "CivilianIndustry": 0.216
     }
   },
 
@@ -171,7 +174,7 @@
   "bauxite_mining": {
     "good": "Bauxite",
     "output": { "deposit:Bauxite*extraction_efficiency": 1.00 },
-    "demand": { "Smelter": 1.45, "CivilianIndustry": 0.36 }
+    "demand": { "Smelter": 2.542, "CivilianIndustry": 0.631 }
   },
 
   "uranium_mining": {
@@ -187,7 +190,7 @@
     },
     "needs": { "Energy": 0.70 },
     "demand": {
-      "CivilianIndustry": 0.22, "ElectronicsPlant": 0.55, "ArmsIndustry": 0.40, "Shipyard": 0.38
+      "CivilianIndustry": 0.253, "ElectronicsPlant": 0.632, "ArmsIndustry": 0.46, "Shipyard": 0.437
     }
   },
 
@@ -199,7 +202,7 @@
     },
     "needs": { "Energy": 0.70 },
     "demand": {
-      "CivilianIndustry": 0.30, "ArmsIndustry": 0.48, "ElectronicsPlant": 0.58, "Agriculture": 0.10
+      "CivilianIndustry": 0.425, "ArmsIndustry": 0.68, "ElectronicsPlant": 0.822, "Agriculture": 0.142
     }
   },
 
@@ -229,7 +232,7 @@
     "output": {
       "CivilianIndustry": 1.95, "population": 0.26, "deposit:Timber*timber_yield": 0.08
     },
-    "demand": { "population": 0.26, "population*standard_of_living": 0.22 }
+    "demand": { "population*income": 0.26, "population*standard_of_living*income": 0.22 }
   },
 
   "pharmaceutical_manufacture": {
@@ -239,7 +242,7 @@
     },
     "needs": { "Chemicals": 0.68 },
     "demand": {
-      "population": 0.12, "population*standard_of_living": 0.16, "raw:Hospital": 0.28
+      "population*income": 0.12, "population*standard_of_living*income": 0.16, "raw:Hospital": 0.28
     }
   },
 
@@ -288,11 +291,11 @@
 
   "construction_industrial_materials": {
     "good": "IndustrialMaterials", "scope": "nation",
-    "demand": { "projects": 2.20 }
+    "demand": { "projects": 5.311 }
   },
   "construction_machinery": {
     "good": "Machinery", "scope": "nation",
-    "demand": { "projects": 0.85 }
+    "demand": { "projects": 0.771 }
   },
   "construction_timber": {
     "good": "Timber", "scope": "nation",
@@ -300,7 +303,7 @@
   },
   "construction_aluminium": {
     "good": "Aluminium", "scope": "nation",
-    "demand": { "projects": 0.30 }
+    "demand": { "projects": 0.345 }
   },
 
   "national_arms_output": {
@@ -313,7 +316,7 @@
   // peacetime rate plus the extra a war adds, so the two can be tuned apart.
   "army_arms_upkeep": {
     "good": "Arms", "scope": "nation",
-    "demand": { "divisions": 0.18, "divisions_at_war": 0.34, "hulls": 0.04 }
+    "demand": { "divisions": 0.238, "divisions_at_war": 0.449, "hulls": 0.053 }
   },
   "army_fuel_upkeep": {
     "good": "Oil", "scope": "nation",
@@ -325,11 +328,11 @@
   },
   "army_chemicals_upkeep": {
     "good": "Chemicals", "scope": "nation",
-    "demand": { "divisions": 0.035, "divisions_at_war": 0.075 }
+    "demand": { "divisions": 0.05, "divisions_at_war": 0.106 }
   },
   "army_aluminium_upkeep": {
     "good": "Aluminium", "scope": "nation",
-    "demand": { "divisions": 0.02, "divisions_at_war": 0.04, "hulls": 0.02 }
+    "demand": { "divisions": 0.023, "divisions_at_war": 0.046, "hulls": 0.023 }
   },
   "army_medical_upkeep": {
     "good": "Pharmaceuticals", "scope": "nation",

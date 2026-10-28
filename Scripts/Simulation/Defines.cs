@@ -472,6 +472,15 @@ public sealed partial class Defines
     /// </summary>
     public float GdpConvergenceRate { get; set; } = 0.10f;
 
+    /// <summary>
+    /// Days at the start of a campaign in which the economy spins up: the calibration factor is
+    /// re-derived each week so GDP holds the figures the scenario was authored with while trade
+    /// routes and prices find their level. The day-zero market is one priced pass, not an
+    /// equilibrium; over the next seven months exports grew into it and the United States' GDP
+    /// rose by a third with its real output up five per cent, Canada's by two thirds. 0 turns it off.
+    /// </summary>
+    public int OutputSpinUpDays { get; set; } = 182;
+
 	/// <summary>Weekly standard-of-living pressure at a complete weighted shortage.</summary>
 	public float ShortageSolWeeklyPenalty { get; set; } = 0.004f;
 

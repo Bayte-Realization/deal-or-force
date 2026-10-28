@@ -347,6 +347,15 @@ public sealed partial class Nation
     /// being its own free-running number - see EconomySystem.Tick.
     /// </summary>
     public float GrossOutput;
+    /// <summary>
+    /// What a head of its people makes, at base prices, the first week it is measured, and how far
+    /// its households' appetite has grown with it since (MarketCore, the recipes' "income"): one at
+    /// the start, so the calibrated 2024 market is untouched, and rising as the country gets richer.
+    /// </summary>
+    public float IncomeBaseline;
+    public float IncomeFactor = 1f;
+    /// <summary>Jobs per worker its buildings asked for in its first market (MarketSystem.CapitalReturns).</summary>
+    public float CapitalIntensityReference;
 
     /// <summary>
     /// Converts weekly gross output into the GDP scale the campaign was authored in.
