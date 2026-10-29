@@ -888,6 +888,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("diplomatic_gestures")) { DiplomaticGestures.Tick(this); DiplomaticGestures.AiTick(this); }
             // Rents, terms, the troops that stay and the owners who answer them (LandArrangements).
             using (SimProfiler.Measure("land_arrangements")) LandArrangementSystem.Tick(this);
+            // Why money does not pile up: erosion, the pressure to spend, the credit cycle, the bills nobody budgets for.
+            using (SimProfiler.Measure("treasury_dynamics")) TreasuryDynamics.Tick(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);

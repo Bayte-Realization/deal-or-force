@@ -192,6 +192,22 @@ public partial class DealOrForceGame
                 () => OpenEconomyTab("Budget"),
                 Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
 
+        // A recession from a financial crisis, its contagion or a pandemic (TreasuryDynamics), and
+        // a treasury so full the country wants it spent: both slow emergencies of the same kind.
+        var recession = 1f - Simulation.TreasuryDynamics.OutputFactor(_campaign, player);
+        if (recession > 0.005f)
+            AddAlert(recession >= 0.05f ? AlertLevel.Critical : AlertLevel.Warning, "inflation",
+                Simulation.Loc.Format("Recession: output -{0}", Fmt.Percent(recession)),
+                () => OpenEconomyTab("Budget"),
+                Simulation.Loc.Format("A financial crisis, its contagion or a pandemic has the economy contracting until {0}.",
+                    Simulation.LandArrangementSystem.DateOfDay(_campaign, player.RecessionUntilDay)));
+        else if (_campaign.Defines.TreasuryDynamicsEnabled && player.Gdp > 0f &&
+                 player.Treasury > player.Gdp * _campaign.Defines.TreasuryComfortShare)
+            AddAlert(AlertLevel.Notice, "inflation", Tr("Treasury overflowing"),
+                () => OpenEconomyTab("Budget"),
+                Simulation.Loc.Format("Reserves above {0} of GDP are spent down every week - handouts and tax cuts where voters rule, leakage where nobody answers to them. Invest it, or watch it go.",
+                    Fmt.Percent(_campaign.Defines.TreasuryComfortShare)));
+
         if (player.BrainDrainRate <= -0.10f && player.WeeklyNetMigration < 0)
             AddAlert(player.BrainDrainRate <= -0.22f ? AlertLevel.Critical : AlertLevel.Warning, "literacy",
                 Simulation.Loc.Format("Brain drain: {0}", Fmt.Percent(MathF.Abs(player.BrainDrainRate))),

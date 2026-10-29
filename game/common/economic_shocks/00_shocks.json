@@ -1,0 +1,18 @@
+// The bills nobody budgets for (TreasuryDynamics.cs). Each week every country rolls once for
+// each kind, at its yearly chance / 52; the first that comes is the week's.
+//
+//   annual_chance   the chance in a year, for one country
+//   cost            [least, most] of the country's GDP it costs the treasury
+//   damage          war-damage-like wreckage of the struck region's works (0..1)
+//   deaths          the share of the region's people it kills
+//   stability       what it costs the government in stability
+//
+// A mod adds a kind with a new key, or changes one field of an old one by naming it alone.
+{
+  "earthquake": { "name": "Earthquake", "annual_chance": 0.015, "cost": [0.002, 0.03], "damage": 0.25, "deaths": 0.0008, "stability": 0.02 },
+  "flood": { "name": "Floods", "annual_chance": 0.04, "cost": [0.001, 0.012], "damage": 0.12, "deaths": 0.0001, "stability": 0.01 },
+  "storm": { "name": "Hurricane", "annual_chance": 0.025, "cost": [0.002, 0.02], "damage": 0.18, "deaths": 0.0002, "stability": 0.01 },
+  "drought": { "name": "Drought", "annual_chance": 0.025, "cost": [0.002, 0.015], "damage": 0.05, "deaths": 0.00005, "stability": 0.015 },
+  "epidemic": { "name": "Epidemic", "annual_chance": 0.012, "cost": [0.002, 0.01], "damage": 0.0, "deaths": 0.0005, "stability": 0.02 },
+  "industrial_accident": { "name": "Industrial disaster", "annual_chance": 0.01, "cost": [0.001, 0.008], "damage": 0.1, "deaths": 0.00002, "stability": 0.01 }
+}

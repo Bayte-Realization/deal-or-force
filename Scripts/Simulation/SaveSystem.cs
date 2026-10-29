@@ -923,6 +923,8 @@ public static class SaveSystem
         public int NextLandArrangementId = 1;
         public List<LeaseOffer> LeaseOffers = new();
         public int NextLeaseOfferId = 1;
+        public float WorldLeverage = -1f;
+        public int LastFinancialCrisisDay = -100000;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -1052,6 +1054,8 @@ public static class SaveSystem
             NextLandArrangementId = campaign.NextLandArrangementId,
             LeaseOffers = new List<LeaseOffer>(campaign.LeaseOffers),
             NextLeaseOfferId = campaign.NextLeaseOfferId,
+            WorldLeverage = campaign.WorldLeverage,
+            LastFinancialCrisisDay = campaign.LastFinancialCrisisDay,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -1128,6 +1132,8 @@ public static class SaveSystem
                 campaign.LandArrangements.Count == 0 ? 1 : campaign.LandArrangements.Max(a => a.Id) + 1);
             campaign.NextLeaseOfferId = Math.Max(NextLeaseOfferId,
                 campaign.LeaseOffers.Count == 0 ? 1 : campaign.LeaseOffers.Max(o => o.Id) + 1);
+            campaign.WorldLeverage = WorldLeverage;
+            campaign.LastFinancialCrisisDay = LastFinancialCrisisDay;
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();

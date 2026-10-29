@@ -38,15 +38,17 @@
   // strength with its allies against the sender's at which it fights, and its chance of doing so;
   // the chance a holder holds its vote (or proclaims a republic where the people are not its own);
   // a great power's chance of asking a friendly small coastal country for a base.
-  "AiPresenceChance": 0.03,
+  "AiPresenceChance": 0.1,
   "AiPresenceKinMajority": 0.55,
   // The highest war restraint at which a computer government does it: in 2024 Russia, Turkey and
   // Azerbaijan stand at 0.58, democracies at 1 and above.
   "AiPresenceRestraintMax": 0.65,
   // The owner's strength with its allies, as a share of the sender's, that keeps the troops at home.
-  "AiPresenceDeterrence": 0.45,
+  "AiPresenceDeterrence": 0.7,
   "AiPresenceWarRatio": 0.8,
   "AiPresenceWarChance": 0.25,
   "AiPresenceReferendumChance": 0.15,
-  "AiLeaseRequestChance": 0.01
+  "AiLeaseRequestChance": 0.01,
+  // What a lease between two countries adds to the price of a war between them, for the computer.
+  "AiLeaseWarCaution": 0.8
 }

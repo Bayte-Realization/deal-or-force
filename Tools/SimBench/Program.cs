@@ -737,8 +737,17 @@ public static class Program
                               $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
                               $"withdrew={LandArrangementSystem.Withdrew} republics={LandArrangementSystem.Republics}; passed over: " + string.Join(" ", LandArrangementSystem.Passed.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) + "; standing: " + string.Join(", ", campaign.LandArrangements.Select(a =>
                                   $"{a.Kind} {campaign.NationById(a.HolderId)?.Tag} in {LandArrangementSystem.RegionNames(campaign, a)} ({campaign.NationById(a.OwnerId)?.Tag})")));
+            var treasuries = campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f && n.Population > 0)
+                .OrderByDescending(n => n.Gdp).Take(20).Select(n => n.Treasury / n.Gdp).OrderBy(x => x).ToList();
+            Console.WriteLine($"PULSE treasury: crises={TreasuryDynamics.Crises} contagions={TreasuryDynamics.Contagions} " +
+                              $"disasters={TreasuryDynamics.Disasters} pandemics={TreasuryDynamics.Pandemics} spent={TreasuryDynamics.Spent:0} " +
+                              $"leaked={TreasuryDynamics.Leaked:0} eroded={TreasuryDynamics.Eroded:0} leverage={campaign.WorldLeverage:0.00}; " +
+                              $"top-20 treasury/GDP min {treasuries.FirstOrDefault():0.00} median {treasuries.ElementAtOrDefault(treasuries.Count / 2):0.00} max {treasuries.LastOrDefault():0.00}; " +
+                              string.Join(", ", campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f).OrderByDescending(n => n.Gdp).Take(8)
+                                  .Select(n => $"{n.Tag} {n.Treasury:0}/{n.Gdp:0}")));
             Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
                 .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
+            foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
             Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
             foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
                 Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");

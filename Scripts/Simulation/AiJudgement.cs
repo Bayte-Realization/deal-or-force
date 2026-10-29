@@ -356,6 +356,13 @@ public static partial class AiStatecraft
         var regard = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id)?.Opinion ?? 0f;
         if (regard > 0f) price += Part(parts, "friendship", regard / 100f * defines.AiFriendshipCaution);
 
+        // A lease between them: the tenant would lose its base, the owner its rent, and a
+        // garrison on the owner's soil is not a border to march across. Guantanamo made the
+        // United States a land neighbour of Cuba, and the computer invaded it in the spring.
+        if (campaign.LandArrangements.Count > 0 && campaign.LandArrangements.Any(a => a.Kind == LandArrangementSystem.Lease &&
+                ((a.HolderId == nation.Id && a.OwnerId == other.Id) || (a.HolderId == other.Id && a.OwnerId == nation.Id))))
+            price += Part(parts, "lease", defines.AiLeaseWarCaution);
+
         // And turning on a country we are actually allied to, which is a different thing from
         // overcoming a fondness for one. Not a dislike defeated but a promise broken in public,
         // with everybody watching to see what this country's signature turns out to be worth.

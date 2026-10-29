@@ -46,19 +46,22 @@ public sealed partial class Defines
     /// in; the owner's strength, with its allies, against the sender's, at which a computer owner
     /// fights for the ground rather than protesting; and its monthly chance of doing so.
     /// </summary>
-    public float AiPresenceChance { get; set; } = 0.03f;
+    public float AiPresenceChance { get; set; } = 0.1f;
     /// <summary>The share of a region's people that must be the sender's own for the computer to call it theirs, when it has no title to it.</summary>
     public float AiPresenceKinMajority { get; set; } = 0.55f;
     /// <summary>The highest war restraint (AiStatecraft.Restraint) at which a computer government sends troops in without a war.</summary>
     public float AiPresenceRestraintMax { get; set; } = 0.65f;
     /// <summary>The owner's strength with its allies, as a share of the sender's, that keeps a computer's troops at home.</summary>
-    public float AiPresenceDeterrence { get; set; } = 0.45f;
+    public float AiPresenceDeterrence { get; set; } = 0.7f;
     public float AiPresenceWarRatio { get; set; } = 0.8f;
     public float AiPresenceWarChance { get; set; } = 0.25f;
     public float AiPresenceReferendumChance { get; set; } = 0.15f;
 
     /// <summary>The computer's monthly chance, for a great power, of asking a friendly small coastal country for a base.</summary>
     public float AiLeaseRequestChance { get; set; } = 0.01f;
+
+    /// <summary>What a lease between two countries adds to the price either pays, in the computer's reckoning, for a war on the other.</summary>
+    public float AiLeaseWarCaution { get; set; } = 0.8f;
 }
 
 /// <summary>
@@ -124,6 +127,8 @@ public static class LandArrangementSystem
     private static void Pass(string why) => Passed[why] = Passed.GetValueOrDefault(why) + 1;
     /// <summary>For the bench: each passed-over pair and the owner's strength against the sender's, or the refusal.</summary>
     public static readonly Dictionary<string, string> PassedPairs = new();
+    /// <summary>For the bench: every arrangement that ended, how and when.</summary>
+    public static readonly List<string> EndedLog = new();
 
     // ---- reading ------------------------------------------------------------------------
 
@@ -202,6 +207,8 @@ public static class LandArrangementSystem
             if (AtWar(c, owner.Id, holder.Id))
             {
                 c.LandArrangements.RemoveAt(index);
+                EndedLog.Add($"day {c.ElapsedDays}: {arrangement.Kind} {holder.Tag} in {RegionNames(c, arrangement)} ({owner.Tag}) ended by war: " +
+                             string.Join(" | ", c.Wars.Where(w => !w.Ended && w.Involves(owner.Id) && w.Involves(holder.Id)).Select(w => w.Name)));
                 c.Chronicle.Record(c, arrangement.Kind == Lease ? "lease_voided_by_war" : "presence_became_war",
                     holder.Id, owner.Id, place: RegionNames(c, arrangement));
                 changed = true;
@@ -484,6 +491,7 @@ public static class LandArrangementSystem
     private static void End(Campaign c, LandArrangement arrangement, string why)
     {
         c.LandArrangements.Remove(arrangement);
+        EndedLog.Add($"day {c.ElapsedDays}: {arrangement.Kind} {arrangement.HolderId}>{arrangement.OwnerId} ended: {why}");
         DiagnosticLogs.Write("simulation", $"ARRANGEMENT_ENDED id={arrangement.Id} kind={arrangement.Kind} why={why} day={c.ElapsedDays}");
     }
 

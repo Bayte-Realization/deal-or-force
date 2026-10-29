@@ -546,7 +546,9 @@ public static class MarketSystem
         // on top, not a new input.
         var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
                            NationalModifiers.Factor(nation, "output") *
-                           CapitalReturns(campaign, nation, demandedJobs, availableWorkers);
+                           CapitalReturns(campaign, nation, demandedJobs, availableWorkers) *
+                           // A recession from a financial crisis or a pandemic (TreasuryDynamics).
+                           TreasuryDynamics.OutputFactor(campaign, nation);
 
         var allocation = ProductionProgramme.Allocate(states, nation);
         ProductionProgramme.MigrateLegacy(nation, allocation);

@@ -177,6 +177,9 @@ public static class CampaignFingerprint
                 Mix(-104);
             }
         }
+        // The world credit cycle (TreasuryDynamics); a campaign that has not started it carries no bytes.
+        if (campaign.WorldLeverage >= 0f || campaign.LastFinancialCrisisDay != -100000)
+        { MixText("credit_cycle"); MixFloat(campaign.WorldLeverage); Mix(campaign.LastFinancialCrisisDay); }
         // Leases and troops in without a war, and the offers of leases on a player's desk.
         if (campaign.LandArrangements.Count > 0 || campaign.NextLandArrangementId != 1)
         {
@@ -531,6 +534,8 @@ public static class CampaignFingerprint
             if (nation.IncomeBaseline != 0f || nation.IncomeFactor != 1f)
             { MixText("income"); MixFloat(nation.IncomeBaseline); MixFloat(nation.IncomeFactor); }
             if (nation.CapitalIntensityReference != 0f) { MixText("capital"); MixFloat(nation.CapitalIntensityReference); }
+            if (nation.RecessionDepth != 0f || nation.RecessionUntilDay != 0)
+            { MixText("recession"); MixFloat(nation.RecessionDepth); Mix(nation.RecessionStartDay); Mix(nation.RecessionUntilDay); }
             Mix(nation.LastCivilWarDay);
             Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);

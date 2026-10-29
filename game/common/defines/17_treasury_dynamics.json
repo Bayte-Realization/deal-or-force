@@ -1,0 +1,41 @@
+// Deal or Force - why money does not simply pile up (TreasuryDynamics.cs).
+//
+// Capital in history accumulated and was spent as fast. Reserves lose to inflation what they do
+// not earn; a full treasury is a political fact - voters want it back, and where nobody answers
+// to voters it leaks into pockets; calm years build leverage until a financial crisis spends it
+// and travels along trade (1873, 1929, 1997, 2008); and there are the bills nobody budgets for
+// (common/economic_shocks) and, once in a long while, a pandemic. TreasuryDynamicsEnabled false
+// switches all of it off.
+{
+  "TreasuryDynamicsEnabled": true,
+  // What reserves earn a year; inflation above it eats them.
+  "ReserveYield": 0.02,
+  // Reserves above TreasuryComfortShare of GDP are spent down each year by TreasurySpendingRate
+  // of the excess where the government answers to voters (war restraint 1) and leak by
+  // TreasuryCorruptionRate where it answers to nobody (restraint 0); the spending buys stability.
+  "TreasuryComfortShare": 0.12,
+  "TreasurySpendingRate": 0.3,
+  "TreasuryCorruptionRate": 0.12,
+  "TreasurySpendingStability": 0.5,
+  "TreasurySpendingStabilityWeeklyMax": 0.002,
+  // The credit cycle: leverage built each calm year, the yearly crisis chance at full leverage
+  // (it rises with leverage squared), and where the world starts in 2024.
+  "LeverageGrowthPerYear": 0.11,
+  "FinancialCrisisChance": 0.35,
+  "StartingLeverage": 0.45,
+  // A crisis at full severity: bailout share of GDP, output lost at the worst, days, stability.
+  "CrisisBailoutShare": 0.06,
+  "CrisisRecessionDepth": 0.08,
+  "CrisisRecessionDays": 540,
+  "CrisisStability": 0.06,
+  // Contagion along trade: strength, decay per link, links, least severity passed on.
+  "ContagionStrength": 1.5,
+  "ContagionDecay": 0.6,
+  "ContagionHops": 3,
+  "ContagionFloor": 0.15,
+  // A world pandemic: yearly chance, output lost at the worst, bill as a share of GDP, days.
+  "PandemicChance": 0.012,
+  "PandemicDepth": 0.05,
+  "PandemicCostShare": 0.02,
+  "PandemicDays": 365
+}
