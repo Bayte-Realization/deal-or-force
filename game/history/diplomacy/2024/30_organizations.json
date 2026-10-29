@@ -13,9 +13,12 @@
 //
 // A charter is what the organization does in the game (common/organizations): "development"
 // for the economic unions with a common budget, "cooperation" for the councils and forums.
+// "doctrine": "common_market" makes one a customs union from the first day - the EU, the Gulf
+// Cooperation Council (2003), Mercosur, the Eurasian Economic Union, ECOWAS's common external
+// tariff (2015): its members buy from each other first and from outside it less.
 {
   "organizations": [
-    { "name": "European Union", "charter": "development",
+    { "name": "European Union", "charter": "development", "doctrine": "common_market",
       "members": ["AUT", "BEL", "BGR", "HRV", "CYP", "CZE", "DNK", "EST", "FIN", "FRA", "DEU", "GRC", "HUN",
                   "IRL", "ITA", "LVA", "LTU", "LUX", "MLT", "NLD", "POL", "PRT", "ROU", "SVK", "SVN", "ESP", "SWE"] },
     { "name": "African Union", "charter": "cooperation",
@@ -34,15 +37,15 @@
       "members": ["BRA", "RUS", "IND", "CHN", "ZAF", "EGY", "ETH", "IRN", "ARE"] },
     { "name": "OPEC", "charter": "cooperation",
       "members": ["SAU", "IRQ", "IRN", "KWT", "VEN", "ARE", "LBY", "NGA", "DZA", "COG", "GNQ", "GAB"] },
-    { "name": "Gulf Cooperation Council", "charter": "cooperation",
+    { "name": "Gulf Cooperation Council", "charter": "cooperation", "doctrine": "common_market",
       "members": ["SAU", "ARE", "KWT", "QAT", "BHR", "OMN"] },
-    { "name": "Mercosur", "charter": "development",
+    { "name": "Mercosur", "charter": "development", "doctrine": "common_market",
       "members": ["ARG", "BRA", "PRY", "URY"] },
     { "name": "Commonwealth of Independent States", "charter": "cooperation",
       "members": ["RUS", "BLR", "KAZ", "KGZ", "TJK", "UZB", "ARM", "AZE", "MDA"] },
-    { "name": "Eurasian Economic Union", "charter": "development",
+    { "name": "Eurasian Economic Union", "charter": "development", "doctrine": "common_market",
       "members": ["RUS", "BLR", "KAZ", "KGZ", "ARM"] },
-    { "name": "ECOWAS", "charter": "development",
+    { "name": "ECOWAS", "charter": "development", "doctrine": "common_market",
       "members": ["BEN", "CPV", "CIV", "GMB", "GHA", "GNB", "LBR", "NGA", "SEN", "SLE", "TGO", "MLI", "BFA", "NER"] }
   ]
 }

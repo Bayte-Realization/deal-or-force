@@ -49,6 +49,14 @@ public sealed partial class Campaign
 
 public sealed partial class Defines
 {
+    /// <summary>
+    /// A customs union: the doctrine that makes an organisation one, how much more its members
+    /// buy from each other, and how much less from outside it (the common external tariff).
+    /// </summary>
+    public string CustomsUnionDoctrine { get; set; } = "common_market";
+    public float CustomsUnionInsideTrade { get; set; } = 1.6f;
+    public float CustomsUnionOutsideTrade { get; set; } = 0.88f;
+
     public float OrganizationFoundingDeposit { get; set; } = .25f;
     public int OrganizationMembershipLimit { get; set; } = 6;
     public int OrganizationApplicationCooldownDays { get; set; } = 30;

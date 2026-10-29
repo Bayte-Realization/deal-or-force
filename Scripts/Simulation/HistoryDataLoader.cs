@@ -110,8 +110,13 @@ public static class HistoryDataLoader
                 var ids = roster.EnumerateArray()
                     .Select(member => campaign.NationByTag(member.GetString() ?? ""))
                     .Where(nation => nation is not null).Select(nation => nation.Id).ToList();
-                if (InternationalOrganizations.Seed(campaign, title.GetString(), charterId, ids) is null)
+                var founded = InternationalOrganizations.Seed(campaign, title.GetString(), charterId, ids);
+                if (founded is null)
                     errors?.Add($"Organization '{title.GetString()}' could not be founded ({charterId}, {ids.Count} members).");
+                // The course it had already chosen: the EU, Mercosur and the Eurasian union are
+                // customs unions on the first day ("doctrine": "common_market").
+                else if (body.TryGetProperty("doctrine", out var doctrine) && doctrine.ValueKind == JsonValueKind.String)
+                    founded.DoctrineId = doctrine.GetString() ?? "";
             }
 
         if (root.TryGetProperty("guarantees", out var guarantees) && guarantees.ValueKind == JsonValueKind.Array)

@@ -163,6 +163,8 @@ static class Program
         if (args.Length == 0) LandArrangementTests.Run();
         if (args.Contains("--treasury-only")) { TreasuryDynamicsTests.Run(); return; }
         if (args.Length == 0) TreasuryDynamicsTests.Run();
+        if (args.Contains("--customs-only")) { CustomsUnionTests.Run(); return; }
+        if (args.Length == 0) CustomsUnionTests.Run();
         if (args.Contains("--world-layers-only")) { WorldLayersTests.Run(); return; }
         if (args.Length == 0) WorldLayersTests.Run();
         if (args.Contains("--gestures-only")) { DiplomaticGestureTests.Run(); return; }

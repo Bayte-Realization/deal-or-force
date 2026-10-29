@@ -124,6 +124,9 @@ public static class TradeNetwork
         internal bool IndexReady;
         internal int FiledCount;
         internal readonly Dictionary<int, List<TradeRoute>> Touching = new();
+        // Each country's customs unions this week: the organisations it belongs to that have
+        // chosen a common market (doctrine "common_market").
+        internal readonly Dictionary<int, List<int>> CustomsUnions = new();
     }
 
     private static readonly TradeRoute[] NoRoutes = Array.Empty<TradeRoute>();
@@ -213,6 +216,16 @@ public static class TradeNetwork
             EnsureDistances(campaign, work);
             MeasureReach(campaign, work);
             work.PartnerAffinityScores.Clear();
+            work.CustomsUnions.Clear();
+            foreach (var organization in campaign.Organizations)
+            {
+                if (organization.Dissolved || organization.DoctrineId != campaign.Defines.CustomsUnionDoctrine) continue;
+                foreach (var member in organization.Members)
+                {
+                    if (!work.CustomsUnions.TryGetValue(member, out var unions)) work.CustomsUnions[member] = unions = new List<int>();
+                    unions.Add(organization.Id);
+                }
+            }
         }
         yield return 0;
 
@@ -421,6 +434,18 @@ public static class TradeNetwork
             if (relation.TradeAgreement) score *= 1.75f;
             if (relation.Stance == DiplomaticStance.Allied) score *= 1.30f;
             else if (relation.Stance == DiplomaticStance.Rival) score *= 0.68f;
+        }
+        // A customs union: members buy from each other first and from outside it less - the
+        // common external tariff - which is what makes joining one, and leaving it, matter.
+        var buyerUnions = work.CustomsUnions.GetValueOrDefault(buyer.Id);
+        if (buyerUnions is not null)
+        {
+            var sellerUnions = work.CustomsUnions.GetValueOrDefault(seller.Id);
+            var shared = false;
+            if (sellerUnions is not null)
+                foreach (var union in buyerUnions)
+                    if (sellerUnions.Contains(union)) { shared = true; break; }
+            score *= shared ? campaign.Defines.CustomsUnionInsideTrade : campaign.Defines.CustomsUnionOutsideTrade;
         }
 
         // Neighbours trade over a border; everyone else trades over a distance, and needs

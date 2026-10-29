@@ -237,3 +237,39 @@ static class DiplomaticGestureTests
             "a glutted good is made less of and a dear one more, within the bounds");
     }
 }
+
+/// <summary>A customs union (organisation doctrine "common_market"): its members buy from each other first.</summary>
+static class CustomsUnionTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("customs union: " + note); Console.WriteLine("PASS customs union: " + note); }
+
+    static float InsideShare(Campaign c, HashSet<int> members)
+    {
+        MarketSystem.Prime(c);
+        var inside = 0f; var all = 0f;
+        foreach (var route in c.TradeRoutes)
+        {
+            if (!members.Contains(route.BuyerId)) continue;
+            all += route.Value;
+            if (members.Contains(route.SellerId)) inside += route.Value;
+        }
+        return all <= 0f ? 0f : inside / all;
+    }
+
+    public static void Run()
+    {
+        var c = Campaign.CreateBootstrap(20261029);
+        MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
+        Check(MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+            WorldMapSource.Width, WorldMapSource.Height, out var map, out var message), message);
+        c.AttachProvinceTopology(map);
+        var eu = c.Organizations.FirstOrDefault(o => o.Name == "European Union");
+        Check(eu is not null && eu.DoctrineId == c.Defines.CustomsUnionDoctrine, "the EU opens as a customs union");
+        var members = eu.Members.ToHashSet();
+        var union = InsideShare(c, members);
+        eu.DoctrineId = "";
+        var plain = InsideShare(c, members);
+        Check(union > plain, $"its members buy more of what they import from each other ({union:P0} against {plain:P0})");
+    }
+}

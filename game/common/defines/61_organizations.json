@@ -1,4 +1,5 @@
 {"Features":{"organizations":true}, "FeatureCommands":{"OrganizationCommand":"organizations"},
  "OrganizationFoundingDeposit":0.25, "OrganizationMembershipLimit":6, "OrganizationApplicationCooldownDays":30,
  "AiMayFoundOrganizations":true, "AiOrganizationWorldLimit":28,
- "OrganizationArrearsCohesionLoss":0.012, "OrganizationDepartureTruceDays":180}
+ "OrganizationArrearsCohesionLoss":0.012, "OrganizationDepartureTruceDays":180,
+ "CustomsUnionDoctrine":"common_market", "CustomsUnionInsideTrade":1.6, "CustomsUnionOutsideTrade":0.88}
