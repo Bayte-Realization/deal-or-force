@@ -835,12 +835,17 @@ public sealed partial class Campaign
         // instead of not at all.
         using (SimProfiler.Measure("military access")) MilitaryAccess.Tick(this);
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
+        // A frame may stop here and between the fleets and the fighting: the same passes in the
+        // same order, but the step's heaviest pair - supply and the battles with their staff
+        // work, thirty milliseconds together - no longer has to land in one frame.
+        yield return 0;
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
         using (SimProfiler.Measure("naval"))
         {
             using (SimProfiler.Measure("  naval:admiralty")) AiAdmiralty.Tick(this);
             using (SimProfiler.Measure("  naval:operations")) NavalOperations.Tick(this);
         }
+        yield return 0;
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
@@ -894,17 +899,30 @@ public sealed partial class Campaign
             HeldRegions.AiMonth(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
-            using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
+            // In stages, like the economy before it (BrainDrain.Stages).
+            using (var drain = BrainDrain.Stages(this).GetEnumerator())
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("brain drain")) more = drain.MoveNext();
+                    yield return 0;
+                    if (!more) break;
+                }
             // And inside each country: from the regions that are worse off to the ones that are
             // better, and away from the fighting, carrying who they are.
             using (SimProfiler.Measure("internal migration")) InternalMigration.Tick(this);
+            yield return 0;
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
-            if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)
+            string invalid = null;
+            if (ElapsedDays % 7 == 0)
+                using (SimProfiler.Measure("integrity")) invalid = NumericIntegrity.FirstLiveIssue(this);
+            if (invalid is not null)
             {
                 BlockSimulation(invalid);
                 throw new CampaignIntegrityException(invalid);
             }
+            yield return 0;
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
@@ -975,10 +993,15 @@ public sealed partial class Campaign
         // Age structure and the cultures that migration moves: the demographic cycle reads the births
         // and deaths the household review has just counted, and aggregates the country's shape so a
         // tooltip or a modifier source reads one number (DemographicCycle).
-        using (SimProfiler.Measure("demography"))
-        {
-            DemographicCycle.Tick(this);
-        }
+        // In stages, so the week's heaviest pass does not land in one frame (DemographicCycle.Stages).
+        using (var demography = DemographicCycle.Stages(this).GetEnumerator())
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("demography")) more = demography.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
         // A country that is running out of people is counted here, straight after the cycle that
         // counts them. What becomes of its empty ground is a later decision about inheritance,
         // deliberately not this line (DEMOGRAPHIC_EXTINCTION_DESIGN_RU.md).

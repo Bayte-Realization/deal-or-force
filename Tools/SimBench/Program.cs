@@ -1567,6 +1567,46 @@ public static class Program
             Console.WriteLine($"Steps: {steps.Count:N0} of {campaign.TickHours}h; median {At(0.5):0.00} ms, p95 {At(0.95):0.00}, " +
                               $"p99 {At(0.99):0.00}, worst {sorted[^1]:0.0}; worst {frame} steps together (a frame at the top speed) {worstFrame:0.0} ms.");
         }
+        // And what a frame feels with smooth time on, which is how the game runs: the simulation
+        // given its budget a frame (Campaign.StepFor) for thirty more days. A frame's cost is the
+        // budget plus the one stage it could not cut short - the number that is a hitch.
+        {
+            var budgetMs = Math.Max(1.0, campaign.Defines.FrameSimulationBudgetMs);
+            var frames = new List<double>();
+            var frameClock = Stopwatch.StartNew();
+            var stopAt = campaign.ElapsedDays + 30;
+            while (campaign.ElapsedDays < stopAt)
+            {
+                frameClock.Restart();
+                campaign.StepFor(budgetMs);
+                frames.Add(frameClock.Elapsed.TotalMilliseconds);
+            }
+            var sortedFrames = frames.OrderBy(ms => ms).ToList();
+            double FrameAt(double share) => sortedFrames[Math.Min(sortedFrames.Count - 1, (int)(sortedFrames.Count * share))];
+            Console.WriteLine($"Frames with smooth time ({budgetMs:0} ms budget, 30 days): {frames.Count:N0}; median {FrameAt(0.5):0.00} ms, " +
+                              $"p99 {FrameAt(0.99):0.00}, p99.9 {FrameAt(0.999):0.00}, worst {sortedFrames[^1]:0.0}; " +
+                              $"{frames.Count(ms => ms > 33.3):N0} over 33 ms.");
+            // The indivisible pieces themselves: one stage a call, named by what the profiler
+            // counted during it - the list an optimisation of hitches works down.
+            var pieces = new List<(double Ms, int Day, string Parts)>();
+            var mark = new Dictionary<string, double>();
+            var pieceStop = campaign.ElapsedDays + 30;
+            while (campaign.ElapsedDays < pieceStop)
+            {
+                mark.Clear();
+                foreach (var sample in SimProfiler.All) mark[sample.Name] = sample.TotalMilliseconds;
+                frameClock.Restart();
+                campaign.StepFor(0.0001);
+                var ms = frameClock.Elapsed.TotalMilliseconds;
+                if (ms < 15) continue;
+                var parts = string.Join(", ", SimProfiler.All
+                    .Select(sample => (Name: sample.Name.Trim(), Ms: sample.TotalMilliseconds - mark.GetValueOrDefault(sample.Name)))
+                    .Where(part => part.Ms >= 2.0).OrderByDescending(part => part.Ms).Take(5).Select(part => $"{part.Name} {part.Ms:0}"));
+                pieces.Add((ms, campaign.ElapsedDays, parts));
+            }
+            foreach (var (ms, day, parts) in pieces.OrderByDescending(piece => piece.Ms).Take(10))
+                Console.WriteLine($"  indivisible {ms:0.0} ms on day {day}: {parts}");
+        }
         Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
                           $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
                           $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +

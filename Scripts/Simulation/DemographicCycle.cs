@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -144,13 +143,31 @@ public static class DemographicCycle
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(DemographicCycle))) return;
+        foreach (var _ in Stages(campaign)) { }
+    }
+
+    /// <summary>How many regions one stage of the cycle works through before the frame gets its turn back.</summary>
+    private const int StageRegions = 256;
+
+    /// <summary>
+    /// The cycle in stages: the same regions in the same order, a pause every StageRegions. It was
+    /// one pass over all eighteen hundred regions on the week's day and the single heaviest thing a
+    /// frame at the top speed carried - eighty milliseconds of a four-hundred-millisecond step.
+    /// </summary>
+    public static IEnumerable<int> Stages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(DemographicCycle))) yield break;
         var defines = campaign.Defines;
-        if (!defines.DemographyAgeStructureEnabled) return;
+        if (!defines.DemographyAgeStructureEnabled) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var anyChanged = false;
-        foreach (var state in campaign.States)
+        // By index and re-checked each time: nothing in a stage adds or removes regions, but a pause
+        // is where something could, and a copy of the list every hour would be garbage for nothing.
+        for (var index = 0; index < campaign.States.Count; index++)
         {
+            if (index > 0 && index % StageRegions == 0) yield return 0;
+            if (index >= campaign.States.Count) break;
+            var state = campaign.States[index];
             if (state is null || state.Unclaimed || state.Population <= 0) continue;
             if (state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
             state.LastDemographyDay = state.LastHouseholdReviewDay;

@@ -192,9 +192,21 @@ public static class BrainDrain
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.Defines.BrainDrainEnabled || !c.Defines.HouseholdDynamicsEnabled) return;
-        if (c.ElapsedDays <= 0 || c.ElapsedDays % Math.Max(1, c.Defines.EconomyTickDays) != 0) return;
-        if (c.Nations.Count < 2 || c.States.Count < 2) return;
+        foreach (var _ in Stages(c)) { }
+    }
+
+    /// <summary>How many source countries one stage works through before the frame gets its turn back.</summary>
+    private const int StageCountries = 48;
+
+    /// <summary>
+    /// The week's emigration in stages: the same countries in the same order, a pause every
+    /// StageCountries - one indivisible piece of twenty-five milliseconds before.
+    /// </summary>
+    public static IEnumerable<int> Stages(Campaign c)
+    {
+        if (c is null || !c.Defines.BrainDrainEnabled || !c.Defines.HouseholdDynamicsEnabled) yield break;
+        if (c.ElapsedDays <= 0 || c.ElapsedDays % Math.Max(1, c.Defines.EconomyTickDays) != 0) yield break;
+        if (c.Nations.Count < 2 || c.States.Count < 2) yield break;
 
         var atWarNations = new HashSet<int>();
         for (var i = 0; i < c.Wars.Count; i++)
@@ -226,6 +238,7 @@ public static class BrainDrain
 
         for (var i = 0; i < c.Nations.Count; i++)
         {
+            if (i > 0 && i % StageCountries == 0) yield return 0;
             var sourceNation = c.Nations[i];
             if (sourceNation.Movement is not null || sourceNation.Population <= 10_000) continue;
             var states = c.StatesOf(sourceNation);
