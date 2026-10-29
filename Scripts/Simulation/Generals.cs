@@ -240,7 +240,9 @@ public static class Generals
         { refusal = Loc.Get("This command is not yours to change."); return false; }
         if (nation.Population <= 0 || campaign.Fallen.Contains(nation.Id)) { refusal = Loc.Get("A country that no longer exists appoints nobody."); return false; }
         var d = campaign.Defines;
-        if (group.CommanderSinceDay >= 0 && campaign.ElapsedDays - group.CommanderSinceDay < d.CommanderReliefCooldownDays)
+        // The wait is for a commander the government itself put in; the ones the campaign opened
+        // with (appointed on its first day) can be changed at once.
+        if (group.CommanderSinceDay > 0 && campaign.ElapsedDays - group.CommanderSinceDay < d.CommanderReliefCooldownDays)
         {
             refusal = Loc.Format("The commander took the group {0} days ago; relieving them is possible after {1}.",
                 campaign.ElapsedDays - group.CommanderSinceDay, d.CommanderReliefCooldownDays);
@@ -248,8 +250,8 @@ public static class Generals
         }
         if (nation.PoliticalPoints < d.CommanderReliefPoliticalCost)
         {
-            refusal = Loc.Format("Relieving a commander costs {0} political credit; there is {1}.",
-                Fmt.Number(d.CommanderReliefPoliticalCost), Fmt.Number(nation.PoliticalPoints));
+            refusal = Loc.Format("Relieving a commander costs {0:0} political credit; there is {1:0.#}.",
+                d.CommanderReliefPoliticalCost, nation.PoliticalPoints);
             return false;
         }
         return true;

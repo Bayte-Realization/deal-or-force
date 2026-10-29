@@ -77,9 +77,13 @@ static class GeneralsTests
             "the same officers are put forward until somebody is relieved");
 
         ukraine.PoliticalPoints = 50f;
-        group.CommanderSinceDay = c.ElapsedDays;
+        group.CommanderSinceDay = 0;
+        Check(Generals.MayRelieve(c, ukraine, group, out _),
+            "the commanders the campaign opened with can be changed at once");
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 200L * 24);
+        group.CommanderSinceDay = c.ElapsedDays - 10;
         Check(!Generals.MayRelieve(c, ukraine, group, out var wait) && wait.Length > 0,
-            "a commander who has just taken the group cannot be relieved at once");
+            "a commander the government has just put in cannot be relieved at once");
         group.CommanderSinceDay = c.ElapsedDays - c.Defines.CommanderReliefCooldownDays;
         group.Victories = 5; group.Defeats = 1;
         var support = ukraine.WarSupport;
@@ -107,7 +111,7 @@ static class GeneralsTests
         russia.PoliticalPoints = 50f; russia.IsHuman = false;
         var loser = losing.Commander;
         c.Defines.AiRelievesFailedCommanders = true;
-        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 19L * 24);
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, (28L * 8 + 19) * 24);
         Generals.AiMonth(c);
         Check(losing.Commander != loser && losing.CommandersRelieved == 1 && losing.StaffSkill > 0.2f,
             "a government the computer runs relieves the commander who keeps losing and picks an abler one");

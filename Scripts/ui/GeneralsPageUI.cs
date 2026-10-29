@@ -68,7 +68,7 @@ public partial class DealOrForceGame
             var cost = Generals.ReliefWarSupportCost(_campaign, group);
             var open = _generalsReliefGroup == group.Id;
             var relieve = ActionButton(open ? Loc.Get("Keep the commander")
-                    : Loc.Format("Relieve of command ({0})", Fmt.Number(_campaign.Defines.CommanderReliefPoliticalCost)),
+                    : Loc.Format("Relieve of command ({0:0})", _campaign.Defines.CommanderReliefPoliticalCost),
                 () =>
                 {
                     _generalsReliefGroup = _generalsReliefGroup == group.Id ? -1 : group.Id;
@@ -78,13 +78,13 @@ public partial class DealOrForceGame
             relieve.Name = "RelieveCommander_" + group.Id;
             relieve.Disabled = !may && !open;
             relieve.TooltipText = Ui.Tip(!may ? refusal
-                : cost > 0f ? Loc.Format("A commander who has won costs war support to remove in wartime: {0} points.", Fmt.Number(cost * 100f))
+                : cost > 0f ? Loc.Format("A commander who has won costs war support to remove in wartime: {0:0.#} points.", cost * 100f)
                 : Loc.Get("Three officers are put forward; choose who takes the group."));
             body.AddChild(relieve);
             if (!open || !may) continue;
 
             if (cost > 0f)
-                body.AddChild(Title(Loc.Format("The country will not like it: war support −{0} points.", Fmt.Number(cost * 100f)),
+                body.AddChild(Title(Loc.Format("The country will not like it: war support −{0:0.#} points.", cost * 100f),
                     12, Ui.Colour("text.accent")));
             var candidates = Generals.Candidates(_campaign, group);
             for (var i = 0; i < candidates.Length; i++)
@@ -124,8 +124,8 @@ public partial class DealOrForceGame
         PolicyHeading(rows, "THE RULES");
         var d = _campaign.Defines;
         PolicyText(rows, Loc.Format(
-            "Relieving a commander costs {0} political credit and is possible {1} days after they took the group. In wartime, removing one who has won costs war support: {2} points for each battle won beyond those lost, at most {3}. The computer's governments relieve commanders by the same rule.",
-            Fmt.Number(d.CommanderReliefPoliticalCost), d.CommanderReliefCooldownDays,
-            Fmt.Number(d.CommanderReliefWarSupportPerVictory * 100f), Fmt.Number(d.CommanderReliefWarSupportMax * 100f)));
+            "Relieving a commander costs {0:0} political credit and is possible {1} days after they took the group. In wartime, removing one who has won costs war support: {2:0.#} points for each battle won beyond those lost, at most {3:0.#}. The computer's governments relieve commanders by the same rule.",
+            d.CommanderReliefPoliticalCost, d.CommanderReliefCooldownDays,
+            d.CommanderReliefWarSupportPerVictory * 100f, d.CommanderReliefWarSupportMax * 100f));
     }
 }
