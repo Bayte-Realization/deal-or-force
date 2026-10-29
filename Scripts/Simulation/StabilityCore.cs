@@ -56,6 +56,12 @@ public sealed class StabilityWeights
     /// <summary>What being at war costs, and what each point of lost war support adds to it.</summary>
     public float War = 0.06f;
     public float WarSupport = 0.10f;
+    /// <summary>
+    /// The share of a war's standing cost an ally pays - a country that joined someone else's
+    /// war rather than fought its own. Its war support still falls with the losses, and that part
+    /// it pays in full.
+    /// </summary>
+    public float WarAllyShare = 1f;
 
     /// <summary>How much of the gap to its target a country closes in a week.</summary>
     public float Approach = 0.10f;
@@ -115,6 +121,7 @@ public static class StabilityCore
                 case "capital_share": Weights.CapitalShare = value; break;
                 case "war": Weights.War = value; break;
                 case "war_support": Weights.WarSupport = value; break;
+                case "war_ally_share": Weights.WarAllyShare = value; break;
                 case "approach": Weights.Approach = value; break;
                 case "governance_limit": Weights.GovernanceLimit = value; break;
                 case "governance_decay": Weights.GovernanceDecay = value; break;
@@ -194,10 +201,19 @@ public static class StabilityCore
         var share = M.Clamp01(weights.CapitalShare);
         var geography = capitalStability * share + country * (1f - share);
 
+        // The standing cost of a war is the country's own war's, or a share of it when every war
+        // it is in is someone else's: the United States joined each of its allies' wars and paid
+        // for each as if its own homeland were the front, and fell from 0.75 to 0.12 in ten years
+        // of other people's wars.
         var atWar = false;
+        var stake = 0f;
         foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
-        var warCost = atWar ? weights.War + (1f - nation.WarSupport) * weights.WarSupport : 0f;
+        {
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            atWar = true;
+            stake = Math.Max(stake, war.AttackerId == nation.Id || war.DefenderId == nation.Id ? 1f : M.Clamp01(weights.WarAllyShare));
+        }
+        var warCost = atWar ? weights.War * stake + (1f - nation.WarSupport) * weights.WarSupport : 0f;
 
         nation.ImperialOverstretch = Overstretch(campaign, nation);
         var overstretchCost = nation.ImperialOverstretch * weights.ImperialOverstretch;
