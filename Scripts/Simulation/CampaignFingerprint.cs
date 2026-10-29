@@ -177,6 +177,30 @@ public static class CampaignFingerprint
                 Mix(-104);
             }
         }
+        // Leases and troops in without a war, and the offers of leases on a player's desk.
+        if (campaign.LandArrangements.Count > 0 || campaign.NextLandArrangementId != 1)
+        {
+            MixText("land_arrangements"); Mix(campaign.NextLandArrangementId); Mix(campaign.LandArrangements.Count);
+            foreach (var arrangement in campaign.LandArrangements.OrderBy(a => a.Id))
+            {
+                Mix(arrangement.Id); MixText(arrangement.Kind); Mix(arrangement.OwnerId); Mix(arrangement.HolderId);
+                Mix(arrangement.StartDay); Mix(arrangement.EndDay); MixFloat(arrangement.RentPerYear); Mix(arrangement.UnpaidWeeks);
+                MixText(arrangement.Purpose); MixText(arrangement.Origin); Mix(arrangement.LeavingOnDay);
+                foreach (var region in arrangement.Regions) Mix(region);
+                Mix(-105);
+            }
+        }
+        if (campaign.LeaseOffers.Count > 0 || campaign.NextLeaseOfferId != 1)
+        {
+            MixText("lease_offers"); Mix(campaign.NextLeaseOfferId); Mix(campaign.LeaseOffers.Count);
+            foreach (var offer in campaign.LeaseOffers.OrderBy(o => o.Id))
+            {
+                Mix(offer.Id); Mix(offer.FromId); Mix(offer.ToId); Mix(offer.Region); Mix(offer.Years);
+                Mix(offer.CreatedDay); Mix(offer.ExpiresDay); MixFloat(offer.RentPerYear); Mix(offer.Renewal ? 1 : 0);
+                Mix(offer.ArrangementId); MixText(offer.Purpose); MixText(offer.State);
+                Mix(-106);
+            }
+        }
         if (campaign.DealOffers.Count > 0 || campaign.NextDealOfferId != 1)
         {
             MixText("deal_negotiations"); Mix(campaign.NextDealOfferId); Mix(campaign.DealOffers.Count);

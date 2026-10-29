@@ -157,9 +157,9 @@ public static class HistoryDataLoader
                 OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
             }
 
-        // Who already answered to whom: Baikonur leased to Russia, the states in free association
-        // with the United States and New Zealand, the breakaways that live on a patron's money and
-        // garrison. `{"overlord": "RUS", "subject": "KAB", "type": "leased_territory"}`. Set as a
+        // Who already answered to whom: the states in free association with the United States and
+        // New Zealand, the breakaways that live on a patron's money and garrison.
+        // `{"overlord": "USA", "subject": "PRI", "type": "dependent_territory"}`. Set as a
         // standing fact rather than through SubjectSystem.Subjugate, which is the verb for a
         // country being made one and leaves the grievance of it.
         if (root.TryGetProperty("subjects", out var subjects) && subjects.ValueKind == JsonValueKind.Array)
@@ -193,6 +193,12 @@ public static class HistoryDataLoader
                 var tie = CampaignDiplomacy.Get(campaign, overlord.Id, subject.Id);
                 OpinionSystem.Remember(campaign, tie, "historic_friendship");
             }
+
+        // Ground held by arrangement on the first day: Baikonur leased to Russia until 2050,
+        // Guantanamo to the United States since 1903 (LandArrangementSystem.FromHistory).
+        if (root.TryGetProperty("arrangements", out var arrangements) && arrangements.ValueKind == JsonValueKind.Array)
+            foreach (var entry in arrangements.EnumerateArray())
+                LandArrangementSystem.FromHistory(campaign, entry, errors);
 
         // What the two of them already thought of each other. Without this the world opened on
         // two hundred and sixty countries that had never met: India and Pakistan neutral, Iran

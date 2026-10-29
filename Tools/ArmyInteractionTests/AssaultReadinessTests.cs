@@ -276,13 +276,29 @@ static class AssaultReadinessTests
         var actual = CampaignFingerprint.Of(c);
         // 24 October: the crisis feature and its two command registrations are hashed.
         // The differential probe removes exactly those entries and restores the old value.
-        Check(actual == 0xA6BA8874BAC1AA0FUL,
+        // 29 October: land_arrangements, its command and its system registration likewise
+        // (0xA6BA8874BAC1AA0F -> 0x09F9EC3BC202D6F0); removing exactly those three restores it.
+        Check(actual == 0x09F9EC3BC202D6F0UL,
             $"default assault floors preserve the current catalogue golden fingerprint (got 0x{actual:X16})");
+        c.Defines.Features.Remove("land_arrangements");
+        c.Defines.FeatureCommands.Remove("LandArrangementCommand");
+        c.Defines.FeatureSystems.Remove("LandArrangementSystem");
+        MechanicFeatures.BuiltIns.Remove("land_arrangements");
+        ulong beforeLand;
+        try { beforeLand = CampaignFingerprint.Of(c); }
+        finally { MechanicFeatures.BuiltIns.Add("land_arrangements"); }
+        Check(beforeLand == 0xA6BA8874BAC1AA0FUL,
+            $"removing exactly the land arrangement registrations restores the 24 October golden (got 0x{beforeLand:X16})");
+        MechanicFeatures.BuiltIns.Remove("land_arrangements");
+        try
+        {
         c.Defines.Features.Remove("crisis_ladder");
         c.Defines.FeatureCommands.Remove("MediateCrisisCommand");
         c.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
         Check(CampaignFingerprint.Of(c) == 0x0BEDBA3316932DC6UL,
             "default assault floors retain the strict legacy golden without new crisis metadata");
+        }
+        finally { MechanicFeatures.BuiltIns.Add("land_arrangements"); }
     }
 
     static Army Unit(Campaign c, int id, int nation, int province, ArmyOrder order)

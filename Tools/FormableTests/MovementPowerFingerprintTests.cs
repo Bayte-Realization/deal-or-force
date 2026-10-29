@@ -71,22 +71,35 @@ static class MovementPowerFingerprintTests
         // back 0x8359F0BC7D23DB59 here.
         // 24 October: isolated differential probes prove that removing crisis_ladder and
         // the two new crisis-command bindings restores the exact 21 October pair below.
+        // 29 October: land_arrangements, LandArrangementCommand and LandArrangementSystem are
+        // registered; removing exactly those (and the built-in) restores the 24 October pair.
         // Pin one current value, not an accumulating allowance of historical goldens.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
-        Check(withoutMovement == 0x32B25385D69F91BBUL,
+        Check(withoutMovement == 0x7B051756BBBE690CUL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x2464DCDBD46983DBUL,
+        Check(withMovement == 0x3B53145C88719B80UL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
+        MechanicFeatures.BuiltIns.Remove("land_arrangements");
+        try
+        {
         foreach (var movement in new[] { false, true })
         {
-            var oldMetadata = Fixture(movement);
+            var beforeLand = Fixture(movement);
+            beforeLand.Defines.Features.Remove("land_arrangements");
+            beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
+            beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
+            Check(CampaignFingerprint.Of(beforeLand) == (movement ? 0x2464DCDBD46983DBUL : 0x32B25385D69F91BBUL),
+                "removing exactly the land arrangement registrations restores the 24 October movement golden: " + movement);
+            var oldMetadata = beforeLand;
             oldMetadata.Defines.Features.Remove("crisis_ladder");
             oldMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");
             oldMetadata.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
             Check(CampaignFingerprint.Of(oldMetadata) == (movement ? 0x792CD510E6A1ECC2UL : 0x1180F22A98EAE162UL),
                 "removing exactly the crisis registrations restores the strict legacy movement golden: " + movement);
         }
+        }
+        finally { MechanicFeatures.BuiltIns.Add("land_arrangements"); }
         var legacy = JsonSerializer.Deserialize<Defines>("{}");
         Check(CampaignFingerprint.Of(Fixture(false, legacy)) == CampaignFingerprint.Of(Fixture(false)),
             "omitted legacy rules acquire the same compiled defaults, not new thresholds");

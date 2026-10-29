@@ -592,6 +592,16 @@ public partial class DealOrForceGame
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
             CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
                 Tr(RegionalStatistics.GdpExplanation));
+            // A half-state: owned by one country, held by another by lease or by troops without a war.
+            if (LandArrangementSystem.Covering(_campaign, state.MapIndex) is { } arranged)
+            {
+                var holder = _campaign.NationById(arranged.HolderId)?.DisplayName ?? "?";
+                CardRow(_regionCardRegionRows, "Held by",
+                    arranged.Kind == LandArrangementSystem.Lease
+                        ? Simulation.Loc.Format("{0}, on lease", holder)
+                        : Simulation.Loc.Format("{0} troops, no war", holder),
+                    LandArrangementSystem.Describe(_campaign, state), "state.warning");
+            }
         }
         if (state is null) { }
         else if (!visible)

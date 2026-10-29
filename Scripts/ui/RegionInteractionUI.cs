@@ -563,6 +563,8 @@ public partial class DealOrForceGame
             _foreignRegionDiplomacy.TooltipText = Ui.Tip(Simulation.Loc.Format(
                 "Open the diplomacy screen with {0}, who this region belongs to.", owner.DisplayName));
         }
+        // Leases and troops in without a war, for a region of anyone's.
+        RefreshArrangementActions();
     }
 
     /// <summary>Whoever the selected region answers to, or null.</summary>

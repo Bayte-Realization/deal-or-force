@@ -919,6 +919,10 @@ public static class SaveSystem
         public int NextDealOfferId = 1;
         public List<UltimatumPaper> UltimatumPapers = new();
         public int NextUltimatumId = 1;
+        public List<LandArrangement> LandArrangements = new();
+        public int NextLandArrangementId = 1;
+        public List<LeaseOffer> LeaseOffers = new();
+        public int NextLeaseOfferId = 1;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -1044,6 +1048,10 @@ public static class SaveSystem
             NextDealOfferId = campaign.NextDealOfferId,
             UltimatumPapers = campaign.UltimatumPapers.Select(Ultimatum.Copy).ToList(),
             NextUltimatumId = campaign.NextUltimatumId,
+            LandArrangements = new List<LandArrangement>(campaign.LandArrangements),
+            NextLandArrangementId = campaign.NextLandArrangementId,
+            LeaseOffers = new List<LeaseOffer>(campaign.LeaseOffers),
+            NextLeaseOfferId = campaign.NextLeaseOfferId,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -1114,6 +1122,12 @@ public static class SaveSystem
             Replace(campaign.Organizations, Organizations ?? new());
             DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId, ElapsedDays);
             Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
+            Replace(campaign.LandArrangements, LandArrangements ?? new());
+            Replace(campaign.LeaseOffers, LeaseOffers ?? new());
+            campaign.NextLandArrangementId = Math.Max(NextLandArrangementId,
+                campaign.LandArrangements.Count == 0 ? 1 : campaign.LandArrangements.Max(a => a.Id) + 1);
+            campaign.NextLeaseOfferId = Math.Max(NextLeaseOfferId,
+                campaign.LeaseOffers.Count == 0 ? 1 : campaign.LeaseOffers.Max(o => o.Id) + 1);
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();

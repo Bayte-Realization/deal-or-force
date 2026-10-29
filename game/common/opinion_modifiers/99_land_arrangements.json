@@ -1,0 +1,9 @@
+// What leases and troops in without a war leave behind (LandArrangements.cs).
+{
+  "leased_land": { "name": "A lease of land between us", "opinion": 10, "days": 3650, "decays": true, "max_stacks": 1 },
+  "refused_our_lease": { "name": "Refused to let us land", "opinion": -10, "days": 730, "decays": true, "max_stacks": 1 },
+  "ended_our_lease": { "name": "Ended our lease early", "opinion": -30, "days": 2190, "decays": true, "max_stacks": 1 },
+  "troops_on_our_land": { "name": "Sent troops onto our land without a war", "opinion": -70, "days": 7300, "decays": true, "max_stacks": 2 },
+  "troops_on_friends_land": { "name": "Sent troops onto a friend's land", "opinion": -20, "days": 2920, "decays": true, "max_stacks": 1 },
+  "annexed_by_referendum": { "name": "Annexed our land by a vote at gunpoint", "opinion": -100, "days": 18250, "decays": true, "max_stacks": 2 }
+}

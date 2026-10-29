@@ -2,9 +2,10 @@
 // The grammar is the one in 00_subjects.json; `shares_overlord_politics` makes the subject
 // governed the way its overlord is, every week.
 {
-  // Land one state rents from another and runs as its own: Baikonur, leased to Russia from
-  // Kazakhstan until 2050, with a Russian administration, Russian law and the rouble. On the
-  // map a country, in every way that matters a part of the one renting it.
+  // Land one state rents from another and runs as a country of its own. The base world no longer
+  // uses it: Baikonur and Guantanamo are leases of the land itself, the owner keeping it in law
+  // (history/diplomacy 40_arrangements.json, LandArrangements.cs). Kept for a mod that wants a
+  // rented territory to stand on the map as a country.
   "leased_territory": {
     "name": "Leased territory",
     "description": "Rented land, run and defended by the state that rents it. A country on the map, a district in practice.",

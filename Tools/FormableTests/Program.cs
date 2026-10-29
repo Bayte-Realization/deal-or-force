@@ -159,6 +159,8 @@ static class Program
         if (args.Length == 0) DesertionTests.Run();
         if (args.Contains("--coup-war-only")) { CoupCivilWarTests.Run(); return; }
         if (args.Length == 0) CoupCivilWarTests.Run();
+        if (args.Contains("--land-only")) { LandArrangementTests.Run(); return; }
+        if (args.Length == 0) LandArrangementTests.Run();
         if (args.Contains("--world-layers-only")) { WorldLayersTests.Run(); return; }
         if (args.Length == 0) WorldLayersTests.Run();
         if (args.Contains("--gestures-only")) { DiplomaticGestureTests.Run(); return; }

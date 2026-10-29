@@ -1,0 +1,52 @@
+// Deal or Force - ground one state owns and another holds by arrangement (LandArrangements.cs).
+//
+// A lease: the owner keeps the land in law; the tenant holds it for a term at a rent - Baikonur
+// to 2050, Guantanamo since 1903, Hong Kong's New Territories for ninety-nine years. A presence:
+// troops in without a war - Crimea in February 2014 - which the owner may swallow or fight.
+// "land_arrangements": false switches the whole mechanic off; the standing leases in
+// history/diplomacy are then never laid on the map.
+{
+  "Features": { "land_arrangements": true },
+  "FeatureCommands": { "LandArrangementCommand": "land_arrangements" },
+  "FeatureSystems": { "LandArrangementSystem": "land_arrangements" },
+
+  // A lease asked for in play: its term in years, its yearly rent as a share of what the region
+  // makes in a year (and at least the floor, in billions), what the owner must think of the asker.
+  "LeaseDefaultYears": 25,
+  "LeaseRentShare": 0.3,
+  "LeaseRentFloor": 0.02,
+  "LeaseOpinionNeeded": 25,
+  // Weeks of unpaid rent before a lease lapses; days a tenant has to leave once it has ended,
+  // in which it may also decide not to; days an offer waits on a player's desk.
+  "LeaseUnpaidWeeks": 8,
+  "LeaseGraceDays": 90,
+  "LeaseOfferDays": 60,
+
+  // Troops in without a war need a border and a reason: the sender's own people at least
+  // PresenceKinShare of the region, a lease there, or an owner below PresenceCollapseStability.
+  "PresenceKinShare": 0.4,
+  "PresenceCollapseStability": 0.3,
+  "PresenceMinimumDivisions": 2,
+  "PresenceNotoriety": 12,
+  // How long troops stand before a vote on joining can be held, and the share of the people the
+  // sender's own must be for the world to half-believe the count.
+  "PresenceReferendumDays": 30,
+  "PresenceReferendumKinShare": 0.5,
+
+  // The computer, monthly: the chance an unrestrained government with a motive sends troops in -
+  // a title to the region, or its own people at least AiPresenceKinMajority of it; the owner's
+  // strength with its allies against the sender's at which it fights, and its chance of doing so;
+  // the chance a holder holds its vote (or proclaims a republic where the people are not its own);
+  // a great power's chance of asking a friendly small coastal country for a base.
+  "AiPresenceChance": 0.03,
+  "AiPresenceKinMajority": 0.55,
+  // The highest war restraint at which a computer government does it: in 2024 Russia, Turkey and
+  // Azerbaijan stand at 0.58, democracies at 1 and above.
+  "AiPresenceRestraintMax": 0.65,
+  // The owner's strength with its allies, as a share of the sender's, that keeps the troops at home.
+  "AiPresenceDeterrence": 0.45,
+  "AiPresenceWarRatio": 0.8,
+  "AiPresenceWarChance": 0.25,
+  "AiPresenceReferendumChance": 0.15,
+  "AiLeaseRequestChance": 0.01
+}

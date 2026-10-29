@@ -32,7 +32,9 @@ public sealed partial class Defines
         ["intelligence"] = true, ["world_order_emergency"] = false,
         // Who leads a country, and what happens to them. A ruler is a person with traits,
         // and the traits feed the same modifier totals a national spirit does.
-        ["rulers"] = true
+        ["rulers"] = true,
+        // Leases and troops in without a war (LandArrangements).
+        ["land_arrangements"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -54,7 +56,8 @@ public sealed partial class Defines
         ["WarDamage"] = "war_damage", ["WarWeariness"] = "war_weariness",
         ["MilitiaCore"] = "militia", ["CivilWarPersistence"] = "militia",
         ["Escalation"] = "escalation", ["ProxyWars"] = "proxy_wars", ["Factions"] = "de_facto_factions", ["Coups"] = "coups",
-        ["ForeignAssistance"] = "foreign_assistance", ["Rulers"] = "rulers"
+        ["ForeignAssistance"] = "foreign_assistance", ["Rulers"] = "rulers",
+        ["LandArrangementSystem"] = "land_arrangements"
     };
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -132,7 +135,7 @@ public static class MechanicFeatures
         "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
         "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
         "government_promises", "strategic_goals", "state_identity", "rulers", "intelligence", "world_order_emergency", "tactical_doctrines",
-        "strategic_doctrines", "union_cohesion", "demographic_cycle"
+        "strategic_doctrines", "union_cohesion", "demographic_cycle", "land_arrangements"
     };
 
     public static Dictionary<string, string> CommandDefaults()
@@ -165,6 +168,7 @@ public static class MechanicFeatures
         Bind("state_identity", "DeclareStateIdentityCommand");
         Bind("tactical_doctrines", "StudyDoctrineCommand");
         Bind("strategic_doctrines", "AdoptStrategicDoctrineCommand");
+        Bind("land_arrangements", "LandArrangementCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
     }

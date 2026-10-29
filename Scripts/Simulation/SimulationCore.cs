@@ -886,6 +886,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("diplomatic_offers")) { Guarantee.Tick(this); AgreementSystem.Tick(this); }
             // Visits, shows of force, mediation and loans (DiplomaticGestures): the instalments weekly, the computer's choices monthly.
             using (SimProfiler.Measure("diplomatic_gestures")) { DiplomaticGestures.Tick(this); DiplomaticGestures.AiTick(this); }
+            // Rents, terms, the troops that stay and the owners who answer them (LandArrangements).
+            using (SimProfiler.Measure("land_arrangements")) LandArrangementSystem.Tick(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
@@ -1030,6 +1032,9 @@ public sealed partial class Campaign
 
             // Ground held by a country nobody is at war with goes home: whatever ended the
             // war today - a peace, a submission, a subjugation - the troops do not stay.
+            // Ground held by arrangement first - a lease, troops in without a war - so the
+            // occupations that go home below are only the ones nothing holds there.
+            if (FeatureEnabled("land_arrangements")) using (SimProfiler.Measure("land arrangements")) LandArrangementSystem.Enforce(this);
             using (SimProfiler.Measure("occupations")) Occupations.Tick(this);
             yield return 0;
 

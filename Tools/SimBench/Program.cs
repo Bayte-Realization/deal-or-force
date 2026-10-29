@@ -732,6 +732,16 @@ public static class Program
             }
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            // Leases and troops in without a war: what stands now and what happened on the way.
+            Console.WriteLine($"PULSE land: leased={LandArrangementSystem.Leased} entered={LandArrangementSystem.Entered} " +
+                              $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
+                              $"withdrew={LandArrangementSystem.Withdrew} republics={LandArrangementSystem.Republics}; passed over: " + string.Join(" ", LandArrangementSystem.Passed.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) + "; standing: " + string.Join(", ", campaign.LandArrangements.Select(a =>
+                                  $"{a.Kind} {campaign.NationById(a.HolderId)?.Tag} in {LandArrangementSystem.RegionNames(campaign, a)} ({campaign.NationById(a.OwnerId)?.Tag})")));
+            Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
+                .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
+            Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
+            foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
+                Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");
             return 0;
         }
 

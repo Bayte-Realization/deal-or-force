@@ -25,7 +25,7 @@ public partial class DealOrForceGame
         var demand = _campaign.UltimatumPapers.FirstOrDefault(candidate => candidate.Id == _ultimatumInboxSelected);
         return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
-            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}";
+            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{LeaseInboxKey()}";
     }
 
     private void RefreshNegotiationNotifications()
@@ -33,7 +33,8 @@ public partial class DealOrForceGame
         var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id)
             + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id)
             + Ultimatum.Incoming(_campaign, _campaign.Player.Id)
-            + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id);
+            + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id)
+            + LeaseOffersIncoming();
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
@@ -174,6 +175,7 @@ public partial class DealOrForceGame
         var showUltimatum = ultimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected);
         if (!showUltimatum) _ultimatumInboxSelected = -1;
         var assistanceSelected = AddAssistanceInboxRows(showDetail: !showUltimatum);
+        AddLeaseInboxRows();
         if (papers.Length == 0 && _dealInboxRows.GetChildCount() == 0)
             _dealInboxRows.AddChild(WrappedUltimatumText("No offers yet. Propose a deal from a country's diplomacy page.", 14));
         _dealInboxScroll.SetDeferred("scroll_vertical", scroll);

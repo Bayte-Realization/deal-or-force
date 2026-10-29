@@ -22,7 +22,6 @@
     { "overlord": "USA", "subject": "PRI", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "VIR", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "UMI", "type": "dependent_territory" },
-    { "overlord": "USA", "subject": "USG", "type": "leased_territory" },
 
     // British Overseas Territories, Crown Dependencies and the Sovereign Base Areas on Cyprus.
     { "overlord": "GBR", "subject": "AIA", "type": "dependent_territory" },
