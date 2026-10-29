@@ -25,12 +25,35 @@ public static partial class AiStatecraft
         var reserves = nation.Gdp <= 0f ? 0f : nation.Treasury / nation.Gdp;
 
         // Tax. Broke countries tax more; comfortable ones with an unhappy population tax
-        // less, because the alternative to a rebate is a riot.
-        var taxTarget = nation.TaxRate;
-        if (!fiscal.CanSpend) taxTarget += defines.AiTaxStep;
+        // less, because the alternative to a rebate is a riot. And a broke country broadens
+        // the base before it raises the rate: a consumption tax first, then the income tax a
+        // little past its neutral level, then a tax on firms, and only then the income tax
+        // again. Every government used to raise the income tax alone - India to 36 %, past
+        // the third of income where it costs more than it raises - with the consumption tax
+        // that carries most poor and middle-income budgets (India's GST) left at nought.
+        var vat = BudgetCore.Find("value_added_tax");
+        var corporate = BudgetCore.Find("corporate_tax");
+        var incomeNeutral = BudgetCore.Find("income_tax")?.Neutral ?? 0.22f;
+        if (!fiscal.CanSpend)
+        {
+            if (vat is not null && BudgetCore.RateOf(nation, vat) < defines.AiConsumptionTaxCeiling)
+                BudgetCore.SetRate(nation, vat, BudgetCore.RateOf(nation, vat) + defines.AiTaxStep);
+            else if (nation.TaxRate < incomeNeutral + 0.06f)
+                nation.TaxRate += defines.AiTaxStep;
+            else if (corporate is not null && BudgetCore.RateOf(nation, corporate) < defines.AiCorporateTaxCeiling)
+                BudgetCore.SetRate(nation, corporate, BudgetCore.RateOf(nation, corporate) + defines.AiTaxStep);
+            else nation.TaxRate += defines.AiTaxStep;
+        }
         else if (reserves > defines.AiTreasuryComfort && nation.Stability < 0.6f && fiscal.WeeklyBalance >= 0)
-            taxTarget -= defines.AiTaxStep;
-        nation.TaxRate = M.Clamp(taxTarget, defines.AiMinimumTaxRate, defines.AiMaximumTaxRate);
+        {
+            // Relief in the reverse order: the income tax above neutral, then the tax every
+            // household feels in its shopping.
+            if (nation.TaxRate > incomeNeutral) nation.TaxRate -= defines.AiTaxStep;
+            else if (vat is not null && BudgetCore.RateOf(nation, vat) > 0f)
+                BudgetCore.SetRate(nation, vat, BudgetCore.RateOf(nation, vat) - defines.AiTaxStep);
+            else nation.TaxRate -= defines.AiTaxStep;
+        }
+        nation.TaxRate = M.Clamp(nation.TaxRate, defines.AiMinimumTaxRate, defines.AiMaximumTaxRate);
 
         // The army costs what the situation is worth.
         bool threatened;

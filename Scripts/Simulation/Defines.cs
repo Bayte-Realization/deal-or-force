@@ -1171,6 +1171,9 @@ public sealed partial class Defines
 	public float AiTreasuryFloor { get; set; } = 0.02f;
 	public float AiTreasuryComfort { get; set; } = 0.12f;
 	public float AiTaxStep { get; set; } = 0.012f;
+	/// <summary>How far a computer government takes the consumption tax and the tax on firms when it needs money, before it raises the income tax further.</summary>
+	public float AiConsumptionTaxCeiling { get; set; } = 0.12f;
+	public float AiCorporateTaxCeiling { get; set; } = 0.15f;
 	public float AiMinimumTaxRate { get; set; } = 0.08f;
 	public float AiMaximumTaxRate { get; set; } = 0.46f;
 	public float AiWartimeMilitarySpending { get; set; } = 0.16f;
