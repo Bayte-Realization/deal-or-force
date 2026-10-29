@@ -264,32 +264,30 @@ public sealed partial class GlobePresentation
             if (!screenBounds.HasPoint(at)) continue;
             var half = marker.Plate.Texture.GetSize() * marker.Plate.PixelSize * _counterFlatFar * .5f;
             var room = new Rect2(at - half, half * 2f);
-            // Zoomed out, the counters of one country that would overlap become one counter
-            // with all their divisions - as a Paradox map does - instead of forty plates and forty
-            // labels piled on each other until only the labels could be read.
-            if (_flatStrategicCounters)
+            // The counters of one country that would overlap become one counter with all their
+            // divisions - as a Paradox map does - instead of forty plates and forty labels piled
+            // on each other until only the labels could be read. At every zoom, not only the
+            // farthest: South Korea's thirty-four divisions covered the whole country, its name
+            // included, at the zoom a player reads a region at. Close in they stand apart and
+            // nothing merges; at the strategic distance a near miss merges too.
+            var reach = _flatStrategicCounters ? half.X * 0.35f : -half.X * 0.25f;
+            ArmyStackMarker host = null;
+            foreach (var (candidate, taken) in _strategicHosts)
+                if (candidate.NationId == marker.NationId && taken.Grow(reach).Intersects(room)) { host = candidate; break; }
+            if (host is not null)
             {
-                ArmyStackMarker host = null;
-                foreach (var (candidate, taken) in _strategicHosts)
-                    if (candidate.NationId == marker.NationId && taken.Grow(half.X * 0.35f).Intersects(room)) { host = candidate; break; }
-                if (host is not null)
-                {
-                    if (!_strategicMerges.TryGetValue(host, out var merged)) _strategicMerges[host] = merged = new List<ArmyStackMarker>();
-                    merged.Add(marker);
-                    continue;
-                }
-                _strategicHosts.Add((marker, room));
+                if (!_strategicMerges.TryGetValue(host, out var merged)) _strategicMerges[host] = merged = new List<ArmyStackMarker>();
+                merged.Add(marker);
                 continue;
             }
-            RefreshProvinceCounterDisplay(marker, false);
-            TakeCounterRoom(room);
+            _strategicHosts.Add((marker, room));
         }
         // The hosts show everything they took in; the counters taken in show nothing, and a click
         // on one selects the whole merged group.
         foreach (var (host, room) in _strategicHosts)
         {
             _strategicMerges.TryGetValue(host, out var merged);
-            RefreshProvinceCounterDisplay(host, true, merged);
+            RefreshProvinceCounterDisplay(host, _flatStrategicCounters, merged);
             TakeCounterRoom(room);
             if (merged is null) continue;
             var ids = host.Node.GetMeta("display_army_ids");
