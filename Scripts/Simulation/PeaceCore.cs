@@ -50,7 +50,7 @@ public static class PeaceTermCatalog
     private static readonly Dictionary<PeaceTerms, PeaceTermDefinition> Defaults = new()
     {
         [PeaceTerms.Ceasefire] = new(
-            "A one-year armistice; all forces return to the pre-war control map.",
+            "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
             0f, 62f, -0.45f, 30, 50f),
         [PeaceTerms.WhitePeace] = new(
             "Pre-war borders and a five-year truce, with no victor or indemnity.",
@@ -257,11 +257,19 @@ public static class PeaceNegotiation
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         if (block.Length > 0) return;
 
+        // A ceasefire is an armistice on the line - Korea 1953, Karabakh 1994, Minsk: the troops
+        // stay where they stand and no border moves. It used to hand every advance back, so a
+        // winning Russia signed away all it held because a ceasefire was easy to accept. What a
+        // side holds region by region stays held as a frozen conflict (LandArrangementSystem);
+        // the scraps of advances go back.
+        var armistice = terms == PeaceTerms.Ceasefire && campaign.FeatureEnabled("land_arrangements")
+            ? LandArrangementSystem.FreezeLine(campaign, war) : null;
         if ((terms == PeaceTerms.Ceasefire || terms == PeaceTerms.WhitePeace || terms == PeaceTerms.WarReparations ||
              terms == PeaceTerms.TradeConcessions || terms == PeaceTerms.DemilitarizedSettlement) &&
             campaign.ProvinceController is not null)
             foreach (var pair in war.OriginalController)
-                campaign.SetProvinceController(pair.Key, pair.Value);
+                if (armistice is null || !armistice.Contains(campaign.ProvinceMap.ProvinceToState[pair.Key]))
+                    campaign.SetProvinceController(pair.Key, pair.Value);
 
         if (terms is PeaceTerms.WarReparations or PeaceTerms.TradeConcessions)
         {
@@ -404,7 +412,7 @@ public static class PeaceNegotiation
         Factions.SettleCivilWarSurvivors(campaign, war);
         war.PeaceSummary = terms switch
         {
-            PeaceTerms.Ceasefire => "A one-year ceasefire restored the pre-war control map.",
+            PeaceTerms.Ceasefire => "An armistice froze the line: each side keeps the regions it holds, and no border moves.",
             PeaceTerms.WhitePeace => "White peace restored the pre-war control map.",
             PeaceTerms.WarReparations => $"Pre-war borders were restored and ${war.Reparations:0.00}B in reparations changed hands.",
             PeaceTerms.TradeConcessions => $"Pre-war borders were restored; a trade agreement and ${war.Reparations:0.00}B concession were imposed.",

@@ -765,6 +765,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
                     System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
                 GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                // And from here on, play: full blocking collections are what a frame feels as a
+                // hitch, so the runtime is asked to do its oldest-generation work in the
+                // background for the rest of the session. Memory may run somewhat higher; a
+                // stutter in the middle of a battle is worse than a few more megabytes.
+                System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
                 GD.Print($"[dof] map applied; managed heap {GC.GetTotalMemory(false) / (1024 * 1024):N0} MB");
                 GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, " +
@@ -1764,6 +1769,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _targetFlatX -= delta.X * unitsPerPixel;
             _targetFlatY += delta.Y * unitsPerPixel;
             ClampFlatCamera();
+            // How fast the hand is moving, smoothed over the last few motion events, for the glide.
+            var now = Time.GetTicksUsec();
+            var seconds = Mathf.Clamp((now - _lastFlatDragUsec) / 1_000_000f, 0.004f, 0.1f);
+            _lastFlatDragUsec = now;
+            var speed = new Vector2(-delta.X, delta.Y) * unitsPerPixel / seconds;
+            _flatGlide = _flatGlide.Lerp(speed, 0.45f).LimitLength(_flatZoom * 3.5f);
 
             // And the camera goes there, rather than being asked to.
             //
@@ -1933,7 +1944,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return pick.Nation.DisplayName + " (" + pick.Nation.Tag + ")\n" + state + "\n" +
                Simulation.StateIdentity.Brief(_campaign, pick.Nation) + "\n" +
                Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId) +
-               (controller is null || controller == pick.Nation ? "" : "\n" + Simulation.Loc.Format(
+               (controller is null || controller == pick.Nation ? ""
+                   // Held by arrangement - a lease, troops without a war - says so, not "occupied".
+                   : pick.State is not null && Simulation.LandArrangementSystem.Covering(_campaign, pick.State.MapIndex, controller.Id) is not null
+                       ? "\n" + Simulation.LandArrangementSystem.Describe(_campaign, pick.State)
+                       : "\n" + Simulation.Loc.Format(
                    "Occupied by {0} · {1:P0} secured\nStill owned by {2}: an occupation is not an annexation. Only a signed peace moves the border.",
                    controller.DisplayName, occupation, pick.Nation.DisplayName)) +
                (_mapMode == StrategicMapMode.Resources && pick.State is not null ? "\n" + Simulation.Loc.Format(
@@ -2123,6 +2138,10 @@ uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
 uniform float political_opacity = 0.68;
+// 1 on the flat map: an atlas sheet read straight on, without the globe's light and curvature
+// to soften it. The terrain tiles showing through the country colours read there as blotches
+// and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
+uniform float flat_projection = 0.0;
 uniform float terrain_repeat = 180.0;
 uniform float terrain_blend_texels = 1.15;
 uniform float id_wander_texels = 0.62;
@@ -2698,11 +2717,13 @@ void fragment() {
     political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
     // Owner remains the ground; keylined controller ribbons mean occupation,
     // never annexation. One shared style for flat map and globe.
-    float treaty = step(0.75, live_control.a);
+    float treaty = step(0.95, live_control.a);
     float occupied = occupation_mask(live_control);
+    float leased = lease_mask(live_control);
     political.rgb = mix(political.rgb, live_control.rgb * political_light, treaty);
     political.rgb = occupation_ribbons(political.rgb, live_control.rgb, UV,
         province_detail, occupied);
+    political.rgb = lease_weave(political.rgb, live_control.rgb, UV, province_detail, leased);
     // The map modes colour the country that owns this ground now (near_nation reads the moved
     // owners), not the one the raster was painted with: the diplomatic view of 2039 drew the
     // borders of 2024, Belarus annexed and all.
@@ -2743,7 +2764,7 @@ void fragment() {
         // Close in a tile is magnified until its texels show. A second look at the same ground at
         // four times the frequency puts fine grain back under the coarse - as brightness only, so
         // the colours stay the tile's own - and only as close in as the province lines appear.
-        if (terrain_detail > 0.001 && province_detail > 0.001) {
+        if (terrain_detail > 0.001 && province_detail > 0.001 && flat_projection < 0.5) {
             vec3 fine = texture(terrain_tiles, vec3(terrain_uv * 4.0, near_slot)).rgb;
             vec3 tile_mean = textureLod(terrain_tiles, vec3(terrain_uv, near_slot), 7.0).rgb;
             float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
@@ -2754,7 +2775,11 @@ void fragment() {
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
         float ground_light = clamp(dot(ground, vec3(0.2126, 0.7152, 0.0722)) * 1.4 + 0.50, 0.62, 1.1);
-        vec3 colored_ground = mix(ground, political.rgb * ground_light, political_opacity);
+        // On the flat sheet the ground's brightness moves the colour within a narrower band, and
+        // the colour covers more of the ground: the relief shows through the hillshade below.
+        ground_light = mix(ground_light, clamp(ground_light, 0.84, 1.03), flat_projection);
+        float colour_cover = mix(political_opacity, min(0.93, political_opacity + 0.17), flat_projection);
+        vec3 colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
         base = mix(water, land_surface, political.a);
         vec2 ht = 1.0 / vec2(textureSize(relief_height, 0));
@@ -2942,6 +2967,13 @@ void fragment() {
     float occupation_stroke = 1.0 - smoothstep(0.35, 1.1, province_distance);
     base = mix(base, vec3(0.045, 0.065, 0.08), occupation_edge * occupation_key * 0.90);
     base = mix(base, vec3(0.92, 0.88, 0.71), occupation_edge * occupation_stroke * 0.94);
+    float lease_edge = abs(lease_mask(near_control) - lease_mask(other_control)) *
+        step(0.5, abs(near_province - other_province_id)) * political.a *
+        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode);
+    float lease_dash = step(0.45, fract((UV.x * 2.0 - UV.y) * mix(90.0, 520.0, province_detail)));
+    vec3 tenant = max(near_control.a, other_control.a) > 0.0
+        ? (lease_mask(near_control) > 0.5 ? near_control.rgb : other_control.rgb) : vec3(0.9);
+    base = mix(base, tenant * 1.08, lease_edge * occupation_stroke * lease_dash * 0.95);
     // A live hostile front takes precedence over the pale occupation contour.
     // The same red stroke remains on unoccupied enemy borders; rear occupation
     // boundaries stay pale rather than pretending to be an active front.
@@ -3079,6 +3111,28 @@ void fragment() {
         return node;
     }
 
+    /// <summary>
+    /// Carry a released drag on and let it die away. While the hand still holds the map the
+    /// glide waits; if the hand has rested more than a moment, there is nothing left to carry.
+    /// </summary>
+    private void UpdateFlatGlide(float delta)
+    {
+        if (_dragging)
+        {
+            if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _flatGlide = Vector2.Zero;
+            return;
+        }
+        if (_flatGlide.LengthSquared() < _flatZoom * _flatZoom * 1e-6f) { _flatGlide = Vector2.Zero; return; }
+        _flatZoomAnchorActive = false;
+        _targetFlatX += _flatGlide.X * delta;
+        _targetFlatY += _flatGlide.Y * delta;
+        ClampFlatCamera();
+        _flatX = _targetFlatX;
+        _flatY = _targetFlatY;
+        // Down to a twentieth in a second: a flick travels, a nudge settles at once.
+        _flatGlide *= Mathf.Pow(0.05f, delta);
+    }
+
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
     private void UpdateOrbitCamera(double delta)
     {
@@ -3099,6 +3153,7 @@ void fragment() {
         _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
+        if (_flatMap) UpdateFlatGlide((float)delta);
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         if (_flatMap && !typing)
@@ -4169,6 +4224,15 @@ void fragment() {
     private const byte OccupiedStripeAlpha = 160;
 
     /// <summary>
+    /// And this a lease (LandArrangementSystem): held by agreement, not by a war, so it must not
+    /// wear an occupation's stripes - the owner's colour stays, the tenant's shows as a fine
+    /// dotted weave and a dashed hem. Between the occupation band and the full transfer of title.
+    /// </summary>
+    private const byte LeasedAlpha = 214;
+
+    private readonly Dictionary<int, int> _leasedRegionHolder = new();
+
+    /// <summary>
     /// One texel per country, holding the colour the political map paints it.
     ///
     /// The fill used to come from a raster of five thousand by three thousand painted colours,
@@ -4218,6 +4282,12 @@ void fragment() {
         Array.Clear(pixels);
         Array.Clear(ownerPixels);
         Array.Clear(ownerIds);
+        // The regions held on lease, and by whom - read once, not once a province.
+        _leasedRegionHolder.Clear();
+        foreach (var arrangement in _campaign.LandArrangements)
+            if (arrangement.Kind == Simulation.LandArrangementSystem.Lease &&
+                _campaign.NationById(arrangement.HolderId) is { } tenant)
+                foreach (var region in arrangement.Regions) _leasedRegionHolder[region] = tenant.MapIndex;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var owner = topology.ProvinceToNation[province];
@@ -4256,7 +4326,9 @@ void fragment() {
             // opacity: short of full it wears the occupier's colour as stripes over whoever
             // the province still legally belongs to, so an advance never looks like an
             // annexation and a peace conference can be read.
-            pixels[write + 3] = OccupiedStripeAlpha;
+            pixels[write + 3] = _leasedRegionHolder.TryGetValue(topology.ProvinceToState[province], out var tenantIndex) &&
+                                tenantIndex == controller
+                ? LeasedAlpha : OccupiedStripeAlpha;
         }
         // The peace being negotiated is drawn over the controller map, so the player sees
         // the border they are proposing rather than the one that exists. This one is solid -
@@ -4693,12 +4765,15 @@ void fragment() {
         if (!CountryLabelsEnabled || !Simulation.WorldLayers.On("country_labels")) { _countryLabelRoot.Visible = false; return; }
         // At tactical zoom, country names yield to states/provinces and unit
         // counters. Keeping continent-scale typography there would cover the map.
+        // The flat map's range used to end at 4.4, which is wider than Europe: the view a
+        // player spends most of the game in had no country names at all, while the globe
+        // at the same scale was full of them. It now runs down to the regional view.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
-            ? _flatZoom is >= 4.4f and <= 10.8f
+            ? _flatZoom is >= 1.7f and <= 10.8f
             : _distance is >= 7.9f and <= 16.5f);
         if (!_countryLabelRoot.Visible) return;
         var minimumCells = _flatMap
-            ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : 150
+            ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : _flatZoom > 2.6f ? 150 : 40
             : _distance > 11.5f ? 26000 : _distance > 9.5f ? 6500 : _distance > 7.4f ? 1500 : 150;
         var viewNormal = _flatMap ? Vector3.Zero : _camera.GlobalPosition.Normalized();
         var horizonThreshold = _distance > 11.5f ? 0.72f : _distance > 9.5f ? 0.62f : _distance > 7.4f ? 0.50f : 0.38f;

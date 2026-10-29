@@ -51,9 +51,18 @@ static class HeldGroundTests
             var owner = NavalOperations.NationAt(campaign, topology.ProvinceToNation[province]);
             var holder = NavalOperations.NationAt(campaign, controllers[province]);
             return owner is not null && holder is not null && owner.Id != holder.Id &&
-                   !enemies.Any(war => war.Opposes(owner.Id, holder.Id));
+                   !enemies.Any(war => war.Opposes(owner.Id, holder.Id)) &&
+                   // Held by arrangement - a lease - is held without a war on purpose.
+                   !LandArrangementSystem.Covers(campaign, province, holder.Id);
         });
         Check(stray == 0, $"no province opens held by a country not at war with its owner ({stray})");
+        // And the leases are on the ground from the first look: Baikonur is Kazakh, held by Russia.
+        var baikonur = campaign.States.Find(state => state.Id == "99_x05");
+        var russia = campaign.NationByTag("RUS");
+        if (baikonur is not null && russia is not null)
+            Check(Enumerable.Range(1, topology.ProvinceCount).Where(p => topology.ProvinceToState[p] == baikonur.MapIndex)
+                    .All(p => controllers[p] == (ushort)russia.MapIndex),
+                "a lease is held on the opening map, before the first day");
 
         // An occupation nobody is at war over goes home the next day...
         var bank = Of(westBank);

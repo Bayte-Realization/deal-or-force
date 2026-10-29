@@ -73,12 +73,23 @@ public sealed partial class GlobePresentation
         MathF.Abs(_targetFlatZoom - _flatZoom) > _flatZoom * .0001f ||
         MathF.Abs(_targetFlatX - _flatX) + MathF.Abs(_targetFlatY - _flatY) > _flatZoom * .0001f;
 
+    /// <summary>
+    /// The flat map's glide: the hand's speed over the last moments of a drag, in map units a
+    /// second, carried on after the button comes up and let die away - the slide the globe has
+    /// and the flat map had not, which is what made it feel wooden. A hand that rested before
+    /// letting go leaves nothing to carry.
+    /// </summary>
+    private Vector2 _flatGlide;
+    private ulong _lastFlatDragUsec;
+
     private void BeginCameraDrag(Vector2 pixel, MouseButton button)
     {
         _dragging = true;
         _cameraDragButton = button;
         _dragDistance = 0f;
         _previousPointer = pixel;
+        _flatGlide = Vector2.Zero;
+        _lastFlatDragUsec = Time.GetTicksUsec();
         if (!_flatMap) return;
         _flatZoomAnchorActive = false;
         // Taking hold of the map cancels an unfinished fly-to/zoom. Starting a drag
@@ -224,6 +235,7 @@ public sealed partial class GlobePresentation
         }
 
         _flatMap = enabled;
+        _globeMaterial?.SetShaderParameter("flat_projection", enabled ? 1f : 0f);
         _globeNode.Visible = !enabled;
         _spaceNode.Visible = !enabled;
         _flatRoot.Visible = enabled;

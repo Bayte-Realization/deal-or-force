@@ -577,7 +577,8 @@ public partial class DealOrForceGame
         ClearChildren(_regionCardProvinceRows);
 
         var owner = state is null ? null : _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
-        var owned = state is not null && state.NationMapIndex == player.MapIndex;
+        var owned = state is not null && (state.NationMapIndex == player.MapIndex ||
+                    (state.HeldById == player.Id && HeldRegions.Administered(_campaign, state)));
         _regionCardFlag.Visible = owner is not null;
         if (owner is not null) SetFlag(_regionCardFlag, owner.Tag, 20);
         _regionCardTitle.Text = state?.DisplayName ?? Tr("Unmapped land");
@@ -602,6 +603,15 @@ public partial class DealOrForceGame
                         : Simulation.Loc.Format("{0} troops, no war", holder),
                     LandArrangementSystem.Describe(_campaign, state), "state.warning");
             }
+            // Held ground worked by its holder (HeldRegions): who runs it and how well yet.
+            else if (state.HeldById >= 0 && _campaign.NationById(state.HeldById) is { } administrator)
+                CardRow(_regionCardRegionRows, "Administered by",
+                    HeldRegions.Administered(_campaign, state)
+                        ? Simulation.Loc.Format("{0} · {1} of its output", administrator.DisplayName, Fmt.Percent(HeldRegions.Efficiency(_campaign, state)))
+                        : Simulation.Loc.Format("{0} · taking over", administrator.DisplayName),
+                    Simulation.Loc.Format("Held by {0} since {1}: its output, workers and taxes go to the holder, at the efficiency of an administration that grows from occupation to integration over a year. The title stays with {2} until a treaty or a vote under the troops.",
+                        administrator.DisplayName, LandArrangementSystem.DateOfDay(_campaign, state.HeldSinceDay), owner?.DisplayName ?? "?"),
+                    "state.warning");
         }
         if (state is null) { }
         else if (!visible)

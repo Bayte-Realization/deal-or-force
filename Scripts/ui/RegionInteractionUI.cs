@@ -98,7 +98,9 @@ public partial class DealOrForceGame
         ClearDetail();
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
-        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
+        // Its own, or administered by it although another owns it (HeldRegions): held ground is worked as one's own.
+        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex ||
+                    (_selectedState.HeldById == _campaign.Player.Id && Simulation.HeldRegions.Administered(_campaign, _selectedState));
         _sideBody.Text = RegionOfCaption(_selectedState, owner) +
                          (owned ? "" : Tr(" · foreign ground, read-only"));
 

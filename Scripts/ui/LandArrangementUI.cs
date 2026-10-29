@@ -89,6 +89,11 @@ public partial class DealOrForceGame
                 AddArrangementButton(arrangement.Kind == LandArrangementSystem.Lease ? "Give up the lease" : "Withdraw the troops", "withdraw", "",
                     "Our soldiers come home and the region goes back to its owner.", confirm: true);
         }
+        // A region we hold in a war: the vote under the troops, the last step to owning it.
+        if (!ours && region.HeldById == player.Id && HeldRegions.Administered(_campaign, region))
+            AddArrangementButton("Hold a referendum", "held_referendum", HeldRegions.ReferendumRefusal(_campaign, player, region),
+                "A vote on joining us in the region our troops hold, in the middle of the war. Its owner will not recognise it and the world will count it against us; the region becomes ours in law.",
+                confirm: true);
         var any = _arrangementStatus.Visible || _arrangementButtons.GetChildCount() > 0;
         _arrangementBox.Visible = any;
         if (any) _regionControls.Visible = true;

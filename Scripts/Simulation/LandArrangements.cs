@@ -178,6 +178,29 @@ public static class LandArrangementSystem
         c.Wars.Any(w => !w.Ended && ((w.Side(true).Contains(a) && w.Side(false).Contains(b)) ||
                                      (w.Side(true).Contains(b) && w.Side(false).Contains(a))));
 
+    /// <summary>
+    /// The arrangements a campaign opens with, laid on the ground the moment the map is attached -
+    /// before the first day, so a lease is on the map the moment the player looks at it, not a
+    /// day later. No checks and no news: history says they stand.
+    /// </summary>
+    public static int LayOnGround(Campaign c, ProvinceTopology topology, ushort[] controllers)
+    {
+        if (c is null || topology is null || controllers is null || c.LandArrangements.Count == 0 ||
+            !c.FeatureEnabled("land_arrangements")) return 0;
+        var holders = new Dictionary<int, ushort>();
+        foreach (var arrangement in c.LandArrangements)
+            if (c.NationById(arrangement.HolderId) is { } holder)
+                foreach (var region in arrangement.Regions) holders[region] = (ushort)holder.MapIndex;
+        var laid = 0;
+        for (var province = 1; province <= topology.ProvinceCount && province < controllers.Length; province++)
+            if (!topology.IsWater(province) && holders.TryGetValue(topology.ProvinceToState[province], out var holderIndex))
+            {
+                controllers[province] = holderIndex;
+                laid++;
+            }
+        return laid;
+    }
+
     // ---- the daily hold -----------------------------------------------------------------
 
     /// <summary>
@@ -708,6 +731,63 @@ public static class LandArrangementSystem
         return true;
     }
 
+    /// <summary>
+    /// An armistice on the line (a ceasefire): every region a belligerent holds most of on the
+    /// other side's ground becomes a presence - held without a war, owned by the other - with no
+    /// notoriety, for nobody sent troops in today; they were already there. Returns the regions
+    /// frozen, so the peace can leave their provinces where they stand.
+    /// </summary>
+    public static HashSet<int> FreezeLine(Campaign c, StrategicWar war)
+    {
+        var frozen = new HashSet<int>();
+        var map = c.ProvinceMap;
+        var controllers = c.ProvinceController;
+        if (map is null || controllers is null || war is null) return frozen;
+        var counts = new Dictionary<int, Dictionary<ushort, int>>();
+        var totals = new Dictionary<int, int>();
+        foreach (var province in war.OriginalController.Keys)
+            if (province > 0 && province <= map.ProvinceCount && !map.IsWater(province))
+            {
+                var region = map.ProvinceToState[province];
+                if (!counts.ContainsKey(region))
+                {
+                    counts[region] = new Dictionary<ushort, int>();
+                    var all = 0;
+                    for (var p = 1; p <= map.ProvinceCount; p++)
+                        if (!map.IsWater(p) && map.ProvinceToState[p] == region)
+                        {
+                            all++;
+                            counts[region][controllers[p]] = counts[region].GetValueOrDefault(controllers[p]) + 1;
+                        }
+                    totals[region] = all;
+                }
+            }
+        foreach (var (regionIndex, byController) in counts.OrderBy(pair => pair.Key))
+        {
+            var state = c.States.Find(s => s.MapIndex == regionIndex);
+            var owner = state is null ? null : c.NationByMapIndex(state.NationMapIndex);
+            if (owner is null || Covering(c, regionIndex) is not null) continue;
+            foreach (var (controller, count) in byController.OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key))
+            {
+                if (controller == owner.MapIndex || count * 2 <= totals[regionIndex]) continue;
+                var holder = c.NationByMapIndex(controller);
+                if (holder is null || holder.Movement is not null || !war.Opposes(holder.Id, owner.Id)) break;
+                var presence = new LandArrangement
+                {
+                    Id = c.NextLandArrangementId++, Kind = Presence, OwnerId = owner.Id, HolderId = holder.Id,
+                    StartDay = c.ElapsedDays, Origin = "armistice"
+                };
+                presence.Regions.Add(regionIndex);
+                c.LandArrangements.Add(presence);
+                frozen.Add(regionIndex);
+                break;
+            }
+        }
+        if (frozen.Count > 0)
+            c.Chronicle.Record(c, "armistice_line", war.AttackerId, war.DefenderId, subject: frozen.Count.ToString());
+        return frozen;
+    }
+
     // ---- the computer ---------------------------------------------------------------------
 
     /// <summary>The owner's strength with the allies and guarantors who would stand by it.</summary>
@@ -953,6 +1033,9 @@ public sealed class LandArrangementCommand : ICampaignCommand
                 break;
             case "republic":
                 Done = LandArrangementSystem.ProclaimRepublic(campaign, issuer, arrangement, out result);
+                break;
+            case "held_referendum":
+                Done = HeldRegions.HoldReferendum(campaign, issuer, region, out result);
                 break;
             case "accept_offer":
             case "refuse_offer":

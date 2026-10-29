@@ -721,6 +721,8 @@ public static class CampaignFingerprint
             {
                 MixText("state_migration"); Mix(state.ReviewNetMigration); MixFloat(state.BrainDrainPressure);
             }
+            // Who administers it although another owns it, and since when (HeldRegions).
+            if (state.HeldById != -1 || state.HeldSinceDay != 0) { MixText("held"); Mix(state.HeldById); Mix(state.HeldSinceDay); }
             foreach (var group in state.PopulationGroups)
             {
                 MixText(group.Culture); MixText(group.Religion); MixText(group.Profession); Mix((int)group.Class); Mix((int)group.Sector);

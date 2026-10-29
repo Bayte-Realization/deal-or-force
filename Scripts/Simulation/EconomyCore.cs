@@ -324,7 +324,10 @@ public sealed class QueueConstructionCommand : ICampaignCommand
         ScenarioState state = null;
         foreach (var candidate in campaign.States)
             if (candidate.MapIndex == StateMapIndex) { state = candidate; break; }
-        if (state is null || state.NationMapIndex != nation.MapIndex) return;
+        // Its own regions, and those it administers although another owns them (HeldRegions):
+        // held ground is built on as one's own.
+        if (state is null || (state.NationMapIndex != nation.MapIndex &&
+                              !(state.HeldById == nation.Id && HeldRegions.Administered(campaign, state)))) return;
 
         var running = 0;
         var highest = 0;

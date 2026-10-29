@@ -518,7 +518,9 @@ public static class MarketSystem
             quote.Exports = 0f;
         }
 
-        var states = campaign.StatesOf(nation);
+        // The regions whose economy answers to it: its own, less those another country holds,
+        // and those it holds of others (HeldRegions) - held ground is ground.
+        var states = HeldRegions.EconomyOf(campaign, nation).ToArray();
 
         // How much of the labour its buildings ask for the nation can actually staff.
         // A country whose industry has outgrown its workforce runs its plant below
@@ -554,7 +556,8 @@ public static class MarketSystem
         ProductionProgramme.MigrateLegacy(nation, allocation);
         // A region the war has wrecked makes less of everything (WarDamage).
         foreach (var state in states)
-            ProductionChains.RunRegion(nation, state, outputFactor * WarDamage.OutputFactor(campaign, nation, state), allocation);
+            ProductionChains.RunRegion(nation, state, outputFactor * WarDamage.OutputFactor(campaign, nation, state) *
+                HeldRegions.WorkedAt(campaign, nation, state), allocation);
 
         // Four LINQ scans of four global lists, once per country, with a capturing closure
         // each. That is a thousand closures and half a million list steps every market week,

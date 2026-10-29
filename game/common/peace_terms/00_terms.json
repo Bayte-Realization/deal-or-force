@@ -24,7 +24,7 @@
 {
   "terms": {
     "Ceasefire": {
-      "description": "A one-year armistice; all forces return to the pre-war control map.",
+      "description": "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
       "cost": 0,
       "acceptance_base": 62,
       "war_score_weight": -0.45,

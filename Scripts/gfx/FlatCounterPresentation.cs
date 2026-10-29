@@ -16,6 +16,9 @@ public sealed partial class GlobePresentation
     private bool _counterDensityDirty = true;
     private bool _flatStrategicCounters;
     private readonly Dictionary<int, List<ArmyStackMarker>> _provinceStackScratch = new();
+    // The strategic view's merged counters: a host and the counters of the same country it took in.
+    private readonly List<(ArmyStackMarker Marker, Rect2 Room)> _strategicHosts = new();
+    private readonly Dictionary<ArmyStackMarker, List<ArmyStackMarker>> _strategicMerges = new();
     private readonly List<List<ArmyStackMarker>> _provinceStackPool = new();
 
     // Geography is authoritative. Collision avoidance must never move a division
@@ -246,6 +249,8 @@ public sealed partial class GlobePresentation
         _occupiedCounterCells.Clear();
         LayoutFlatArmyStackOffsets();
         var screenBounds = new Rect2(-80, -50, Size.X + 160, Size.Y + 100);
+        _strategicHosts.Clear();
+        foreach (var list in _strategicMerges.Values) list.Clear();
         foreach (var marker in _armyStacks.Values)
         {
             marker.TargetPosition = ArmyMarkerPosition(marker);
@@ -257,18 +262,56 @@ public sealed partial class GlobePresentation
             if (!marker.Node.IsVisibleInTree() || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
             var at = _camera.UnprojectPosition(marker.Node.GlobalPosition);
             if (!screenBounds.HasPoint(at)) continue;
-            RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
             var half = marker.Plate.Texture.GetSize() * marker.Plate.PixelSize * _counterFlatFar * .5f;
-            TakeCounterRoom(new Rect2(at - half, half * 2f));
+            var room = new Rect2(at - half, half * 2f);
+            // Zoomed out, the counters of one country that would overlap become one counter
+            // with all their divisions - as a Paradox map does - instead of forty plates and forty
+            // labels piled on each other until only the labels could be read.
+            if (_flatStrategicCounters)
+            {
+                ArmyStackMarker host = null;
+                foreach (var (candidate, taken) in _strategicHosts)
+                    if (candidate.NationId == marker.NationId && taken.Grow(half.X * 0.35f).Intersects(room)) { host = candidate; break; }
+                if (host is not null)
+                {
+                    if (!_strategicMerges.TryGetValue(host, out var merged)) _strategicMerges[host] = merged = new List<ArmyStackMarker>();
+                    merged.Add(marker);
+                    continue;
+                }
+                _strategicHosts.Add((marker, room));
+                continue;
+            }
+            RefreshProvinceCounterDisplay(marker, false);
+            TakeCounterRoom(room);
+        }
+        // The hosts show everything they took in; the counters taken in show nothing, and a click
+        // on one selects the whole merged group.
+        foreach (var (host, room) in _strategicHosts)
+        {
+            _strategicMerges.TryGetValue(host, out var merged);
+            RefreshProvinceCounterDisplay(host, true, merged);
+            TakeCounterRoom(room);
+            if (merged is null) continue;
+            var ids = host.Node.GetMeta("display_army_ids");
+            foreach (var taken in merged)
+            {
+                taken.Plate.Visible = false;
+                taken.Count.Visible = false;
+                if (taken.ConditionBars is not null) taken.ConditionBars.Visible = false;
+                taken.DisplayFingerprint = 0;
+                taken.Node.SetMeta("display_army_ids", ids);
+            }
         }
         LayoutFlatAuxiliaryCounters();
         QueueRedraw();
     }
 
-    private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact)
+    private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact, List<ArmyStackMarker> merged = null)
     {
         marker.DisplayStack.Clear();
         marker.DisplayStack.AddRange(marker.Stack);
+        if (merged is not null)
+            foreach (var taken in merged) marker.DisplayStack.AddRange(taken.Stack);
         marker.DisplayProvinces = 1;
         marker.Compact = compact;
         marker.Plate.Visible = true;
@@ -294,7 +337,7 @@ public sealed partial class GlobePresentation
             marker.ShownMenTenths = menTenths;
             marker.ShownCompact = compact;
             var text = compact
-                ? (menTenths > 0 ? $"{divCount}·{menTenths / 10f:0.#}k" : divCount.ToString())
+                ? divCount.ToString()
                 : $"{divCount}\n{menTenths / 10f:0.#}k";
             marker.CountText = text;
             if (marker.Count.Text != text) marker.Count.Text = text;

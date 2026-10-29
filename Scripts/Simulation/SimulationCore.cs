@@ -890,6 +890,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("land_arrangements")) LandArrangementSystem.Tick(this);
             // Why money does not pile up: erosion, the pressure to spend, the credit cycle, the bills nobody budgets for.
             using (SimProfiler.Measure("treasury_dynamics")) TreasuryDynamics.Tick(this);
+            // Votes under the troops in regions held a year or more (HeldRegions).
+            HeldRegions.AiMonth(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
@@ -1210,6 +1212,8 @@ public sealed partial class Campaign
         UnclaimedLand.ApplyToGround(this, topology, ProvinceController);
         // And where history says somebody else's troops hold a region, they do (Gaza).
         HeldGround.ApplyToGround(this, topology, ProvinceController);
+        // And ground held by arrangement - Baikonur, Guantanamo - from the first look, not the first day.
+        LandArrangementSystem.LayOnGround(this, topology, ProvinceController);
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
 
         // A fleet's home port is a province, and provinces only exist once the map is

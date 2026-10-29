@@ -70,6 +70,8 @@ static class LandArrangementTests
         Leases();
         TroopsWithoutWar();
         Republic();
+        HeldGround();
+        Armistice();
         PlayerDesk();
         Persistence();
     }
@@ -134,6 +136,53 @@ static class LandArrangementTests
         Check(born.AnswersTo(tenant.Id) && born.SecededFromId == owner.Id,
             "which answers to the holder, and which its old country counts as a breakaway");
         Check(c.LandArrangements.Count == 0 && c.Chronicle.Entries.Any(e => e.Kind == "republic_proclaimed"), "the presence is over and the world hears of it");
+    }
+
+    static void Hold(Campaign c, int region, Nation nation)
+    {
+        foreach (var p in Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p => c.ProvinceMap.ProvinceToState[p] == region))
+            c.SetProvinceController(p, (ushort)nation.MapIndex);
+    }
+
+    static void HeldGround()
+    {
+        var c = Fixture();
+        var (tenant, owner) = (c.Nations[0], c.Nations[1]);
+        Hold(c, 3003, tenant);
+        HeldRegions.Refresh(c);
+        var region = c.States.First(s => s.MapIndex == 3003);
+        Check(region.HeldById == tenant.Id && !HeldRegions.Administered(c, region), "a region just taken is held but not yet run by its holder");
+        Day(c, c.Defines.HeldRegionSettleDays + 1);
+        Check(HeldRegions.EconomyOf(c, tenant).Any(s => s.MapIndex == 3003), "once settled, its economy answers to the holder");
+        Check(!HeldRegions.EconomyOf(c, owner).Any(s => s.MapIndex == 3003), "and no longer to the owner");
+        Check(HeldRegions.WorkedAt(c, tenant, region) < 1f && HeldRegions.WorkedAt(c, tenant, c.States.First(s => s.MapIndex == 3001)) == 1f,
+            "worked at the administration's efficiency, own regions at full");
+        var before = c.Construction.Count;
+        new QueueConstructionCommand { IssuerId = tenant.Id, StateMapIndex = 3003, Building = BuildingKind.Infrastructure }.Apply(c);
+        Check(c.Construction.Count == before + 1, "and built on as the holder's own");
+        Check(HeldRegions.HoldReferendum(c, tenant, region, out _) == false, "a vote waits for the administration to settle");
+        Day(c, c.Defines.HeldRegionSettleDays + c.Defines.HeldReferendumDays + 1);
+        Check(HeldRegions.HoldReferendum(c, tenant, region, out var vote) && region.NationMapIndex == tenant.MapIndex,
+            "half a year on, a vote under the troops makes it the holder's in law: " + vote);
+    }
+
+    static void Armistice()
+    {
+        var c = Fixture();
+        var (tenant, owner) = (c.Nations[0], c.Nations[1]);
+        var war = new StrategicWar { Id = 1, AttackerId = tenant.Id, DefenderId = owner.Id, StartedDay = 0 };
+        c.Wars.Add(war);
+        foreach (var p in Enumerable.Range(1, c.ProvinceMap.ProvinceCount).Where(p => c.ProvinceMap.ProvinceToState[p] == 3003))
+        {
+            war.OriginalController[p] = (ushort)owner.MapIndex;
+            c.SetProvinceController(p, (ushort)tenant.MapIndex);
+        }
+        var frozen = LandArrangementSystem.FreezeLine(c, war);
+        Check(frozen.Contains(3003) && c.LandArrangements.Any(a => a.Kind == LandArrangementSystem.Presence && a.Origin == "armistice"),
+            "an armistice freezes the line: the region held stays held, without a war");
+        war.Ended = true;
+        Occupations.Tick(c);
+        Check(HeldBy(c, 3003, tenant), "and the end of the war does not send the troops home");
     }
 
     static void PlayerDesk()

@@ -89,6 +89,17 @@
   "Held by": "Удерживает",
   "{0}, on lease": "{0}, по аренде",
   "{0} troops, no war": "войска страны {0}, без войны",
+  "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.": "Перемирие по линии фронта: войска остаются в удерживаемых регионах, границы не меняются - замороженный конфликт.",
+  "An armistice froze the line: each side keeps the regions it holds, and no border moves.": "Перемирие заморозило линию: каждая сторона сохраняет удерживаемые регионы, границы не меняются.",
+  "chronicle.armistice_line": "Перемирие замораживает линию между странами {0} и {1}: регионов, удерживаемых без войны, - {2}.",
+  "presence.claim.armistice": "по линии перемирия",
+  "We do not administer this region.": "Мы не управляем этим регионом.",
+  "A capital is not annexed by a vote.": "Столицу не присоединяют голосованием.",
+  "A vote on joining us in the region our troops hold, in the middle of the war. Its owner will not recognise it and the world will count it against us; the region becomes ours in law.": "Голосование о присоединении в регионе, который держат наши войска, прямо во время войны. Владелец его не признает, мир поставит это нам в вину; по закону регион станет нашим.",
+  "Administered by": "Под управлением",
+  "{0} · {1} of its output": "{0} · {1} его выпуска",
+  "{0} · taking over": "{0} · берёт под контроль",
+  "Held by {0} since {1}: its output, workers and taxes go to the holder, at the efficiency of an administration that grows from occupation to integration over a year. The title stays with {2} until a treaty or a vote under the troops.": "Удерживается страной {0} с {1}: выпуск, рабочие и налоги идут удерживающему, с эффективностью управления, которая растёт от оккупации до интеграции за год. Право на землю остаётся у страны {2} до договора или голосования под охраной войск.",
   "Accept": "Принять",
   "Refuse": "Отказать"
 }

@@ -89,6 +89,17 @@
   "Held by": "Held by",
   "{0}, on lease": "{0}, on lease",
   "{0} troops, no war": "{0} troops, no war",
+  "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.": "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
+  "An armistice froze the line: each side keeps the regions it holds, and no border moves.": "An armistice froze the line: each side keeps the regions it holds, and no border moves.",
+  "chronicle.armistice_line": "An armistice freezes the line between {0} and {1}: {2} region(s) stay held without a war.",
+  "presence.claim.armistice": "on the armistice line",
+  "We do not administer this region.": "We do not administer this region.",
+  "A capital is not annexed by a vote.": "A capital is not annexed by a vote.",
+  "A vote on joining us in the region our troops hold, in the middle of the war. Its owner will not recognise it and the world will count it against us; the region becomes ours in law.": "A vote on joining us in the region our troops hold, in the middle of the war. Its owner will not recognise it and the world will count it against us; the region becomes ours in law.",
+  "Administered by": "Administered by",
+  "{0} · {1} of its output": "{0} · {1} of its output",
+  "{0} · taking over": "{0} · taking over",
+  "Held by {0} since {1}: its output, workers and taxes go to the holder, at the efficiency of an administration that grows from occupation to integration over a year. The title stays with {2} until a treaty or a vote under the troops.": "Held by {0} since {1}: its output, workers and taxes go to the holder, at the efficiency of an administration that grows from occupation to integration over a year. The title stays with {2} until a treaty or a vote under the troops.",
   "Accept": "Accept",
   "Refuse": "Refuse"
 }
