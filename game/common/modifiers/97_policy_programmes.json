@@ -1,0 +1,82 @@
+// Targeted, temporary programmes. They never move a player's budget sliders.
+// Re-granting refreshes a single programme; it does not stack permanent bonuses.
+{
+  "revenue_compliance_audit": {
+    "name": "Revenue compliance audit",
+    "description": "Recover unpaid liabilities through procurement and collection audits, not a higher headline tax rate. Administrative work temporarily raises construction costs.",
+    "days": 270, "positive": true,
+    "modifiers": { "tax_efficiency": 0.06, "construction_cost": 0.02 }
+  },
+  "procurement_rescheduling": {
+    "name": "Rescheduled defence procurement",
+    "description": "Release industrial capacity by delaying new military deliveries. Civilian output improves, but replacement and training schedules slow down.",
+    "days": 180, "positive": false,
+    "modifiers": { "output": 0.02, "support_recovery": -0.08, "recruitment_speed": -0.08 }
+  },
+  "investment_concessions": {
+    "name": "Investment concession contracts",
+    "description": "New industrial contracts bring production at the cost of temporary collection concessions. The national tax-rate setting is unchanged.",
+    "days": 365, "positive": true,
+    "modifiers": { "output": 0.02, "tax_efficiency": -0.06 }
+  },
+  "research_retention_programme": {
+    "name": "Research retention programme",
+    "description": "Laboratories and graduate placements retain expertise. Research capacity improves while construction personnel are diverted into the programme.",
+    "days": 365, "positive": true,
+    "modifiers": { "research_speed": 0.10, "construction_speed": -0.03 }
+  },
+  "classified_research_programme": {
+    "name": "Classified military research",
+    "description": "Military specialists translate a discovery into field procedures and maintenance. Restricted circulation slows civilian research diffusion.",
+    "days": 270, "positive": true,
+    "modifiers": { "support_recovery": 0.08, "army_attack": 0.02, "research_speed": -0.03 }
+  },
+  "frontline_relief_programme": {
+    "name": "Frontline relief programme",
+    "description": "Replacements and rest schedules restore organisation. Relief reduces offensive tempo; it neither teleports divisions nor creates equipment.",
+    "days": 90, "positive": true,
+    "modifiers": { "organisation_recovery": 0.10, "reinforcement_rate": 0.06, "army_attack": -0.03 }
+  },
+  "minority_government_compact": {
+    "name": "Minority-government compact",
+    "description": "Negotiated parliamentary concessions sustain a minority cabinet. Collection exemptions reduce revenue for the duration of the agreement.",
+    "days": 180, "positive": false,
+    "modifiers": { "tax_efficiency": -0.03, "stability_weekly": 0.0004 }
+  },
+  "civic_mediation_programme": {
+    "name": "Civic mediation programme",
+    "description": "Local mediators continue talks after the streets empty. Grievances ease gradually, while negotiated procurement obligations increase project costs.",
+    "days": 180, "positive": true,
+    "modifiers": { "radicalism_weekly": -0.0006, "construction_cost": 0.02 }
+  },
+  "border_reserve_programme": {
+    "name": "Border reserve preparations",
+    "description": "Engineers prepare defensive positions and depot procedures. This buys preparation, not new divisions or an automatic troop movement.",
+    "days": 180, "positive": true,
+    "modifiers": { "entrenchment_speed": 0.12, "supply": 0.03, "recruitment_speed": -0.03 }
+  },
+  "market_access_commitments": {
+    "name": "Market-access commitments",
+    "description": "Harmonised clearance procedures extend trade reach. Temporary exemptions reduce collection efficiency without changing the tax rate.",
+    "days": 270, "positive": true,
+    "modifiers": { "trade_reach": 0.08, "tax_efficiency": -0.02 }
+  },
+  "defence_arsenal_consolidation": {
+    "name": "Consolidated arsenal schedules",
+    "description": "Shared depot and maintenance schedules accelerate real replacements. Civil construction slows while contractors service the armed forces.",
+    "days": 270, "positive": true,
+    "modifiers": { "reinforcement_rate": 0.10, "supply": 0.06, "construction_speed": -0.06 }
+  },
+  "staff_academy_programme": {
+    "name": "Staff academy programme",
+    "description": "Experienced officers teach rotation and recovery procedures to new formations. Existing experience pays for the programme; it does not grant free equipment.",
+    "days": 365, "positive": true,
+    "modifiers": { "organisation_recovery": 0.08, "recruitment_speed": 0.06 }
+  },
+  "field_refit_programme": {
+    "name": "Field refit programme",
+    "description": "Workshop teams improve defensive reliability and replacement throughput. Refitting slows marches and still requires equipment from actual stocks.",
+    "days": 180, "positive": true,
+    "modifiers": { "reinforcement_rate": 0.08, "army_defense": 0.04, "army_speed": -0.02 }
+  }
+}

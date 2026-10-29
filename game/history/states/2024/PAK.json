@@ -10,6 +10,7 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2017 census by province (Punjab: Punjabi and Saraiki, Urdu, Pashto).
 {
   // Azad Kashmir
   "pk_jk": {
@@ -55,7 +56,7 @@
   "pk_pb": {
     "population": 123868145,
     "urbanization": 0.31,
-    "cultures": { "punjabi": 0.4633, "hindustani": 0.234, "bengali_muslim": 0.0624, "gujarati": 0.0624, "rajasthani": 0.0624, "hazara": 0.0312, "persian": 0.0312, "tajik": 0.0187, "nepali": 0.0156, "hui": 0.0094, "tibetan": 0.0062, "parsi": 0.0031 },
+    "cultures": { "punjabi": 0.8, "hindustani": 0.12, "pashtun": 0.05, "kashmiri": 0.02, "sindhi": 0.01 },
     "buildings": { "Agriculture": 43, "CivilianIndustry": 4, "Infrastructure": 1 },
     "resources": { "Food": 1.71, "Coal": 0.249, "Oil": 0.283, "IronOre": 0.146, "RareEarths": 0.055, "NaturalGas": 0.389, "Timber": 2.476, "Bauxite": 0.143, "Uranium": 0.013 }
   },

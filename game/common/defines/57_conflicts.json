@@ -140,7 +140,9 @@
   // stability below which they plot, the chance of a plot at no stability at all (it falls in
   // proportion to how far below the line a country is), and how long a plot takes to ripen.
   "CoupReviewDays": 30,
-  "CoupStabilityThreshold": 0.35,
+  // 0.42 since 2026-10-28: the Sahel's juntas and Sudan's generals took power in states the
+  // simulation holds at 0.33 to 0.41, and at 0.35 a decade had three coups in the world.
+  "CoupStabilityThreshold": 0.42,
   "CoupBaseChance": 0.04,
   "CoupPlotDays": 60,
   // A coup next door for three years after it, and a war being lost, make it likelier.
@@ -151,5 +153,9 @@
   "CoupStabilityGain": 0.12,
   "CoupWarSupportGain": 0.05,
   // How long a junta that has just taken power is left alone by its own officers.
-  "CoupGraceDays": 730
+  "CoupGraceDays": 730,
+  // The output per head (dollars) at which the risk is halved; it falls with the square beyond.
+  // Rich democracies are not overthrown by their armies (Przeworski): a 25-year history had
+  // juntas in Rome and Brasilia. Twelve thousand keeps Brazil at 0.64 and puts Italy at 0.12.
+  "CoupWealthReference": 12000
 }

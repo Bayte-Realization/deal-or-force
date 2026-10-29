@@ -98,9 +98,10 @@ public partial class DealOrForceGame
         ClearDetail();
 
         var owner = _campaign.Nations.Find(nation => nation.MapIndex == _selectedState.NationMapIndex);
-        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex;
-        _sideBody.Text = Simulation.Loc.Format("{0} of {1}",
-                             Tr(_selectedState.Kind), owner?.DisplayName ?? Tr("an unknown state")) +
+        // Its own, or administered by it although another owns it (HeldRegions): held ground is worked as one's own.
+        var owned = _selectedState.NationMapIndex == _campaign.Player.MapIndex ||
+                    (_selectedState.HeldById == _campaign.Player.Id && Simulation.HeldRegions.Administered(_campaign, _selectedState));
+        _sideBody.Text = RegionOfCaption(_selectedState, owner) +
                          (owned ? "" : Tr(" · foreign ground, read-only"));
 
         DetailHeading("PEOPLE");
@@ -564,6 +565,10 @@ public partial class DealOrForceGame
             _foreignRegionDiplomacy.TooltipText = Ui.Tip(Simulation.Loc.Format(
                 "Open the diplomacy screen with {0}, who this region belongs to.", owner.DisplayName));
         }
+        // Leases and troops in without a war, for a region of anyone's.
+        RefreshArrangementActions();
+        // And our own people across that border, if any of them live here.
+        RefreshKinActions();
     }
 
     /// <summary>Whoever the selected region answers to, or null.</summary>

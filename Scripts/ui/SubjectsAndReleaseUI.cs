@@ -44,7 +44,7 @@ public partial class DealOrForceGame
 
             var shade = new ColorRect
             {
-                Color = new Color(0.015f, 0.026f, 0.041f, 0.76f),
+                Color = Ui.Colour("surface.overlay"),
                 MouseFilter = MouseFilterEnum.Stop
             };
             shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -54,18 +54,14 @@ public partial class DealOrForceGame
             Ui.Place(panel, "modal.ledger");
             var rows = ScrollablePanelRows(panel, 22, 16, 10);
 
-            var header = new HBoxContainer();
-            header.AddThemeConstantOverride("separation", 8);
-            rows.AddChild(header);
-            var title = Title("MANAGE SUBJECTS & SATELLITES", 23, Ui.Colour("text.accent"));
-            title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            header.AddChild(title);
-            header.AddChild(ActionButton("Release new country...", () =>
+            var releaseNew = ActionButton("Release new country...", () =>
             {
                 CloseSubjectsModal();
                 OpenReleaseCountryModal();
-            }, 190, 32, true));
-            header.AddChild(ActionButton("×", CloseSubjectsModal, 38, 32));
+            }, 190, 32, true);
+            ScreenHeader(rows, "MANAGE SUBJECTS & SATELLITES",
+                "Autonomy tiers, tribute flows, garrison integration and territorial reorganisation of dependent states.",
+                false, releaseNew, ActionButton("×", CloseSubjectsModal, 38, 32));
 
             _subjectsModalFeedback = Title("", 12, Ui.Colour("text.accent_dim"));
             _subjectsModalFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -84,7 +80,7 @@ public partial class DealOrForceGame
 
             var shade = new ColorRect
             {
-                Color = new Color(0.015f, 0.026f, 0.041f, 0.76f),
+                Color = Ui.Colour("surface.overlay"),
                 MouseFilter = MouseFilterEnum.Stop
             };
             shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -94,19 +90,15 @@ public partial class DealOrForceGame
             Ui.Place(panel, "modal.ledger");
             var rows = ScrollablePanelRows(panel, 22, 16, 10);
 
-            var header = new HBoxContainer();
-            header.AddThemeConstantOverride("separation", 8);
-            rows.AddChild(header);
-            var title = Title("RELEASE A NEW COUNTRY", 23, Ui.Colour("text.accent"));
-            _releaseModalTitle = title;
-            title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            header.AddChild(title);
-            header.AddChild(ActionButton("Manage existing subjects", () =>
+            var manageBtn = ActionButton("Manage existing subjects", () =>
             {
                 CloseReleaseCountryModal();
                 OpenSubjectsModal();
-            }, 200, 32));
-            header.AddChild(ActionButton("×", CloseReleaseCountryModal, 38, 32));
+            }, 200, 32);
+            var releaseHead = ScreenHeader(rows, "RELEASE A NEW COUNTRY",
+                "Establish a new autonomous dependency or sovereign state from controlled provinces.",
+                false, manageBtn, ActionButton("×", CloseReleaseCountryModal, 38, 32));
+            _releaseModalTitle = HeaderTitle(releaseHead);
 
             _releaseModalFeedback = Title("", 12, Ui.Colour("text.accent_dim"));
             _releaseModalFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;

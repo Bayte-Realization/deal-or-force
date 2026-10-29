@@ -141,7 +141,7 @@
         "effects": {
           "gdp_percent": 0.006,
           "productivity": 0.01,
-          "tax_rate": -0.015
+          "add_modifier": { "investment_concessions": 365 }
         },
         "modifiers": [
           {
@@ -223,7 +223,8 @@
         "title": "Build somewhere worth staying for",
         "consequence": "Slow, and it is the only thing that has ever worked.",
         "effects": {
-          "education_spending": 0.012,
+          "treasury_percent": -0.04,
+          "add_modifier": { "research_retention_programme": 365 },
           "state.standard_of_living": 0.006
         }
       },
@@ -336,7 +337,8 @@
         "title": "Keep it to ourselves",
         "consequence": "A military advantage, and a narrower one.",
         "effects": {
-          "military_spending": 0.01,
+          "treasury_percent": -0.02,
+          "add_modifier": { "classified_research_programme": 270 },
           "war_support": 0.03,
           "productivity": 0.005
         }
@@ -410,7 +412,8 @@
         "effects": {
           "war_support": 0.04,
           "stability": 0.008,
-          "military_spending": 0.004
+          "treasury_percent": -0.012,
+          "add_modifier": { "frontline_relief_programme": 90 }
         }
       },
       {
@@ -547,7 +550,7 @@
         "consequence": "Every vote is a negotiation from now on.",
         "effects": {
           "stability": -0.012,
-          "tax_rate": -0.01
+          "add_modifier": { "minority_government_compact": 180 }
         }
       },
       {
@@ -614,7 +617,7 @@
         "effects": {
           "stability": 0.022,
           "state.radicalism": -0.024,
-          "tax_rate": -0.01
+          "add_modifier": { "civic_mediation_programme": 180 }
         }
       },
       {
@@ -808,7 +811,8 @@
         "title": "Fund the next stage",
         "consequence": "More of the same, which is the point.",
         "effects": {
-          "education_spending": 0.012,
+          "treasury_percent": -0.035,
+          "add_modifier": { "research_retention_programme": 365 },
           "literacy": 0.006,
           "productivity": 0.006
         }
@@ -817,7 +821,7 @@
         "title": "Declare it finished and spend elsewhere",
         "consequence": "The money goes somewhere it is also needed.",
         "effects": {
-          "education_spending": -0.01,
+          "remove_modifier": [ "research_retention_programme" ],
           "treasury_percent": 0.03,
           "literacy": -0.002
         }
@@ -885,10 +889,10 @@
         }
       },
       {
-        "title": "Reinforce the sector and say nothing",
+        "title": "Prepare the sector and say nothing",
         "consequence": "Expensive, quiet, and understood by everybody who matters.",
         "effects": {
-          "military_spending": 0.012,
+          "add_modifier": { "border_reserve_programme": 180 },
           "treasury_percent": -0.02,
           "war_support": 0.02
         }
@@ -938,7 +942,7 @@
         "consequence": "Access, obligations, and a seat next time.",
         "effects": {
           "market_access": 0.06,
-          "tax_rate": -0.005,
+          "add_modifier": { "market_access_commitments": 270 },
           "stability": 0.006
         }
       },

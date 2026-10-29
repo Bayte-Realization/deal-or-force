@@ -31,7 +31,7 @@ public partial class DealOrForceGame
     private HBoxContainer _doctrineToolbar;
     private Label _doctrineScreenSummary;
     private Label _doctrineZoomLabel;
-    private Button _doctrineTacticalView, _doctrineCourseView;
+    private Button _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView;
     private string _doctrineView = "tactical";
     private int _doctrineScreenDay = -1;
     private DoctrinePresentationState? _doctrineScreenState;
@@ -56,26 +56,33 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.doctrines");
         var rows = PanelRows(panel, 18, 14, 8);
 
-        var header = new HBoxContainer();
-        rows.AddChild(header);
-        var title = Title(Tr("BOOK OF WAR"), 25, Ui.Colour("text.accent"));
-        title.Name = "DoctrineScreenTitle";
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        _doctrineTacticalView = ActionButton("Tactical books", () => SetDoctrineView("tactical"), 176, 32, true,
+        // The head of the page, built from the shared vocabulary: display title, a sentence of
+        // purpose, the two views and the close, and a rule under the lot.
+        _doctrineTacticalView = ActionButton("Tactical books", () => SetDoctrineView("tactical"), 176, 34, true,
             "res://game/gfx/interface/icons/icon_military.png");
         _doctrineTacticalView.Name = "DoctrineTacticalView";
-        header.AddChild(_doctrineTacticalView);
-        _doctrineCourseView = ActionButton("Strategic course", () => SetDoctrineView("course"), 176, 32, false,
+        _doctrineTacticalView.SetMeta("atlas_tab_button", true);
+        StyleButton(_doctrineTacticalView, true);
+        _doctrineCourseView = ActionButton("Strategic course", () => SetDoctrineView("course"), 176, 34, false,
             "res://game/gfx/interface/icons/icon_agenda.png");
         _doctrineCourseView.Name = "DoctrineCourseView";
-        header.AddChild(_doctrineCourseView);
+        _doctrineCourseView.SetMeta("atlas_tab_button", true);
+        StyleButton(_doctrineCourseView, false);
+        _doctrineGeneralsView = ActionButton("Generals", () => SetDoctrineView("generals"), 150, 34, false,
+            "res://game/gfx/interface/icons/icon_military.png");
+        _doctrineGeneralsView.Name = "DoctrineGeneralsView";
+        _doctrineGeneralsView.SetMeta("atlas_tab_button", true);
+        StyleButton(_doctrineGeneralsView, false);
+        var toMilitary = ActionButton("Army", () => { CloseDoctrineScreen(); OpenScreen("Military"); }, 0, 34, false,
+            "res://game/gfx/interface/icons/icon_military.png");
         var close = ActionButton("×", CloseDoctrineScreen, 38, 32);
         close.Name = "CloseDoctrineScreen";
         close.TooltipText = Ui.Tip(Tr("Close"));
-        header.AddChild(close);
+        ScreenHeader(rows, "BOOK OF WAR",
+            "What each service is taught to be, what it costs to change its mind, and what the country pays it in.",
+            right: new Control[] { _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView, toMilitary, close });
 
-        _doctrineScreenSummary = Title("", 14, Ui.Colour("text.body"));
+        _doctrineScreenSummary = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body"));
         _doctrineScreenSummary.Name = "DoctrineScreenSummary";
         // One line, ellipsised: a caption that wraps into a ladder of single words is worse than a
         // caption that ends in an ellipsis, and the tooltip holds the whole sentence anyway.
@@ -181,6 +188,7 @@ public partial class DealOrForceGame
         }
         StyleButton(_doctrineTacticalView, _doctrineView == "tactical");
         StyleButton(_doctrineCourseView, _doctrineView == "course");
+        StyleButton(_doctrineGeneralsView, _doctrineView == "generals");
         UpdateDoctrineZoomLabel();
         if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
             _doctrineBook = n.TacticalDoctrine.Branch.Length > 0
@@ -199,7 +207,23 @@ public partial class DealOrForceGame
         RebuildDoctrineBookList(n);
 
         ClearPolicyRows(_doctrineCentre);
-        if (_doctrineView == "course")
+        if (_doctrineView == "generals")
+        {
+            var generalsScroll = new ScrollContainer
+            {
+                Name = "DoctrineGeneralsScroll",
+                SizeFlagsVertical = SizeFlags.ExpandFill,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                FollowFocus = true
+            };
+            _doctrineCentre.AddChild(generalsScroll);
+            var generalsRows = new VBoxContainer { Name = "DoctrineGeneralsRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            generalsRows.AddThemeConstantOverride("separation", 8);
+            generalsScroll.AddChild(generalsRows);
+            GeneralsPage(n, generalsRows);
+        }
+        else if (_doctrineView == "course")
         {
             var courseScroll = new ScrollContainer
             {
@@ -227,30 +251,51 @@ public partial class DealOrForceGame
         }
 
         ClearPolicyRows(_doctrineSide);
-        ShowDoctrinePreview(n, _doctrineSide);
+        if (_doctrineView == "generals") GeneralsSide(_doctrineSide);
+        else ShowDoctrinePreview(n, _doctrineSide);
     }
 
-    /// <summary>The six books as a column: what each is, and how much of it is written down.</summary>
+    /// <summary>The books as a column, shelf by shelf: what each is, and how much of it is written down.</summary>
     private void RebuildDoctrineBookList(Nation n)
     {
         if (_doctrineBookList is null) return;
         ClearPolicyRows(_doctrineBookList);
-        var memory = n.TacticalDoctrine;
+        TacticalDoctrines.EnsureShelves(n);
         foreach (var branch in TacticalDoctrineCatalog.All)
         {
             var id = branch.Id;
-            var inForce = string.Equals(memory.Branch, id, StringComparison.Ordinal);
-            var written = inForce ? branch.Nodes.Count(node => TacticalDoctrines.Known(n, node.Id)) : 0;
+            var track = TacticalDoctrines.TrackFor(n, branch);
+            var inForce = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal);
+            var written = inForce ? track.Known.Count : 0;
             var button = ActionButton("", () => SelectDoctrineBook(id), 0, 46, inForce);
             button.Name = "ScreenBook_" + id;
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.ClipText = true;
             button.AutowrapMode = TextServer.AutowrapMode.Off;
-            button.Text = Loc.Format("{0}\n{1} of {2} · paid for in {3}", Tr(branch.Name), written,
-                branch.Nodes.Count, Loc.Get(TacticalDoctrines.ServiceName(branch.Experience)));
+            button.Text = Loc.Format("{0}: {1}\n{2} of {3} · paid for in {4}", Tr(DoctrineSlots.Name(branch.Slot)),
+                Tr(branch.Name), written, branch.Nodes.Count,
+                Loc.Get(TacticalDoctrines.ServiceName(branch.Experience)));
             button.AddThemeFontSizeOverride("font_size", 12);
             button.TooltipText = Ui.Tip(Tr(branch.Description));
-            _doctrineBookList.AddChild(button);
+            // A status edge: brass for the book in force, blue for one being read, a hairline
+            // for a shelf that is still empty. A list of equal buttons says nothing about
+            // which of them is the country's own.
+            var row = new HBoxContainer { Name = "BookRow_" + id };
+            row.AddThemeConstantOverride("separation", 6);
+            var edge = new Panel
+            {
+                CustomMinimumSize = new Vector2(3, 0),
+                MouseFilter = MouseFilterEnum.Ignore
+            };
+            var edgeStyle = new StyleBoxFlat
+            {
+                BgColor = Ui.Colour(inForce ? "text.accent" : written > 0 ? "state.info" : "surface.line_faint")
+            };
+            edgeStyle.SetCornerRadiusAll(1);
+            edge.AddThemeStyleboxOverride("panel", edgeStyle);
+            row.AddChild(edge);
+            row.AddChild(button);
+            _doctrineBookList.AddChild(row);
         }
     }
 

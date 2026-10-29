@@ -5,12 +5,19 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
-    private void BeginOffensiveStroke(GlobePick pick, bool edit)
+    private void BeginOffensiveStroke(GlobePick pick, bool edit, bool append)
     {
         _offensiveStroke.Clear(); _drawnProvinces.Clear(); _editingBorderId = -1;
+        _appendOffensivePhase = append;
         _offensiveSource = OffensivePlanning.Source(_campaign, SelectedPlayerArmies());
         if (_offensiveSource is null) return;
-        if (edit)
+        if (append && (_offensiveSource.Kind != FrontLineKind.Offensive || OffensivePlanning.PhaseCount(_offensiveSource) >= OffensivePlanning.MaxPhases))
+        {
+            _offensiveSource = null;
+            SetArmyFeedback(Tr("Shift+RMB adds a phase to an existing offensive with fewer than 24 phases."));
+            return;
+        }
+        if (edit || append)
         {
             if (_offensiveSource.Kind != FrontLineKind.Offensive)
             {
@@ -49,8 +56,10 @@ public partial class DealOrForceGame
             }
         }
         _drawnProvinces.Clear(); _drawnProvinces.UnionWith(_offensiveStroke);
-        _globe.SetOffensivePlanPreview(_offensiveStroke,
-            _offensiveSource.Kind == FrontLineKind.Defence ? _offensiveSource.Provinces : _offensiveSource.SourceProvinces);
+        System.Collections.Generic.IReadOnlyCollection<int> departure = _appendOffensivePhase
+            ? OffensivePlanning.PhaseGoals(_offensiveSource, OffensivePlanning.PhaseCount(_offensiveSource) - 1).ToArray()
+            : _offensiveSource.Kind == FrontLineKind.Defence ? _offensiveSource.Provinces : _offensiveSource.SourceProvinces;
+        _globe.SetOffensivePlanPreview(_offensiveStroke, departure);
         RefreshDrawingUi();
     }
 }

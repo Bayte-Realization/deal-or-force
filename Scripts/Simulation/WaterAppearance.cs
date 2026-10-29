@@ -10,10 +10,11 @@ namespace DealOrForce.Simulation;
 public sealed record WaterAppearance(
     string LakeTexture = "", string RiverTexture = "",
     string LakeRelative = "gfx/water/lake_surface.png", string RiverRelative = "gfx/water/river_surface.png",
-    float RiverInset = .18f, float RiverNearOpacity = .92f, float RiverFarOpacity = .58f,
+    float RiverInset = -.10f, float RiverNearOpacity = .92f, float RiverFarOpacity = .58f,
     float ShoreWidth = .75f, float DepthReach = 5f,
     float TextureStrength = .65f, float TileRepeat = 640f,
-    float RippleStrength = .035f, float AnimationSpeed = 0f, int TileResolution = 512)
+    float RippleStrength = .035f, float AnimationSpeed = 0f, int TileResolution = 512,
+    float RiverWidthReach = .90f)
 {
     public RiverVisualProfile[] RiverProfiles { get; init; } = Array.Empty<RiverVisualProfile>();
 }
@@ -57,6 +58,7 @@ public static partial class TerrainCatalog
                     RippleStrength = Number(s, "ripple_strength", Water.RippleStrength, 0, .5f),
                     AnimationSpeed = Number(s, "animation_speed", Water.AnimationSpeed, 0, .05f),
                     TileResolution = (int)Number(s, "tile_resolution", Water.TileResolution, 64, 2048),
+                    RiverWidthReach = Number(s, "river_width_reach_texels", Water.RiverWidthReach, 0, 2.5f),
                     RiverProfiles = Profiles(s, Water.RiverProfiles)
                 };
                 Water = next; // Reject an invalid declaration as a whole.

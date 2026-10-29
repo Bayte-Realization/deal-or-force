@@ -62,6 +62,34 @@ public sealed class IssueUltimatumCommand : ICampaignCommand
     public float Reparations { get; init; }
     public bool LiftEmbargo { get; init; }
     public bool NonAggression { get; init; }
+    // The rest of the terms. Recorded commands from before these existed simply never set
+    // them, which is what "not demanded" already means.
+    public bool Annex { get; init; }
+    public bool Vassalise { get; init; }
+    public bool Disarm { get; init; }
+    public bool BreakAlliances { get; init; }
+    public bool ReleaseSubjects { get; init; }
+    public bool TechnologyTransfer { get; init; }
+    public bool ChangeGovernment { get; init; }
+    public bool FleetTransfer { get; init; }
+    public string SubjectKind { get; init; } = "";
+    public bool TradeAgreement { get; init; }
+    public bool EmbargoThird { get; init; }
+    public int EmbargoOnId { get; init; }
+    public bool BreakNamed { get; init; }
+    public int BreakWithId { get; init; }
+    public bool CancelGuarantee { get; init; }
+    public int CancelGuaranteeId { get; init; }
+    public bool JoinAlliance { get; init; }
+    public bool AcceptGuarantee { get; init; }
+    public bool MilitaryAccess { get; init; }
+    public bool WhitePeace { get; init; }
+    public bool CedeOccupied { get; init; }
+    public bool Humiliate { get; init; }
+    public bool ReleaseNamed { get; init; }
+    public int ReleaseSubjectId { get; init; }
+    public bool Liberate { get; init; }
+    public int LiberateRegion { get; init; }
     public Ultimatum.Outcome Result { get; private set; } = new(false, "No ultimatum was issued.");
     public Ultimatum.Answer? Response { get; private set; }
 
@@ -74,15 +102,26 @@ public sealed class IssueUltimatumCommand : ICampaignCommand
         var target = campaign.NationById(TargetId);
         var regions = StateMapIndices ?? Array.Empty<int>();
         if (regions.Length == 0 && StateMapIndex >= 0) regions = new[] { StateMapIndex };
+        var demand = new Ultimatum.Demand
+        {
+            Regions = regions, Reparations = Reparations, LiftEmbargo = LiftEmbargo, NonAggression = NonAggression,
+            Annex = Annex, Vassalise = Vassalise, Disarm = Disarm, BreakAlliances = BreakAlliances,
+            ReleaseSubjects = ReleaseSubjects, TechnologyTransfer = TechnologyTransfer,
+            ChangeGovernment = ChangeGovernment, FleetTransfer = FleetTransfer, SubjectKind = SubjectKind ?? "",
+            TradeAgreement = TradeAgreement, EmbargoThird = EmbargoThird, EmbargoOnId = EmbargoOnId,
+            BreakNamed = BreakNamed, BreakWithId = BreakWithId, CancelGuarantee = CancelGuarantee,
+            CancelGuaranteeId = CancelGuaranteeId, JoinAlliance = JoinAlliance, AcceptGuarantee = AcceptGuarantee,
+            MilitaryAccess = MilitaryAccess, WhitePeace = WhitePeace, CedeOccupied = CedeOccupied,
+            Humiliate = Humiliate, ReleaseNamed = ReleaseNamed, ReleaseSubjectId = ReleaseSubjectId,
+            Liberate = Liberate, LiberateRegion = LiberateRegion
+        };
         // Older commands without a region chose the largest eligible one.
-        if (regions.Length == 0 && Reparations == 0 && !LiftEmbargo && !NonAggression && target is not null)
+        if (!Ultimatum.HasAnyTerm(demand) && target is not null)
         {
             var state = campaign.States.Where(s => Ultimatum.CanDemand(campaign, target, s.MapIndex))
                 .OrderByDescending(s => s.Population).ThenBy(s => s.MapIndex).FirstOrDefault();
-            if (state is not null) regions = new[] { state.MapIndex };
+            if (state is not null) demand = demand with { Regions = new[] { state.MapIndex } };
         }
-        var demand = new Ultimatum.Demand { Regions = regions, Reparations = Reparations,
-            LiftEmbargo = LiftEmbargo, NonAggression = NonAggression };
         var assessment = Ultimatum.Assess(campaign, demander, target, demand);
         if (!assessment.Valid) { Result = new(false, assessment.Reason); return; }
         Response = assessment.Response;

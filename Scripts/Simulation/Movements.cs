@@ -203,6 +203,9 @@ public static class MovementCatalog
 
     /// <summary>The pattern a fallen country's government in exile is made from.</summary>
     public const string ExileTemplate = "government_in_exile";
+    /// <summary>A beaten rising that went to ground (MovementFall.GoUnderground): its id begins so, and the template fills it in.</summary>
+    public const string UndergroundTemplate = "insurgency";
+    public const string UndergroundPrefix = "underground_";
 }
 
 /// <summary>Fighters on their way to a region ahead of an uprising (the infiltrate action).</summary>
@@ -485,7 +488,8 @@ public static partial class Movements
     {
         var state = nation.Movement;
         if (Exiles.TryGetValue(state, out var cached) && cached.Item1 == MovementCatalog.Version) return cached.Item2;
-        var template = MovementCatalog.Of(MovementCatalog.ExileTemplate);
+        var underground = state.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal);
+        var template = MovementCatalog.Of(underground ? MovementCatalog.UndergroundTemplate : MovementCatalog.ExileTemplate);
         var description = template?.Description ?? "";
         if (!state.Landless)
             description = Loc.Format("The legal government of {0} has returned to its homeland and resumed governance over its people.", nation.Name);
@@ -503,7 +507,8 @@ public static partial class Movements
         };
         definition.Peoples.AddRange(state.Peoples);
         definition.Homeland.AddRange(state.Homeland);
-        definition.Traits.AddRange(template is null ? new[] { "government_in_exile" } : template.Traits);
+        definition.Traits.AddRange(template is not null ? template.Traits
+            : underground ? new[] { "armed_wing", "tunnel_network" } : new[] { "government_in_exile" });
         if (template is not null) definition.Faiths.AddRange(template.Faiths);
         definition.ForgetLookups();
         Exiles.AddOrUpdate(state, Tuple.Create(MovementCatalog.Version, definition));
@@ -636,7 +641,11 @@ public static partial class Movements
         return counted == 0 ? (0f, 0f) : ((float)(latitude / counted), (float)(longitude / counted));
     }
 
-    private static int FreeMapIndex(Campaign campaign)
+    /// <summary>
+    /// The lowest map index no country and no movement is using. Shared with anything that
+    /// founds a new country at runtime, so two founders cannot be handed the same index.
+    /// </summary>
+    internal static int FreeMapIndex(Campaign campaign)
     {
         var taken = new HashSet<int>();
         foreach (var nation in campaign.Nations) taken.Add(nation.MapIndex);

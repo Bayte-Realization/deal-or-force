@@ -73,7 +73,8 @@ public static class BorderFronts
     {
         if (line.Kind == FrontLineKind.Offensive && line.ObjectiveSequence.Count > 0 && line.BorderNationId >= 0)
         {
-            if (line.BorderRevision == campaign.MapRevision) return;
+            if (line.BorderRevision == campaign.MapRevision || line.ActiveOffensivePhase > 0 ||
+                OffensivePlanning.HasNextPhase(line)) return;
             line.SourceProvinces.Clear();
             line.SourceProvinces.UnionWith(Resolve(campaign, line));
             line.PostsDay = int.MinValue;

@@ -591,6 +591,9 @@ public static class SaveSystem
             // must keep the colours that host actually sent, not run its own migration.
             SecessionColours.MigrateLegacy(campaign);
             NationNaming.MigrateLegacy(campaign);
+            // A save written before the shelves existed carries one book of war; it moves onto
+            // the shelf its own service belongs to before anything reads it.
+            foreach (var n in campaign.Nations) TacticalDoctrines.EnsureShelves(n);
             // The payload has no live topology yet. Repair historical minor-state
             // renamings once its saved owners/controllers are attached, on the loading
             // host only. Joining peers keep the authoritative identity the host sends.
@@ -919,10 +922,20 @@ public static class SaveSystem
         public int NextDealOfferId = 1;
         public List<UltimatumPaper> UltimatumPapers = new();
         public int NextUltimatumId = 1;
+        public List<LandArrangement> LandArrangements = new();
+        public int NextLandArrangementId = 1;
+        public List<LeaseOffer> LeaseOffers = new();
+        public int NextLeaseOfferId = 1;
+        public float WorldLeverage = -1f;
+        public int LastFinancialCrisisDay = -100000;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
         public int AssistanceLastTickDay = -1;
+        /// <summary>One-time depot shipments asked for in a war (ArmsShipmentRequests). Absent in older saves.</summary>
+        public List<ArmsShipmentRequest> ArmsShipmentRequests = new();
+        public List<ArmsShipmentCooldown> ArmsShipmentCooldowns = new();
+        public int NextArmsShipmentRequestId = 1;
         /// <summary>The ground each country first held, and which countries' falls are decided
         /// (Movements). Neither was saved: a loaded campaign forgot every government in exile's
         /// homeland, and a client's world parted from its host's within a day, because the
@@ -1044,10 +1057,19 @@ public static class SaveSystem
             NextDealOfferId = campaign.NextDealOfferId,
             UltimatumPapers = campaign.UltimatumPapers.Select(Ultimatum.Copy).ToList(),
             NextUltimatumId = campaign.NextUltimatumId,
+            LandArrangements = new List<LandArrangement>(campaign.LandArrangements),
+            NextLandArrangementId = campaign.NextLandArrangementId,
+            LeaseOffers = new List<LeaseOffer>(campaign.LeaseOffers),
+            NextLeaseOfferId = campaign.NextLeaseOfferId,
+            WorldLeverage = campaign.WorldLeverage,
+            LastFinancialCrisisDay = campaign.LastFinancialCrisisDay,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
             AssistanceLastTickDay = campaign.AssistanceLastTickDay,
+            ArmsShipmentRequests = campaign.ArmsShipmentRequests.Select(global::DealOrForce.Simulation.ArmsShipmentRequests.Copy).ToList(),
+            ArmsShipmentCooldowns = campaign.ArmsShipmentCooldowns.Select(global::DealOrForce.Simulation.ArmsShipmentRequests.Copy).ToList(),
+            NextArmsShipmentRequestId = campaign.NextArmsShipmentRequestId,
             Homelands = campaign.Homelands.ToDictionary(pair => pair.Key, pair => new List<int>(pair.Value)),
             Fallen = campaign.Fallen.OrderBy(id => id).ToList(),
             NextOrganizationId = campaign.NextOrganizationId,
@@ -1112,8 +1134,16 @@ public static class SaveSystem
             Replace(campaign.Wars, Wars);
             Replace(campaign.Sponsorships, Sponsorships);
             Replace(campaign.Organizations, Organizations ?? new());
-            DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId);
+            DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId, ElapsedDays);
             Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
+            Replace(campaign.LandArrangements, LandArrangements ?? new());
+            Replace(campaign.LeaseOffers, LeaseOffers ?? new());
+            campaign.NextLandArrangementId = Math.Max(NextLandArrangementId,
+                campaign.LandArrangements.Count == 0 ? 1 : campaign.LandArrangements.Max(a => a.Id) + 1);
+            campaign.NextLeaseOfferId = Math.Max(NextLeaseOfferId,
+                campaign.LeaseOffers.Count == 0 ? 1 : campaign.LeaseOffers.Max(o => o.Id) + 1);
+            campaign.WorldLeverage = WorldLeverage;
+            campaign.LastFinancialCrisisDay = LastFinancialCrisisDay;
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();
@@ -1150,6 +1180,7 @@ public static class SaveSystem
                 ProvinceController, ProvinceOccupation, ProvinceOwner, ProvinceState, NoHumanAuthority);
             ForeignAssistance.Restore(campaign, AssistanceRequests, AssistanceCooldowns,
                 NextAssistanceRequestId, AssistanceLastTickDay);
+            global::DealOrForce.Simulation.ArmsShipmentRequests.Restore(campaign, ArmsShipmentRequests, ArmsShipmentCooldowns, NextArmsShipmentRequestId);
             campaign.CivilWarBudget = CivilWarBudget?.Copy(campaign.ElapsedDays) ??
                 CivilWarBudgetState.FromLegacy(campaign);
             // Both memories were introduced together. Never infer new state while loading

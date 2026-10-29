@@ -37,7 +37,7 @@ public partial class DealOrForceGame
     private void MaintainQuality(double delta)
     {
         if (_qualityGovernor is null || _globe is null) return;
-        var next = _qualityGovernor.Sample(delta * 1000.0);
+        var next = _qualityGovernor.Sample(delta * 1000.0, _globe.MeasuredGpuMs);
         if (next is null) return;
         _globe.ApplyQuality(next);
         DiagnosticLogs.Write("performance",

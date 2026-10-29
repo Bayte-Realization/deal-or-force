@@ -167,6 +167,17 @@ public partial class DealOrForceGame
         detailsCard.AddThemeStyleboxOverride("panel", ButtonStyle(false, 0));
         columns.AddChild(detailsCard);
         var details = PanelRows(detailsCard, 18, 16, 8);
+        // The bookmark's picture, as a Paradox bookmark has one: the sprite scenario_<id> when a
+        // scenario or a mod ships it, the night side of the Earth when it does not.
+        var detailsPicture = new TextureRect
+        {
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            CustomMinimumSize = new Vector2(0, 220),
+            ClipContents = true,
+            MouseFilter = MouseFilterEnum.Ignore
+        };
+        details.AddChild(detailsPicture);
         var detailsName = Title("", 21, Ui.Colour("text.bright"));
         detailsName.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         details.AddChild(detailsName);
@@ -216,6 +227,8 @@ public partial class DealOrForceGame
                 "Workspace scenarios save in place; base and mod scenarios become independent copies.");
             openError.Text = "";
             detailsName.Text = chosen?.Name ?? "";
+            detailsPicture.Texture = chosen is null ? null : ScenarioPicture(chosen.Id);
+            detailsPicture.Visible = detailsPicture.Texture is not null;
             detailsId.Text = chosen is null ? "" : Tr("Identifier") + ": " + chosen.Id;
             detailsDescription.Text = chosen?.Description ?? "";
             detailsSource.Text = chosen is null ? "" : Tr("Source") + ": " +
@@ -618,5 +631,18 @@ public partial class DealOrForceGame
             _authorStatus.Text = Tr("Saved. Previous version: .bak. Enable Editor workspace and restart for rules/UI changes.") + " " + path;
         }
         catch (Exception e) { _authorStatus.Text = e.Message; }
+    }
+
+    /// <summary>A scenario's picture: its own sprite (scenario_&lt;id&gt;), else the night Earth, else none.</summary>
+    private static Texture2D ScenarioPicture(string id)
+    {
+        // The player who turned the generated pictures off sees none here either.
+        if (LoadingScreen.IllustrationPaths().Length == 0) return null;
+        foreach (var name in new[] { "scenario_" + id.ToLowerInvariant(), "loading_earth_night" })
+        {
+            var path = SpriteCatalog.TextureOf(name);
+            if (path.Length > 0 && LoadingScreen.Picture(path) is { } texture) return texture;
+        }
+        return null;
     }
 }

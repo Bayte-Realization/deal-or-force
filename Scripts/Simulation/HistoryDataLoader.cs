@@ -110,8 +110,13 @@ public static class HistoryDataLoader
                 var ids = roster.EnumerateArray()
                     .Select(member => campaign.NationByTag(member.GetString() ?? ""))
                     .Where(nation => nation is not null).Select(nation => nation.Id).ToList();
-                if (InternationalOrganizations.Seed(campaign, title.GetString(), charterId, ids) is null)
+                var founded = InternationalOrganizations.Seed(campaign, title.GetString(), charterId, ids);
+                if (founded is null)
                     errors?.Add($"Organization '{title.GetString()}' could not be founded ({charterId}, {ids.Count} members).");
+                // The course it had already chosen: the EU, Mercosur and the Eurasian union are
+                // customs unions on the first day ("doctrine": "common_market").
+                else if (body.TryGetProperty("doctrine", out var doctrine) && doctrine.ValueKind == JsonValueKind.String)
+                    founded.DoctrineId = doctrine.GetString() ?? "";
             }
 
         if (root.TryGetProperty("guarantees", out var guarantees) && guarantees.ValueKind == JsonValueKind.Array)
@@ -157,9 +162,9 @@ public static class HistoryDataLoader
                 OpinionSystem.Remember(campaign, relation, "non_aggression_pact");
             }
 
-        // Who already answered to whom: Baikonur leased to Russia, the states in free association
-        // with the United States and New Zealand, the breakaways that live on a patron's money and
-        // garrison. `{"overlord": "RUS", "subject": "KAB", "type": "leased_territory"}`. Set as a
+        // Who already answered to whom: the states in free association with the United States and
+        // New Zealand, the breakaways that live on a patron's money and garrison.
+        // `{"overlord": "USA", "subject": "PRI", "type": "dependent_territory"}`. Set as a
         // standing fact rather than through SubjectSystem.Subjugate, which is the verb for a
         // country being made one and leaves the grievance of it.
         if (root.TryGetProperty("subjects", out var subjects) && subjects.ValueKind == JsonValueKind.Array)
@@ -193,6 +198,12 @@ public static class HistoryDataLoader
                 var tie = CampaignDiplomacy.Get(campaign, overlord.Id, subject.Id);
                 OpinionSystem.Remember(campaign, tie, "historic_friendship");
             }
+
+        // Ground held by arrangement on the first day: Baikonur leased to Russia until 2050,
+        // Guantanamo to the United States since 1903 (LandArrangementSystem.FromHistory).
+        if (root.TryGetProperty("arrangements", out var arrangements) && arrangements.ValueKind == JsonValueKind.Array)
+            foreach (var entry in arrangements.EnumerateArray())
+                LandArrangementSystem.FromHistory(campaign, entry, errors);
 
         // What the two of them already thought of each other. Without this the world opened on
         // two hundred and sixty countries that had never met: India and Pakistan neutral, Iran

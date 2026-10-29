@@ -93,7 +93,8 @@ public static class ParliamentaryPolitics
             // ruling floor must fit the actual seats, not reverse Clamp's bounds.
             var rulingCeiling = rem - 0.05f;
             var rulingFloor = Math.Min(0.10f, rulingCeiling);
-            p.RulingBlocShare = Math.Clamp(rem * approval, rulingFloor, rulingCeiling);
+            var safeCeiling = Math.Max(rulingFloor, rulingCeiling);
+            p.RulingBlocShare = Math.Clamp(rem * approval, rulingFloor, safeCeiling);
             p.OppositionShare = Math.Max(0.05f, 1.0f - p.RulingBlocShare - p.DovishShare);
 
             p.MilitaryBudgetCutActive = p.DovishShare >= campaign.Defines.ParliamentAntiWarThreshold;
@@ -204,11 +205,42 @@ public static class ParliamentaryPolitics
     public static void OnLawAdopted(Campaign campaign, Nation nation, PoliticalPolicy policy)
     {
         if (campaign is null || nation?.Parliament is null || policy is null) return;
-        if (string.Equals(policy.Category, nation.Parliament.FavoredLawCategory, StringComparison.OrdinalIgnoreCase))
+        if (MatchesFavoredLawCategory(policy.Category, nation.Parliament.FavoredLawCategory))
         {
             nation.Parliament.FactionDiscontent = Math.Max(0f, nation.Parliament.FactionDiscontent - 0.20f);
             nation.Stability = Math.Clamp(nation.Stability + 0.01f, 0f, 1f);
             campaign.Chronicle.Record(campaign, "parliament_law_supported", nation.Id, place: policy.Name);
         }
+    }
+
+    public static bool MatchesFavoredLawCategory(string policyCategory, string favored)
+    {
+        if (string.IsNullOrWhiteSpace(policyCategory) || string.IsNullOrWhiteSpace(favored)) return false;
+        if (string.Equals(policyCategory, favored, StringComparison.OrdinalIgnoreCase)) return true;
+
+        return favored.ToLowerInvariant() switch
+        {
+            "fiscal" => policyCategory.Equals("Fiscal mandate", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Currency regime", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Ownership regime", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Energy and climate", StringComparison.OrdinalIgnoreCase),
+            "peace" => policyCategory.Equals("Military service", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Security mandate", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Post-conflict recovery", StringComparison.OrdinalIgnoreCase),
+            "rights" => policyCategory.Equals("Civil rights", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Social guarantees", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Judiciary", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Media and press", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Labour relations", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Nationalities", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Local autonomy", StringComparison.OrdinalIgnoreCase),
+            "trade" => policyCategory.Equals("Trade policy", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Industrial policy", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Migration", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Foreign stance", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Bilateral stance", StringComparison.OrdinalIgnoreCase)
+                || policyCategory.Equals("Regional development", StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
     }
 }

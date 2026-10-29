@@ -110,21 +110,17 @@ public partial class DealOrForceGame
         panel.Name = "SovereignFinancePanel";
         Ui.Place(panel, "modal.diplomacy");
         var rows = PanelRows(panel, 22, 16, 10);
-        var header = new HBoxContainer(); header.AddThemeConstantOverride("separation", 8); rows.AddChild(header);
-        _financeTitle = Title("SOVEREIGN FINANCE", 24, Ui.Colour("text.accent"));
-        _financeTitle.Name = "FinanceTitle";
-        _financeTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _financeTitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        _financeTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        _financeTitle.ClipText = true; header.AddChild(_financeTitle);
         var budget = ActionButton("Open the budget", () =>
         { _sovereignFinanceLayer.Hide(); _financeFromBudget = false; OpenScreen("State Affairs"); }, 0, 32);
         budget.TooltipText = Ui.Tip(Tr("Adjust taxes and spending. Borrowing finances a deficit; it does not repair it."));
-        header.AddChild(budget);
-        header.AddChild(HandbookButton("budget"));
         _financeClose = ActionButton("×", CloseSovereignFinance, 38, 32);
         _financeClose.Name = "CloseSovereignFinance";
-        _financeClose.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(_financeClose);
+        _financeClose.TooltipText = Ui.Tip(Tr("Close"));
+        var head = ScreenHeader(rows, "SOVEREIGN FINANCE",
+            "Cash, borrowed principal, overdue obligations, credit capacity and bond issuance.",
+            false, budget, HandbookButton("budget"), _financeClose);
+        _financeTitle = HeaderTitle(head);
+        _financeTitle.Name = "FinanceTitle";
         _financeState = WrappedUltimatumText("", 13); _financeState.Name = "FinanceCondition"; rows.AddChild(_financeState);
         var metrics = new HBoxContainer(); metrics.AddThemeConstantOverride("separation", 10); rows.AddChild(metrics);
         _financeCash = FinanceMetric(metrics, "Treasury", "FinanceCash", "Available money, not the country's accumulated obligations.");
@@ -202,11 +198,11 @@ public partial class DealOrForceGame
         parent.AddChild(column); return PolicyColumn(column, name, true);
     }
 
-    private void FinanceHeading(VBoxContainer parent, string caption) => parent.AddChild(Title(caption, 13, Ui.Colour("text.accent")));
+    private void FinanceHeading(VBoxContainer parent, string caption) => SectionRule(parent, caption);
 
     private void FinanceRow(VBoxContainer parent, string caption, string key, string tip)
     {
-        var panel = new PanelContainer(); panel.AddThemeStyleboxOverride("panel", ShellRowStyle(_financeValues.Count % 2 == 0));
+        var panel = new PanelContainer(); panel.AddThemeStyleboxOverride("panel", ShellRowStyle(_financeValues.Count % 2 == 0, readOnly: true));
         panel.TooltipText = Ui.Tip(Tr(tip)); parent.AddChild(panel);
         var rows = PanelRows(panel, 7, 4, 2);
         rows.AddChild(WrappedUltimatumText(caption, 11));

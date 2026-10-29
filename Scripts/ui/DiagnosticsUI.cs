@@ -14,7 +14,9 @@ public partial class DealOrForceGame
 
     private void StartDiagnostics()
     {
-        if (!DiagnosticLogs.Start(ProjectSettings.GlobalizePath("user://logs")))
+        // The journal goes where the player's other files are, so `logs/` holds the engine log
+        // and these channels side by side instead of the two folders it used to be.
+        if (!DiagnosticLogs.Start(GamePaths.Logs))
         {
             if (DiagnosticLogs.LastFailure.Length > 0) GD.PushWarning("Diagnostic files unavailable: " + DiagnosticLogs.LastFailure);
             return;

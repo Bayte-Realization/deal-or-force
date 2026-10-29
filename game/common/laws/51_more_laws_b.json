@@ -1,0 +1,90 @@
+// Второй пакет законов, часть вторая: социальные гарантии, промышленность, труд, миграция.
+{
+  "welfare_universal_child_allowance": {
+    "name": "Universal child allowance",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "Every family with children receives it, working or not; the poorest households spend it, and the factories notice who is not in them.",
+    "modifiers": { "living_weekly": 0.0006, "recruitment_speed": 0.02, "output": -0.02 }
+  },
+  "welfare_school_meals": {
+    "name": "School meals",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "A hot dinner for every pupil, which is a health programme, an attendance programme and a farm subsidy at once.",
+    "modifiers": { "living_weekly": 0.0005, "militia_readiness": 0.02, "output": -0.01 }
+  },
+  "welfare_unemployment_insurance": {
+    "name": "Unemployment insurance",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "A wage for a year after a factory closes, which keeps men off the street and makes hiring them back slower.",
+    "modifiers": { "living_weekly": 0.0004, "radicalism_weekly": -0.0003, "construction_cost": 0.02 }
+  },
+
+  "industry_export_processing_zones": {
+    "name": "Export processing zones",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "Duty-free ports with their own rules: foreign plant arrives to assemble and stays for the shipping, not for the country.",
+    "modifiers": { "trade_reach": 0.06, "output": 0.03, "living_weekly": -0.0002 }
+  },
+  "industry_state_holding": {
+    "name": "State holding company",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "The state's factories are gathered under one board that can move money between them, and answers for all of them at once.",
+    "modifiers": { "output": 0.04, "construction_speed": 0.04, "credit_capacity": -0.03 }
+  },
+  "industry_small_firm_credit": {
+    "name": "Small-firm credit lines",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "Guaranteed loans for workshops under fifty hands, which is where most of the country actually works.",
+    "modifiers": { "output": 0.03, "construction_cost": -0.03, "borrowing_cost": 0.04 }
+  },
+
+  "labour_flexible_hours": {
+    "name": "Flexible hours",
+    "category": "Labour regulation",
+    "icon": "industry",
+    "description": "Shift patterns set by agreement rather than by statute, which suits the plant and wears out the household.",
+    "modifiers": { "output": 0.03, "living_weekly": -0.0002, "radicalism_weekly": 0.0002 }
+  },
+  "labour_union_councils": {
+    "name": "Union councils",
+    "category": "Labour regulation",
+    "icon": "industry",
+    "description": "Elected councils in every large works, with a real say over safety and pace and a real cost in time lost to meetings.",
+    "modifiers": { "living_weekly": 0.0005, "radicalism_weekly": -0.0004, "construction_speed": -0.03 }
+  },
+  "labour_safety_inspectorate": {
+    "name": "Safety inspectorate",
+    "category": "Labour regulation",
+    "icon": "industry",
+    "description": "An inspector with the right to stop a line, which costs output the week it is used and buys back the men it saves.",
+    "modifiers": { "living_weekly": 0.0004, "output": -0.02, "stability_weekly": 0.0003 }
+  },
+
+  "migration_guest_worker_quotas": {
+    "name": "Guest-worker quotas",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "Workers arrive for a fixed term and a fixed job, which fills the shortage and leaves the country with people who never quite belong.",
+    "modifiers": { "output": 0.03, "assimilation": -0.10, "movement_activity": 0.05 }
+  },
+  "migration_border_industrialisation": {
+    "name": "Border industrialisation",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "Plant, housing and roads along the frontier, so that the border has a population of its own that stays.",
+    "modifiers": { "settlement": 0.20, "construction_speed": 0.03, "assimilation": 0.05 }
+  },
+  "migration_humanitarian_corridors": {
+    "name": "Humanitarian corridors",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "A lawful route in for people who would otherwise arrive anyway, which the world praises and the border districts do not.",
+    "modifiers": { "living_weekly": 0.0003, "movement_activity": 0.08, "stability_weekly": -0.0002 }
+  }
+}

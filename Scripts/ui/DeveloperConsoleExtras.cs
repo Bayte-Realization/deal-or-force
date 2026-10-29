@@ -138,6 +138,15 @@ public partial class DealOrForceGame
     /// </summary>
     private string ConsoleLayout(string argument) => LayoutAudit.Report(this);
 
+    /// <summary>The same report the Settings button writes, for when the window is unusable.</summary>
+    private string ConsoleReport(string argument)
+    {
+        var path = CreateSupportReport();
+        return path.Length > 0
+            ? "Report written: " + path
+            : "A report could not be written: " + Simulation.SupportReport.LastFailure;
+    }
+
     /// <summary>Read or set the length of one simulation step, live.</summary>
     private string ConsoleStep(string argument)
     {
@@ -218,7 +227,7 @@ public partial class DealOrForceGame
         if (!_touchingGrass)
         {
             _touchingGrass = true;
-            GetTree().CreateTimer(8.0, true).Timeout += () => GetTree().Quit();
+            GetTree().CreateTimer(8.0, true).Timeout += () => ApplicationExit.Request(this);
         }
         return Simulation.ConsoleVerse.TouchGrass(Loc.Language) + "\n\n" +
                Loc.Get("The game closes in eight seconds. Nothing has been saved.");

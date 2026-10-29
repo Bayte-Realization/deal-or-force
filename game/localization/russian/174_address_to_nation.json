@@ -1,4 +1,3 @@
-// Обращения к нации (AddressToNation.cs).
 {
   "chronicle.address_to_nation": "Правительство страны {0} обращается к нации: «{2}».",
   "chronicle.promise_kept": "Правительство страны {0} сдержало обещание: «{2}».",
@@ -8,7 +7,6 @@
   "The country is listening: an address now lands with {0} of its full weight.": "Страна слушает: обращение сейчас подействует на {0} от полной силы.",
   "Promised: {0}. It falls due in {1} day(s).": "Обещано: «{0}». Срок наступит через {1} дн.",
   "stability {0}": "стабильность {0}",
-  "war support {0}": "поддержка войны {0}",
   "Broken, in {0} days: stability {1}{2}.": "Если не сдержать за {0} дн.: стабильность {1}{2}.",
   "There is no such address.": "Такого обращения нет.",
   "A movement speaks to its followers, not to a nation.": "Движение обращается к сторонникам, а не к нации.",

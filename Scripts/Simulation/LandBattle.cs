@@ -50,6 +50,10 @@ public sealed class LandBattle
     public readonly List<int> LastDefenderLine = new();
     public int AttackerReinforcements;
     public int DefenderReinforcements;
+    /// <summary>The manoeuvre each staff fought the last day with (CombatTactics), or "".
+    /// Written every round; read by the report. Empty in saves older than the tactics.</summary>
+    public string AttackerTactic = "";
+    public string DefenderTactic = "";
     public float RiverCrossingStrength;
     /// <summary>What each side's long-range forces - guns, aircraft, drones - contributed
     /// to this battle, in raw reach points. Written each round; shown in the report.</summary>

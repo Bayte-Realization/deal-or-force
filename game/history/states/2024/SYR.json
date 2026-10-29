@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Kurds, Druze and Assyrians by governorate, pre-2011 estimates.
 {
   // Al-Hasakah
   "sy_ha": {
     "population": 1530761,
     "urbanization": 0.09,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.4501, "kurdish": 0.4, "assyrian": 0.1, "bedouin": 0.0154, "druze_people": 0.0115, "turkmen_iraqi": 0.0115, "armenian": 0.0058, "adyghe": 0.0038, "palestinian": 0.0019 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.327, "Coal": 0.112, "Oil": 0.308, "IronOre": 0.097, "RareEarths": 0.042, "NaturalGas": 0.265, "Timber": 2.277, "Bauxite": 0.067, "Uranium": 0.007 }
   },
@@ -31,7 +32,7 @@
   "sy_hl": {
     "population": 5111439,
     "urbanization": 0.61,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.699, "kurdish": 0.15, "bedouin": 0.0378, "assyrian": 0.0283, "druze_people": 0.0283, "turkmen_iraqi": 0.0283, "armenian": 0.0142, "adyghe": 0.0094, "palestinian": 0.0047 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.271, "Coal": 0.478, "Oil": 0.73, "IronOre": 0.285, "RareEarths": 0.104, "NaturalGas": 0.63, "Timber": 3.112, "Bauxite": 0.139, "Uranium": 0.009 }
   },
@@ -39,7 +40,7 @@
   "sy_su": {
     "population": 1328455,
     "urbanization": 0.22,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.5104, "druze_people": 0.4, "bedouin": 0.0276, "assyrian": 0.0207, "turkmen_iraqi": 0.0207, "armenian": 0.0103, "adyghe": 0.0069, "palestinian": 0.0034 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.229, "Coal": 0.245, "Oil": 0.545, "IronOre": 0.151, "RareEarths": 0.03, "NaturalGas": 0.289, "Timber": 1.379, "Bauxite": 0.04, "Uranium": 0.005 }
   },
@@ -47,7 +48,7 @@
   "sy_dy": {
     "population": 429521,
     "urbanization": 0.97,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.8421, "bedouin": 0.0455, "druze_people": 0.0341, "turkmen_iraqi": 0.0341, "armenian": 0.0171, "adyghe": 0.0114, "kurdish": 0.01, "palestinian": 0.0057 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.641, "Coal": 0.214, "Oil": 0.665, "IronOre": 0.145, "RareEarths": 0.055, "NaturalGas": 0.576, "Timber": 0.865, "Bauxite": 0.14, "Uranium": 0.008 }
   },
@@ -55,7 +56,7 @@
   "sy_hm": {
     "population": 2701276,
     "urbanization": 0.54,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.814, "bedouin": 0.044, "assyrian": 0.033, "druze_people": 0.033, "turkmen_iraqi": 0.033, "armenian": 0.0165, "adyghe": 0.011, "kurdish": 0.01, "palestinian": 0.0055 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.374, "Coal": 0.276, "Oil": 0.425, "IronOre": 0.145, "RareEarths": 0.078, "NaturalGas": 0.775, "Timber": 1.502, "Bauxite": 0.057, "Uranium": 0.015 }
   },
@@ -63,7 +64,7 @@
   "sy_hi": {
     "population": 2378198,
     "urbanization": 0.49,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.814, "bedouin": 0.044, "assyrian": 0.033, "druze_people": 0.033, "turkmen_iraqi": 0.033, "armenian": 0.0165, "adyghe": 0.011, "kurdish": 0.01, "palestinian": 0.0055 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.141, "Coal": 0.262, "Oil": 0.777, "IronOre": 0.341, "RareEarths": 0.064, "NaturalGas": 0.462, "Timber": 0.946, "Bauxite": 0.068, "Uranium": 0.011 }
   },
@@ -71,7 +72,7 @@
   "sy_rd": {
     "population": 3296981,
     "urbanization": 0.82,
-    "cultures": { "arab_levantine": 0.74, "kurdish": 0.1, "bedouin": 0.04, "assyrian": 0.03, "druze_people": 0.03, "turkmen_iraqi": 0.03, "armenian": 0.015, "adyghe": 0.01, "palestinian": 0.005 },
+    "cultures": { "arab_levantine": 0.791, "kurdish": 0.05, "bedouin": 0.0428, "assyrian": 0.0321, "turkmen_iraqi": 0.0321, "druze_people": 0.02, "armenian": 0.016, "adyghe": 0.0107, "palestinian": 0.0053 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.369, "Coal": 0.136, "Oil": 0.291, "IronOre": 0.117, "RareEarths": 0.053, "NaturalGas": 0.201, "Timber": 1.176, "Bauxite": 0.071, "Uranium": 0.008 }
   }

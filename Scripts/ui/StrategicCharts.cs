@@ -91,6 +91,7 @@ public sealed partial class StrategicLineChart : Control
     {
         var font = ThemeDB.FallbackFont;
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
+        DrawLine(new Vector2(1, 1), new Vector2(Size.X - 1, 1), Ui.Colour("surface.edge_top"), 1f);
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
         DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
         DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, -1, 11, Ui.Colour("text.caption"));
@@ -116,6 +117,7 @@ public sealed partial class StrategicLineChart : Control
         const float captionHeight = 40f;
         _plot = new Rect2(58, 56, MathF.Max(40, Size.X - 74),
             MathF.Max(36, Size.Y - 64f - legendHeight - captionHeight));
+        DrawRect(_plot, Ui.Colour("surface.inset"), true);
         if (_days.Count == 0 || _series.Count == 0 || _series.All(series => series.Values.Count == 0))
         {
             DrawString(font, _plot.GetCenter(), "History will appear after the first simulation week.",
@@ -157,14 +159,29 @@ public sealed partial class StrategicLineChart : Control
                 Ui.Colour("text.caption"));
         }
 
+        var fillAlpha = _series.Count == 1 ? 0.14f : 0.07f;
         foreach (var series in _series)
         {
             var count = Math.Min(_days.Count, series.Values.Count);
+            var areaColor = new Color(series.Color.R, series.Color.G, series.Color.B, fillAlpha);
             for (var index = 1; index < count; index++)
             {
                 var before = Point(index - 1, count, series.Values[index - 1], minimum, maximum);
                 var after = Point(index, count, series.Values[index], minimum, maximum);
+                DrawColoredPolygon(new[]
+                {
+                    before,
+                    after,
+                    new Vector2(after.X, _plot.End.Y),
+                    new Vector2(before.X, _plot.End.Y)
+                }, areaColor);
                 DrawLine(before, after, series.Color, 2.2f, true);
+            }
+            if (count > 1)
+            {
+                var latest = Point(count - 1, count, series.Values[count - 1], minimum, maximum);
+                DrawCircle(latest, 4.5f, Ui.Colour("surface.inset"));
+                DrawCircle(latest, 3.0f, series.Color);
             }
             // One reading is not an empty chart. A three-pixel dot in a field this size reads as
             // nothing at all, so a lone value is drawn as what it is: a marker big enough to see,

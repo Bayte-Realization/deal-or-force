@@ -56,7 +56,7 @@ public partial class DealOrForceGame
         {
             Texture = Art("brand_logo_banner", "res://game/gfx/interface/brand_logo_banner.png"),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
-            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             CustomMinimumSize = new Vector2(0, 184),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             TooltipText = Ui.Tip(Tr("Deal or Force"))
@@ -76,7 +76,8 @@ public partial class DealOrForceGame
         rows.AddChild(_scenarioSummary);
 
         _modStatus = Title(_modLoader.StatusLine, 12, Ui.Colour("text.faint"));
-        _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: user://mods"));
+        _modStatus.TooltipText = Ui.Tip(Tr("Development mods: res://mods · installed mods: ") +
+                                        ProjectSettings.GlobalizePath("user://mods"));
         rows.AddChild(_modStatus);
 
         rows.AddChild(ActionButton("Singleplayer", OpenScenarioLibrary, 330, 46, true));
@@ -110,7 +111,7 @@ public partial class DealOrForceGame
         _languageButton = ActionButton(LanguageButtonLabel(), CycleLanguage, 330, 42);
         _languageButton.TooltipText = Ui.Tip(Tr("Cycle the interface language. Mods add their own by dropping localization/<language>.json into the mod folder."));
         rows.AddChild(_languageButton);
-        rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
+        rows.AddChild(ActionButton("Quit to desktop", () => ApplicationExit.Request(this), 330, 42));
 
         _navigationHint = Title("Right-drag to turn the globe · wheel to zoom · WASD to move.", 13,
             Ui.Colour("text.hint"));

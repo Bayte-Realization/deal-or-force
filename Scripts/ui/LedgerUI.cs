@@ -50,45 +50,48 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.ledger");
 
         var rows = PanelRows(panel, 22, 16, 9);
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        _ledgerTitle = Title("NATIONAL LEDGER", 25, Ui.Colour("text.accent"));
-        _ledgerTitle.TooltipText = Ui.Tip(Tr("A record, for any country in the world. Nothing on this screen changes " +
-                                   "anything: what you can decide is in State Affairs."));
-        _ledgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(_ledgerTitle);
-
         var playerView = ActionButton("Player nation", () =>
         {
             _ledgerViewedNationId = _campaign.Player.Id;
             RefreshLedger();
         }, 116, 32, true);
+        playerView.SetMeta("atlas_tab_button", true);
+        StyleButton(playerView, true);
         playerView.TooltipText = Ui.Tip(Tr("Return every chart to the country you currently control."));
-        header.AddChild(playerView);
         var selectedView = ActionButton("Map selection", () =>
         {
             _ledgerViewedNationId = (_selectedNation ?? _campaign.Player).Id;
             RefreshLedger();
         }, 124, 32);
+        selectedView.SetMeta("atlas_tab_button", true);
+        StyleButton(selectedView, false);
         selectedView.TooltipText = Ui.Tip(Tr("Compare the country most recently selected on the map. Policies remain read-only for foreign countries."));
-        header.AddChild(selectedView);
-        header.AddChild(HandbookButton("reports"));
-        header.AddChild(ActionButton("×", CloseLedger, 38, 32));
+        var toStateAffairs = ActionButton("State Affairs", () =>
+        {
+            CloseLedger();
+            OpenStateAffairs();
+        }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_state_affairs.png");
 
-        var tabs = new HFlowContainer();
-        tabs.AddThemeConstantOverride("h_separation", 6);
-        tabs.AddThemeConstantOverride("v_separation", 6);
-        rows.AddChild(tabs);
+        // A ledger is a document, so it opens like one: masthead, a sentence saying what the
+        // document is for, the controls that choose whose record is on the desk, then a rule.
+        var head = ScreenHeader(rows, "National ledger",
+            "A record of any country in the world. Nothing on this screen changes anything: what you can decide is in State Affairs.",
+            false, playerView, selectedView, toStateAffairs, HandbookButton("reports"), ActionButton("×", CloseLedger, 38, 32));
+        _ledgerTitle = HeaderTitle(head);
+
+        var tabs = TabStrip(rows, "LedgerTabs");
         foreach (var definition in CampaignUiCatalog.For("Ledger").Tabs)
         {
             var tab = definition.Id;
             var captured = tab;
-            var button = ActionButton(definition.Label, () =>
+            var button = TabButton(tabs, definition.Label, () =>
             {
                 _ledgerTab = captured;
                 RefreshLedger();
-            }, 116, 32, tab == "Overview");
+            }, 116, tab == "Overview");
+            button.SetMeta("atlas_tab_button", true);
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            StyleButton(button, tab == "Overview");
             button.TooltipText = Ui.Tip(Tr(tab switch
             {
                 "Overview" => "Who governs, what the country is doing, and what the week costs. Change any of it in State Affairs.",
@@ -100,7 +103,6 @@ public partial class DealOrForceGame
                 "Vulnerabilities" => "Import dependence and concentration of named suppliers.",
                 _ => "Compare this country with the largest powers in the current world."
             }));
-            tabs.AddChild(button);
             _ledgerTabButtons[tab] = button;
         }
 
@@ -241,7 +243,7 @@ public partial class DealOrForceGame
         _ledgerLineA.Visible = _ledgerLineB.Visible = _ledgerBarsA.Visible = _ledgerBarsB.Visible = known;
         if (!known)
         {
-            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName);
+            _ledgerTitle.Text = Simulation.Loc.Format("National ledger · {0}", nation.DisplayName);
             _ledgerSummary.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
             _ledgerSummary.Text = Tr("Fog of war — foreign internal statistics are unavailable. Choose Player nation.");
             _ledgerPolicyLine.Text = "";
@@ -249,7 +251,7 @@ public partial class DealOrForceGame
         }
         if (report)
         {
-            _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName);
+            _ledgerTitle.Text = Simulation.Loc.Format("National ledger · {0}", nation.DisplayName);
             _ledgerPolicyLine.Text = "";
             foreach (var (tab, button) in _ledgerTabButtons) ApplyLedgerButtonState(button, tab == _ledgerTab);
             RefreshStrategicReport(nation);
@@ -261,7 +263,7 @@ public partial class DealOrForceGame
         var gdpTrend = samples.Count > 1 && MathF.Abs(first.Gdp) > 0.001f ? nation.Gdp / first.Gdp - 1f : 0f;
         var populationTrend = samples.Count > 1 && first.PopulationMillions > 0.001f
             ? nation.Population / 1_000_000f / first.PopulationMillions - 1f : 0f;
-        _ledgerTitle.Text = Simulation.Loc.Format("NATIONAL LEDGER · {0}", nation.DisplayName.ToUpperInvariant());
+        _ledgerTitle.Text = Simulation.Loc.Format("National ledger · {0}", nation.DisplayName);
         _ledgerSummary.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
         _ledgerSummary.Text = Simulation.Loc.Format(
             "{0}  ·  GDP {1}  ·  population {2}  ·  market access {3:P0}  ·  " +

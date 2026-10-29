@@ -50,7 +50,7 @@ public static class PeaceTermCatalog
     private static readonly Dictionary<PeaceTerms, PeaceTermDefinition> Defaults = new()
     {
         [PeaceTerms.Ceasefire] = new(
-            "A one-year armistice; all forces return to the pre-war control map.",
+            "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
             0f, 62f, -0.45f, 30, 50f),
         [PeaceTerms.WhitePeace] = new(
             "Pre-war borders and a five-year truce, with no victor or indemnity.",
@@ -192,26 +192,46 @@ public static class PeaceNegotiation
         penalty = Math.Clamp(penalty, 0f, 100f);
 
         var duration = campaign.ElapsedDays - war.StartedDay;
-        var stalemateDiscount = 0f;
-        if (duration > 365)
+        // How much the war's own length and exhaustion discount the resolve - pure arithmetic,
+        // now in Scripts/Rules/PeaceRules.fs and called through the same hook as the peace graph
+        // rules. The managed form stays here as the fallback the differential harness compares
+        // against, so the two can never drift apart unnoticed.
+        var weariness = WarWeariness.Weariness(campaign, war);
+        var statusQuo = terms == PeaceTerms.StatusQuo;
+        var responderOccupied = 0f;
+        if (statusQuo)
         {
-            var years = (duration - 365f) / 365f;
-            stalemateDiscount = terms == PeaceTerms.StatusQuo ? MathF.Min(0.85f, years * 0.35f) : MathF.Min(0.60f, years * 0.20f);
+            var other = war.IsAttacking(responder.Id) ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
+            responderOccupied = other;
         }
-        if (war.Stalled)
-            stalemateDiscount = MathF.Max(stalemateDiscount, terms == PeaceTerms.StatusQuo ? 0.65f : 0.40f);
-
-        var wearinessDiscount = WarWeariness.Weariness(campaign, war) / 100f * 0.5f;
-        stalemateDiscount = MathF.Min(0.90f, stalemateDiscount + wearinessDiscount);
-
-        if (terms == PeaceTerms.StatusQuo)
-        {
-            var responderOccupied = war.IsAttacking(responder.Id) ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
-            if (responderOccupied > 0.02f)
-                stalemateDiscount = MathF.Max(stalemateDiscount, 0.50f + MathF.Min(0.40f, responderOccupied));
-        }
+        var stalemateDiscount = PeaceRulesHook.TryStalemate(duration, statusQuo, war.Stalled,
+            weariness, responderOccupied, out var fromRules)
+            ? fromRules
+            : ManagedStalemateDiscount(duration, statusQuo, war.Stalled, weariness, responderOccupied);
 
         return MathF.Max(0f, penalty * (1f - stalemateDiscount));
+    }
+
+    /// <summary>
+    /// The managed form of the stalemate discount: what the game runs when the F# rules library
+    /// did not load, and the oracle the differential test compares the F# against.
+    /// </summary>
+    internal static float ManagedStalemateDiscount(int durationDays, bool statusQuo, bool stalled,
+        float weariness, float responderOccupied)
+    {
+        var stalemateDiscount = 0f;
+        if (durationDays > 365)
+        {
+            var years = (durationDays - 365f) / 365f;
+            stalemateDiscount = statusQuo ? MathF.Min(0.85f, years * 0.35f) : MathF.Min(0.60f, years * 0.20f);
+        }
+        if (stalled)
+            stalemateDiscount = MathF.Max(stalemateDiscount, statusQuo ? 0.65f : 0.40f);
+        var wearinessDiscount = weariness / 100f * 0.5f;
+        stalemateDiscount = MathF.Min(0.90f, stalemateDiscount + wearinessDiscount);
+        if (statusQuo && responderOccupied > 0.02f)
+            stalemateDiscount = MathF.Max(stalemateDiscount, 0.50f + MathF.Min(0.40f, responderOccupied));
+        return MathF.Max(0f, stalemateDiscount);
     }
 
     public static string BlockReason(Campaign campaign, StrategicWar war, int nationId, PeaceTerms terms)
@@ -257,11 +277,19 @@ public static class PeaceNegotiation
         war.LastPeaceProposalDay = campaign.ElapsedDays;
         if (block.Length > 0) return;
 
+        // A ceasefire is an armistice on the line - Korea 1953, Karabakh 1994, Minsk: the troops
+        // stay where they stand and no border moves. It used to hand every advance back, so a
+        // winning Russia signed away all it held because a ceasefire was easy to accept. What a
+        // side holds region by region stays held as a frozen conflict (LandArrangementSystem);
+        // the scraps of advances go back.
+        var armistice = terms == PeaceTerms.Ceasefire && campaign.FeatureEnabled("land_arrangements")
+            ? LandArrangementSystem.FreezeLine(campaign, war) : null;
         if ((terms == PeaceTerms.Ceasefire || terms == PeaceTerms.WhitePeace || terms == PeaceTerms.WarReparations ||
              terms == PeaceTerms.TradeConcessions || terms == PeaceTerms.DemilitarizedSettlement) &&
             campaign.ProvinceController is not null)
             foreach (var pair in war.OriginalController)
-                campaign.SetProvinceController(pair.Key, pair.Value);
+                if (armistice is null || !armistice.Contains(campaign.ProvinceMap.ProvinceToState[pair.Key]))
+                    campaign.SetProvinceController(pair.Key, pair.Value);
 
         if (terms is PeaceTerms.WarReparations or PeaceTerms.TradeConcessions)
         {
@@ -404,7 +432,7 @@ public static class PeaceNegotiation
         Factions.SettleCivilWarSurvivors(campaign, war);
         war.PeaceSummary = terms switch
         {
-            PeaceTerms.Ceasefire => "A one-year ceasefire restored the pre-war control map.",
+            PeaceTerms.Ceasefire => "An armistice froze the line: each side keeps the regions it holds, and no border moves.",
             PeaceTerms.WhitePeace => "White peace restored the pre-war control map.",
             PeaceTerms.WarReparations => $"Pre-war borders were restored and ${war.Reparations:0.00}B in reparations changed hands.",
             PeaceTerms.TradeConcessions => $"Pre-war borders were restored; a trade agreement and ${war.Reparations:0.00}B concession were imposed.",

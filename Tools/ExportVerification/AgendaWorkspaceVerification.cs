@@ -90,7 +90,7 @@ public partial class ExportVerification
                     Check(reason == expected, "agenda refusal is localised in " + language);
                 }
                 else if (language == "russian")
-                    Check((game.FindChild("AgendaTitle", true, false) as Label)?.Text == "Дивиденд мира",
+                    Check((game.FindChild("AgendaTitle", true, false) as Label)?.Text == Loc.Get("The peace dividend"),
                         "agenda Russian goal title has no encoding corruption");
                 await Capture("agenda-" + (index == 1 ? "promises-" : "goals-") + language);
             }

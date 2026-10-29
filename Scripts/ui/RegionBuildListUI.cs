@@ -143,7 +143,7 @@ public partial class DealOrForceGame
 
         var player = _campaign.Player;
         var running = _campaign.Construction.Count(project => project.NationId == player.Id);
-        var limit = _campaign.Defines.MaxConstructionProjects;
+        var limit = ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects);
         foreach (var kind in BuildingCatalog.All.OrderBy(kind => Tr(BuildingCatalog.Get(kind).Name), StringComparer.CurrentCulture))
         {
             var definition = BuildingCatalog.Get(kind);
@@ -154,7 +154,7 @@ public partial class DealOrForceGame
             var refusal = Waterfront.Refusal(_campaign, state.MapIndex, kind);
             if (refusal.Length == 0 && running >= limit)
                 refusal = Simulation.Loc.Format("The national construction limit is reached: {0} projects are under way.", running);
-            if (refusal.Length == 0 && player.Treasury < MathF.Min(0.05f, definition.Cost))
+            if (refusal.Length == 0 && player.Treasury < MathF.Min(0.05f, ConstructionCost.Of(_campaign, player, kind)))
                 refusal = Tr("The treasury cannot start it.");
 
             var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
@@ -183,7 +183,7 @@ public partial class DealOrForceGame
             row.AddChild(build);
 
             var tip = Tr(definition.Name) + "\n" + Simulation.Loc.Get(definition.Description) + "\n\n" +
-                      Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(definition.Cost), definition.Days) +
+                      Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days) +
                       "\n" + Simulation.Loc.Format("In this region: {0} built, {1} under way.", built, underway);
             var effects = BuildingEffects(state, kind, definition);
             if (effects.Length > 0) tip += "\n\n" + effects;

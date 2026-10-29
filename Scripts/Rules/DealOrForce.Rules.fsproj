@@ -15,5 +15,13 @@
     <Compile Include="CatalogueWindow.fs" />
     <Compile Include="WarScoreRules.fs" />
     <Compile Include="PeaceRules.fs" />
+    <Compile Include="WarRhythmRules.fs" />
+    <Compile Include="EconomyRules.fs" />
+    <Compile Include="DemographyRules.fs" />
+    <Compile Include="DiplomacyRules.fs" />
+    <Compile Include="CombatTempoRules.fs" />
+    <Compile Include="DiplomaticActRules.fs" />
+    <Compile Include="PoliticalPolicyRules.fs" />
+    <Compile Include="PeaceLedger.fs" />
   </ItemGroup>
 </Project>

@@ -145,8 +145,9 @@ public static partial class CampaignIntel
             view.CombatContacts.UnionWith(battle.Attackers);
             view.CombatContacts.UnionWith(battle.Defenders);
         }
-        foreach (var army in c.Armies)
-            if (view.CombatContacts.Contains(army.Id)) Reveal(army.ProvinceId, 0);
+        if (view.CombatContacts.Count > 0)
+            foreach (var army in c.Armies)
+                if (view.CombatContacts.Contains(army.Id)) Reveal(army.ProvinceId, 0);
         // An invasion order alone is NOT reconnaissance across the world. The fleet
         // must actually have approached its beach, or combat must already have begun.
         foreach (var fleet in c.Fleets)

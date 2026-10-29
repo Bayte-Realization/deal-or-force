@@ -297,6 +297,35 @@ public partial class DealOrForceGame
                 }, 0, 34, iconPath: "res://game/gfx/interface/icons/icon_decisions.png"));
             }
         }
+        // A membership crisis: who is bargaining and until when, and the two levers - demanding
+        // better terms for ourselves, or buying the bargaining member back (OrganizationCrises).
+        if (OrganizationCrises.Active(_campaign))
+        {
+            if (o.CrisisMemberId >= 0 && _campaign.NationById(o.CrisisMemberId) is { } bargaining)
+                _conflictsPage.AddChild(Caption(Loc.Format("Membership crisis: {0} demands better terms; the vote on leaving is in {1} days.",
+                    bargaining.DisplayName, Math.Max(0, o.CrisisSinceDay + _campaign.Defines.OrganizationCrisisDays - _campaign.ElapsedDays))));
+            var demand = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "demand_terms" };
+            var demandWhy = InternationalOrganizations.Refusal(_campaign, demand);
+            var demandButton = ActionButton("Demand better terms", () => OrganizationAction(demand, "demand" + o.Id), 0, 34,
+                iconPath: "res://game/gfx/interface/icons/icon_decisions.png");
+            demandButton.Disabled = demandWhy.Length > 0;
+            demandButton.TooltipText = Ui.Tip(demandWhy.Length > 0 ? demandWhy : Tr(
+                "Open a membership crisis: for half a year the others may buy your country back with a concession paid to your treasury. If nobody does, nothing forces you out - leaving stays your choice."));
+            _conflictsPage.AddChild(demandButton);
+            if (o.CrisisMemberId >= 0 && o.CrisisMemberId != player.Id)
+            {
+                var concede = new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "concede" };
+                var concedeWhy = InternationalOrganizations.Refusal(_campaign, concede);
+                var cost = OrganizationCrises.ConcessionCost(_campaign, _campaign.NationById(o.CrisisMemberId));
+                var concedeButton = ActionButton(Loc.Format("Make a concession ({0})", Fmt.Money(cost)),
+                    () => OrganizationAction(concede, "concede" + o.Id + ":" + o.CrisisMemberId), 0, 34,
+                    iconPath: "res://game/gfx/interface/icons/icon_decisions.png");
+                concedeButton.Disabled = concedeWhy.Length > 0;
+                concedeButton.TooltipText = Ui.Tip(concedeWhy.Length > 0 ? concedeWhy : Tr(
+                    "Pay the bargaining member to stay: its sense of belonging rises for years and it thinks better of your country. The crisis ends."));
+                _conflictsPage.AddChild(concedeButton);
+            }
+        }
         _conflictsPage.AddChild(ActionButton("Leave organization", () => OrganizationAction(new OrganizationCommand {
             IssuerId = player.Id, OrganizationId = o.Id, Action = "leave" }, "leave" + o.Id), 0, 34));
     }

@@ -271,6 +271,8 @@ public static partial class AiStatecraft
     // two hundred and sixty distance tests and a linear search of a list of the same
     // length for each of them - was measured at a millisecond and a quarter per country in
     // the running game, which is most of what a campaign day cost.
+    private static Campaign _overseasCampaign;
+    private static int _overseasNationCount = -1;
     private static readonly Dictionary<int, (int Hulls, List<int> Targets)> OverseasCache = new();
 
     /// <summary>
@@ -285,6 +287,12 @@ public static partial class AiStatecraft
     /// </summary>
     private static IReadOnlyList<int> Reachable(Campaign campaign, Nation nation)
     {
+        if (!ReferenceEquals(_overseasCampaign, campaign) || _overseasNationCount != campaign.Nations.Count)
+        {
+            OverseasCache.Clear();
+            _overseasCampaign = campaign;
+            _overseasNationCount = campaign.Nations.Count;
+        }
         ReachableTargets.Clear();
         ReachableSeen.Clear();
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, nation.MapIndex))
@@ -463,7 +471,9 @@ public static partial class AiStatecraft
         // The weekly opinion pass has already refreshed this rival's intelligence estimate.
         using (SimProfiler.Measure("    dip:buy_peace"))
         if (worstRival is not null && worstOpinion <= defines.AiRivalryThreshold &&
-            CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is { NonAggressionPact: false } &&
+            nation.Treasury > 0.01f &&
+            CampaignDiplomacy.Peek(campaign, nation.Id, worstRival.Id) is { NonAggressionPact: false, Stance: not DiplomaticStance.AtWar } &&
+            Strength(campaign, nation) < CampaignIntel.EstimatedStrength(campaign, nation.Id, worstRival) &&
             ThreatPosture.ThreatOf(campaign, nation, worstRival) >= defines.AiBuyPeaceThreat &&
             (neighbours.Contains(worstRival.MapIndex) || CanStageWar(campaign, worstRival, nation)) &&
             BuyPeace(campaign, nation, worstRival))
@@ -875,6 +885,8 @@ public static partial class AiStatecraft
         if (!defines.AiUltimatumsBeforeWar) return false;
         if (Ultimatum.PendingBetween(campaign, nation.Id, target.Id)) return true;
         var cause = Statecraft.CasusBelli(campaign, nation, target);
+        // A territorial claim is still negotiable. Only an already refused demand (or
+        // another non-territorial cause) skips this last chance to settle without war.
         if (!string.IsNullOrEmpty(cause) && cause is not ("irredentism" or "reconquest")) return false;
         var key = "ultimatum/" + target.Id;
         if (nation.DecisionAvailableDay.GetValueOrDefault(key) > campaign.ElapsedDays) return false;
@@ -905,7 +917,11 @@ public static partial class AiStatecraft
             bestScore = score;
             best = state;
         }
-        if (best is null) { Count("ultimatum_no_region"); return false; }
+        if (best is null)
+        {
+            Count("ultimatum_no_region");
+            return TryAnnexUltimatum(campaign, nation, target, key);
+        }
 
         var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
         if (target.IsHuman)
@@ -933,6 +949,23 @@ public static partial class AiStatecraft
         Ultimatum.Resolve(campaign, nation, target, demand, assessment.Response);
         Count(assessment.Response == Ultimatum.Answer.Yield ? "ultimatum_yielded" : "ultimatum_refused");
         DiagnosticLogs.Write("ai", $"AI_ULTIMATUM {nation.Tag}->{target.Tag} region={best.Id} answer={assessment.Response}");
+        return true;
+    }
+
+    /// <summary>
+    /// One annexation, and only when the same assessment that answers a region would yield.
+    /// A human is never swallowed here.
+    /// </summary>
+    static bool TryAnnexUltimatum(Campaign campaign, Nation nation, Nation target, string key)
+    {
+        if (target.IsHuman) return false;
+        var demand = new Ultimatum.Demand { Annex = true };
+        var assessment = Ultimatum.Assess(campaign, nation, target, demand);
+        if (!assessment.Valid || assessment.Response != Ultimatum.Answer.Yield) return false;
+        nation.DecisionAvailableDay[key] = campaign.ElapsedDays + Math.Max(30, campaign.Defines.AiUltimatumIntervalDays);
+        Ultimatum.Resolve(campaign, nation, target, demand, Ultimatum.Answer.Yield);
+        Count("ultimatum_yielded");
+        DiagnosticLogs.Write("ai", $"AI_ULTIMATUM {nation.Tag}->{target.Tag} annex answer=Yield");
         return true;
     }
 
@@ -1417,11 +1450,8 @@ public static partial class AiStatecraft
         var theirs = CampaignIntel.EstimatedStrength(campaign, buyer.Id, seller);
         if (mine >= theirs) return false;
 
-        // A slice of the treasury, scaled to the gap: the wider the gulf, the larger the
-        // cheque - but never more than the country can spare and the table allows.
-        var gap = M.Clamp((theirs - mine) / M.Max(0.01f, theirs), 0f, 1f);
         var fiscal = AiFiscalPolicy.Assess(campaign, buyer, campaign.Defines.AiTreasuryFloor);
-        var offer = M.Clamp(buyer.Treasury * (0.1f + 0.4f * gap), 0f, fiscal.DiscretionaryCash);
+        var offer = Rules.DiplomacyRules.BuyPeaceOffer(buyer.Treasury, fiscal.DiscretionaryCash, mine, theirs);
         if (offer <= 0f) return false;
 
         var command = new ProposeDealCommand

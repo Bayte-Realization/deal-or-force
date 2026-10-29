@@ -69,16 +69,14 @@ public partial class DealOrForceGame
         var panel = TexturedPanel(_researchLayer);
         Ui.Place(panel, "modal.research");
         var rows = PanelRows(panel, 18, 14, 8);
-        var header = new HBoxContainer();
-        rows.AddChild(header);
-        var title = Title("Research", 25, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
         _researchFocus = ActionButton("Show current research", () => SelectResearchTechnology(_campaign.Player.CurrentResearch, true), 0, 32);
         _researchFocus.Name = "FocusCurrentResearch";
-        header.AddChild(_researchFocus);
-        header.AddChild(HandbookButton("research"));
-        header.AddChild(ActionButton("×", CloseResearchScreen, 38, 32));
+        // The head is the same head as the doctrine, policy and diplomacy workspaces: title in
+        // the display face, a sentence of purpose, the figures on the right, a rule under it.
+        ScreenHeader(rows, "Research",
+            "What the country is learning, what it will cost, and what is waiting behind it.",
+            false, _researchFocus, HandbookButton("research"),
+            ActionButton("×", CloseResearchScreen, 38, 32));
         _researchSummary = Title("", 14, Ui.Colour("text.body"));
         _researchSummary.Name = "ResearchSummary";
         rows.AddChild(_researchSummary);
@@ -92,9 +90,13 @@ public partial class DealOrForceGame
         toolbar.AddChild(_researchSearch);
         _researchCatalogView = ActionButton("Catalogue", () => SetResearchView(false), 112, 32, true);
         _researchCatalogView.Name = "ResearchCatalogueView";
+        _researchCatalogView.SetMeta("atlas_tab_button", true);
+        StyleButton(_researchCatalogView, true);
         toolbar.AddChild(_researchCatalogView);
         _researchGraphView = ActionButton("Dependencies", () => SetResearchView(true), 112, 32);
         _researchGraphView.Name = "ResearchDependencyView";
+        _researchGraphView.SetMeta("atlas_tab_button", true);
+        StyleButton(_researchGraphView, false);
         toolbar.AddChild(_researchGraphView);
         // Zoom by button as well as by gesture: Alt with the wheel is the window manager's on some
         // layouts, and a tree with no hands on it is a tree nobody reads (TreeViewport).

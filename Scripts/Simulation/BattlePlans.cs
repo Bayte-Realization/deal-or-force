@@ -65,6 +65,11 @@ public enum PlanCohesion
 /// it, so a player can paint in any direction, in several strokes, and correct a stroke
 /// by painting over it with the right mouse button.
 /// </summary>
+public sealed class OffensivePhase
+{
+    public readonly List<int> ObjectiveSequence = new();
+}
+
 public sealed class DrawnFrontLine
 {
     public int Id;
@@ -84,6 +89,9 @@ public sealed class DrawnFrontLine
     // Offensive intent: the departure front is distinct from the ordered destination stroke.
     public readonly HashSet<int> SourceProvinces = new();
     public readonly List<int> ObjectiveSequence = new();
+    public readonly List<OffensivePhase> OffensivePhases = new();
+    public int ActiveOffensivePhase;
+    public int OffensiveRegroupDay = -1;
     public readonly List<int> DefensiveSequence = new();
     public readonly Dictionary<int, int> Objectives = new();
 
@@ -415,6 +423,8 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
     public IReadOnlyList<int> ArmyIds { get; init; } = Array.Empty<int>();
     public int BorderNationId { get; init; } = -1;
     public int EditLineId { get; init; } = -1;
+    public bool AppendOffensivePhase { get; init; }
+    public int EditOffensivePhase { get; init; } = -1;
     public bool WholeBorder { get; init; }
     public float StartLatitude { get; init; }
     public float StartLongitude { get; init; }

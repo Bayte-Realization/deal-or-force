@@ -255,6 +255,7 @@ public static class Program
             return WorldSoakReport.Run(campaign, days, seed, output);
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
         // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
         // added up across every neighbouring pair in the world, term by term (AiAppetiteReport).
@@ -328,8 +329,7 @@ public static class Program
         var replayAt = Array.IndexOf(args, "--replay");
         if (replayAt >= 0)
         {
-            var root = replayAt + 1 < args.Length ? args[replayAt + 1]
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Deal or Force", "save games");
+            var root = replayAt + 1 < args.Length ? args[replayAt + 1] : DefaultSaveRoot();
             var slot = replayAt + 2 < args.Length ? args[replayAt + 2] : "autosave";
             var length = replayAt + 3 < args.Length && int.TryParse(args[replayAt + 3], out var replayDays) ? replayDays : 30;
             return ReplaySave(root, slot, length);
@@ -545,8 +545,154 @@ public static class Program
             return 0;
         }
 
+        // `--mobility <days> [every]`: how much fronts move, all wars together - provinces that changed
+        // controller in the period, wars with land fighting and how many of those stood still for
+        // ninety days, battles ended and how they ended. "Static" answered with numbers.
+        var mobilityAt = Array.IndexOf(args, "--mobility");
+        if (mobilityAt >= 0)
+        {
+            var mobilityDays = mobilityAt + 1 < args.Length && int.TryParse(args[mobilityAt + 1], out var mdays) ? mdays : 365;
+            var mobilityEvery = mobilityAt + 2 < args.Length && int.TryParse(args[mobilityAt + 2], out var mevery) ? mevery : 30;
+            campaign.IsPaused = false;
+            var previous = (ushort[])campaign.ProvinceController.Clone();
+            var lastMove = new Dictionary<int, int>();
+            var seenBattles = new HashSet<int>();
+            var movedTotal = 0;
+            Warfare.OutcomeTally.Clear();
+            for (var day = 1; day <= mobilityDays; day++)
+            {
+                campaign.TickDay();
+                var control = campaign.ProvinceController;
+                for (var p = 1; p < control.Length && p < previous.Length; p++)
+                {
+                    if (control[p] == previous[p]) continue;
+                    movedTotal++;
+                    foreach (var war in campaign.Wars)
+                        if (!war.Ended && war.OriginalController.ContainsKey(p)) lastMove[war.Id] = day;
+                    previous[p] = control[p];
+                }
+                if (day % mobilityEvery != 0 && day != mobilityDays) continue;
+                var fighting = campaign.Wars.Where(w => !w.Ended && campaign.Armies.Any(a => a.AssignedWarId == w.Id)).ToList();
+                var stalled = fighting.Count(w => day - lastMove.GetValueOrDefault(w.Id, 0) >= 90 &&
+                                                  campaign.ElapsedDays - w.StartedDay >= 90);
+                var ended = campaign.Battles.Where(b => b.Ended && seenBattles.Add(b.Id)).ToList();
+                var attackerWins = ended.Count(b => b.WinnerId == b.AttackerId);
+                Console.WriteLine($"FRONTS day {campaign.ElapsedDays}: provinces changed hands {movedTotal:N0} in the period, " +
+                                  $"wars with armies in the field {fighting.Count} ({stalled} still for 90+ days), " +
+                                  $"battles ended {ended.Count} (attacker won {attackerWins}), open {campaign.Battles.Count(b => !b.Ended)}; " +
+                                  "outcomes " + string.Join(", ", Warfare.OutcomeTally.OrderByDescending(p => p.Value).Take(6).Select(p => $"{p.Key} {p.Value}")));
+                // The largest war by divisions, side by side: who is on the advance, in battle,
+                // resting after a spent attack, marching, and how ready they are.
+                var largest = fighting.OrderByDescending(w => campaign.Armies.Count(a => a.AssignedWarId == w.Id)).FirstOrDefault();
+                if (largest is not null)
+                    foreach (var sideId in new[] { largest.AttackerId, largest.DefenderId })
+                    {
+                        var side = campaign.Armies.Where(a => a.AssignedWarId == largest.Id && a.NationId == sideId && a.TemplateId != MilitiaCore.TemplateId).ToList();
+                        if (side.Count == 0) continue;
+                        Console.WriteLine($"   {campaign.NationById(sideId)?.Tag} in {largest.Name}: {side.Count} div, " +
+                                          $"advance {side.Count(a => a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead)}, " +
+                                          $"defend {side.Count(a => a.OrderKind == ArmyOrder.DefendFront)}, reserve {side.Count(a => a.OrderKind == ArmyOrder.ReserveFront)}, " +
+                                          $"in battle {side.Count(a => a.InBattle)}, resting {side.Count(a => a.ReadyDay > campaign.ElapsedDays)}, " +
+                                          $"marching {side.Count(a => a.Route.Count > 0)}, org {side.Average(a => a.Organisation):0.00}, " +
+                                          $"planning {side.Average(a => a.Planning):0.00}, readiness {FrontPlanner.Readiness(campaign, largest, campaign.NationById(sideId)):0.00}");
+                    }
+                movedTotal = 0;
+                Warfare.OutcomeTally.Clear();
+            }
+            return 0;
+        }
+
+        // `--growth <days> [every]`: whether the world grows richer - world output, people and output
+        // per head, year by year, with the ten largest economies and the mean secular drift. Run it
+        // with --define SecularFrontierGrowth=0 for the world as it was before the frontier moved.
+        var growthAt = Array.IndexOf(args, "--growth");
+        if (growthAt >= 0)
+        {
+            var growthDays = growthAt + 1 < args.Length && int.TryParse(args[growthAt + 1], out var gd) ? gd : 3650;
+            var growthEvery = growthAt + 2 < args.Length && int.TryParse(args[growthAt + 2], out var ge) ? ge : 365;
+            campaign.IsPaused = false;
+            double WorldGdp() => campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp);
+            long WorldPeople() => campaign.Nations.Where(n => n.Population > 0).Sum(n => n.Population);
+            var startGdp = WorldGdp();
+            var startPeople = WorldPeople();
+            void Report()
+            {
+                var gdp = WorldGdp();
+                var people = WorldPeople();
+                var years = MathF.Max(1f / 365f, campaign.ElapsedDays / 365f);
+                var perHead = gdp * 1e9 / Math.Max(1, people);
+                var startPerHead = startGdp * 1e9 / Math.Max(1, startPeople);
+                var alive = campaign.Nations.Where(n => n.Population > 0 && n.Gdp > 0f).ToList();
+                Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
+                                  $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
+                                  $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                // How much of its workforce each country's buildings ask for (MarketSystem.CapitalReturns).
+                var intensities = alive.Select(n => (n.Tag, Jobs: campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded),
+                        Workers: campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)))
+                    .Where(x => x.Workers > 0.01f).Select(x => (x.Tag, Ratio: x.Jobs / x.Workers)).OrderByDescending(x => x.Ratio).ToList();
+                Console.WriteLine($"   jobs per worker: median {intensities[intensities.Count / 2].Ratio:0.00}, " +
+                                  $"{alive.Count(n => n.CapitalIntensityReference > 0f && campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded) / Math.Max(0.01f, campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)) > n.CapitalIntensityReference * campaign.Defines.CapitalDeepeningHeadroom)} past their headroom; highest " +
+                                  string.Join(", ", intensities.Take(12).Select(x => $"{x.Tag} {x.Ratio:0.00}")));
+                Console.WriteLine("   top: " + string.Join(", ", alive.OrderByDescending(n => n.Gdp).Take(10)
+                    .Select(n => $"{n.Tag} {n.Gdp:N0} ({n.Gdp * 1e9 / Math.Max(1, n.Population):N0}/head)")));
+                // What a country's output is made of: GDP = gross output x 52 x output scale, the
+                // scale drifting with the secular cycle and the output with productivity and work.
+                foreach (var tag in (Environment.GetEnvironmentVariable("DOF_GROWTH_TAGS") ?? "USA,CHN,IND,ITA,FRA,DEU,JPN,RUS")
+                             .Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var n = campaign.NationByTag(tag.Trim());
+                    if (n is null || n.Population <= 0) continue;
+                    Console.WriteLine($"   {n.Tag}: gdp {n.Gdp:N0}, gross {n.GrossOutput:0.###}, scale {n.OutputScale:0.####}, " +
+                                      $"real {n.Market.Values.Sum(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice):0.###}, " +
+                                      $"productivity {n.Productivity:0.###}, employed {n.EmployedShare:P0} (jobs {campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded):0.0}M of {campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable):0.0}M, returns {MarketSystem.CapitalReturns(campaign, n, campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded), campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)):0.00}), drift {n.SecularDrift * 100:+0.00;-0.00}%, " +
+                                      $"pop {n.Population / 1e6:0.0}M, stab {n.Stability:0.00}, hc {n.HumanCapital:0.00}, debt {n.DebtCondition}, " +
+                                      $"sites {campaign.Construction.Count(p => p.NationId == n.Id)}/{ConstructionCost.Limit(campaign, n, campaign.Defines.MaxConstructionProjects)}, " +
+                                      $"treasury {n.Treasury:0.0}, capacity {n.ConstructionCapacity:0.00}, literacy {n.Literacy:0.00}, sol {n.StandardOfLiving:0.00}, " +
+                                      $"price level {ConstructionCost.PriceLevel(campaign, n):0.00}");
+                    // What its real output is made of, and what it has built.
+                    Console.WriteLine("      goods: " + string.Join(", ", n.Market.Values
+                        .OrderByDescending(q => q.Production * CommodityCatalog.Get(q.Commodity).BasePrice).Take(6)
+                        .Select(q => $"{q.Commodity} {q.Production * CommodityCatalog.Get(q.Commodity).BasePrice:0.0} (sat {q.Satisfaction:P0}, price x{q.Price / MathF.Max(0.01f, CommodityCatalog.Get(q.Commodity).BasePrice):0.00})")));
+                    Console.WriteLine("      buildings: " + string.Join(", ", campaign.StatesOf(n).SelectMany(s => s.Buildings)
+                        .GroupBy(p => p.Key).Select(g => (g.Key, Count: g.Sum(p => p.Value))).OrderByDescending(g => g.Count)
+                        .Select(g => $"{g.Key} {g.Count}")) + $"; output factor {NationalModifiers.Factor(n, "output"):0.00}");
+                }
+            }
+            void Tallies()
+            {
+                // Why the AI did or did not build this year, summed over every country.
+                var built = AiStatecraft.Tally.Where(p => p.Key.StartsWith("construction", StringComparison.Ordinal))
+                    .OrderByDescending(p => p.Value).Select(p => $"{p.Key} {p.Value}");
+                Console.WriteLine("   construction tally: " + string.Join(", ", built));
+                AiStatecraft.Tally.Clear();
+            }
+            Report();
+            for (var day = 1; day <= growthDays; day++)
+            {
+                campaign.TickDay();
+                if (day % growthEvery == 0 || day == growthDays) { Report(); Tallies(); }
+            }
+            return 0;
+        }
+
         // `--pulse <days>`: how lively the world is - every kind of chronicle entry, counted year by
         // year, with the wars between states begun and the largest war of each year.
+        // `--civil-war-probe <days>`: plays the days, then lists the twenty least stable countries with
+        // why each can or cannot have a civil war today, and the weekly chance.
+        var probeAt = Array.IndexOf(args, "--civil-war-probe");
+        if (probeAt >= 0)
+        {
+            var probeDays = probeAt + 1 < args.Length && int.TryParse(args[probeAt + 1], out var pdays) ? pdays : 365;
+            campaign.IsPaused = false;
+            for (var day = 0; day < probeDays; day++) campaign.TickDay();
+            Console.WriteLine($"CIVIL WAR PROBE day {campaign.ElapsedDays}: starts in the last year {CivilWarOutbreak.StartsInLastYear(campaign)} of {campaign.Defines.CivilWarWorldPerYear}");
+            foreach (var nation in campaign.Nations.Where(n => n.Movement is null && n.Population > 0 && campaign.StatesOf(n).Length > 0)
+                         .OrderBy(n => n.Stability).Take(20))
+                Console.WriteLine($"  {nation.Tag} stability {nation.Stability:0.00} regions {campaign.StatesOf(nation).Length} " +
+                                  $"chance {CivilWarOutbreak.Chance(campaign, nation):0.0000} last {nation.LastCivilWarDay}: " +
+                                  $"{CivilWarOutbreak.EligibilityReason(campaign, nation)}");
+            return 0;
+        }
         var pulseAt = Array.IndexOf(args, "--pulse");
         if (pulseAt >= 0)
         {
@@ -558,6 +704,7 @@ public static class Program
             long covertSeen = 0;
             var covert = new Dictionary<string, int>();
             var largest = 0;
+            var bornFrom = campaign.Nations.Count;
             for (var day = 1; day <= pulseDays; day++)
             {
                 campaign.TickDay();
@@ -586,6 +733,31 @@ public static class Program
             }
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            // Leases and troops in without a war: what stands now and what happened on the way.
+            Console.WriteLine($"PULSE land: leased={LandArrangementSystem.Leased} entered={LandArrangementSystem.Entered} " +
+                              $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
+                              $"withdrew={LandArrangementSystem.Withdrew} republics={LandArrangementSystem.Republics}; passed over: " + string.Join(" ", LandArrangementSystem.Passed.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) + "; standing: " + string.Join(", ", campaign.LandArrangements.Select(a =>
+                                  $"{a.Kind} {campaign.NationById(a.HolderId)?.Tag} in {LandArrangementSystem.RegionNames(campaign, a)} ({campaign.NationById(a.OwnerId)?.Tag})")));
+            var treasuries = campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f && n.Population > 0)
+                .OrderByDescending(n => n.Gdp).Take(20).Select(n => n.Treasury / n.Gdp).OrderBy(x => x).ToList();
+            Console.WriteLine($"PULSE treasury: crises={TreasuryDynamics.Crises} contagions={TreasuryDynamics.Contagions} " +
+                              $"disasters={TreasuryDynamics.Disasters} pandemics={TreasuryDynamics.Pandemics} spent={TreasuryDynamics.Spent:0} " +
+                              $"leaked={TreasuryDynamics.Leaked:0} eroded={TreasuryDynamics.Eroded:0} leverage={campaign.WorldLeverage:0.00}; " +
+                              $"top-20 treasury/GDP min {treasuries.FirstOrDefault():0.00} median {treasuries.ElementAtOrDefault(treasuries.Count / 2):0.00} max {treasuries.LastOrDefault():0.00}; " +
+                              string.Join(", ", campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f).OrderByDescending(n => n.Gdp).Take(8)
+                                  .Select(n => $"{n.Tag} {n.Treasury:0}/{n.Gdp:0}")));
+            Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
+                .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
+            foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
+            // The countries the run gave birth to, as the player would read them on the map: the
+            // test of whether new states carry names worth reading.
+            foreach (var born in campaign.Nations.Skip(bornFrom))
+                Console.WriteLine($"PULSE born {born.Tag} \"{born.DisplayName}\" from {campaign.NationById(born.SecededFromId)?.Tag ?? "-"} " +
+                                  $"people {string.Join("/", born.FoundedCultures.Take(2))} regions {campaign.StatesOf(born).Length}" +
+                                  (born.Movement is not null ? " movement" : ""));
+            Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
+            foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
+                Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");
             return 0;
         }
 
@@ -1402,6 +1574,46 @@ public static class Program
             Console.WriteLine($"Steps: {steps.Count:N0} of {campaign.TickHours}h; median {At(0.5):0.00} ms, p95 {At(0.95):0.00}, " +
                               $"p99 {At(0.99):0.00}, worst {sorted[^1]:0.0}; worst {frame} steps together (a frame at the top speed) {worstFrame:0.0} ms.");
         }
+        // And what a frame feels with smooth time on, which is how the game runs: the simulation
+        // given its budget a frame (Campaign.StepFor) for thirty more days. A frame's cost is the
+        // budget plus the one stage it could not cut short - the number that is a hitch.
+        {
+            var budgetMs = Math.Max(1.0, campaign.Defines.FrameSimulationBudgetMs);
+            var frames = new List<double>();
+            var frameClock = Stopwatch.StartNew();
+            var stopAt = campaign.ElapsedDays + 30;
+            while (campaign.ElapsedDays < stopAt)
+            {
+                frameClock.Restart();
+                campaign.StepFor(budgetMs);
+                frames.Add(frameClock.Elapsed.TotalMilliseconds);
+            }
+            var sortedFrames = frames.OrderBy(ms => ms).ToList();
+            double FrameAt(double share) => sortedFrames[Math.Min(sortedFrames.Count - 1, (int)(sortedFrames.Count * share))];
+            Console.WriteLine($"Frames with smooth time ({budgetMs:0} ms budget, 30 days): {frames.Count:N0}; median {FrameAt(0.5):0.00} ms, " +
+                              $"p99 {FrameAt(0.99):0.00}, p99.9 {FrameAt(0.999):0.00}, worst {sortedFrames[^1]:0.0}; " +
+                              $"{frames.Count(ms => ms > 33.3):N0} over 33 ms.");
+            // The indivisible pieces themselves: one stage a call, named by what the profiler
+            // counted during it - the list an optimisation of hitches works down.
+            var pieces = new List<(double Ms, int Day, string Parts)>();
+            var mark = new Dictionary<string, double>();
+            var pieceStop = campaign.ElapsedDays + 30;
+            while (campaign.ElapsedDays < pieceStop)
+            {
+                mark.Clear();
+                foreach (var sample in SimProfiler.All) mark[sample.Name] = sample.TotalMilliseconds;
+                frameClock.Restart();
+                campaign.StepFor(0.0001);
+                var ms = frameClock.Elapsed.TotalMilliseconds;
+                if (ms < 15) continue;
+                var parts = string.Join(", ", SimProfiler.All
+                    .Select(sample => (Name: sample.Name.Trim(), Ms: sample.TotalMilliseconds - mark.GetValueOrDefault(sample.Name)))
+                    .Where(part => part.Ms >= 2.0).OrderByDescending(part => part.Ms).Take(5).Select(part => $"{part.Name} {part.Ms:0}"));
+                pieces.Add((ms, campaign.ElapsedDays, parts));
+            }
+            foreach (var (ms, day, parts) in pieces.OrderByDescending(piece => piece.Ms).Take(10))
+                Console.WriteLine($"  indivisible {ms:0.0} ms on day {day}: {parts}");
+        }
         Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
                           $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
                           $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +
@@ -1843,9 +2055,31 @@ public static class Program
         var trace = new List<int>();
         var ukraineIndex = campaign.NationByTag("UKR")?.MapIndex ?? -1;
         var traceFront = Environment.GetEnvironmentVariable("DOF_TRACE_FRONT") == "1";
+        var ukraineId = campaign.NationByTag("UKR")?.Id ?? -1;
+        long seenEntry = 0;
+        var lastHeld = ukraineIndex >= 0 ? HeldBy(campaign, ukraineIndex) : 0;
         for (var day = 0; day < days; day++)
         {
             campaign.TickDay();
+            if (traceFront && ukraineIndex >= 0)
+            {
+                // What happened to Ukraine today, and any day its holding jumps: a country that
+                // lost everything and came back with more than it started with is a peace or a
+                // restoration somebody has to be able to name.
+                var entries = campaign.Chronicle.Entries;
+                for (var i = entries.Count - 1; i >= 0 && entries[i].Sequence > seenEntry; i--)
+                {
+                    var e = entries[i];
+                    if (e.ActorId == ukraineId || e.TargetId == ukraineId)
+                        Console.WriteLine($"  UKR day {e.Day}: {e.Kind} {e.ActorName} -> {e.TargetName} {e.Subject} {e.Place}");
+                }
+                if (entries.Count > 0) seenEntry = Math.Max(seenEntry, entries[^1].Sequence);
+                var held = HeldBy(campaign, ukraineIndex);
+                if (Math.Abs(held - lastHeld) >= 20)
+                    Console.WriteLine($"  UKR day {day + 1}: holding {lastHeld} -> {held}, wars open: " +
+                        string.Join("; ", campaign.Wars.Where(w => !w.Ended && w.Involves(ukraineId)).Select(w => w.Name)));
+                lastHeld = held;
+            }
             if (day % 15 == 0 && ukraineIndex >= 0 && campaign.ProvinceController is not null)
                 trace.Add(HeldBy(campaign, ukraineIndex));
             if (traceFront && day % 30 == 0) TraceFront(campaign, day);
@@ -5052,8 +5286,13 @@ public static class Program
         }
 
         var cost = ledger.Cost(written);
-        if (cost > shaping)
-            return $"the treaty costs {cost:0.00} against a budget of {shaping:0.00}";
+        // Ground the army holds and joins to the country is kept whatever this test's budget is
+        // (PeaceShape.KeepHeldConquest), and the ledger prices it at no more than
+        // Budget x AiPeaceBudgetShare - which is the real game's own treaty budget. The shaping
+        // budget above is an artificial one and can be smaller than that ceiling.
+        var heldCeiling = ledger.Budget * Math.Clamp(campaign.Defines.AiPeaceBudgetShare, 0.05f, 1f);
+        if (cost > MathF.Max(shaping, heldCeiling) + 0.001f)
+            return $"the treaty costs {cost:0.00} against a budget of {shaping:0.00} (held-ground ceiling {heldCeiling:0.00})";
 
         var strandedNow = StrandedProvinces(campaign, winner, written.Provinces);
         var strandedBefore = StrandedProvinces(campaign, winner, cheapest.Provinces);
@@ -8172,16 +8411,30 @@ public static class Program
         var table = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var file in Directory.GetFiles(folder, "*.json").OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase))
         {
-            using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file),
-                new System.Text.Json.JsonDocumentOptions
-                {
-                    AllowTrailingCommas = true,
-                    CommentHandling = System.Text.Json.JsonCommentHandling.Skip
-                });
-            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
-            foreach (var entry in document.RootElement.EnumerateObject())
-                if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.String)
-                    table[entry.Name] = entry.Value.GetString() ?? "";
+            // A half-written file from a parallel edit used to crash the audit with a stack
+            // trace and no name; now the audit says which file to look at.
+            System.Text.Json.JsonDocument document;
+            try
+            {
+                document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(file),
+                    new System.Text.Json.JsonDocumentOptions
+                    {
+                        AllowTrailingCommas = true,
+                        CommentHandling = System.Text.Json.JsonCommentHandling.Skip
+                    });
+            }
+            catch (System.Text.Json.JsonException error)
+            {
+                Console.WriteLine($"  unreadable {language} localization file: {Path.GetFileName(file)} — {error.Message}");
+                continue;
+            }
+            using (document)
+            {
+                if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object) continue;
+                foreach (var entry in document.RootElement.EnumerateObject())
+                    if (entry.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+                        table[entry.Name] = entry.Value.GetString() ?? "";
+            }
         }
         return table;
     }
@@ -10685,6 +10938,7 @@ public static class Program
         if (hamas.Movement.IncomeWeekly <= 0f || hamas.Treasury <= treasury)
             return $"eight weeks brought Hamas {hamas.Treasury - treasury:0.000} bn ({hamas.Movement.IncomeWeekly:0.0000} a week)";
         if (hamas.Movement.Cadres <= cadres) return $"Hamas's cadres went from {cadres:0} to {hamas.Movement.Cadres:0}";
+        var eightWeekDonations = hamas.Treasury - treasury;
 
         // The headquarters moves to a sponsor.
         var iran = campaign.NationByTag("IRN");
@@ -10703,20 +10957,26 @@ public static class Program
         MovementRules.TakeRegion(campaign, hamas, westBank, palestine);
         if (hamas.Landless || campaign.StatesOf(hamas).Length == 0) return "Hamas rose and holds nothing";
         if (hamas.CapitalStateMapIndex != westBank.MapIndex) return "Hamas holds the West Bank and is not governed from it";
+        if (hamas.Movement is not null) return "a movement holding a country did not graduate to sovereign statehood";
         var militia = campaign.Armies.Count(army => army.NationId == hamas.Id);
         if (militia == 0) return "Hamas took the West Bank with no militia to hold it";
 
         // And loses it again.
+        // Statehood now graduates a movement to a regular country. Its fall belongs to
+        // the weekly country lifecycle, not Week(), which only updates existing movements.
+        // Choose the exile branch explicitly in this fixture; real campaigns retain their roll.
+        campaign.Defines.MovementExileBase = 1f;
         var topology = campaign.ProvinceMap;
         var provinces = Enumerable.Range(1, topology.ProvinceCount).Where(province => topology.ProvinceToNation[province] == hamas.MapIndex).ToList();
         StatePartition.Annex(campaign, provinces, israel, asConquest: true);
+        MovementFall.Decide(campaign);
         MovementRules.Week(campaign, hamas);
         if (!hamas.Landless) return "Hamas lost all its ground and is not landless again";
         var host = Movements.HostOf(campaign, hamas);
         if (host is null || host == israel) return $"Hamas, landless again, went to {host?.Tag ?? "nowhere"}";
 
         Console.WriteLine($"  movements: {all.Count} founded ({string.Join(", ", all.Select(nation => nation.Tag))}); " +
-                          $"Hamas made {(hamas.Treasury - treasury) * 1000:0} M in eight weeks, moved to {tehran.Id}, rose in the West Bank " +
+                          $"Hamas made {eightWeekDonations * 1000:0} M in eight weeks, moved to {tehran.Id}, rose in the West Bank " +
                           $"with {militia} militia, lost it and went on from {host.Tag}.");
         return "";
     }
@@ -11624,6 +11884,17 @@ public static class Program
     /// player walked into is asked to happen here, where the exception can be read in full,
     /// instead of in a dialog that only quotes its message.
     /// </summary>
+    /// <summary>
+    /// Where a player's saves are when `--replay` is given no folder: the one game folder under
+    /// Documents, the same one the game writes to.
+    /// </summary>
+    private static string DefaultSaveRoot()
+    {
+        var folders = DealOrForce.Simulation.GameFolders.For(
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+        return folders?.Saves ?? Path.Combine(AppContext.BaseDirectory, "saves");
+    }
+
     private static int ReplaySave(string root, string slot, int days)
     {
         if (!Directory.Exists(root)) { Console.WriteLine($"  no such save root: {root}"); return 1; }

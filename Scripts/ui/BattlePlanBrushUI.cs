@@ -28,6 +28,7 @@ public partial class DealOrForceGame
     private bool _editingStart;
     private readonly List<int> _offensiveStroke = new();
     private DrawnFrontLine _offensiveSource;
+    private bool _appendOffensivePhase;
     private readonly List<int> _defensiveStroke = new();
     private bool _defensiveStrokeValid;
     private Button _planEraserButton;
@@ -154,6 +155,7 @@ public partial class DealOrForceGame
             : kind == FrontLineKind.Fallback ? _defensiveStroke.ToList() : _drawnProvinces.ToList();
         var border = _borderDraft;
         var editId = _editingBorderId;
+        var appendPhase = _appendOffensivePhase;
         EndDrawing();
 
         if (provinces.Count == 0 || armies.Count == 0)
@@ -172,6 +174,7 @@ public partial class DealOrForceGame
             ArmyIds = armies,
             BorderNationId = border?.BorderNationId ?? -1,
             EditLineId = editId,
+            AppendOffensivePhase = appendPhase,
             WholeBorder = border?.WholeBorder ?? false,
             StartLatitude = border?.StartLatitude ?? 0, StartLongitude = border?.StartLongitude ?? 0,
             EndLatitude = border?.EndLatitude ?? 0, EndLongitude = border?.EndLongitude ?? 0
@@ -185,7 +188,8 @@ public partial class DealOrForceGame
             return;
         }
         if (kind == FrontLineKind.Offensive && !SelectedPlayerArmies().Any(a =>
-            BattlePlanning.LineFor(_campaign, a) is { Kind: FrontLineKind.Offensive } l && l.ObjectiveSequence.SequenceEqual(provinces)))
+            BattlePlanning.LineFor(_campaign, a) is { Kind: FrontLineKind.Offensive } l &&
+            OffensivePlanning.PhaseGoals(l, appendPhase ? OffensivePlanning.PhaseCount(l) - 1 : l.ActiveOffensivePhase).SequenceEqual(provinces)))
         {
             SetArmyFeedback(Tr("Objective rejected: draw one connected land line in the front's target country. Existing orders were kept."));
             return;
@@ -249,6 +253,7 @@ public partial class DealOrForceGame
         _globe.ObjectivePaintMode = false;
         _offensiveStroke.Clear();
         _offensiveSource = null;
+        _appendOffensivePhase = false;
         _defensiveStroke.Clear();
         _globe.BorderStrokeStarted -= BeginBorderStroke;
         _globe.BorderStrokeMoved -= MoveBorderStroke;
@@ -278,7 +283,7 @@ public partial class DealOrForceGame
                     "Border front: {0:N0} posts · release RMB to assign. MMB pans.", _drawnProvinces.Count)
             : _drawingKind == FrontLineKind.Offensive
                 ? Simulation.Loc.Format(
-                    "Objective: {0:N0} provinces · RMB drag in target country, release to save · Alt+RMB redraw · Esc cancel.",
+                    "Objective: {0:N0} provinces · RMB drag to save · Shift+RMB adds a phase · Alt+RMB redraws · Esc cancel.",
                     _offensiveStroke.Count)
             : _drawingKind == FrontLineKind.Fallback
                 ? Simulation.Loc.Format("Defensive line: {0:N0} posts · RMB drag on your land, release to assign · backtrack to shorten · Esc cancel.", _defensiveStroke.Count)
@@ -298,18 +303,20 @@ public partial class DealOrForceGame
                 armies.Count(a => a.OrderProvinceId > 0 && a.ProvinceId == a.OrderProvinceId), armies.Length);
         var line = OffensivePlanning.Source(_campaign, armies);
         if (line is not { Kind: FrontLineKind.Offensive } || line.Objectives.Count == 0)
-            return Tr("Front: LMB whole border / RMB section. Defend: RMB line on your land. Attack: RMB destination. Alt+RMB redraws.");
+            return Tr("Front: LMB whole border / RMB section. Defend: RMB line on your land. Attack: RMB destination. Shift+RMB adds a phase; Alt+RMB redraws the active one.");
         var reached = armies.Count(a => line.Objectives.GetValueOrDefault(a.Id, -1) == a.ProvinceId);
         var executing = armies.Count(a => a.PlanActive);
-        var phase = Tr(reached == armies.Length ? "Objective reached"
+        var state = Tr(line.OffensiveRegroupDay >= 0 ? "Regrouping"
+            : reached == armies.Length && OffensivePlanning.HasNextPhase(line) ? "Awaiting readiness"
+            : reached == armies.Length ? "Objective reached"
             : executing > 0 ? "Executing" : "Prepared / paused");
         return Simulation.Loc.Format(
-                   "{0} · {1:N0}/{2:N0} divisions at objective · {3:N0} goal provinces.",
-                   phase, reached, armies.Length, line.Provinces.Count) + " " +
-               Tr("Execute advances; Prepare stops. Attack + Alt/RMB redraws the objective.");
+                   "Phase {0:N0}/{1:N0} · {2} · {3:N0}/{4:N0} divisions at objective · {5:N0} goal provinces.",
+                   line.ActiveOffensivePhase + 1, OffensivePlanning.PhaseCount(line), state, reached, armies.Length, line.Provinces.Count) + " " +
+               Tr("Execute advances; Prepare stops. Attack + Shift/RMB adds a phase; Alt/RMB redraws the active one.");
     }
 
-    private void BeginBorderStroke(GlobePick pick, bool whole, bool edit)
+    private void BeginBorderStroke(GlobePick pick, bool whole, bool edit, bool append)
     {
         if (_drawingKind == FrontLineKind.Fallback)
         {
@@ -330,7 +337,7 @@ public partial class DealOrForceGame
             MoveBorderStroke(pick);
             return;
         }
-        if (_drawingKind == FrontLineKind.Offensive) { BeginOffensiveStroke(pick, edit); return; }
+        if (_drawingKind == FrontLineKind.Offensive) { BeginOffensiveStroke(pick, edit, append); return; }
         _drawnProvinces.Clear();
         _borderDraft = null;
         _editingBorderId = -1;

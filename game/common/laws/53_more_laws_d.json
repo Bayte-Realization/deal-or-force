@@ -1,0 +1,90 @@
+// Второй пакет законов, часть четвёртая: автономия, развитие, восстановление, внешняя поза.
+{
+  "regional_budget_share": {
+    "name": "Regional budget share",
+    "category": "Regional autonomy",
+    "icon": "population",
+    "description": "A fixed share of national revenue is handed to the regions to spend as they see fit, which rebuilds faster and argues louder.",
+    "modifiers": { "reconstruction_speed": 0.06, "movement_activity": 0.05, "tax_efficiency": -0.03 }
+  },
+  "regional_assembly_elections": {
+    "name": "Regional assembly elections",
+    "category": "Regional autonomy",
+    "icon": "population",
+    "description": "Every region elects the body that spends its money, which turns a grievance into a manifesto.",
+    "modifiers": { "stability_weekly": 0.0004, "movement_activity": -0.03, "radicalism_weekly": -0.0002 }
+  },
+  "regional_prefect_review": {
+    "name": "Prefect review boards",
+    "category": "Regional autonomy",
+    "icon": "population",
+    "description": "A central board reviews every regional decision that spends national money, which slows the regions and steadies the books.",
+    "modifiers": { "tax_efficiency": 0.02, "stability_weekly": -0.0002, "reconstruction_speed": -0.02 }
+  },
+
+  "development_transport_nodes": {
+    "name": "Transport nodes",
+    "category": "Regional development",
+    "icon": "terrain",
+    "description": "Rail and road meet at a warehouse town with a siding, a yard and a reason to exist.",
+    "modifiers": { "supply": 0.04, "trade_reach": 0.04, "construction_cost": 0.02 }
+  },
+  "development_state_farms": {
+    "name": "State farms",
+    "category": "Regional development",
+    "icon": "terrain",
+    "description": "Large mechanised holdings on unclaimed land, which feed the cities and settle the countryside in one decision.",
+    "modifiers": { "output": 0.04, "settlement": 0.10, "living_weekly": -0.0003 }
+  },
+  "development_broadband": {
+    "name": "Rural broadband",
+    "category": "Regional development",
+    "icon": "terrain",
+    "description": "A cable to every district that wants one, which moves the offices out of the capital without moving the people.",
+    "modifiers": { "research_speed": 0.03, "output": 0.02, "construction_speed": -0.02 }
+  },
+
+  "recovery_clearance_corps": {
+    "name": "Clearance corps",
+    "category": "Regional recovery",
+    "icon": "industry",
+    "description": "Uniformed teams that clear rubble, salvage steel and open roads before the surveyors arrive.",
+    "modifiers": { "reconstruction_speed": 0.12, "recruitment_cost": -0.02, "output": -0.02 }
+  },
+  "recovery_land_registry": {
+    "name": "Land and title registry",
+    "category": "Regional recovery",
+    "icon": "industry",
+    "description": "Who owns the ruined plot is settled in a registry rather than in a quarrel, which is what lets anything be rebuilt on it.",
+    "modifiers": { "reconstruction_speed": 0.08, "tax_efficiency": 0.03, "radicalism_weekly": -0.0002 }
+  },
+  "recovery_utility_restoration": {
+    "name": "Utility restoration first",
+    "category": "Regional recovery",
+    "icon": "industry",
+    "description": "Water, heat and power before anything cosmetic, which is slower to photograph and faster to live in.",
+    "modifiers": { "living_weekly": 0.0005, "reconstruction_speed": 0.06, "construction_speed": -0.03 }
+  },
+
+  "foreign_non_aligned_balance": {
+    "name": "Non-aligned balance",
+    "category": "Foreign posture",
+    "icon": "treaty",
+    "description": "Arms and trade bought from both camps and obligations promised to neither, which keeps the country whole and its army unready.",
+    "modifiers": { "deterrence": 0.03, "trade_reach": 0.03, "army_attack": -0.02 }
+  },
+  "foreign_forward_presence": {
+    "name": "Forward presence",
+    "category": "Foreign posture",
+    "icon": "treaty",
+    "description": "Ships and aircraft where the quarrel would start rather than where the country ends, which is expensive and understood.",
+    "modifiers": { "deterrence": 0.06, "naval_speed": 0.03, "living_weekly": -0.0002 }
+  },
+  "foreign_mediation_office": {
+    "name": "Mediation office",
+    "category": "Foreign posture",
+    "icon": "treaty",
+    "description": "A standing service that offers to chair other people's negotiations, which buys goodwill and spends the habit of threatening.",
+    "modifiers": { "stability_weekly": 0.0002, "trade_reach": 0.04, "deterrence": -0.02 }
+  }
+}

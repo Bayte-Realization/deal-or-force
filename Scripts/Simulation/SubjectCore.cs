@@ -125,6 +125,13 @@ public sealed class SubjectWeights
     public float OverlordAtWarPull = 0.20f;
     public float OverlordStrengthHold = 0.35f;
     public float BreakAt = 1.0f;
+    /// <summary>
+    /// How far one subject's breaking point lies from BreakAt, either way, drawn from the seed for
+    /// each pair of subject and overlord. Without it the same dependency broke on the same day in
+    /// every world - Palestine rose against Syria on day 2 813 of two campaigns with different
+    /// seeds - and a played-again campaign retold the same history.
+    /// </summary>
+    public float BreakJitter = 0.12f;
     public float DriftPerWeek = 0.02f;
     public float AnnexSizeLimit = 0.25f;
 }
@@ -178,6 +185,7 @@ public static class SubjectCatalog
                 Read(entry.Value, "overlord_at_war_pull", value => weights.OverlordAtWarPull = value);
                 Read(entry.Value, "overlord_strength_hold", value => weights.OverlordStrengthHold = value);
                 Read(entry.Value, "break_at", value => weights.BreakAt = value);
+                Read(entry.Value, "break_jitter", value => weights.BreakJitter = value);
                 Read(entry.Value, "drift_per_week", value => weights.DriftPerWeek = value);
             Read(entry.Value, "annex_size_limit", value => weights.AnnexSizeLimit = M.Clamp01(value));
                 continue;
@@ -577,7 +585,9 @@ public static class SubjectSystem
                 ? Math.Min(want, subject.LibertyDesire + drift)
                 : Math.Max(want, subject.LibertyDesire - weights.DriftPerWeek);
 
-            if (subject.LibertyDesire >= weights.BreakAt) { leaving.Add(subject); continue; }
+            var breakAt = weights.BreakAt + weights.BreakJitter *
+                (2f * Escalation.Roll(campaign.Seed, subject.Id, overlord.Id, 0, 0xB7E) - 1f);
+            if (subject.LibertyDesire >= breakAt) { leaving.Add(subject); continue; }
 
             // And the other ending. A country steering itself decides this for itself; the
             // rest take the option when they have it and the subject is small enough that

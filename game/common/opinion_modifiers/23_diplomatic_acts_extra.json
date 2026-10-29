@@ -1,0 +1,13 @@
+// Причины, которые оставляют новые двусторонние акты: визит, порт, обмен, разведка, граница,
+// помощь, лицензия, воздушное пространство, совместный патруль.
+{
+  "state_visit": { "name": "A state visit", "opinion": 14, "days": 900, "decays": true, "max_stacks": 2 },
+  "port_visit": { "name": "A port visit", "opinion": 7, "days": 500, "decays": true, "max_stacks": 2 },
+  "student_exchange": { "name": "Students in our universities", "opinion": 9, "days": 1400, "decays": true, "max_stacks": 2 },
+  "intelligence_sharing": { "name": "Shares intelligence with us", "opinion": 16, "days": 800, "decays": true, "max_stacks": 2 },
+  "border_commission": { "name": "Settled the border with us", "opinion": 10, "days": 1800, "decays": true, "max_stacks": 1 },
+  "disaster_relief": { "name": "Sent us disaster relief", "opinion": 20, "days": 1100, "decays": true, "max_stacks": 2 },
+  "technology_licence": { "name": "Licensed a technology to us", "opinion": 12, "days": 900, "decays": true, "max_stacks": 2 },
+  "airspace_cooperation": { "name": "Opens its airspace to us", "opinion": 8, "days": 700, "decays": true, "max_stacks": 2 },
+  "joint_naval_patrol": { "name": "Patrols with our fleet", "opinion": 9, "days": 600, "decays": true, "max_stacks": 2 }
+}

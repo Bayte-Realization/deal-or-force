@@ -40,10 +40,9 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.peace_offer");
         var rows = PanelRows(panel, 30, 26, 12);
 
-        rows.AddChild(Title("PEACE OFFER", 12, Ui.Colour("text.caption")));
-        _peaceOfferTitle = Title("", 24, Ui.Colour("text.accent"));
-        _peaceOfferTitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_peaceOfferTitle);
+        var offerHead = ScreenHeader(rows, "PEACE OFFER",
+            "Review the proposed settlement border on the map before signing or refusing.");
+        _peaceOfferTitle = HeaderTitle(offerHead);
 
         _peaceOfferBody = Title("", 15, Ui.Colour("text.body_soft"));
         _peaceOfferBody.AutowrapMode = TextServer.AutowrapMode.WordSmart;

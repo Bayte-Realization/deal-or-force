@@ -108,14 +108,9 @@ public partial class DealOrForceGame
         Ui.Place(panel, "hud.support_panel");
         var rows = PanelRows(panel, 16, 12, 7);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        var title = Title("LONG-RANGE FORCES", 21, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        header.AddChild(HandbookButton("long_range"));
-        header.AddChild(ActionButton("×", CloseSupportScreen, 34, 30));
+        ScreenHeader(rows, "LONG-RANGE FORCES",
+            "Aircraft, drones, long-range artillery and air-defence squadrons.",
+            false, HandbookButton("long_range"), ActionButton("×", CloseSupportScreen, 34, 30));
 
         _supportSummary = Title("", 12, Ui.Colour("text.body_soft"));
         _supportSummary.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -133,9 +128,11 @@ public partial class DealOrForceGame
         foreach (var (id, label, _) in SupportFilters)
         {
             var captured = id;
-            var chip = ActionButton(label, () => SetSupportFilter(captured), 0, 26);
+            var chip = ActionButton(label, () => SetSupportFilter(captured), 0, 28);
+            chip.SetMeta("atlas_tab_button", true);
             chip.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             chip.ToggleMode = true;
+            StyleButton(chip, false);
             filters.AddChild(chip);
             _supportFilterButtons[id] = chip;
         }
@@ -146,6 +143,16 @@ public partial class DealOrForceGame
         _supportRebaseBanner.Visible = false;
         rows.AddChild(_supportRebaseBanner);
 
+        var supportFrame = new PanelContainer
+        {
+            Name = "SupportRosterFrame",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        supportFrame.SetMeta("atlas_section_ground", "surface.inset");
+        supportFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(supportFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        rows.AddChild(supportFrame);
         _supportScroll = new ScrollContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -154,7 +161,7 @@ public partial class DealOrForceGame
             VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
             FollowFocus = true
         };
-        rows.AddChild(_supportScroll);
+        supportFrame.AddChild(_supportScroll);
         _supportRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportRows.AddThemeConstantOverride("separation", 6);
         _supportScroll.AddChild(_supportRows);

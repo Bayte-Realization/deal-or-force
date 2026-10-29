@@ -9,9 +9,17 @@
 // already there - and at least AiMineDeposit - and anything else in the biggest region with
 // fewest of it. With no shortage worth building for, it builds civilian industry.
 //
+// A good the whole world makes more than AiBuildWorldGlut times what it wants is not built for:
+// the country's shortage is a trade route, not a missing factory. A country at war builds an
+// arms factory only while it is short of something one makes (and the world is not awash in it).
+//
 // Every file in this folder is read in name order and later files win.
 {
   "AiBuildShortage": 0.9,
   "AiBuildShortagesConsidered": 3,
-  "AiMineDeposit": 0.5
+  "AiMineDeposit": 0.5,
+  "AiBuildWorldGlut": 1.4,
+  // Short of hands - filling less than this share of its jobs - a country builds for its
+  // shortages and puts up no factory just to have one.
+  "AiBuildLabourFloor": 0.95
 }

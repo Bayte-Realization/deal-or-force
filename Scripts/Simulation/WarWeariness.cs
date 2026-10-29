@@ -48,6 +48,8 @@ public sealed partial class Defines
     public float AiOffensiveReadyOrganisation { get; set; } = 0.55f;
     /// <summary>Average organisation at which it stops attacking until it has recovered.</summary>
     public float AiOffensiveExhaustedOrganisation { get; set; } = 0.30f;
+    /// <summary>How much more of the army goes forward in a side's offensive season, and a two-fifths share of it less in its lull (WarCore.OffensivePulse); 0 is the same pressure every day.</summary>
+    public float AiOffensivePulseStrength { get; set; } = 0.6f;
     /// <summary>How much faster men are called up by a country at war whose own ground is being taken.</summary>
     public float MobilisationMultiplier { get; set; } = 4f;
     /// <summary>How deep into debt a country being overrun goes to raise an army, as a share of its GDP.</summary>

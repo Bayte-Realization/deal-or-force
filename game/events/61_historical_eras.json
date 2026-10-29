@@ -92,5 +92,121 @@
     "date": "2021-06-01",
     "window_days": 60,
     "effects": { "inflation": 0.015, "gdp_percent": 0.01, "stability": 0.01 }
+  },
+
+  // ---------------------------------------------------------------- the 2030s
+  // The campaign's own future. Anything past the scenario's opening morning is the
+  // world the player is making; these are the tides that arrive regardless, so a long
+  // campaign has an era of its own rather than a 2024 that never ends.
+  "loitering_munitions_maturity_2027": {
+    "title": "The Munitions That Wait",
+    "description": "Cheap loitering airframes, produced by the hundred thousand, make every supply road and every march a watched thing. Armies relearn dispersion; staffs relearn patience.",
+    "date": "2027-03-15",
+    "window_days": 60,
+    "effects": { "army.experience": 10, "research": 25 },
+    "modifiers": [ { "id": "drone_logistics_revolution", "days": 730 } ]
+  },
+  "counter_uas_wall_2028": {
+    "title": "The Counter-Drone Wall",
+    "description": "Radar masts, laser mounts and jamming trucks grow along every front. The cheap sky meets its answer, and the answer costs more than the question.",
+    "date": "2028-09-01",
+    "window_days": 60,
+    "effects": { "army.entrenchment": 0.03, "stability": 0.01, "gdp_percent": -0.005 }
+  },
+  "rare_earth_squeeze_2029": {
+    "title": "The Rare Earth Squeeze",
+    "description": "Export quotas and refinery politics double the price of what every motor, missile and turbine needs. The world industrial policy era begins in a mine.",
+    "date": "2029-05-20",
+    "window_days": 45,
+    "effects": { "market_access": -0.05, "inflation": 0.012, "political_points": 5 },
+    "modifiers": [ { "id": "rare_earth_cartel_discipline", "days": 730 } ]
+  },
+  "orbital_broadband_2030": {
+    "title": "Orbital Broadband",
+    "description": "Mega-constellations finish stitching the planet: the last valleys without a signal come online, and the first orbital economies with them.",
+    "date": "2030-10-01",
+    "window_days": 90,
+    "effects": { "literacy": 0.01, "productivity": 0.02, "research": 30 },
+    "modifiers": [ { "id": "orbital_broadband_boom", "days": 1095 } ]
+  },
+  "solid_state_batteries_2031": {
+    "title": "The Solid State Decade",
+    "description": "Batteries that do not burn and charge in minutes rebuild the car, the grid and the march. Autonomy is no longer a demonstration.",
+    "date": "2031-04-15",
+    "window_days": 90,
+    "effects": { "gdp_percent": 0.02, "standard_of_living": 0.01 },
+    "modifiers": [ { "id": "autonomous_supply_corps", "days": 730 } ]
+  },
+  "demographic_winter_2033": {
+    "title": "The Demographic Winter",
+    "description": "Birthrooms stay empty in half the world's economies. Pension arithmetic turns from dull to cruel, and every government discovers it is now an immigration ministry.",
+    "date": "2033-01-10",
+    "window_days": 90,
+    "effects": { "population_percent": -0.01, "stability": -0.02, "political_points": -5 }
+  },
+  "ai_governance_referendum_2034": {
+    "title": "The Machine in the Ministry",
+    "description": "A national referendum on letting language models draft regulation passes narrowly, fails loudly elsewhere, and either way ends the argument about whether the question exists.",
+    "date": "2034-06-01",
+    "window_days": 45,
+    "effects": { "research": 40, "stability": -0.03, "state.radicalism": 0.02 }
+  },
+  "arctic_routes_2036": {
+    "title": "The Arctic Opens",
+    "description": "Late-summer passages stay clear long enough to insure. Cargo moves over the top; the ports that were outposts become addresses.",
+    "date": "2036-08-20",
+    "window_days": 60,
+    "trigger": { "tags": ["RUS", "CAN", "USA", "NOR", "DNK", "ISL", "FIN", "SWE"] },
+    "effects": { "market_access": 0.06, "gdp_percent": 0.015, "political_points": 4 }
+  },
+  "lunar_industrialisation_2039": {
+    "title": "The Lunar Yard",
+    "description": "The first industrial extraction on another world: a rounding error of GDP and a round number of everything else.",
+    "date": "2039-03-01",
+    "window_days": 90,
+    "effects": { "research": 60, "credit_confidence": 0.03, "gdp_percent": 0.01 }
+  },
+  "grey_fleet_decarbonisation_2042": {
+    "title": "The Fleets Go Quiet",
+    "description": "The last national naval orders for oil-fired hulls are signed, and the shipyards learn a new trade. The sea lanes change their arithmetic slowly, then all at once.",
+    "date": "2042-11-05",
+    "window_days": 90,
+    "effects": { "fleet.readiness": 0.05, "inflation": 0.008, "research": 20 }
+  },
+
+  // The nuclear thread of the same years. The mechanics of the shadow are simulated
+  // (Deterrence, the Cuba rule, the proliferation race); these are the years as the
+  // world lived them - the scares that made the treaty thinkable.
+  "warning_satellite_scare_2032": {
+    "title": "The Ninety-Second Shadow",
+    "description": "A warning satellite dies in a debris cloud and, for ninety seconds, a duty officer's screen shows launch. It is a flock of geese, an aging sensor, a badly timed exercise. Nobody fires. Nobody forgets either.",
+    "date": "2032-08-14",
+    "window_days": 30,
+    "effects": { "stability": -0.02, "political_points": -3 },
+    "modifiers": [ { "id": "nuclear_terror", "days": 240 } ]
+  },
+  "the_black_suitcase_2035": {
+    "title": "The Black Suitcase Minutes",
+    "description": "A coup-shaken capital, a general no cabinet can reach, and a launch exercise nobody told the neighbours about. The phones work. That is the whole of what prevents the end of the world.",
+    "date": "2035-03-02",
+    "window_days": 21,
+    "trigger": { "tags": ["USA", "RUS", "CHN", "IND", "PAK", "PRK", "ISR", "GBR", "FRA"] },
+    "effects": { "stability": -0.04, "state.radicalism": 0.03, "political_points": -6 }
+  },
+  "second_caribbean_moment_2038": {
+    "title": "The Second Caribbean Moment",
+    "description": "Missiles on a neighbour's soil again, a blockade again, and both fleets' submarines holding station off the same shallow sea. Thirteen days of freighted silence, ended by a back channel both sides later deny.",
+    "date": "2038-10-09",
+    "window_days": 13,
+    "trigger": { "tags": ["USA", "RUS", "CHN", "CUB", "VEN"] },
+    "effects": { "stability": -0.06, "state.radicalism": 0.04, "political_points": -8 }
+  },
+  "red_line_treaty_2041": {
+    "title": "The Red Line Treaty",
+    "description": "Every hand that could end the world signs one document: hotlines that never close, exercises announced a month ahead, satellites nobody shoots at. It is not peace. It is the world agreeing to keep flinching in slow motion.",
+    "date": "2041-06-27",
+    "window_days": 60,
+    "effects": { "stability": 0.03, "credit_confidence": 0.02, "political_points": 5 },
+    "modifiers": [ { "id": "red_line_treaty", "days": 1460 } ]
   }
 }

@@ -158,7 +158,7 @@ static class CivilWarBudgetTests
         var random = c.Random.State;
         CivilWarOutbreak.Tick(c);
         CivilWarOutbreak.Tick(c);
-        Check(c.Nations.Count == 1 && c.Wars.Count == 0 && CivilWarOutbreak.StartsInLastYear(c) == 3,
+        Check(c.Nations.Count == 1 && c.Wars.Count == 0 && CivilWarOutbreak.StartsInLastYear(c) == c.Defines.CivilWarWorldPerYear,
             "evicted chronicle facts and repeated same-day reviews cannot bypass the global limit");
         Check(c.Random.State == random && CampaignFingerprint.Of(c) == fingerprint,
             "a capped review and its repeated call consume no RNG or authoritative state");

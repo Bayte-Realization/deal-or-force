@@ -17,7 +17,18 @@ public enum ArmyStance
 {
     Cautious,
     Balanced,
-    Aggressive
+    Aggressive,
+    // Appended, never inserted: a stance is saved as its number.
+    /// <summary>
+    /// Hold at any price. The formation does not give ground, entrenches faster and hits harder
+    /// in defence, and pays for it in blood: the same ground is bought with more of its people.
+    /// </summary>
+    LastStand,
+    /// <summary>
+    /// Attack now rather than when ready: the heaviest attack multiplier and the fastest
+    /// planning of any posture, with the worst defence and the heaviest casualties.
+    /// </summary>
+    ForceAttack
 }
 
 public enum ReinforcementPriority
@@ -55,6 +66,14 @@ public sealed class ArmyGroup
     public string Name = "";
     public string Commander = "Unassigned staff";
     public float StaffSkill = 0.45f;
+    /// <summary>The commander's temperament (common/generals), their record, when they took the group, and how many before them fell (Generals).</summary>
+    public string CommanderTrait = "";
+    public int Victories;
+    public int Defeats;
+    public int CommanderSinceDay = -1;
+    public int CommandersLost;
+    /// <summary>How many of its commanders the government has relieved (Generals.Relieve).</summary>
+    public int CommandersRelieved;
 }
 
 /// <summary>
@@ -127,6 +146,11 @@ public sealed partial class Army
     public float SupplyCongestion = 1f;
     public bool CutOff;
     public int DaysCutOff;
+    /// <summary>
+    /// Set only when the staff fills a hole from a free reserve or a threatened-hole advance.
+    /// None on a fresh formation. A later order command clears it.
+    /// </summary>
+    public StaffNote StaffNote;
     public int BattleId = -1;
     public int ReadyDay;
 
@@ -610,6 +634,7 @@ public static class MilitaryOperations
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitaryOperations))) return;
+        OffensivePlanning.Tick(campaign);
         var topology = campaign.ProvinceMap;
         // A nation's daily replacement capacity is shared out by priority - but only among
         // the formations that can actually take replacements. Counting every division in
@@ -1069,6 +1094,7 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
         var previousProgress = army.MoveProgress;
 
         army.OrderKind = Order;
+        army.StaffNote = StaffNote.None;
         army.DirectOrder = false;
         // Front dispatch is the only subsystem allowed to repopulate these fields.
         // Until a war/front is assigned, changing role cancels a manual march cleanly.
@@ -1258,6 +1284,7 @@ public sealed class SetArmyPlanExecutionCommand : ICampaignCommand
         var army = campaign.Armies.Find(candidate => candidate.Id == ArmyId);
         if (army is null || army.NationId != IssuerId) return;
         if (army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) return;
+        if (Active && StaffReasons.SupplyHoldsAttack(campaign, army)) return;
         army.PlanActive = Active;
         var line = BattlePlanning.LineFor(campaign, army);
         if (!army.InBattle && line is { Kind: FrontLineKind.Offensive } && line.Objectives.Count > 0)
@@ -1280,6 +1307,8 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => CautiousMovement,
         ArmyStance.Aggressive => AggressiveMovement,
+        ArmyStance.LastStand => 0.70f,
+        ArmyStance.ForceAttack => 1.05f,
         _ => 1f
     };
 
@@ -1290,6 +1319,8 @@ public static class MilitaryDoctrine
         {
             ArmyStance.Cautious => defines.MarchCautiousMultiplier,
             ArmyStance.Aggressive => defines.MarchAggressiveMultiplier,
+            ArmyStance.LastStand => defines.MarchCautiousMultiplier,
+            ArmyStance.ForceAttack => 1.0f,
             _ => 1f
         };
 
@@ -1297,6 +1328,10 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 1.16f,
         ArmyStance.Aggressive => 0.84f,
+        // A formation ordered to hold where it stands does not fall back to rest: it digs,
+        // and it is relieved by somebody else or by nobody.
+        ArmyStance.LastStand => 0.55f,
+        ArmyStance.ForceAttack => 0.70f,
         _ => 1f
     };
 
@@ -1304,6 +1339,8 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 1.24f,
         ArmyStance.Aggressive => 0.72f,
+        ArmyStance.LastStand => 1.45f,
+        ArmyStance.ForceAttack => 0.55f,
         _ => 1f
     };
 
@@ -1311,6 +1348,9 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 0.80f,
         ArmyStance.Aggressive => 1.10f,
+        // Attack now is the whole point of the order: the plan is what is already drawn.
+        ArmyStance.LastStand => 0.70f,
+        ArmyStance.ForceAttack => 1.25f,
         _ => 1f
     };
 
@@ -1318,6 +1358,8 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 0.84f,
         ArmyStance.Aggressive => 1.16f,
+        ArmyStance.LastStand => 0.92f,
+        ArmyStance.ForceAttack => 1.32f,
         _ => 1f
     };
 
@@ -1325,6 +1367,8 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 1.12f,
         ArmyStance.Aggressive => 0.94f,
+        ArmyStance.LastStand => 1.38f,
+        ArmyStance.ForceAttack => 0.70f,
         _ => 1f
     };
 
@@ -1332,6 +1376,8 @@ public static class MilitaryDoctrine
     {
         ArmyStance.Cautious => 0.84f,
         ArmyStance.Aggressive => 1.22f,
+        ArmyStance.LastStand => 1.45f,
+        ArmyStance.ForceAttack => 1.30f,
         _ => 1f
     };
 }
@@ -1425,6 +1471,7 @@ public static class MilitaryBootstrap
                     StaffSkill = 0.38f + ((nation.MapIndex * 13 + groupIndex * 17) % 28) / 100f
                 };
                 campaign.ArmyGroups.Add(group);
+                Generals.Appoint(campaign, group);
                 nationGroups.Add(group);
             }
 

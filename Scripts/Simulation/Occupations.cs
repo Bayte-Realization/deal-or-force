@@ -59,6 +59,8 @@ public static class Occupations
             if (holding is not null)
             {
                 if (Enemies.Contains(Pair(holding.Id, owning.Id))) continue;
+                // A lease, or troops in without a war: held by arrangement, not by a war.
+                if (LandArrangementSystem.Covers(campaign, province, holding.Id)) continue;
                 if (!written)
                 {
                     written = true;

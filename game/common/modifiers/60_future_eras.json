@@ -1,0 +1,44 @@
+{
+  "drone_logistics_revolution": {
+    "name": "Drone logistics revolution",
+    "description": "The sky is a truck now: cheap airframes move shells and stretchers to the line nobody drives to.",
+    "days": 730,
+    "positive": true,
+    "modifiers": { "support_recovery": 0.08, "supply": 0.04, "organisation_recovery": 0.05 }
+  },
+  "autonomous_supply_corps": {
+    "name": "Autonomous supply corps",
+    "description": "Convoys that drive themselves over ground no surveyor has walked, and rebuild what shellfire unmakes.",
+    "days": 730,
+    "positive": true,
+    "modifiers": { "supply": 0.05, "construction_speed": 0.04, "support_losses": -0.06 }
+  },
+  "orbital_broadband_boom": {
+    "name": "Orbital broadband boom",
+    "description": "Every valley online at once: provinces that traded by barter trade by wire.",
+    "days": 1095,
+    "positive": true,
+    "modifiers": { "trade_reach": 0.08, "research_speed": 0.04, "tax_efficiency": 0.02 }
+  },
+  "rare_earth_cartel_discipline": {
+    "name": "Rare earth cartel discipline",
+    "description": "The refiners hold the line and the world pays their price for what its magnets need.",
+    "days": 730,
+    "positive": false,
+    "modifiers": { "trade_reach": -0.05, "construction_cost": 0.05 }
+  },
+  "nuclear_terror": {
+    "name": "Nuclear terror",
+    "description": "A minute and a half when nobody knew. Everybody who has a capital remembers it.",
+    "days": 240,
+    "positive": false,
+    "modifiers": { "war_support_weekly": -0.0015, "stability_weekly": -0.0004 }
+  },
+  "red_line_treaty": {
+    "name": "The Red Line Treaty",
+    "description": "Signed by every hand that could end the world, with inspections anyone can refuse and nobody has.",
+    "days": 1460,
+    "positive": true,
+    "modifiers": { "deterrence": 0.05, "war_support_weekly": 0.0005 }
+  }
+}

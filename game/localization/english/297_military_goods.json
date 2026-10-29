@@ -1,0 +1,14 @@
+// The arsenal goods (common/goods/20_military_industry.json).
+{
+  "Tanks": "Tanks",
+  "Armoured fighting vehicles: steel, engines and fire control. An army without them holds ground but cannot take it.": "Armoured fighting vehicles: steel, engines and fire control. An army without them holds ground but cannot take it.",
+  "Drones": "Drones",
+  "Unmanned aircraft, from the hobby quadcopter with a grenade to the strike drone. Cheap, numerous and devoured by a war.": "Unmanned aircraft, from the hobby quadcopter with a grenade to the strike drone. Cheap, numerous and devoured by a war.",
+  "Combat aircraft": "Combat aircraft",
+  "Fighters and bombers: aluminium, precision engineering and the most demanding electronics a country makes.": "Fighters and bombers: aluminium, precision engineering and the most demanding electronics a country makes.",
+  "CombatAircraft": "Combat aircraft",
+  "Missiles": "Missiles",
+  "Guided munitions for air defence, ships and long-range strikes.": "Guided munitions for air defence, ships and long-range strikes.",
+  "Artillery": "Artillery",
+  "Guns and rocket launchers. Barrels wear out: a war at full intensity eats them as it eats shells.": "Guns and rocket launchers. Barrels wear out: a war at full intensity eats them as it eats shells."
+}

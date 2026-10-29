@@ -14,6 +14,11 @@ public sealed class UltimatumPaper
     public int[] Regions = Array.Empty<int>();
     public float Reparations;
     public bool LiftEmbargo, NonAggression;
+    public bool Annex, Vassalise, Disarm, BreakAlliances, ReleaseSubjects, TechnologyTransfer, ChangeGovernment, FleetTransfer;
+    public string SubjectKind = "";
+    public bool TradeAgreement, EmbargoThird, BreakNamed, CancelGuarantee, JoinAlliance, AcceptGuarantee, MilitaryAccess;
+    public bool WhitePeace, CedeOccupied, Humiliate, ReleaseNamed, Liberate;
+    public int EmbargoOnId, BreakWithId, CancelGuaranteeId, ReleaseSubjectId, LiberateRegion;
     public UltimatumPaperState State;
     public string Reason = "";
 
@@ -23,7 +28,17 @@ public sealed class UltimatumPaper
         Regions = Regions ?? Array.Empty<int>(),
         Reparations = Reparations,
         LiftEmbargo = LiftEmbargo,
-        NonAggression = NonAggression
+        NonAggression = NonAggression,
+        Annex = Annex, Vassalise = Vassalise, Disarm = Disarm, BreakAlliances = BreakAlliances,
+        ReleaseSubjects = ReleaseSubjects, TechnologyTransfer = TechnologyTransfer,
+        ChangeGovernment = ChangeGovernment, FleetTransfer = FleetTransfer,
+        SubjectKind = SubjectKind ?? "",
+        TradeAgreement = TradeAgreement, EmbargoThird = EmbargoThird, EmbargoOnId = EmbargoOnId,
+        BreakNamed = BreakNamed, BreakWithId = BreakWithId, CancelGuarantee = CancelGuarantee,
+        CancelGuaranteeId = CancelGuaranteeId, JoinAlliance = JoinAlliance, AcceptGuarantee = AcceptGuarantee,
+        MilitaryAccess = MilitaryAccess, WhitePeace = WhitePeace, CedeOccupied = CedeOccupied,
+        Humiliate = Humiliate, ReleaseNamed = ReleaseNamed, ReleaseSubjectId = ReleaseSubjectId,
+        Liberate = Liberate, LiberateRegion = LiberateRegion
     };
 
     [JsonIgnore] public bool Pending => State == UltimatumPaperState.Pending;
@@ -49,6 +64,17 @@ public static partial class Ultimatum
         CreatedDay = paper.CreatedDay, ExpiresDay = paper.ExpiresDay, ClosedDay = paper.ClosedDay,
         Regions = (paper.Regions ?? Array.Empty<int>()).ToArray(),
         Reparations = paper.Reparations, LiftEmbargo = paper.LiftEmbargo, NonAggression = paper.NonAggression,
+        Annex = paper.Annex, Vassalise = paper.Vassalise, Disarm = paper.Disarm, BreakAlliances = paper.BreakAlliances,
+        ReleaseSubjects = paper.ReleaseSubjects, TechnologyTransfer = paper.TechnologyTransfer,
+        ChangeGovernment = paper.ChangeGovernment, FleetTransfer = paper.FleetTransfer,
+        SubjectKind = paper.SubjectKind ?? "",
+        TradeAgreement = paper.TradeAgreement, EmbargoThird = paper.EmbargoThird, EmbargoOnId = paper.EmbargoOnId,
+        BreakNamed = paper.BreakNamed, BreakWithId = paper.BreakWithId, CancelGuarantee = paper.CancelGuarantee,
+        CancelGuaranteeId = paper.CancelGuaranteeId, JoinAlliance = paper.JoinAlliance,
+        AcceptGuarantee = paper.AcceptGuarantee, MilitaryAccess = paper.MilitaryAccess,
+        WhitePeace = paper.WhitePeace, CedeOccupied = paper.CedeOccupied, Humiliate = paper.Humiliate,
+        ReleaseNamed = paper.ReleaseNamed, ReleaseSubjectId = paper.ReleaseSubjectId,
+        Liberate = paper.Liberate, LiberateRegion = paper.LiberateRegion,
         State = paper.State, Reason = paper.Reason ?? ""
     };
 
@@ -71,6 +97,17 @@ public static partial class Ultimatum
             ExpiresDay = (int)Math.Min(int.MaxValue, (long)c.ElapsedDays + days),
             Regions = RegionIds(demand),
             Reparations = demand.Reparations, LiftEmbargo = demand.LiftEmbargo, NonAggression = demand.NonAggression,
+            Annex = demand.Annex, Vassalise = demand.Vassalise, Disarm = demand.Disarm, BreakAlliances = demand.BreakAlliances,
+            ReleaseSubjects = demand.ReleaseSubjects, TechnologyTransfer = demand.TechnologyTransfer,
+            ChangeGovernment = demand.ChangeGovernment, FleetTransfer = demand.FleetTransfer,
+            SubjectKind = demand.SubjectKind ?? "",
+            TradeAgreement = demand.TradeAgreement, EmbargoThird = demand.EmbargoThird, EmbargoOnId = demand.EmbargoOnId,
+            BreakNamed = demand.BreakNamed, BreakWithId = demand.BreakWithId, CancelGuarantee = demand.CancelGuarantee,
+            CancelGuaranteeId = demand.CancelGuaranteeId, JoinAlliance = demand.JoinAlliance,
+            AcceptGuarantee = demand.AcceptGuarantee, MilitaryAccess = demand.MilitaryAccess,
+            WhitePeace = demand.WhitePeace, CedeOccupied = demand.CedeOccupied, Humiliate = demand.Humiliate,
+            ReleaseNamed = demand.ReleaseNamed, ReleaseSubjectId = demand.ReleaseSubjectId,
+            Liberate = demand.Liberate, LiberateRegion = demand.LiberateRegion,
             State = UltimatumPaperState.Pending
         };
         c.UltimatumPapers.Add(paper);

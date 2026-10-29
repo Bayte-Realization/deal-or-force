@@ -1,0 +1,22 @@
+// Crises, contagion, pandemics and disasters (TreasuryDynamics.cs).
+{
+  "chronicle.financial_crisis": "A financial crisis breaks out in {0}: banks fail, the state bails them out, a recession begins (severity {2} %).",
+  "chronicle.crisis_contagion": "The crisis spreads from {1} to {0} along its trade (severity {2} %).",
+  "chronicle.pandemic": "A pandemic sweeps the world; {0} is hit hardest. Economies everywhere contract.",
+  "chronicle.disaster_earthquake": "An earthquake strikes {3} in {0}: damage of {2}.",
+  "chronicle.disaster_flood": "Floods sweep {3} in {0}: damage of {2}.",
+  "chronicle.disaster_storm": "A hurricane hits {3} in {0}: damage of {2}.",
+  "chronicle.disaster_drought": "Drought grips {3} in {0}: losses of {2}.",
+  "chronicle.disaster_epidemic": "An epidemic breaks out in {3}, {0}: it costs {2}.",
+  "chronicle.disaster_industrial_accident": "An industrial disaster in {3}, {0}: damage of {2}.",
+  "Recession: output -{0}": "Recession: output -{0}",
+  "A financial crisis, its contagion or a pandemic has the economy contracting until {0}.": "A financial crisis, its contagion or a pandemic has the economy contracting until {0}.",
+  "Treasury overflowing": "Treasury overflowing",
+  "Reserves above {0} of GDP are spent down every week - handouts and tax cuts where voters rule, leakage where nobody answers to them. Invest it, or watch it go.": "Reserves above {0} of GDP are spent down every week - handouts and tax cuts where voters rule, leakage where nobody answers to them. Invest it, or watch it go.",
+  "Earthquake": "Earthquake",
+  "Floods": "Floods",
+  "Hurricane": "Hurricane",
+  "Drought": "Drought",
+  "Epidemic": "Epidemic",
+  "Industrial disaster": "Industrial disaster"
+}

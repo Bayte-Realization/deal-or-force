@@ -27,7 +27,7 @@
       "output": 0.05,
       "construction_speed": 0.1,
       "recruitment_speed": 0.1,
-      "tax_efficiency": -0.03
+      "credit_capacity": -0.03
     }
   },
   "national_mourning": {
@@ -83,7 +83,7 @@
       "state.radicalism": 0.0014
     },
     "modifiers": {
-      "tax_efficiency": 0.05,
+      "credit_capacity": 0.05,
       "construction_speed": -0.1,
       "research_speed": -0.05
     }
@@ -142,7 +142,7 @@
       "state.radicalism": 0.0011
     },
     "modifiers": {
-      "tax_efficiency": -0.03
+      "credit_capacity": -0.03
     }
   },
   "general_mobilisation": {
@@ -176,7 +176,7 @@
     "modifiers": {
       "construction_speed": 0.2,
       "supply": 0.05,
-      "tax_efficiency": -0.03
+      "credit_capacity": -0.03
     }
   },
   "reconstruction_programme": {
@@ -187,7 +187,7 @@
     "modifiers": {
       "reconstruction_speed": 1.0,
       "construction_speed": 0.1,
-      "tax_efficiency": -0.02
+      "credit_capacity": -0.02
     }
   },
   "research_initiative": {
@@ -197,16 +197,18 @@
     "positive": true,
     "modifiers": {
       "research_speed": 0.2,
-      "tax_efficiency": -0.03
+      "credit_capacity": -0.02
     }
   },
   "tax_reform": {
     "name": "Tax reform",
-    "description": "The code is simpler, the loopholes fewer and the inspectors more numerous. Revenue rises; so do the complaints.",
+    "description": "The code is simpler, the loopholes fewer and the inspectors more numerous. The state borrows on better terms, and every week somebody complains about it.",
     "days": 540,
     "positive": true,
     "modifiers": {
-      "tax_efficiency": 0.1,
+      "tax_efficiency": 0.08,
+      "credit_capacity": 0.06,
+      "borrowing_cost": -0.02,
       "stability_weekly": -0.001
     }
   },
@@ -273,7 +275,7 @@
     "modifiers": {
       "trade_reach": -0.08,
       "output": -0.03,
-      "tax_efficiency": -0.03
+      "credit_capacity": -0.03
     }
   },
   "brain_drain": {
@@ -292,7 +294,7 @@
     "days": 365,
     "positive": true,
     "modifiers": {
-      "tax_efficiency": 0.08,
+      "credit_capacity": 0.05,
       "construction_cost": -0.05,
       "stability_weekly": -0.0005
     }

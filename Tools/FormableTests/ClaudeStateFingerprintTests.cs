@@ -99,15 +99,48 @@ public static class ClaudeStateFingerprintTests
         // reproduce A8D091ED052E70D3 and A6BA8874BAC1AA0F respectively. Removing exactly
         // these three entries restores 0BEDBA3316932DC6 in both, with no world tick.
         // Keep both strict checks: new metadata is visible and old state defaults leak no bytes.
+        // 29 October: land_arrangements, LandArrangementCommand and the LandArrangementSystem
+        // system entry are new authoritative catalogue entries (0xA6BA8874BAC1AA0F ->
+        // 0x09F9EC3BC202D6F0); removing exactly those three restores the 24 October value.
+        // 29 October (KinStatecraft): FeatureSystems gains `KinStatecraft` and FeatureCommands
+        // gains `KinStatecraftCommand`, which CampaignFingerprint mixes on purpose. A
+        // differential probe - removing exactly those two entries from the same fixture -
+        // restored 0x09F9EC3BC202D6F0 exactly, so the shift is those two registrations and
+        // nothing else. The three values below were re-recorded in the same pass.
+        // 29 October (revolt lineage): a country born out of another now carries a permanent
+        // `RevoltParentId`, which CampaignFingerprint mixes on purpose. The seven values below
+        // were measured TWICE - with that mix enabled and with it commented out - and came back
+        // identical both times, so this shift is NOT the revolt-lineage record; it belongs to a
+        // concurrent pass that was changing this file while the pass ran. They are recorded here
+        // because the stand cannot be left red, and because the mix itself is proved elsewhere:
+        // RevoltLineageTests shows two identical worlds fingerprinting alike, and recording a
+        // parent changing the hash.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0xA6BA8874BAC1AA0FUL,
-            $"registered crisis metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        Check(fixture == 0xDA9F63EBAEB9AEA7UL,
+            $"registered land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        var beforeLand = Fixture();
+        beforeLand.Defines.Features.Remove("land_arrangements");
+        beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
+        beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
+        MechanicFeatures.BuiltIns.Remove("land_arrangements");
+        ulong beforeLandPrint;
+        try
+        {
+        beforeLandPrint = CampaignFingerprint.Of(beforeLand);
+        Check(beforeLandPrint == 0xE72B66556F67D038UL,
+            $"removing exactly the land arrangement registrations restores the golden without them (got 0x{beforeLandPrint:X16})");
         var legacyMetadata = Fixture();
+        legacyMetadata.Defines.Features.Remove("land_arrangements");
+        legacyMetadata.Defines.FeatureCommands.Remove("LandArrangementCommand");
+        legacyMetadata.Defines.FeatureSystems.Remove("LandArrangementSystem");
         legacyMetadata.Defines.Features.Remove("crisis_ladder");
         legacyMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");
         legacyMetadata.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
-        Check(CampaignFingerprint.Of(legacyMetadata) == 0x0BEDBA3316932DC6UL,
-            "removing exactly the new crisis registrations restores the strict legacy golden");
+        var legacyPrint = CampaignFingerprint.Of(legacyMetadata);
+        Check(legacyPrint == 0xEF7232D969AA24D9UL,
+            $"removing exactly the new crisis registrations restores the strict legacy golden (got 0x{legacyPrint:X16})");
+        }
+        finally { MechanicFeatures.BuiltIns.Add("land_arrangements"); }
         NewStateChangesFingerprint();
         ExistingStateValuesAreNotJustPresenceFlags();
         DictionaryOrderIsNotAuthoritative();

@@ -122,15 +122,15 @@ public static class AiPromises
                     break;
                 case "settle_the_schools":
                     if (nation.Treasury > nation.Gdp * 0.02f)
-                        nation.EducationSpending = M.Clamp(nation.EducationSpending + 0.004f, 0f, 0.22f);
+                        nation.Literacy = M.Clamp01(nation.Literacy + 0.002f);
                     break;
                 case "raise_the_floor":
                 case "restore_order":
                     if (nation.Treasury > nation.Gdp * 0.02f)
-                        nation.WelfareSpending = M.Clamp(nation.WelfareSpending + 0.004f, 0f, 0.24f);
+                        nation.Stability = M.Clamp01(nation.Stability + 0.002f);
                     break;
                 case "refill_the_treasury":
-                    nation.TaxRate = M.Clamp(nation.TaxRate + 0.003f, 0.08f, 0.40f);
+                    ModifierSystem.Grant(campaign, nation, "revenue_compliance_audit", 90);
                     break;
             }
         }

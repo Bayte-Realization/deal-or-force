@@ -1,0 +1,65 @@
+{
+  "cultural_cooperation": {
+    "name": "Cultural cooperation",
+    "description": "Exchanges, exhibitions and a year of easier talk between two capitals.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "stability_weekly": 0.004 }
+  },
+  "research_cooperation": {
+    "name": "Research cooperation",
+    "description": "Laboratories that share results for a year.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "research_speed": 0.05 }
+  },
+  "military_attache": {
+    "name": "Military attaché",
+    "description": "An officer at the other capital, and a staff that recovers a little faster for it.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "organisation_recovery": 0.03 }
+  },
+  "consular_convention": {
+    "name": "Consular convention",
+    "description": "Consulates that keep trade moving without a full commercial treaty.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "trade_reach": 0.04 }
+  },
+  "student_exchange": {
+    "name": "Student exchange",
+    "description": "A year of students in each other's universities.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "research_speed": 0.03 }
+  },
+  "intelligence_sharing": {
+    "name": "Shared intelligence",
+    "description": "A year in which each staff sees a little of what the other has already learned.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "army_defense": 0.02 }
+  },
+  "border_commission": {
+    "name": "Border commission",
+    "description": "A commission that keeps the border a place of rules rather than incidents.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "stability_weekly": 0.003 }
+  },
+  "technology_licence": {
+    "name": "Licensed technology",
+    "description": "A paid licence, not a gift: the buyer's laboratories move a little faster for a year.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "research_speed": 0.04 }
+  },
+  "airspace_cooperation": {
+    "name": "Airspace cooperation",
+    "description": "Corridors and warning shared for a year. It is not an alliance.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "support_recovery": 0.04 }
+  }
+}

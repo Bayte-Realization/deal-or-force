@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
@@ -97,7 +98,9 @@ public static class FrontManager
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(FrontManager))) return;
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
         CallUpIdle(campaign);
-        foreach (var war in campaign.Wars)
+        // Defensive copy to prevent InvalidOperationException if Wars list is modified during iteration.
+        var wars = campaign.Wars.ToList();
+        foreach (var war in wars)
         {
             if (war.Ended) continue;
             Balance(campaign, war);
@@ -142,7 +145,9 @@ public static class FrontManager
         Idle.Clear();
         foreach (var army in campaign.Armies)
         {
-            if (army.OrderKind != ArmyOrder.Manual || army.AssignedWarId >= 0 || army.DirectOrder) continue;
+            // Manual, including a division already named to a war but given no defend or advance.
+            // A direct player order is left alone.
+            if (army.OrderKind != ArmyOrder.Manual || army.DirectOrder) continue;
             if (army.InBattle || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.Route.Count > 0) continue;
             if (army.TemplateId == MilitiaCore.TemplateId || army.FrontLineId >= 0) continue;
             Idle.Add(army);
@@ -358,16 +363,28 @@ public static class FrontManager
             if (!filled && mayBorrow)
                 for (var attempt = 0; attempt < 3; attempt++)
                 {
-                    // A hole with the enemy standing next to it may be closed by an advance as
-                    // well, one division of it - an attack that leaves the door open behind it
-                    // is not worth the ground it takes. Only for holes: the advances as a whole
-                    // stay where the planner massed them (FrontStaffMovesAdvances).
-                    var threatened = Need.GetValueOrDefault(hole, 1f) >= campaign.Defines.FrontHoleAdvanceNeed;
-                    var reserve = NearestReserve(campaign, nation, war, hole, today, threatened);
+                    // A free reserve fills the hole before anyone is taken off an attack.
+                    // Spreading advances along the front stays off (FrontStaffMovesAdvances):
+                    // that measurement cost ground. Only a hole the enemy is already standing
+                    // next to may borrow one advance, and only after no reserve could take it.
+                    var borrowedAdvance = false;
+                    var reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: false);
+                    if (reserve is null &&
+                        Need.GetValueOrDefault(hole, 1f) >= campaign.Defines.FrontHoleAdvanceNeed)
+                    {
+                        reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: true);
+                        borrowedAdvance = reserve is not null && reserve.OrderKind == ArmyOrder.AdvanceFront;
+                    }
                     if (reserve is null) break;
                     var duty = reserve.OrderKind;
                     reserve.OrderKind = ArmyOrder.DefendFront;
-                    if (Repost(campaign, nation, reserve, hole)) { budget--; holders++; filled = true; break; }
+                    if (Repost(campaign, nation, reserve, hole))
+                    {
+                        reserve.StaffNote = borrowedAdvance
+                            ? StaffNote.ThreatenedHole
+                            : StaffNote.EmptyPostFromReserve;
+                        budget--; holders++; filled = true; break;
+                    }
                     reserve.OrderKind = duty;
                     Refused.Add(reserve.Id);
                     if (!connectivityChecked)

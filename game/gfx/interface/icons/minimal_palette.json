@@ -152,6 +152,21 @@
                                            },
                     "icon_good_pharmaceuticals":  {
                                                       "source_colour":  "#b48732"
-                                                  }
+                                                  },
+                    "icon_good_tanks":  {
+                                            "source_colour":  "#b48732"
+                                        },
+                    "icon_good_drones":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_good_combataircraft":  {
+                                                     "source_colour":  "#b48732"
+                                                 },
+                    "icon_good_missiles":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_artillery":  {
+                                                "source_colour":  "#b48732"
+                                            }
                 }
 }

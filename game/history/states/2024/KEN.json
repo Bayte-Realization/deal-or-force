@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2019 census by former province.
 {
   // Central
   "ke_200": {
     "population": 8770643,
     "urbanization": 0.55,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "kikuyu": 0.62, "kamba": 0.08, "luhya": 0.07, "luo": 0.07, "meru": 0.05, "kalenjin": 0.03, "kisii": 0.03, "somali": 0.02, "maasai": 0.02, "indian_diaspora": 0.01 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.541, "Coal": 0.216, "Oil": 0.288, "IronOre": 0.152, "RareEarths": 0.083, "NaturalGas": 0.653, "Timber": 2.905, "Bauxite": 0.065, "Uranium": 0.007 }
   },
@@ -23,7 +24,7 @@
   "ke_300": {
     "population": 6055303,
     "urbanization": 0.43,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "mijikenda": 0.55, "swahili": 0.1, "kamba": 0.08, "kikuyu": 0.06, "luo": 0.06, "luhya": 0.04, "somali": 0.04, "maasai": 0.03, "arab_yemeni": 0.02, "indian_diaspora": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.439, "Coal": 0.249, "Oil": 0.349, "IronOre": 0.169, "RareEarths": 0.086, "NaturalGas": 0.697, "Timber": 2.43, "Bauxite": 0.078, "Uranium": 0.009 }
   },
@@ -31,7 +32,7 @@
   "ke_400": {
     "population": 7820882,
     "urbanization": 0.18,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "kamba": 0.45, "meru": 0.35, "oromo": 0.06, "somali": 0.05, "kikuyu": 0.05, "turkana": 0.02, "luo": 0.02 },
     "buildings": { "Agriculture": 3, "Infrastructure": 1 },
     "resources": { "Food": 1.491, "Coal": 0.453, "Oil": 0.7, "IronOre": 0.146, "RareEarths": 0.04, "NaturalGas": 0.661, "Timber": 2.427, "Bauxite": 0.073, "Uranium": 0.015 }
   },
@@ -39,7 +40,7 @@
   "ke_500": {
     "population": 3692004,
     "urbanization": 0.1,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "somali": 0.95, "oromo": 0.03, "kikuyu": 0.01, "kamba": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.877, "Coal": 0.282, "Oil": 0.242, "IronOre": 0.101, "RareEarths": 0.051, "NaturalGas": 0.369, "Timber": 1.175, "Bauxite": 0.094, "Uranium": 0.01 }
   },
@@ -47,7 +48,7 @@
   "ke_600": {
     "population": 3266329,
     "urbanization": 0.34,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "luo": 0.62, "kisii": 0.3, "luhya": 0.04, "kalenjin": 0.02, "kikuyu": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.986, "Coal": 0.228, "Oil": 0.491, "IronOre": 0.163, "RareEarths": 0.047, "NaturalGas": 0.399, "Timber": 3.051, "Bauxite": 0.06, "Uranium": 0.01 }
   },
@@ -55,7 +56,7 @@
   "ke_700": {
     "population": 22968812,
     "urbanization": 0.21,
-    "cultures": { "kikuyu": 0.172, "luhya": 0.142, "kalenjin": 0.132, "luo": 0.108, "kamba": 0.098, "somali": 0.062, "sukuma": 0.06, "swahili": 0.06, "chagga": 0.05, "nuer": 0.031, "acholi": 0.03, "maasai": 0.025, "oromo": 0.02, "arab_yemeni": 0.005, "indian_diaspora": 0.005 },
+    "cultures": { "kalenjin": 0.35, "luhya": 0.25, "kikuyu": 0.15, "luo": 0.08, "maasai": 0.06, "turkana": 0.06, "kisii": 0.03, "somali": 0.01, "kamba": 0.01 },
     "buildings": { "Agriculture": 8, "Infrastructure": 1 },
     "resources": { "Food": 1.635, "Coal": 0.326, "Oil": 0.856, "IronOre": 0.263, "RareEarths": 0.128, "NaturalGas": 0.806, "Timber": 1.295, "Bauxite": 0.159, "Uranium": 0.012 }
   }

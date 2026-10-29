@@ -258,6 +258,8 @@ public static class FormableNations
             // A dynamic major power has no bookmark tag to protect it. Its own settled
             // ground is still an identity; cultural eligibility for a tiny restoration
             // must not turn the whole successor state into that one annexed strip.
+            // ProvinceSetOf(Campaign, ...) returns region map indices, not province ids.
+            // The comparison below is in provinces and must also exclude occupied ground.
             var map = campaign.ProvinceMap;
             var controllers = campaign.ProvinceController;
             for (var province = 1; province <= map.ProvinceCount && province < controllers.Length; province++)
@@ -297,19 +299,34 @@ public static class FormableNations
         }
     }
 
+    private static ProvinceTopology _peopleMap;
+    private static int _peopleMapRevision = int.MinValue;
+    private static Dictionary<int, int> _stateLandProvinceTotals;
+
     /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
     private static long People(Campaign campaign, HashSet<int> provinces)
     {
         if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
         var map = campaign.ProvinceMap;
-        var totals = new Dictionary<int, int>();
-        var inside = new Dictionary<int, int>();
-        for (var province = 1; province <= map.ProvinceCount; province++)
+        if (!ReferenceEquals(_peopleMap, map) || _peopleMapRevision != campaign.MapRevision || _stateLandProvinceTotals is null)
         {
-            if (map.WaterByProvince[province]) continue;
+            _peopleMap = map;
+            _peopleMapRevision = campaign.MapRevision;
+            _stateLandProvinceTotals = new Dictionary<int, int>(campaign.States.Count);
+            for (var province = 1; province <= map.ProvinceCount; province++)
+            {
+                if (map.WaterByProvince[province]) continue;
+                var state = map.ProvinceToState[province];
+                _stateLandProvinceTotals[state] = _stateLandProvinceTotals.GetValueOrDefault(state) + 1;
+            }
+        }
+        var totals = _stateLandProvinceTotals;
+        var inside = new Dictionary<int, int>();
+        foreach (var province in provinces)
+        {
+            if (province <= 0 || province > map.ProvinceCount || map.WaterByProvince[province]) continue;
             var state = map.ProvinceToState[province];
-            totals[state] = totals.GetValueOrDefault(state) + 1;
-            if (provinces.Contains(province)) inside[state] = inside.GetValueOrDefault(state) + 1;
+            inside[state] = inside.GetValueOrDefault(state) + 1;
         }
         long people = 0;
         foreach (var state in campaign.States)

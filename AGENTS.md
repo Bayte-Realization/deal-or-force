@@ -14,9 +14,17 @@ Two tools exist so the daily loop is one command instead of four remembered ones
 instead of re-deriving the commands.
 
 - **`Tools/dev.ps1`** — the whole loop behind switches:
-  `-Build`, `-Test [-TestArgs '--identity-only']`, `-Import`, `-Game [-CaptureDirectory <dir>] [-Headless]`, `-All`.
+  `-Build`, `-Test [-TestArgs '--identity-only']`, `-Import`, `-Game [-CaptureDirectory <dir>] [-Headless]`, `-All`,
+  and `-Doctor`: what starts with the game (engine, SDK, every autoload, the language count,
+  the optional Luau/JVM adapters, content and save sizes). Autoloads are the first frames of
+  every start, so a new runtime is visible there instead of being felt as a mystery stall.
   It finds the Godot executable itself and reports the numbers that matter (test count, failures,
   `EXPORT_VERIFY failures=N`). Example: `powershell -ExecutionPolicy Bypass -File Tools\dev.ps1 -All`.
+- **`Tools/audit-localization.ps1`** — the translation tables checked for the three silent
+  mistakes: the same English key translated twice and differently (the later file wins, so one
+  button reads two ways), a dropped `{0}`, and an empty value. `-Fail` makes it a gate.
+  Reports to `tmp_logs/localization-audit.csv`; 611 conflicting keys were found on the first run
+  and are listed there for translating one at a time.
 - **`Tools/game-capture.ps1`** — look at a screen a player reaches by clicking.
   `-Game` above runs the exported executable and can only photograph what its own probe
   reaches. This runs the game out of the editor project with Fennara's runtime helper switched
@@ -34,6 +42,50 @@ instead of re-deriving the commands.
   tools: `build_game`, `run_tests`, `game_verify`, `capture_screenshots`, `list_technologies`,
   `localization_audit`. Registered as `deal-or-force-dev` in `.mcp.json`; MCP servers are read
   when the client window starts, so restart the window after changing the file.
+- **`Tools/probe-project.ps1`** — builds `tmp\probe_run\`: the real project reached through
+  directory junctions, with only `BootGuard` as an autoload, so the in-game `ExportVerification`
+  probe can photograph the game without the Fennara runtime helper.
+- **Editor start-up, and why it used to crawl**: the editor walks `res://` and follows
+  directory junctions, so anything scratch inside the project is scanned — and imported, if it
+  is an image. The probe project used to live in `tmp_run/` next to the real folders, which made
+  every editor start scan the whole project a second time; `tmp_playtest/` added 542 PNGs to
+  import on every run; `Tools/BtaBridge` alone is **45 225 files** and `Tools` in total is
+  **69 015**. Every scratch folder now carries an empty `.gdignore` (`tmp`, `tmp_logs`,
+  `tmp_playtest`, `.fennara`, `Tools/*/bin|obj`, `Tools/BtaBridge`, `Tools/UniversalModder`,
+  `Tools/game-mcp`, `Tools/knowledge-mcp`), which makes Godot skip the folder entirely. Keep new
+  scratch directories out of `res://`, or give them a `.gdignore` on the same day they appear.
+  Closing Godot before opening the editor also matters: a second editor on the same project and
+  the `godot-ai` daemons left over from earlier sessions compete for the same files.
+- **`Tools/editor-doctor.ps1`** — the same answer as numbers: how many files each top folder puts
+  in front of the editor, how large `.godot/imported` has grown, whether the C# assembly is older
+  than the newest `.cs` (the editor then compiles on start), and which editors are running.
+  `-Clean` deletes the import cache and the editor's file cache, drops `.import` sidecars inside
+  ignored scratch folders, and rebuilds in one slow pass; `-Time` measures a headless editor
+  start. Both refuse to run while an editor holds the project, because it locks every GDExtension
+  DLL and the run would fail on the copy.
+- **`Tools/close-godot.ps1`** — list every Godot process by kind (`editor`, `run`, `daemon`) and
+  close the ones asked for: `-Daemons` (Fennara helpers, recreated on demand), `-Runs`
+  (command-line probes and tests), `-Editors` (unsaved work is lost; asks first), `-All -Yes`.
+- **Bug reports** — the button `Report a problem` in Settings and the console command `report`
+  both call `Scripts/SupportReportGame.cs` → `Scripts/Simulation/SupportReport.cs`, which writes
+  `reports/DealOrForce-report-YYYYMMDD-HHMMSS.zip`: `report.txt` (build, machine, language,
+  world), the last three logs, `settings.json`, and the newest save when it is under 32 MB.
+  Nothing in it touches Godot, so `Tools/FormableTests --support-report-only` exercises the same
+  code without the engine.
+- **`Tools/FormableTests --replay-save <file.bdfsave> [days]`** — the player's own campaign, run
+  forward. A crash report says "it broke on 24 July"; this loads that save **read-only**, builds
+  the province topology, unpauses, and ticks day by day, stopping at the first day the simulation
+  refuses with the day, the exception type and the top stack frames (the in-game snapshot keeps no
+  stack). A save is evidence, not a fixture: it is never written back. Prints `REPLAY_LOADED` /
+  `REPLAY_WORLD` (nations, movements, offices, open wars, regions, chronicle), then `REPLAY_OK` or
+  `REPLAY_CRASH`. Use it before and after fixing a runtime report; it is the difference between
+  "should be fixed" and "your save now runs".
+- **Moved out of `res://` on 27 October 2026**: `Tools/BtaBridge` (**45 225 files**) and
+  `Tools/UniversalModder` now live in `D:\Godot Projects\deal-or-force-tools\`. Neither is used
+  by Godot — BtaBridge bridges another game's mod format and UniversalModder is an upstream clone
+  — and together they were more than half of everything the editor walked. `addons/at-icons`
+  (7 428 files) is `.gdignore`d with its plugin switched off in `project.godot`: no script, scene
+  or resource referenced it.
 - **`Tools/knowledge-mcp/server.mjs`** — the same kind of dependency-free MCP server for the
   repository's own memory: `search_docs` (grep docs/game/Tools), `plan_status` (master-plan rows
   with the status vocabulary), `list_defines` (simulation tunables with their rationale),
@@ -50,6 +102,12 @@ instead of re-deriving the commands.
   `--emit <harness>` prints paste-ready JSON for what that harness lacks; `--json` gives the
   matrix to a script. There is deliberately no `--apply`: a config outside this project
   belongs to whoever owns it.
+- **`Tools/game-folders.ps1`** — puts everything the game writes into one folder,
+  `Documents\Bayte Realization\Deal or Force` (`saves/`, `settings/`, `logs/`, `screenshots/`,
+  `mods/`, `dlc/`, `reports/`). The game's own half is code (`Scripts/GamePaths.cs`,
+  `Scripts/Simulation/GameFolders.cs`); the script moves Godot's `user://` folder in and
+  replaces it with a directory junction, so engine files land in the same place. Idempotent;
+  needs Godot closed because Windows will not move an open `godot.log`. `-WhatIf` prints the plan.
 - **External AI tooling** — `docs/AI_TOOLING_ASSESSMENT_RU.md` records the verdict on
   REA, universal-modder and Co-op Anything. None of their MCP servers are registered in
   `.mcp.json`. REA reverse-engineers binaries and needs Node ^22.19 / ^24.11 / >=26.

@@ -5,12 +5,13 @@ F# files do not appear as attachable `.fs` Node scripts in Godot. C# owns Godot
 source generation, exported properties and signals; pure F# domain code is called
 through ordinary strongly typed .NET references. No native engine fork is needed.
 
-Tested: official Godot `4.8.beta1.mono.official.4d10419ca`, Windows x86_64,
-.NET SDK 10.0.402, `net10.0`, Godot.NET.Sdk `4.8.0-beta.1`.
+Tested: official Godot `4.8.beta2.mono.official.cafc17a19`, Windows x86_64,
+.NET SDK 10, `net10.0`, Godot.NET.Sdk `4.8.0-beta.2`. On 29 October 2026 the
+template built and the headless probe printed `LANGUAGE_KIT_PASS language=fsharp`.
 
 ```powershell
-./build.ps1 -GodotExecutable 'C:/GodotEngineNet 4.8-Beta1/Godot_v4.8-beta1_mono_win64_console.exe' -OutputDirectory C:/Temp/fsharp-probe
-./probe.ps1 -GodotExecutable 'C:/GodotEngineNet 4.8-Beta1/Godot_v4.8-beta1_mono_win64_console.exe' -ProjectDirectory C:/Temp/fsharp-probe
+./build.ps1 -GodotExecutable 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' -OutputDirectory C:/Temp/fsharp-probe
+./probe.ps1 -GodotExecutable 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' -ProjectDirectory C:/Temp/fsharp-probe
 ```
 
 The template is reusable by copying `FSharpLogic` to your project and adding its

@@ -212,9 +212,18 @@ public static class WarNames
             return Loc.Format("{0} Civil War", rising.DisplayName);
         // A secession is the same war seen from the other side: the parent state and the
         // province that left it. Naming it after both countries reads as a tautology -
-        // "Gulf Union-Republic of East War" - when it is one country's civil war.
+        // "Gulf Union-Republic of East War" - when it is one country's civil war. Unless the
+        // side that left was a country before it was anybody's subject: China throwing off
+        // an American protectorate is not the American civil war, it is China's war of
+        // independence.
         if (SeniorSide(war, attacker, defender) is { } senior)
-            return Loc.Format("{0} Civil War", senior.DisplayName);
+        {
+            var leaver = senior.Id == attacker.Id ? defender : attacker;
+            return leaver.SecededFromId == senior.Id && string.IsNullOrEmpty(leaver.FoundedInRevolt) &&
+                   leaver.Movement is null && string.IsNullOrEmpty(leaver.FactionId)
+                ? Loc.Format("{0} War of Independence", leaver.DisplayName)
+                : Loc.Format("{0} Civil War", senior.DisplayName);
+        }
         // A pair name is rebuilt from today's names, not today's spellings of yesterday's.
         if (IsPairName(war.Name) || NationNaming.LooksLikeKey(war.Name))
             return Loc.Format(war.Name.EndsWith(" Border War", StringComparison.Ordinal)
@@ -524,6 +533,7 @@ public static partial class FrontPlanner
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             if (!profiles.TryGetValue(nation.Id, out var profile))
                 profiles[nation.Id] = profile = AiStrategyCatalog.Resolve(campaign, war, nation);
+            if (StaffReasons.SupplyHoldsAttack(campaign, army)) continue;
             if (army.Planning < profile.ExecutePlanningThreshold && !Warfare.CanStartOpenAdvance(campaign, war, army)) continue;
             new SetArmyPlanExecutionCommand { IssuerId = nation.Id, ArmyId = army.Id, Active = true }.Apply(campaign);
         }
@@ -601,7 +611,25 @@ public static partial class FrontPlanner
         // month. Below the readiness line the share falls away - an operational pause, for either
         // side - and comes back as the divisions recover.
         share *= Readiness(c, war, nation);
+        share = MathF.Min(0.92f, share * OffensivePulse(c, war, nation));
         return share;
+    }
+
+    /// <summary>
+    /// The rhythm of a war, for one side: offensives and pauses rather than the same pressure
+    /// every day. Every side of every war has a cycle of its own, ninety to a hundred and eighty
+    /// days long with a phase drawn from the seed; for about a third of it the general staff
+    /// throws its weight forward (AiOffensivePulseStrength more of the army on the advance), for
+    /// a quarter it rests and refits. Two sides seldom peak together, so a front moves in waves -
+    /// one side's offensive, the other's counter-blow - and no two campaigns move alike. Readiness
+    /// still applies under it: a broken army does not attack because it is the season to.
+    /// </summary>
+    internal static float OffensivePulse(Campaign c, StrategicWar war, Nation nation)
+    {
+        if (war is null || nation is null) return 1f;
+        return WarRhythm.Pulse(c.Defines.AiOffensivePulseStrength,
+            Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F1), Escalation.Roll(c.Seed, war.Id, nation.Id, 0, 0x0F2),
+            c.ElapsedDays - war.StartedDay);
     }
 
     /// <summary>
@@ -888,6 +916,13 @@ public static partial class FrontPlanner
             var stance = order == ArmyOrder.Spearhead || order == ArmyOrder.AdvanceFront
                 ? profile.OffensiveStance
                 : order == ArmyOrder.DefendFront ? profile.DefensiveStance : ArmyStance.Balanced;
+            // The capital is not a province like the others. A government still sitting in its
+            // own capital orders the divisions there to hold it, whatever the doctrine says:
+            // that is the one order a computer army was not giving itself, and losing the
+            // capital without a fight was the cheapest way to lose a war.
+            if (order == ArmyOrder.DefendFront && army.ProvinceId > 0 &&
+                army.ProvinceId == CapitalCore.EffectiveProvinceId(campaign, campaign.NationById(nationId)))
+                stance = ArmyStance.LastStand;
 
             // Re-issuing an order a division already has is not free: it clears the route,
             // picks a fresh target from a front list that shifts every time a province
@@ -913,7 +948,9 @@ public static partial class FrontPlanner
                 new SetArmyStanceCommand { IssuerId = nationId, ArmyId = army.Id, Stance = stance }.Apply(campaign);
 
             bool execute;
-            if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
+            if (StaffReasons.SupplyHoldsAttack(campaign, army))
+                execute = false;
+            else if (order is not (ArmyOrder.AdvanceFront or ArmyOrder.Spearhead))
             {
                 execute = false;
             }

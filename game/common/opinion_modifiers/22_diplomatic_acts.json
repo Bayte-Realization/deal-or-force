@@ -1,0 +1,19 @@
+{
+  "cultural_cooperation": { "name": "Cultural cooperation", "opinion": 8, "days": 700, "decays": true, "max_stacks": 1 },
+  "research_cooperation": { "name": "Research cooperation", "opinion": 8, "days": 700, "decays": true, "max_stacks": 1 },
+  "military_attache": { "name": "A military attaché", "opinion": 6, "days": 500, "decays": true, "max_stacks": 1 },
+  "joint_exercise": { "name": "A joint exercise", "opinion": 6, "days": 400, "decays": true, "max_stacks": 2 },
+  "embargo_lifted": { "name": "Lifted an embargo", "opinion": 10, "days": 600, "decays": true, "max_stacks": 1 },
+  "subsidy_paid": { "name": "A subsidy", "opinion": 12, "days": 500, "decays": true, "max_stacks": 2 },
+  "staff_talks": { "name": "Staff talks", "opinion": 4, "days": 300, "decays": true, "max_stacks": 1 },
+  "consular_convention": { "name": "A consular convention", "opinion": 6, "days": 700, "decays": true, "max_stacks": 1 },
+  "state_visit": { "name": "A state visit", "opinion": 10, "days": 500, "decays": true, "max_stacks": 1 },
+  "port_visit": { "name": "A port visit", "opinion": 6, "days": 400, "decays": true, "max_stacks": 1 },
+  "student_exchange": { "name": "A student exchange", "opinion": 6, "days": 700, "decays": true, "max_stacks": 1 },
+  "intelligence_sharing": { "name": "Shared intelligence", "opinion": 8, "days": 400, "decays": true, "max_stacks": 1 },
+  "border_commission": { "name": "A border commission", "opinion": 5, "days": 600, "decays": true, "max_stacks": 1 },
+  "disaster_relief": { "name": "Disaster relief", "opinion": 12, "days": 500, "decays": true, "max_stacks": 1 },
+  "technology_licence": { "name": "A technology licence", "opinion": 6, "days": 500, "decays": true, "max_stacks": 1 },
+  "airspace_cooperation": { "name": "Airspace cooperation", "opinion": 5, "days": 400, "decays": true, "max_stacks": 1 },
+  "joint_naval_patrol": { "name": "A joint patrol", "opinion": 6, "days": 400, "decays": true, "max_stacks": 1 }
+}

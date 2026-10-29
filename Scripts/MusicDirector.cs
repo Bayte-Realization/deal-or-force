@@ -30,6 +30,7 @@ public partial class MusicDirector : Node
     private double _clock;
     private string _region = "", _subRegion = "", _country = "";
     private bool _auditionSuppressed;
+    private bool _shuttingDown;
 
     public void SuppressForAudition(bool suppressed)
     { _auditionSuppressed = suppressed; RefreshVolume(); }
@@ -59,12 +60,13 @@ public partial class MusicDirector : Node
     /// </param>
     public void FollowScene(Node scene, Func<MusicCatalog.Moment> moment, Func<MusicReadout> situation = null,
         Func<bool> silence = null)
-    { _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; _askSilence = silence; if (IsInsideTree()) Follow(); }
+    { if (_shuttingDown) return; _cueFocus.Reset(); _auditionSuppressed = false; _asker = scene; _askMoment = moment; _askSituation = situation; _askSilence = silence; if (IsInsideTree()) Follow(); }
 
     private bool Silenced => _askSilence is not null && _asker is not null && IsInstanceValid(_asker) && _askSilence();
 
     public override void _Ready()
     {
+        if (_shuttingDown) return;
         for (var i = 0; i < _decks.Length; i++)
         {
             var index = i;
@@ -78,6 +80,7 @@ public partial class MusicDirector : Node
 
     public override void _Process(double delta)
     {
+        if (_shuttingDown) return;
         _cueFocus.Advance(delta);
         var completed = _transition.Advance(delta);
         if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
@@ -91,9 +94,28 @@ public partial class MusicDirector : Node
 
     public override void _ExitTree()
     {
+        StopPlayback();
+        if (ReferenceEquals(_instance, this)) _instance = null;
+    }
+
+    internal static void PrepareApplicationExit()
+    {
+        if (IsInstanceValid(_instance)) _instance.StopPlayback();
+    }
+
+    private void StopPlayback()
+    {
+        _shuttingDown = true;
         // There is no deferred tween callback left to revive an obsolete scene's selection.
         _transition.Reset(); _playing = ""; _asker = null; _askMoment = null; _askSituation = null; _askSilence = null;
-        if (ReferenceEquals(_instance, this)) _instance = null;
+        // A removed director can remain alive until QueueFree/managed collection.
+        // Release the audio-server playback and its resource now, not at process exit.
+        foreach (var deck in _decks)
+        {
+            if (!IsInstanceValid(deck)) continue;
+            deck.Stop();
+            deck.Stream = null;
+        }
     }
 
     public void RefreshVolume()
@@ -138,6 +160,7 @@ public partial class MusicDirector : Node
 
     private void RequestNext(bool advance)
     {
+        if (_shuttingDown) return;
         _transition.RequestSelection(advance);
         DrainSelection();
     }

@@ -29,7 +29,9 @@ public static class EngineScriptMod
             ["get_politics"] = Callable.From<string, Godot.Collections.Dictionary>(api.get_politics),
             ["enact_policy"] = Callable.From<string, string, string, int, bool, bool>(api.enact_policy),
             ["manage_debt"] = Callable.From<string, string, double, bool>(api.manage_debt),
-            ["add_course_shock"] = Callable.From<string, double, string, bool>(api.add_course_shock)
+            ["add_course_shock"] = Callable.From<string, double, string, bool>(api.add_course_shock),
+            ["study_doctrine"] = Callable.From<string, string, string, bool, bool>(api.study_doctrine),
+            ["propose_diplomatic_act"] = Callable.From<string, string, string, bool>(api.propose_diplomatic_act)
         };
         bridge.MakeReadOnly();
         return bridge;
@@ -48,8 +50,8 @@ public static class EngineScriptMod
     public static RefCounted Load(string physicalPath)
     {
         var suffix = Path.GetExtension(physicalPath).ToLowerInvariant();
-        if (suffix != ".lua")
-            throw new InvalidOperationException("The verified engine-script adapter accepts Luau .lua scripts only.");
+        if (suffix is not (".lua" or ".luau"))
+            throw new InvalidOperationException("The verified engine-script adapter accepts Luau .lua or .luau scripts only.");
         if (!ClassDB.ClassExists("LuauScript"))
         {
             if (!Godot.FileAccess.FileExists(LuauExtension))

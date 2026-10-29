@@ -1,0 +1,7 @@
+[configuration]
+entry_symbol = "cgo_extension_init"
+compatibility_minimum = "4.7"
+reloadable = false
+
+[libraries]
+windows.x86_64 = "res://addons/dof_go/dof_go.dll"

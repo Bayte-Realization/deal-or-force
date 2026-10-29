@@ -77,13 +77,17 @@ internal static class WarLedgerReport
             Console.WriteLine($" {(w.CivilConflict ? "CIVIL" : "WAR  ")} {Tag(w.AttackerId)}->{Tag(w.DefenderId)} " +
                               $"day {w.StartedDay}-{(w.Ended ? w.EndedDay.ToString() : "...")} ({length}d) " +
                               $"stage={w.EscalationStage} allies={w.AttackerAllies.Count}/{w.DefenderAllies.Count}[{string.Join(",", w.AttackerAllies.Concat(w.DefenderAllies).Select(id => c.NationById(id)?.Tag))}] " +
-                              $"losses={w.AttackerLosses:0.000}/{w.DefenderLosses:0.000} score={w.WarScore:0.00} " +
+                              $"losses={w.AttackerLosses:0.000}/{w.DefenderLosses:0.000} " +
+                              $"(killed/wounded/captured {w.AttackerKilled:0}/{w.AttackerWounded:0}/{w.AttackerCaptured:0} vs {w.DefenderKilled:0}/{w.DefenderWounded:0}/{w.DefenderCaptured:0}) score={w.WarScore:0.00} " +
                               $"winner={winner} \"{WarNames.Of(c, w)}\" {w.PeaceSummary}" + (w.PeaceProposerId >= 0 ? $" (put by {Tag(w.PeaceProposerId)}: {w.LastNegotiation})" : ""));
         }
         // What happened short of wars: incidents, crises, backers (Escalation, ProxyWars).
         var kinds = new[] { "incident", "incident_calm", "tension_crisis", "tension_clashes", "tension_eased",
-            "war_major", "war_total", "proxy_started", "proxy_ended", "secession", "secession_contested", "civil_war", "war_started", "border_war", "coup_plot", "coup", "coup_counter", "coup_foiled", "regime_change", "ultimatum_accepted", "ultimatum_refused" };
+            "war_major", "war_total", "proxy_started", "proxy_ended", "secession", "secession_contested", "civil_war", "war_started", "border_war", "coup_plot", "coup", "coup_counter", "coup_foiled", "regime_change", "ultimatum_accepted", "ultimatum_refused", "great_battle", "general_fallen", "mass_desertion", "went_underground", "movement_statehood" };
         Console.WriteLine("CHRONICLE " + string.Join(" ", kinds.Select(k => $"{k}={c.Chronicle.Entries.Count(e => e.Kind == k)}")));
+        // The chronicle keeps its last 2,048 entries; these count the whole run.
+        Console.WriteLine($"TALLY great_battles={Generals.GreatBattles} commanders_fallen={Generals.CommandersFallen} " +
+                          $"deserted={Desertion.Deserted:N0} recruited_by_enemy={Desertion.Recruited:N0} went_underground={MovementFall.WentUnderground}");
         foreach (var entry in c.Chronicle.Entries.Where(e => e.Kind is "ultimatum_accepted" or "ultimatum_refused"))
             Console.WriteLine($" ULTIMATUM day {entry.Day} {Tag(entry.ActorId)}->{Tag(entry.TargetId)} {entry.Kind["ultimatum_".Length..]}: {entry.Subject}");
         var shaky = c.Nations.Where(n => n.Movement is null && n.FactionId.Length == 0 && n.Population > 0 && c.StatesOf(n).Length > 0)

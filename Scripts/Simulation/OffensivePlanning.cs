@@ -4,9 +4,12 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
-/// <summary>A destination stroke never replaces its departure front or becomes an endless advance.</summary>
+/// <summary>A destination stroke preserves its departure front; phases regroup together and stop at the final objective.</summary>
 public static class OffensivePlanning
 {
+    public const int MaxPhases = 24;
+    private const float FullPlanning = .99f;
+
     public static DrawnFrontLine Source(Campaign c, IEnumerable<Army> armies)
     {
         var lines = armies.Select(a => BattlePlanning.LineFor(c, a)).ToArray();
@@ -29,19 +32,49 @@ public static class OffensivePlanning
         var enemy = c.NationById(source.BorderNationId);
         var control = c.ProvinceController ?? map.ProvinceToNation;
         var goals = command.Provinces.Distinct().ToArray();
-        if (enemy is null || goals.Length == 0 || goals.Length > 128 || goals.Any(p =>
+        if (enemy is null || own is null || goals.Length == 0 || goals.Length > 128 || goals.Any(p =>
             p <= 0 || p > map.ProvinceCount || map.IsWater(p) || control[p] != enemy.MapIndex)) return;
         for (var i = 1; i < goals.Length; i++)
             if (!map.Neighbors[goals[i - 1]].Contains(goals[i])) return;
-        var departure = source.Kind == FrontLineKind.Defence ? source.Provinces : source.SourceProvinces;
+
+        var count = existing is null ? 0 : PhaseCount(existing);
+        var phaseIndex = command.AppendOffensivePhase ? count : command.EditOffensivePhase >= 0
+            ? command.EditOffensivePhase : existing?.ActiveOffensivePhase ?? 0;
+        if (command.AppendOffensivePhase && (existing is null || count >= MaxPhases) ||
+            existing is not null && !command.AppendOffensivePhase &&
+            (phaseIndex < existing.ActiveOffensivePhase || phaseIndex >= count)) return;
+        IReadOnlyCollection<int> departure = phaseIndex == 0
+            ? source.Kind == FrontLineKind.Defence ? source.Provinces : source.SourceProvinces
+            : PhaseGoals(existing, phaseIndex - 1).ToArray();
         if (departure.Count == 0) return;
-        // Reject unreachable islands/neutral corridors without changing existing orders.
         var seed = departure.OrderBy(x => x).First();
         var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
         var corridor = war is null
             ? map.FindOperationalRoute(seed, goals[0], (ushort)own.MapIndex, (ushort)enemy.MapIndex, control)
             : WarCoalition.OperationalRoute(c, war, own.Id, seed, goals[0], control);
         if (corridor.Length == 0) return;
+        var phase = new OffensivePhase();
+        phase.ObjectiveSequence.AddRange(goals);
+
+        if (existing is not null && (existing.OffensivePhases.Count > 0 || command.AppendOffensivePhase))
+        {
+            if (existing.OffensivePhases.Count == 0)
+            {
+                var legacy = new OffensivePhase();
+                legacy.ObjectiveSequence.AddRange(existing.ObjectiveSequence);
+                existing.OffensivePhases.Add(legacy);
+            }
+            if (command.AppendOffensivePhase) existing.OffensivePhases.Add(phase);
+            else existing.OffensivePhases[phaseIndex] = phase;
+            if (!command.AppendOffensivePhase && phaseIndex == existing.ActiveOffensivePhase)
+            {
+                ActivatePhase(c, existing, phaseIndex);
+                foreach (var army in armies) Route(c, army, existing);
+            }
+            DiagnosticLogs.Write("orders", $"OFFENSIVE_PHASE line={existing.Id} phase={phaseIndex} total={PhaseCount(existing)} goal_posts={goals.Length} append={command.AppendOffensivePhase}");
+            return;
+        }
+
         var line = new DrawnFrontLine { Id = existing?.Id ?? c.NextFrontLineId++, NationId = own.Id,
             Kind = FrontLineKind.Offensive, BorderNationId = enemy.Id, WholeBorder = source.WholeBorder,
             StartLatitude = source.StartLatitude, StartLongitude = source.StartLongitude,
@@ -50,7 +83,7 @@ public static class OffensivePlanning
         line.BorderRevision = c.MapRevision;
         line.Provinces.UnionWith(goals);
         line.ObjectiveSequence.AddRange(goals);
-        // Stable near-first lanes with balanced occupancy; no daily reshuffle of objectives.
+        line.OffensivePhases.Add(phase);
         var used = new Dictionary<int, int>();
         foreach (var army in armies)
         {
@@ -72,6 +105,90 @@ public static class OffensivePlanning
         foreach (var army in armies)
             new SetArmyOrderCommand { IssuerId = own.Id, ArmyId = army.Id, Order = ArmyOrder.AdvanceFront }.Apply(c);
         DiagnosticLogs.Write("orders", $"OFFENSIVE_PLAN line={line.Id} owner={own.Id} target={enemy.Id} divisions={armies.Length} source_posts={departure.Count} goal_posts={goals.Length} edit={existing is not null}");
+    }
+
+    public static int PhaseCount(DrawnFrontLine line) => Math.Max(1, line.OffensivePhases.Count);
+
+    public static IReadOnlyList<int> PhaseGoals(DrawnFrontLine line, int index) =>
+        line.OffensivePhases.Count > 0 && index >= 0 && index < line.OffensivePhases.Count
+            ? line.OffensivePhases[index].ObjectiveSequence : line.ObjectiveSequence;
+
+    public static bool HasNextPhase(DrawnFrontLine line) => line.ActiveOffensivePhase + 1 < PhaseCount(line);
+
+    private static void ActivatePhase(Campaign c, DrawnFrontLine line, int index)
+    {
+        var goals = PhaseGoals(line, index);
+        var departure = index == 0 ? line.SourceProvinces.ToArray() : PhaseGoals(line, index - 1).ToArray();
+        line.ActiveOffensivePhase = index;
+        line.OffensiveRegroupDay = -1;
+        line.SourceProvinces.Clear(); line.SourceProvinces.UnionWith(departure);
+        line.ObjectiveSequence.Clear(); line.ObjectiveSequence.AddRange(goals);
+        line.Provinces.Clear(); line.Provinces.UnionWith(goals);
+        line.Objectives.Clear(); line.Posts.Clear(); line.PostsDay = int.MinValue;
+        var used = new Dictionary<int, int>();
+        foreach (var army in line.ArmyIds.Distinct().OrderBy(id => id).Select(id => c.Armies.Find(a => a.Id == id))
+            .Where(a => a is not null && a.NationId == line.NationId && a.FrontLineId == line.Id))
+        {
+            var goal = goals.OrderBy(p => used.GetValueOrDefault(p))
+                .ThenBy(p => Distance(c.ProvinceMap, army.ProvinceId, p)).ThenBy(p => p).First();
+            used[goal] = used.GetValueOrDefault(goal) + 1;
+            line.Objectives[army.Id] = goal;
+        }
+    }
+
+    private static Army[] Members(Campaign c, DrawnFrontLine line) => line.ArmyIds.Distinct().OrderBy(id => id)
+        .Select(id => c.Armies.Find(a => a.Id == id))
+        .Where(a => a is not null && a.NationId == line.NationId && a.FrontLineId == line.Id && a.Divisions >= .1f)
+        .ToArray();
+
+    private static bool FullyPrepared(Campaign c, DrawnFrontLine line, Army army) => army.PlanActive &&
+        !army.InBattle && army.Planning >= FullPlanning &&
+        army.ProvinceId == line.Objectives.GetValueOrDefault(army.Id, -1) &&
+        AssaultReadiness.Assess(c, army).Ready;
+
+    public static int RegroupDays(Campaign c, DrawnFrontLine line)
+    {
+        var participants = Members(c, line).Where(a => line.Objectives.ContainsKey(a.Id)).ToArray();
+        if (participants.Length == 0) return 3;
+        var preparedShare = participants.Count(a => FullyPrepared(c, line, a)) / (float)participants.Length;
+        return Math.Max(3, (int)Math.Ceiling(3f / Math.Clamp(preparedShare, .25f, 1f)));
+    }
+
+    public static void Tick(Campaign c)
+    {
+        if (c.ProvinceMap is null || c.ProvinceController is null) return;
+        foreach (var line in c.FrontLines)
+        {
+            if (line.Kind != FrontLineKind.Offensive || !HasNextPhase(line)) continue;
+            var own = c.NationById(line.NationId);
+            var members = Members(c, line);
+            var participants = members.Where(a => line.Objectives.ContainsKey(a.Id)).ToArray();
+            if (own is null || participants.Length == 0 || !participants.Any(a => a.PlanActive))
+            {
+                line.OffensiveRegroupDay = -1;
+                continue;
+            }
+            var war = c.Wars.Find(w => !w.Ended && w.Opposes(line.NationId, line.BorderNationId));
+            var ready = war is not null && participants.Any(a => FullyPrepared(c, line, a)) &&
+                line.ObjectiveSequence.All(p => c.ProvinceController[p] == own.MapIndex);
+            if (!ready) { line.OffensiveRegroupDay = -1; continue; }
+            if (line.OffensiveRegroupDay < 0)
+            {
+                line.SourceProvinces.Clear();
+                line.SourceProvinces.UnionWith(line.ObjectiveSequence);
+                line.PostsDay = int.MinValue;
+                line.OffensiveRegroupDay = c.ElapsedDays + RegroupDays(c, line);
+                continue;
+            }
+            if (c.ElapsedDays < line.OffensiveRegroupDay) continue;
+            ActivatePhase(c, line, line.ActiveOffensivePhase + 1);
+            foreach (var army in members)
+            {
+                army.PlanActive = true;
+                Route(c, army, line);
+            }
+            DiagnosticLogs.Write("orders", $"OFFENSIVE_PHASE_ADVANCE line={line.Id} phase={line.ActiveOffensivePhase} divisions={members.Length}");
+        }
     }
 
     private static float Distance(ProvinceTopology map, int a, int b)

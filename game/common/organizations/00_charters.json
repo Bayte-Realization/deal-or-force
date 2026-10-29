@@ -12,8 +12,8 @@
       "modifiers": { "stability_weekly": 0.0005 }
     },
     "common_market": {
-      "name": "Common market integration",
-      "description": "Shared commercial standards and customs corridors lower barriers across member borders and expand market reach.",
+      "name": "Customs union",
+      "description": "A customs union: members buy from each other first and outsiders face a common external tariff; shared standards widen every member's market.",
       "modifiers": { "trade_reach": 0.06, "output": 0.02 }
     },
     "integrated_command": {

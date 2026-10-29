@@ -11,13 +11,20 @@ public partial class DealOrForceGame
     private Control _policyLayer;
     private PanelContainer _policyPanel;
     private VBoxContainer _policyList, _policyOptions, _policyPreview, _policyContext;
-    private ScrollContainer _policyOptionsScroll;
+    private ScrollContainer _policyOptionsScroll, _policyPreviewScroll;
+    private VBoxContainer _policyReformTerms;
+    private HBoxContainer _policyReformActions;
+    private PanelContainer _policyReformBar;
+    private VBoxContainer _policyCategoryColumn;
+    private int _policyPixelHeight, _policyPixelWidth;
     private LineEdit _policySearch;
     private Label _policySummary, _policyWorkspaceFeedback;
     private readonly Dictionary<string, Button> _policyTabs = new();
     private string _policyTab = "National", _policyCategory = "", _policySelected = "", _lawTarget = "";
     private int _lawRegion, _policyBuiltDay = -1;
     private Button _policyEnact;
+    private readonly Dictionary<string, (Button Button, Label Status)> _policyChoices = new();
+    private readonly Dictionary<string, Label> _policyFigures = new();
 
     private bool PolicyIsAgenda => _policyTab == "Agendas";
     private string PolicyScope => _policyTab == "Regional" ? "region" : _policyTab == "Foreign" ? "foreign" : "nation";
@@ -27,7 +34,7 @@ public partial class DealOrForceGame
         _policyLayer = FullLayer("PolicyWorkspace");
         _policyLayer.Visible = false;
         _hudLayer.AddChild(_policyLayer);
-        var shade = new ColorRect { Color = new Color(.015f, .026f, .041f, .72f), MouseFilter = MouseFilterEnum.Stop };
+        var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _policyLayer.AddChild(shade);
         _policyPanel = TexturedPanel(_policyLayer);
@@ -35,42 +42,62 @@ public partial class DealOrForceGame
         // Use the same authored surface and framing as full diplomacy, not a second skin.
         Ui.Place(_policyPanel, "modal.policies");
         var rows = PanelRows(_policyPanel, 22, 16, 9);
-        var header = new HBoxContainer(); rows.AddChild(header);
-        var title = Title("LAWS AND NATIONAL AGENDA", 25, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
-        header.AddChild(ActionButton("My country", () => OpenScreen("Nation"), 0, 32,
-            iconPath: "res://game/gfx/interface/icons/icon_nation.png"));
-        header.AddChild(HandbookButton("domestic_crises"));
+        // The head of the workspace, from the shared vocabulary: display title, a sentence of
+        // purpose, the two shortcuts and the close, and a rule under the lot.
+        var myCountry = ActionButton("My country", () => OpenScreen("Nation"), 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_nation.png");
+        var toDoctrines = ActionButton("Doctrines tab", () => { ClosePolicyWorkspace(); OpenDoctrineScreen(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_laws.png");
+        var toBudget = ActionButton("State Affairs", () => { ClosePolicyWorkspace(); OpenStateAffairs(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_state_affairs.png");
+        var handbook = HandbookButton("domestic_crises");
         var close = ActionButton("×", ClosePolicyWorkspace, 38, 32);
-        close.Name = "ClosePolicyWorkspace"; close.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(close);
-        _policySummary = Title("", 13, Ui.Colour("text.body_soft")); rows.AddChild(_policySummary);
+        close.Name = "ClosePolicyWorkspace"; close.TooltipText = Ui.Tip(Tr("Close"));
+        ScreenHeader(rows, "LAWS AND NATIONAL AGENDA",
+            "What the state is allowed to do, what it does now, and what changing it costs.",
+            right: new Control[] { myCountry, toBudget, toDoctrines, handbook, close });
+        var figures = new HBoxContainer { Name = "PolicyFigures" };
+        figures.AddThemeConstantOverride("separation", Ui.Gap(24)); rows.AddChild(figures);
+        foreach (var caption in new[] { "Stability", "Treasury", "Enacted laws", "Political credit" })
+        {
+            var cell = NumberCell(caption, "—"); cell.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            figures.AddChild(cell); _policyFigures[caption] = (Label)cell.GetNode("FigureValue");
+        }
+        _policySummary = Title("", 12, Ui.Colour("text.caption"));
+        _policySummary.Visible = false; rows.AddChild(_policySummary);
         var tabs = new HBoxContainer(); tabs.AddThemeConstantOverride("separation", 6); rows.AddChild(tabs);
         foreach (var tab in CampaignUiCatalog.For("Laws").Tabs)
         {
             var id = tab.Id;
             var button = ActionButton(tab.Label, () => SelectPolicyTab(id), 0, 34,
                 iconPath: "res://game/gfx/interface/icons/icon_" + (id == "Course" || id == "Agendas" ? "agenda" : "laws") + ".png");
-            button.Name = "PolicyTab_" + id; button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.Name = "PolicyTab_" + id;
+            button.SetMeta("atlas_tab_button", true);
+            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.ClipText = true; button.TooltipText = Ui.Tip(Tr(tab.Label));
+            StyleButton(button, id == _policyTab);
             tabs.AddChild(button); _policyTabs[id] = button;
         }
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 14); rows.AddChild(body);
-        var list = new VBoxContainer { CustomMinimumSize = new Vector2(220, 0) }; body.AddChild(list);
+        body.AddThemeConstantOverride("separation", Ui.Gap(12)); rows.AddChild(body);
+        var list = new VBoxContainer { CustomMinimumSize = new Vector2(180, 0) }; body.AddChild(list);
+        _policyCategoryColumn = list;
         _policyContext = new VBoxContainer { Name = "PolicyTarget" }; list.AddChild(_policyContext);
         _policySearch = Placeholder(new LineEdit { Name = "PolicySearch", ClearButtonEnabled = true }, "Find a law or category...");
         _policySearch.TextChanged += _ => RebuildPolicyList(); list.AddChild(_policySearch);
         _policyList = PolicyColumn(list, "PolicyCategories", false);
-        var options = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1.1f };
+        var options = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = .85f };
         body.AddChild(options);
         _policyOptions = PolicyColumn(options, "PolicyOptions", true);
         _policyOptionsScroll = (ScrollContainer)_policyOptions.GetParent();
-        var preview = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1 };
+        var preview = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsStretchRatio = 1.65f };
         body.AddChild(preview);
         _policyPreview = PolicyColumn(preview, "PolicyPreview", true);
+        _policyPreviewScroll = (ScrollContainer)_policyPreview.GetParent();
+        BuildPolicyReformBar(rows);
         _policyWorkspaceFeedback = Title("", 12, Ui.Colour("text.body_soft"));
-        _policyWorkspaceFeedback.Name = "PolicyFeedback"; _policyWorkspaceFeedback.CustomMinimumSize = new Vector2(0, 22); rows.AddChild(_policyWorkspaceFeedback);
+        _policyWorkspaceFeedback.Name = "PolicyFeedback"; _policyWorkspaceFeedback.Visible = false; rows.AddChild(_policyWorkspaceFeedback);
     }
 
     private static VBoxContainer PolicyColumn(Control parent, string name, bool expand)
@@ -108,7 +135,9 @@ public partial class DealOrForceGame
         _openScreen = "Laws";
         RaiseWorkspaceLayer(_policyLayer);
         _policyWorkspaceFeedback.Text = "";
-        SelectPolicyTab(_policyTab);
+        _policyWorkspaceFeedback.Visible = false;
+        foreach (var (id, button) in _policyTabs) StyleButton(button, id == _policyTab);
+        BuildPolicyTarget(); RebuildPolicyList(); _policyBuiltDay = -1; RefreshPolicyWorkspace();
         _policySearch.GrabFocus(); UpdateScreenButtons();
     }
 
@@ -126,6 +155,8 @@ public partial class DealOrForceGame
         // Do not render laws underneath a tab labelled Doctrines.
         if (tab == "Doctrines") { ClosePolicyWorkspace(); OpenArmyDoctrinePage(); return; }
         _policyTab = tab; _policyCategory = ""; _policySelected = ""; _policySearch.Text = "";
+        _policyWorkspaceFeedback.Visible = false; _policyBuiltDay = -1;
+        _policyReformBar.Visible = tab is not ("Course" or "Crises" or "Doctrines");
         foreach (var (id, button) in _policyTabs) StyleButton(button, id == tab);
         _policyOptionsScroll.ScrollVertical = 0;
         BuildPolicyTarget(); RebuildPolicyList(); RefreshPolicyWorkspace();
@@ -169,7 +200,7 @@ public partial class DealOrForceGame
         if (_policyTab == "Crises")
         {
             _policySearch.PlaceholderText = Tr("Find a governed region...");
-            ShowDomesticCrisisWorkspace(); return;
+            ShowDomesticCrisisWorkspace(); FitPolicyTypography(); return;
         }
         _policySearch.PlaceholderText = Tr("Find a law or category...");
         if (_policyTab == "Course")
@@ -186,7 +217,7 @@ public partial class DealOrForceGame
         foreach (var group in groups)
         {
             var key = group.Key;
-            var button = ActionButton(key, () => { _policyCategory = key; _policySelected = ""; RebuildPolicyList(); }, 0, 38,
+            var button = ActionButton(key, () => { _policyCategory = key; _policySelected = ""; _policyOptionsScroll.ScrollVertical = 0; RebuildPolicyList(); }, 0, 38,
                 key == _policyCategory, "res://game/gfx/interface/icons/icon_" + group.First().Icon + ".png");
             button.Name = "PolicyCategory_" + group.First().Id; button.Alignment = HorizontalAlignment.Left;
             button.ClipText = true; button.TooltipText = Ui.Tip(Tr(key)); _policyList.AddChild(button);
@@ -203,14 +234,19 @@ public partial class DealOrForceGame
         // where it is taken: a law, an agenda, a course in war all come out of this number.
         var credit = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
-        _policySummary.Text = n.DisplayName + " · " + Tr("Stability") + " " + Fmt.Percent(n.Stability) +
-            " · " + Tr("Treasury") + " " + Fmt.Money(n.Treasury) + " · " + Tr("Enacted laws") + " " + n.Laws.Count +
-            " · " + Tr("Political credit") + " " + Fmt.Number(n.PoliticalPoints) +
-            " (" + Loc.Format("{0}/week", Fmt.Number(credit)) + ")";
+        _policyFigures["Stability"].Text = Fmt.Percent(n.Stability);
+        _policyFigures["Treasury"].Text = Fmt.Money(n.Treasury);
+        _policyFigures["Enacted laws"].Text = n.Laws.Count.ToString();
+        _policyFigures["Political credit"].Text = Fmt.Number(n.PoliticalPoints);
+        _policyFigures["Political credit"].TooltipText = Ui.Tip(Loc.Format("{0}/week", Fmt.Number(credit)));
+        // Affordability can change while paused through other commands. Keep the persistent
+        // action live without destroying focused controls or the comparison being read.
+        RefreshPolicyReformBar();
+        if (_policyPixelHeight != GetWindow().Size.Y || _policyPixelWidth != GetWindow().Size.X) FitPolicyTypography();
         // Do not tear down focused controls on every simulation frame.
         if (_policyBuiltDay == _campaign.ElapsedDays) return;
         _policyBuiltDay = _campaign.ElapsedDays;
-        if (_policyTab == "Crises") { ShowDomesticCrisisWorkspace(); return; }
+        if (_policyTab == "Crises") { ShowDomesticCrisisWorkspace(); FitPolicyTypography(); return; }
         if (_policyTab == "Course")
         {
             var scroll = _policyOptionsScroll.ScrollVertical;

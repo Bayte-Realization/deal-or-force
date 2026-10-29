@@ -149,6 +149,7 @@ public partial class DealOrForceGame
         {
             var current = religion
                 ? id.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase) ||
+                  (Simulation.StateIdentity.IsAtheist(id) && Simulation.StateIdentity.IsAtheist(nation.DeclaredReligion)) ||
                   (id == Simulation.StateIdentity.SecularChoice &&
                    Simulation.StateIdentity.IsSecular(nation.DeclaredReligion))
                 : id.Equals(nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase);
@@ -172,6 +173,7 @@ public partial class DealOrForceGame
             ? Simulation.Loc.Format("The last declaration is still fresh. {0} day(s) to go.", settling)
             : Simulation.Loc.Format("A declaration costs about {0} stability against the majority's grain, less with it; nothing may be declared again for {1} days.",
                 _campaign.Defines.StateIdentityStabilityCost.ToString("0%"), _campaign.Defines.StateIdentityCooldownDays);
+        _identityFeedback.Text += "\n" + Tr("A declaration does not instantly convert residents. Beliefs change gradually; a declared worldview opposed by the population can fuel instability and civil-war opposition.");
     }
 
     /// <summary>A choice with its exact share printed under it: the number a declaration
@@ -183,8 +185,10 @@ public partial class DealOrForceGame
         button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         card.AddChild(button);
         var secular = religion && Simulation.StateIdentity.IsSecular(id);
+        var atheist = religion && Simulation.StateIdentity.IsAtheist(id);
         var caption = secular
             ? Tr("No minimum · a state may always decline a church")
+            : atheist ? Simulation.Loc.Format("{0:0.0%} atheist · state policy, not religious neutrality", share)
             : Simulation.Loc.Format("{0:0.0%} of the country · needs {1:0%}",
                 share, _campaign.Defines.StateIdentityShare);
         card.AddChild(RowLabel(caption, 10,

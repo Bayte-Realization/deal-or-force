@@ -1,0 +1,7 @@
+{
+  "ArmsShipmentShare": 0.25,
+  "ArmsShipmentDays": 14,
+  "ArmsShipmentOfferDays": 21,
+  "ArmsShipmentCooldownDays": 90,
+  "ArmsShipmentReviewDays": 14
+}

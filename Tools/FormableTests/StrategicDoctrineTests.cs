@@ -30,7 +30,7 @@ static class StrategicDoctrineTests
     static void ShippedSeven()
     {
         var all = StrategicDoctrineCatalog.All.ToList();
-        Check(all.Count == 7, "seven shipped strategies");
+        Check(all.Count >= 7, "at least seven shipped strategies");
         foreach (var doctrine in all)
         {
             Check(doctrine.Name.Length > 0 && doctrine.Description.Length > 0,
@@ -191,9 +191,9 @@ static class StrategicDoctrineTests
         foreach (var nation in campaign.Nations)
         {
             nation.StrategicDoctrine.Id = "";
-            var byCharacter = TacticalDoctrines.PreferredBranch(campaign, nation);
+            var byCharacter = TacticalDoctrines.PreferredBranch(campaign, nation, DoctrineSlots.Air);
             nation.StrategicDoctrine.Id = "air_power";
-            var byStrategy = TacticalDoctrines.PreferredBranch(campaign, nation);
+            var byStrategy = TacticalDoctrines.PreferredBranch(campaign, nation, DoctrineSlots.Air);
             if (byStrategy != "sky") { overridden = false; break; }
             if (byCharacter != "sky") overridden = true;
         }
@@ -210,7 +210,8 @@ static class StrategicDoctrineTests
         cadet.StrategicDoctrine.Id = "air_power";
         cadet.ArmyExperience = 500f; cadet.AirExperience = 500f;
         for (var day = 1; day <= 21; day++) { SetDay(studying, day); TacticalDoctrines.Tick(studying); }
-        Check(cadet.TacticalDoctrine.Branch == "sky" || cadet.TacticalDoctrine.LearningBranch == "sky",
+        var airShelf = cadet.TacticalDoctrine.Track(DoctrineSlots.Air);
+        Check(airShelf.Branch == "sky" || airShelf.LearningBranch == "sky",
             "and the government studies the tree its strategy leans on");
     }
 

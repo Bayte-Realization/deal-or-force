@@ -185,7 +185,11 @@ public static class ScriptLibrary
                 score += addition;
             if ((entry.TryGetProperty("factor", out var factor) || entry.TryGetProperty("multiply", out factor)) && factor.TryGetSingle(out var multiplier))
                 score *= multiplier;
+            if (entry.TryGetProperty("luau_formula", out var rowFormula) && rowFormula.ValueKind == JsonValueKind.String)
+                score = LuauFormulaEvaluator.Evaluate(rowFormula.GetString(), NationFormulaSnapshot.From(campaign, nation, score), score);
         }
+        if (root.TryGetProperty("luau_formula", out var finalFormula) && finalFormula.ValueKind == JsonValueKind.String)
+            score = LuauFormulaEvaluator.Evaluate(finalFormula.GetString(), NationFormulaSnapshot.From(campaign, nation, score), score);
         return score;
     }
 

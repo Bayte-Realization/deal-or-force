@@ -75,8 +75,9 @@
       ],
       "claims_state": true,
       "relation": "war", "war_name": "Syrian Civil War",
-      "army_share": 0.0, "fighters": 45000, "parent_fighters": 30000, "militia": 3,
-      "stability": 0.35, "war_support": 0.7,
+      "parent_modifier": "syrian_army_overstretched",
+      "army_share": 0.0, "fighters": 50000, "parent_fighters": 30000, "militia": 4,
+      "stability": 0.42, "war_support": 0.82,
       "overlord": "TUR", "subject_type": "client"
     },
     {
@@ -95,8 +96,8 @@
       "claims_state": true,
       "relation": "war", "war_name": "Syrian Civil War",
       "parent_modifier": "syrian_army_overstretched",
-      "army_share": 0.0, "fighters": 55000, "parent_fighters": 30000, "militia": 4,
-      "stability": 0.45, "war_support": 0.9,
+      "army_share": 0.0, "fighters": 65000, "parent_fighters": 30000, "militia": 5,
+      "stability": 0.52, "war_support": 0.92,
       "patrons": ["TUR", "QAT"], "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
     },
     {
@@ -125,8 +126,8 @@
       "government": "military_junta", "ideology": "nationalism", "peoples": ["arab_maghrebi"],
       "regions": ["ly_mj", "ly_aj", "ly_qb", "ly_bu", "ly_kf", "ly_sr", "ly_ju", "ly_sb", "ly_ws", "ly_mq", "ly_wd", "ly_gt"],
       "claims_state": true,
-      "relation": "truce", "truce_days": 720,
-      "army_share": 0.0, "fighters": 45000, "militia": 2, "stability": 0.5, "war_support": 0.6,
+      "relation": "truce", "truce_days": 150,
+      "army_share": 0.0, "fighters": 60000, "militia": 3, "stability": 0.52, "war_support": 0.78,
       "patrons": ["ARE", "EGY", "RUS"]
     },
     {
@@ -141,7 +142,7 @@
       "parent_modifier": "junta_overstretched",
       "claims_state": true,
       "relation": "war", "war_name": "Myanmar Civil War",
-      "army_share": 0.0, "fighters": 30000, "militia": 3, "stability": 0.35, "war_support": 0.85
+      "army_share": 0.0, "fighters": 42000, "militia": 4, "stability": 0.42, "war_support": 0.88
     },
     {
       "id": "arakan_army", "tag": "ARA", "name": "Arakan Army",
@@ -154,7 +155,7 @@
       ],
       "parent_modifier": "junta_overstretched",
       "relation": "war", "war_name": "Arakan Offensive",
-      "army_share": 0.0, "fighters": 30000, "militia": 4, "stability": 0.5, "war_support": 0.9
+      "army_share": 0.0, "fighters": 38000, "militia": 4, "stability": 0.54, "war_support": 0.92
     },
     {
       "id": "kachin_independence_organisation", "tag": "KIO", "name": "Kachin Independence Organisation",
@@ -193,9 +194,12 @@
       "areas": [
         [[28.75, -1.55], [29.15, -1.6], [29.45, -1.5], [29.62, -1.35], [29.62, -1.05], [29.45, -0.85], [29.1, -0.95], [28.8, -1.15]]
       ],
+      "holds": [
+        [[28.85, -1.85], [29.35, -1.85], [29.35, -1.52], [28.85, -1.52]]
+      ],
       "claims_state": true,
       "relation": "war", "war_name": "M23 Offensive",
-      "army_share": 0.0, "fighters": 10000, "militia": 3, "stability": 0.45, "war_support": 0.85,
+      "army_share": 0.0, "fighters": 26000, "militia": 4, "stability": 0.48, "war_support": 0.88,
       "patrons": ["RWA"], "listed_by": ["USA", "GBR", "FRA", "BEL"]
     },
     {
@@ -444,9 +448,9 @@
     { "between": ["SIG", "SDF"], "structural": 55, "tension": 70, "grievance": [30, 45] },
     { "between": ["SIG", "SYR"], "structural": 55, "tension": 55, "grievance": [50, 35] },
     { "between": ["SDF", "SYR"], "structural": 40, "tension": 50, "grievance": [40, 35] },
-    { "between": ["LNA", "LBY"], "structural": 50, "tension": 45, "grievance": [30, 30] },
-    { "between": ["LNA", "TUR"], "structural": 30, "tension": 35 },
-    { "between": ["RSF", "EGY"], "structural": 20, "tension": 40 }
+    { "between": ["LNA", "LBY"], "structural": 62, "tension": 74, "grievance": [50, 50] },
+    { "between": ["LNA", "TUR"], "structural": 35, "tension": 45 },
+    { "between": ["RSF", "EGY"], "structural": 25, "tension": 48 }
   ],
 
   "sponsorships": [
@@ -455,18 +459,19 @@
     { "sponsor": "USA", "client": "SDF", "war": ["SYR", "SDF"], "level": 2 },
     { "sponsor": "TUR", "client": "SIG", "war": ["SYR", "SIG"], "level": 2 },
     { "sponsor": "QAT", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 },
-    { "sponsor": "TUR", "client": "HTS", "war": ["SYR", "HTS"], "level": 1 },
+    { "sponsor": "TUR", "client": "HTS", "war": ["SYR", "HTS"], "level": 2 },
     { "sponsor": "ARE", "client": "RSF", "war": ["SDN", "RSF"], "level": 2 },
     { "sponsor": "IRN", "client": "HTH", "war": ["YEM", "HTH"], "level": 2 },
     { "sponsor": "SAU", "client": "YEM", "war": ["YEM", "HTH"], "level": 2 },
     { "sponsor": "ARE", "client": "YEM", "war": ["YEM", "HTH"], "level": 1 },
+    { "sponsor": "ARE", "client": "STC", "war": ["YEM", "STC"], "level": 2 },
     { "sponsor": "EGY", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
     { "sponsor": "TUR", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
     { "sponsor": "IRN", "client": "SDN", "war": ["SDN", "RSF"], "level": 1 },
     { "sponsor": "USA", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
     { "sponsor": "TUR", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
     { "sponsor": "RUS", "client": "MMR", "war": ["MMR", "NUG"], "level": 1 },
-    { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 1 },
+    { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 2 },
     { "sponsor": "ZAF", "client": "COD", "war": ["COD", "AFC"], "level": 1 }
   ]
 }

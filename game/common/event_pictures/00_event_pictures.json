@@ -98,6 +98,21 @@
     "nixon_shock_1971": "finance",
     "dotcom_and_digital_2000": "digital",
     "arab_spring_2011": "protest",
-    "supply_chain_nearshoring_2021": "industry"
+    "supply_chain_nearshoring_2021": "industry",
+
+    "grid_failure_capital": "energy",
+    "general_writes_book": "politics",
+    "drought_grain_belt": "drought",
+    "insurer_withdraws": "sea_lanes",
+    "border_incident_night": "border",
+    "bank_run": "finance",
+    "fighter_prototype": "laboratory",
+    "teachers_pay_demand": "protest",
+    "pipeline_sabotage": "energy",
+    "defector_with_folder": "espionage",
+    "olympic_bid": "celebration",
+    "museum_disputed_artefact": "diplomacy",
+    "port_outbreak": "epidemic",
+    "currency_raid": "finance"
   }
 }

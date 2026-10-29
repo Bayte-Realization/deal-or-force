@@ -7,6 +7,22 @@ public sealed partial class Defines
 {
     public float AiPeaceDecisiveScore { get; set; } = 75f;
     public float AiPeaceDecisiveOccupationShare { get; set; } = .65f;
+
+    /// <summary>
+    /// How long a war score may sit at a decisive level over ground the winner holds before
+    /// the score itself is the verdict. Measured wars (WAR_CALIBRATION_2026_10_26) ran for
+    /// years at a score of a hundred without the occupation map ever converting to "secure",
+    /// and a finished war that never ends is not a war any more: it is a bug with casualties.
+    /// </summary>
+    public int AiPeaceDecisivePatienceDays { get; set; } = 540;
+
+    /// <summary>
+    /// The score at which a war the aggressor is plainly losing becomes the defender's
+    /// victory: liberation of its own ground and reparations, never annexation. The
+    /// attacker's own decisive bar stays where it is; this is the defender's, and it is
+    /// lower because a repelled invasion is a verdict the whole world has already watched.
+    /// </summary>
+    public float AiPeaceRepelledScore { get; set; } = 35f;
 }
 
 public static partial class AiStatecraft
@@ -90,6 +106,47 @@ public static partial class AiStatecraft
             securedShare >= campaign.Defines.AiAnnexationOccupationShare;
         var absorbing = reclaiming || seatTaken || reunification || civilDecisive;
         if (!absorbing && !PeaceShape.Near(campaign, winner, loser)) return false;
+
+        // The Cuba rule: one holder of the deterrent does not conquer another. The wall's
+        // door has no handle on this side. A war between holders still ends - on limited
+        // terms, and sooner the higher the shadow, because the world (and each side's own
+        // cities) is doing the pushing: the decisive bar comes down by the brink, and the
+        // settlement is liberation and money, never the aggressor's homeland on the map.
+        var brink = global::DealOrForce.Simulation.Deterrence.Brinkmanship(campaign, war);
+        if (!absorbing && brink > 0f)
+        {
+            var bar = MathF.Max(campaign.Defines.AiPeaceRepelledScore,
+                campaign.Defines.AiPeaceDecisiveScore - brink * 10f);
+            if (score < bar) return false;
+            for (var province = 1; province <= map.ProvinceCount; province++)
+                if (map.ProvinceToNation[province] == winner.MapIndex && !map.IsWater(province) &&
+                    campaign.ProvinceController[province] == loser.MapIndex)
+                    demand.Provinces.Add(province);
+            WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
+            return true;
+        }
+
+        // A repelled aggression is its own victory, and it is not a conquest. Measured
+        // (WAR_CALIBRATION_2026_10_26): defenders led wars by as much as 47 points and
+        // still took nothing, because the only decisive verdict was the attacker's
+        // annexation. When the side that was attacked has plainly won on points, its
+        // settlement is liberation and money: every province of its own still under the
+        // aggressor's boot (ground already held, priced as nothing to retake), reparations
+        // from the verdict's budget, and no claim on the aggressor's homeland at all.
+        // The absorbing cases above keep their own, harsher roads.
+        if (!absorbing && !civilWar && !war.IsAttacking(winner.Id) &&
+            score >= campaign.Defines.AiPeaceRepelledScore &&
+            campaign.ElapsedDays - war.StartedDay >= campaign.Defines.AiPeaceDecisivePatienceDays / 2)
+        {
+            for (var province = 1; province <= map.ProvinceCount; province++)
+                if (map.ProvinceToNation[province] == winner.MapIndex && !map.IsWater(province) &&
+                    campaign.ProvinceController[province] == loser.MapIndex)
+                    demand.Provinces.Add(province);
+            // The verdict's money half is written by the terms from the ledger's budget;
+            // the demand here carries only the ground.
+            WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
+            return true;
+        }
         if (absorbing)
         {
             var scoreFloor = reunification
@@ -112,8 +169,16 @@ public static partial class AiStatecraft
             WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
             return true;
         }
+        // A verdict that has stood for a season of the war is its own proof of conquest. The
+        // civil branch already says ground is its own proof; an interstate war that has held
+        // two-thirds of a country at a score of ninety for the patience of the world does not
+        // need the occupation paperwork to finish converting before the loser capitulates.
+        // Measured before this gate: wars of 618 and 730 days at a score of 100, unresolved.
+        var longDecisive = score >= MathF.Min(90f, campaign.Defines.AiPeaceDecisiveScore + 15f) &&
+                           campaign.ElapsedDays - war.StartedDay >= campaign.Defines.AiPeaceDecisivePatienceDays &&
+                           heldShare >= .65f;
         var fullConquest = Reintegration.WantsFullConquestAnnexation(campaign, war, winner, loser, score, securedShare, heldShare) ||
-            annexationDecisive;
+            annexationDecisive || longDecisive;
         if (!fullConquest && (score < campaign.Defines.AiPeaceDecisiveScore || securedShare < campaign.Defines.AiPeaceDecisiveOccupationShare))
             return false;
 

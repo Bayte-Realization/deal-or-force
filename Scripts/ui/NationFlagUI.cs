@@ -140,6 +140,35 @@ public partial class DealOrForceGame
     /// moment a campaign starts, on the loader's own threads, so the screen finds them read.
     /// </summary>
     private static readonly Dictionary<string, string> FlagsLoading = new();
+    // Invalidating a UI cache does not cancel the engine's owned load request.
+    // Retired requests must still be collected, but must not repopulate that cache.
+    private static readonly List<string> RetiredFlagLoads = new();
+    internal static int PendingFlagWarmups => FlagsLoading.Count + RetiredFlagLoads.Count;
+
+    internal static void PollFlagWarmups()
+    {
+        if (PendingFlagWarmups == 0) return;
+        var budget = 16;
+        foreach (var pending in FlagsLoading.ToArray())
+        {
+            var status = ResourceLoader.LoadThreadedGetStatus(pending.Value);
+            if (status == ResourceLoader.ThreadLoadStatus.InProgress) continue;
+            var result = status == ResourceLoader.ThreadLoadStatus.InvalidResource
+                ? null : ResourceLoader.LoadThreadedGet(pending.Value);
+            FlagsLoading.Remove(pending.Key);
+            if (result is Texture2D texture) FlagCache[pending.Key] = texture;
+            if (--budget == 0) return;
+        }
+        for (var i = RetiredFlagLoads.Count - 1; i >= 0; i--)
+        {
+            var path = RetiredFlagLoads[i];
+            var status = ResourceLoader.LoadThreadedGetStatus(path);
+            if (status == ResourceLoader.ThreadLoadStatus.InProgress) continue;
+            if (status != ResourceLoader.ThreadLoadStatus.InvalidResource) ResourceLoader.LoadThreadedGet(path);
+            RetiredFlagLoads.RemoveAt(i);
+            if (--budget == 0) return;
+        }
+    }
 
     /// <summary>Ask for every flag the world flies now, without waiting for any of them.</summary>
     private static void WarmFlags(Campaign campaign)
@@ -639,16 +668,14 @@ public partial class DealOrForceGame
         }
     }
 
-    private static Color ShadeFabric(Color color, int x, int y, int width, int height)
-    {
-        var wave = Mathf.Sin(x * 0.045f + y * 0.015f) * 0.025f;
-        var edge = 1f - 0.06f * Mathf.Pow(2f * (x / (float)width - 0.5f), 2f) - 0.06f * Mathf.Pow(2f * (y / (float)height - 0.5f), 2f);
-        return new Color(
-            Mathf.Clamp((color.R + wave) * edge, 0f, 1f),
-            Mathf.Clamp((color.G + wave) * edge, 0f, 1f),
-            Mathf.Clamp((color.B + wave) * edge, 0f, 1f),
-            1f);
-    }
+    /// <summary>
+    /// A field colour as it is painted: flat. It used to ripple the cloth and darken the edges,
+    /// and the provisional flags of new countries read as embossed and muddy beside the flat flags
+    /// every other country flies (the user, 2026-10-28). Kept as one door so a mod that wants the
+    /// cloth back has one place to put it.
+    /// </summary>
+    private static Color ShadeFabric(Color color, int x, int y, int width, int height) =>
+        new(Mathf.Clamp(color.R, 0f, 1f), Mathf.Clamp(color.G, 0f, 1f), Mathf.Clamp(color.B, 0f, 1f), 1f);
 
     private static void DrawEightPointStar(Image image, int width, int height, Vector2 centre, float radius, Color fill)
     {
@@ -789,6 +816,7 @@ public partial class DealOrForceGame
     {
         FlagCache.Clear();
         ResolvedFlags.Clear();
+        RetiredFlagLoads.AddRange(FlagsLoading.Values);
         FlagsLoading.Clear();
     }
 

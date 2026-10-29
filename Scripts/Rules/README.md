@@ -20,6 +20,19 @@ This migration isolates readable rules; it does not claim F# arithmetic is
 faster than C#. The allocation improvements in this pass are separate C#
 catalogue/traversal changes. Rust game migration is paused by the author.
 
+`PeaceRules.StalemateDiscount` is the newest tenant and the pattern for the
+next ones: how much a long, stalling or exhausting war discounts a winner's
+resolve over an achievable aim. It is five numbers in and one out - days since
+the war began, whether the term is a return to the status quo, whether the front
+has stalled, how weary both sides are, how much of the responder's ground is
+held - and the surrounding `PeaceNegotiation.WarAimResolve` still decides
+*whether* the penalty applies, because that needs the campaign.
+`PeaceRulesHook.InstallStalemate` wires it, `PeaceNegotiation.ManagedStalemateDiscount`
+stays as the fallback when the F# library did not load, and `--peace-stalemate-only`
+compares the two on 4 160 cases and requires the exact float, plus eight checks
+that the branches do what their sentences say. A port that cannot drift is the
+only port worth making.
+
 ## Verify from the repository root
 
 ```powershell

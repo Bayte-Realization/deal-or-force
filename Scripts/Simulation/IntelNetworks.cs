@@ -159,6 +159,8 @@ public static class IntelNetworks
         }
     }
 
+    private static readonly Dictionary<int, (int Id, float Share)> SharedNetworkShares = new();
+
     /// <summary>
     /// The target's provinces a network shows through the fog: a share equal to its strength,
     /// chosen by a fixed pattern per pair, so the picture fills in as the network grows instead
@@ -171,12 +173,12 @@ public static class IntelNetworks
         var map = c.ProvinceMap;
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
         // One pass over the map for every network at once: the share each target is seen by.
-        var shares = new Dictionary<int, (int Id, float Share)>();
+        SharedNetworkShares.Clear();
         foreach (var (targetId, strength) in viewer.IntelNetworks)
-            if (strength > 0.01f && c.NationById(targetId) is { } target) shares[target.MapIndex] = (targetId, M.Clamp01(strength));
-        if (shares.Count == 0) return;
+            if (strength > 0.01f && c.NationById(targetId) is { } target) SharedNetworkShares[target.MapIndex] = (targetId, M.Clamp01(strength));
+        if (SharedNetworkShares.Count == 0) return;
         // Only the targets' own provinces (CampaignIntel.ProvincesHeldBy), not the whole map.
-        foreach (var (mapIndex, seen) in shares)
+        foreach (var (mapIndex, seen) in SharedNetworkShares)
             foreach (var p in CampaignIntel.ProvincesHeldBy(c, controllers, mapIndex))
             {
                 if (p >= reach.Length || reach[p] > 0) continue;

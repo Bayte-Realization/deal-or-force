@@ -1,19 +1,26 @@
-// The typeface the interface is set in.
+// The typefaces the interface is set in.
 //
-// Globality Atlas typography: restrained sans-serif UI and tracked serif country names.
-// The UI retains Godot's multilingual default. The map requests an installed serif with
-// Cyrillic coverage; the engine falls back if none is installed. These are existing typefaces,
-// not an original font file. A mod can bundle its licensed font and set the file role below.
+// Globality Atlas typography: a restrained interface face for data, and a serif for the
+// things that are read rather than scanned - screen titles, document heads, country names.
 //
-//   {
-//     "fonts": {
-//       "ui.default": "fonts/NotoSansSC-Regular.ttf"
-//     }
-//   }
+// Why two faces and not one. A grand strategy interface is a document and a ledger at the
+// same time. The ledger wants a grotesque with flat sides and tabular figures; the document
+// wants a serif, because a serif is what a printed atlas uses for a heading and the eye reads
+// it as "this is the title" before it reads a single letter. With one face for both, every
+// heading looked like a bigger caption, which is the whole reason the interface read as flat.
 //
-// Roles: ui.default, map.countries and map.cities. File paths override system_families when available.
+// Nothing new is bundled: these are system families with fallbacks, and the engine's own face
+// is the last resort, exactly as before. A mod may ship its licensed files and use the `file`
+// role instead of `system_families`.
+//
+// Roles:
+//   ui.default   - buttons, rows, tables, body text
+//   ui.display   - screen titles, document heads, the big figure over a section
+//   map.countries, map.cities - the globe's own lettering
 {
   "fonts": {
+    "ui.default": { "system_families": ["Segoe UI Variable Text", "Segoe UI", "Noto Sans", "DejaVu Sans", "Arial"] },
+    "ui.display": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif", "DejaVu Serif"] },
     "map.countries": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] },
     "map.cities": { "system_families": ["Georgia", "Noto Serif", "Liberation Serif"] }
   }

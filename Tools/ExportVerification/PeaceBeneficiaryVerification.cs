@@ -61,13 +61,22 @@ public partial class ExportVerification
             await Capture("peace-beneficiary-" + language + "-" + width);
             if (width == 1280)
             {
+                (game.FindChild("PeaceTreatyTab", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.1);
                 var body = game.FindChild("PeaceBodyScroll",true,false) as ScrollContainer;
                 var lastTerm = game.VerificationLastPeaceTerm;
                 body?.EnsureControlVisible(lastTerm); await Wait(.2);
                 Check(body!.GetGlobalRect().Grow(1).Encloses(lastTerm.GetGlobalRect()),
-                    "single scroll reaches all additional terms in 720p");
+                    "treaty page scroll reaches all additional terms in 720p");
+                foreach (var control in new Control[] { picker, propose, leave,
+                             game.FindChild("PeaceBudgetSummary", true, false) as Control,
+                             game.FindChild("PeaceSigningStatus", true, false) as Control })
+                    Check(control is not null && control.IsVisibleInTree() && !body.IsAncestorOf(control) &&
+                        game.GetViewportRect().Grow(1).Encloses(control.GetGlobalRect()),
+                        "recipient, totals, status and signing remain fixed while reading the last term: " + control?.Name);
                 await Capture("peace-beneficiary-terms-" + language + "-" + width);
-                body.ScrollVertical = 0; await Wait(.1);
+                (game.FindChild("PeaceTerritoryTab", true, false) as Button)?.EmitSignal(BaseButton.SignalName.Pressed);
+                await Wait(.1);
             }
             Check(CampaignFingerprint.Of(c) == fp && c.Random.State == random,
                 "language, scrolling and preview capture preserve campaign authority");

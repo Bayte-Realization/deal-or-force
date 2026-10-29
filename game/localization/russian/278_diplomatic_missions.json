@@ -9,7 +9,6 @@
   "Mission in progress: {0} days left, {1} paid weeks. Weekly: {2:0.##} political credit and {3}. Recall stops future payments; earned goodwill fades normally.": "Миссия работает: осталось {0} дн., оплачено {1} нед. Еженедельно: {2:0.##} политических очков и {3}. Отзыв прекращает расходы; заслуженное доверие постепенно ослабевает.",
   "Legacy diplomacy: an immediate treasury-funded overture.": "Прежняя дипломатия: немедленное улучшение отношений за счёт казны.",
   "A {0}-day mission, not an instant opinion boost. Start: {1:0.##} political credit and {2}. Weekly: {3:0.##} political credit and {4}. Goodwill ceiling: +{5:0.#}; tension and political distance slow progress. At most {6} concurrent missions.": "Миссия на {0} дн., без мгновенного улучшения мнения. Отправка: {1:0.##} политических очков и {2}. Еженедельно: {3:0.##} политических очков и {4}. Предел доверия: +{5:0.#}; напряжённость и политические различия замедляют сближение. Одновременно не более {6} миссий.",
-  "Recall diplomatic mission": "Отозвать дипломатическую миссию",
   "Diplomatic mission dispatched. Goodwill grows gradually, not immediately.": "Дипломатическая миссия отправлена. Доверие будет расти постепенно, не мгновенно.",
   "Diplomatic mission recalled. No further weekly payments.": "Дипломатическая миссия отозвана. Еженедельные расходы прекращены.",
   "Sustained diplomatic engagement": "Продолжительное дипломатическое сближение",

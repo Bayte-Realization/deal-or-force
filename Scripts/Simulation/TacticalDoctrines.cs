@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -15,6 +15,22 @@ public sealed partial class Defines
 
     /// <summary>How long an AI government waits before rewriting its Doctrine again.</summary>
     public int DoctrineAiRewriteCooldownDays { get; set; } = 365;
+
+    /// <summary>
+    /// How many books of war one country may hold at once: one for the ground forces, one for
+    /// the air, one for the fleet, and one general staff book. They are learned side by side -
+    /// a navy does not forget how to fight because the army changed its mind.
+    /// </summary>
+    public int DoctrineTracks { get; set; } = 4;
+
+    /// <summary>
+    /// Tactical books held at once: ground, air and sea, learned side by side. A further tactical
+    /// book, including a rewrite of a shelf once this many are already in force, is refused.
+    /// </summary>
+    public int DoctrineTacticalSlots { get; set; } = 3;
+
+    /// <summary>General-staff books held at once. The staff's book does not spend a tactical slot.</summary>
+    public int DoctrineGeneralSlots { get; set; } = 1;
 }
 
 /// <summary>
@@ -26,25 +42,105 @@ public sealed record DoctrineNode(string Id, string Name, string Description, in
 
 /// <summary>A branch of the war Doctrine: one philosophy of war, learned as a tree.</summary>
 public sealed record DoctrineBranch(string Id, string Name, string Description, string Experience,
-    IReadOnlyList<DoctrineNode> Nodes)
+    string Slot, IReadOnlyList<DoctrineNode> Nodes)
 {
     public DoctrineNode Find(string nodeId) =>
         nodeId is null ? null : Nodes.FirstOrDefault(node => string.Equals(node.Id, nodeId, StringComparison.Ordinal));
 }
 
-/// <summary>What the army is reading: the Doctrine in force, its learned nodes, and what is being learned now.</summary>
-public sealed class TacticalDoctrineMemory
+/// <summary>
+/// The four shelves a country's books of war stand on. A book belongs to exactly one shelf and is
+/// paid for out of that shelf's own purse, so the shelves never compete: the army's experience buys
+/// army books, the air force's buys air books, the fleet's buys sea books, and the general staff's
+/// book is paid for in the government's political credit.
+/// </summary>
+public static class DoctrineSlots
 {
-    /// <summary>The Doctrine in force. A node's bonuses only count while its Doctrine is the one in force.</summary>
+    public const string Ground = "ground";
+    public const string Air = "air";
+    public const string Sea = "sea";
+    public const string General = "general";
+
+    /// <summary>The order the shelves are shown in: the army first, the staff last.</summary>
+    public static readonly string[] All = { Ground, Air, Sea, General };
+
+    public static bool Knows(string id) => id is Ground or Air or Sea or General;
+
+    /// <summary>Which shelf a service's experience pays for.</summary>
+    public static string ForExperience(string experience) => experience switch
+    {
+        MilitaryExperience.Air => Air,
+        MilitaryExperience.Navy => Sea,
+        MilitaryExperience.Command => General,
+        _ => Ground
+    };
+
+    /// <summary>What the shelf is called in a sentence, in the words the interface shows.</summary>
+    public static string Name(string slot) => slot switch
+    {
+        Air => "air doctrine",
+        Sea => "naval doctrine",
+        General => "general doctrine",
+        _ => "ground doctrine"
+    };
+}
+
+/// <summary>What one shelf holds: the book in force, the articles written in it, and what is being learned.</summary>
+public sealed class DoctrineTrack
+{
+    /// <summary>The book in force on this shelf. Empty means the shelf is still empty.</summary>
     public string Branch = "";
 
-    /// <summary>Nodes learned under the Doctrine in force. A rewrite starts the new Doctrine empty.</summary>
+    /// <summary>Articles learned under the book in force. A rewrite starts the new book empty.</summary>
     public List<string> Known = new();
 
     public string LearningBranch = "";
     public string LearningNode = "";
     public int LearningDoneDay = -1;
     public int LastRewriteDay = -9999;
+
+    public DoctrineTrack Clone() => new()
+    {
+        Branch = Branch, Known = new List<string>(Known), LearningBranch = LearningBranch,
+        LearningNode = LearningNode, LearningDoneDay = LearningDoneDay, LastRewriteDay = LastRewriteDay
+    };
+}
+
+/// <summary>
+/// What the army is reading: one book per shelf, its learned nodes, and what is being learned on
+/// each shelf now. A country can be reading up to four books at once - ground, air, sea and the
+/// general staff's own - and each is studied independently.
+///
+/// The single-book fields below are what a save written before the shelves existed carries. They
+/// are read exactly once, by <see cref="TacticalDoctrines.EnsureShelves"/>, and copied onto the
+/// shelf their book belongs to; nothing writes them afterwards.
+/// </summary>
+public sealed class TacticalDoctrineMemory
+{
+    public string Branch = "";
+    public List<string> Known = new();
+    public string LearningBranch = "";
+    public string LearningNode = "";
+    public int LearningDoneDay = -1;
+    public int LastRewriteDay = -9999;
+
+    /// <summary>The four shelves, by <see cref="DoctrineSlots"/> id. Refilled on demand.</summary>
+    public Dictionary<string, DoctrineTrack> Tracks = new(StringComparer.Ordinal);
+
+    /// <summary>Whether the older single-book fields have been moved onto their shelf.</summary>
+    public bool ShelvesOpened;
+
+    /// <summary>The shelf for this id, created if the country has never used it.</summary>
+    public DoctrineTrack Track(string slot)
+    {
+        Tracks ??= new Dictionary<string, DoctrineTrack>(StringComparer.Ordinal);
+        if (!Tracks.TryGetValue(slot, out var track))
+        {
+            track = new DoctrineTrack();
+            Tracks[slot] = track;
+        }
+        return track;
+    }
 }
 
 public sealed partial class Nation
@@ -61,8 +157,8 @@ public sealed partial class Nation
 }
 
 /// <summary>
-/// The country's book of war, read from common/Doctrine like every other catalogue: the base game
-/// and a mod write the same thing, and a branch a mod adds is a branch.
+/// The country's book of war, read from common/tactical_doctrines like every other catalogue: the
+/// base game and a mod write the same thing, and a branch a mod adds is a branch.
 /// </summary>
 public static class TacticalDoctrineCatalog
 {
@@ -70,16 +166,26 @@ public static class TacticalDoctrineCatalog
     public const float RushCostMultiplier = 3f;
 
     private static readonly Dictionary<string, DoctrineBranch> Entries = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, DoctrineBranch> ByNode = new(StringComparer.Ordinal);
     public static int Revision { get; private set; }
     public static IEnumerable<DoctrineBranch> All => Entries.Values.OrderBy(branch => branch.Id, StringComparer.Ordinal);
     public static DoctrineBranch Find(string id) => id is null ? null : Entries.GetValueOrDefault(id);
     public static bool KnowsExperience(string kind) =>
-        kind is MilitaryExperience.Army or MilitaryExperience.Air or MilitaryExperience.Navy;
+        kind is MilitaryExperience.Army or MilitaryExperience.Air or MilitaryExperience.Navy or MilitaryExperience.Command;
+
+    /// <summary>The book an article belongs to, or null for an id no book holds.</summary>
+    public static DoctrineBranch BranchOf(string nodeId) =>
+        nodeId is null ? null : ByNode.GetValueOrDefault(nodeId);
+
+    /// <summary>Every book on one shelf, in catalogue order.</summary>
+    public static IEnumerable<DoctrineBranch> OnShelf(string slot) =>
+        All.Where(branch => string.Equals(branch.Slot, slot, StringComparison.Ordinal));
+
     static TacticalDoctrineCatalog() => ResetCatalog();
 
     public static void ResetCatalog()
     {
-        Entries.Clear(); Revision++;
+        Entries.Clear(); ByNode.Clear(); Revision++;
         foreach (var doc in GameDataLoader.DataDocuments("common", "tactical_doctrines")) using (doc) Merge(doc.RootElement);
     }
 
@@ -109,7 +215,15 @@ public static class TacticalDoctrineCatalog
                 }
                 var experience = Text("experience", "").Trim().ToLowerInvariant();
                 if (!KnowsExperience(experience))
-                    throw new ArgumentException("experience must be army, air or navy");
+                    throw new ArgumentException("experience must be army, air, navy or command");
+                // A book's shelf follows from the purse that pays for it unless the data says
+                // otherwise; a book that says otherwise has to be payable on the shelf it names.
+                var slot = Text("slot", "").Trim().ToLowerInvariant();
+                if (slot.Length == 0) slot = DoctrineSlots.ForExperience(experience);
+                if (!DoctrineSlots.Knows(slot))
+                    throw new ArgumentException("slot must be ground, air, sea or general");
+                if (!string.Equals(slot, DoctrineSlots.ForExperience(experience), StringComparison.Ordinal))
+                    throw new ArgumentException($"slot '{slot}' cannot be paid for in {experience} experience");
                 if (!e.TryGetProperty("nodes", out var list) || list.ValueKind != JsonValueKind.Array ||
                     list.GetArrayLength() == 0)
                     throw new ArgumentException("a Doctrine with no nodes is not a Doctrine");
@@ -123,6 +237,9 @@ public static class TacticalDoctrineCatalog
                         ? idValue.GetString() : "";
                     if (!MechanicFeatures.ValidId(id) || !seen.Add(id))
                         throw new ArgumentException($"node id '{id}' is invalid or repeated");
+                    // Article ids are the save's own vocabulary: two books may not share one.
+                    if (ByNode.ContainsKey(id) || Entries.Values.Any(other => other.Find(id) is not null))
+                        throw new ArgumentException($"node id '{id}' already belongs to another Doctrine");
                     var days = (int)Number(item, "days", 0f);
                     var cost = Number(item, "cost", 0f);
                     if (days <= 0 || cost <= 0f)
@@ -151,8 +268,10 @@ public static class TacticalDoctrineCatalog
                     foreach (var need in node.Requires)
                         if (!seen.Contains(need))
                             throw new ArgumentException($"node '{node.Id}' requires '{need}', which this branch does not hold");
-                Entries[entry.Name] = new DoctrineBranch(entry.Name, Text("name", entry.Name),
-                    Text("description", ""), experience, nodes);
+                var branch = new DoctrineBranch(entry.Name, Text("name", entry.Name),
+                    Text("description", ""), experience, slot, nodes);
+                Entries[entry.Name] = branch;
+                foreach (var node in nodes) ByNode[node.Id] = branch;
                 Revision++;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
@@ -164,7 +283,8 @@ public static class TacticalDoctrineCatalog
 }
 
 /// <summary>
-/// The country's book of war: what its army is taught to be, and what changing its mind costs.
+/// The country's books of war: what each of its services is taught to be, and what changing its
+/// mind costs.
 ///
 /// A Doctrine is a tree, studied the way technologies are: nodes open by their prerequisites, and
 /// each is paid for in the experience its own service actually earned (MilitaryExperience). A
@@ -172,18 +292,20 @@ public static class TacticalDoctrineCatalog
 /// rush price and lands at once. Nothing here is decorative: every node's block is read by the
 /// simulation's own army, supply and training arithmetic through NationalModifiers.
 ///
-/// Rewriting a Doctrine is the point of the mechanic, not an exception to it: a country whose war
-/// stopped being the war it prepared for can change its book, and pays twice - political points
-/// for the government that has to sell the reform, and a season of retraining in which the old
-/// habits are gone and the new ones are not learned (the doctrine_retraining spirit). The nodes of
-/// the abandoned Doctrine are not kept. That is what makes the choice real.
+/// The shelves are what makes a country's war whole: the ground, air, sea and general staff books
+/// are all read at once, each studied on its own days, so a country is never forced to choose a
+/// navy instead of an air force. Within one shelf, rewriting is the point of the mechanic: a
+/// country whose war stopped being the war it prepared for can change its book, and pays twice -
+/// political points for the government that has to sell the reform, and a season of retraining in
+/// which the old habits are gone and the new ones are not learned (the doctrine_retraining
+/// spirit). The nodes of the abandoned book are not kept. That is what makes the choice real.
 /// </summary>
 public static class TacticalDoctrines
 {
     /// <summary>The spirit granted while an army relearns: see common/modifiers/46_retraining.json.</summary>
     public const string RetrainingModifier = "doctrine_retraining";
 
-    /// <summary>Which Doctrine each character of government leans towards (AiStrategyCatalog).</summary>
+    /// <summary>Which Doctrine each character of government leans towards on the ground shelf.</summary>
     private static readonly Dictionary<string, string> CharacterBranches = new(StringComparer.OrdinalIgnoreCase)
     {
         ["blitzkrieg"] = "manoeuvre", ["irredentist"] = "manoeuvre",
@@ -194,10 +316,29 @@ public static class TacticalDoctrines
         ["expeditionary"] = "sky", ["trading_state"] = "coast"
     };
 
+    /// <summary>Which book a government reaches for on each of the other three shelves.</summary>
+    private static readonly Dictionary<string, string> CharacterAir = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["blitzkrieg"] = "sky", ["major_offensive"] = "sky", ["expeditionary"] = "sky",
+        ["attrition"] = "strategic_air", ["default"] = "sky"
+    };
+
+    private static readonly Dictionary<string, string> CharacterSea = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["trading_state"] = "coast", ["expeditionary"] = "coast", ["default"] = "coast"
+    };
+
+    private static readonly Dictionary<string, string> CharacterGeneral = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["minor_power"] = "mobilisation", ["isolated"] = "mobilisation",
+        ["attrition"] = "staff", ["default"] = "staff"
+    };
+
     public static float Experience(Nation nation, string kind) => kind switch
     {
         MilitaryExperience.Air => nation.AirExperience,
         MilitaryExperience.Navy => nation.NavalExperience,
+        MilitaryExperience.Command => nation.PoliticalPoints,
         _ => nation.ArmyExperience
     };
 
@@ -207,6 +348,7 @@ public static class TacticalDoctrines
         {
             case MilitaryExperience.Air: nation.AirExperience = MathF.Max(0f, nation.AirExperience - cost); break;
             case MilitaryExperience.Navy: nation.NavalExperience = MathF.Max(0f, nation.NavalExperience - cost); break;
+            case MilitaryExperience.Command: nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - cost); break;
             default: nation.ArmyExperience = MathF.Max(0f, nation.ArmyExperience - cost); break;
         }
     }
@@ -215,37 +357,118 @@ public static class TacticalDoctrines
     {
         MilitaryExperience.Air => "air experience",
         MilitaryExperience.Navy => "naval experience",
+        MilitaryExperience.Command => "political credit",
         _ => "army experience"
     };
 
-    /// <summary>Whether this node has been learned under the Doctrine in force.</summary>
-    public static bool Known(Nation nation, string nodeId) =>
-        nation.TacticalDoctrine.Known.Contains(nodeId);
+    /// <summary>
+    /// Move a save written before the shelves existed onto them: the one book it carries goes on
+    /// the shelf its service belongs to, with its articles and its unfinished course. Called from
+    /// every read path, so a campaign opens with its book wherever it is loaded from.
+    /// </summary>
+    public static void EnsureShelves(Nation nation)
+    {
+        var memory = nation?.TacticalDoctrine;
+        if (memory is null || memory.ShelvesOpened) return;
+        memory.ShelvesOpened = true;
+        memory.Tracks ??= new Dictionary<string, DoctrineTrack>(StringComparer.Ordinal);
+        if (memory.Branch.Length == 0) return;
+        var branch = TacticalDoctrineCatalog.Find(memory.Branch);
+        if (branch is null) return;
+        var track = memory.Track(branch.Slot);
+        if (track.Branch.Length > 0) return;
+        track.Branch = branch.Id;
+        track.Known = new List<string>(memory.Known);
+        track.LearningBranch = memory.LearningBranch;
+        track.LearningNode = memory.LearningNode;
+        track.LearningDoneDay = memory.LearningDoneDay;
+        track.LastRewriteDay = memory.LastRewriteDay;
+    }
+
+    /// <summary>The shelf a book stands on, opened if this country has never used it.</summary>
+    public static DoctrineTrack TrackFor(Nation nation, DoctrineBranch branch)
+    {
+        if (nation is null || branch is null) return null;
+        EnsureShelves(nation);
+        return nation.TacticalDoctrine.Track(branch.Slot);
+    }
+
+    /// <summary>The book in force on one shelf, or null while the shelf is empty.</summary>
+    public static DoctrineBranch BookOn(Nation nation, string slot)
+    {
+        if (nation is null || !DoctrineSlots.Knows(slot)) return null;
+        EnsureShelves(nation);
+        var track = nation.TacticalDoctrine.Tracks.GetValueOrDefault(slot);
+        return track is null || track.Branch.Length == 0 ? null : TacticalDoctrineCatalog.Find(track.Branch);
+    }
+
+    /// <summary>Every book in force, in shelf order - what the country is reading right now.</summary>
+    public static IEnumerable<(string Slot, DoctrineBranch Branch)> Books(Nation nation)
+    {
+        if (nation is null) yield break;
+        foreach (var slot in DoctrineSlots.All)
+            if (BookOn(nation, slot) is { } branch) yield return (slot, branch);
+    }
+
+    /// <summary>Whether this node has been learned under the book in force on its shelf.</summary>
+    public static bool Known(Nation nation, string nodeId)
+    {
+        if (nation is null || string.IsNullOrEmpty(nodeId)) return false;
+        var branch = TacticalDoctrineCatalog.BranchOf(nodeId);
+        return branch is not null && Known(nation, branch, nodeId);
+    }
+
+    public static bool Known(Nation nation, DoctrineBranch branch, string nodeId)
+    {
+        var track = TrackFor(nation, branch);
+        return track is not null &&
+               string.Equals(track.Branch, branch.Id, StringComparison.Ordinal) &&
+               track.Known.Contains(nodeId);
+    }
 
     /// <summary>
     /// The nodes of a branch that can be started now: not learned, and every prerequisite learned.
-    /// For a branch that is not the one in force this is its roots, because a rewrite starts empty.
+    /// For a branch that is not the one in force on its shelf this is its roots, because a rewrite
+    /// starts empty.
     /// </summary>
     public static List<DoctrineNode> Available(Nation nation, string branchId)
     {
         var branch = TacticalDoctrineCatalog.Find(branchId);
         var found = new List<DoctrineNode>();
         if (branch is null) return found;
-        var inForce = string.Equals(nation.TacticalDoctrine.Branch, branchId, StringComparison.Ordinal);
+        var track = TrackFor(nation, branch);
+        var inForce = track is not null && string.Equals(track.Branch, branchId, StringComparison.Ordinal);
         foreach (var node in branch.Nodes)
         {
-            if (inForce && Known(nation, node.Id)) continue;
+            if (inForce && track.Known.Contains(node.Id)) continue;
             var ready = true;
             foreach (var need in node.Requires)
-                if (!inForce || !Known(nation, need)) { ready = false; break; }
+                if (!inForce || !track.Known.Contains(need)) { ready = false; break; }
             if (ready) found.Add(node);
         }
         return found;
     }
 
-    private static bool Rewriting(Nation nation, string branchId) =>
-        nation.TacticalDoctrine.Branch.Length > 0 &&
-        !string.Equals(nation.TacticalDoctrine.Branch, branchId, StringComparison.Ordinal);
+    private static bool Rewriting(Nation nation, DoctrineBranch branch)
+    {
+        var track = TrackFor(nation, branch);
+        return track is not null && track.Branch.Length > 0 &&
+               !string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
+    }
+
+    /// <summary>Books already in force on the tactical shelves, or on the general shelf.</summary>
+    public static int BooksHeld(Nation nation, bool general)
+    {
+        if (nation is null) return 0;
+        EnsureShelves(nation);
+        var count = 0;
+        foreach (var slot in DoctrineSlots.All)
+        {
+            if ((slot == DoctrineSlots.General) != general) continue;
+            if (BookOn(nation, slot) is not null) count++;
+        }
+        return count;
+    }
 
     /// <summary>Why this node cannot be started now, in the words the interface shows. Empty means it can.</summary>
     public static string Refusal(Campaign campaign, Nation nation, string branchId, string nodeId, bool rush)
@@ -255,16 +478,50 @@ public static class TacticalDoctrines
         if (branch is null) return Loc.Get("No such Doctrine is written.");
         var node = branch.Find(nodeId);
         if (node is null) return Loc.Get("No such article of the Doctrine is written.");
-        if (Known(nation, node.Id)) return Loc.Get("This article has already been learned.");
-        if (nation.TacticalDoctrine.LearningNode.Length > 0) return Loc.Get("The army is already learning an article.");
-        foreach (var need in node.Requires)
-            if (!Known(nation, need)) return Loc.Get("The earlier articles of this Doctrine come first.");
-        if (Rewriting(nation, branch.Id) &&
-            nation.PoliticalPoints + 0.001f < campaign.Defines.DoctrineRewritePoliticalCost)
-            return Loc.Format("Rewriting the Doctrine costs {0} political points.",
-                campaign.Defines.DoctrineRewritePoliticalCost);
+        var track = TrackFor(nation, branch);
+        if (track is null) return Loc.Get("No such Doctrine is written.");
+        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal) && track.Known.Contains(node.Id))
+            return Loc.Get("This article has already been learned.");
+        if (track.LearningNode.Length > 0) return Loc.Get("This service is already learning an article.");
+        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal))
+        {
+            foreach (var need in node.Requires)
+                if (!track.Known.Contains(need)) return Loc.Get("The earlier articles of this Doctrine come first.");
+        }
+        // A shelf with no book, or another book, starts at the roots: a tree is climbed from
+        // the bottom whether the service is beginning it or beginning it again.
+        else if (node.Requires.Count > 0)
+            return Loc.Get("The earlier articles of this Doctrine come first.");
+        var sameBook = string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
+        var rewriting = Rewriting(nation, branch);
+        if (!sameBook)
+        {
+            var generalShelf = branch.Slot == DoctrineSlots.General;
+            var held = BooksHeld(nation, generalShelf);
+            var tacticalCap = Math.Max(0, campaign.Defines.DoctrineTacticalSlots);
+            var generalCap = Math.Max(0, campaign.Defines.DoctrineGeneralSlots);
+            var cap = generalShelf ? generalCap : tacticalCap;
+            // Full tactical shelves refuse another tactical book, including a swap on a shelf
+            // already in use: that book would be one past the cap. Under the cap, changing
+            // the book on one shelf is still a rewrite.
+            // Opening an empty shelf past the cap is the refused extra book. Changing the
+            // book already on a shelf does not add a slot, so that rewrite stays available.
+            if (track.Branch.Length == 0 && held >= cap)
+                return Loc.Format(
+                    "A country may hold {0} tactical doctrines and {1} general doctrine. Another tactical doctrine is refused.",
+                    tacticalCap, generalCap);
+        }
         var price = rush ? node.RushCost : node.Cost;
-        if (Experience(nation, branch.Experience) + 0.001f < price)
+        var rewriteCost = rewriting ? campaign.Defines.DoctrineRewritePoliticalCost : 0f;
+        if (branch.Experience == MilitaryExperience.Command)
+        {
+            if (nation.PoliticalPoints + 0.001f < rewriteCost + price)
+                return Loc.Format("This article needs {0} points of {1}.",
+                    rewriteCost + price, Loc.Get(ServiceName(branch.Experience)));
+        }
+        else if (rewriteCost > 0f && nation.PoliticalPoints + 0.001f < rewriteCost)
+            return Loc.Format("Rewriting the Doctrine costs {0} political points.", rewriteCost);
+        else if (Experience(nation, branch.Experience) + 0.001f < price)
             return Loc.Format("This article needs {0} points of {1}.",
                 price, Loc.Get(ServiceName(branch.Experience)));
         return "";
@@ -276,12 +533,17 @@ public static class TacticalDoctrines
         var branch = TacticalDoctrineCatalog.Find(branchId);
         var node = branch?.Find(nodeId);
         if (branch is null || node is null || Refusal(campaign, nation, branchId, nodeId, rush).Length > 0) return false;
-        if (Rewriting(nation, branchId))
+        var track = TrackFor(nation, branch);
+        if (Rewriting(nation, branch))
         {
             nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - campaign.Defines.DoctrineRewritePoliticalCost);
-            nation.TacticalDoctrine.Branch = branch.Id;
-            nation.TacticalDoctrine.Known.Clear();     // the abandoned book is not kept
-            nation.TacticalDoctrine.LastRewriteDay = campaign.ElapsedDays;
+            track.Branch = branch.Id;
+            track.Known.Clear();     // the abandoned book is not kept
+            track.LastRewriteDay = campaign.ElapsedDays;
+            track.LearningBranch = "";
+            track.LearningNode = "";
+            track.LearningDoneDay = -1;
+            SyncLegacyFields(nation, track);
             ModifierSystem.Grant(campaign, nation, RetrainingModifier, campaign.Defines.DoctrineRetrainingDays);
             campaign.Chronicle.Record(campaign, "doctrine_rewritten", nation.Id, subject: branch.Name, isPublic: true);
             NationalModifiers.Invalidate(nation);
@@ -296,9 +558,10 @@ public static class TacticalDoctrines
         }
         else
         {
-            nation.TacticalDoctrine.LearningBranch = branch.Id;
-            nation.TacticalDoctrine.LearningNode = node.Id;
-            nation.TacticalDoctrine.LearningDoneDay = campaign.ElapsedDays + Math.Max(1, node.Days);
+            track.LearningBranch = branch.Id;
+            track.LearningNode = node.Id;
+            track.LearningDoneDay = campaign.ElapsedDays + Math.Max(1, node.Days);
+            SyncLegacyFields(nation, track);
         }
         campaign.MarkStrategicChange();
         return true;
@@ -306,27 +569,41 @@ public static class TacticalDoctrines
 
     private static void Learn(Campaign campaign, Nation nation, DoctrineBranch branch, DoctrineNode node)
     {
-        // Whose article has just landed is whose Doctrine is in force: a crash course taken from
-        // nothing must start the Doctrine, not leave the army with a known article and no book.
-        nation.TacticalDoctrine.Branch = branch.Id;
-        nation.TacticalDoctrine.LearningBranch = "";
-        nation.TacticalDoctrine.LearningNode = "";
-        nation.TacticalDoctrine.LearningDoneDay = -1;
-        if (!nation.TacticalDoctrine.Known.Contains(node.Id)) nation.TacticalDoctrine.Known.Add(node.Id);
+        var track = TrackFor(nation, branch);
+        // Whose article has just landed is whose book is in force: a crash course taken from
+        // nothing must start the Doctrine, not leave the service with a known article and no book.
+        track.Branch = branch.Id;
+        track.LearningBranch = "";
+        track.LearningNode = "";
+        track.LearningDoneDay = -1;
+        if (!track.Known.Contains(node.Id)) track.Known.Add(node.Id);
+        SyncLegacyFields(nation, track);
         NationalModifiers.Invalidate(nation);
         campaign.Chronicle.Record(campaign, "doctrine_article", nation.Id, subject: node.Name);
         // The bench's own record of what the AI did with its book, beside its war counters.
         if (Delegation.RunByAi(nation)) Count("doctrine_adopted");
     }
 
+    private static void SyncLegacyFields(Nation nation, DoctrineTrack activeTrack)
+    {
+        var memory = nation?.TacticalDoctrine;
+        if (memory is null || activeTrack is null) return;
+        memory.Branch = activeTrack.Branch;
+        memory.Known = new List<string>(activeTrack.Known);
+        memory.LearningBranch = activeTrack.LearningBranch;
+        memory.LearningNode = activeTrack.LearningNode;
+        memory.LearningDoneDay = activeTrack.LearningDoneDay;
+        memory.LastRewriteDay = activeTrack.LastRewriteDay;
+    }
+
     private static void Count(string what) =>
         AiStatecraft.Tally[what] = AiStatecraft.Tally.GetValueOrDefault(what) + 1;
 
     /// <summary>
-    /// What has come due, and what every other government is doing about its own book. Each
-    /// country keeps its own day of the week, the spread the rest of the cabinet already uses.
+    /// What has come due on every shelf, and what every other government is doing about its own
+    /// books. Each country keeps its own day of the week, the spread the rest of the cabinet
+    /// already uses.
     /// </summary>
-
     public static void Tick(Campaign campaign)
     {
         if (campaign is null) return;
@@ -339,14 +616,16 @@ public static class TacticalDoctrines
         }
         foreach (var nation in campaign.Nations)
         {
+            EnsureShelves(nation);
             var memory = nation.TacticalDoctrine;
-            if (memory.LearningNode.Length > 0 && day >= memory.LearningDoneDay)
+            foreach (var track in memory.Tracks.Values)
             {
-                var branch = TacticalDoctrineCatalog.Find(memory.LearningBranch);
-                var node = branch?.Find(memory.LearningNode);
+                if (track.LearningNode.Length == 0 || day < track.LearningDoneDay) continue;
+                var branch = TacticalDoctrineCatalog.Find(track.LearningBranch);
+                var node = branch?.Find(track.LearningNode);
                 if (branch is null || node is null)
                 {
-                    memory.LearningBranch = ""; memory.LearningNode = ""; memory.LearningDoneDay = -1;
+                    track.LearningBranch = ""; track.LearningNode = ""; track.LearningDoneDay = -1;
                 }
                 else
                 {
@@ -361,67 +640,103 @@ public static class TacticalDoctrines
     }
 
     /// <summary>
-    /// A government improving its own book: the Doctrine its character prefers, the cheapest
-    /// article open right now, and a crash course when it is at war and can pay for one - war is
-    /// when the next article is worth more than the money of waiting.
+    /// A government improving its own books: for every shelf, the Doctrine its character prefers,
+    /// the cheapest article open right now, and a crash course when it is at war and can pay for
+    /// one - war is when the next article is worth more than the money of waiting.
     /// </summary>
     private static void AiStudy(Campaign campaign, Nation nation)
     {
-        if (nation.TacticalDoctrine.LearningNode.Length > 0) return;
-        var branch = TacticalDoctrineCatalog.Find(PreferredBranch(campaign, nation));
-        if (branch is null) return;
-        if (Rewriting(nation, branch.Id) && nation.TacticalDoctrine.Known.Count > 0 &&
-            campaign.ElapsedDays - nation.TacticalDoctrine.LastRewriteDay <
-            Math.Max(30, campaign.Defines.DoctrineAiRewriteCooldownDays)) return;
-        var have = Experience(nation, branch.Experience);
+        EnsureShelves(nation);
         var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
-        DoctrineNode choice = null;
-        var rush = false;
-        foreach (var node in Available(nation, branch.Id))
+        foreach (var slot in DoctrineSlots.All)
         {
-            if (atWar && have + 0.001f >= node.RushCost) { choice = node; rush = true; break; }
-            if (have + 0.001f < node.Cost) continue;
-            if (choice is null || node.Cost < choice.Cost) choice = node;
+            var track = nation.TacticalDoctrine.Track(slot);
+            if (track.LearningNode.Length > 0) continue;
+            var branch = TacticalDoctrineCatalog.Find(
+                track.Branch.Length > 0 ? track.Branch : PreferredBranch(campaign, nation, slot));
+            if (branch is null || !string.Equals(branch.Slot, slot, StringComparison.Ordinal)) continue;
+            if (Rewriting(nation, branch) && track.Known.Count > 0 &&
+                campaign.ElapsedDays - track.LastRewriteDay <
+                Math.Max(30, campaign.Defines.DoctrineAiRewriteCooldownDays)) continue;
+            var have = Experience(nation, branch.Experience);
+            DoctrineNode choice = null;
+            var rush = false;
+            foreach (var node in Available(nation, branch.Id))
+            {
+                if (atWar && have + 0.001f >= node.RushCost) { choice = node; rush = true; break; }
+                if (have + 0.001f < node.Cost) continue;
+                if (choice is null || node.Cost < choice.Cost) choice = node;
+            }
+            if (choice is null) continue;
+            Study(campaign, nation, branch.Id, choice.Id, rush);
         }
-        if (choice is null) return;
-        Study(campaign, nation, branch.Id, choice.Id, rush);
     }
 
     /// <summary>
-    /// The tactical tree this country reaches for: the one its grand strategy leans on if the
-    /// strategy names one, otherwise the one its character prefers (AiStrategyCatalog.Of).
+    /// The book this country reaches for on the ground shelf: the one its grand strategy leans on
+    /// if the strategy names one, otherwise the one its character prefers (AiStrategyCatalog.Of).
     /// </summary>
-    public static string PreferredBranch(Campaign campaign, Nation nation)
+    public static string PreferredBranch(Campaign campaign, Nation nation) => PreferredBranch(campaign, nation, DoctrineSlots.Ground);
+
+    /// <summary>The book this country reaches for on one shelf.</summary>
+    public static string PreferredBranch(Campaign campaign, Nation nation, string slot)
     {
         var bias = StrategicDoctrines.TacticalBias(nation);
-        if (bias.Length > 0) return bias;
-        return CharacterBranches.TryGetValue(AiStrategyCatalog.Of(campaign, nation).Id, out var branch) ? branch : "fire";
+        if (bias.Length > 0 && TacticalDoctrineCatalog.Find(bias) is { } leaning &&
+            string.Equals(leaning.Slot, slot, StringComparison.Ordinal)) return bias;
+        var character = AiStrategyCatalog.Of(campaign, nation).Id;
+        var table = slot switch
+        {
+            DoctrineSlots.Air => CharacterAir,
+            DoctrineSlots.Sea => CharacterSea,
+            DoctrineSlots.General => CharacterGeneral,
+            _ => CharacterBranches
+        };
+        if (table.TryGetValue(character, out var wanted) &&
+            TacticalDoctrineCatalog.Find(wanted) is { } found &&
+            string.Equals(found.Slot, slot, StringComparison.Ordinal)) return wanted;
+        return TacticalDoctrineCatalog.OnShelf(slot).FirstOrDefault()?.Id ?? "";
     }
 
-    /// <summary>The articles in force, as one source of national modifiers - read by NationalModifiers.</summary>
+    /// <summary>
+    /// The articles in force, as sources of national modifiers - read by NationalModifiers. One
+    /// source per shelf, so the screens can say which book gave what.
+    /// </summary>
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
-        var memory = nation?.TacticalDoctrine;
-        var branch = memory is null ? null : TacticalDoctrineCatalog.Find(memory.Branch);
-        if (branch is null || memory.Known.Count == 0) yield break;
-        // The dictionary is the country's own, kept and refilled: asked once a day for every
-        // country with a doctrine, and a fresh dictionary a day was the collector's budget.
-        var totals = nation.TacticalDoctrineModifiers ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        totals.Clear();
-        foreach (var node in branch.Nodes)
+        if (nation is null) yield break;
+        EnsureShelves(nation);
+        foreach (var slot in DoctrineSlots.All)
         {
-            if (!memory.Known.Contains(node.Id)) continue;
-            foreach (var effect in node.Modifiers)
-                totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
+            var book = BookOn(nation, slot);
+            if (book is null) continue;
+            var track = nation.TacticalDoctrine.Track(slot);
+            if (track.Known.Count == 0) continue;
+            // The dictionaries are the country's own, kept and refilled: asked once a day for
+            // every country with a doctrine, and a fresh one a day was the collector's budget.
+            var cache = nation.DoctrineModifierCache ??=
+                new Dictionary<string, Dictionary<string, float>>(StringComparer.Ordinal);
+            if (!cache.TryGetValue(slot, out var totals))
+            {
+                totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                cache[slot] = totals;
+            }
+            totals.Clear();
+            foreach (var node in book.Nodes)
+            {
+                if (!track.Known.Contains(node.Id)) continue;
+                foreach (var effect in node.Modifiers)
+                    totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
+            }
+            if (totals.Count > 0) yield return (book.Name, totals);
         }
-        if (totals.Count > 0) yield return (branch.Name, totals);
     }
 }
 
 public sealed partial class Nation
 {
-    /// <summary>What the army's book of war adds, kept between asks. Not saved; refilled from scratch.</summary>
-    internal Dictionary<string, float> TacticalDoctrineModifiers;
+    /// <summary>What the books of war add, kept between asks. Not saved; refilled from scratch.</summary>
+    internal Dictionary<string, Dictionary<string, float>> DoctrineModifierCache;
 }
 
 public sealed class StudyDoctrineCommand : ICampaignCommand

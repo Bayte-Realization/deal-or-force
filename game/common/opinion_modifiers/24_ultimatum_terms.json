@@ -1,0 +1,6 @@
+// Причины, которые остаются после подписанного ультиматума: чужие войска на своей земле,
+// навязанное правительство, отнятый флот и разорванные союзы помнят дольше, чем бумагу.
+{
+  "imposed_our_government": { "name": "Gave them our government", "opinion": -22, "days": 2200, "decays": true, "max_stacks": 1 },
+  "ultimatum_disarmed": { "name": "Disarmed us at gunpoint", "opinion": -30, "days": 2200, "decays": true, "max_stacks": 1 }
+}

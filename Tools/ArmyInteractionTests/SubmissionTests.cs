@@ -107,5 +107,20 @@ static class SubmissionTests
         Check(c.Nations.Where(n => n.IsSubject).All(n => !c.NationById(n.OverlordId).IsSubject),
             "nobody answers to a country that itself answers to somebody");
         Check(c.Random.State == randomBefore, "asking draws nothing from the campaign's random stream");
+
+        // --- F: a protector is one of the powers nearest to it ----------------------------------
+        // In the 25-year probe a Jersey that had left Britain went to Estonia, 2 000 km off and
+        // inside SubmissionReachKm, past Britain, France and the Low Countries.
+        var jersey = c.NationByTag("JEY");
+        var full = -c.Defines.SubmissionDistancePenalty;
+        Check(SubmissionSystem.Reach(c, jersey, c.NationByTag("FRA")) == 0f,
+            "France, next door to Jersey, is within its reach");
+        Check(SubmissionSystem.Reach(c, jersey, c.NationByTag("EST")) <= full * 0.99f &&
+              SubmissionSystem.Reach(c, jersey, c.NationByTag("PRT")) <= full * 0.99f,
+            "Estonia and Portugal, past a crowd of nearer powers, are as good as across the world to Jersey");
+        c.Defines.SubmissionNearerProtectors = 0;
+        Check(SubmissionSystem.Reach(c, jersey, c.NationByTag("EST")) == 0f,
+            "SubmissionNearerProtectors 0 turns the crowd off");
+        c.Defines.SubmissionNearerProtectors = 3;
     }
 }

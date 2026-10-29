@@ -64,8 +64,8 @@ public partial class ExportVerification
             var hours = c.ElapsedHours; var random = c.Random.State;
             ClickPausedDoctrine(study, label + " study");
             // No timer or process frame occurs between pressing and verifying.
-            Check(n.TacticalDoctrine.LearningBranch == branch.Id && n.TacticalDoctrine.LearningNode == root.Id &&
-                n.TacticalDoctrine.LearningDoneDay == c.ElapsedDays + root.Days && c.Commands.Count == 0,
+            Check(n.TacticalDoctrine.Track(branch.Slot).LearningBranch == branch.Id && n.TacticalDoctrine.Track(branch.Slot).LearningNode == root.Id &&
+                n.TacticalDoctrine.Track(branch.Slot).LearningDoneDay == c.ElapsedDays + root.Days && c.Commands.Count == 0,
                 "actual study button starts its article before the next frame: " + label);
             Check(Math.Abs(n.NavalExperience - (1000 - root.Cost)) < .001f &&
                 n.ArmyExperience == 1000 && n.AirExperience == 1000,
@@ -80,7 +80,7 @@ public partial class ExportVerification
             Check(c.IsPaused && c.ElapsedHours == hours && c.Random.State == random,
                 "actual study button neither advances time nor consumes randomness: " + label);
             await Wait(.4);
-            Check(n.TacticalDoctrine.LearningNode == root.Id &&
+            Check(n.TacticalDoctrine.Track(branch.Slot).LearningNode == root.Id &&
                 (game.FindChild("State_" + root.Id, true, false) as Label)?.Text ==
                     Loc.Format("being learned · {0} days left", root.Days) && c.IsPaused && c.ElapsedHours == hours,
                 "learning survives subsequent paused frames without a manual redraw: " + label);
@@ -100,8 +100,8 @@ public partial class ExportVerification
             Check(rush is { Disabled: false }, "real crash-course button is available on pause: " + label);
             if (rush is null || rush.Disabled) continue;
             ClickPausedDoctrine(rush, label + " rush");
-            Check(n.TacticalDoctrine.Branch == branch.Id && TacticalDoctrines.Known(n, root.Id) &&
-                n.TacticalDoctrine.LearningNode.Length == 0 && c.Commands.Count == 0,
+            Check(n.TacticalDoctrine.Track(branch.Slot).Branch == branch.Id && TacticalDoctrines.Known(n, root.Id) &&
+                n.TacticalDoctrine.Track(branch.Slot).LearningNode.Length == 0 && c.Commands.Count == 0,
                 "actual crash-course button puts the article in force synchronously: " + label);
             Check(Math.Abs(n.NavalExperience - (1000 - root.RushCost)) < .001f &&
                 (game.FindChild("State_" + root.Id, true, false) as Label)?.Text == Loc.Get("in force"),
@@ -172,7 +172,7 @@ public partial class ExportVerification
         game.VerificationOpenPausedDoctrines(book.Id);
         await Wait(.2);
         ClickPausedDoctrine(PausedDoctrineButton(game, "StudyArticle_" + article.Id), "after changing player country");
-        Check(next.TacticalDoctrine.LearningNode == article.Id && next.NavalExperience == 1000 - article.Cost,
+        Check(next.TacticalDoctrine.Track(book.Slot).LearningNode == article.Id && next.NavalExperience == 1000 - article.Cost,
             "retained doctrine cards submit for the current country, not their original country");
 
         next.TacticalDoctrine = new TacticalDoctrineMemory();

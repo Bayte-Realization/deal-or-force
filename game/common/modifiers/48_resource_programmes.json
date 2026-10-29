@@ -34,13 +34,13 @@
   },
   "civil_service_compact": {
     "name": "Civil service implementation compact",
-    "description": "Use a substantial political mandate to coordinate procurement and tax administration. For nine months existing construction proceeds a little faster and more assessed tax arrives. The mandate is spent; nothing is built for free.",
+    "description": "Use a substantial political mandate to coordinate procurement and the civil service. For nine months existing construction proceeds a little faster, and the state borrows on slightly better terms. The mandate is spent; nothing is built for free.",
     "days": 270,
     "positive": true,
     "effects": {},
     "modifiers": {
       "construction_speed": 0.035,
-      "tax_efficiency": 0.025
+      "credit_capacity": 0.02
     }
   }
 }

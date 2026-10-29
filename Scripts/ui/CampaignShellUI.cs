@@ -22,11 +22,12 @@ public partial class DealOrForceGame
         var style = new StyleBoxFlat
         {
             BgColor = Ui.Colour("shell.background"), BorderColor = Ui.Colour("shell.border"),
-            BorderWidthLeft = 1, BorderWidthRight = 1, BorderWidthBottom = 1,
-            BorderWidthTop = 2, ShadowColor = new Color(0, 0, 0, 0.28f),
-            ShadowSize = 5, ShadowOffset = new Vector2(0, 3)
+            ShadowColor = new Color(0, 0, 0, 0.24f),
+            ShadowSize = 4, ShadowOffset = new Vector2(0, 2)
         };
+        style.SetBorderWidthAll(1);
         style.SetContentMarginAll(1);
+        style.SetCornerRadiusAll(4);
         return style;
     }
 
@@ -44,21 +45,27 @@ public partial class DealOrForceGame
         {
             DrawCenter = false,
             BorderColor = Ui.Colour("shell.border"),
-            BorderWidthLeft = 2, BorderWidthRight = 2, BorderWidthBottom = 2, BorderWidthTop = 3,
-            ShadowColor = new Color(0, 0, 0, 0.22f), ShadowSize = 4, ShadowOffset = new Vector2(0, 3)
+            ShadowColor = new Color(0, 0, 0, 0.18f), ShadowSize = 3, ShadowOffset = new Vector2(0, 2)
         };
-        style.SetCornerRadiusAll(2);
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(4);
         return style;
     }
 
-    private static StyleBoxFlat ShellRowStyle(bool alternate)
+    private static StyleBoxFlat ShellRowStyle(bool alternate, bool readOnly = false)
     {
+        var accented = alternate && !readOnly;
         var style = new StyleBoxFlat
         {
             BgColor = Ui.Colour(alternate ? "shell.row_alternate" : "shell.row"),
-            ContentMarginLeft = InterfaceSkin.Metric("shell.row_padding", 9), ContentMarginRight = InterfaceSkin.Metric("shell.row_padding", 9),
-            ContentMarginTop = 3, ContentMarginBottom = 3
+            BorderColor = Ui.Colour(accented ? "button.primary_border" : "surface.line_faint", accented ? 0.72f : 0.45f),
+            ContentMarginLeft = InterfaceSkin.Metric("shell.row_padding", 9),
+            ContentMarginRight = InterfaceSkin.Metric("shell.row_padding", 9),
+            ContentMarginTop = 4, ContentMarginBottom = 4
         };
+        style.BorderWidthBottom = 1;
+        if (accented) style.BorderWidthLeft = 1;
+        style.SetCornerRadiusAll(3);
         return style;
     }
 
@@ -182,6 +189,7 @@ public partial class DealOrForceGame
     /// </summary>
     private void FitOutliner()
     {
+        FitSituationDesk();
         if (_outliner is null) return;
         var collapsed = Math.Max(InterfaceSkin.Metric("shell.outliner_collapsed", 48), _outliner.GetCombinedMinimumSize().Y);
         var room = Mathf.Clamp(Size.Y - _outliner.OffsetTop - 68, 180, InterfaceSkin.Metric("shell.outliner_height", 600));
@@ -227,10 +235,12 @@ public partial class DealOrForceGame
                 }
                 else SelectDossierTab(captured);
             }, 0, InterfaceSkin.Metric("shell.tab_height", 34));
+            button.SetMeta("atlas_tab_button", true);
             button.ClipText = true;
             // Five policy tabs share a narrow dossier; keep Russian labels readable.
             if (screen == "Laws") button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            StyleButton(button, false);
             Tip(button, tab.Label);
             _dossierTabButtons.Add(tab.Id, button);
             _dossierTabs.AddChild(button);

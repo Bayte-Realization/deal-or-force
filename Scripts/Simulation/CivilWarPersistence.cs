@@ -45,7 +45,9 @@ public static class CivilWarPersistence
             foreach (var id in new[] { war.AttackerId, war.DefenderId })
             {
                 var nation = c.NationById(id);
-                if (nation is null || nation.IsHuman) continue;
+                // The same reserve for everybody; a player's is raised when the player has
+                // handed the army to its staff, since it spends the player's men and money.
+                if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Army))) continue;
                 var standing = c.Armies.Count(a => a.NationId == id && a.TemplateId == MilitiaCore.TemplateId);
                 var ceiling = Math.Min(Math.Max(0, c.Defines.CivilWarReserveFormations),
                     (int)Math.Min(int.MaxValue, nation.Population / Math.Max(1f, MilitiaCore.Weights.PopulationPerFormation)));

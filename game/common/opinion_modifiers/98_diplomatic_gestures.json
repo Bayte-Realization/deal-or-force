@@ -1,0 +1,11 @@
+// What the gestures between governments leave behind (DiplomaticGestures.cs).
+{
+  "state_visit": { "name": "Received our head of state", "opinion": 20, "days": 1460, "decays": true, "max_stacks": 2 },
+  "show_of_force": { "name": "Massed troops on our border", "opinion": -15, "days": 730, "decays": true, "max_stacks": 2 },
+  "mediated_peace": { "name": "Brought us to a ceasefire", "opinion": 25, "days": 2190, "decays": true, "max_stacks": 1 },
+  "development_loan": { "name": "Lent us money for our development", "opinion": 15, "days": 1825, "decays": true, "max_stacks": 2 },
+  "defaulted_on_loan": { "name": "Defaulted on our loan", "opinion": -30, "days": 3650, "decays": true, "max_stacks": 1 },
+  "expelled_diplomats": { "name": "Expelled our diplomats", "opinion": -25, "days": 1095, "decays": true, "max_stacks": 2 },
+  "joint_exercises": { "name": "Held exercises with us", "opinion": 15, "days": 730, "decays": true, "max_stacks": 1 },
+  "exercises_against_us": { "name": "Rehearsed a war against us with others", "opinion": -10, "days": 730, "decays": true, "max_stacks": 2 }
+}

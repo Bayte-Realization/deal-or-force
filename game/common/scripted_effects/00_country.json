@@ -11,7 +11,8 @@
   "war_footing": {
     "war_support": 0.06,
     "stability": -0.020,
-    "military_spending": 0.010
+    "army.organisation": 0.08,
+    "construction_capacity": 0.08
   },
 
   "civil_calm": {
@@ -21,7 +22,8 @@
 
   "austerity": {
     "treasury_percent": 0.030,
-    "welfare_spending": -0.008,
+    "credit_confidence": 0.025,
+    "inflation": -0.010,
     "standard_of_living": -0.010,
     "stability": -0.012
   },

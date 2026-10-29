@@ -1,4 +1,3 @@
-// Что одна страна подписала с другой — там, где игрок на это смотрит.
 {
   "PACTS": "ДОГОВОРЫ",
   "Offered": "Предложено",
@@ -11,14 +10,12 @@
   "with you": "с вами",
   "with you, since day {0}": "с вами, с {0}-го дня",
   "{0} has offered an alliance": "{0} предлагает союз",
-
   "Alliance": "Союз",
   "Propose alliance": "Предложить союз",
   "Accept alliance": "Принять союз",
   "Break alliance": "Разорвать союз",
   "Guarantee": "Гарантировать",
   "Withdraw guarantee": "Отозвать гарантию",
-
   "They would sign: {0} against {1} needed.": "Они подпишут: {0} при нужных {1}.",
   "They would refuse: {0} against {1} needed.": "Они откажут: {0} при нужных {1}.",
   "An attack on either of you is answered by the other.": "На нападение на любого из вас отвечает другой.",
@@ -29,21 +26,16 @@
   "Walk out. They remember it, and so does everybody watching.": "Выйти. Они это запомнят — и все, кто смотрит, тоже.",
   "Promise to fight for them if they are attacked. It costs nothing until it costs everything.": "Обещать воевать за них, если на них нападут. Не стоит ничего, пока не стоит всего.",
   "Take back the promise. They will notice.": "Забрать обещание назад. Они заметят.",
-
   "Allied with {0}.": "Союз с {0} заключён.",
   "Left the alliance with {0}.": "Союз с {0} разорван.",
   "{0} accepted.": "{0} соглашается.",
   "{0} declined.": "{0} отказывает.",
   "You guarantee {0}.": "Вы гарантируете {0}.",
   "You no longer guarantee {0}.": "Вы больше не гарантируете {0}.",
-
   "What it wants this week is worked out from how large it has grown, whether its overlord can govern itself, and whether that overlord is at war. At a hundred per cent it simply leaves.": "Чего она хочет на этой неделе, считается заново: насколько она выросла, способен ли сюзерен управлять собой и ведёт ли он войну. На ста процентах она просто уходит.",
-
-  // Просьба к союзнику прийти и его ответ.
   "CALLING FOR HELP": "ЗОВ О ПОМОЩИ",
   "Ask {0} to join this war. They are not obliged to - an offensive call is a favour, and refusing one costs goodwill rather than the alliance.": "Попросить {0} вступить в эту войну. Они не обязаны: наступательный призыв — это просьба об одолжении. Отказ испортит отношения, но союз сохранится.",
   "You are not in that war.": "Вы не участвуете в этой войне.",
-  "That war is over.": "Эта война уже окончена.",
   "{0} cannot join against {1}: {2}": "{0} не может выступить против {1}: {2}",
   "{0} could not join.": "{0} не смогли вступить.",
   "{0} is already in this war.": "{0} уже в этой войне.",

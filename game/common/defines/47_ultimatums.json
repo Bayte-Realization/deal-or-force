@@ -2,5 +2,11 @@
   "UltimatumMaxRegions": 8,
   "UltimatumMaxTreasuryShare": 0.5,
   "UltimatumSettlementTruceDays": 180,
-  "UltimatumRefusalTruceDays": 3
+  "UltimatumRefusalTruceDays": 3,
+  "UltimatumAnswerDays": 21,
+  "UltimatumHistoryLimit": 32,
+  "UltimatumDisarmamentDays": 1095,
+  "UltimatumTechnologyDays": 730,
+  "UltimatumFleetShare": 0.5,
+  "UltimatumAnnexStrengthRatio": 1.75
 }

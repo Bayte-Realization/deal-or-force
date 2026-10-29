@@ -93,6 +93,8 @@ static class WorkerBackendTests
         var rust = Path.Combine(root, "build", "example-rust.exe");
         var luau = Path.Combine(root, "build", "luau-worker", "Release", "deal-or-force-luau.exe");
         typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 365L * 24);
+        // Restored 2026-10-29 with a working build/example-go.exe (go build of the
+        // go_worker template); the loop still skips any fixture whose binary is absent.
         foreach (var (exe, arguments, language) in new[] {
             (go, Array.Empty<string>(), "Go"),
             (rust, Array.Empty<string>(), "Rust"),

@@ -73,6 +73,7 @@ static class UltimatumTests
 
     public static void Run()
     {
+        UltimatumTerms();
         {
             var (c, map, demander, target, stateIdx, provinces) = Setup();
             var stability = target.Stability;
@@ -381,4 +382,113 @@ static class UltimatumTests
                 "a disappeared country cannot become a ghost-war target even without a truce");
         }
     }
+    /// <summary>
+    /// The rest of the terms. A package can now ask for almost anything - a subject, a
+    /// disarmed army, a fleet, a government - and each term is applied by the system that
+    /// already owns that thing, so there is no second copy of any rule.
+    /// </summary>
+    static void UltimatumTerms()
+    {
+        // Every term says what it is in the summary a player reads before sending.
+        var (summaryCampaign, _, _, _, _, _) = Setup();
+        var summaryDemand = new Ultimatum.Demand
+        {
+            Vassalise = true, Disarm = true, BreakAlliances = true, ReleaseSubjects = true,
+            TechnologyTransfer = true, ChangeGovernment = true, FleetTransfer = true, Annex = true
+        };
+        var summary = Ultimatum.Summary(summaryCampaign, summaryDemand);
+        foreach (var term in new[]
+                 {
+                     "The country as our subject", "Disarmament", "Break their alliances",
+                     "Release their subjects", "Hand over their drawings", "A government of our colour",
+                     "Half their fleet", "The whole country, annexed"
+                 })
+            Check(summary.Contains(term, StringComparison.Ordinal), "the package summary names every term: " + term);
+
+        // Annexation is the whole demand: nothing is left to ask for beside it.
+        {
+            var (c, _, demander, target, stateIdx, _) = Setup();
+            var valid = Ultimatum.Validate(c, demander, target,
+                new Ultimatum.Demand { Annex = true, Regions = new[] { stateIdx } }, out var reason);
+            Check(!valid, "a package cannot both annex a country and take a region of it");
+            Check(reason.Contains("Annexation", StringComparison.Ordinal),
+                "and it says so in words a player can act on");
+        }
+
+        // Terms that have nothing to act on are refused rather than signed for nothing.
+        {
+            var (c, _, demander, target, _, _) = Setup();
+            // The shipped 2024 world has alliances of its own; this check is about a country
+            // that has none, so it is emptied of them first rather than assumed to be.
+            foreach (var bond in c.Relations.Values)
+                if (bond.Stance == DiplomaticStance.Allied && (bond.A == target.Id || bond.B == target.Id))
+                    bond.Stance = DiplomaticStance.Neutral;
+            c.Fleets.RemoveAll(fleet => fleet.NationId == target.Id);
+            foreach (var other in c.Nations.ToArray())
+                if (other.AnswersTo(target.Id)) SubjectSystem.Release(c, other);
+            Check(!Ultimatum.Validate(c, demander, target, new Ultimatum.Demand { BreakAlliances = true }, out _),
+                "an alliance cannot be broken with a country that has none");
+            Check(!Ultimatum.Validate(c, demander, target, new Ultimatum.Demand { FleetTransfer = true }, out _),
+                "a fleet cannot be demanded of a country without one");
+            Check(!Ultimatum.Validate(c, demander, target, new Ultimatum.Demand { ReleaseSubjects = true }, out _),
+                "subjects cannot be released by a country that has none");
+        }
+
+        // An empty paper is still nothing.
+        Check(!Ultimatum.HasAnyTerm(new Ultimatum.Demand()) && Ultimatum.HasAnyTerm(summaryDemand),
+            "an ultimatum with no terms at all is not an ultimatum");
+
+        // The drawings: the demander works faster for two years, and the target keeps its own.
+        {
+            var (c, _, demander, target, _, _) = Setup();
+            // This is a successful transfer fixture, not a request for nonexistent research.
+            target.Technologies.Add(TechnologyCatalog.All.First().Id);
+            var outcome = Ultimatum.Resolve(c, demander, target,
+                new Ultimatum.Demand { TechnologyTransfer = true }, Ultimatum.Answer.Yield);
+            Check(outcome.Accepted && demander.Modifiers.Any(m => m.Id == "ultimatum_technology"),
+                "a technology demand hands the drawings over and the laboratories notice");
+        }
+
+        // The government: replaced with one of the demander's own colour, and it costs the
+        // country its stability.
+        {
+            var (c, _, demander, target, _, _) = Setup();
+            demander.Government = "republic";
+            target.Government = "monarchy";
+            var stability = target.Stability;
+            var outcome = Ultimatum.Resolve(c, demander, target,
+                new Ultimatum.Demand { ChangeGovernment = true }, Ultimatum.Answer.Yield);
+            Check(outcome.Accepted && target.Government == "republic" && target.Stability < stability,
+                "a government demand replaces the government and is paid for in stability");
+            Check(CampaignDiplomacy.Get(c, demander.Id, target.Id).Reasons
+                    .Any(r => string.Equals(r.Id, "imposed_our_government", StringComparison.OrdinalIgnoreCase)),
+                "and the country remembers who did it");
+        }
+
+        // A demand is one answer: refusing it applies no term at all.
+        {
+            var (c, _, demander, target, stateIdx, _) = Setup();
+            target.Technologies.Add(TechnologyCatalog.All.First().Id);
+            var provincesBefore = c.StatesOf(target).Length;
+            var outcome = Ultimatum.Resolve(c, demander, target,
+                new Ultimatum.Demand { Regions = new[] { stateIdx }, TechnologyTransfer = true }, Ultimatum.Answer.Refuse);
+            Check(outcome.Accepted && c.StatesOf(target).Length == provincesBefore &&
+                  !demander.Modifiers.Any(m => m.Id == "ultimatum_technology"),
+                "a refusal hands over neither land nor drawings");
+        }
+
+        // A country that answers to somebody else is its overlord's business, not ours.
+        {
+            var (c, _, demander, target, _, _) = Setup();
+            var overlord = c.Nations.First(n => n.Id != demander.Id && n.Id != target.Id);
+            target.OverlordId = overlord.Id;
+            target.SubjectType = "puppet";
+            Check(!Ultimatum.Validate(c, demander, target, new Ultimatum.Demand { Annex = true }, out var reason) &&
+                  reason.Contains("overlord", StringComparison.OrdinalIgnoreCase),
+                "a subject cannot be annexed over its overlord's head");
+            target.OverlordId = 0;
+            target.SubjectType = "";
+        }
+    }
+
 }

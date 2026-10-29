@@ -67,12 +67,31 @@ public static class Deterrence
     }
 
     /// <summary>
-    /// The price a direct war between two holders carries, and zero for every other pair.
+    /// The price a direct war between two deterrent holders carries, and zero for every other pair.
     /// Read by the war judgement's price list, so what the bench reports, what the console
     /// explains and what the government decided are one arithmetic, as ever.
     /// </summary>
     public static float MutualPrice(Campaign campaign, Nation a, Nation b) =>
         TierOf(campaign, a) >= 1 && TierOf(campaign, b) >= 1 ? campaign.Defines.AiMutualDeterrencePrice : 0f;
+
+    /// <summary>
+    /// The shadow over a war both sides could end the world from, as a pressure 0..4: the
+    /// product of the two tiers, zero for every ordinary war. Nobody plans a conquest
+    /// through a war like that - not because either government is timid, but because the
+    /// world (and each government's own cities) prices the map's redrafting out of it.
+    /// Read by the peace outcomes, which end holders' wars in limited terms and relax the
+    /// decisive bar by this pressure: the higher the shadow, the sooner the armistice.
+    /// </summary>
+    public static float Brinkmanship(Campaign campaign, StrategicWar war)
+    {
+        if (campaign is null || war is null || war.Ended || !campaign.Defines.MutualDeterrenceEnabled) return 0f;
+        var attacker = campaign.NationById(war.AttackerId);
+        var defender = campaign.NationById(war.DefenderId);
+        if (attacker is null || defender is null) return 0f;
+        var attackerTier = TierOf(campaign, attacker);
+        var defenderTier = TierOf(campaign, defender);
+        return attackerTier >= 1 && defenderTier >= 1 ? Math.Min(4, attackerTier * defenderTier) : 0f;
+    }
 }
 
 public sealed partial class Defines

@@ -35,6 +35,9 @@ static class CivicCampaignTests
         Check(MovementDealings.Refusal(c, parent, movement, "authorise_referendum").Length == 0, "parent can permit a vote");
         new MovementDealingCommand { IssuerId = parent.Id, MovementId = movement.Id, Action = "authorise_referendum" }.Apply(c);
         Check(CivilIndependence.ParentConsents(c, movement, parent), "authorisation is an actual campaign command");
+        var options = new JsonSerializerOptions { IncludeFields = true, PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate };
+        var saved = JsonSerializer.Deserialize<MovementState>(JsonSerializer.Serialize(movement.Movement, options), options);
+        Check(saved.ReadyOnDay.ContainsKey(CivilIndependence.ConsentKey(parent.Id)), "referendum consent survives serialization");
         var votes = CivilIndependence.ResidentSupport(movement, region);
         Check(votes > .5f, "majority uses all residents, not just a selected people's fraction");
         var secedingProvince = PeaceConference.ProvincesOfState(c.ProvinceMap, region.MapIndex).First();
@@ -61,9 +64,6 @@ static class CivicCampaignTests
             $"the agreed vote carries the whole Scottish homeland, not one region ({homelandTaken} of {homelandRegions.Length})");
         Check(CampaignDiplomacy.Get(c, parent.Id, movement.Id).TruceUntil > c.ElapsedDays,
             "settlement protects against immediate attack");
-        var options = new JsonSerializerOptions { IncludeFields = true, PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate };
-        var saved = JsonSerializer.Deserialize<MovementState>(JsonSerializer.Serialize(movement.Movement, options), options);
-        Check(saved.ReadyOnDay.ContainsKey(CivilIndependence.ConsentKey(parent.Id)), "referendum consent survives serialization");
         // A diaspora is named for where it is, not for the homeland its people came from:
         // Scots in California found California. And a secession seated in one region is that
         // region, not the whole land its box sits in - the Highlands are Highland, and
@@ -87,15 +87,17 @@ static class CivicCampaignTests
         movement.ManpowerReserve = 100_000; movement.Treasury = 1;
         typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 90L * 24);
         var reserveMen = movement.ManpowerReserve; var reserveMoney = movement.Treasury;
+        // A player who runs the army by hand is not charged for a reserve it did not order.
+        Delegation.Set(parent, Delegation.Army, false);
         CivilWarPersistence.Tick(c);
         Check(war.EscalationStage == 1 && c.Armies.Count == armies + 1 &&
             movement.ManpowerReserve == reserveMen - MilitiaCore.Weights.Formation &&
             Math.Abs(movement.Treasury - (reserveMoney - c.Defines.CivilWarReserveCost)) < .0001,
-            "active civil war mobilises one paid AI reserve on owned ground");
+            $"active civil war mobilises one paid AI reserve on owned ground (stage {war.EscalationStage}, armies {c.Armies.Count - armies}, men {reserveMen - movement.ManpowerReserve}, money {reserveMoney - movement.Treasury})");
         CivilWarPersistence.Tick(c);
         Check(c.Armies.Count == armies + 1, "same escalation stage cannot mint repeated reserves");
         Check(!c.Armies.Any(a => a.NationId == parent.Id && a.TemplateId == MilitiaCore.TemplateId),
-            "reserve automation does not spend a human player's resources");
+            "reserve automation does not spend the resources of a player who runs the army by hand");
         var savedWar = JsonSerializer.Deserialize<StrategicWar>(JsonSerializer.Serialize(war, options), options);
         Check(savedWar.CivilConflict && savedWar.EscalationStage == 1 && savedWar.AiNegotiationUnlockDay == 540,
             "civil war duration and paid mobilisation stage survive serialization");

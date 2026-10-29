@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory)][string]$OutputDirectory,
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta1',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
     [hashtable]$Addons = @{},
     [string]$KotlinProject,
     [string]$JavaHome = $env:JAVA_HOME,

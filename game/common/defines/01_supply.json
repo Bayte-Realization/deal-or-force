@@ -16,6 +16,9 @@
   "SupplyTraceRange": 20,
   // Days a cut-off grouping lives on what it carried before supply and organisation are spent.
   "SupplyCutoffDays": 14,
+  // Staff attacks wait while recorded ammunition or oil cover is under this share of yesterday's draw.
+  // 0 turns the wait off. A direct order is not waiting on it.
+  "SupplyAttackCoverageFloor": 0.5,
   "BaseStateSupplyThroughput": 6,
   "SupplyThroughputPerDivision": 0.12,
   "SupplyPerInfrastructure": 2.2,

@@ -506,13 +506,49 @@ public static class LogisticsSystem
             var stores = DepotDays(campaign, army);
             if (stores.Length > 0) head += " " + stores;
             if (army.DaysCutOff >= span)
-                return head + " " + Loc.Get("Organisation is spent and it cannot keep attacking.");
-            return head + " " + Loc.Format("{0} days until supply and organisation are spent.",
-                Math.Max(0, span - army.DaysCutOff));
+                return Finish(campaign, army, head + " " + Loc.Get("Organisation is spent and it cannot keep attacking."));
+            return Finish(campaign, army, head + " " + Loc.Format("{0} days until supply and organisation are spent.",
+                Math.Max(0, span - army.DaysCutOff)));
         }
+        var openStores = DepotDays(campaign, army);
+        var openTail = openStores.Length > 0 ? " " + openStores : "";
         if (army.SupplyCongestion < 0.999f)
-            return Loc.Get("Thinning.") + " " + Loc.Get("The supply hub is over capacity.");
-        return Loc.Get("Fed.") + " " + Loc.Get("The supply line reaches a hub.");
+            return Finish(campaign, army, Loc.Get("Thinning.") + " " + Loc.Get("The supply hub is over capacity.") + openTail);
+        return Finish(campaign, army, Loc.Get("Fed.") + " " + Loc.Get("The supply line reaches a hub.") + openTail);
+    }
+
+    /// <summary>
+    /// Hub, road length and a blockade, from fields and fleet pressure the trace already computed.
+    /// A read. There is no stored sea-route flag, so a sea leg is not invented here.
+    /// </summary>
+    private static string Finish(Campaign campaign, Army army, string head)
+    {
+        var road = Road(campaign, army);
+        var blockade = BlockadeLine(campaign, army);
+        if (road.Length > 0) head += " " + road;
+        if (blockade.Length > 0) head += " " + blockade;
+        return head;
+    }
+
+    private static string Road(Campaign campaign, Army army)
+    {
+        if (campaign is null || army.SupplySourceStateMapIndex < 0 || army.SupplyDistance < 0) return "";
+        var hub = campaign.States.Find(state => state.MapIndex == army.SupplySourceStateMapIndex);
+        var name = hub is null || string.IsNullOrEmpty(hub.Name)
+            ? army.SupplySourceStateMapIndex.ToString()
+            : hub.Name;
+        return Loc.Format("The hub is {0}, {1} provinces along the road.", name, army.SupplyDistance);
+    }
+
+    private static string BlockadeLine(Campaign campaign, Army army)
+    {
+        if (campaign?.ProvinceMap is not { } map || army.ProvinceId <= 0 || army.ProvinceId > map.ProvinceCount)
+            return "";
+        var nation = campaign.Nations.Find(candidate => candidate.Id == army.NationId);
+        if (nation is null) return "";
+        var centre = map.CenterOf(army.ProvinceId);
+        if (NavalOperations.BlockadePressure(campaign, nation, centre.Latitude, centre.Longitude) <= 0f) return "";
+        return Loc.Get("A blockade is sitting on this coast.");
     }
 
     /// <summary>
@@ -535,4 +571,54 @@ public static class LogisticsSystem
         var days = StrategicStockpiles.DaysOnHand(nation, good);
         return days is int n ? Loc.Format(lasts, n) : Loc.Get(idle);
     }
+
+    private static readonly string[] AttackCoverGoods = { "Ammunition", "Oil" };
+
+    /// <summary>
+    /// Yesterday's ammunition or oil cover was recorded under <see cref="Defines.SupplyAttackCoverageFloor"/>.
+    /// A missing record is a full cover: a quiet depot is not a refusal. A read. It does not
+    /// seed the depot, spend it, or move the formation. Nation id is not a list index.
+    /// </summary>
+    public static bool DepotShortOfAttack(Campaign campaign, Army army)
+    {
+        if (campaign is null || army is null || !campaign.Defines.StrategicStockpilesEnabled) return false;
+        var floor = campaign.Defines.SupplyAttackCoverageFloor;
+        if (!float.IsFinite(floor) || floor <= 0f) return false;
+        var nation = campaign.Nations.Find(candidate => candidate.Id == army.NationId);
+        if (nation is null) return false;
+        foreach (var good in AttackCoverGoods)
+        {
+            if (!nation.StockpileCoverage.TryGetValue(good, out var met) || !float.IsFinite(met)) continue;
+            if (met < floor) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The lower recorded ammunition or oil cover, as a whole percent. 100 when neither is recorded.</summary>
+    public static int ShortCoverPercent(Campaign campaign, Army army)
+    {
+        var nation = campaign?.Nations.Find(candidate => candidate.Id == army?.NationId);
+        if (nation is null) return 100;
+        var lowest = 100;
+        var any = false;
+        foreach (var good in AttackCoverGoods)
+        {
+            if (!nation.StockpileCoverage.TryGetValue(good, out var met) || !float.IsFinite(met)) continue;
+            any = true;
+            var percent = WholePercent(met);
+            if (percent < lowest) lowest = percent;
+        }
+        return any ? lowest : 100;
+    }
+
+    /// <summary>The attack floor as a whole percent. Half is 50. A read of the define.</summary>
+    public static int AttackCoverPercent(Campaign campaign)
+    {
+        var floor = campaign?.Defines.SupplyAttackCoverageFloor ?? 0.5f;
+        if (!float.IsFinite(floor)) floor = 0.5f;
+        return (int)MathF.Round(Math.Clamp(floor, 0f, 1f) * 100f);
+    }
+
+    private static int WholePercent(float share) =>
+        (int)MathF.Floor(Math.Clamp(share, 0f, 1f) * 100f + 0.0001f);
 }

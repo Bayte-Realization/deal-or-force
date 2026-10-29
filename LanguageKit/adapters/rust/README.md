@@ -15,4 +15,4 @@ Requirements: Windows x86_64, Rust >= 1.94, MSVC linker/Windows SDK, exact targe
 
 Exposes `DofRustKernel : RefCounted`, `weighted_sum(PackedInt32Array)` and `language_name()`. This tiny arithmetic kernel demonstrates a native boundary; it is not a port of authoritative campaign logic. It does not add Rust as a drop-in scene script or provide Rust syntax editing/completion in Godot. Cargo and a code editor remain the authoring tools. Build is debug; performance and export-template parity are not claimed.
 
-Verified on `4.8.beta1.mono.official.4d10419ca`: editor import, class construction, method dispatch, negative and empty-array inputs, zero exit, no Godot error lines.
+Verified on `4.8.beta2.mono.official.cafc17a19` on 29 October 2026: the same sample, `api-custom` from that executable, editor import, `RUST_PROBE PASS weighted_sum=20 empty=0`, exit 0. godot-rust printed `API v4.8.beta2.mono.official`. This is not a simulation kernel. The ownership benchmark still has C# ahead (about 2629 ms vs 3657 ms p50).

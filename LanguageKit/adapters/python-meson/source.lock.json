@@ -1,0 +1,8 @@
+{
+  "id": "godot-python-meson",
+  "url": "https://github.com/touilleMan/godot-python.git",
+  "commit": "4f585652a76d3161a5beca4b41559eeb940fcf1d",
+  "branch_reviewed": "godot4-meson",
+  "license": "MIT",
+  "scope": "API parser compatibility only; not a built or runtime-certified addon"
+}

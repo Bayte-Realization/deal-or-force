@@ -37,7 +37,7 @@ public static partial class Warfare
         if (army.OrderProvinceId <= 0) return boundedPlan;
         if (boundedPlan && army.ProvinceId == army.OrderProvinceId)
         {
-            army.PlanActive = false;
+            army.PlanActive = OffensivePlanning.HasNextPhase(plan);
             army.Route.Clear(); army.PlannedRoute.Clear();
             return true;
         }

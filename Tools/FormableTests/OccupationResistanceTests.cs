@@ -34,7 +34,7 @@ static class OccupationResistanceTests
             "there is nothing to slip where nothing is held");
         Check(OccupationResistance.Slip(0.01f, 1f, 0f, d) <= 0.01f,
             "the slip can never exceed the occupation itself");
-        var off = new Defines();
+        var off = new Defines { OccupationResistanceInCivilWars = false };
         Check(!off.OccupationResistanceEnabled && OccupationResistance.Slip(0.8f, 0.5f, 0f, off) == 0f,
             "with the rule off occupation stays free, as it has always been");
         Check(OccupationResistance.PartisanCasualties(15000f, 0.8f, 0.8f, d) > 0f,
@@ -100,6 +100,7 @@ static class OccupationResistanceTests
             "the week the hold slipped the garrison bled, and its wounded are on the way back");
 
         c.Defines.OccupationResistanceEnabled = false;
+        c.Defines.OccupationResistanceInCivilWars = false;
         c.ProvinceOccupation[province] = 0.8f;
         SetDay(c, 26);
         OccupationResistance.Tick(c);

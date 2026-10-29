@@ -1,0 +1,25 @@
+{
+  "ground doctrine": "сухопутная доктрина",
+  "air doctrine": "воздушная доктрина",
+  "naval doctrine": "морская доктрина",
+  "general doctrine": "общая доктрина",
+
+  "Four shelves of books of war - ground, air, sea and the general staff - and each shelf holds one book at a time. The shelves are learned side by side: a navy does not forget its book because the army rewrote its own. Articles are paid for in the experience of their own service; the staff's book is paid for in political credit. A crash course costs more and lands at once. {0} and that service relearns what it thought it knew, until the new articles are drilled in.": "Четыре полки воинских уставов — сухопутная, воздушная, морская и генерального штаба, — и на каждой полке один устав за раз. Полки учатся одновременно: флот не забывает свой устав оттого, что армия переписала свой. Положения оплачиваются опытом своего рода войск; устав штаба — политическим капиталом. Ускоренный курс дороже и осваивается сразу. {0}, и этот род войск переучивается, пока новые положения не отработаны.",
+  "Abandoning a book on a shelf costs {0} political points": "Смена устава на полке стоит {0} политического капитала",
+  "Shelf empty. The first article of any book costs nothing political; abandoning one later does.": "Полка пуста. Первое положение любого устава не стоит политически ничего; отказ от него позже — стоит.",
+  "{0}/week · next staff article {1}": "{0}/неделя · следующее положение штаба {1}",
+  "This service is already learning an article.": "Этот род войск уже учит статью.",
+
+  "Doctrine of the shock": "Доктрина удара",
+  "War as one blow in one place: armour, concentration and pursuit, with nothing held back for the second day.": "Война как один удар в одном месте: броня, сосредоточение и преследование, и ничего не придержано на второй день.",
+  "Doctrine of infiltration": "Доктрина просачивания",
+  "War from inside the enemy's position: patrols, storm parties and small units that own the ground they stand on.": "Война изнутри позиции противника: дозоры, штурмовые группы и мелкие части, которым принадлежит земля под ногами.",
+  "Doctrine of the long reach": "Доктрина дальней руки",
+  "War against the enemy's country rather than its army: range, bases and a campaign flown for months.": "Война против страны противника, а не против его армии: дальность, базы и кампания, которую летают месяцами.",
+  "Doctrine of the undersea": "Доктрина подводной войны",
+  "War on the enemy's shipping: boats, packs and a blockade that costs no battle line.": "Война против судоходства противника: лодки, стаи и блокада, которой не нужен линейный флот.",
+  "Doctrine of the general staff": "Доктрина генерального штаба",
+  "War as an organisation: plans that survive contact, intelligence that arrives in time, and a staff that can change its mind.": "Война как организация: планы, которые переживают соприкосновение, разведка, которая успевает, и штаб, который умеет передумать.",
+  "Doctrine of national mobilisation": "Доктрина всеобщей мобилизации",
+  "War as a country's whole weight: registers, factories, transport and the political will to keep them turning.": "Война как весь вес страны: списки, заводы, транспорт и политическая воля их крутить."
+}

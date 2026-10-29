@@ -1,13 +1,3 @@
-// The world's proper nouns: every country in `common/countries`, and the continents and
-// regions the country table groups them into.
-//
-// Kept apart from the interface's own strings because they are a different kind of thing
-// and a different job: somebody translating the game's sentences and somebody checking two
-// hundred country names are rarely the same person, and never in the same sitting.
-//
-// The key is the English name exactly as `common/countries` writes it, which is how every
-// other lookup in this game works. A mod that renames a country ships its own row for the
-// new name; one that does not reads in whatever the mod called it.
 {
   "Abkhazia": "Абхазия",
   "Afghanistan": "Афганистан",
@@ -224,7 +214,6 @@
   "Somaliland": "Сомалиленд",
   "South Africa": "Южно-Африканская Республика",
   "South Georgia and the Islands": "Южная Георгия и Южные Сандвичевы Острова",
-  "South Korea": "Южная Корея",
   "South Ossetia": "Южная Осетия",
   "South Sudan": "Южный Судан",
   "Southern Patagonian Ice Field": "Южнопатагонское ледниковое плато",

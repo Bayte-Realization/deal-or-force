@@ -61,25 +61,19 @@ public partial class DealOrForceGame
         AddChild(_peaceLayer);
 
         var panel = TexturedPanel(_peaceLayer);
+        panel.Name = "PeaceWorkspacePanel";
+        _peaceWorkspacePanel = panel;
         Ui.Place(panel, "hud.peace_panel");
 
         var shell = PanelRows(panel, 20, 16, 8);
-        var body = new ScrollContainer { Name = "PeaceBodyScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true,
-            MouseForcePassScrollEvents = false };
-        shell.AddChild(body);
-        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        rows.AddThemeConstantOverride("separation", 8);
-        body.AddChild(rows);
-        _peaceTitle = Title("PEACE CONFERENCE", 22, Ui.Colour("text.accent"));
-        rows.AddChild(_peaceTitle);
+        var leave = ActionButton("×", ClosePeaceConference, 36, 32);
+        leave.Name = "ConferenceLeave";
+        leave.TooltipText = Ui.Tip(Tr("Walk away from the table. The war continues."));
+        var peaceHead = ScreenHeader(shell, "PEACE CONFERENCE", "", right: new Control[] { leave });
+        _peaceTitle = HeaderTitle(peaceHead);
+        _peaceTitle.AddThemeFontSizeOverride("font_size", 22);
 
-        _peaceBudget = Title("", 14, Ui.Colour("text.bright"));
-        _peaceBudget.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_peaceBudget);
-
-        rows.AddChild(Title("Peace beneficiary", 12, Ui.Colour("text.caption")));
+        shell.AddChild(Title("Peace beneficiary", 12, Ui.Colour("text.caption")));
         _peaceBeneficiaryPicker = new OptionButton { Name = "PeaceBeneficiary", FitToLongestItem = false,
             SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 34) };
         _peaceBeneficiaryPicker.ItemSelected += index =>
@@ -89,7 +83,17 @@ public partial class DealOrForceGame
             _peaceDemand.BeneficiaryId = chosen == _peaceDemand.ProposerId ? -1 : chosen;
             RefreshPeaceConference();
         };
-        rows.AddChild(_peaceBeneficiaryPicker);
+        shell.AddChild(_peaceBeneficiaryPicker);
+        BuildPeaceWorkspaceTabs(shell);
+        var body = new ScrollContainer { Name = "PeaceBodyScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true,
+            MouseForcePassScrollEvents = false };
+        shell.AddChild(body);
+        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        rows.AddThemeConstantOverride("separation", 8);
+        body.AddChild(rows);
+        _peaceTerritoryPage = rows;
         _peaceBeneficiaryNote = Title("", 12, Ui.Colour("text.body_soft"));
         _peaceBeneficiaryNote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceBeneficiaryNote);
@@ -97,10 +101,6 @@ public partial class DealOrForceGame
         _peaceBorderNote = Title("", 12, Ui.Colour("text.faint"));
         _peaceBorderNote.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceBorderNote);
-
-        _peaceVerdict = Title("", 13, Ui.Colour("state.warning"));
-        _peaceVerdict.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        rows.AddChild(_peaceVerdict);
 
         // Two tools, the way a unit selection has two: a brush that goes province by province
         // along a border, and a frame that takes or gives back everything inside a rectangle.
@@ -116,11 +116,19 @@ public partial class DealOrForceGame
         Tip(_peaceFrameButton, "Drag a rectangle: the left button takes everything inside it, the right gives it all back.");
         tools.AddChild(_peaceFrameButton);
 
+        var claims = new HBoxContainer();
+        claims.AddThemeConstantOverride("separation", 6); rows.AddChild(claims);
+        var clear = ActionButton("Clear", ClearPeaceDemand, 0, 34);
+        clear.Name = "ConferenceClear";
+        clear.TooltipText = Ui.Tip(Tr("Drop every claim and start the settlement again."));
+        var occupied = ActionButton("Claim held", ClaimOccupiedGround, 0, 34);
+        occupied.Name = "ConferenceClaimHeld";
+        occupied.TooltipText = Ui.Tip(Tr("Claim every province you currently occupy. The cheapest demand there is."));
+        foreach (var button in new[] { clear, occupied })
+        { button.SizeFlagsHorizontal = SizeFlags.ExpandFill; claims.AddChild(button); }
+
         _peaceHint = Title(
-            "The left button takes ground, the right gives it back · the brush goes province by province, " +
-            "the frame takes or releases everything inside a rectangle (Shift does the same with the brush) · " +
-            "click a region below to take or release all of it · " +
-            "WASD and the middle mouse button move the camera",
+            "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map",
             12, Ui.Colour("text.faint"));
         _peaceHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceHint);
@@ -137,15 +145,23 @@ public partial class DealOrForceGame
         _peaceLegend.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_peaceLegend);
 
-        rows.AddChild(Title("TERRITORY DEMANDED", 11, Ui.Colour("text.caption")));
+        SectionRule(rows, "TERRITORY DEMANDED");
         _peaceLedgerRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _peaceLedgerRows.AddThemeConstantOverride("separation", 2);
         rows.AddChild(_peaceLedgerRows);
 
-        rows.AddChild(Title("OTHER TERMS", 11, Ui.Colour("text.caption")));
+        var treatyRows = new VBoxContainer { Name = "PeaceTreatyPage", Visible = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        treatyRows.AddThemeConstantOverride("separation", 8);
+        // One scroll viewport, two pages. Hidden pages must not reserve minimum height.
+        body.RemoveChild(rows);
+        var pages = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        body.AddChild(pages); pages.AddChild(rows); pages.AddChild(treatyRows);
+        _peaceTreatyPage = treatyRows;
+        SectionRule(treatyRows, "OTHER TERMS");
         var terms = new VBoxContainer { Name = "PeaceTermsList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         terms.AddThemeConstantOverride("separation", 3);
-        rows.AddChild(terms);
+        treatyRows.AddChild(terms);
         AddPeaceTerm(terms, "reparations", "Reparations",
             "An indemnity scaled to what their economy can still bear.");
         AddPeaceTerm(terms, "trade", "Trade concessions",
@@ -167,29 +183,8 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Make them a {0}", Tr(kind.Name).ToLowerInvariant()),
                 kind.Description);
 
-        _conferenceWhitePeaceButton = ActionButton("White peace", ProposeConferenceWhitePeace, 0, 34);
-        _conferenceWhitePeaceButton.Name = "ConferenceWhitePeace";
-        shell.AddChild(_conferenceWhitePeaceButton);
-        var actions = new GridContainer { Name = "ConferenceFooter", Columns = 2 };
-        actions.AddThemeConstantOverride("h_separation", 6);
-        actions.AddThemeConstantOverride("v_separation", 6);
-        shell.AddChild(actions);
-        var clear = ActionButton("Clear", ClearPeaceDemand, 92, 34);
-        clear.TooltipText = Ui.Tip(Tr("Drop every claim and start the settlement again."));
-        actions.AddChild(clear);
-        var occupied = ActionButton("Claim held", ClaimOccupiedGround, 118, 34);
-        occupied.Name = "ConferenceClaimHeld";
-        occupied.TooltipText = Ui.Tip(Tr("Claim every province you currently occupy. The cheapest demand there is."));
-        actions.AddChild(occupied);
-        _conferenceProposeButton = ActionButton("Propose", ProposeWrittenPeace, 108, 34, true);
-        _conferenceProposeButton.Name = "ConferencePropose";
-        _conferenceProposeButton.TooltipText = Ui.Tip(Tr("Put the settlement to them."));
-        actions.AddChild(_conferenceProposeButton);
-        var cancel = ActionButton("Leave", ClosePeaceConference, 92, 34);
-        cancel.Name = "ConferenceLeave";
-        cancel.TooltipText = Ui.Tip(Tr("Walk away from the table. The war continues."));
-        actions.AddChild(cancel);
-        foreach (var child in actions.GetChildren().OfType<Control>()) child.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        BuildPeaceSettlementFooter(shell);
+        panel.Resized += () => FitNegotiationTypography(panel);
     }
 
     /// <summary>Brush or frame. Kept between conferences: whoever chose the frame once wants it again.</summary>
@@ -203,7 +198,9 @@ public partial class DealOrForceGame
 
     private void AddPeaceTerm(Container parent, string key, string caption, string help)
     {
-        var button = ActionButton(caption, () => TogglePeaceTerm(key), 300, 30);
+        var button = ActionButton(caption, () => TogglePeaceTerm(key), 0, 36);
+        button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         Tip(button, help);
         _peaceTermButtons[key] = button;
         parent.AddChild(button);
@@ -235,6 +232,7 @@ public partial class DealOrForceGame
         _peaceLedgerModel = new PeaceLedger(_campaign, war, _campaign.Player.Id);
         _peacePriceRecipient = -1;
         _peaceLayer.Visible = true;
+        SelectPeaceWorkspacePage(false);
         _sidePanel.Visible = false;
         SetArmyPanelVisible(false);
         _peaceReturnsToWar = _warLedgerLayer is { Visible: true } ? war.Id : -1;
@@ -430,7 +428,7 @@ public partial class DealOrForceGame
             : PeaceNegotiation.Description(PeaceTerms.WhitePeace) + "\n" + Loc.Format("Acceptance {0}%.",
                 PeaceNegotiation.Acceptance(_campaign, _peaceWar, player.Id, PeaceTerms.WhitePeace).ToString("0")));
         var loser = _peaceLedgerModel.Loser;
-        _peaceTitle.Text = Simulation.Loc.Format("PEACE WITH {0}", loser?.DisplayName?.ToUpperInvariant() ?? "?");
+        _peaceTitle.Text = Simulation.Loc.Format("Peace treaty: {0}", loser?.DisplayName ?? "?");
 
         var budget = _peaceLedgerModel.Budget;
         var signed = PeaceConference.Round(_campaign, _peaceWar, _peaceDemand);
@@ -438,6 +436,9 @@ public partial class DealOrForceGame
         _peaceBudget.Text = Simulation.Loc.Format("This war is worth {0:0.0} · you are asking for {1:0.0}", budget, cost);
         _peaceBudget.AddThemeColorOverride("font_color",
             cost > budget ? Ui.Colour("state.negative") : Ui.Colour("state.positive"));
+        _peaceLeverageValue.Text = budget.ToString("0.0");
+        _peaceDemandValue.Text = cost.ToString("0.0");
+        _peaceDemandValue.AddThemeColorOverride("font_color", Ui.Colour(cost > budget ? "state.negative" : "text.bright"));
 
         var added = signed.Provinces.Count(province => !_peaceDemand.Provinces.Contains(province));
         var removed = _peaceDemand.Provinces.Count(province => !signed.Provinces.Contains(province));
@@ -474,6 +475,7 @@ public partial class DealOrForceGame
             });
 
         RefreshPeaceLedgerRows(signed);
+        FitNegotiationTypography(_peaceWorkspacePanel);
         // An independent state has no final map colour yet: do not misrepresent it as annexation.
         if (signed.ReleaseRegions) _globe.ClearPeacePreview();
         else if (beneficiary is not null) _globe.SetPeacePreview(signed.Provinces, beneficiary.MapIndex);

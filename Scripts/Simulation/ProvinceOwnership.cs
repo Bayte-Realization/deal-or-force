@@ -82,6 +82,24 @@ public static class ProvinceOwnership
     }
 
     /// <summary>
+    /// The ground a country holds in a live campaign: every region whose present owner is that
+    /// nation.
+    ///
+    /// The two methods above answer from the bookmark file, which is what the map was drawn
+    /// with. After a war has moved a border they are history, not the present, and a rule about
+    /// "what this country is" has to look at the present. Occupation is deliberately not
+    /// included: land held under military control belongs to its owner.
+    /// </summary>
+    public static HashSet<int> ProvinceSetOf(Campaign campaign, int nationMapIndex)
+    {
+        var found = new HashSet<int>();
+        if (campaign?.States is null || nationMapIndex < 0) return found;
+        foreach (var state in campaign.States)
+            if (state.NationMapIndex == nationMapIndex) found.Add(state.MapIndex);
+        return found;
+    }
+
+    /// <summary>
     /// Forget the political map entirely.
     ///
     /// The map compiler needs this. It builds the province map from the vector sources and

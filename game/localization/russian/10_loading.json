@@ -19,9 +19,6 @@
   "Loading could not be completed": "Не удалось завершить загрузку",
   "Details have been written to the error log.": "Подробности записаны в журнал ошибок.",
   "Return to game": "Вернуться в игру",
-
-  // Что загружено — надпись в главном меню.
-  "no external mods · open user://mods or res://mods": "внешних модов нет · откройте user://mods или res://mods",
   "{0} mod(s) loaded": "загружено модов: {0}",
   "{0} warning(s)": "предупреждений: {0}",
   "Content packs load after the base game and before mods.": "Наборы контента загружаются после основной игры и перед модами.",

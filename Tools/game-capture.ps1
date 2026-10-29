@@ -56,7 +56,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
 }
 
 $engine = Find-Godot

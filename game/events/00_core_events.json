@@ -129,28 +129,26 @@
     "weight": 2.0,
     "options": [
       {
-        "title": "Raise taxes",
-        "consequence": "Restores the budget; unpopular and mildly deflationary.",
+        "title": "Audit unpaid revenue and procurement",
+        "consequence": "Improve collection for 270 days without changing tax rates. Audits consume administrative capacity and provoke resistance.",
         "effects": {
-          "tax_rate": 0.03,
+          "add_modifier": { "revenue_compliance_audit": 270 },
           "stability": -0.02,
           "state.radicalism": 0.015
         }
       },
       {
-        "title": "Cut the military budget",
-        "consequence": "Frees money immediately at the cost of readiness.",
+        "title": "Reschedule defence procurement",
+        "consequence": "Free civilian capacity for 180 days, but slow military recovery and training. Funding settings stay under your control.",
         "effects": {
-          "military_spending": -0.015,
+          "add_modifier": { "procurement_rescheduling": 180 },
           "war_support": -0.03
         }
       },
       {
-        "title": "Cut welfare and education",
-        "consequence": "Balances the books; the social cost lands on the regions.",
+        "title": "Restructure public service contracts",
+        "consequence": "A year of collection reforms and delayed projects, with a social cost. No budget slider is changed.",
         "effects": {
-          "welfare_spending": -0.012,
-          "education_spending": -0.01,
           "state.radicalism": 0.02,
           "state.standard_of_living": -0.01
         },

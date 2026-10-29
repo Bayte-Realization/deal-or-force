@@ -33,7 +33,7 @@ public partial class DealOrForceGame
         _economyBuildRows = new VBoxContainer();
         _economyBuildRows.AddThemeConstantOverride("separation", 10);
         _economyControls.AddChild(_economyBuildRows);
-        _economyBuildRows.AddChild(Title("Build in region", 12, Ui.Colour("text.accent_dim")));
+        SectionRule(_economyBuildRows, "Build in region");
         _constructionRegion = new OptionButton { Name = "ConstructionRegion", FitToLongestItem = false, CustomMinimumSize = new Vector2(0, 36) };
         _constructionRegion.ItemSelected += index =>
         {
@@ -44,13 +44,22 @@ public partial class DealOrForceGame
         _economyBuildRows.AddChild(_constructionRegion);
         _constructionStatus = Title("", 13, Ui.Colour("text.body_soft"));
         _economyBuildRows.AddChild(_constructionStatus);
+        var queueFrame = new PanelContainer
+        {
+            Name = "ConstructionQueueFrame",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        queueFrame.SetMeta("atlas_section_ground", "surface.inset");
+        queueFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(queueFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        _economyBuildRows.AddChild(queueFrame);
         var queueScroll = new ScrollContainer
         {
             Name = "ConstructionQueueScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, Math.Clamp(InterfaceSkin.Metric("construction.queue_height", 190), 100, 360)),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        _economyBuildRows.AddChild(queueScroll);
+        queueFrame.AddChild(queueScroll);
         _constructionQueueRows = new VBoxContainer { Name = "ConstructionQueue", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         queueScroll.AddChild(_constructionQueueRows);
         _buildingSearch = ShellSearch("Search buildings…", "BuildingSearch");
@@ -138,7 +147,7 @@ public partial class DealOrForceGame
         }
         else SetDeskCaption(_deskGood, Tr("Market"));
         var sites = _campaign.Construction.Count(project => project.NationId == player.Id);
-        SetDeskCaption(_deskSites, Simulation.Loc.Format("Sites {0}/{1}", sites, _campaign.Defines.MaxConstructionProjects));
+        SetDeskCaption(_deskSites, Simulation.Loc.Format("Sites {0}/{1}", sites, ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects)));
     }
 
     /// <summary>
@@ -227,7 +236,7 @@ public partial class DealOrForceGame
 
             var line = new HBoxContainer();
             rows.AddChild(line);
-            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(definition.Cost), definition.Days), 12, Ui.Colour("text.caption"));
+            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days), 12, Ui.Colour("text.caption"));
             cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             cost.AutowrapMode = TextServer.AutowrapMode.Off;
             cost.ClipText = true;
@@ -242,7 +251,7 @@ public partial class DealOrForceGame
                 : Simulation.Loc.Format(
                     "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.",
                     _selectedState.DisplayName,
-                    Fmt.Money(definition.Cost * _campaign.Defines.DemolitionRefund)));
+                    Fmt.Money(ConstructionCost.Of(_campaign, player, kind) * _campaign.Defines.DemolitionRefund)));
             line.AddChild(remove);
 
             var dry = hasRegion
@@ -251,9 +260,9 @@ public partial class DealOrForceGame
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            var slots = _campaign.Defines.MaxConstructionProjects;
+            var slots = ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects);
             add.Disabled = !hasRegion || dry.Length > 0 || count >= slots ||
-                           player.Treasury < Math.Min(0.05f, definition.Cost);
+                           player.Treasury < Math.Min(0.05f, ConstructionCost.Of(_campaign, player, kind));
             Tip(add, !hasRegion ? Tr("Select an owned region.")
                 : dry.Length > 0 ? dry
                 : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)

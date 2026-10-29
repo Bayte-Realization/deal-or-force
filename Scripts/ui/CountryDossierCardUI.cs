@@ -28,9 +28,10 @@ public partial class DealOrForceGame
     {
         if (_countryFactCursor == _countryFactPool.Count)
         {
-            var row = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 24),
+            var row = new StructuredFactRow { SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 26),
                 MouseFilter = MouseFilterEnum.Stop };
             row.AddThemeConstantOverride("separation", 10); row.SetMeta("retained_country_fact", true);
+            var padLeft = new Control { CustomMinimumSize = new Vector2(6, 0), MouseFilter = MouseFilterEnum.Ignore };
             var name = Title("", 12, Ui.Colour("text.caption"));
             name.Name = "CountryFactCaption";
             // Godot's clipped + wrapped labels can report a one-pixel minimum height.
@@ -39,12 +40,21 @@ public partial class DealOrForceGame
             name.SizeFlagsHorizontal = SizeFlags.ExpandFill; name.MouseFilter = MouseFilterEnum.Ignore;
             var figure = Title("", 14, Ui.Colour("text.bright"));
             figure.Name = "CountryFactValue";
+            figure.AddThemeFontOverride("font", Ui.NumberFont);
             figure.AutowrapMode = TextServer.AutowrapMode.WordSmart; figure.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             figure.HorizontalAlignment = HorizontalAlignment.Right; figure.MouseFilter = MouseFilterEnum.Ignore;
-            row.AddChild(name); row.AddChild(figure); _countryCardRows.AddChild(row);
+            var padRight = new Control { CustomMinimumSize = new Vector2(4, 0), MouseFilter = MouseFilterEnum.Ignore };
+            row.AddChild(padLeft); row.AddChild(name); row.AddChild(figure); row.AddChild(padRight); _countryCardRows.AddChild(row);
             _countryFactPool.Add((row, name, figure));
         }
+        var index = _countryFactCursor;
         var item = _countryFactPool[_countryFactCursor++];
+        if (item.Row is StructuredFactRow structured)
+        {
+            structured.Alternate = (index & 1) == 1;
+            structured.AccentToken = token;
+            structured.QueueRedraw();
+        }
         item.Row.Visible = true;
         item.Caption.Text = Tr(caption); item.Value.Text = value ?? "";
         item.Caption.SetMeta(LocSourceMeta, caption); item.Caption.SetMeta(LocAppliedMeta, item.Caption.Text);
@@ -71,10 +81,12 @@ public partial class DealOrForceGame
             var captured = page;
             var button = ActionButton(page, () => SelectCountryDossierPage(captured), 0, 32);
             button.Name = "CountryPage" + page;
+            button.SetMeta("atlas_tab_button", true);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.AddThemeFontSizeOverride("font_size", 12);
             button.ClipText = true;
             button.TooltipText = Tr(page);
+            StyleButton(button, page == _countryDossierTab);
             tabs.AddChild(button); _countryDossierTabs.Add(page, button);
         }
     }

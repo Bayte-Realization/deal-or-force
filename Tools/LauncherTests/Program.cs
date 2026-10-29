@@ -13,6 +13,17 @@ void Json(string relative, object data)
 }
 try
 {
+    var documents = Path.Combine(temporary,"Documents with spaces");
+    var canonicalProfile = LauncherCatalog.ProfileInDocuments(documents);
+    Check(canonicalProfile == DealOrForce.Simulation.GameFolders.For(documents)!.Root &&
+        canonicalProfile == Path.Combine(documents,"Bayte Realization","Deal or Force"),
+        "Launcher and game use the same publisher/game folder under Documents");
+    Check(!Directory.Exists(documents),"Resolving the player folder does not create or migrate files");
+    bool missingDocuments = false;
+    try { LauncherCatalog.ProfileInDocuments(""); } catch(DirectoryNotFoundException) { missingDocuments=true; }
+    Check(missingDocuments,"Missing Documents never silently selects a relative installation folder");
+    Check(typeof(LauncherCatalog).Assembly.GetName().Version?.ToString() == DealOrForce.Simulation.GameBuildInfo.Version+".0",
+        "Launcher test assembly and shared game release version agree");
     var profile = Path.Combine(temporary, "profile");
     var root = Path.Combine(temporary, "install with spaces");
     Directory.CreateDirectory(root); File.WriteAllText(Path.Combine(root, "Deal or Force.exe"), "fixture");
@@ -68,11 +79,14 @@ try
     File.WriteAllText(Path.Combine(language, "settings.json"), "{ \"language\": \"english\", \"map_smoothing\": false }");
     Check(L.Remember(language, "russian"), "Language written into the game's settings");
     L.Choose(language);
-    using (var written = JsonDocument.Parse(File.ReadAllText(Path.Combine(language, "settings.json"))))
+    var currentSettings = Path.Combine(language,"settings","settings.json");
+    using (var written = JsonDocument.Parse(File.ReadAllText(currentSettings)))
         Check(L.IsRussian && written.RootElement.GetProperty("map_smoothing").GetBoolean() == false,
             "Language read back, the game's other settings kept");
-    File.WriteAllText(Path.Combine(language, "settings.json"), "not json");
-    Check(!L.Remember(language, "english") && File.ReadAllText(Path.Combine(language, "settings.json")) == "not json",
+    Check(File.ReadAllText(Path.Combine(language,"settings.json")).Contains("english"),
+        "Legacy settings are preserved when the current settings folder is written");
+    File.WriteAllText(currentSettings, "not json");
+    Check(!L.Remember(language, "english") && File.ReadAllText(currentSettings) == "not json",
         "An unreadable settings file is left alone, not replaced");
     L.Use("english");
     Console.WriteLine($"{checks} launcher checks passed.");

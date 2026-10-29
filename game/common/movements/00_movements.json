@@ -143,6 +143,13 @@
   // and its government carries on abroad (MovementFall.cs). Its tag, name, colour, peoples and
   // homeland are its own; the rest is this. A mod changes what every government in exile is by
   // changing this one entry.
+  "insurgency": {
+    "template": true,
+    "description": "A rising beaten in the field that did not surrender: its fighters went home with their rifles, its leaders into the hills and the safe houses, and its people kept their silence. It waits for the victor to tire.",
+    "legitimacy": 0.2,
+    "traits": ["armed_wing", "tunnel_network"]
+  },
+
   "government_in_exile": {
     "template": true,
     "description": "A government that has lost the whole of its country and carries on from abroad: recognised by its friends, followed by its people at home, and waiting for its chance to go back.",

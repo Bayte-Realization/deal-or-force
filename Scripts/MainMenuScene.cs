@@ -73,6 +73,7 @@ public partial class MainMenuScene : Control
     public override void _Ready()
     {
         Name = "MainMenu";
+        ApplicationExit.Ensure(this);
         WrapGuard.Install(GetTree());
         ControlSkin.Apply();
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -92,10 +93,11 @@ public partial class MainMenuScene : Control
         FontCatalog.Load();
         if (PresentationFonts.For("ui.default") is { } face) AddThemeFontOverride("font", face);
 
-        // And the language the player chose last time. Their preferences live in a file
-        // under user://, and nothing has told the store where that is yet - the campaign
-        // scene is what normally does it, and it is not running.
-        PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
+        // And the language the player chose last time. The preferences live in the one game
+        // folder under Documents, and nothing has told the store where that is yet - the
+        // campaign scene is what normally does it, and it is not running.
+        GamePaths.Prepare();
+        PlayerSettings.UseDirectory(GamePaths.Settings);
         var chosen = SettingsCatalog.Chosen("language");
         if (chosen.Length > 0) Loc.Language = chosen;
 
@@ -108,6 +110,8 @@ public partial class MainMenuScene : Control
         MusicDirector.Ensure(this).FollowScene(this, () => MusicCatalog.Moment.Menu);
 
         AddChild(new AtlasBackdrop { MouseFilter = MouseFilterEnum.Ignore });
+        // The illustrations over the drawn ground, dimmed so the grid and the logo still lead.
+        AddChild(new MenuIllustrations());
 
         var panel = new PanelContainer();
         panel.AddThemeStyleboxOverride("panel", MenuPanelStyle());
@@ -134,21 +138,13 @@ public partial class MainMenuScene : Control
         rows.AddThemeConstantOverride("separation", 9);
         margin.AddChild(rows);
 
-        // The logo is a paper banner, and the paper is part of the art rather than an accident:
-        // the lettering is a dark blue and a dark red that cannot be read against a navy panel.
-        // That is why the transparent brand_logo_menu.png that also ships is NOT used here,
-        // however much it looks like it was meant to be - measured, its strokes are #2E466B and
-        // #8F1C1E, and on this panel neither is legible.
-        //
-        // What was wrong was the framing. The paper sat hard against the panel with no edge at
-        // all, so it read as a white rectangle pasted onto the screen instead of as a plaque
-        // laid on the desk. The plate gives it that edge, and the paper colour is a token so a
-        // reskin can move the plaque with the rest of the palette.
+        // The thumbnail's parchment plaque supplies its own edge. Do not put a second
+        // rectangular paper/gold frame behind its transparent worn perimeter.
         var logoPlate = new PanelContainer { MouseFilter = MouseFilterEnum.Ignore };
         var plateStyle = new StyleBoxFlat
         {
-            BgColor = Ui.Colour("brand.paper"),
-            BorderColor = Ui.Colour("button.primary_border"),
+            BgColor = Colors.Transparent,
+            BorderColor = Colors.Transparent,
             CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3,
             CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3
         };
@@ -156,11 +152,10 @@ public partial class MainMenuScene : Control
         logoPlate.AddThemeStyleboxOverride("panel", plateStyle);
         logoPlate.AddChild(new TextureRect
         {
-            Texture = GD.Load<Texture2D>(SpriteCatalog.TextureOf("brand_logo_banner",
-                "res://game/gfx/interface/brand_logo_banner.png")),
+            Name = "MenuGameLogo", Texture = BrandAssets.GamePlaque(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
-            CustomMinimumSize = new Vector2(0, 150),
+            CustomMinimumSize = new Vector2(0, 200),
             MouseFilter = MouseFilterEnum.Ignore
         });
         rows.AddChild(logoPlate);
@@ -176,7 +171,7 @@ public partial class MainMenuScene : Control
         _language = MenuAction(LanguageLabel(), CycleLanguage, 42);
         rows.AddChild(_language);
         rows.AddChild(MenuAction("Credits", ShowCredits, 42));
-        rows.AddChild(MenuAction("Quit to desktop", () => GetTree().Quit(), 42));
+        rows.AddChild(MenuAction("Quit to desktop", () => ApplicationExit.Request(this), 42));
 
         RefreshModFrontendMenu();
         _modActions = ModFrontendMenu.Create(_menuMods.FrontendActions, id =>
@@ -190,6 +185,7 @@ public partial class MainMenuScene : Control
         BuildCredits();
         BuildSettings();
         BuildArchive();
+        StartupIntro.AttachIfNeeded(this);
         ExportVerification.AttachIfRequested(this);
     }
 

@@ -90,9 +90,10 @@
       </Border>
       <TextBlock Text="DEAL OR FORCE  /  LAUNCH CENTRE" FontSize="11" Foreground="#CCB77E" VerticalAlignment="Center"/>
      </DockPanel>
-     <Border Background="#EFE8D8" Padding="0,20" Margin="0,22,0,0" BorderBrush="#B19A60" BorderThickness="1">
+     <Border Background="Transparent" Margin="0,22,0,0">
       <Border.Effect><DropShadowEffect BlurRadius="22" ShadowDepth="0" Opacity="0.55" Color="Black"/></Border.Effect>
-      <Image Source="Brand.png" Stretch="Uniform" Height="96"/>
+      <Image x:Name="GameLogo" Source="Brand.png" Stretch="Uniform" Height="192"
+             RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Deal or Force"/>
      </Border>
     </StackPanel>
     <StackPanel Grid.Row="1" VerticalAlignment="Bottom" Margin="0,0,0,18">
@@ -155,7 +156,8 @@
        <CheckBox Grid.Column="1" Margin="12,0,0,0" IsChecked="{Binding Checked, Mode=OneWay}" IsEnabled="{Binding Owned}" Tag="{Binding}" Click="ToggleClick"
         AutomationProperties.Name="{Binding Name}" ToolTip="{local:T 'Turn on or off for the next launch'}"/>
        <StackPanel Grid.Column="2" Margin="0,12,12,12">
-        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold"/>
+        <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextWrapping="NoWrap"
+                   TextTrimming="CharacterEllipsis" ToolTip="{Binding Name}"/>
         <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
          <TextBlock x:Name="State" Text="{Binding Status}" Foreground="#9FB0B7" FontSize="12"/>
          <Border x:Name="CodeChip" Visibility="Collapsed" Margin="10,0,0,0" Padding="6,0" BorderBrush="#B86A4E" BorderThickness="1" CornerRadius="2">
@@ -191,7 +193,7 @@
    <Border Grid.Row="6" BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Margin="0,16,0,0" Padding="0,12,0,0">
     <DockPanel>
      <WrapPanel DockPanel.Dock="Right" VerticalAlignment="Center">
-      <Button Content="Logs and settings" Click="OpenProfile" Style="{StaticResource Link}"/>
+      <Button x:Name="ProfileButton" Content="Logs and settings" Click="OpenProfile" Style="{StaticResource Link}"/>
       <Button x:Name="EngineButton" Content="  /  Choose Godot .NET" Click="ChooseEngine" Style="{StaticResource Link}"/>
      </WrapPanel>
      <TextBlock x:Name="Status" Text="Settings take effect when the game starts." FontSize="12" Foreground="#B4C4CB" VerticalAlignment="Center" Margin="0,0,16,0"/>

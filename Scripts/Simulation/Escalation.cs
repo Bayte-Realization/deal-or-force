@@ -771,7 +771,7 @@ public static class Escalation
             onOwnInitiative: false, limited: true);
         if (war is null) return;
         war.LimitedUntilDay = c.ElapsedDays + Math.Max(7, defines.BorderWarDays);
-        war.Name = $"{attacker.Name}–{defender.Name} Border War";
+        war.Name = $"{attacker.DisplayName}–{defender.DisplayName} Border War";
         c.Chronicle.Record(c, "border_war", attacker.Id, defender.Id);
         DiagnosticLogs.Write("simulation", $"BORDER_WAR attacker={attacker.Tag} defender={defender.Tag} tension={relation.Tension:0}");
     }

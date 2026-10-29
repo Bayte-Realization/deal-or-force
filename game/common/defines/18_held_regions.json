@@ -1,0 +1,22 @@
+// Deal or Force - held ground is ground (HeldRegions.cs).
+//
+// A region another country controls - by an advance, by troops sent in without a war - works for
+// the one holding it: output, workers, its people's demand, GDP and taxes, at the efficiency of an
+// administration that settles in over HeldRegionIntegrationDays. The owner keeps the title, and a
+// treaty or a vote under the troops settles that too. A lease is not held ground.
+{
+  "HeldRegionsWorkForHolder": true,
+  // The share of a region's provinces a country must control, and for how many days, before the
+  // region's economy answers to it.
+  "HeldRegionControlShare": 0.5,
+  "HeldRegionSettleDays": 14,
+  // The administration's grip: from occupation to integration.
+  "HeldRegionEfficiencyStart": 0.35,
+  "HeldRegionEfficiencyFull": 0.85,
+  "HeldRegionIntegrationDays": 365,
+  // A vote under the troops in a held region, in the middle of the war (September 2022): after
+  // HeldReferendumDays for anyone; the computer waits AiHeldReferendumDays, then tries monthly.
+  "HeldReferendumDays": 180,
+  "AiHeldReferendumDays": 365,
+  "AiHeldReferendumChance": 0.04
+}

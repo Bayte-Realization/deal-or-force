@@ -10,11 +10,20 @@ internal static class AtlasSurfaceSkin
 {
     internal enum Level { Instrument, Document, Inset, Raised }
     private static readonly Dictionary<string, StyleBoxTexture> Buttons = new();
+    private static readonly Dictionary<string, StyleBox> SpecialButtons = new();
     private static readonly Dictionary<string, Texture2D> Panels = new();
     private static Texture2D _grain;
     private static StyleBoxFlat _focus, _roundFocus;
     private static Texture2D _musicGlyph;
-    static AtlasSurfaceSkin() => InterfaceSkin.Changed += () => { Buttons.Clear(); Panels.Clear(); _grain = null; _focus = null; _roundFocus = null; };
+    static AtlasSurfaceSkin() => InterfaceSkin.Changed += () =>
+    {
+        Buttons.Clear();
+        SpecialButtons.Clear();
+        Panels.Clear();
+        _grain = null;
+        _focus = null;
+        _roundFocus = null;
+    };
 
     internal static float Relief => AtlasSurfaceLighting.Relief(Ui.Metric("atlas.relief", .65f));
 
@@ -22,48 +31,234 @@ internal static class AtlasSurfaceSkin
     {
         var key = $"{primary}|{state}|{iconOnly}|{narrow}|{rounded}";
         if (Buttons.TryGetValue(key, out var cached)) return cached;
-        var fill = Ui.Colour(state switch
+        var baseFill = Ui.Colour(state switch
         {
             1 => primary ? "button.primary_fill_hover" : "button.fill_hover",
             2 => primary ? "button.primary_fill_pressed" : "button.fill_pressed",
             3 => primary ? "button.primary_fill" : "button.fill_disabled",
             _ => primary ? "button.primary_fill" : "button.fill"
         });
+        var obsidian = Ui.Colour("surface.inset");
+        // Blend primary buttons with deep obsidian so they read as dark architectural slate
+        // lit by warm brass rather than a flat brown rectangle.
+        var fill = primary && state != 3 ? obsidian.Lerp(baseFill, state == 1 ? 0.68f : 0.56f) : baseFill;
         var edge = Ui.Colour(state switch
         {
-            1 => "button.border_hover", 2 => "button.border_pressed",
+            1 => "button.border_hover",
+            2 => "button.border_pressed",
             3 => primary ? "button.primary_border" : "button.border_disabled",
             _ => primary ? "button.primary_border" : "button.border"
         });
-        const int width = 48, height = 40;
+        var accent = Ui.Colour("text.accent");
+        var bright = Ui.Colour("text.bright");
+        var shadow = Ui.Colour("surface.background");
+        const int width = 64, height = 48;
         var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
         var relief = Relief * (state == 3 ? .25f : 1f);
-        var shadow = Ui.Colour("surface.background");
         for (var y = 0; y < height; y++)
         for (var x = 0; x < width; x++)
         {
-            var light = AtlasSurfaceLighting.Light(x / (float)(width - 1), y / (float)(height - 1), state == 2) * relief;
+            var u = x / (float)(width - 1);
+            var v = y / (float)(height - 1);
+            // Smooth vertical studio gradient + subtle directional relief for tactile volume.
+            var verticalBias = state == 2 ? (v - 0.5f) * 0.14f : (0.45f - v) * 0.16f;
+            var directional = AtlasSurfaceLighting.Light(u, v, state == 2) * 0.45f;
+            var light = (verticalBias + directional) * relief;
             var colour = light >= 0 ? fill.Lightened(light) : fill.Darkened(-light);
-            var distance = Math.Min(Math.Min(x, width - 1 - x), Math.Min(y, height - 1 - y));
-            if (distance == 0) colour = edge.Darkened(y > height / 2 ? .28f * relief : 0);
-            else if (y == 1) colour = state == 2 ? shadow.Lerp(fill, .6f) : fill.Lightened(.19f * relief);
-            else if (y == height - 2) colour = state == 2 ? fill.Lightened(.08f * relief) : fill.Lerp(shadow, .55f * relief);
-            // Utility shortcuts may use a softer capsule without changing every workbench button.
+            if (primary && state != 2)
+            {
+                var topWarmth = MathF.Max(0f, 1f - v * 2.2f) * (state == 1 ? 0.14f : 0.09f) * relief;
+                colour = colour.Lerp(accent, topWarmth);
+            }
+
+            var distX = Math.Min(x, width - 1 - x);
+            var distY = Math.Min(y, height - 1 - y);
+            var distance = Math.Min(distX, distY);
+            if (distance == 0)
+            {
+                colour = edge.Darkened(y > height / 2 ? .22f * relief : 0f);
+                if (primary && y <= 1 && state != 3)
+                    colour = accent.Lightened(state == 1 ? 0.12f : 0.02f);
+            }
+            else if (primary && y == 1 && x >= 1 && x <= width - 2 && state != 2)
+            {
+                // Crisp 2px warm brass top accent bar on primary/active controls.
+                colour = edge.Lerp(accent, state == 1 ? 0.65f : 0.42f);
+            }
+            else if (y == 1)
+            {
+                colour = state == 2
+                    ? shadow.Lerp(fill, .45f)
+                    : colour.Lerp(bright, (state == 1 ? .18f : .11f) * relief);
+            }
+            else if (y == height - 2)
+            {
+                colour = state == 2
+                    ? fill.Lightened(.06f * relief)
+                    : colour.Lerp(shadow, .62f * relief);
+            }
+            else if (distX == 1)
+            {
+                colour = colour.Lightened((state == 1 ? .06f : .03f) * relief);
+            }
+
             var radius = rounded ? 8 : 3;
-            var cornerX = Math.Max(0, radius - Math.Min(x, width - 1 - x));
-            var cornerY = Math.Max(0, radius - Math.Min(y, height - 1 - y));
-            colour.A *= Math.Clamp(radius + 1.3f - MathF.Sqrt(cornerX * cornerX + cornerY * cornerY), 0, 1);
+            var cornerX = Math.Max(0, radius - distX);
+            var cornerY = Math.Max(0, radius - distY);
+            colour.A *= Math.Clamp(radius + 1.25f - MathF.Sqrt(cornerX * cornerX + cornerY * cornerY), 0, 1);
             image.SetPixel(x, y, colour);
         }
         var style = new StyleBoxTexture
         {
-            Texture = ImageTexture.CreateFromImage(image), TextureMarginLeft = rounded ? 10 : 5, TextureMarginRight = rounded ? 10 : 5,
-            TextureMarginTop = rounded ? 10 : 5, TextureMarginBottom = rounded ? 10 : 5,
-            ContentMarginLeft = narrow ? 2 : 10, ContentMarginRight = narrow ? 2 : 10,
+            Texture = ImageTexture.CreateFromImage(image),
+            TextureMarginLeft = rounded ? 10 : 6,
+            TextureMarginRight = rounded ? 10 : 6,
+            TextureMarginTop = rounded ? 10 : 6,
+            TextureMarginBottom = rounded ? 10 : 6,
+            ContentMarginLeft = narrow ? 3 : 10,
+            ContentMarginRight = narrow ? 3 : 10,
             ContentMarginTop = iconOnly ? (state == 2 ? 9 : 7) : (state == 2 ? 7 : 6),
             ContentMarginBottom = iconOnly ? (state == 2 ? 5 : 7) : (state == 2 ? 5 : 8)
         };
         Buttons[key] = style;
+        return style;
+    }
+
+    /// <summary>
+    /// Architectural left-rail navigation tile: dark obsidian-slate face, subtle 1px structural
+    /// perimeter, and a bold 3px luminous gold-amber indicator bar on the left edge when active.
+    /// </summary>
+    internal static StyleBox NavTile(bool active, int state)
+    {
+        var key = $"nav|{active}|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var baseBg = Ui.Colour(active ? "surface.raised" : state == 1 ? "button.fill_hover" : "surface.inset");
+        var accent = Ui.Colour("text.accent");
+        var border = Ui.Colour(active ? "button.primary_border" : state == 1 ? "button.border_hover" : "surface.line_faint");
+        if (active) baseBg = baseBg.Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.42f : 0.30f);
+        else if (state == 2) baseBg = Ui.Colour("button.fill_pressed");
+        else if (state == 0) baseBg = baseBg.Lightened(0.02f);
+
+        var style = new StyleBoxFlat
+        {
+            BgColor = baseBg,
+            BorderColor = active ? accent : (state == 1 ? border.Lerp(accent, 0.45f) : border),
+            BorderWidthLeft = active ? 3 : (state == 1 ? 2 : 1),
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            ShadowColor = new Color(0, 0, 0, active ? 0.42f : 0.22f),
+            ShadowSize = active ? 4 : 2,
+            ShadowOffset = new Vector2(0, 1),
+            ContentMarginLeft = 4,
+            ContentMarginRight = 4,
+            ContentMarginTop = state == 2 ? 6 : 5,
+            ContentMarginBottom = state == 2 ? 4 : 5
+        };
+        style.SetCornerRadiusAll(4);
+        SpecialButtons[key] = style;
+        return style;
+    }
+
+    /// <summary>
+    /// Segmented tab button for dossiers, country cards, and workspaces: quiet recessed pill when
+    /// inactive, elevated slate card with a 2px gold-amber top bar when active.
+    /// </summary>
+    internal static StyleBox TabPill(bool active, int state)
+    {
+        var key = $"tab|{active}|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var accent = Ui.Colour("text.accent");
+        var fill = active
+            ? Ui.Colour("surface.raised").Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.38f : 0.25f)
+            : state == 1
+                ? Ui.Colour("button.fill_hover")
+                : Ui.Colour("surface.inset").Lightened(0.015f);
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = active ? accent : Ui.Colour(state == 1 ? "button.border_hover" : "surface.line_faint"),
+            BorderWidthTop = active ? 2 : 1,
+            BorderWidthLeft = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            ShadowColor = new Color(0, 0, 0, active ? 0.35f : 0f),
+            ShadowSize = active ? 3 : 0,
+            ShadowOffset = new Vector2(0, 1),
+            ContentMarginLeft = 10,
+            ContentMarginRight = 10,
+            ContentMarginTop = 5,
+            ContentMarginBottom = 5
+        };
+        style.SetCornerRadiusAll(3);
+        SpecialButtons[key] = style;
+        return style;
+    }
+
+    /// <summary>
+    /// Section header bar inside the right-hand Agenda / Outliner rail: tracked uppercase header
+    /// with a crisp bottom rule and subtle elevated slate background.
+    /// </summary>
+    internal static StyleBox OutlinerGroupBar(int state)
+    {
+        var key = $"outliner_group|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var fill = state == 1
+            ? Ui.Colour("surface.raised").Lightened(0.04f)
+            : Ui.Colour("surface.inset").Lerp(Ui.Colour("surface.raised"), 0.45f);
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = state == 1 ? Ui.Colour("text.accent_dim") : Ui.Colour("surface.line"),
+            BorderWidthBottom = 1,
+            BorderWidthTop = 1,
+            BorderWidthLeft = 2,
+            BorderWidthRight = 0,
+            ContentMarginLeft = 8,
+            ContentMarginRight = 8,
+            ContentMarginTop = 4,
+            ContentMarginBottom = 4
+        };
+        style.SetCornerRadiusAll(2);
+        SpecialButtons[key] = style;
+        return style;
+    }
+
+    /// <summary>
+    /// Structured Agenda Card row inside the right-hand Outliner: recessed/elevated dark slate card
+    /// with a 3px colored status bar on the left edge.
+    /// </summary>
+    internal static StyleBox OutlinerCardRow(string stripeToken, int state)
+    {
+        if (string.IsNullOrEmpty(stripeToken) || !InterfaceSkin.Has(stripeToken))
+            stripeToken = "button.primary_border";
+        var key = $"outliner_row|{stripeToken}|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var stripe = Ui.Colour(stripeToken);
+        var fill = state switch
+        {
+            1 => Ui.Colour("button.fill_hover").Lerp(stripe, 0.08f),
+            2 => Ui.Colour("button.fill_pressed"),
+            _ => Ui.Colour("shell.row").Lerp(Ui.Colour("surface.raised"), 0.35f)
+        };
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = state == 1 ? stripe.Lightened(0.15f) : stripe,
+            BorderWidthLeft = 3,
+            BorderWidthTop = 1,
+            BorderWidthRight = 1,
+            BorderWidthBottom = 1,
+            ShadowColor = new Color(0, 0, 0, 0.26f),
+            ShadowSize = 3,
+            ShadowOffset = new Vector2(0, 1),
+            ContentMarginLeft = 10,
+            ContentMarginRight = 10,
+            ContentMarginTop = 5,
+            ContentMarginBottom = 5
+        };
+        style.SetCornerRadiusAll(3);
+        SpecialButtons[key] = style;
         return style;
     }
 
@@ -126,19 +321,26 @@ internal static class AtlasSurfaceSkin
         var key = level + "|" + ground;
         if (Panels.TryGetValue(key, out var cached)) return cached;
         var fill = Ui.Colour(ground);
-        var accent = Ui.Colour("text.accent");
+        var deep = Ui.Colour("surface.background");
+        // Blend blue-tinted legacy shell grounds slightly toward deep obsidian-slate so panels
+        // have a grounded, modern dark-graphite authority without losing their skin token.
+        if (level is Level.Instrument or Level.Document)
+            fill = fill.Lerp(deep, 0.28f);
         const int size = 96;
         var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         var relief = Relief;
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)
         {
-            var u = x / (float)(size - 1); var v = y / (float)(size - 1);
-            var illumination = AtlasSurfaceLighting.Light(u, v, level == Level.Inset) * relief;
-            var colour = illumination >= 0 ? fill.Lightened(illumination * .65f) : fill.Darkened(-illumination);
-            var lamp = MathF.Exp(-u * 3 - v * 5) * relief;
-            if (level == Level.Document) colour = colour.Lerp(accent, lamp * .055f);
-            if (level == Level.Raised) colour = colour.Lightened(.025f * relief);
+            var u = x / (float)(size - 1);
+            var v = y / (float)(size - 1);
+            // Primarily vertical studio illumination so stretching to wide strips or tall rails
+            // never creates a diagonal smudge.
+            var vertical = level == Level.Inset ? (v - 0.35f) * 0.08f : (0.35f - v) * 0.09f;
+            var subtleCorner = AtlasSurfaceLighting.Light(u, v, level == Level.Inset) * 0.22f;
+            var illumination = (vertical + subtleCorner) * relief;
+            var colour = illumination >= 0 ? fill.Lightened(illumination * .55f) : fill.Darkened(-illumination);
+            if (level == Level.Raised) colour = colour.Lightened(.022f * relief);
             image.SetPixel(x, y, colour);
         }
         return Panels[key] = ImageTexture.CreateFromImage(image);
@@ -149,7 +351,7 @@ internal static class AtlasSurfaceSkin
         if (_grain is not null) return _grain;
         const int size = 64;
         var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
-        var amount = AtlasSurfaceLighting.GrainAmount(Ui.Metric("atlas.grain", .018f));
+        var amount = AtlasSurfaceLighting.GrainAmount(Ui.Metric("atlas.grain", .018f)) * .32f;
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)
         {
@@ -164,9 +366,20 @@ internal static class AtlasSurfaceSkin
     internal static StyleBoxFlat Section(string ground = "surface.inset")
     {
         if (!InterfaceSkin.Has(ground)) ground = "surface.inset";
-        var style = new StyleBoxFlat { BgColor = Ui.Colour(ground), BorderColor = Ui.Colour("surface.line_faint"),
-            ShadowColor = Ui.Colour("surface.background", .35f), ShadowSize = 4, ShadowOffset = new(0, 2) };
-        style.SetBorderWidthAll(1); style.SetContentMarginAll(10); style.SetCornerRadiusAll(2);
+        var isRaised = ground is "surface.raised" or "war.card";
+        var baseFill = Ui.Colour(ground);
+        if (!isRaised) baseFill = baseFill.Lerp(Ui.Colour("surface.background"), 0.22f);
+        var style = new StyleBoxFlat
+        {
+            BgColor = baseFill,
+            BorderColor = Ui.Colour(isRaised ? "surface.line" : "surface.line_faint"),
+            ShadowColor = Ui.Colour("surface.background", isRaised ? .48f : .34f),
+            ShadowSize = isRaised ? 6 : 4,
+            ShadowOffset = new(0, 2)
+        };
+        style.SetBorderWidthAll(1);
+        style.SetContentMarginAll(10);
+        style.SetCornerRadiusAll(4);
         return style;
     }
 }
@@ -178,7 +391,7 @@ public partial class AtlasPanelFinish : Node2D
     internal string Ground = "shell.background";
     private PanelContainer _panel;
     // A Control child is laid out INSIDE a PanelContainer's content margins. The
-    // decorative rim then runs straight through its labels. Node2D paints the full
+    // structural frame then runs straight through its labels. Node2D paints the full
     // panel without participating in content layout or intercepting GUI input.
     public override void _EnterTree()
     {
@@ -202,61 +415,32 @@ public partial class AtlasPanelFinish : Node2D
         var size = _panel?.Size ?? Vector2.Zero;
         if (size.X <= 0 || size.Y <= 0) return;
         var w = size.X;
-        var h = size.Y;
         var rect = new Rect2(Vector2.Zero, size);
         DrawTextureRect(AtlasSurfaceSkin.PanelTexture(SurfaceLevel, Ground), rect, false);
         DrawTextureRect(AtlasSurfaceSkin.GrainTexture(), rect, true);
 
         var relief = AtlasSurfaceSkin.Relief;
-        var light = Ui.Colour("text.body", .11f * relief);
-        var shadow = Ui.Colour("surface.background", .82f * relief);
         var isInset = SurfaceLevel == AtlasSurfaceSkin.Level.Inset;
-
-        // Four-sided directional bevel (top/left catch light, bottom/right sit in shadow).
-        DrawLine(new(1f, 1.5f), new(w - 1f, 1.5f), isInset ? shadow : light, 1f);
-        DrawLine(new(1.5f, 1f), new(1.5f, h - 1f), isInset ? shadow : light, 1f);
-        DrawLine(new(1f, h - 1.5f), new(w - 1f, h - 1.5f), isInset ? light : shadow, 1f);
-        DrawLine(new(w - 1.5f, 1f), new(w - 1.5f, h - 1f), isInset ? light : shadow, 1f);
-
-        if (isInset)
+        var isRaised = SurfaceLevel == AtlasSurfaceSkin.Level.Raised;
+        var frame = new StyleBoxFlat
         {
-            var insetBorder = Ui.Colour("surface.line", .55f);
-            DrawRect(new Rect2(.5f, .5f, w - 1f, h - 1f), insetBorder, false, 1f);
-            return;
-        }
+            DrawCenter = false,
+            BorderColor = Ui.Colour(isInset ? "surface.line" : "shell.border", isInset ? .58f : .82f),
+            ShadowColor = Ui.Colour("surface.background", (isInset ? 0f : isRaised ? .42f : .30f) * relief),
+            ShadowSize = isInset ? 0 : isRaised ? 6 : 4,
+            ShadowOffset = new(0, isInset ? 0 : 2)
+        };
+        frame.SetBorderWidthAll(1);
+        frame.SetCornerRadiusAll(4);
+        frame.SetContentMarginAll(0);
+        DrawStyleBox(frame, rect);
 
-        // Architectural rim & brass crown for floating cards, dossiers, and workspaces.
-        var parentSurface = GetParent() is Node parent && parent.HasMeta("skin_panel_surface")
-            ? parent.GetMeta("skin_panel_surface").AsInt32()
-            : -1;
-        var isStrip = parentSurface == 2; // PanelSurface.CommandStrip
-        var outerBorder = Ui.Colour("shell.border", .92f);
-        var brass = Ui.Colour("button.primary_border", SurfaceLevel == AtlasSurfaceSkin.Level.Document ? .88f : .68f);
-        var innerFrame = Ui.Colour("button.primary_border", SurfaceLevel == AtlasSurfaceSkin.Level.Document ? .26f : .20f);
-
-        // 1. Crisp outer structural border around all four edges.
-        DrawRect(new Rect2(.5f, .5f, w - 1f, h - 1f), outerBorder, false, 1.5f);
-
-        // 2. Top brass crown rule.
-        var crownHeight = SurfaceLevel == AtlasSurfaceSkin.Level.Document ? 2.5f : 2f;
-        DrawRect(new Rect2(1f, 1f, w - 2f, crownHeight), brass, true);
-
-        // 3. Inner recessed mat line & corner brackets on floating cards and workspaces.
-        if (!isStrip && w >= 120f && h >= 64f)
+        if (w > 8f)
         {
-            DrawRect(new Rect2(3.5f, 3.5f, w - 7f, h - 7f), innerFrame, false, 1f);
-            var corner = MathF.Min(11f, MathF.Min(w, h) * 0.12f);
-            var cornerColor = Ui.Colour("button.primary_border", .65f);
-            // Top-left & top-right corner ticks
-            DrawLine(new(3.5f, 3.5f), new(3.5f + corner, 3.5f), cornerColor, 1.5f);
-            DrawLine(new(3.5f, 3.5f), new(3.5f, 3.5f + corner), cornerColor, 1.5f);
-            DrawLine(new(w - 3.5f - corner, 3.5f), new(w - 3.5f, 3.5f), cornerColor, 1.5f);
-            DrawLine(new(w - 3.5f, 3.5f), new(w - 3.5f, 3.5f + corner), cornerColor, 1.5f);
-            // Bottom-left & bottom-right corner ticks
-            DrawLine(new(3.5f, h - 3.5f), new(3.5f + corner, h - 3.5f), cornerColor, 1.5f);
-            DrawLine(new(3.5f, h - 3.5f - corner), new(3.5f, h - 3.5f), cornerColor, 1.5f);
-            DrawLine(new(w - 3.5f - corner, h - 3.5f), new(w - 3.5f, h - 3.5f), cornerColor, 1.5f);
-            DrawLine(new(w - 3.5f, h - 3.5f - corner), new(w - 3.5f, h - 3.5f), cornerColor, 1.5f);
+            var topLight = isInset
+                ? Ui.Colour("surface.background", .45f * relief)
+                : Ui.Colour("text.body", .09f * relief);
+            DrawLine(new(4f, 1.5f), new(w - 4f, 1.5f), topLight, 1f);
         }
     }
 }

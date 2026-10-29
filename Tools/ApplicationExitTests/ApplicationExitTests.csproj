@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <CodePage>65001</CodePage>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../Scripts/Presentation/ApplicationExitState.cs" />
+    <Compile Include="../FormableTests/ApplicationExitTests.cs" />
+  </ItemGroup>
+</Project>

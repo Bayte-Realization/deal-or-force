@@ -129,6 +129,7 @@ public static class MilitaryAccess
     /// </summary>
     public static void Tick(Campaign c)
     {
+        if (!c.StepOpensNewDay) return;
         foreach (var r in c.Relations.Values)
         {
             if (r.MilitaryAccessRequestedBy >= 0 && !Pending(c, r))

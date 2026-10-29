@@ -43,6 +43,7 @@
     "cooldown_days": 600,
     "gdp_cost_share": 0.0012,
     "kind": "AntiCorruptionDrive",
+    "effects": { "add_modifier": { "revenue_compliance_audit": 270 } },
     "ai_will_do": "ai_anti_corruption"
   },
   "emergency_mobilisation": {
@@ -222,7 +223,7 @@
   "tax_reform": {
     "name": "Tax reform",
     "resource_costs": {"political_points": 35},
-    "description": "Simplify the code and close the loopholes. A tenth more of the taxes arrives, and every week somebody complains about it.",
+    "description": "Simplify the code and close the loopholes. The state borrows on better terms, and every week somebody complains about it.",
     "cooldown_days": 1095,
     "gdp_cost_share": 0.001,
     "unavailable": "Only a settled country can take the argument",

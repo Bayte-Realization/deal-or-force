@@ -1,0 +1,92 @@
+// Воинский устав: книга войны страны, устроенная как дерево знаний. Ветка — устав (доктрина);
+// узлы внутри неё открываются по зависимостям, как технологии.
+//
+// Каждый узел стоит опыта того рода войск, чей устав это: армия учится в бою, походах и на
+// учениях; авиация — на заданиях; флот — в море (MilitaryExperience). Узел можно вести
+// планомерно (cost, за days) или ускоренным курсом (rush_cost, сразу): второй способ дороже,
+// и это единственная разница между ними.
+//
+// Устав стоит на одной из четырёх полок: ground, air, sea, general. Полка держит один устав
+// за раз, но полки учатся одновременно — сухопутный, воздушный, морской и устав генерального
+// штаба не мешают друг другу. Переписать устав на полке можно, но за политические очки и
+// переучивание: прогресс прежнего устава не сохраняется.
+{
+  "manoeuvre": {
+    "name": "Doctrine of manoeuvre",
+    "description": "War as movement: columns that arrive first, recover fastest, and hit the flank before the line turns.",
+    "experience": "army",
+    "nodes": [
+      { "id": "manoeuvre_march", "name": "Marching columns",
+        "description": "Divisions on the road move and recover faster than the old book allowed.",
+        "cost": 20, "days": 120, "rush_cost": 55,
+        "modifiers": { "army_speed": 0.06, "organisation_recovery": 0.05 } },
+      { "id": "manoeuvre_columns", "name": "Independent columns", "requires": ["manoeuvre_march"],
+        "description": "Columns trusted to arrive on their own, and to fight when they do.",
+        "cost": 30, "days": 180, "rush_cost": 85,
+        "modifiers": { "army_speed": 0.05, "army_attack": 0.04 } },
+      { "id": "manoeuvre_screen", "name": "The horse screen", "requires": ["manoeuvre_march"],
+        "description": "Screens that find the enemy before the enemy finds the columns.",
+        "cost": 25, "days": 150, "rush_cost": 70,
+        "modifiers": { "army_speed": 0.04, "supply": 0.03 } },
+      { "id": "manoeuvre_motorised", "name": "Motorised columns", "requires": ["manoeuvre_columns"],
+        "description": "Lorries where the horses were, and fuel where the fodder was.",
+        "cost": 40, "days": 200, "rush_cost": 110,
+        "modifiers": { "army_speed": 0.05, "supply": 0.03 } },
+      { "id": "manoeuvre_airland", "name": "Air-land liaison", "requires": ["manoeuvre_screen"],
+        "description": "The column and the wing share one map and one clock.",
+        "cost": 35, "days": 180, "rush_cost": 95,
+        "modifiers": { "army_attack": 0.03, "support_recovery": 0.04 } },
+      { "id": "manoeuvre_free_hand", "name": "The free hand", "requires": ["manoeuvre_columns"],
+        "description": "A commander who may change the plan mid-march without waiting for permission.",
+        "cost": 55, "days": 240, "rush_cost": 150,
+        "modifiers": { "army_attack": 0.05, "organisation_recovery": 0.05 } },
+      { "id": "manoeuvre_deep_raid", "name": "Deep raids", "requires": ["manoeuvre_free_hand"],
+        "description": "Formations sent past the front rather than through it.",
+        "cost": 65, "days": 260, "rush_cost": 175,
+        "modifiers": { "army_attack": 0.04, "army_speed": 0.04 } },
+      { "id": "manoeuvre_grand", "name": "The grand manoeuvre", "requires": ["manoeuvre_deep_raid", "manoeuvre_airland"],
+        "description": "Every arm on one timetable, and the enemy's timetable cancelled.",
+        "cost": 85, "days": 320, "rush_cost": 230,
+        "modifiers": { "army_attack": 0.05, "army_speed": 0.05, "organisation_recovery": 0.04 } }
+    ]
+  },
+  "fire": {
+    "name": "Doctrine of fire",
+    "description": "War as weight of shell: everything the country can reach, brought down on one square kilometre at a time.",
+    "experience": "army",
+    "nodes": [
+      { "id": "fire_concentrated", "name": "Concentrated fire",
+        "description": "The guns of a front are laid on one task at a time, and the aircraft with them.",
+        "cost": 20, "days": 120, "rush_cost": 55,
+        "modifiers": { "army_attack": 0.06, "support_recovery": 0.05 } },
+      { "id": "fire_counter", "name": "Counter-battery", "requires": ["fire_concentrated"],
+        "description": "The enemy's long-range fire is hunted rather than endured.",
+        "cost": 30, "days": 180, "rush_cost": 85,
+        "modifiers": { "army_attack": 0.05, "support_losses": -0.08 } },
+      { "id": "fire_depots", "name": "Depot raids", "requires": ["fire_concentrated"],
+        "description": "Ammunition is cheaper to destroy in the dump than to receive at the front.",
+        "cost": 25, "days": 150, "rush_cost": 70,
+        "modifiers": { "support_losses": -0.06, "supply": 0.03 } },
+      { "id": "fire_sound", "name": "Sound ranging", "requires": ["fire_concentrated"],
+        "description": "A gun that has fired once has given its address away.",
+        "cost": 35, "days": 180, "rush_cost": 95,
+        "modifiers": { "army_attack": 0.04 } },
+      { "id": "fire_stock", "name": "The shell stock", "requires": ["fire_depots"],
+        "description": "A barrage is a warehouse emptied on a schedule.",
+        "cost": 45, "days": 200, "rush_cost": 120,
+        "modifiers": { "support_losses": -0.04, "supply": 0.03 } },
+      { "id": "fire_barrage", "name": "The deep barrage", "requires": ["fire_counter"],
+        "description": "Supply dumps and railheads behind the line are treated as targets.",
+        "cost": 55, "days": 240, "rush_cost": 150,
+        "modifiers": { "army_attack": 0.05, "supply": 0.04 } },
+      { "id": "fire_rolling", "name": "The rolling barrage", "requires": ["fire_barrage"],
+        "description": "The infantry walks behind the shells instead of after them.",
+        "cost": 70, "days": 260, "rush_cost": 185,
+        "modifiers": { "army_attack": 0.05, "army_defense": 0.03 } },
+      { "id": "fire_total", "name": "The whole weight", "requires": ["fire_rolling", "fire_stock"],
+        "description": "One fire plan for the front, the air and the rear, written the night before.",
+        "cost": 90, "days": 320, "rush_cost": 240,
+        "modifiers": { "army_attack": 0.06, "supply": 0.03 } }
+    ]
+  }
+}

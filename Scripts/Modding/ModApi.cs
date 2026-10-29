@@ -1,6 +1,4 @@
 using System;
-using System.Globalization;
-using System.Reflection;
 using DealOrForce.Simulation;
 using Godot;
 
@@ -34,7 +32,8 @@ public partial class ModApi : RefCounted
     {
         "get_day", "get_date", "log", "feature_enabled", "set_feature",
         "get_province_terrain", "get_nation", "set_nation_number", "get_politics",
-        "enact_policy", "manage_debt", "add_course_shock", "get_define", "set_define"
+        "enact_policy", "manage_debt", "add_course_shock", "study_doctrine", "propose_diplomatic_act",
+        "get_define", "set_define"
     };
     public bool set_feature(string id, bool enabled) => _campaign?.SetFeature(id, enabled) == true;
 
@@ -80,31 +79,8 @@ public partial class ModApi : RefCounted
 
     public Godot.Collections.Dictionary get_nation(string tag) => GetNation(tag);
 
-    public bool SetNationNumber(string tag, string key, double value)
-    {
-        var nation = _campaign?.NationByTag(tag);
-        if (nation is null || !float.IsFinite((float)value)) return false;
-        var number = (float)value;
-
-        switch (Normalize(key))
-        {
-            case "population": nation.Population = Math.Max(0L, (long)value); break;
-            case "treasury": nation.Treasury = number; break;
-            case "publicdebt": nation.PublicDebt = Math.Max(0, number); break;
-            case "debtarrears": nation.DebtArrears = Math.Max(0, number); break;
-            case "paymentarrears": nation.PaymentArrears = Math.Max(0, number); break;
-            case "creditconfidence": nation.CreditConfidence = Math.Clamp(number, 0, 1); break;
-            case "gdp": nation.Gdp = Math.Max(0f, number); break;
-            case "militaryspending": nation.MilitarySpending = Math.Clamp(number, 0f, 1f); break;
-            case "taxrate": nation.TaxRate = Math.Clamp(number, 0f, 1f); break;
-            case "stability": nation.Stability = Math.Clamp(number, 0f, 1f); break;
-            case "warsupport": nation.WarSupport = Math.Clamp(number, 0f, 1f); break;
-            case "manpower": nation.ManpowerReserve = Math.Max(0f, number); break;
-            default: return false;
-        }
-
-        return true;
-    }
+    public bool SetNationNumber(string tag, string key, double value) =>
+        ModScalarAccess.SetNationNumber(_campaign, tag, key, value);
 
     public bool set_nation_number(string tag, string key, double value) => SetNationNumber(tag, key, value);
 
@@ -141,46 +117,20 @@ public partial class ModApi : RefCounted
         return ModOperations.QueueCourseShock(_campaign, tag, strength, reason);
     }
 
-    public double GetDefine(string name, double fallback = 0)
-    {
-        if (_campaign is null) return fallback;
-        var property = FindDefine(name);
-        if (property is null) return fallback;
-        var value = property.GetValue(_campaign.Defines);
-        return value is IConvertible convertible
-            ? convertible.ToDouble(CultureInfo.InvariantCulture)
-            : fallback;
-    }
+    public bool study_doctrine(string tag, string branchId, string nodeId, bool rush = false) =>
+        ModOperations.QueueStudyDoctrine(_campaign, tag, branchId, nodeId, rush);
+
+    public bool propose_diplomatic_act(string issuerTag, string targetTag, string actName) =>
+        ModOperations.QueueDiplomaticAct(_campaign, issuerTag, targetTag, actName);
+
+    public double GetDefine(string name, double fallback = 0) =>
+        ModScalarAccess.GetDefine(_campaign?.Defines, name, fallback);
 
     public double get_define(string name, double fallback = 0) => GetDefine(name, fallback);
 
-    public bool SetDefine(string name, double value)
-    {
-        if (_campaign is null || !double.IsFinite(value)) return false;
-        var property = FindDefine(name);
-        if (property is null || !property.CanWrite) return false;
-        try
-        {
-            property.SetValue(_campaign.Defines, Convert.ChangeType(value, property.PropertyType, CultureInfo.InvariantCulture));
-            return true;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-    }
+    public bool SetDefine(string name, double value) =>
+        ModScalarAccess.SetDefine(_campaign?.Defines, name, value);
 
     public bool set_define(string name, double value) => SetDefine(name, value);
 
-    private PropertyInfo FindDefine(string name)
-    {
-        var normalized = Normalize(name);
-        foreach (var property in typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public))
-            if (Normalize(property.Name) == normalized)
-                return property;
-        return null;
-    }
-
-    private static string Normalize(string value) =>
-        (value ?? "").Replace("_", "", StringComparison.Ordinal).Replace("-", "", StringComparison.Ordinal).ToLowerInvariant();
 }

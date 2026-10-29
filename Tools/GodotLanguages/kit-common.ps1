@@ -16,7 +16,9 @@ function Get-KitPath {
 function Read-KitLock {
     param([string]$KitRoot = $PSScriptRoot)
     $data = Get-Content -LiteralPath (Join-Path $KitRoot 'sources.lock.json') -Raw | ConvertFrom-Json
-    if ($data.schema_version -ne 1) { throw 'Unsupported source lock schema.' }
+    # Schema 2 (2026-10-29) adds per-source status/branch/note fields and the go/zig/python
+    # sources; the reader's own requirements did not change, so both versions parse.
+    if ($data.schema_version -notin 1, 2) { throw 'Unsupported source lock schema.' }
     $ids = @{}
     foreach ($source in $data.sources) {
         if ($source.id -notmatch '^[a-z][a-z0-9_-]*$' -or $ids.ContainsKey($source.id)) { throw 'Invalid or duplicated source id.' }

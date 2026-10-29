@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -111,29 +110,22 @@ public static class DemographicCycle
 {
     /// <summary>How much of a region is of working age: neither too young nor past it.</summary>
     public static float WorkingShare(ScenarioState state) =>
-        state is null ? 0.62f : Math.Clamp(1f - state.YoungShare - state.OldShare, 0.05f, 0.95f);
+        state is null ? 0.62f : Rules.DemographyRules.WorkingShare(state.YoungShare, state.OldShare);
 
     /// <summary>
     /// A country's own newborns: the further the young share has fallen below the reference, the
     /// fewer of them there are. 1 at the reference and above, never below a third.
     /// </summary>
-    public static float FertilityFactor(ScenarioState state)
-    {
-        if (state is null) return 1f;
-        var reference = 0.28f;
-        return Math.Clamp(1f - (reference - state.YoungShare) * 2f, 0.35f, 1.25f);
-    }
+    public static float FertilityFactor(ScenarioState state) =>
+        state is null ? 1f : Rules.DemographyRules.FertilityFactor(state.YoungShare);
 
     /// <summary>
     /// A country's own deaths: an old population dies at a higher rate even where medicine is good,
     /// because medicine does not make anybody younger. 1 at the reference and below.
     /// </summary>
-    public static float MortalityFactor(ScenarioState state, Defines defines)
-    {
-        if (state is null || defines is null) return 1f;
-        var excess = Math.Max(0f, state.OldShare - defines.DemographyReferenceOldShare);
-        return 1f + excess * defines.DemographyMortalityOldWeight * 3f;
-    }
+    public static float MortalityFactor(ScenarioState state, Defines defines) =>
+        state is null || defines is null ? 1f :
+            Rules.DemographyRules.MortalityFactor(state.OldShare, defines.DemographyReferenceOldShare, defines.DemographyMortalityOldWeight);
 
     /// <summary>
     /// Once per household review, region by region: the bins move. Piggybacking on that review is
@@ -144,30 +136,42 @@ public static class DemographicCycle
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(DemographicCycle))) return;
+        foreach (var _ in Stages(campaign)) { }
+    }
+
+    /// <summary>How many regions one stage of the cycle works through before the frame gets its turn back.</summary>
+    private const int StageRegions = 256;
+
+    /// <summary>
+    /// The cycle in stages: the same regions in the same order, a pause every StageRegions. It was
+    /// one pass over all eighteen hundred regions on the week's day and the single heaviest thing a
+    /// frame at the top speed carried - eighty milliseconds of a four-hundred-millisecond step.
+    /// </summary>
+    public static IEnumerable<int> Stages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(DemographicCycle))) yield break;
         var defines = campaign.Defines;
-        if (!defines.DemographyAgeStructureEnabled) return;
+        if (!defines.DemographyAgeStructureEnabled) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var anyChanged = false;
-        foreach (var state in campaign.States)
+        // By index and re-checked each time: nothing in a stage adds or removes regions, but a pause
+        // is where something could, and a copy of the list every hour would be garbage for nothing.
+        for (var index = 0; index < campaign.States.Count; index++)
         {
+            if (index > 0 && index % StageRegions == 0) yield return 0;
+            if (index >= campaign.States.Count) break;
+            var state = campaign.States[index];
             if (state is null || state.Unclaimed || state.Population <= 0) continue;
             if (state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
             state.LastDemographyDay = state.LastHouseholdReviewDay;
             anyChanged = true;
-            var population = Math.Max(1f, state.Population);
-            var born = Math.Clamp(state.ReviewBirths / population, 0f, 0.2f);
-            var died = Math.Clamp(state.ReviewDeaths / population, 0f, 0.2f);
-            var young = state.YoungShare;
-            var old = state.OldShare;
-            var working = WorkingShare(state);
-            // Ageing: the young grow up, the workers grow old, and the old are the ones who die.
-            var matured = young * defines.DemographyMaturationAnnual * interval;
-            var aged = working * defines.DemographyAgeingAnnual * interval;
-            var oldDeaths = Math.Min(old, died * defines.DemographyMortalityOldWeight);
-            var rest = Math.Max(0f, died - oldDeaths);
-            state.YoungShare = Math.Clamp(young - matured - rest * 0.5f + born, 0.05f, 0.62f);
-            state.OldShare = Math.Clamp(old + aged - oldDeaths, 0.02f, 0.45f);
+            var stepped = Rules.DemographyRules.StepCohorts(
+                state.Population, state.ReviewBirths, state.ReviewDeaths,
+                state.YoungShare, state.OldShare,
+                defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
+                defines.DemographyMortalityOldWeight, interval);
+            state.YoungShare = stepped.YoungShare;
+            state.OldShare = stepped.OldShare;
             MoveCultures(campaign, state);
         }
         if (anyChanged) Aggregate(campaign);
@@ -185,6 +189,10 @@ public static class DemographicCycle
         var groups = state.PopulationGroups;
         if (groups.Count == 0 || state.Population <= 0) return;
         Assimilate(campaign, state, groups);
+        // A group everybody has left or assimilated out of is nobody. Kept, they piled up -
+        // every migration and every assimilation leaves its emptied group behind - and every
+        // weekly walk over the region's people walked them too.
+        groups.RemoveAll(static group => group.Size <= 0);
     }
 
     private static readonly Dictionary<string, long> PeopleHere = new(StringComparer.OrdinalIgnoreCase);

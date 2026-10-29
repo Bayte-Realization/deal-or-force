@@ -359,7 +359,7 @@ public static class CampaignDiplomacy
         var war = new StrategicWar
         {
             Id = campaign.Wars.Count == 0 ? 0 : campaign.Wars.Max(other => other.Id) + 1,
-            Name = $"{attacker.Name}–{defender.Name} War",
+            Name = $"{attacker.DisplayName}–{defender.DisplayName} War",
             AttackerId = attackerId,
             DefenderId = defenderId,
             StartedDay = campaign.ElapsedDays,

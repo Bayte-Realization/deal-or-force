@@ -431,6 +431,18 @@ public sealed partial class Defines
 	/// <summary>How fast prices chase their target. 0 freezes them, 1 snaps instantly.</summary>
 	public float PriceAdjustSpeed { get; set; } = 0.25f;
 
+	/// <summary>
+	/// How much of a price's distance from its base a country's GDP counts. What a country makes is
+	/// valued at base price plus this share of the difference: the oil exporter still gains when oil
+	/// is dear (the terms of trade), but a shortage that doubles the price of steel does not double
+	/// the output of every mill. At 1 GDP was nominal with no deflator, and a world of rising
+	/// scarcity read as a boom - 8 % world growth in the first year, Italy doubling in a decade.
+	/// </summary>
+	public float GdpPriceShare { get; set; } = 0.25f;
+
+	/// <summary>How far above or below its base a price may count towards GDP, as a share of the base.</summary>
+	public float GdpPriceBand { get; set; } = 0.6f;
+
 	/// <summary>Share of a shortfall a country can cover by importing from the world market.</summary>
 	public float WorldMarketAccess { get; set; } = 0.80f;
 
@@ -459,6 +471,15 @@ public sealed partial class Defines
     /// player can act on. 0 freezes GDP at its calibrated starting value.
     /// </summary>
     public float GdpConvergenceRate { get; set; } = 0.10f;
+
+    /// <summary>
+    /// Days at the start of a campaign in which the economy spins up: the calibration factor is
+    /// re-derived each week so GDP holds the figures the scenario was authored with while trade
+    /// routes and prices find their level. The day-zero market is one priced pass, not an
+    /// equilibrium; over the next seven months exports grew into it and the United States' GDP
+    /// rose by a third with its real output up five per cent, Canada's by two thirds. 0 turns it off.
+    /// </summary>
+    public int OutputSpinUpDays { get; set; } = 182;
 
 	/// <summary>Weekly standard-of-living pressure at a complete weighted shortage.</summary>
 	public float ShortageSolWeeklyPenalty { get; set; } = 0.004f;
@@ -944,6 +965,14 @@ public sealed partial class Defines
 	/// <summary>Days a formation needs after being driven out of a province.</summary>
 	public int RestAfterRetreatDays { get; set; } = 7;
 
+	/// <summary>
+	/// How many provinces deep a beaten formation looks for its own side's line before it
+	/// surrenders: through ground no enemy stands in, to ground its side holds. 1: only the
+	/// provinces next to it, as before - on a front of small provinces a division whose
+	/// neighbours had all changed hands surrendered whole with its own line two provinces away.
+	/// </summary>
+	public int RetreatSearchDepth { get; set; } = 1;
+
 	/// <summary>How many provinces out from itself a division is taken to hold ground.</summary>
 	public int FrontCoverageRadius { get; set; } = 2;
 
@@ -1021,6 +1050,13 @@ public sealed partial class Defines
 
 	/// <summary>Days a cut-off grouping lives on what it carried before supply and organisation are spent.</summary>
 	public int SupplyCutoffDays { get; set; } = 14;
+
+	/// <summary>
+	/// Share of yesterday's ammunition or oil need a staff attack still accepts.
+	/// A recorded cover under this does not start the attack. 0 waits for nothing.
+	/// A direct order is not this wait. The default is half.
+	/// </summary>
+	public float SupplyAttackCoverageFloor { get; set; } = 0.5f;
 
 	/// <summary>War score at which the losing side gives in.</summary>
 	// ---- Peace conference: what a demand costs against the war score that buys it ----
@@ -1150,6 +1186,9 @@ public sealed partial class Defines
 	public float AiTreasuryFloor { get; set; } = 0.02f;
 	public float AiTreasuryComfort { get; set; } = 0.12f;
 	public float AiTaxStep { get; set; } = 0.012f;
+	/// <summary>How far a computer government takes the consumption tax and the tax on firms when it needs money, before it raises the income tax further.</summary>
+	public float AiConsumptionTaxCeiling { get; set; } = 0.12f;
+	public float AiCorporateTaxCeiling { get; set; } = 0.15f;
 	public float AiMinimumTaxRate { get; set; } = 0.08f;
 	public float AiMaximumTaxRate { get; set; } = 0.46f;
 	public float AiWartimeMilitarySpending { get; set; } = 0.16f;
@@ -1163,7 +1202,7 @@ public sealed partial class Defines
 	public float AiPeacetimeArmsFocus { get; set; } = 0.04f;
 	public float AiStabilityConcern { get; set; } = 0.52f;
 	public float AiSocialStep { get; set; } = 0.006f;
-	public float AiBuildTreasuryFloor { get; set; } = 0.03f;
+	public float AiBuildTreasuryFloor { get; set; } = 0.01f;
 	public int AiMaxConcurrentProjects { get; set; } = 4;
 
 	/// <summary>How much each existing building of a kind discourages another one there.</summary>

@@ -142,36 +142,61 @@ public partial class DealOrForceGame
         AddBattleSide(sideRow, battle, true, attacker, attacking);
         AddBattleSide(sideRow, battle, false, defender, defending);
         if (battle.WithdrawnAttackers.Count + battle.WithdrawnDefenders.Count > 0)
-            _battleDetailControls.AddChild(BattleText(Loc.Format("Withdrawn formations: {0}/{1}",
-                battle.WithdrawnAttackers.Count, battle.WithdrawnDefenders.Count), 12, "text.muted"));
-        _battleDetailControls.AddChild(new HSeparator());
-        _battleDetailControls.AddChild(BattleText(Tr("Ground and fire"), 13, "text.accent"));
+            _battleDetailControls.AddChild(FactRow(Tr("Withdrawn formations"),
+                $"{battle.WithdrawnAttackers.Count}/{battle.WithdrawnDefenders.Count}", "surface.line_faint", "text.muted"));
+        SectionRule(_battleDetailControls, "Ground and fire");
         var terrain = _campaign.ProvinceMap?.TerrainAt(battle.ProvinceId);
         // A report that says "19 formations" without saying how many of them are in the line
         // is the report that hid the Kharkiv problem: the province held one formation, the
         // panel counted nineteen, and four of them were shooting. The frontage line says
         // which of the two numbers the fire belongs to.
         var known = battle.AttackerInLine + battle.DefenderInLine > 0;
-        _battleDetailControls.AddChild(BattleText(known
-            ? Loc.Format("Terrain: {0} · frontage {1:0}/{2:0} · in line {3}/{4} vs {5}/{6}",
-                Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth,
-                battle.AttackerInLine, battle.Attackers.Count, battle.DefenderInLine, battle.Defenders.Count)
-            : Loc.Format("Terrain: {0} · frontage {1:0}/{2:0}",
-                Tr(terrain?.Name ?? "Unknown"), battle.AttackerWidth, battle.DefenderWidth)));
+        _battleDetailControls.AddChild(FactRow(Tr("Terrain"), Tr(terrain?.Name ?? "Unknown"), "button.primary_border"));
+        _battleDetailControls.AddChild(FactRow(Tr("Frontage"),
+            known
+                ? Loc.Format("{0:0}/{1:0} · in line {2}/{3} vs {4}/{5}",
+                    battle.AttackerWidth, battle.DefenderWidth,
+                    battle.AttackerInLine, battle.Attackers.Count, battle.DefenderInLine, battle.Defenders.Count)
+                : $"{battle.AttackerWidth:0}/{battle.DefenderWidth:0}",
+            "surface.line_faint"));
         if (battle.RiverCrossingStrength > 0)
         {
-            _battleDetailControls.AddChild(BattleText(Tr(battle.RiverCrossingStrength > .66f
-                ? "River crossing: major · defender advantage active"
-                : "River crossing: ordinary · defender advantage active"), 12, "state.warning"));
+            _battleDetailControls.AddChild(FactRow(Tr("River crossing"),
+                Tr(battle.RiverCrossingStrength > .66f ? "Major · defender advantage" : "Ordinary · defender advantage"),
+                "state.warning", "state.warning"));
             if (!battle.Ended)
-                _battleDetailControls.AddChild(BattleText(Loc.Format("River assault power retained: {0:P0}",
-                    WaterConditions.AttackMultiplier(_campaign, battle.RiverCrossingStrength, battle.ProvinceId)), 12, "text.body_soft"));
+                _battleDetailControls.AddChild(FactRow(Tr("River assault power retained"),
+                    $"{WaterConditions.AttackMultiplier(_campaign, battle.RiverCrossingStrength, battle.ProvinceId):P0}",
+                    "state.warning", "text.body_soft"));
         }
-        _battleDetailControls.AddChild(BattleText(Loc.Format("Long-range fire: {0:0.#}/{1:0.#}",
-            battle.AttackerSupport, battle.DefenderSupport)));
+        // The day's manoeuvres. A countered manoeuvre names itself in the colour of the side
+        // that countered it, because that is the fact of the morning; the tooltip says what
+        // each manoeuvre is, in the same words for both languages.
+        var attackerTactic = Simulation.CombatTactics.Find(battle.AttackerTactic);
+        var defenderTactic = Simulation.CombatTactics.Find(battle.DefenderTactic);
+        if (attackerTactic is not null || defenderTactic is not null)
+        {
+            var nameOf = new Func<Simulation.CombatTactic, string>(tactic =>
+                tactic is null ? Tr("No manoeuvre") : Tr(tactic.Name));
+            var tacticTone = attackerTactic is not null && attackerTactic.Counters(defenderTactic)
+                ? "state.positive"
+                : defenderTactic is not null && defenderTactic.Counters(attackerTactic)
+                    ? "state.warning"
+                    : "text.body_soft";
+            var manoeuvres = FactRow(Tr("Manoeuvres"),
+                $"{nameOf(attackerTactic)} vs {nameOf(defenderTactic)}", tacticTone, tacticTone);
+            manoeuvres.TooltipText = Ui.Tip(
+                (attackerTactic is null ? "" : Tr(attackerTactic.Name) + " — " + Tr(attackerTactic.Description)) +
+                (attackerTactic is not null && defenderTactic is not null ? "\n" : "") +
+                (defenderTactic is null ? "" : Tr(defenderTactic.Name) + " — " + Tr(defenderTactic.Description)));
+            _battleDetailControls.AddChild(manoeuvres);
+        }
+        _battleDetailControls.AddChild(FactRow(Tr("Long-range fire"),
+            $"{battle.AttackerSupport:0.#}/{battle.DefenderSupport:0.#}", "surface.line_faint"));
         var latest = battle.Rounds.LastOrDefault();
         if (latest is not null)
         {
+            SectionRule(_battleDetailControls, "Combat log", Loc.Format("{0} d.", battle.Rounds.Count));
             _battleDetailControls.AddChild(BattleText(Tr(latest.Note), 12, "text.accent_dim"));
             var history = string.Join("\n", battle.Rounds.TakeLast(3).Reverse().Select(round =>
                 Loc.Format("Day {0}: losses {1:N0}/{2:N0} · organisation {3:P0}/{4:P0}",

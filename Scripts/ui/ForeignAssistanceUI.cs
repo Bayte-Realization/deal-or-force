@@ -69,7 +69,7 @@ public partial class DealOrForceGame
             var counterpart = _campaign.NationById(letter.RequesterId == player.Id ? letter.DonorId : letter.RequesterId);
             var button = ActionButton(Loc.Format("Financial request · {0}\n{1}", counterpart?.DisplayName ?? "?", Tr(AssistanceStateKey(letter.State))), () =>
             {
-                _assistanceInboxSelected = id; _dealInboxSelected = -1; _ultimatumInboxSelected = -1; _assistanceConfirm = -1; _dealInboxMessage = "";
+                _assistanceInboxSelected = id; _dealInboxSelected = -1; _ultimatumInboxSelected = -1; ClearArmsInboxSelection(); _assistanceConfirm = -1; _dealInboxMessage = "";
                 RefreshDealInbox(force: true);
             }, 0, 54, id == _assistanceInboxSelected);
             button.Name = "AssistanceRequest_" + id; button.ClipText = true;

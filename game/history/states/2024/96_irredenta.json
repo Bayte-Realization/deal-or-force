@@ -1,0 +1,64 @@
+// Irredenta: ground a country holds as its own homeland in law (cores) or wants back (claims),
+// on 1 January 2024. Neither changes who owns or holds a region. A homeland held by another is
+// a grievance and a war aim the AI weighs first; a claim is a weaker motive (TerritorialClaimWeight)
+// that grows when the holder is at war elsewhere or falling apart (LostLands.Weight) - the stab in
+// the back, the second front. The owner is listed among the cores where a region gets cores,
+// because "cores" replaces the list rather than adding to it.
+// Sources: the constitutions and official positions of the countries named; see each line.
+{
+  // Both Koreas claim the whole peninsula (DPRK Constitution art. 9, ROK Constitution art. 3).
+  "kr_42": {"claims": ["PRK"]}, "kr_41": {"claims": ["PRK"]}, "kr_47": {"claims": ["PRK"]},
+  "kr_48": {"claims": ["PRK"]}, "kr_46": {"claims": ["PRK"]},
+  "kp_04": {"claims": ["KOR"]}, "kp_07": {"claims": ["KOR"]}, "kp_09": {"claims": ["KOR"]},
+  "kp_06": {"claims": ["KOR"]}, "kp_03": {"claims": ["KOR"]}, "kp_10": {"claims": ["KOR"]},
+  "kp_08": {"claims": ["KOR"]}, "kp_02": {"claims": ["KOR"]},
+
+  // The People's Republic holds Taiwan to be a province of China (Anti-Secession Law, 2005).
+  "tw_khh": {"cores": ["TWN", "CHN"]}, "tw_nan": {"cores": ["TWN", "CHN"]},
+
+  // Kosovo: Serbia's Autonomous Province of Kosovo and Metohija (Constitution of Serbia, 2006);
+  // union with Albania is the Albanian national question's old answer.
+  "xk_x13": {"cores": ["KOS", "SRB"], "claims": ["ALB"]},
+  // Republika Srpska: the Serbian national programme's claim on Bosnia's Serb entity.
+  "ba_x02": {"claims": ["SRB"]},
+
+  // Kashmir: India and Pakistan each hold the other's part as their own.
+  "in_jk": {"cores": ["IND", "PAK"]}, "in_la": {"cores": ["IND"], "claims": ["PAK", "CHN"]},
+  "pk_jk": {"cores": ["PAK", "IND"]}, "pk_gb": {"cores": ["PAK", "IND"]},
+  // Arunachal Pradesh, China's "Zangnan".
+  "in_ar": {"cores": ["IND"], "claims": ["CHN"]},
+  // The Durand Line has never been recognised by Kabul.
+  "pk_kp": {"claims": ["AFG"]}, "pk_ta": {"claims": ["AFG"]},
+
+  // Western Sahara: Morocco's Southern Provinces, the Sahrawi Republic's homeland.
+  "eh_x01": {"cores": ["ESH", "MAR"]},
+  // Somaliland is Somalia in Mogadishu's law; Greater Somalia's claims on the Ogaden and the
+  // Northern Frontier District.
+  "99_x11": {"cores": ["SOL", "SOM"]},
+  "et_so": {"claims": ["SOM"]}, "ke_500": {"claims": ["SOM"]},
+  // Ethiopia's sea: Assab, lost with Eritrea in 1993.
+  "er_dk": {"claims": ["ETH"]},
+
+  // The Falklands (Argentine Constitution, transitional clause 1); Essequibo (Venezuela's 2023
+  // referendum); Gibraltar (Spain); Belize (Guatemala); Bolivia's sea at Antofagasta.
+  "fk_x01": {"claims": ["ARG"]},
+  "gy_ba": {"claims": ["VEN"]}, "gy_pm": {"claims": ["VEN"]}, "gy_pt": {"claims": ["VEN"]}, "gy_ut": {"claims": ["VEN"]},
+  "gi_x01": {"claims": ["ESP"]},
+  "bz_cy": {"claims": ["GTM"]},
+  "cl_an": {"claims": ["BOL"]},
+
+  // Northern Ireland: Irish unity remains the Republic's stated aspiration (Constitution art. 3).
+  "gb_stb": {"claims": ["IRL"]},
+
+  // The Megali Idea: Constantinople, Smyrna, Northern Epirus, and union with Cyprus.
+  "tr_54": {"claims": ["GRC"]}, "tr_35": {"claims": ["GRC"]}, "al_05": {"claims": ["GRC"]}, "cy_01": {"claims": ["GRC"]},
+  // The National Pact of 1920: Mosul, Kirkuk and Aleppo.
+  "iq_ni": {"claims": ["TUR"]}, "iq_ts": {"claims": ["TUR"]}, "sy_hl": {"claims": ["TUR"]},
+
+  // Russia and the lands of the old empire: the Kazakh north, settled by Russians, and the union
+  // of Moldova with Romania as the Romanian answer.
+  "kz_sev": {"claims": ["RUS"]}, "kz_pav": {"claims": ["RUS"]}, "kz_vos": {"claims": ["RUS"]},
+  "kz_akm": {"claims": ["RUS"]}, "kz_kus": {"claims": ["RUS"]},
+  "md_si": {"claims": ["ROU"]},
+  "md_or": {"claims": ["ROU"]}
+}

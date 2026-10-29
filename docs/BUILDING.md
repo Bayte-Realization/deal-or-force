@@ -4,6 +4,11 @@
 
 For handing the game to somebody who has neither Godot nor the sources.
 
+Current game release: **EntertAlpha 0.3.0.3**. `Tools/Test-ReleaseVersion.ps1`
+checks the shared game/launcher/rules metadata, engine/export settings and current
+release documentation before export. `SaveSystem.GameVersion` uses `GameBuildInfo`;
+the save format and network protocol are independent of the release label.
+
 ## Once: the export templates
 
 Godot will run the project in the editor with no preparation at all, but it can only build a
@@ -12,14 +17,14 @@ they are not installed by default.
 
 In the editor: **Editor → Manage Export Templates… → Download and Install**.
 
-The version has to match **exactly**, the word `mono` included: the engine here is
-`C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe`, so the templates must be
-`4.8.dev7.mono`. This experimental branch targets .NET 10 and SDK 4.8.0-dev.7.
+The version has to match **exactly**, the word `mono` included: the current engine is
+`C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe`, so the templates must be
+`4.8.beta2.mono`. Use the SDK declared by `DealOrForce.csproj`.
 The separate 4.7 checkout needs its own matching templates. Templates from a plain build will not do for a .NET build, and the
 error when they do not will be unhelpful.
 
 To check they arrived: the folder
-`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.8.dev7.mono\` should exist and
+`C:\Users\<name>\AppData\Roaming\Godot\export_templates\4.8.beta2.mono\` should exist and
 not be empty.
 
 ## Every time: build

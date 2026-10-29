@@ -1,0 +1,14 @@
+// What a country's quiet hand among its own people abroad leaves behind (KinStatecraft.cs).
+// A grievance is the host's, and it is a grievance before it is an opinion: the pair's
+// tension already reads it, which is how working a people for years ends in a war
+// nobody declared over it.
+{
+  "working_our_people": { "name": "Working our people against us", "opinion": -12, "days": 1095, "decays": true, "max_stacks": 3 },
+  "caught_working_our_people": { "name": "Caught stirring up our people", "opinion": -30, "days": 2190, "decays": true, "max_stacks": 2 },
+  "suspects_our_volunteers": { "name": "Suspected of arming our rebels", "opinion": -18, "days": 1825, "decays": true, "max_stacks": 2 },
+  "proved_sending_volunteers": { "name": "Proved to have sent volunteers to our rebels", "opinion": -40, "days": 3650, "decays": true, "max_stacks": 1 },
+  "founded_proxy_in_our_land": { "name": "Founded a movement of its people in our land", "opinion": -25, "days": 3650, "decays": true, "max_stacks": 2 },
+  "caught_founding_proxy": { "name": "Caught founding a movement in our land", "opinion": -45, "days": 5475, "decays": true, "max_stacks": 1 },
+  "caught_running_our_offices": { "name": "Caught running its own offices in our land", "opinion": -28, "days": 3650, "decays": true, "max_stacks": 2 },
+  "shut_our_offices": { "name": "Shut the offices our people used", "opinion": -12, "days": 1095, "decays": true, "max_stacks": 2 }
+}

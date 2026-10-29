@@ -1,6 +1,6 @@
 #requires -Version 7.0
 param(
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta1',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
     [string]$ProjectDirectory = (Join-Path $PSScriptRoot 'projects/AllSix'),
     [string]$JavaHome = 'C:/Program Files/Eclipse Adoptium/jdk-25.0.2.10-hotspot'
 )

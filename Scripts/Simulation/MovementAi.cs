@@ -83,7 +83,8 @@ public static class MovementAi
 
         bool Try(string action, int region = -1, int target = -1)
         {
-            if (done >= 2) return false;
+            // A vote carried or a rising won this week makes it a state: it has nothing left to try.
+            if (done >= 2 || nation.Movement is null) return false;
             if (MovementActions.Refusal(campaign, nation, action, region, target).Length > 0) return false;
             new MovementActionCommand { IssuerId = nation.Id, Action = action, StateMapIndex = region, TargetNationId = target }
                 .Apply(campaign);

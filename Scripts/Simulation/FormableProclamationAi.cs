@@ -184,6 +184,7 @@ public static class FormableProclamationAi
                      .OrderBy(d => d.Id, StringComparer.Ordinal))
         {
             if (!FormableNations.Eligible(campaign, nation, definition) || !FormableNations.CompatibleProclamation(nation, definition)) continue;
+            if (FormableNations.SmallerThanCountry(campaign, nation, definition)) continue;
             var candidate = Evaluate(campaign, nation, definition, context);
             if (candidate.CanProclaim && (best is null || candidate.Score > best.Score)) best = candidate;
         }

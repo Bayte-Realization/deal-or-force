@@ -59,7 +59,7 @@ public sealed partial class GlobePresentation
 
     private void UpdateIce(double delta)
     {
-        var frozen = _campaign?.Curse == Simulation.WorldCurses.Snowgrave;
+        var frozen = _campaign?.Curse == Simulation.WorldCurses.Snowgrave && Simulation.WorldLayers.On("ice");
         if (!frozen)
         {
             if (_iceShell is not null) { _iceShell.Visible = false; foreach (var sheet in _iceSheets) sheet.Visible = false; }

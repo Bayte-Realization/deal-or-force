@@ -23,6 +23,8 @@ public sealed partial class Defines
     public float SecessionDefectionShare { get; set; } = 0.45f;
     /// <summary>A de facto faction that has lost most of its ground fights on while it keeps this many formations and this much war support.</summary>
     public int FactionFightOnFormations { get; set; } = 2;
+    /// <summary>Whether every rising and breakaway fights on while it has formations and the will, as the named insurgencies do.</summary>
+    public bool RisingsFightOn { get; set; } = true;
     public float FactionFightOnSupport { get; set; } = 0.2f;
     /// <summary>How long a faction's "seasoned insurgency" lasts from the first day.</summary>
     public int FactionSeasonedDays { get; set; } = 1460;
@@ -46,8 +48,25 @@ public sealed partial class Nation
     /// The state this one broke away from, by secession or a rising, or -1. What lets that state
     /// treat the war as one for its own ground: cheap to write back in at a peace, never given
     /// away for a white peace while it is winning, and taken back whole when the breakaway gives up.
+    ///
+    /// It is a *live* position, so a reconciliation clears it. See <see cref="RevoltParentId"/>
+    /// for the part that must not be forgotten.
     /// </summary>
     public int SecededFromId = -1;
+
+    /// <summary>
+    /// The state this country was born out of, kept for good, or -1 for a country that was
+    /// always here.
+    ///
+    /// <see cref="SecededFromId"/> is a claim and a position: a breakaway written back into its
+    /// parent at a peace has it cleared, which is right for the war and wrong for the memory. The
+    /// next quarrel over the same ground then had nothing to read, and
+    /// <see cref="Reintegration.IsBreakawayOf"/> fell back to guessing from tag prefixes - which
+    /// also said yes to unrelated countries that happened to share one. This field is written
+    /// once, at the birth, and never cleared: it is the difference between "we are one country
+    /// having a civil war" and "two countries with similar initials".
+    /// </summary>
+    public int RevoltParentId = -1;
 }
 
 /// <summary>
@@ -56,23 +75,68 @@ public sealed partial class Nation
 /// </summary>
 public static class Reintegration
 {
-    /// <summary>Whether this country broke away from that one.</summary>
+    /// <summary>
+    /// Whether this country broke away from that one.
+    ///
+    /// Answered from what was **recorded** when the country was born, not from what its name
+    /// looks like. The old version read "a country founded in revolt whose tag begins with the
+    /// government's tag", which also answered yes for two unrelated states sharing a prefix, and
+    /// carried two hand-written exceptions (UKR, IND) for the cases where the prefix rule missed.
+    /// A war wrongly labelled a civil conflict is not cosmetic: it changes peace shape, what the
+    /// winner may take, and who may intercede. The label has to be evidence.
+    /// </summary>
     public static bool IsBreakawayOf(Nation breakaway, Nation government)
     {
         if (breakaway is null || government is null || breakaway.Id == government.Id) return false;
+        // The live link, then the permanent record that outlives it: a breakaway written back
+        // into its parent clears the first, and the next war over the same ground still needs
+        // to know the two were one country.
         if (breakaway.SecededFromId == government.Id) return true;
+        if (breakaway.RevoltParentId == government.Id) return true;
+        // A rising under arms is not a state yet, and its name carries the parent.
         if (breakaway.Name.StartsWith("rising:", StringComparison.Ordinal))
         {
             var parts = breakaway.Name.Split(':');
             if (parts.Length >= 3 && string.Equals(parts[2], government.Tag, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
-        if (!string.IsNullOrEmpty(breakaway.FoundedInRevolt) &&
+        // A faction the game keeps for this country: the data names its parent, which is a record
+        // rather than a resemblance.
+        if (Factions.Of(breakaway) is { } faction && faction.Parent.Length > 0 &&
+            string.Equals(faction.Parent, government.Tag, StringComparison.OrdinalIgnoreCase))
+            return true;
+        // Saves written before RevoltParentId existed: the old prefix rule, kept last and only
+        // while the country has no recorded parent. It is the rule that mislabelled unrelated
+        // countries, so it may not run for anything the game has since recorded.
+        if (breakaway.RevoltParentId < 0 && !string.IsNullOrEmpty(breakaway.FoundedInRevolt) &&
             (breakaway.Tag.StartsWith(government.Tag, StringComparison.OrdinalIgnoreCase) ||
              (government.Tag == "UKR" && breakaway.Tag.StartsWith("U")) ||
              (government.Tag == "IND" && breakaway.Tag.StartsWith("1"))))
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// Give every country that predates <see cref="Nation.RevoltParentId"/> the record it would
+    /// have been given at birth.
+    ///
+    /// A save from before the field carries a live claim for its breakaways and, for a faction,
+    /// the parent named in `history/factions`. Both are enough to write the permanent record once,
+    /// on load, instead of leaving the campaign to fall back on tag prefixes for ever. Nothing is
+    /// invented: a country with neither stays at -1 and is read exactly as before.
+    /// </summary>
+    public static void AdoptLegacyLineage(Campaign campaign)
+    {
+        if (campaign?.Nations is null) return;
+        foreach (var nation in campaign.Nations)
+        {
+            if (nation is null || nation.RevoltParentId >= 0) continue;
+            if (nation.SecededFromId >= 0 && nation.SecededFromId != nation.Id)
+                nation.RevoltParentId = nation.SecededFromId;
+            else if (Factions.Of(nation) is { } faction && faction.Parent.Length > 0 &&
+                     campaign.NationByTag(faction.Parent) is { } parent && parent.Id != nation.Id)
+                nation.RevoltParentId = parent.Id;
+        }
     }
 
     /// <summary>
@@ -125,7 +189,17 @@ public static class Reintegration
     }
 
     /// <summary>Whether a region belongs to the same people, culture group, homeland or unification project as the winner.</summary>
-    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region)
+    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region) =>
+        IsKindredRegion(c, winner, region, byCultureGroup: true);
+
+    /// <summary>
+    /// The same, with the culture group counted or not. A whole state is not its neighbour's
+    /// lost province because both peoples belong to one family of cultures: Ukrainians and
+    /// Russians are East Slavs, Serbs and Croats South Slavs, and by the group rule every region
+    /// of Ukraine was Russia's kin - its 2024 war became a reunification, and a decisive one took
+    /// the whole country unconditionally in nineteen of twenty-four two-year runs.
+    /// </summary>
+    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region, bool byCultureGroup)
     {
         if (c is null || winner is null || region is null || region.Population <= 0) return false;
         if (TerritorialClaims.TitleOf(c, winner, region) == TerritorialTitle.Homeland ||
@@ -134,7 +208,7 @@ public static class Reintegration
         var cultures = WarAims.Cultures(winner);
         if (cultures.Count == 0) return false;
         if (WarAims.CultureShare(region, cultures) >= 0.40f) return true;
-        return CultureGroupShare(region, cultures) >= 0.55f;
+        return byCultureGroup && CultureGroupShare(region, cultures) >= 0.55f;
     }
 
     /// <summary>
@@ -166,7 +240,7 @@ public static class Reintegration
         {
             var pop = Math.Max(0L, state.Population);
             totalPop += pop;
-            if (IsKindredRegion(c, winner, state))
+            if (IsKindredRegion(c, winner, state, byCultureGroup: false))
             {
                 kindredPop += pop;
                 kindredRegions++;

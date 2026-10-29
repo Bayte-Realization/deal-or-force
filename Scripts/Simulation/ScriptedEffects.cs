@@ -139,14 +139,6 @@ public static class ScriptedEffects
             0f, float.PositiveInfinity, "Parallel construction throughput.");
         NationField("manpower", n => n.ManpowerReserve, (n, v) => n.ManpowerReserve = v, 0f, float.PositiveInfinity,
             "Trained manpower available for reinforcement.");
-        NationField("tax_rate", n => n.TaxRate, (n, v) => n.TaxRate = v, 0f, 0.75f,
-            "Headline tax rate, 0-1.");
-        NationField("military_spending", n => n.MilitarySpending, (n, v) => n.MilitarySpending = v, 0f, 0.5f,
-            "Share of output spent on the armed forces.");
-        NationField("welfare_spending", n => n.WelfareSpending, (n, v) => n.WelfareSpending = v, 0f, 0.5f,
-            "Share of output spent on social welfare.");
-        NationField("education_spending", n => n.EducationSpending, (n, v) => n.EducationSpending = v, 0f, 0.5f,
-            "Share of output spent on education and science.");
         NationField("market_access", n => n.MarketAccess, (n, v) => n.MarketAccess = v, 0f, 1f,
             "Access to the world market, 0-1.");
         NationField("imperial_overstretch", n => n.ImperialOverstretch, (n, v) => n.ImperialOverstretch = v, 0f, 1f,

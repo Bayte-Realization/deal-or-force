@@ -79,6 +79,7 @@ public partial class DealOrForceGame
 
         row.CustomMinimumSize = new Vector2(0, 30);
         row.AddThemeConstantOverride("separation", 14);
+        row.AddChild(new Control { CustomMinimumSize = new Vector2(4, 0), MouseFilter = MouseFilterEnum.Ignore });
         // The same mark for the same idea wherever it appears. Reusing one symbol across
         // the top bar, the alert rail and every dossier row is the whole of what makes an
         // icon set worth having, and a caption with no symbol declared simply has none.
@@ -111,8 +112,18 @@ public partial class DealOrForceGame
         var card = new PanelContainer();
         card.SetMeta("dossier_field", caption);
         card.SetMeta("dossier_group", _detailGroup);
-        card.AddThemeStyleboxOverride("panel", ShellRowStyle(_sideDetail.GetChildCount() % 2 == 0));
-        card.AddChild(row);
+        card.AddThemeStyleboxOverride("panel", ShellRowStyle(_sideDetail.GetChildCount() % 2 == 0, readOnly: true));
+        var content = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        content.AddThemeConstantOverride("separation", 3); card.AddChild(content); content.AddChild(row);
+        if (row.Share >= 0f)
+        {
+            var meter = new ProgressBar { Name = "DossierShareTrack", MinValue = 0, MaxValue = 1, Step = .0001, Value = row.Share,
+                ShowPercentage = false, CustomMinimumSize = new Vector2(0, 3), MouseFilter = MouseFilterEnum.Ignore };
+            var track = new StyleBoxFlat { BgColor = Ui.Colour("surface.line_faint") }; track.SetCornerRadiusAll(1);
+            var fill = new StyleBoxFlat { BgColor = new Color(row.Fill, .7f) }; fill.SetCornerRadiusAll(1);
+            meter.AddThemeStyleboxOverride("background", track); meter.AddThemeStyleboxOverride("fill", fill);
+            content.AddChild(meter);
+        }
         _sideDetail.AddChild(card);
         // The row is in the tree now, so the figure can read the real theme font before it is
         // given tabular digits.

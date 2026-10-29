@@ -23,6 +23,7 @@ public partial class DealOrForceGame
     private CheckBox _dealAskPact, _dealAskTrade, _dealAskEmbargo;
     private CheckBox _dealGiveRelease, _dealAskRelease;
     private Label _dealAssessment, _dealTerms, _dealTreasuries, _dealValuation;
+    private Label _dealWeightFigure, _dealPayFigure, _dealAskFigure;
     private Control _dealReturnFocus;
     private Button _dealSend, _dealClose, _dealBalance, _dealAskMore;
     private WarBar _dealMeter;
@@ -88,19 +89,12 @@ public partial class DealOrForceGame
         panel.Name = "DealPanel";
         Ui.Place(panel, "modal.deal");
         var rows = PanelRows(panel, 20, 16, 12);
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 12);
-        rows.AddChild(header);
-        header.AddChild(FlagBadge(target.Tag, 30, target.DisplayName));
-        var heading = Title(Loc.Format("Deal with {0}", target.DisplayName), 24, Ui.Colour("text.accent"));
-        heading.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        heading.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        header.AddChild(heading);
-        header.AddChild(HandbookButton("deals"));
         var close = ActionButton("×", CloseDealComposer, 38, 32);
         close.Name = "CloseDealComposer"; close.TooltipText = Ui.Tip(Tr("Close"));
-        header.AddChild(close);
-        rows.AddChild(WrappedUltimatumText("A voluntary exchange. Review what each side gives, then confirm once. A refusal transfers nothing.", 13));
+        var dealHead = ScreenHeader(rows, Loc.Format("Deal with {0}", target.DisplayName),
+            "A voluntary exchange. Review what each side gives, then confirm once. A refusal transfers nothing.",
+            false, HandbookButton("deals"), close);
+        PrependToScreenHeader(dealHead, FlagBadge(target.Tag, 30, target.DisplayName));
 
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 20);
@@ -116,15 +110,12 @@ public partial class DealOrForceGame
         var reviewFrame = new PanelContainer { Name = "DealReviewPanel", SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill };
         reviewFrame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10)); body.AddChild(reviewFrame);
-        var reviewScroll = new ScrollContainer { Name = "DealReviewScroll", CustomMinimumSize = new(220, 0),
+        var reviewScroll = new ScrollContainer { Name = "DealReviewScroll", CustomMinimumSize = new(0, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
         reviewFrame.AddChild(reviewScroll);
         var review = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         review.AddThemeConstantOverride("separation", 10); reviewScroll.AddChild(review);
-        review.AddChild(Title("REVIEW BEFORE SIGNING", 17, Ui.Colour("text.accent")));
-        _dealAssessment = WrappedUltimatumText("", 20);
-        _dealAssessment.Name = "DealAssessment";
-        review.AddChild(_dealAssessment);
+        SectionRule(review, "REVIEW BEFORE SIGNING");
         // How far the table leans for them: right of the tick they sign, left they refuse.
         _dealMeter = new WarBar { Name = "DealMeter", CustomMinimumSize = new Vector2(0, 12),
             SizeFlagsHorizontal = SizeFlags.ExpandFill, Track = Ui.Colour("war.track"),
@@ -153,8 +144,7 @@ public partial class DealOrForceGame
         _dealValuation = WrappedUltimatumText("", 13); _dealValuation.Name = "DealValuationBreakdown";
         _dealValuation.TooltipText = Ui.Tip(Tr("Diplomatic value is how the other government weighs the deal, in points: not money, and not a forecast of profit."));
         review.AddChild(_dealValuation);
-        review.AddChild(new HSeparator());
-        review.AddChild(Title("TERRITORIAL PACKAGE", 14, Ui.Colour("text.accent")));
+        SectionRule(review, "TERRITORIAL PACKAGE");
         _dealTerritoryPreview = new DealTerritoryPreview(); review.AddChild(_dealTerritoryPreview);
         _dealMapHint = WrappedUltimatumText("", 12); review.AddChild(_dealMapHint);
         review.AddChild(new HSeparator());
@@ -163,17 +153,48 @@ public partial class DealOrForceGame
         review.AddChild(_dealTerms);
         review.AddChild(WrappedUltimatumText(Loc.Format("Signed: {0} days of protected peace on both sides of the table.",
             Math.Clamp(_campaign.Defines.DealSettlementTruceDays, 0, 3650)), 13));
-        rows.AddChild(new HSeparator());
+        var footer = new PanelContainer { Name = "DealSettlementFooter" };
+        footer.AddThemeStyleboxOverride("panel", WarInsetStyle(10, 10));
+        AtlasSurfaceSkin.Attach(footer, AtlasSurfaceSkin.Level.Inset, "war.card");
+        rows.AddChild(footer);
+        var foot = new VBoxContainer();
+        foot.AddThemeConstantOverride("separation", 8);
+        footer.AddChild(foot);
+        var figures = new HBoxContainer();
+        figures.AddThemeConstantOverride("separation", 16);
+        foot.AddChild(figures);
+        var weight = NumberCell("Their weight", "—");
+        var pay = NumberCell("You pay", "—");
+        var ask = NumberCell("They pay", "—");
+        foreach (var cell in new[] { weight, pay, ask })
+        { cell.SizeFlagsHorizontal = SizeFlags.ExpandFill; figures.AddChild(cell); }
+        _dealWeightFigure = weight.GetNode<Label>("FigureValue");
+        _dealPayFigure = pay.GetNode<Label>("FigureValue");
+        _dealAskFigure = ask.GetNode<Label>("FigureValue");
+        _dealAssessment = WrappedUltimatumText("", 16);
+        _dealAssessment.Name = "DealAssessment";
+        foot.AddChild(_dealAssessment);
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 12);
-        rows.AddChild(actions);
-        _dealClose = ActionButton("Cancel", CloseDealComposer, 130, 36);
+        foot.AddChild(actions);
+        _dealClose = ActionButton("Cancel", CloseDealComposer, 0, 36);
+        _dealClose.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         actions.AddChild(_dealClose);
-        _dealSend = ActionButton("Review deal", SendComposedDeal, 240, 36, true);
+        _dealSend = ActionButton("Review deal", SendComposedDeal, 0, 36, true);
         _dealSend.Name = "SendComposedDeal";
+        _dealSend.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         actions.AddChild(_dealSend);
+        panel.Resized += () => FitNegotiationTypography(panel);
+        FitNegotiationTypography(panel);
         RefreshDealComposer();
         _dealGiveCash.GetLineEdit().GrabFocus();
+    }
+
+    private static Label DealRefusal(string text)
+    {
+        var why = WrappedUltimatumText(text, 12);
+        why.LabelSettings.FontColor = Ui.Colour("state.warning");
+        return why;
     }
 
     /// <summary>One half of the table: a cheque, the promises that side can honestly make,
@@ -206,31 +227,42 @@ public partial class DealOrForceGame
         half.AddChild(Title("TREATIES", 13, Ui.Colour("text.accent")));
         pact = new CheckBox { Name = ours ? "DealGivePact" : "DealAskPact", Text = Tr("Non-aggression pact"),
             Disabled = relation?.NonAggressionPact == true,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
             TooltipText = Ui.Tip(Tr("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again.")) };
         half.AddChild(pact);
+        if (pact.Disabled) half.AddChild(DealRefusal("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again."));
         trade = new CheckBox { Name = ours ? "DealGiveTrade" : "DealAskTrade", Text = Tr("Trade agreement"),
             Disabled = relation?.TradeAgreement == true,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
             TooltipText = Ui.Tip(Tr("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again.")) };
         half.AddChild(trade);
+        if (trade.Disabled) half.AddChild(DealRefusal("This is a mutual pact. Select it on one side only; an existing treaty cannot be sold again."));
         embargo = new CheckBox
         {
             Name = ours ? "DealGiveEmbargo" : "DealAskEmbargo",
             Text = Tr(ours ? "Lift our embargo" : "Lift their embargo"),
             // Our half lifts an embargo we imposed; their half asks them to lift theirs.
             Disabled = relation?.EmbargoBy(owner.Id) != true,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
             TooltipText = Ui.Tip(Tr("Only the country that imposed this embargo can lift it. Disabled means it has no embargo to remove."))
         };
         half.AddChild(embargo);
+        if (embargo.Disabled) half.AddChild(DealRefusal("Only the country that imposed this embargo can lift it. Disabled means it has no embargo to remove."));
         half.AddChild(new HSeparator());
         half.AddChild(Title("REGIONS TO TRANSFER", 13, Ui.Colour("text.accent")));
         release = new CheckBox { Name = ours ? "DealGiveRelease" : "DealAskRelease", Text = Tr("Establish an independent country"),
-            Disabled = !_campaign.FeatureEnabled("secession"), ClipText = true,
+            Disabled = !_campaign.FeatureEnabled("secession"),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill,
             TooltipText = Ui.Tip(Tr("Release selected whole, connected regions instead of transferring them to the partner. The new country receives its population share of treasury and debt. Its identity follows local peoples and the largest region. Voluntary release renounces the parent's homeland title to these original regions. One settlement per deal; the parent must retain land.")) };
         half.AddChild(release);
+        if (release.Disabled) half.AddChild(DealRefusal("Secession is turned off for this campaign."));
         var search = new LineEdit { Name = ours ? "DealGiveRegionSearch" : "DealAskRegionSearch",
             PlaceholderText = Tr("Search regions…"), ClearButtonEnabled = true,
             TooltipText = Ui.Tip(Tr("Filter by the displayed region name. Filtering does not remove your selected terms.")) };
         half.AddChild(search);
+        var regionCount = Title("", 11, Ui.Colour("text.muted"));
+        regionCount.Name = ours ? "DealGiveRegionCount" : "DealAskRegionCount";
+        half.AddChild(regionCount);
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
         half.AddChild(scroll);
@@ -248,8 +280,8 @@ public partial class DealOrForceGame
                     state.DisplayName + " · " + Fmt.People(state.Population) + "\n" +
                     Loc.Format("Worth to {0}: {1} points", owner.DisplayName, Ultimatum.RegionWorth(_campaign, owner, state, receiving: false).ToString("0")) + "\n" +
                     Loc.Format("Largest people: {0}", Loc.Get(DemographyCatalog.CultureKey(EconomySystem.Cultures(state).FirstOrDefault().Culture ?? "Unknown"))) + "\n" +
-                    Tr("Only fully owned and controlled regions may be exchanged. Each country must retain actual territory."), ClipText = true,
-                CustomMinimumSize = new(150, 32) };
+                    Tr("Only fully owned and controlled regions may be exchanged. Each country must retain actual territory."),
+                AutowrapMode = TextServer.AutowrapMode.WordSmart, SizeFlagsHorizontal = SizeFlags.ExpandFill };
             choice.Toggled += selected =>
             {
                 if (selected) chosen.Add(id); else chosen.Remove(id);
@@ -260,12 +292,23 @@ public partial class DealOrForceGame
         var empty = WrappedUltimatumText("No matching regions. Clear the search; monetary and treaty terms remain available.", 13);
         empty.Name = ours ? "DealGiveEmpty" : "DealAskEmpty";
         empty.Visible = regionRows.GetChildCount() == 0; regionRows.AddChild(empty);
-        search.TextChanged += text =>
+        void ShowRegionCount(string text)
         {
+            var shown = 0;
+            var selectable = 0;
             foreach (var choice in regionRows.GetChildren().OfType<CheckBox>())
-                choice.Visible = choice.Text.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase);
-            empty.Visible = !regionRows.GetChildren().OfType<CheckBox>().Any(choice => choice.Visible);
-        };
+            {
+                var match = choice.Text.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase);
+                choice.Visible = match;
+                if (!match) continue;
+                shown++;
+                if (!choice.Disabled) selectable++;
+            }
+            empty.Visible = shown == 0;
+            regionCount.Text = Loc.Format("{0} regions · {1} selectable", shown, selectable);
+        }
+        search.TextChanged += text => ShowRegionCount(text);
+        ShowRegionCount("");
         cash.ValueChanged += _ => RefreshDealComposer();
         pact.Toggled += _ => RefreshDealComposer();
         trade.Toggled += _ => RefreshDealComposer();
@@ -287,6 +330,12 @@ public partial class DealOrForceGame
         var acceptable = assessment.Acceptable;
         _dealSend.Disabled = !valid;
         var net = assessment.ToValuation.Total - assessment.GrudgePenalty;
+        if (_dealWeightFigure is not null)
+        {
+            _dealWeightFigure.Text = valid && target?.IsHuman != true ? net.ToString("+0.0;-0.0;0.0") : "—";
+            _dealPayFigure.Text = Fmt.Money(deal.From.Cash);
+            _dealAskFigure.Text = Fmt.Money(deal.To.Cash);
+        }
         _dealMeter.Visible = valid && target?.IsHuman != true;
         if (valid) _dealMeter.Lean(Mathf.Clamp(net / 40f, -1f, 1f), Ui.Colour("state.positive"), Ui.Colour("state.negative"));
         _dealBalanceCash = valid && !acceptable ? Ultimatum.CashToBalance(_campaign, player, target, deal) : 0f;

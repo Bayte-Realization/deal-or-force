@@ -60,6 +60,12 @@
     {
       "name": "ANZUS",
       "members": ["AUS", "NZL"]
+    },
+
+    // The Liptako-Gourma Charter signed in September 2023 by the three Sahel military juntas.
+    {
+      "name": "Alliance of Sahel States",
+      "members": ["MLI", "BFA", "NER"]
     }
   ],
 
@@ -67,13 +73,19 @@
     // What the United States has instead of alliances where it has no treaty, and alongside
     // them where it has: a standing commitment to defend, without the other side being bound
     // to anything in return.
-    { "by": "USA", "to": ["JPN", "KOR", "PHL", "ISR", "AUS", "TWN"] },
+    { "by": "USA", "to": ["JPN", "KOR", "PHL", "ISR", "AUS", "TWN", "GUY", "KWT", "QAT", "BHR"] },
 
     // Russia's own, in the countries where its garrisons already are.
-    { "by": "RUS", "to": ["ABK", "OST", "SYR"] },
+    { "by": "RUS", "to": ["ABK", "OST", "SYR", "MLI", "BFA"] },
+
+    // Turkey's commitments under the Shusha Declaration and in northern Cyprus.
+    { "by": "TUR", "to": ["AZE", "CYN"] },
+
+    // Iran's strategic depth commitment to Damascus.
+    { "by": "IRN", "to": ["SYR"] },
 
     // And France's, which are older than the republic that holds them.
-    { "by": "FRA", "to": ["MCO", "AND"] }
+    { "by": "FRA", "to": ["MCO", "AND", "CYP", "DJI"] }
   ],
 
   "pacts": [

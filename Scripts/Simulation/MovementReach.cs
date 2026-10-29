@@ -69,6 +69,14 @@ public static class MovementReach
         MovementDefinition definition, long own, long faithful, Nation owner = null)
     {
         if (!CanOperate(campaign, nation, region, definition, owner)) return 0f;
+        // A defeated regional insurgency is not a worldwide movement of its culture.
+        // Diaspora offices may be hosted abroad, but do not create a territorial following there.
+        if (nation.Movement.Id.StartsWith(MovementCatalog.UndergroundPrefix, StringComparison.Ordinal) &&
+            !IsHomeland(campaign, definition, region)) return 0f;
+        // A campaign for one region's charter is a campaign in that region: the Silesian
+        // autonomists had a following among the Poles of Grodno and Kaliningrad, and the
+        // Texan nationalists would have had one in California.
+        if (definition.Has("civic_independence") && !IsHomeland(campaign, definition, region)) return 0f;
         if (own > 0) return MovementRules.MaxSupport;
         // The shared faith supplies a small sympathetic audience, not a territorial mandate.
         return faithful > 0 ? .04f : 0f;

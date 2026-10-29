@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="../../Scripts/Modding/ContentSelection.cs" Link="ContentSelection.cs" />
     <Compile Include="../../Scripts/Simulation/GameBuildInfo.cs" Link="GameBuildInfo.cs" />
+    <Compile Include="../../Scripts/Simulation/GameFolders.cs" Link="GameFolders.cs" />
     <Resource Include="../../game/gfx/loading/loading_war_room.jpg" Link="Art/loading_war_room.jpg" />
     <Resource Include="../../game/gfx/loading/loading_negotiation_hall.jpg" Link="Art/loading_negotiation_hall.jpg" />
     <Resource Include="../../game/gfx/loading/loading_port_dusk.jpg" Link="Art/loading_port_dusk.jpg" />

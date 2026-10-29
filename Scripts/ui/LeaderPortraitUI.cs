@@ -134,6 +134,8 @@ public partial class DealOrForceGame
             !path.StartsWith("res://", StringComparison.Ordinal) && !path.StartsWith("user://", StringComparison.Ordinal)) return null;
         try
         {
+            if (path.StartsWith("res://", StringComparison.Ordinal))
+                return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
             if (!Godot.FileAccess.FileExists(path))
                 return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
             using (var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read))

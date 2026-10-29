@@ -176,8 +176,8 @@ static class MovementZoneTests
             "one militia, capped once, not a fresh cap per region");
         Check(c.Chronicle.Entries.Count(e => e.Kind == "movement_statehood" && e.ActorId == rising.Id) == 1,
             "the country is proclaimed once");
-        Check((rising.Movement?.LastReport ?? "").Contains("3", StringComparison.Ordinal),
-            "the report counts the regions that came over: " + rising.Movement?.LastReport);
+        Check(rising.Movement is null && c.StatesOf(rising).Length == 3,
+            "the movement that took its homeland is a state now, not a movement holding land");
 
         // ---- a referendum carries region by region ----------------------------------------
         var civicWorld = Fixture(true);
@@ -188,6 +188,8 @@ static class MovementZoneTests
         votes.Legitimacy = 0.9f;
         foreach (var index in new[] { 3001, 3002, 3003 }) votes.Support[index] = 0.9f;
         votes.ReadyOnDay[CivilIndependence.ConsentKey(holder.Id)] = civicWorld.ElapsedDays + 500;
+        // Counted region by region: the settlement a quarter of votes get (Schleswig, 1920).
+        civicWorld.Defines.CivilReferendumByRegionShare = 1f;
         var civicSeed = Movements.StateById(civicWorld, "z_0");
         Check(CivilIndependence.Refusal(civicWorld, civic, civicSeed).Length == 0,
             "the parent's consent and a local majority qualify the vote");
@@ -205,6 +207,39 @@ static class MovementZoneTests
             "a nonviolent campaign raises no militia");
         Check(civicWorld.Chronicle.Entries.Count(e => e.Kind == "peaceful_independence" && e.ActorId == civic.Id) == 1,
             "one peaceful independence is written into the chronicle");
+
+        // ---- most votes are one question for the whole homeland ---------------------------
+        var oneVote = Fixture(true);
+        Movements.Activate(oneVote, MovementCatalog.Of(CivicId));
+        var scots = oneVote.NationByTag("ZTC");
+        var crown = oneVote.Nations[0];
+        scots.Movement.Legitimacy = 0.9f;
+        foreach (var index in new[] { 3001, 3002, 3003 }) scots.Movement.Support[index] = 0.9f;
+        scots.Movement.ReadyOnDay[CivilIndependence.ConsentKey(crown.Id)] = oneVote.ElapsedDays + 500;
+        oneVote.Defines.CivilReferendumByRegionShare = 0f;
+        Check(CivilIndependence.Ratify(oneVote, scots, Movements.StateById(oneVote, "z_0")) &&
+              Movements.StateById(oneVote, "z_1").NationMapIndex == scots.MapIndex,
+            "a vote carried across the homeland takes the region that voted no along with the rest");
+
+        // ---- and a vote can be lost ------------------------------------------------------
+        var lostVote = Fixture(true);
+        Movements.Activate(lostVote, MovementCatalog.Of(CivicId));
+        var hopefuls = lostVote.NationByTag("ZTC");
+        var state = lostVote.Nations[0];
+        hopefuls.Movement.Legitimacy = 0.9f;
+        foreach (var index in new[] { 3001, 3002, 3003 }) hopefuls.Movement.Support[index] = 0.45f;
+        hopefuls.Movement.ReadyOnDay[CivilIndependence.ConsentKey(state.Id)] = lostVote.ElapsedDays + 500;
+        lostVote.Defines.CivilReferendumSwing = 0f;
+        var asked = Movements.StateById(lostVote, "z_0");
+        Check(CivilIndependence.ResidentSupport(hopefuls, asked) is > 0.42f and < 0.5f &&
+              CivilIndependence.Refusal(lostVote, hopefuls, asked).Length == 0,
+            "a campaign short of a majority may still hold its vote");
+        var legitimacy = hopefuls.Movement.Legitimacy;
+        Check(!CivilIndependence.Ratify(lostVote, hopefuls, asked) && asked.NationMapIndex == state.MapIndex,
+            "and lose it: the region stays");
+        Check(hopefuls.Movement.Legitimacy < legitimacy && CivilIndependence.Refusal(lostVote, hopefuls, asked).Length > 0 &&
+              lostVote.Chronicle.Entries.Any(e => e.Kind == "referendum_lost"),
+            "a lost vote costs the campaign standing and closes the question for years");
 
 
         // ---- an exile comes home to its whole homeland -------------------------------------
@@ -251,6 +286,7 @@ static class MovementZoneTests
         ballot.Movement.Legitimacy = .9f;
         foreach (var index in new[] { 3001, 3002, 3003 }) ballot.Movement.Support[index] = .9f;
         ballot.Movement.ReadyOnDay[CivilIndependence.ConsentKey(original.Id)] = 500;
+        occupied.Defines.CivilReferendumByRegionShare = 1f;
         var occupiedProvince = Enumerable.Range(1, occupied.ProvinceMap.ProvinceCount)
             .First(p => occupied.ProvinceMap.ProvinceToState[p] == 3002);
         occupied.ProvinceController[occupiedProvince] = (ushort)occupied.Nations[1].MapIndex;

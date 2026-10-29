@@ -68,6 +68,14 @@ public static class MilitaryExperience
     public const string Air = "air";
     public const string Navy = "navy";
 
+    /// <summary>
+    /// The general staff's own purse, which is the government's political credit. A general book
+    /// of war is the one kind of doctrine that is not bought with a service's experience: it is
+    /// bought with what the cabinet can push through, which is why it is slow and why it competes
+    /// with every other decision a government has to sell.
+    /// </summary>
+    public const string Command = "command";
+
     private static readonly Dictionary<int, int> Engaged = new();
     private static readonly Dictionary<int, int> Drilling = new();
     private static readonly Dictionary<int, int> Flying = new();

@@ -168,6 +168,10 @@ public static class DealNegotiations
         paper.State = state; paper.ClosedDay = c.ElapsedDays; paper.Reason = reason;
         c.DealInboxRevision++;
         c.MarkStrategicChange();
+        // The history kept is the same at every moment, not only after the day's Tick: a bargain
+        // closed between two Ticks left one paper over the limit, a save taken then held it, and
+        // reading the save back trimmed it - an untouched save that did not load as it was.
+        TrimHistory(c);
     }
 
     private static int[] Ground(Campaign c, Ultimatum.Side side)
@@ -189,7 +193,8 @@ public static class DealNegotiations
         if (old.Count > 0) c.DealOffers.RemoveAll(old.Contains);
     }
 
-    public static void Restore(Campaign c, IEnumerable<DealOffer> papers, int nextId)
+    /// <param name="today">The saved day: the campaign's own clock is restored after the offers.</param>
+    public static void Restore(Campaign c, IEnumerable<DealOffer> papers, int nextId, int today = -1)
     {
         var seen = new HashSet<int>();
         var pendingPairs = new HashSet<(int, int)>();
@@ -207,9 +212,13 @@ public static class DealNegotiations
                 (paper.From.Regions?.Length ?? 0) > 100 || (paper.To.Regions?.Length ?? 0) > 100 ||
                 (paper.FromProvinces?.Length ?? 0) > 200000 || (paper.ToProvinces?.Length ?? 0) > 200000) continue;
             highestId = Math.Max(highestId, paper.Id);
-            if (paper.Pending && (active >= MaxActiveOffers ||
+            // The same test Submit applies: an offer past its date but not yet closed by the day's
+            // Tick does not stand in the way of a new one between the same pair, so a save taken
+            // on that day holds both. Reading it back dropped the new one.
+            var live = paper.Pending && paper.ExpiresDay > (today >= 0 ? today : c.ElapsedDays);
+            if (live && (active >= MaxActiveOffers ||
                 !pendingPairs.Add((Math.Min(paper.FromId, paper.ToId), Math.Max(paper.FromId, paper.ToId))))) continue;
-            if (paper.Pending) active++;
+            if (live) active++;
             c.DealOffers.Add(Copy(paper));
         }
         c.NextDealOfferId = Math.Max(Math.Max(1, nextId), highestId + 1);

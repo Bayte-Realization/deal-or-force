@@ -1,15 +1,5 @@
 // Стратегические доктрины: как страна собирается выигрывать войны, а не как её дивизии дерутся.
-// Тактическая доктрина — дерево статей; стратегическая — один выбор на страну из семи путей.
-//
-// Каждая даёт: пакет национальных модификаторов (те же ключи, что у технологий), множители к
-// тому, как армия учится (`training_slots` — сколько соединений ИИ держит на учениях,
-// `drill_experience` — опыт за учения, `battle_experience` — опыт за бой, `air_experience` и
-// `naval_experience` — опыт соответствующих родов войск), и `tactical_bias` — какую тактическую
-// доктрину правительство этого склада тянет первой (у кадровой армии своя голова, у неё
-// пристрастия нет).
-//
-// Первый выбор бесплатен политически; смена курса стоит `political_cost` политических очков —
-// то же, чем платят за переписывание тактической доктрины.
+// Первый выбор бесплатен политически; смена курса стоит `political_cost` политических очков.
 {
   "manoeuvre_war": {
     "name": "War of manoeuvre",
@@ -46,6 +36,15 @@
     "training_slots": 1.6, "drill_experience": 1.4, "battle_experience": 0.9,
     "air_experience": 1.1, "naval_experience": 1.1
   },
+  "joint_general_staff": {
+    "name": "Unified general staff",
+    "description": "Every arm of the armed forces answers to one operational staff, turning combined-arms doctrine into state policy.",
+    "political_cost": 12,
+    "modifiers": { "organisation_recovery": 0.05, "army_attack": 0.04, "supply": 0.04 },
+    "training_slots": 1.3, "drill_experience": 1.25, "battle_experience": 1.15,
+    "air_experience": 1.2, "naval_experience": 1.2,
+    "tactical_bias": "staff"
+  },
   "universal_levy": {
     "name": "Universal levy",
     "description": "The nation itself is the reserve: every district forms its company, and the replacements are already standing in them.",
@@ -72,5 +71,50 @@
     "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.0,
     "air_experience": 1.0, "naval_experience": 1.5,
     "tactical_bias": "coast"
+  },
+  "deep_strike_strategy": {
+    "name": "Strategic paralysis & deep strike",
+    "description": "Win by blinding and starving the enemy's war machine from afar with drones, missiles and precision air power.",
+    "political_cost": 12,
+    "modifiers": { "support_recovery": 0.06, "support_losses": -0.08, "deterrence": 0.04 },
+    "training_slots": 1.1, "drill_experience": 1.1, "battle_experience": 1.1,
+    "air_experience": 1.6, "naval_experience": 1.1,
+    "tactical_bias": "strategic_air"
+  },
+  "asymmetric_sea_denial": {
+    "name": "Maritime denial & commerce raiding",
+    "description": "Deny the seas to stronger navies while strangling hostile trade routes with submarines and coastal missiles.",
+    "political_cost": 10,
+    "modifiers": { "naval_speed": 0.07, "trade_reach": 0.06, "deterrence": 0.03 },
+    "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.1,
+    "air_experience": 1.1, "naval_experience": 1.5,
+    "tactical_bias": "sea_denial"
+  },
+  "total_war_mobilisation": {
+    "name": "Total war mobilisation",
+    "description": "Place the entire nation's industry, reserves and transport network on a permanent footing for protracted conflict.",
+    "political_cost": 12,
+    "modifiers": { "recruitment_speed": 0.10, "output": 0.05, "reinforcement_rate": 0.08 },
+    "training_slots": 1.2, "drill_experience": 1.0, "battle_experience": 1.3,
+    "air_experience": 1.1, "naval_experience": 1.1,
+    "tactical_bias": "mobilisation"
+  },
+  "shock_breakthrough": {
+    "name": "Breakthrough and pursuit",
+    "description": "Win by one blow in one place, then by not letting the beaten army walk away.",
+    "political_cost": 12,
+    "modifiers": { "army_attack": 0.05, "army_speed": 0.04 },
+    "training_slots": 1.0, "drill_experience": 1.0, "battle_experience": 1.3,
+    "air_experience": 1.1, "naval_experience": 1.0,
+    "tactical_bias": "shock"
+  },
+  "infiltration_war": {
+    "name": "War of infiltration",
+    "description": "Win inside the enemy position: patrols, storm parties and small units that keep what they take.",
+    "political_cost": 10,
+    "modifiers": { "army_attack": 0.03, "entrenchment_speed": 0.06 },
+    "training_slots": 1.1, "drill_experience": 1.2, "battle_experience": 1.1,
+    "air_experience": 1.0, "naval_experience": 1.0,
+    "tactical_bias": "infiltration"
   }
 }

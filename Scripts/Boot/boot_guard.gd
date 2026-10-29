@@ -56,6 +56,7 @@ var _overlay: CanvasLayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_start_autopilot()
 	# Automated headless runs have no visible frame. A black dummy viewport is
 	# expected, not a broken GPU; never persist a renderer fallback or restart here.
 	_active = DisplayServer.get_name() != "headless" and \
@@ -273,3 +274,20 @@ func _show_message(text: String) -> void:
 	label.add_theme_font_size_override("font_size", 20)
 	label.add_theme_color_override("font_color", Color(0.92, 0.90, 0.84))
 	_overlay.add_child(label)
+
+
+## A development hook, nothing a player meets: DOF_AUTOPILOT names a GDScript file (res:// or a
+## path on disk) that is added to the tree as a node, so a screenshot tour or a click-through
+## can drive the game out of the live project without editing project.godot or mirroring the
+## tree. It saves its own pictures from the viewport, so the window need not have focus.
+func _start_autopilot() -> void:
+	var path := OS.get_environment("DOF_AUTOPILOT")
+	if path.is_empty():
+		return
+	var script := load(path) as Script
+	if script == null:
+		push_warning("DOF_AUTOPILOT: cannot load " + path)
+		return
+	var pilot: Node = script.new()
+	pilot.name = "DofAutopilot"
+	get_tree().root.add_child.call_deferred(pilot)

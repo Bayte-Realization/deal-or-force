@@ -1,0 +1,54 @@
+// Свежая пачка событий: торговля, граница, банки.
+{
+  "insurer_withdraws": {
+    "title": "The insurers leave the coast",
+    "description": "The two houses that cover the country's shipping announce they will not renew. Without cover, hulls do not sail and cargo does not move.",
+    "weight": 0.8,
+    "options": [
+      { "title": "Underwrite it as the state",
+        "consequence": "Trade continues on the public balance sheet.",
+        "effects": { "treasury_percent": -0.03, "credit_confidence": 0.02, "market_access": 0.02 } },
+      { "title": "Let the market price the risk",
+        "consequence": "Freight gets expensive, and some of it stops.",
+        "effects": { "gdp_percent": -0.006, "inflation": 0.004, "market_access": -0.03 } },
+      { "title": "Build a national marine insurer",
+        "consequence": "A decade to be trusted, a season to be founded.",
+        "effects": { "treasury_percent": -0.02, "credit_confidence": 0.01, "market_access": 0.01 },
+        "modifiers": [ { "id": "industrial_renewal", "days": 270 } ] }
+    ]
+  },
+  "border_incident_night": {
+    "title": "Shots on the frontier",
+    "description": "A patrol on the wrong side of a line nobody has surveyed since the last war. Two dead, one of them ours, and two versions of the night.",
+    "weight": 1.0,
+    "options": [
+      { "title": "Apologise and open a commission",
+        "consequence": "The border is calmer by Friday and the tabloids are not.",
+        "effects": { "stability": 0.01, "war_support": -0.015, "army_experience": 1 },
+        "modifiers": [ { "id": "border_commission", "days": 365 } ] },
+      { "title": "Reinforce the sector",
+        "consequence": "The line is held; the bill is permanent.",
+        "effects": { "treasury_percent": -0.02, "war_support": 0.012, "army_experience": 2 } },
+      { "title": "Demand an answer by Friday",
+        "consequence": "A deadline nobody can meet, which is the point.",
+        "effects": { "war_support": 0.02, "stability": -0.008, "army_experience": 1 } }
+    ]
+  },
+  "bank_run": {
+    "title": "A queue outside the second-largest bank",
+    "description": "The queue starts at seven and is round the block by nine. Nothing is wrong with the bank except the queue, which is what makes it wrong.",
+    "weight": 0.9,
+    "trigger": { "max_credit_confidence": 0.55 },
+    "options": [
+      { "title": "Guarantee every deposit",
+        "consequence": "The queue goes; the state is now a bank.",
+        "effects": { "treasury_percent": -0.05, "credit_confidence": 0.12, "stability": 0.012 } },
+      { "title": "Let it fail on Monday",
+        "consequence": "Moral hazard is a theory until the savers arrive.",
+        "effects": { "credit_confidence": -0.10, "state.radicalism": 0.02, "gdp_percent": -0.008 } },
+      { "title": "Nationalise it over the weekend",
+        "consequence": "Deposits safe, shareholders gone, the state in retail banking.",
+        "effects": { "treasury_percent": -0.035, "productivity": 0.0015, "political_points": -8, "credit_confidence": 0.05 } }
+    ]
+  }
+}

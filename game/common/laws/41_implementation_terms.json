@@ -1,0 +1,59 @@
+// Refinements to the 69-option expansion, kept separate so its content remains mod-overlayable.
+// Wartime laws need a real active war; adopting them does not manufacture troops or equipment.
+{
+  "service_total_levy": { "requires_war": true, "cost_share": 0.00008, "cooldown_days": 270 },
+  "rights_martial_tribunals": {
+    "requires_war": true, "cost_share": 0.00003, "cooldown_days": 180,
+    "description": "Military courts make civic mobilisation harder and improve militia readiness, but increase resentment and slow research. Existing movements are not destroyed by decree."
+  },
+  "labour_wartime_shifts": { "requires_war": true, "cost_share": 0.00004, "cooldown_days": 180 },
+  "media_wartime_censorship": { "requires_war": true, "cost_share": 0.00003, "cooldown_days": 180 },
+  "administration_digital": { "cost_share": 0.00010, "cooldown_days": 365 },
+  "energy_nuclear_renaissance": {
+    "cost_share": 0.00010, "cooldown_days": 365,
+    "description": "Baseload-grid standards improve output, research and supply throughput at higher construction costs. Power plants still require construction and supply routes remain vulnerable."
+  },
+  "energy_strategic_reserve": {
+    "description": "Reserve-priority rules improve supply throughput and military movement at the expense of civilian output. Actual fuel must still be produced or imported; a blockade or encirclement can still stop the army."
+  },
+  "regional_cultural_charter": {
+    "cost_share": 0.00008, "cooldown_days": 270,
+    "description": "A cultural charter reduces resentment and improves stability in this region. It does not instantly change its culture, borders or the status of existing movements."
+  },
+  "recovery_housing_blitz": {
+    "cost_share": 0.00008, "cooldown_days": 270,
+    "description": "Prioritise household services in the selected region: living conditions improve and resentment declines. Housing and clinics are not placed on the map for free."
+  },
+  "recovery_amnesty_reintegration": {
+    "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "A local reconciliation mandate lowers resentment and improves regional stability. Armed formations are not automatically disbanded or recruited; those settlements remain separate actions."
+  },
+  "development_corridors": {
+    "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "Prioritise services around regional transport corridors, improving living conditions and stability here. Railways, ports and supply links still require their normal construction."
+  },
+  "development_rural_electrification": {
+    "cost_share": 0.00007, "cooldown_days": 270,
+    "description": "Rural service guarantees improve living conditions and reduce local resentment. This regional law does not create roads, clinics or electricity infrastructure instantly."
+  },
+  "foreign_allied_integration": {
+    "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "Prioritise long-term trust with this country. The doctrine affects trust calculations only; alliances, military access and economic agreements still need separate consent."
+  },
+  "foreign_co_prosperity": {
+    "cost_share": 0.00007, "cooldown_days": 270,
+    "description": "Make trust with this regional partner a standing priority. The doctrine does not create an organisation, transfer sovereignty or sign a treaty automatically."
+  },
+  "trade_customs_bloc": {
+    "description": "Preferential customs procedures improve trade reach and supply throughput at a revenue-collection cost. An actual customs union still needs agreements with other countries."
+  },
+  "migration_exit_controls": {
+    "description": "Exit controls constrain civic organisation and accelerate recruitment, but weaken trade reach and research. This law alone does not stop the separate brain-drain process."
+  },
+  "migration_diaspora_return": {
+    "description": "Support domestic settlement, gradual assimilation and research at a collection-efficiency cost. Population is not created instantly and state migration rules still apply."
+  },
+  "nationalities_regional_federation": {
+    "description": "A federal nationalities mandate slows assimilation and reduces resentment, while civic movements gain room and reconstruction improves. No new republics or subject states are created automatically."
+  }
+}

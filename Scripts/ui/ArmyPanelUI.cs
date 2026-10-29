@@ -72,13 +72,16 @@ public partial class DealOrForceGame
         header.AddThemeConstantOverride("separation", 8);
         shell.AddChild(header);
 
-        _armyPanelTitle = Title("Army", 19, Ui.Colour("text.accent"));
+        _armyPanelTitle = Title("Army", (int)Ui.Metric("ui.font.title", 20), Ui.Colour("text.accent"));
         _armyPanelTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _armyPanelTitle.AutowrapMode = TextServer.AutowrapMode.Off;
         _armyPanelTitle.ClipText = true;
         header.AddChild(_armyPanelTitle);
 
-        _armyPanelCount = Title("", 15, Ui.Colour("text.bright"));
+        _armyPanelCount = Title("", (int)Ui.Metric("ui.font.heading", 16), Ui.Colour("text.bright"));
+        // A count of divisions is a figure, so it is set in the tabular face: a right-aligned
+        // count whose digits change width as the selection grows reads as a twitch.
+        _armyPanelCount.AddThemeFontOverride("font", Ui.NumberFont);
         _armyPanelCount.HorizontalAlignment = HorizontalAlignment.Right;
         _armyPanelCount.AutowrapMode = TextServer.AutowrapMode.Off;
         _armyPanelCount.ClipText = true;
@@ -90,7 +93,7 @@ public partial class DealOrForceGame
         // The descriptive line gets the complete safe width instead of fighting the
         // selection count and close button in the header. Long commander names wrap
         // to a second line and are then clipped, never painted through the frame.
-        _armyPanelSubtitle = Title("", 12, Ui.Colour("text.muted"));
+        _armyPanelSubtitle = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.muted"));
         _armyPanelSubtitle.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         _armyPanelSubtitle.ClipText = true;
         _armyPanelSubtitle.MaxLinesVisible = 2;
@@ -103,6 +106,18 @@ public partial class DealOrForceGame
         shell.AddChild(_armyComposition);
 
         // ---- the roster ---------------------------------------------------------------
+        var rosterFrame = new PanelContainer
+        {
+            Name = "ArmyRosterFrame",
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 76),
+            SizeFlagsStretchRatio = 0.75f
+        };
+        rosterFrame.SetMeta("atlas_section_ground", "surface.inset");
+        rosterFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(rosterFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        shell.AddChild(rosterFrame);
         var scroll = new ScrollContainer
         {
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
@@ -110,14 +125,11 @@ public partial class DealOrForceGame
             ClipContents = true,
             FollowFocus = true,
             SizeFlagsVertical = SizeFlags.ExpandFill,
-            // Two rows remain usable even in a 720p window; surplus height is shared
-            // with the command deck below.
-            CustomMinimumSize = new Vector2(0, 72),
-            SizeFlagsStretchRatio = 0.75f
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        shell.AddChild(scroll);
+        rosterFrame.AddChild(scroll);
         _armyRoster = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _armyRoster.AddThemeConstantOverride("separation", 2);
+        _armyRoster.AddThemeConstantOverride("separation", 3);
         scroll.AddChild(_armyRoster);
 
         _armyRosterHint = Title(
@@ -204,7 +216,7 @@ public partial class DealOrForceGame
         // ---- the brush ----------------------------------------------------------------
         // An order names a role; a drawn line says where. The three buttons pick which
         // kind of line the brush is drawing, and pressing the same one again commits it.
-        plansPage.AddChild(Title("DRAW ON THE MAP", 11, Ui.Colour("text.caption")));
+        plansPage.AddChild(Title("DRAW ON THE MAP", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
         // Two columns leave room for translated captions as well as the pictograms.
         var draw = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         draw.AddThemeConstantOverride("h_separation", 4);
@@ -213,7 +225,7 @@ public partial class DealOrForceGame
         AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
             "Draw the line to hold. The selection spreads along its length and digs in.");
         AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
-            "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Alt+RMB redraws it. Prepare holds the departure front; Execute advances to the objective and stops.");
+            "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Shift+RMB adds a later phase (up to 24); Alt+RMB redraws the active phase. Prepare pauses locally; Execute advances through the phases and stops after the final objective.");
         AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
             "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
         var dropLine = ArmyIconButton("Clear plans", ClearDrawnLine, 96, 30, false, "plan_clear");
@@ -227,13 +239,13 @@ public partial class DealOrForceGame
             11, Ui.Colour("text.muted"));
         _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         plansPage.AddChild(_drawFeedback);
-        var steps = Title("Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare stops the advance. Alt + right-drag redraws; Esc cancels drawing.",
+        var steps = Title("Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare pauses. Shift + right-drag adds a phase; Alt + right-drag redraws the active phase; Esc cancels drawing.",
             12, Ui.Colour("text.caption"));
         steps.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         plansPage.AddChild(steps);
 
         // ---- posture and reinforcement -------------------------------------------------
-        doctrinePage.AddChild(Title("POSTURE", 11, Ui.Colour("text.caption")));
+        doctrinePage.AddChild(Title("POSTURE", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
         var posture = new HFlowContainer();
         posture.AddThemeConstantOverride("h_separation", 4);
         posture.AddThemeConstantOverride("v_separation", 4);
@@ -244,8 +256,12 @@ public partial class DealOrForceGame
             "No modifier either way. The right choice when supply or local superiority is uncertain.");
         AddStanceButton(posture, "Aggressive", ArmyStance.Aggressive,
             "Faster and harder-hitting, at the cost of recovery, defence and heavier casualties.");
+        AddStanceButton(posture, "Last stand", ArmyStance.LastStand,
+            "Hold this ground at any price: the strongest defence and the fastest digging, and the heaviest casualties of any posture.");
+        AddStanceButton(posture, "Force attack", ArmyStance.ForceAttack,
+            "Attack now rather than when ready: the heaviest attack, the worst defence, and the heaviest casualties.");
 
-        doctrinePage.AddChild(Title("REINFORCEMENT PRIORITY", 11, Ui.Colour("text.caption")));
+        doctrinePage.AddChild(Title("REINFORCEMENT PRIORITY", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
         var priority = new HBoxContainer();
         priority.AddThemeConstantOverride("separation", 4);
         doctrinePage.AddChild(priority);
@@ -257,7 +273,7 @@ public partial class DealOrForceGame
             "1.90 weight. These recover first, and starve the lower priorities when reserves are short.");
 
         // ---- organisation --------------------------------------------------------------
-        organisationPage.AddChild(Title("HEADQUARTERS", 11, Ui.Colour("text.caption")));
+        organisationPage.AddChild(Title("HEADQUARTERS", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
         // Two columns keep translated captions and icon-bearing buttons within the
         // narrow command frame. A single row could exceed the safe inner rail even
         // when its declared minimum widths appeared to fit.
@@ -399,6 +415,8 @@ public partial class DealOrForceGame
         {
             ArmyStance.Cautious => "stance_cautious",
             ArmyStance.Aggressive => "stance_aggressive",
+            ArmyStance.LastStand => "stance_cautious",
+            ArmyStance.ForceAttack => "stance_aggressive",
             _ => "stability"
         };
         var button = ArmyIconButton(caption, () => IssueArmyStance(stance), 96, 32, false, icon);
@@ -498,9 +516,12 @@ public partial class DealOrForceGame
         _armyPanelSubtitle.Text = divisions.Count == 1
             ? OneLineSummary(divisions[0])
             : Simulation.Loc.Format("{0} · {1:N0} men · {2:N0} headquarters",
-                Tr(group?.Commander ?? "No commander assigned"),
+                CommanderCaption(group),
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
+        _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
+            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
+            "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
         // Selection counts are localised; a fixed English-sized slot clips Russian.
         _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(84,
@@ -610,6 +631,15 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Equipment: {0:P0}", army.Equipment) + "\n" + EquipmentLogistics.Description(_campaign, army), tooltipMeasure: 72);
             equipmentBar.Name = "EquipmentBar_" + army.Id;
             line.AddChild(equipmentBar);
+            var reason = Simulation.StaffReasons.Explain(_campaign, army);
+            var reasonMark = Title(Simulation.StaffReasons.Label(_campaign, army), 11, Ui.Colour("text.caption"));
+            reasonMark.Name = "StaffReason_" + army.Id;
+            reasonMark.ClipText = true;
+            reasonMark.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            reasonMark.CustomMinimumSize = new Vector2(96, 16);
+            reasonMark.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+            reasonMark.TooltipText = Ui.Tip(reason);
+            line.AddChild(reasonMark);
             line.AddChild(StatusPip(army));
         }
 
@@ -707,7 +737,8 @@ public partial class DealOrForceGame
                     army.ProvinceId) + "\n" +
                 Simulation.Loc.Format("Order: {0} · posture: {1}",
                     OrderName(army.OrderKind), StanceName(army.Stance)) + "\n" +
-                Simulation.ArmyVocabulary.Situation(_campaign, army);
+                Simulation.ArmyVocabulary.Situation(_campaign, army) + "\n" +
+                Simulation.StaffReasons.Explain(_campaign, army);
         if (army.LastMoveResult == ArmyMoveResult.RouteInterrupted)
             text += "\n" + Simulation.Loc.Get(
                 "The route is cut. Choose a new destination.");
@@ -783,4 +814,11 @@ public partial class DealOrForceGame
         _globe.SelectArmies(_selectedArmies.Select(candidate => candidate.Id));
         RefreshArmyPanel();
     }
+
+    /// <summary>The commander of a group as the panel names them: name, temperament, skill and record.</summary>
+    private string CommanderCaption(ArmyGroup group) =>
+        group is null || group.Commander == Simulation.Generals.Unassigned || group.CommanderTrait.Length == 0
+            ? Tr(group?.Commander ?? "No commander assigned")
+            : Simulation.Loc.Format("{0} ({1}, skill {2:0}%, {3} won / {4} lost)", group.Commander,
+                Tr(Simulation.Generals.Trait(group.CommanderTrait).Name), group.StaffSkill * 100f, group.Victories, group.Defeats);
 }

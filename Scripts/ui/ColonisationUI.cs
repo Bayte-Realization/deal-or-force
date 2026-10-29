@@ -16,7 +16,7 @@ public partial class DealOrForceGame
     {
         if (state is null || _campaign is null) return;
         if (_networkLayer is not null && _networkLayer.Visible) return;
-        if (_pickerLayer.Visible || !_hudLayer.Visible) return;
+        if (_pickerLayer is { Visible: true } || !_hudLayer.Visible) return;
 
         _selectedUnclaimed = state;
         // Nothing that reads a region expects one without an owner, so the region the rest of

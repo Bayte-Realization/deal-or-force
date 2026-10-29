@@ -20,13 +20,18 @@ void fragment() {
     float edge_distance = min(UV.y, 1.0 - UV.y);
     float aa = max(fwidth(UV.y), 0.012);
     float coverage = smoothstep(0.0, aa, edge_distance);
-    float inner = smoothstep(0.07, 0.07 + aa, edge_distance);
+    float inner = smoothstep(0.09, 0.09 + aa, edge_distance);
+    float center_spine = 1.0 - smoothstep(0.0, 0.24, abs(UV.y - 0.5));
     float filled = 1.0 - smoothstep(COLOR.a - 0.006, COLOR.a + 0.006, UV2.x);
-    float grain = mix(0.65, 1.08, texture(ink, UV).r);
-    vec3 paint = order_color.rgb * grain * mix(0.68, 1.0, filled);
-    ALBEDO = mix(order_color.rgb * 0.30, paint, inner);
+    float grain = mix(0.72, 1.10, texture(ink, UV).r);
+    // Flowing tactical chevrons along the shaft (suppressed inside the arrowhead UV2.y > 0.5)
+    float chevron_coord = fract(UV.x * 1.35 - abs(UV.y - 0.5) * 0.85 - TIME * 1.15);
+    float chevron = smoothstep(0.18, 0.34, chevron_coord) * (1.0 - smoothstep(0.55, 0.72, chevron_coord)) * (1.0 - step(0.5, UV2.y));
+    vec3 base_paint = order_color.rgb * grain * mix(0.68, 1.04, filled);
+    base_paint = mix(base_paint, clamp(order_color.rgb * 1.28 + vec3(0.12, 0.10, 0.06), vec3(0.0), vec3(1.0)), chevron * 0.42 + center_spine * 0.18);
+    ALBEDO = mix(vec3(0.04, 0.05, 0.07), base_paint, inner);
     float hatch = support_order && UV2.y < 0.5 ? mix(0.55, 1.0, step(0.28, fract(UV.x * 2.0))) : 1.0;
-    ALPHA = coverage * mix(0.62, 0.98, filled) * hatch;
+    ALPHA = coverage * mix(0.68, 0.98, filled) * hatch;
 }
 """ };
         var kinds = new[] { "move", "attack", "support" };

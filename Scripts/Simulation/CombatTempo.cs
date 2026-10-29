@@ -63,6 +63,12 @@ public sealed partial class Defines
 
     /// <summary>Bonus to counterattack drive during desperate homeland/capital defence.</summary>
     public float DesperateCounterattackBonus { get; set; } = 0.30f;
+
+    /// <summary>Maximum combat effectiveness penalty suffered by an encircled/cut-off formation once supply cutoff matures (HOI4 cauldron penalty).</summary>
+    public float EncirclementMaxCombatPenalty { get; set; } = 0.30f;
+
+    /// <summary>Attack bonus per additional province direction beyond the first when enveloping an enemy sector from multiple axes.</summary>
+    public float FlankingAttackBonusPerDirection { get; set; } = 0.10f;
 }
 
 /// <summary>
@@ -71,77 +77,48 @@ public sealed partial class Defines
 /// </summary>
 public static class CombatTempo
 {
+    /// <summary>
+    /// Cauldron / encirclement combat multiplier (0.70..1.00 by default). Formations cut off from national supply
+    /// lose operational cohesion as their pocket isolation deepens across <see cref="Defines.SupplyCutoffDays"/>.
+    /// </summary>
+    public static float EncirclementFactor(Defines defines, bool cutOff, int daysCutOff) =>
+        defines is null
+            ? 1f
+            : DealOrForce.Rules.CombatTempoRules.EncirclementFactor(
+                true, cutOff, daysCutOff, defines.EncirclementMaxCombatPenalty, defines.SupplyCutoffDays);
+
+    /// <summary>
+    /// Multi-directional envelopment multiplier for attackers striking a single province from multiple adjacent axes.
+    /// </summary>
+    public static float EnvelopmentFactor(Defines defines, int attackDirections) =>
+        defines is null
+            ? 1f
+            : DealOrForce.Rules.CombatTempoRules.EnvelopmentFactor(
+                true, attackDirections, defines.MaxAttackDirections, defines.FlankingAttackBonusPerDirection);
+
     public static float Breakthrough(Defines defines, float pressure, float planning, float supply) =>
         Breakthrough(defines, pressure, planning, supply, 0f, 1, 1f);
 
     public static float Breakthrough(Defines defines, float pressure, float planning, float supply,
-        float defenderEntrenchment, int attackDirections, float terrainBreakthroughFactor)
-    {
-        if (defines is null || !float.IsFinite(pressure) || !float.IsFinite(planning) || !float.IsFinite(supply))
-            return 0f;
-        if (planning < defines.BreakthroughPlanningFloor || supply < defines.BreakthroughSupplyFloor)
-            return 0f;
-
-        // Entrenched positions require significantly higher superiority to break through,
-        // but attacking from multiple directions (flanking) partially bypasses that entrenchment.
-        var entrenchmentResistance = MathF.Max(0f, defenderEntrenchment * defines.BreakthroughEntrenchmentResistance);
-        var flankingReduction = MathF.Max(0, attackDirections - 1) * 0.20f;
-        var effectiveFloor = defines.BreakthroughPressureFloor + MathF.Max(0f, entrenchmentResistance - flankingReduction);
-
-        var superiority = Range(pressure, effectiveFloor, defines.BreakthroughPressureSpan);
-        var prepared = Ratio(planning, defines.BreakthroughPlanningFloor);
-        var supplied = Ratio(supply, defines.BreakthroughSupplyFloor);
-        var terrainFactor = float.IsFinite(terrainBreakthroughFactor) && terrainBreakthroughFactor > 0.01f
-            ? MathF.Min(1f, terrainBreakthroughFactor) : 1f;
-
-        return M.Clamp01(superiority * prepared * supplied * terrainFactor);
-    }
+        float defenderEntrenchment, int attackDirections, float terrainBreakthroughFactor) =>
+        defines is null
+            ? 0f
+            : DealOrForce.Rules.CombatTempoRules.Breakthrough(
+                true, pressure, planning, supply, defenderEntrenchment, attackDirections, terrainBreakthroughFactor,
+                defines.BreakthroughPlanningFloor, defines.BreakthroughSupplyFloor,
+                defines.BreakthroughPressureFloor, defines.BreakthroughPressureSpan,
+                defines.BreakthroughEntrenchmentResistance);
 
     public static float Counterattack(Defines defines, float pressure, float entrenchment, float supply) =>
         Counterattack(defines, pressure, entrenchment, supply, 1f, 1f, false);
 
     public static float Counterattack(Defines defines, float pressure, float entrenchment, float supply,
-        float attackerOrg, float defenderOrg, bool desperateDefense)
-    {
-        if (defines is null || !float.IsFinite(pressure) || !float.IsFinite(entrenchment) || !float.IsFinite(supply))
-            return 0f;
-        if (entrenchment < defines.CounterattackEntrenchmentFloor || supply < defines.CounterattackSupplyFloor)
-            return 0f;
-
-        // Two avenues for counterattack:
-        // 1. Direct local superiority (existing path: defender firepower beats attacker breakthrough).
-        var superiority = Range(pressure, defines.CounterattackPressureFloor, defines.CounterattackPressureSpan);
-
-        // 2. Punitive counterattack against an exhausted/spent attacker:
-        // When the attacker's organisation falls while the defender holds discipline and lines,
-        // or during desperate last-stand defence of the homeland.
-        var vulnerability = 0f;
-        if (float.IsFinite(attackerOrg) && float.IsFinite(defenderOrg))
-        {
-            var orgDelta = defenderOrg - attackerOrg;
-            if (attackerOrg < 0.60f && orgDelta > -0.15f)
-            {
-                var exhaustion = M.Clamp01((0.60f - attackerOrg) / 0.40f);
-                var tenacity = M.Clamp01((defenderOrg + 0.15f) / 0.50f);
-                vulnerability = exhaustion * tenacity * defines.CounterattackVulnerabilityWeight;
-            }
-        }
-        if (desperateDefense)
-        {
-            vulnerability += defines.DesperateCounterattackBonus;
-        }
-
-        var effectiveDrive = MathF.Max(superiority, M.Clamp01(vulnerability));
-        if (effectiveDrive <= 0.001f) return 0f;
-
-        var prepared = Ratio(entrenchment, defines.CounterattackEntrenchmentFloor);
-        var supplied = Ratio(supply, defines.CounterattackSupplyFloor);
-        return M.Clamp01(effectiveDrive * prepared * supplied);
-    }
-
-    private static float Range(float value, float floor, float span) =>
-        M.Clamp01((value - floor) / MathF.Max(0.01f, span));
-
-    private static float Ratio(float value, float floor) =>
-        M.Clamp01(value / MathF.Max(0.01f, floor));
+        float attackerOrg, float defenderOrg, bool desperateDefense) =>
+        defines is null
+            ? 0f
+            : DealOrForce.Rules.CombatTempoRules.Counterattack(
+                true, pressure, entrenchment, supply, attackerOrg, defenderOrg, desperateDefense,
+                defines.CounterattackEntrenchmentFloor, defines.CounterattackSupplyFloor,
+                defines.CounterattackPressureFloor, defines.CounterattackPressureSpan,
+                defines.CounterattackVulnerabilityWeight, defines.DesperateCounterattackBonus);
 }

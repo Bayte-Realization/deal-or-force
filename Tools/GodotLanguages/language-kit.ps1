@@ -1,6 +1,6 @@
 param(
     [ValidateSet('Doctor', 'Fetch', 'Build', 'Probe', 'InstallKit')][string]$Action = 'Doctor',
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta1',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
     [string[]]$Languages = @('luau', 'fsharp', 'nim', 'odin', 'rust', 'kotlin'),
     [string]$CacheDirectory = (Join-Path $PSScriptRoot '.cache/sources'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '.cache/artifacts'),

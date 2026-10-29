@@ -1,0 +1,18 @@
+// Состояния, которые оставляет подписанный ультиматум. Ни одно не трогает налоги и ставки
+// финансирования: это то, что игрок уже решает сам во внутренних делах.
+{
+  "ultimatum_disarmament": {
+    "name": "Disarmed by treaty",
+    "description": "The army was cut down on paper and the paper is being kept, for now.",
+    "days": 1095,
+    "positive": false,
+    "modifiers": { "army_attack": -0.12, "army_defense": -0.12, "recruitment_speed": -0.25 }
+  },
+  "ultimatum_technology": {
+    "name": "Drawings handed over",
+    "description": "Somebody else's laboratories did the work, and the work is ours now.",
+    "days": 730,
+    "positive": true,
+    "modifiers": { "research_speed": 0.08, "construction_speed": 0.02 }
+  }
+}

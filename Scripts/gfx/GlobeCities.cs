@@ -99,30 +99,57 @@ public sealed partial class GlobePresentation
     }
 
     /// <summary>
-    /// A dot drawn once: a pale disc in a dark ring for a town, a ringed one for a regional
-    /// capital, and a gold one for a seat of government.
+    /// A dot drawn once: a pale disc in a dark ring for a town, a ringed bullseye for a regional
+    /// capital, and a golden compass-star roundel for a seat of government.
     /// </summary>
     private static ImageTexture CityDotTexture(bool ringed, bool capital)
     {
         const int size = 32;
-        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
-        var centre = (size - 1) / 2f;
-        var fill = capital ? new Color(0.98f, 0.84f, 0.42f) : new Color(0.93f, 0.95f, 0.96f);
-        var ink = new Color(0.05f, 0.07f, 0.09f);
-        for (var y = 0; y < size; y++)
-        for (var x = 0; x < size; x++)
+        const int scale = 2;
+        const int s = size * scale;
+        var image = Image.CreateEmpty(s, s, false, Image.Format.Rgba8);
+        var centre = (s - 1) / 2f;
+        var gold = new Color(0.99f, 0.85f, 0.38f);
+        var ivory = new Color(0.95f, 0.97f, 0.99f);
+        var fill = capital ? gold : ivory;
+        var ink = new Color(0.03f, 0.05f, 0.08f, 0.96f);
+        var outerRadius = (ringed ? 14.8f : 11.2f) * scale;
+        for (var y = 0; y < s; y++)
+        for (var x = 0; x < s; x++)
         {
-            var distance = new Vector2(x - centre, y - centre).Length();
+            var dx = x - centre;
+            var dy = y - centre;
+            var distance = MathF.Sqrt(dx * dx + dy * dy);
+            if (distance > outerRadius + 1f) continue;
+
             Color colour;
-            if (distance <= 7.5f) colour = fill;
-            else if (ringed && distance > 9.5f && distance <= 12.5f) colour = fill;
-            else if (distance <= (ringed ? 14.5f : 10.5f)) colour = ink;
-            else continue;
-            // A pixel of antialiasing on the outer edge.
-            var edge = (ringed ? 14.5f : 10.5f) - distance;
-            colour.A = Mathf.Clamp(edge + 0.5f, 0f, 1f);
+            if (capital)
+            {
+                // Golden cartographic capital roundel with 4-point star flare and ivory core
+                var angle = MathF.Atan2(dy, dx);
+                var starFlare = MathF.Pow(MathF.Abs(MathF.Cos(angle * 2f)), 3f) * 3.2f;
+                if (distance <= 4.5f * scale) colour = ivory;
+                else if (distance <= (8.2f + starFlare * 0.45f) * scale) colour = gold;
+                else if (distance >= 10.2f * scale && distance <= 12.8f * scale) colour = gold.Darkened(0.08f);
+                else colour = ink;
+            }
+            else if (ringed)
+            {
+                if (distance <= 6.2f * scale) colour = fill.Lerp(Colors.White, (1f - distance / (6.2f * scale)) * 0.25f);
+                else if (distance >= 9.6f * scale && distance <= 12.4f * scale) colour = fill.Darkened(0.08f);
+                else colour = ink;
+            }
+            else
+            {
+                if (distance <= 7.2f * scale) colour = fill.Lerp(Colors.White, (1f - distance / (7.2f * scale)) * 0.25f);
+                else colour = ink;
+            }
+
+            var edge = outerRadius - distance;
+            colour.A *= Mathf.Clamp(edge + 0.75f, 0f, 1f);
             image.SetPixel(x, y, colour);
         }
+        image.Resize(size, size, Image.Interpolation.Lanczos);
         return ImageTexture.CreateFromImage(image);
     }
 
@@ -138,6 +165,7 @@ public sealed partial class GlobePresentation
     private void UpdateCityLabels(double delta)
     {
         if (!IsInstanceValid(_cityRoot) || !IsInstanceValid(_camera)) return;
+        if (!Simulation.WorldLayers.On("city_labels")) { _cityRoot.Visible = false; return; }
         var map = _campaign?.ProvinceMap;
         if (map is not null && (!ReferenceEquals(map, _cityAnchorMap) || _cityAnchors.Length != _cities.Count))
         {
@@ -198,6 +226,9 @@ public sealed partial class GlobePresentation
             if (moved && !_flatMap) HideCitiesPastHorizon();
             return;
         }
+        // When only _cityDirty was triggered (e.g. an army marched) and the camera hasn't moved,
+        // throttle city placement to at most twice a second instead of 10 times a second!
+        if (!moved && _cityClock < 0.5) return;
         _cityClock = 0;
         _cityDirty = false;
         _citySeenCamera = cameraTransform;

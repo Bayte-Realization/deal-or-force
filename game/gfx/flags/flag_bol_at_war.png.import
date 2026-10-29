@@ -2,7 +2,7 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://h4jya2oaw0pd"
+uid="uid://js7glq1l0rbs"
 path="res://.godot/imported/flag_bol_at_war.png-f8dbe16c39b5c726f9d2b72d0ce0b3e2.ctex"
 metadata={
 "vram_texture": false
@@ -39,5 +39,5 @@ process/premult_alpha=false
 process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
-process/size_limit=256
+process/size_limit=0
 detect_3d/compress_to=1

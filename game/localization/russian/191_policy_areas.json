@@ -1,49 +1,40 @@
-// Новые области политики из common/laws/10_new_policy_areas.json.
 {
   "Balanced trade rules": "Уравновешенные торговые правила",
-  "Open markets": "Открытые рынки",
   "Cheap imports and wider reach, at the cost of the industries that cannot compete.": "Дешёвый импорт и более широкий охват — ценой отраслей, которые не выдерживают конкуренции.",
   "Protected markets": "Защищённые рынки",
   "Domestic industry first: more output and more self-sufficiency, less trade and dearer credit.": "Своя промышленность прежде всего: больше выпуска и самостоятельности, меньше торговли и дороже кредит.",
   "Strategic controls": "Стратегический контроль",
   "Export controls and stockpiles on what a war would need, with the paperwork that comes with them.": "Экспортный контроль и запасы того, что понадобится на войне, вместе с сопутствующей отчётностью.",
-
   "Hard currency anchor": "Привязка к твёрдой валюте",
   "Managed float": "Управляемый курс",
   "A central bank that leans against the market: steadier trade, less room to spend.": "Центральный банк, идущий против рынка: торговля ровнее, но тратить почти нечего.",
   "Development mandate": "Мандат на развитие",
   "Credit directed at what the state wants built, and the inflation that comes with it.": "Кредит направляется туда, что государство хочет построить, — вместе с сопутствующей инфляцией.",
-
   "Import dependence": "Зависимость от импорта",
   "Diversified supply": "Диверсифицированные поставки",
   "Many suppliers and many routes, so no single one can hold the country to ransom.": "Много поставщиков и много маршрутов: ни один из них не может шантажировать страну.",
   "Energy sovereignty": "Энергетический суверенитет",
   "Domestic production at whatever it costs, and the insulation from a closed border that buys.": "Собственная добыча любой ценой — и та защита от закрытой границы, которую она даёт.",
-
   "Basic research": "Фундаментальные исследования",
   "Applied research": "Прикладные исследования",
   "Work that reaches a factory within the year, rather than a paper within the decade.": "Работа, доходящая до завода за год, а не до статьи за десятилетие.",
   "Military research priority": "Приоритет военных исследований",
   "The laboratories answer to the general staff: better equipment, thinner civilian shelves.": "Лаборатории подчиняются генштабу: техника лучше, гражданские полки пустее.",
-
   "Basic pensions": "Базовые пенсии",
   "Universal pensions": "Всеобщие пенсии",
   "Everyone who reaches the age is covered, and the contributions come out of the working country.": "Покрыт каждый, кто достиг возраста, а взносы платит работающая страна.",
   "Funded pensions": "Накопительные пенсии",
   "Individual accounts invested in the economy: deeper capital markets and a thinner safety net.": "Личные счета, вложенные в экономику: капитал глубже, а страховочная сеть тоньше.",
-
   "Balanced regional development": "Уравновешенное региональное развитие",
   "Frontier investment": "Инвестиции в окраины",
   "Money goes where the country is thin rather than where it is already rich.": "Деньги идут туда, где страна тонка, а не туда, где уже богато.",
   "Capital-first development": "Развитие столицы прежде всего",
   "Concentrate on the place that already works: more output per unit spent, and an angrier periphery.": "Сосредоточиться на месте, которое уже работает: больше выпуска на вложенный рубль и злее окраины.",
-
   "Neutral posture": "Нейтральная позиция",
   "Alignment doctrine": "Доктрина союза",
   "Stand openly with this country, in public and in treaties.": "Открыто стоять с этой страной — и на словах, и в договорах.",
   "Transactional engagement": "Сугубо деловые отношения",
   "Deal by deal, with no promises kept past the deal.": "Сделка за сделкой, без обещаний, живущих дольше сделки.",
-
   "Trade policy": "Торговая политика",
   "Currency regime": "Валютный режим",
   "Energy policy": "Энергетическая политика",
@@ -52,7 +43,6 @@
   "Pension policy": "Пенсионная политика",
   "Regional development": "Региональное развитие",
   "Foreign posture": "Внешняя позиция",
-
   "Ordinary trade rules.": "Обычные торговые правила.",
   "Cheaper imports and a wider reach, at the cost of the industries that cannot compete.": "Дешёвый импорт и более широкий охват — ценой отраслей, которые не выдерживают конкуренции.",
   "Domestic industry first: more output and self-sufficiency, less trade and dearer credit.": "Своя промышленность прежде всего: больше выпуска и самостоятельности, меньше торговли и дороже кредит.",
@@ -61,18 +51,10 @@
   "The central bank leans against the market: steadier trade, less room to spend.": "Центральный банк идёт против рынка: торговля ровнее, но тратить почти нечего.",
   "Credit is directed at what the state wants built, and carries the inflation that comes with it.": "Кредит направляется туда, что государство хочет построить, — вместе с сопутствующей инфляцией.",
   "Ordinary energy supply.": "Обычное энергоснабжение.",
-  "Many suppliers and many routes, so no single one can hold the country to ransom.": "Много поставщиков и много маршрутов: ни один из них не может шантажировать страну.",
-  "Domestic production at whatever it costs, and the insulation from a closed border that buys.": "Собственная добыча любой ценой — и та защита от закрытой границы, которую она даёт.",
   "Ordinary research priorities.": "Обычные приоритеты исследований.",
-  "Work that reaches a factory within the year, rather than a paper within the decade.": "Работа, доходящая до завода за год, а не до статьи за десятилетие.",
-  "The laboratories answer to the general staff: better equipment, thinner civilian shelves.": "Лаборатории подчиняются генштабу: техника лучше, гражданские полки пустее.",
   "Ordinary pension provision.": "Обычное пенсионное обеспечение.",
-  "Everyone who reaches the age is covered, and the contributions come out of the working country.": "Покрыт каждый, кто достиг возраста, а взносы платит работающая страна.",
-  "Individual accounts invested in the economy: deeper capital markets and a thinner safety net.": "Личные счета, вложенные в экономику: капитал глубже, а страховочная сеть тоньше.",
   "Ordinary regional development.": "Обычное региональное развитие.",
   "Money goes where the country is thin rather than where it is already rich: the region lives better and resents less.": "Деньги идут туда, где страна тонка, а не туда, где уже богато: регион живёт лучше и злится меньше.",
   "Concentrate on the place that already works: the centre lives better, and the periphery notices what it is not getting.": "Сосредоточиться на месте, которое уже работает: центр живёт лучше, а окраины замечают, чего не получают.",
-  "No standing doctrine towards this country.": "Постоянной доктрины в отношении этой страны нет.",
-  "Stand openly with this country, in public and in treaties.": "Открыто стоять с этой страной — и на словах, и в договорах.",
-  "Deal by deal, with no promises kept past the deal.": "Сделка за сделкой, без обещаний, живущих дольше сделки."
+  "No standing doctrine towards this country.": "Постоянной доктрины в отношении этой страны нет."
 }

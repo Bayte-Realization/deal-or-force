@@ -1,0 +1,69 @@
+// Свежая пачка событий: спорт, культура, здоровье, деньги.
+{
+  "olympic_bid": {
+    "title": "The bid committee comes calling",
+    "description": "A delegation with a slideshow wants the country to host the summer games in eight years. The slideshow is very good.",
+    "weight": 0.6,
+    "options": [
+      { "title": "Bid for the games",
+        "consequence": "A decade of construction and a fortnight of television.",
+        "effects": { "treasury_percent": -0.07, "construction_capacity": 0.10, "stability": 0.014, "state.standard_of_living": 0.001 },
+        "modifiers": [ { "id": "cultural_moment", "days": 270 } ] },
+      { "title": "Decline politely",
+        "consequence": "The money stays in the budget, which nobody photographs.",
+        "effects": { "treasury_percent": 0.008, "stability": -0.002 } },
+      { "title": "Bid for a smaller championship instead",
+        "consequence": "Half the glory, a fifth of the bill.",
+        "effects": { "treasury_percent": -0.02, "stability": 0.006, "market_access": 0.01 } }
+    ]
+  },
+  "museum_disputed_artefact": {
+    "title": "A disputed artefact, a foreign minister",
+    "description": "The national museum holds something another country says was taken in 1897. Their minister raises it at every meeting, in front of photographers.",
+    "weight": 0.8,
+    "options": [
+      { "title": "Return it with a ceremony",
+        "consequence": "Goodwill abroad, and a column of complaint at home.",
+        "effects": { "stability": -0.006, "war_support": -0.008, "market_access": 0.02, "political_points": 4 } },
+      { "title": "Refuse, and say why",
+        "consequence": "A patriotic answer that closes a door.",
+        "effects": { "war_support": 0.012, "stability": 0.004, "market_access": -0.015 } },
+      { "title": "Lend it for twenty years",
+        "consequence": "Everybody can claim something, which is how it is done.",
+        "effects": { "political_points": 6, "market_access": 0.01, "state.radicalism": 0.003 } }
+    ]
+  },
+  "port_outbreak": {
+    "title": "A fever in the port district",
+    "description": "The hospitals in one port city report four times the usual admissions in a week. The pathogen is common; the speed is not.",
+    "weight": 1.0,
+    "options": [
+      { "title": "Quarantine the district",
+        "consequence": "The outbreak stops at the docks and so does the cargo.",
+        "effects": { "gdp_percent": -0.006, "state.standard_of_living": -0.002, "stability": -0.004, "market_access": -0.02 } },
+      { "title": "Emergency hospitals, no closure",
+        "consequence": "Expensive, and the port keeps working.",
+        "effects": { "treasury_percent": -0.045, "stability": 0.008, "state.standard_of_living": 0.001 } },
+      { "title": "Say the risk is low",
+        "consequence": "It probably is. Probably.",
+        "effects": { "state.radicalism": 0.012, "state.standard_of_living": -0.003, "market_access": 0.005 } }
+    ]
+  },
+  "currency_raid": {
+    "title": "Somebody is selling the currency",
+    "description": "Three days of one-way flow, no obvious seller, and a central bank that has already spent a tenth of its reserves.",
+    "weight": 0.8,
+    "trigger": { "max_credit_confidence": 0.7 },
+    "options": [
+      { "title": "Raise the policy rate hard",
+        "consequence": "The flow stops; the factories borrow at the new number.",
+        "effects": { "inflation": -0.01, "productivity": -0.002, "credit_confidence": 0.06 } },
+      { "title": "Spend the reserves",
+        "consequence": "A defence that works until it doesn't.",
+        "effects": { "treasury_percent": -0.05, "credit_confidence": 0.03, "inflation": 0.004 } },
+      { "title": "Close the capital account",
+        "consequence": "The raid ends and so does the investment.",
+        "effects": { "credit_confidence": -0.06, "stability": 0.01, "market_access": -0.03 } }
+    ]
+  }
+}

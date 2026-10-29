@@ -230,6 +230,7 @@ public static class ProxyWars
     public static void Tick(Campaign c)
     {
         if (c is null || c.ElapsedDays <= 0) return;
+        ArmsShipmentRequests.Tick(c);
         if (!MechanicFeatures.SystemEnabled(c, nameof(ProxyWars))) return;
         var defines = c.Defines;
         var every = Math.Max(1, defines.ProxyReviewDays);

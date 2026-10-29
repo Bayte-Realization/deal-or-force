@@ -421,7 +421,7 @@ public static class AllianceSystem
         return true;
     }
 
-    private static void Sign(Campaign campaign, DiplomaticRelation relation, Nation one, Nation other)
+    internal static void Sign(Campaign campaign, DiplomaticRelation relation, Nation one, Nation other)
     {
         relation.Stance = DiplomaticStance.Allied;
         relation.AllianceOfferedBy = 0;

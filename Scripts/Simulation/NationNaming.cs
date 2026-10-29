@@ -145,17 +145,33 @@ public static class NationNaming
         if (anyLand is not null && !NameAlreadyTaken(campaign, LandAtlas.Name(anyLand)))
             return ("land", anyLand.Id);
 
-        // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.).
+        // 8. The region's own seat/city name (Rostov, Samara, Novosibirsk, Odesa, Lyon, Hamburg, etc.)
+        //    - one nobody already wears: Nigeria's Niger State does not found a second Niger, it
+        //    looks to the next region of the rising, as four Nigerian risings in one bench run
+        //    each called themselves the Republic of Niger beside the real one.
+        if (region is not null)
+        {
+            var wanted = new HashSet<int>(regions ?? Array.Empty<int>());
+            foreach (var candidate in campaign.States.Where(s => wanted.Contains(s.MapIndex) || s == region)
+                         .OrderByDescending(s => s == region).ThenByDescending(s => s.Population).ThenBy(s => s.MapIndex))
+            {
+                var place = StripAdministrativeSuffix(RegionNames.Resolve(candidate));
+                if (place.Length > 0 && CompassDirection(place).Length == 0 &&
+                    !string.Equals(place, parent?.Name, StringComparison.OrdinalIgnoreCase) &&
+                    !NameAlreadyTaken(campaign, place))
+                    return ("region", candidate.Id);
+            }
+        }
+
+        // 9. Region fallback: authentic regional identity rather than an occupier's compass direction -
+        //    unless a country already wears the region's name, when the people who live there name
+        //    it instead (Nigeria's Niger State was founding a second Niger beside the real one).
         if (region is not null)
         {
             var place = StripAdministrativeSuffix(RegionNames.Resolve(region));
-            if (place.Length > 0 && CompassDirection(place).Length == 0 &&
-                !string.Equals(place, parent?.Name, StringComparison.OrdinalIgnoreCase))
-                return ("region", region.Id);
+            if (NameAlreadyTaken(campaign, place) && HasIdentity(groundPeople)) return PeopleBase(campaign, groundPeople);
+            return ("region", region.Id);
         }
-
-        // 9. Region fallback: authentic regional identity rather than an occupier's compass direction.
-        if (region is not null) return ("region", region.Id);
         if (!string.IsNullOrWhiteSpace(culture)) return ("culture", culture);
         return parent is null ? ("literal", "") : IdentitySource(parent);
     }
@@ -300,6 +316,12 @@ public static class NationNaming
     public static bool CarriesStateForm(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
+        // A name that is itself a republic - "Central African Republic", "Czech Republic",
+        // "Республика Дагестан" - was becoming "Republic of Central African Republic".
+        var trimmed = name.Trim();
+        if (trimmed.EndsWith(" Republic", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Republic ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("Республика", StringComparison.OrdinalIgnoreCase)) return true;
         foreach (var phrase in FormPhrases)
         {
             if (phrase.Length >= 3 && name.Contains(phrase, StringComparison.OrdinalIgnoreCase))
@@ -313,6 +335,15 @@ public static class NationNaming
             var head = pattern.Split("{0}")[0].Trim();
             if (head.Length >= 3 && name.Contains(head, StringComparison.OrdinalIgnoreCase)) return true;
         }
+        return false;
+    }
+
+    /// <summary>Whether any word of a name is a side of the compass: "Matabeleland South", "North Kivu", "Восточный Казахстан".</summary>
+    public static bool NamesASide(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        foreach (var word in name.Split(' ', '-', ','))
+            if (CompassDirection(word).Length > 0) return true;
         return false;
     }
 
@@ -474,17 +505,18 @@ public static class NationNaming
     /// Highlands calling itself Scotland would be the second thing with that name, which is
     /// exactly the duplication this is written against.
     /// </summary>
-    private static bool NameAlreadyTaken(Campaign campaign, string name)
+    internal static bool NameAlreadyTaken(Campaign campaign, string name)
     {
         if (campaign is null || string.IsNullOrWhiteSpace(name)) return false;
         foreach (var nation in campaign.Nations)
         {
-            if (campaign.Fallen.Contains(nation.Id)) continue;
             var holds = campaign.StatesOf(nation).Length > 0;
-            if (!holds && nation.Movement is null) continue;
+            if (!holds && nation.Movement is not { Dissolved: false }) continue;
             if (string.Equals(CountryNames.Resolve(nation, false), name, StringComparison.OrdinalIgnoreCase))
                 return true;
             if (string.Equals(CountryNames.Resolve(nation, true), name, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (string.Equals(BaseOf(campaign, nation), name, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
         return false;
@@ -544,7 +576,7 @@ public static class NationNaming
     public static string StripAdministrativeSuffix(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return name ?? "";
-        var trimmed = name.TrimEnd();
+        var trimmed = StripRepublicPrefix(name.TrimEnd());
         foreach (var (suffix, cut) in AdministrativeSuffixes)
         {
             if (!trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) continue;
@@ -563,8 +595,21 @@ public static class NationNaming
         (" Department", 11), (" Oblast", 7), (" Region", 7), (" County", 7),
         (" State", 6), (" District", 9), (" Territory", 10), (" Municipality", 13),
         (" Воеводство", 10), (" Провинция", 10), (" Префектура", 11), (" Губерния", 9),
-        (" Область", 8), (" Регион", 7), (" Округ", 6), (" Район", 6)
+        (" Область", 8), (" Регион", 7), (" Округ", 6), (" Район", 6),
+        // Russia's republics are regions called "Mari El Republic" or "Republic of Dagestan":
+        // a state founded on one was "Republic of Mari El Republic".
+        (" Republic", 9), (" Республика", 11)
     };
+
+    /// <summary>A leading "Republic of" ("Республика"), which the state's own form will say again.</summary>
+    public static string StripRepublicPrefix(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return name ?? "";
+        foreach (var prefix in new[] { "Republic of ", "Республика " })
+            if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && name.Length - prefix.Length >= 3)
+                return name[prefix.Length..].TrimStart();
+        return name;
+    }
 
     /// <summary>The short name of a people's state for a map label: "Ukraine", "Kurdistan".</summary>
     private static string ShortPeopleName(string culture, string adjective)
@@ -753,9 +798,11 @@ public static class NationNaming
                     return Loc.GetOr(fDef.Name, fDef.Name);
                 return nation.FoundNameBase;
             case "direction":
-                return ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id)
-                    ? Loc.Format("name.direction." + direction, SourceName(kind, id, nation.FoundNameBase))
-                    : nation.FoundNameBase;
+                if (!ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id)) return nation.FoundNameBase;
+                var sided = SourceName(kind, id, nation.FoundNameBase);
+                // A source that already names a side takes no second one: "Northern
+                // Matabeleland South" was a state founded on Matabeleland South.
+                return NamesASide(sided) ? sided : Loc.Format("name.direction." + direction, sided);
             default:
                 // An unknown recipe from an older save: its stored name is a name unless it
                 // is a key, in which case the country's own name is the only honest answer.
@@ -1176,15 +1223,38 @@ public static class NationNaming
         if (campaign is null || nation is null || !string.IsNullOrWhiteSpace(nation.CustomName)) return;
         var name = Render(campaign, nation, false);
         if (name.Length == 0) return;
+        // The base as well as the whole name: "Republic of Zimbabwe" does not equal "Zimbabwe",
+        // and a Shona rising in Mozambique wore it beside the real one. The country it rose from
+        // is left out - a claimant to its own state carries that state's name on purpose.
+        var basis = BaseOf(campaign, nation);
+        var parentId = nation.SecededFromId >= 0 ? nation.SecededFromId : nation.ReleasedFromId;
         var clash = false;
         foreach (var other in campaign.Nations)
         {
-            if (ReferenceEquals(other, nation) || other.Population <= 0) continue;
-            if (!string.Equals(CountryNames.Resolve(other, false), name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (ReferenceEquals(other, nation) || other.Id == parentId ||
+                (!campaign.HasOwnedLand(other) && other.Movement is not { Dissolved: false })) continue;
+            var full = CountryNames.Resolve(other, false);
+            var shortName = CountryNames.Resolve(other, true);
+            if (!string.Equals(full, name, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(full, basis, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(shortName, basis, StringComparison.OrdinalIgnoreCase)) continue;
             clash = true;
             break;
         }
         if (!clash) return;
+        // Its people's adjective first - the Shona Republic - and only then its largest region.
+        var people = nation.FoundedCultures.FirstOrDefault(c => CultureAdjective(c).Length > 0);
+        if (people is not null && !(nation.FoundNameKind == "culture_adj" && nation.FoundNameId == people))
+        {
+            var keptKind = nation.FoundNameKind;
+            var keptId = nation.FoundNameId;
+            nation.FoundNameKind = "culture_adj";
+            nation.FoundNameId = people;
+            var renamed = Render(campaign, nation, false);
+            if (!NameAlreadyTaken(campaign, renamed)) { nation.FoundNameBase = BaseName(campaign, nation); return; }
+            nation.FoundNameKind = keptKind;
+            nation.FoundNameId = keptId;
+        }
         var region = LargestRegion(campaign, regions);
         if (region is null || (nation.FoundNameKind == "region" && nation.FoundNameId == region.Id)) return;
         nation.FoundNameKind = "region";

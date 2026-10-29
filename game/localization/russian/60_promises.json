@@ -1,7 +1,7 @@
 {
   "chronicle.promise_made": "{0} обещает публично: {2}.",
-  "chronicle.promise_kept": "{0} исполняет своё публичное обещание: {2}.",
-  "chronicle.promise_broken": "{0} не исполняет своё публичное обещание: {2}.",
+  "chronicle.promise_kept": "Правительство страны {0} сдержало обещание: «{2}».",
+  "chronicle.promise_broken": "Правительство страны {0} не сдержало обещание («{2}»), и страна это запомнила.",
 
   "PROMISES": "ОБЕЩАНИЯ",
   "Promise": "Обещание",
@@ -69,8 +69,8 @@
   "Unreconstructed infrastructure retards supply routes and living conditions.": "Невосстановленная инфраструктура тормозит снабжение и роняет уровень жизни.",
   "Rebuilding war damage restores production capacity and regional stability.": "Восстановление военных разрушений возвращает производственные мощности и региональную стабильность.",
   "Unrest heat": "Накал волнений",
-  "Secession pressure": "Тяга к отделению",
-  "Government approval": "Одобрение правительства",
+  "Secession pressure": "Давление отделения",
+  "Government approval": "Принятие правительства",
   "War damage": "Военные разрушения",
   "Inspect regional crisis": "Открыть кризис региона",
   "Open regional construction": "Открыть стройку в регионе"

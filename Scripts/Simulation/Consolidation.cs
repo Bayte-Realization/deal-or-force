@@ -104,11 +104,9 @@ public static class Consolidation
     public static float Ambition(Campaign c, Nation nation)
     {
         var ideology = PoliticsCore.IdeologyOf(nation);
-        var authority = M.Clamp(ideology.Authority, -1f, 1f);
-        var nationalist = string.Equals(nation.Ideology, "nationalism", StringComparison.OrdinalIgnoreCase) ? 0.25f : 0f;
-        var settled = M.Clamp((nation.Stability - 0.40f) * 0.8f, -0.3f, 0.4f);
+        var nationalist = string.Equals(nation.Ideology, "nationalism", StringComparison.OrdinalIgnoreCase);
         var restraint = AiStatecraft.Restraint(c, nation);
-        return M.Clamp01(0.36f + 0.35f * authority + nationalist + settled - 0.30f * restraint);
+        return Rules.DiplomacyRules.ConsolidationAmbition(ideology.Authority, nationalist, nation.Stability, restraint);
     }
 
     private static void Review(Campaign c, Nation founder)
@@ -238,7 +236,7 @@ public static class Consolidation
     /// <summary>Who holds the union's ground, province by province, by map index. Kept for the day.</summary>
     private static (Dictionary<int, int> Owners, int Total) Owners(Campaign c, FormableNation definition)
     {
-        if (!ReferenceEquals(_ownersFor, c) || _ownersDay != c.ElapsedDays || _ownersRevision != c.MapRevision)
+        if (!ReferenceEquals(_ownersFor, c) || _ownersRevision != c.MapRevision)
         {
             OwnersCache.Clear();
             _ownersFor = c;
@@ -280,8 +278,9 @@ public static class Consolidation
         var theirs = owners.GetValueOrDefault(other.MapIndex) / (float)total;
         // Kindred holders only: a union is never a reason to fight a foreign people.
         var kinship = PeacefulFormation.CulturalAffinity(nation, other);
-        if (theirs <= 0f || kinship < 0.5f) return 0f;
-        return M.Clamp01(nation.ConsolidationAmbition) * M.Clamp01(theirs * 2f) * kinship * c.Defines.AiConsolidationAppetite;
+        return Rules.DiplomacyRules.ConsolidationWarValue(
+            nation.ConsolidationAmbition, c.Defines.ConsolidationForceAmbition,
+            theirs, kinship, c.Defines.AiConsolidationAppetite);
     }
 
     /// <summary>Checks whether a nation is an emergent splinter, rebel shard, or micro-state.</summary>
@@ -298,28 +297,9 @@ public static class Consolidation
     }
 
     /// <summary>Checks if nation a shares a direct land border with nation b.</summary>
-    public static bool ShareBorder(Campaign c, Nation a, Nation b)
-    {
-        if (c?.ProvinceMap is null || a is null || b is null || a.Id == b.Id) return false;
-        var map = c.ProvinceMap;
-        var bIdx = (ushort)b.MapIndex;
-        foreach (var state in c.StatesOf(a))
-        {
-            var provinces = PeaceConference.ProvincesOfState(map, state.MapIndex);
-            foreach (var p in provinces)
-            {
-                if (p <= 0 || p > map.ProvinceCount || map.ProvinceToNation[p] != a.MapIndex) continue;
-                var neighbors = map.Neighbors[p];
-                for (var i = 0; i < neighbors.Length; i++)
-                {
-                    var n = neighbors[i];
-                    if (n > 0 && n <= map.ProvinceCount && map.ProvinceToNation[n] == bIdx && !map.WaterByProvince[n])
-                        return true;
-                }
-            }
-        }
-        return false;
-    }
+    public static bool ShareBorder(Campaign c, Nation a, Nation b) =>
+        c?.ProvinceMap is not null && a is not null && b is not null && a.Id != b.Id &&
+        CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
 
     /// <summary>Willingness of a kindred shard to unify into a coherent state.</summary>
     public static float ShardWillingness(Campaign c, Nation founder, Nation partner)
@@ -368,7 +348,7 @@ public static class Consolidation
         if (willing >= c.Defines.ShardConsolidationAcceptance)
         {
             partner.DecisionAvailableDay[offerKey] = c.ElapsedDays + 60;
-            if (!partner.IsHuman)
+            if (!partner.IsHuman || c.ObserverMode)
             {
                 ExecuteShardConsolidation(c, founder, partner);
                 return;

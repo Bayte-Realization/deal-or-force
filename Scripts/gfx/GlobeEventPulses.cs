@@ -100,16 +100,22 @@ uniform float fade = 1.0;
 void fragment() {
     vec2 p = UV * 2.0 - 1.0;
     float r = length(p);
-    float wave = fract(phase);
-    float ring = smoothstep(0.07, 0.0, abs(r - mix(0.42, 1.0, wave))) * (1.0 - wave);
-    float disc = smoothstep(0.42, 0.38, r);
-    float rim = smoothstep(0.035, 0.0, abs(r - 0.40));
+    float wave1 = fract(phase);
+    float wave2 = fract(phase + 0.5);
+    float ring1 = smoothstep(0.065, 0.0, abs(r - mix(0.42, 1.0, wave1))) * (1.0 - wave1);
+    float ring2 = smoothstep(0.055, 0.0, abs(r - mix(0.42, 0.92, wave2))) * (1.0 - wave2) * 0.65;
+    float ring = max(ring1, ring2);
+    float disc = smoothstep(0.43, 0.39, r);
+    float inner_bevel = smoothstep(0.03, 0.0, abs(r - 0.35));
+    float rim = smoothstep(0.04, 0.0, abs(r - 0.41));
     vec2 iuv = clamp(p / 0.56 * 0.5 + 0.5, 0.0, 1.0);
     float glyph = texture(icon, iuv).a * step(max(abs(p.x), abs(p.y)), 0.28);
-    vec3 col = mix(vec3(0.03, 0.035, 0.05), tint.rgb, max(rim, glyph));
-    col = mix(col, tint.rgb, ring * (1.0 - disc));
+    vec3 dark_core = mix(vec3(0.025, 0.035, 0.05), vec3(0.06, 0.08, 0.11), 1.0 - r * 1.5);
+    vec3 col = mix(dark_core, tint.rgb * 1.12, max(rim, glyph));
+    col = mix(col, tint.rgb * 0.75, inner_bevel * 0.45);
+    col = mix(col, tint.rgb * 1.15, ring * (1.0 - disc));
     ALBEDO = col;
-    ALPHA = clamp(max(disc * 0.82, ring * 0.85), 0.0, 1.0) * fade;
+    ALPHA = clamp(max(disc * 0.90, ring * 0.88), 0.0, 1.0) * fade;
 }";
 
     /// <summary>The events marked on the map, or not.</summary>
@@ -144,6 +150,7 @@ void fragment() {
     {
         if (_pulseRoot is null || !IsInstanceValid(_pulseRoot) || _campaign is null) return;
         if (!_mapApplied) return;
+        if (!Simulation.WorldLayers.On("event_pulses")) { _pulseRoot.Visible = false; return; }
         TakeNewEvents();
         var today = _campaign.ElapsedDays;
         var zoom = _flatMap ? Mathf.Clamp(_flatZoom / 1.6f, 0.45f, 2f) : Mathf.Clamp(_distance / 9f, 0.45f, 2f);

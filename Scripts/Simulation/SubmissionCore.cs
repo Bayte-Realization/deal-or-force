@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -11,6 +13,11 @@ public sealed partial class Defines
     public float SubmissionReachKm { get; set; } = 2500f;
     /// <summary>What distance costs an offer at twice SubmissionReachKm and beyond.</summary>
     public float SubmissionDistancePenalty { get; set; } = 0.8f;
+    /// <summary>
+    /// How many closer countries strong enough to protect a small state it passes over before
+    /// distance starts to count against an asker; at twice this many the penalty is full. 0 turns it off.
+    /// </summary>
+    public int SubmissionNearerProtectors { get; set; } = 3;
 
     /// <summary>How many times stronger a country has to be before a smaller one will consider answering to it.</summary>
     public float SubmissionMinimumStrengthRatio { get; set; } = 3f;
@@ -170,10 +177,58 @@ public static class SubmissionSystem
         var theirs = DemographyCatalog.PrimaryCulture(target.Tag);
         if (!string.IsNullOrWhiteSpace(theirs) && DemographyCatalog.IsPrimary(asker.Tag, theirs)) return 0f;
         if (target.ReleasedFromId == asker.Id || target.SecededFromId == asker.Id) return 0f;
+        var defines = campaign.Defines;
         var km = AllianceSystem.CapitalKm(asker, target);
-        var reach = MathF.Max(1f, campaign.Defines.SubmissionReachKm);
-        if (km <= reach) return 0f;
-        return -campaign.Defines.SubmissionDistancePenalty * M.Clamp01((km - reach) / reach);
+        var reach = MathF.Max(1f, defines.SubmissionReachKm);
+        var far = km <= reach ? 0f : -defines.SubmissionDistancePenalty * M.Clamp01((km - reach) / reach);
+        // Within reach is not enough on a crowded continent: 2 500 km from Jersey holds most of
+        // Europe, and Jersey went to Portugal past Britain, France and the Low Countries. A small
+        // state looks to the powers nearest to it; each one that is strong enough to protect it
+        // and closer than the asker pushes the asker down the list, and past twice
+        // SubmissionNearerProtectors the asker is as good as across the world.
+        var crowd = defines.SubmissionNearerProtectors;
+        if (crowd <= 0 || far <= -defines.SubmissionDistancePenalty) return far;
+        var closer = CloserProtectors(campaign, target, asker, km, 2 * crowd);
+        var crowded = -defines.SubmissionDistancePenalty * M.Clamp01((closer - crowd) / (float)crowd);
+        return MathF.Min(far, crowded);
+    }
+
+    /// <summary>
+    /// How many countries, other than the asker, could protect the target and sit closer to it,
+    /// counted up to <paramref name="enough"/>. Strength is read once a day per campaign, the
+    /// first time anybody asks, so that this never walks every army for every pair.
+    /// </summary>
+    private static int CloserProtectors(Campaign campaign, Nation target, Nation asker, float km, int enough)
+    {
+        var strength = DailyStrength(campaign);
+        var needed = strength.GetValueOrDefault(target.Id) * campaign.Defines.SubmissionMinimumStrengthRatio;
+        var count = 0;
+        foreach (var other in campaign.Nations)
+        {
+            if (other.Id == asker.Id || other.Id == target.Id || other.IsSubject || other.Population <= 0) continue;
+            if (strength.GetValueOrDefault(other.Id) < needed) continue;
+            if (AllianceSystem.CapitalKm(other, target) >= km) continue;
+            if (++count >= enough) break;
+        }
+        return count;
+    }
+
+    private sealed class StrengthFrame
+    {
+        internal int Day = int.MinValue;
+        internal readonly Dictionary<int, float> ByNation = new();
+    }
+    private static readonly ConditionalWeakTable<Campaign, StrengthFrame> StrengthFrames = new();
+
+    private static Dictionary<int, float> DailyStrength(Campaign campaign)
+    {
+        var frame = StrengthFrames.GetOrCreateValue(campaign);
+        if (frame.Day == campaign.ElapsedDays) return frame.ByNation;
+        frame.Day = campaign.ElapsedDays;
+        frame.ByNation.Clear();
+        foreach (var nation in campaign.Nations)
+            if (nation.Population > 0) frame.ByNation[nation.Id] = AiStatecraft.StrengthOf(campaign, nation);
+        return frame.ByNation;
     }
 
     public static float Willingness(Campaign campaign, Nation target, Nation asker, SubmissionRoute route,

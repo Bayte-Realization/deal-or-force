@@ -93,8 +93,12 @@ public sealed class ModLoader
             // On the main menu, under the campaign summary, and in English until now while
             // the rest of that menu was translated.
             var packs = Dlc.Packages.Count == 0 ? "" : $"{Dlc.StatusLine} · ";
+            // The folder, not the engine's shorthand: "user://mods" is exact and means nothing
+            // to a player looking for it. After the folder junction this path is inside the one
+            // game folder under Documents, which is a place a person can open.
             var mods = EnabledCount == 0
-                ? Simulation.Loc.Get("no external mods · open user://mods or res://mods")
+                ? Simulation.Loc.Format("no external mods · open {0} or res://mods",
+                    ProjectSettings.GlobalizePath("user://mods"))
                 : Simulation.Loc.Format("{0} mod(s) loaded", EnabledCount);
             return packs + mods +
                 (ErrorCount > 0 ? " · " + Simulation.Loc.Format("{0} warning(s)", ErrorCount) : "");

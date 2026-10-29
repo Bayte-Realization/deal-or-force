@@ -1,7 +1,8 @@
 {
   "lake_texture": "gfx/water/lake_surface.png",
   "river_texture": "gfx/water/river_surface.png",
-  "river_inset_texels": 0.18,
+  "river_inset_texels": -0.10,
+  "river_width_reach_texels": 0.90,
   "river_near_opacity": 0.92,
   "river_far_opacity": 0.58,
   "shore_width_texels": 0.75,

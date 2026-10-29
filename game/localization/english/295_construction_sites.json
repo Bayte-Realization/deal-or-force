@@ -1,0 +1,4 @@
+{
+  // How many building sites work at once (ConstructionCost.WorkingSites): the rest wait their turn.
+  "{0} of {1} sites open · {2} worked at a time": "{0} of {1} sites open · {2} worked at a time"
+}

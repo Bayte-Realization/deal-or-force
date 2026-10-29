@@ -70,5 +70,8 @@
   "Ogaden National Liberation Front": "Ogaden National Liberation Front",
   "Gave us our country back": "Gave us our country back",
   "Invalid simulation values prevent this action. Pause and inspect the campaign.": "Invalid simulation values prevent this action. Pause and inspect the campaign.",
-  "chronicle.restoration": "{0} is restored in {3}."
+  "chronicle.restoration": "{0} is restored in {3}.",
+  "chronicle.went_underground": "Beaten by {1}, {0} has not surrendered: it has gone underground in {3}.",
+  "Beaten in the field, it has gone underground in {0}.": "Beaten in the field, it has gone underground in {0}.",
+  "A rising beaten in the field that did not surrender: its fighters went home with their rifles, its leaders into the hills and the safe houses, and its people kept their silence. It waits for the victor to tire.": "A rising beaten in the field that did not surrender: its fighters went home with their rifles, its leaders into the hills and the safe houses, and its people kept their silence. It waits for the victor to tire."
 }

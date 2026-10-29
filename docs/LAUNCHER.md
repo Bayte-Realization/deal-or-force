@@ -1,5 +1,9 @@
 # The Deal or Force launcher
 
+Updated 28 October 2026: **ReimAlpha 2 0.9.0**. The launcher embeds the game's
+current `brand_logo_banner.png` and DoF icon. Rebuild the launcher to update
+those embedded resources; replacing a source PNG does not update an existing EXE.
+
 *Русская версия: [LAUNCHER_RU.md](LAUNCHER_RU.md)*
 
 Run **Deal or Force Launcher.exe** beside `project.godot` (development) or
@@ -53,14 +57,21 @@ remains separate from the launcher.
 
 The file shared with the game is `user://content_selection.json`. On Windows, by default:
 
-`%APPDATA%/Godot/app_userdata/Deal or Force/content_selection.json`
+`Documents/Bayte Realization/Deal or Force/content_selection.json`
+
+The path is resolved by the same `GameFolders` code as the game, including Windows
+Documents redirection. Language preferences use `settings/settings.json`, with
+read compatibility for the older root-level `settings.json`. The profile button
+opens this player folder and shows its full path as a tooltip. `--profile` remains
+an explicit test override. With no package selected, "Open folder" opens the
+player's `mods` or `dlc` directory; a selected package keeps its actual location.
 
 Settings are keyed by ID, not by absolute package paths. With no saved settings, the
 manifests' own values are used. Saving is atomic and the previous version becomes `.bak`. A
 corrupted file is not silently overwritten; restore the `.bak` or fix the JSON. The game
 also reads these settings when started directly without the launcher.
 
-The launcher's log is `user://logs/launcher.log`, rotated past 1 MB. The "Logs and settings"
+The launcher's log is `Documents/Bayte Realization/Deal or Force/logs/launcher.log`, rotated past 1 MB. The "Logs and settings"
 button opens the profile folder. The launcher records discovery errors, saves, the PID of
 the launch, the exit and its code. The game's own logs are described in `LOGS.md`. No log is
 sent anywhere over the internet.

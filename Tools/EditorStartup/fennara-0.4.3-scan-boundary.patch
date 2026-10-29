@@ -1,0 +1,80 @@
+diff --git a/fennara-cpp/src/csharp/project.cpp b/fennara-cpp/src/csharp/project.cpp
+index 5440fce..befd522 100644
+--- a/fennara-cpp/src/csharp/project.cpp
++++ b/fennara-cpp/src/csharp/project.cpp
+@@ -1,6 +1,7 @@
+ #include "fennara/csharp/project.hpp"
+ 
+ #include <godot_cpp/classes/dir_access.hpp>
++#include <godot_cpp/classes/file_access.hpp>
+ #include <godot_cpp/classes/project_settings.hpp>
+ 
+ namespace fennara::csharp_support {
+@@ -10,7 +11,7 @@ constexpr int kMaxScanDepth = 5;
+ 
+ bool should_skip_dir(const godot::String &name) {
+     const godot::String lower = name.to_lower();
+-    return lower == ".godot" || lower == ".git" || lower == ".import" ||
++    return lower.begins_with(".") ||
+            lower == "addons" || lower == "bin" || lower == "obj" ||
+            lower == "node_modules";
+ }
+@@ -51,6 +52,15 @@ void scan_dir(const godot::String &dir_path,
+         return;
+     }
+ 
++    // Godot's resource scan already excludes these subtrees. Diagnostics must
++    // not walk ignored build/export copies or a different nested Godot project
++    // on the editor's main thread just to discover its C# entry point.
++    if (depth > 0 &&
++        (godot::FileAccess::file_exists(dir_path.path_join(".gdignore")) ||
++         godot::FileAccess::file_exists(dir_path.path_join("project.godot")))) {
++        return;
++    }
++
+     godot::Ref<godot::DirAccess> dir = godot::DirAccess::open(dir_path);
+     if (dir.is_null()) {
+         return;
+@@ -68,7 +78,9 @@ void scan_dir(const godot::String &dir_path,
+ 
+         const godot::String child = dir_path.path_join(name);
+         if (dir->current_is_dir()) {
+-            if (!should_skip_dir(name)) {
++            // A junction may lead back into this project or outside its root.
++            // MSBuild still resolves explicit ProjectReference dependencies.
++            if (!should_skip_dir(name) && !dir->is_link(name)) {
+                 scan_dir(child, root, depth + 1, projects);
+             }
+             continue;
+diff --git a/fennara-cpp/src/file_utils.cpp b/fennara-cpp/src/file_utils.cpp
+index 09ce8bd..dda281c 100644
+--- a/fennara-cpp/src/file_utils.cpp
++++ b/fennara-cpp/src/file_utils.cpp
+@@ -11,6 +11,13 @@ namespace file_utils {
+ namespace {
+ void scan_dir_recursive(godot::String path, godot::Array &results,
+                         bool include_csharp, bool include_gdshader) {
++    // Automatic indexing follows the same project boundary as Godot, not every
++    // exported copy or language/toolchain checkout inside the workspace.
++    if (path != "res://" &&
++        (godot::FileAccess::file_exists(path.path_join(".gdignore")) ||
++         godot::FileAccess::file_exists(path.path_join("project.godot")))) {
++        return;
++    }
+     godot::Ref<godot::DirAccess> dir = godot::DirAccess::open(path);
+     if (!dir.is_valid()) {
+         return;
+@@ -31,8 +38,11 @@ void scan_dir_recursive(godot::String path, godot::Array &results,
+ 
+         godot::String full_path = path.path_join(file_name);
+         if (dir->current_is_dir()) {
+-            scan_dir_recursive(full_path, results, include_csharp,
+-                               include_gdshader);
++            if (!dir->is_link(file_name) && file_name != "bin" &&
++                file_name != "obj" && file_name != "node_modules") {
++                scan_dir_recursive(full_path, results, include_csharp,
++                                   include_gdshader);
++            }
+         } else if (file_name.ends_with(".gd") ||
+                    (include_csharp && file_name.ends_with(".cs")) ||
+                    (include_gdshader && file_name.ends_with(".gdshader"))) {

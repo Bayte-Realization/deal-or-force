@@ -202,6 +202,14 @@ if (Test-Path -LiteralPath $imported) {
     Write-Host "  reused $($requiredImports.Count) required import-cache entries, not the editor addon cache" -ForegroundColor DarkGray
 }
 
+# Prepare from a minimal project as well. Running even this small script in the developer
+# project starts every runtime autoload before the script can remove them from the export;
+# some of those development servers keep the otherwise-finished headless process alive.
+$stagedPrepare = Join-Path $stage 'Tools\prepare_export_project.gd'
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $stagedPrepare) | Out-Null
+Copy-Item -LiteralPath (Join-Path $project 'Tools\prepare_export_project.gd') -Destination $stagedPrepare
+[IO.File]::WriteAllText((Join-Path $stage 'project.godot'), "config_version=5`n", [Text.UTF8Encoding]::new($false))
+
 # Godot writes a good deal to stderr on a perfectly successful export - deprecation notes,
 # the "safe save" grumble, its own plugins' chatter - and with ErrorActionPreference set to
 # Stop that ends the script before any of the checks run. Its output is information here,
@@ -209,8 +217,9 @@ if (Test-Path -LiteralPath $imported) {
 $previousPreference = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-    & $Godot --headless --path $project --script res://Tools/prepare_export_project.gd -- (Join-Path $stage 'project.godot') 2>&1 | Out-Host
+    & $Godot --headless --path $stage --script res://Tools/prepare_export_project.gd -- (Join-Path $project 'project.godot') (Join-Path $stage 'project.godot') 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Unable to serialize the isolated export configuration.' }
+    Remove-Item -LiteralPath $stagedPrepare -Force
     & $Godot --headless --editor --path $stage --import 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw 'Isolated project import failed.' }
     & $Godot --headless --path $stage $mode $Preset $exe 2>&1 | Out-Host

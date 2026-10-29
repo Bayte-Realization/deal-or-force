@@ -10,9 +10,18 @@ static class PoliticalPolicyTests
     { if (!ok) throw new Exception(label); Console.WriteLine("PASS policies: " + label); }
     public static void Run()
     {
-        PoliticalPolicyCatalog.ResetCatalog();
         var errors = new List<string>();
-        foreach (var doc in GameDataLoader.DataDocuments("common", "laws")) using (doc) PoliticalPolicyCatalog.MergeLaws(doc.RootElement, errors);
+        // Validate the actual clean load order. Replaying early overlays over the final
+        // already-overlaid catalogue is not equivalent when a later file changes scope.
+        PoliticalPolicyCatalog.ResetCatalog(errors);
+        var declared = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var doc in GameDataLoader.DataDocuments("common", "laws")) using (doc)
+        {
+            foreach (var row in doc.RootElement.EnumerateObject())
+                if (!row.Name.StartsWith("//") && row.Value.ValueKind == JsonValueKind.Object &&
+                    row.Value.TryGetProperty("name", out _) && row.Value.TryGetProperty("category", out _))
+                    declared.Add(row.Name);
+        }
         Check(errors.Count == 0, "all vanilla laws pass scope/effect validation");
         // Raised from 45/15 on 15 October 2026: common/laws/10_new_policy_areas.json adds seven
         // more areas (trade, currency, energy, research, pensions, regional development, foreign
@@ -21,8 +30,14 @@ static class PoliticalPolicyTests
         // show up here as a total that did not move, which is the other thing this catches.
         // 71/23 since 22 October 2026: common/laws/30_nationalities.json, four answers to what a
         // state does about its minorities.
-        Check(PoliticalPolicyCatalog.AllLaws.Count() == 71 && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 23,
-            "71 laws in 23 categories load");
+        // 140/23 since 26 October 2026: common/laws/40_expanded_laws.json adds 3 more options to
+        // every one of the 23 existing law categories (71 + 69 = 140). Later packs (50-55) add
+        // three more to each of the same categories again.
+        // Additional packs may extend these same categories. Compare every authored id with
+        // what actually loaded, rather than pinning a total while a content pack is added.
+        var loaded = PoliticalPolicyCatalog.AllLaws.Select(p => p.Id).ToHashSet(StringComparer.Ordinal);
+        Check(loaded.Count >= 140 && loaded.SetEquals(declared) && PoliticalPolicyCatalog.AllLaws.GroupBy(p => p.Category).Count() == 23,
+            loaded.Count + " declared laws in the original 23 categories load without omissions");
         Check(PoliticalPolicyCatalog.AllAgendas.Count() == 6, "six agendas load");
         var c = Campaign.CreateBootstrap(701); var n = c.NationByTag("ITA"); c.ConfigureSinglePlayer(n.Id);
         n.Treasury = 100;

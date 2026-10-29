@@ -577,14 +577,14 @@ public partial class DealOrForceGame
         ClearChildren(_regionCardProvinceRows);
 
         var owner = state is null ? null : _campaign.Nations.Find(nation => nation.MapIndex == state.NationMapIndex);
-        var owned = state is not null && state.NationMapIndex == player.MapIndex;
+        var owned = state is not null && (state.NationMapIndex == player.MapIndex ||
+                    (state.HeldById == player.Id && HeldRegions.Administered(_campaign, state)));
         _regionCardFlag.Visible = owner is not null;
         if (owner is not null) SetFlag(_regionCardFlag, owner.Tag, 20);
         _regionCardTitle.Text = state?.DisplayName ?? Tr("Unmapped land");
         var isCapital = owner is not null && state.MapIndex == owner.CapitalStateMapIndex;
         _regionCardCaption.Text = state is null ? "" :
-            Simulation.Loc.Format("{0} of {1}", Tr(state.Kind), owner?.DisplayName ?? Tr("an unknown state")) +
-            (isCapital ? " · " + Tr("the capital") : "");
+            RegionOfCaption(state, owner) + (isCapital ? " · " + Tr("the capital") : "");
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
         var visible = state is not null && (owner is null || CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
@@ -593,6 +593,25 @@ public partial class DealOrForceGame
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
             CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
                 Tr(RegionalStatistics.GdpExplanation));
+            // A half-state: owned by one country, held by another by lease or by troops without a war.
+            if (LandArrangementSystem.Covering(_campaign, state.MapIndex) is { } arranged)
+            {
+                var holder = _campaign.NationById(arranged.HolderId)?.DisplayName ?? "?";
+                CardRow(_regionCardRegionRows, "Held by",
+                    arranged.Kind == LandArrangementSystem.Lease
+                        ? Simulation.Loc.Format("{0}, on lease", holder)
+                        : Simulation.Loc.Format("{0} troops, no war", holder),
+                    LandArrangementSystem.Describe(_campaign, state), "state.warning");
+            }
+            // Held ground worked by its holder (HeldRegions): who runs it and how well yet.
+            else if (state.HeldById >= 0 && _campaign.NationById(state.HeldById) is { } administrator)
+                CardRow(_regionCardRegionRows, "Administered by",
+                    HeldRegions.Administered(_campaign, state)
+                        ? Simulation.Loc.Format("{0} · {1} of its output", administrator.DisplayName, Fmt.Percent(HeldRegions.Efficiency(_campaign, state)))
+                        : Simulation.Loc.Format("{0} · taking over", administrator.DisplayName),
+                    Simulation.Loc.Format("Held by {0} since {1}: its output, workers and taxes go to the holder, at the efficiency of an administration that grows from occupation to integration over a year. The title stays with {2} until a treaty or a vote under the troops.",
+                        administrator.DisplayName, LandArrangementSystem.DateOfDay(_campaign, state.HeldSinceDay), owner?.DisplayName ?? "?"),
+                    "state.warning");
         }
         if (state is null) { }
         else if (!visible)
@@ -815,5 +834,19 @@ public partial class DealOrForceGame
             parent.RemoveChild(child);
             child.QueueFree();
         }
+    }
+
+    /// <summary>
+    /// "Oblast of Russia", "Province of China" - unless the country's own name already says the
+    /// kind: a Russian republic that became a state was "Republic of Republic of Dagestan".
+    /// Then it is a region of that country.
+    /// </summary>
+    private string RegionOfCaption(ScenarioState state, Nation owner)
+    {
+        var kind = Tr(state.Kind);
+        var country = owner?.DisplayName ?? Tr("an unknown state");
+        if (owner is not null && kind.Length > 0 && country.Contains(kind, StringComparison.OrdinalIgnoreCase))
+            kind = Tr("Region");
+        return Simulation.Loc.Format("{0} of {1}", kind, country);
     }
 }

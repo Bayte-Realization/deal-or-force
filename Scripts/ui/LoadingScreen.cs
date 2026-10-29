@@ -37,15 +37,20 @@ public partial class LoadingScreen : Control
     /// The setting that takes the generated pictures away (`loading_without_ai_art`): the screen
     /// is then the plain chart it was at first - grid, frame, seal and dossier. Read straight from
     /// the player's file, because the first loading screen stands before the catalogues exist.
+    /// The main menu has its own setting (`menu_without_ai_art`, MenuIllustrations).
     /// </summary>
-    private static bool Plain()
+    internal static bool Plain(string setting = "loading_without_ai_art")
     {
         try
         {
             // The campaign scene started on its own (from the editor) shows its first loading
             // screen before it has told the settings where the player's file is.
-            if (!PlayerSettings.Located) PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
-            return SettingsCatalog.Flag("loading_without_ai_art");
+            if (!PlayerSettings.Located)
+            {
+                GamePaths.Prepare();
+                PlayerSettings.UseDirectory(GamePaths.Settings);
+            }
+            return SettingsCatalog.Flag(setting);
         }
         catch (System.Exception) { return false; }
     }
@@ -122,11 +127,11 @@ public partial class LoadingScreen : Control
         _caption.HorizontalAlignment = HorizontalAlignment.Center;
         _body.AddChild(_caption);
         _logoPlate = new Panel { MouseFilter = MouseFilterEnum.Ignore };
-        _logoPlate.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color("e9e4d9") });
+        _logoPlate.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = Colors.Transparent });
         _body.AddChild(_logoPlate);
         _logo = new TextureRect
         {
-            Texture = GD.Load<Texture2D>("res://game/gfx/interface/brand_logo_banner.png"),
+            Name = "LoadingGameLogo", Texture = BrandAssets.GamePlaque(),
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
             MouseFilter = MouseFilterEnum.Ignore
@@ -163,7 +168,7 @@ public partial class LoadingScreen : Control
 
     private static Label Text(string text, int size, string color)
     {
-        var label = new Label { Text = text, AutowrapMode = TextServer.AutowrapMode.WordSmart,
+        var label = new Label { Text = Loc.Get(text), AutowrapMode = TextServer.AutowrapMode.WordSmart,
             MouseFilter = MouseFilterEnum.Ignore };
         label.AddThemeFontSizeOverride("font_size", size);
         label.AddThemeColorOverride("font_color", new Color(color));
@@ -194,6 +199,16 @@ public partial class LoadingScreen : Control
     /// </summary>
     private static Texture2D NextScene()
     {
+        var paths = IllustrationPaths();
+        if (paths.Length == 0) return null;
+        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % paths.Length) : (_sceneTurn + 1) % paths.Length;
+        return Picture(paths[_sceneTurn]);
+    }
+
+    /// <summary>Every loading_* illustration, base game and mods alike, in name order; none when the player turned them off with this setting.</summary>
+    internal static string[] IllustrationPaths(string setting = "loading_without_ai_art")
+    {
+        if (Plain(setting)) return System.Array.Empty<string>();
         string[] paths;
         try
         {
@@ -205,14 +220,12 @@ public partial class LoadingScreen : Control
                     .Where(f => f.EndsWith(".jpg") || f.EndsWith(".png") || f.EndsWith(".webp"))
                     .OrderBy(f => f, System.StringComparer.Ordinal).Select(f => SceneFolder + f).ToArray();
         }
-        catch (System.Exception) { return null; }
-        if (paths.Length == 0) return null;
-        _sceneTurn = _sceneTurn < 0 ? (int)(Time.GetUnixTimeFromSystem() / 60 % paths.Length) : (_sceneTurn + 1) % paths.Length;
-        return Picture(paths[_sceneTurn]);
+        catch (System.Exception) { return System.Array.Empty<string>(); }
+        return paths;
     }
 
     /// <summary>An imported picture, or a mod's loose file read as it is.</summary>
-    private static Texture2D Picture(string path)
+    internal static Texture2D Picture(string path)
     {
         if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
         var loose = path.StartsWith("res://", System.StringComparison.Ordinal) ? ProjectSettings.GlobalizePath(path) : path;

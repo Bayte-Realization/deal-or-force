@@ -80,6 +80,38 @@ type PeaceRules private () =
 
             parts.ToArray()
 
+    /// The stalemate discount a long, tiring or already-stalled war applies to the winner's
+    /// resolve over an achievable war aim.
+    ///
+    /// Pulled out of `PeaceNegotiation.WarAimResolve` as a pure function of five numbers,
+    /// because that is what it always was: time since the war began, whether the term on the
+    /// table is a return to the status quo, whether the front has stalled, how weary both
+    /// sides are, and how much of the responder's ground is occupied. The surrounding method
+    /// still decides *whether* the penalty applies at all - that needs the campaign - but the
+    /// arithmetic is here, where a wrong sign or a missing clamp is a compile-time absence
+    /// rather than a number nobody notices for a year.
+    ///
+    /// Float32 throughout, in the same order as the C# it replaces: a differential harness
+    /// compares the two over a grid and requires exact equality, so the order matters.
+    static member StalemateDiscount(durationDays: int,
+                                    statusQuo: bool,
+                                    stalled: bool,
+                                    weariness: single,
+                                    responderOccupied: single) : single =
+        let mutable discount = 0.0f
+        if durationDays > 365 then
+            let years = single (durationDays - 365) / 365.0f
+            discount <-
+                if statusQuo then MathF.Min(0.85f, years * 0.35f)
+                else MathF.Min(0.60f, years * 0.20f)
+        if stalled then
+            discount <- MathF.Max(discount, if statusQuo then 0.65f else 0.40f)
+        let wearinessDiscount = weariness / 100.0f * 0.5f
+        discount <- MathF.Min(0.90f, discount + wearinessDiscount)
+        if statusQuo && responderOccupied > 0.02f then
+            discount <- MathF.Max(discount, 0.50f + MathF.Min(0.40f, responderOccupied))
+        MathF.Max(0.0f, discount)
+
     /// Evaluates the strategic desirability of claiming a region in peace demands.
     /// aim: 0 = People, 1 = Sea, 2 = Buffer, 3 = Wealth.
     static member EvaluateRegionValue(population: int64,

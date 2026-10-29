@@ -37,7 +37,7 @@ public partial class DealOrForceGame
         _settingsLayer.MouseFilter = MouseFilterEnum.Stop;
         AddChild(_settingsLayer);
 
-        var veil = new ColorRect { Color = new Color(0.01f, 0.02f, 0.04f, 0.72f), MouseFilter = MouseFilterEnum.Stop };
+        var veil = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _settingsLayer.AddChild(veil);
 
@@ -57,12 +57,11 @@ public partial class DealOrForceGame
         var headRows = new VBoxContainer();
         headRows.AddThemeConstantOverride("separation", 10);
         head.AddChild(headRows);
-        headRows.AddChild(Title("SETTINGS", 26, Ui.Colour("text.accent")));
+        ScreenHeader(headRows, "SETTINGS",
+            "Interface scale, video quality, strategic audio and campaign preferences.",
+            false, ActionButton("×", HideSettings, 38, 32));
 
-        var tabs = new HFlowContainer();
-        tabs.AddThemeConstantOverride("h_separation", 6);
-        tabs.AddThemeConstantOverride("v_separation", 5);
-        headRows.AddChild(tabs);
+        var tabs = TabStrip(headRows, "SettingsTabs");
         var categories = DealOrForce.Modding.LauncherSelection.IsEditorRun
             ? SettingsCatalog.Categories().Append("editor_mods") : SettingsCatalog.Categories();
         foreach (var category in categories.Distinct(StringComparer.OrdinalIgnoreCase))
@@ -71,8 +70,8 @@ public partial class DealOrForceGame
             // The English, not the translation: `ActionButton` translates what it is
             // given and remembers the original, and a tab that remembered the Russian
             // had nothing to translate when the language changed back.
-            var button = ActionButton(SettingsRows.CategorySource(category), () => ShowSettingsCategory(captured), 150, 34);
-            tabs.AddChild(button);
+            var button = TabButton(tabs, SettingsRows.CategorySource(category), () => ShowSettingsCategory(captured), 150);
+            button.SetMeta("atlas_tab_button", true);
             _settingsTabs[category] = button;
         }
 
@@ -102,6 +101,46 @@ public partial class DealOrForceGame
         actions.AddChild(reset);
         var media = ActionButton("Sound and artwork", OpenMediaLibrary, 190, 40);
         media.Name = "OpenMediaLibrarySettings"; actions.AddChild(media);
+
+        // "Where does this game keep my files?" is a question the interface should answer
+        // itself, in the place where a player looks for it, with a button that opens the folder
+        // rather than a path they have to copy by hand.
+        var folderRow = new HBoxContainer();
+        folderRow.AddThemeConstantOverride("separation", 10);
+        footRows.AddChild(folderRow);
+        var folderButton = ActionButton("Game folder", OpenGameFolder, 160, 36);
+        folderButton.Name = "OpenGameFolderSettings";
+        folderButton.TooltipText = Ui.Tip(Tr("Open the folder that holds saves, settings, logs and mods."));
+        folderRow.AddChild(folderButton);
+        // "Something went wrong" needs one button, not a forum thread: the report carries the
+        // build, the machine, the last three logs, the settings and the newest save, in one zip
+        // in the game folder. Console `report` does the same when the window is unusable.
+        Button reportButton = null;
+        reportButton = ActionButton("Report a problem", () =>
+        {
+            var path = CreateSupportReport();
+            var made = path.Length > 0;
+            reportButton.Text = Tr(made ? "Report saved" : "Report failed");
+            reportButton.TooltipText = Ui.Tip(made ? path : SupportReport.LastFailure);
+            if (made) OS.ShellOpen(GamePaths.Reports);
+        }, 190, 36);
+        reportButton.Name = "ReportProblemSettings";
+        reportButton.TooltipText = Ui.Tip(Tr("Write a zip with the build, the logs, the settings and the save, so a problem can be looked at."));
+        folderRow.AddChild(reportButton);
+        var folderLine = RowLabel(GamePaths.Root, 11, Ui.Colour("text.faint"));
+        folderLine.Name = "GameFolderPath";
+        folderLine.ClipText = true;
+        folderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        folderLine.TooltipText = Ui.Tip(GamePaths.Root);
+        folderRow.AddChild(folderLine);
+    }
+
+    /// <summary>Open the one game folder in the system's file browser.</summary>
+    private void OpenGameFolder()
+    {
+        GamePaths.Prepare();
+        try { OS.ShellOpen(GamePaths.Root); }
+        catch (Exception exception) { DiagnosticLogs.Write("errors", $"FOLDER_OPEN_FAILED {exception.Message}"); }
     }
 
     private void ShowSettings()

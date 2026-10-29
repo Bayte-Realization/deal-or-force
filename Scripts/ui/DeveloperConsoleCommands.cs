@@ -337,6 +337,10 @@ public partial class DealOrForceGame
             "The forms a counted sentence takes in the language that is loaded. One, two, five, " +
             "eleven, twenty-one - which is where a translation usually breaks.",
             ConsolePlural);
+        Add("report", "DEBUG", "report",
+            "Write a bug report: build, machine, logs, settings and the newest save in one zip " +
+            "under reports/. The button in Settings does the same thing.",
+            ConsoleReport);
 
         // ------------------------------------------------------------------------- the rest --
         //
@@ -1647,7 +1651,7 @@ public partial class DealOrForceGame
         {
             var surface = (PanelSurface)node.GetMeta("skin_panel_surface").AsInt32();
             var inCampaign = node.GetMeta("skin_campaign_surface").AsBool();
-            panel.AddThemeStyleboxOverride("panel", inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
+            panel.AddThemeStyleboxOverride("panel", PanelStyle(surface, inCampaign));
             // A menu window's edge is a child of its own, drawn over the artwork, so a skin change
             // has to repaint that child as well or the line keeps the old tint
             // (DealOrForceGame.TexturedPanel).

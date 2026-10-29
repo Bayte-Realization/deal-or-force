@@ -1,9 +1,7 @@
 {
   "Budget": "Бюджет",
-  "Market": "Рынок",
   "Construction": "Строительство",
   "Society": "Общество",
-  "Province": "Провинция",
   "Situation report": "Сводка",
   "Build in region": "Регион строительства",
   "Search buildings…": "Поиск зданий…",
@@ -24,13 +22,7 @@
   "Imports {0:0.#} · exports {1:0.#}": "Импорт {0:0.#} · экспорт {1:0.#}",
   "WATCHLIST": "НАБЛЮДЕНИЕ",
   "WARS": "ВОЙНЫ",
-  "BATTLES": "СРАЖЕНИЯ",
   "NAVY": "ФЛОТ",
-  "MARKET": "РЫНОК",
-  "CONSTRUCTION": "СТРОИТЕЛЬСТВО",
-  "At peace": "Мирное время",
-  "No active engagements": "Активных боёв нет",
-  "No market data": "Нет рыночных данных",
   "Idle — open Economy to queue a project": "Простой — добавьте проект в разделе экономики",
   "No construction": "Строительство простаивает",
   "Decisions: {0}": "Доступно решений: {0}",
@@ -39,8 +31,6 @@
   "Agricultural complex": "Агрокомплекс",
   "Civilian industry": "Гражданская промышленность",
   "Extraction industry": "Добывающая промышленность",
-  "Power plant": "Электростанция",
-  "Arms industry": "Военная промышленность",
   "Refinery": "Нефтеперерабатывающий завод",
   "Chemical plant": "Химический завод",
   "Smelter": "Металлургический завод",
@@ -48,42 +38,28 @@
   "Shipyard": "Верфь",
   "Rail network": "Железнодорожная сеть",
   "Research laboratory": "Исследовательская лаборатория",
-
-  // Вода и то, чего стоит причал вдали от неё.
   "{0}: this region has no coast, no lake and no navigable river.": "{0}: у этого региона нет ни моря, ни озера, ни судоходной реки.",
   "Needs a coast, a lake or a navigable river. On inland water it is worth less.": "Нужен выход к морю, озеру или судоходной реке. На внутренней воде стоит меньше.",
   "{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.": "{0} — стройка начата в регионе {1} · {2} за {3} дн. Внутренняя вода: даст {4} от приморского.",
-
-  // Выход и возвращение.
   "Menu": "Меню",
   "Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera.": "Меню паузы (Esc): сохранение, загрузка, настройки и выход в главное меню. F5 — быстрое сохранение, F9 — загрузка, F10 — свободная камера.",
   "Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping.": "Выйти из кампании на титульный экран. При выходе ничего не сохраняется — сделайте быстрое сохранение, если кампанию стоит оставить.",
-
-  // Снос зданий и отмена строек.
   "{0} standing": "построено: {0}",
   "Nothing of this kind is standing in the selected region.": "В выбранном регионе таких построек нет.",
   "Pull one down in {0}. Its contribution goes with it and {1} comes back as scrap.": "Снести одну в регионе {0}. Её вклад уйдёт вместе с ней, а {1} вернётся ломом.",
   "Call this site off. What has already been spent stays spent; the rest is never taken.": "Свернуть стройку. Потраченное не вернуть, но остальное уже не спишут.",
   "{0} of 12 sites running": "строек идёт: {0} из 12",
-
-  // Наблюдение за миром вместо управления им.
   "Watch the world  [F7]": "Наблюдать за миром  [F7]",
   "Observer mode: no events, nothing stops the clock, and the panels get out of the way. For watching a world run, and for recording one.": "Режим наблюдателя: ивентов нет, время не останавливается, панели уходят с экрана. Чтобы смотреть, как живёт мир, и чтобы записывать это.",
   "Observing · F7 returns the controls · nothing will stop the clock": "Наблюдение · F7 вернёт управление · время не остановится",
-
-  // Сколько строек страна может вести разом — теперь это define.
   "Every one of the {0} construction sites is taken.": "Все {0} строительных площадок заняты.",
   "All {0} sites are already under way. Something has to finish - or be called off - before anything else starts.": "Все {0} строек уже идут. Прежде чем начать новую, надо что-то закончить — или свернуть.",
   "Nothing under construction. {0} sites may run at once.": "Ничего не строится. Одновременно можно вести {0} строек.",
   "{0} of {1} sites running": "строек идёт: {0} из {1}",
-
-  // Почему договор пока нельзя предложить.
   "No active war": "Активной войны нет",
   "This war has no territorial objective": "У этой войны нет территориальной цели",
   "The war has not lasted {0} days": "Война длится меньше {0} дн.",
   "Opponent acceptance {0}% (requires {1}%)": "Готовность противника {0}% (нужно {1}%)",
-
-  // Стандартные условия мира из common/peace_terms.
   "A one-year armistice; all forces return to the pre-war control map.": "Годичное перемирие; войска возвращаются к довоенной линии контроля.",
   "Pre-war borders and a five-year truce, with no victor or indemnity.": "Довоенные границы и пятилетнее перемирие, без победителя и контрибуции.",
   "Pre-war borders plus an immediate economy-scaled indemnity.": "Довоенные границы плюс немедленная контрибуция по размеру экономики.",
@@ -92,8 +68,6 @@
   "Keep secured provinces inside the declared strategic objective.": "Оставить за собой закреплённые провинции в пределах заявленной цели войны.",
   "Keep every secured occupation, evacuating exposed advances.": "Оставить всю закреплённую оккупацию, оставив незащищённые вклинения.",
   "Unconditional surrender under the current occupation map.": "Безоговорочная капитуляция по текущей карте оккупации.",
-
-  // Сводка, отсортированная по важности.
   "Event": "Ивент",
   "Peace offer: {0}": "Мирных предложений: {0}",
   "Shortages: {0}": "Дефицит: {0}",
@@ -102,15 +76,9 @@
   "Inflation: {0}": "Инфляция: {0}",
   "Nothing being built": "Ничего не строится",
   "Prices are rising well past the comfortable rate. The policy rate in the budget is the lever.": "Цены растут заметно выше комфортного уровня. Рычаг — ключевая ставка в бюджете.",
-
-  // Две строки сводки, которых не было в таблице.
   "Another government has put a settlement to you and is waiting on an answer.": "Другое правительство предложило вам мир и ждёт ответа.",
   "Essential goods are in shortage. Open Economy for production, demand, imports and prices.": "Не хватает жизненно важных товаров. Откройте экономику: производство, спрос, импорт и цены.",
-
-  // Когда в сводке вообще нет новостей.
   "Nothing needs attention.": "Ничего не требует внимания.",
-
-  // Что предлагает чужой регион вместо приказов, которые нельзя отдать.
   "Talk to {0}": "Поговорить с: {0}",
   "Open the diplomacy screen with {0}, who this region belongs to.": "Открыть дипломатию с державой {0}, которой принадлежит этот регион."
 }

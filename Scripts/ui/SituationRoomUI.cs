@@ -32,11 +32,11 @@ public partial class DealOrForceGame
         var panel = TexturedPanel(_situationLayer); panel.Name = "SituationRoomPanel"; Ui.Place(panel, "workspace.situation");
         _situationPanel = panel;
         var rows = PanelRows(panel, 22, 18, 10);
-        var header = new HBoxContainer(); header.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.header_gap", 10)); rows.AddChild(header);
-        var title = SituationText("SITUATION ROOM", 25, "text.accent"); title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
-        header.AddChild(HandbookButton("situation_room"));
         _situationClose = ActionButton("×", CloseSituationRoom, 38, 32); _situationClose.Name = "CloseSituationRoom";
-        _situationClose.TooltipText = Ui.Tip(Tr("Close")); header.AddChild(_situationClose);
+        _situationClose.TooltipText = Ui.Tip(Tr("Close"));
+        ScreenHeader(rows, "SITUATION ROOM",
+            "Urgent national pressures, foreign crises, military readiness and development opportunities.",
+            false, HandbookButton("situation_room"), _situationClose);
         _situationSummary = SituationText("", 13, "text.body_soft"); _situationSummary.Name = "SituationSummary"; rows.AddChild(_situationSummary);
         var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", (int)Ui.Metric("situation.filter_h_gap", 6)); filters.AddThemeConstantOverride("v_separation", (int)Ui.Metric("situation.filter_v_gap", 4));
         rows.AddChild(filters);
@@ -44,8 +44,11 @@ public partial class DealOrForceGame
         {
             var captured = key;
             var button = ActionButton(SituationFilterName(key), () =>
-            { _situationFilter = captured; RefreshSituationList(); }, 0, 30);
-            button.Name = "SituationFilter_" + key; button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
+            { _situationFilter = captured; RefreshSituationList(); }, 0, 32);
+            button.Name = "SituationFilter_" + key;
+            button.SetMeta("atlas_tab_button", true);
+            button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
+            StyleButton(button, key == _situationFilter);
             filters.AddChild(button); _situationFilters[key] = button;
         }
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -55,9 +58,14 @@ public partial class DealOrForceGame
         left.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.column_gap", 8)); body.AddChild(left);
         _situationSearch = Placeholder(new LineEdit { Name = "SituationSearch", ClearButtonEnabled = true }, "Find an issue or country...");
         _situationSearch.TextChanged += _ => RefreshSituationList(); left.AddChild(_situationSearch);
+        var listFrame = new PanelContainer { Name = "SituationListFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        listFrame.SetMeta("atlas_section_ground", "surface.inset");
+        listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        left.AddChild(listFrame);
         var listScroll = new ScrollContainer { Name = "SituationListScroll", HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill, FollowFocus = true };
-        left.AddChild(listScroll);
+        listFrame.AddChild(listScroll);
         _situationList = new VBoxContainer { Name = "SituationList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _situationList.AddThemeConstantOverride("separation", (int)Ui.Metric("situation.list_gap", 7)); listScroll.AddChild(_situationList);
         _situationEmpty = SituationText("", 14, "text.body_soft"); _situationList.AddChild(_situationEmpty);
@@ -341,6 +349,7 @@ public partial class DealOrForceGame
             }
             _assistanceInboxSelected = -1;
             _dealInboxSelected = -1;
+            ClearArmsInboxSelection();
             _situationLayer.Visible = false;
             _situationReturn = "Inbox";
             OpenDealInbox();
@@ -352,6 +361,7 @@ public partial class DealOrForceGame
             _ultimatumInboxSelected = item.TargetId;
             _dealInboxSelected = -1;
             _assistanceInboxSelected = -1;
+            ClearArmsInboxSelection();
             _situationLayer.Visible = false;
             _situationReturn = "Inbox";
             OpenDealInbox();
@@ -389,8 +399,8 @@ public partial class DealOrForceGame
         _situationLayer.Visible = false; _situationReturn = "";
         switch (item.Route)
         {
-            case SituationRoute.Inbox: _assistanceInboxSelected = -1; _dealInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
-            case SituationRoute.Assistance: _dealInboxSelected = -1; _assistanceInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
+            case SituationRoute.Inbox: _assistanceInboxSelected = -1; ClearArmsInboxSelection(); _dealInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
+            case SituationRoute.Assistance: _dealInboxSelected = -1; ClearArmsInboxSelection(); _assistanceInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
             case SituationRoute.PeaceOffer: OpenWarLedger(); ShowWarLedgerDetail(item.TargetId); _situationReturn = "Wars"; break;
             case SituationRoute.Organization:
                 _selectedOrganization = item.TargetId; _conflictTab = 4; OpenScreen("Conflicts"); _situationReturn = "Conflicts"; break;

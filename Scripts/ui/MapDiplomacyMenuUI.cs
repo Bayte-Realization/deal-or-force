@@ -26,6 +26,25 @@ public partial class DealOrForceGame
         return button;
     }
 
+    /// <summary>
+    /// One cooperation act asked for from the map. The answer is written where the menu already
+    /// writes it - the paper, the refusal or the signature - and the map redraws.
+    /// </summary>
+    private void ProposeActFromMap(Nation target, DiplomaticAct act)
+    {
+        var player = _campaign?.Player;
+        if (player is null || target is null) return;
+        var command = new DiplomaticActCommand
+        {
+            IssuerId = player.Id, TargetId = target.Id, Act = act, Step = DiplomaticActStep.Propose
+        };
+        _campaign.Commands.Enqueue(command);
+        _campaign.Commands.ApplyAll(_campaign);
+        if (_mapDiplomacyFeedback is not null)
+            _mapDiplomacyFeedback.Text = Tr(command.Result.Length > 0 ? command.Result : "Diplomatic act");
+        Refresh();
+    }
+
     /// <summary>Closes the floating map diplomacy menu if it is open.</summary>
     private void CloseMapDiplomacyMenu()
     {
@@ -153,6 +172,27 @@ public partial class DealOrForceGame
         RefreshOutreachButton(missionButton,target);
         AddMapDiplomacyAction(rows, Tr("Denounce"), "INFLUENCE", DenounceDiplomacyTarget,
             Tr("Publicly denounce them, lowering opinion and raising tension."));
+        AddGestureAction(rows, target, "state_visit", "State visit", "INFLUENCE");
+        AddGestureAction(rows, target, "show_of_force", "Show of force", "INFLUENCE");
+        AddGestureAction(rows, target, "loan", "Development loan", "AGREEMENTS");
+        AddGestureAction(rows, target, "joint_exercises", "Joint exercises", "INFLUENCE");
+        AddGestureAction(rows, target, "expel_diplomats", "Expel their diplomats", "INFLUENCE");
+        if (!atWar) AddGestureAction(rows, target, "mediate", "Mediate their war", "War and peace");
+
+        // --- Cooperation, straight from the map ---
+        // The diplomacy screen offers all of them with their prices; here are the four a
+        // government reaches for in the middle of something else, each refused in the same
+        // words the screen and the queue would use.
+        foreach (var act in DiplomaticActs.Quick)
+        {
+            var captured = act;
+            var refusal = DiplomaticActs.Refusal(_campaign, player, target, captured);
+            var button = AddMapDiplomacyAction(rows, Tr(DiplomaticActs.Name(captured)), "COOPERATION",
+                () => ProposeActFromMap(target, captured),
+                refusal.Length > 0 ? refusal : Tr(DiplomaticActs.Name(captured)));
+            button.Name = "MapAct_" + captured;
+            button.Disabled = refusal.Length > 0;
+        }
 
         // --- Agreements ---
         AddMapDiplomacyAction(rows, Tr("Propose alliance"), "AGREEMENTS", ToggleDiplomacyAlliance,
@@ -206,5 +246,46 @@ public partial class DealOrForceGame
         var x = Math.Clamp(at.X + 14f, 8f, MathF.Max(8f, screen.X - width - 8f));
         var y = Math.Clamp(at.Y + 10f, 8f, MathF.Max(8f, screen.Y - height - 8f));
         _mapDiplomacyMenu.Position = new Vector2(x, y);
+    }
+    /// <summary>A diplomatic gesture on the map menu (DiplomaticGestures): disabled with the reason when it cannot be made.</summary>
+    private void AddGestureAction(VBoxContainer rows, Nation target, string gesture, string caption, string iconRole)
+    {
+        Button button = null;
+        button = AddMapDiplomacyAction(rows, Tr(caption), iconRole, () =>
+        {
+            var command = new DiplomaticGestureCommand { IssuerId = _campaign.Player.Id, TargetId = target.Id, Gesture = gesture };
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+            if (_mapDiplomacyFeedback is not null)
+                _mapDiplomacyFeedback.Text = command.Done ? Tr(caption) + " ✓" : command.Refusal;
+            RefreshGestureButton(button, target, gesture);
+        }, "");
+        RefreshGestureButton(button, target, gesture);
+    }
+
+    private void RefreshGestureButton(Button button, Nation target, string gesture)
+    {
+        if (button is null || target is null) return;
+        var player = _campaign.Player;
+        var d = _campaign.Defines;
+        var refusal = DiplomaticGestures.Refusal(_campaign, player.Id, target.Id, gesture);
+        var war = gesture == "mediate" ? DiplomaticGestures.MediableWar(_campaign, player, target) : null;
+        var description = gesture switch
+        {
+            "state_visit" => Simulation.Loc.Format("A visit by our head of state: {0:0.##} political credit and {1}. Opinion +20 for four years; a friend of a neutral.",
+                d.StateVisitPoliticalCost, Fmt.Money(d.StateVisitCash)),
+            "show_of_force" => Simulation.Loc.Format("Manoeuvres on their border: {0}. Their opinion -15 and a grievance against us; our war support rises, and theirs a little.",
+                Fmt.Money(d.ShowOfForceCash)),
+            "mediate" => Simulation.Loc.Format("Offer to mediate the {0}: {1:0.##} political credit. If both sides are ready, a ceasefire, and both remember who brought it.",
+                war is null ? "" : WarNames.Of(_campaign, war), d.MediationPoliticalCost),
+            "loan" => Simulation.Loc.Format("Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.",
+                Fmt.Money(DiplomaticGestures.LoanSize(_campaign, player, target)), d.LoanInterest * 100f, d.LoanWeeks),
+            "joint_exercises" => Simulation.Loc.Format("Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.",
+                d.ExercisesPoliticalCost, Fmt.Money(d.ExercisesCash)),
+            "expel_diplomats" => Simulation.Loc.Get("Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud."),
+            _ => ""
+        };
+        button.Disabled = refusal.Length > 0;
+        button.TooltipText = Ui.Tip(description + (refusal.Length == 0 ? "" : "\n\n" + refusal));
     }
 }

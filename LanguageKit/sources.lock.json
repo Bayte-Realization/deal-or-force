@@ -1,29 +1,41 @@
 {
   "schema_version": 1,
   "engine": {
-    "version": "4.8.beta1.mono.official.4d10419ca",
-    "directory": "C:/GodotEngineNet 4.8-Beta1",
-    "executable": "Godot_v4.8-beta1_mono_win64_console.exe",
-    "gui_sha256": "6A76B684EDBA16C12348663CB9759B6ECB42FC4C0969470C69B1A75727E42CF9",
+    "version": "4.8.beta2.mono.official.cafc17a19",
+    "directory": "C:/GodotEngineNet 4.8-Beta2",
+    "executable": "Godot_v4.8-beta2_mono_win64_console.exe",
+    "gui_sha256": "6B894EF7578A8999266ECDBC267BCD424CAADB16B8F15E0F6DEE4D3FC0596524",
     "platform": "windows-x86_64"
   },
+  "verification": {
+    "rust": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+    "zig": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+    "go": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "runtime-smoke", "date": "2026-10-29" },
+    "python": { "engine": "4.8.beta2.mono.official.cafc17a19", "stage": "failed-teardown", "date": "2026-10-29", "note": "py4godot 4.7-alpha21 executes small integers, but fails the 64-bit boundary and leaks registered classes/resources; not approved" }
+  },
   "sources": [
-    { "id": "rust", "url": "https://github.com/godot-rust/gdext.git", "commit": "0b680b4d59c4790d4673b2293110687d2e5261c7", "license": "MPL-2.0" },
+    { "id": "rust", "url": "https://github.com/godot-rust/gdext.git", "commit": "0b680b4d59c4790d4673b2293110687d2e5261c7", "license": "MPL-2.0", "release": "v0.5.5" },
     { "id": "nim", "url": "https://github.com/godot-nim/gdext-nim.git", "commit": "15b69a92ba2642f2bea117e01e3bbcd112c9f57d", "license": "MIT" },
     { "id": "odin", "url": "https://github.com/dresswithpockets/odin-godot.git", "commit": "93395901a76f62a9f2adff76c2eb38a185d91513", "license": "Apache-2.0" },
     { "id": "kotlin", "url": "https://github.com/utopia-rise/godot-jvm.git", "commit": "5d39c7e3fbe5be78853837e3c89676e7a92c9ec9", "license": "MIT" },
     { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "b43ed1619abc12a669c59cb0aa25c4582873a7b9", "license": "BSD-3-Clause" },
     { "id": "luau", "url": "https://github.com/Fumohouse/godot-luau-script.git", "commit": "7942ce6def8023596ca0cb8d819b032eb40a4bce", "license": "MIT", "archived": true },
-    { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "note": "Lua/LuaJIT, not Luau" }
+    { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "note": "Lua/LuaJIT, not Luau" },
+    { "id": "zig", "url": "https://github.com/gdzig/gdzig.git", "commit": "c1b0cc3c7befc4c2483624d078e1e650b07b2dfa", "license": "MIT", "note": "vendored API snapshot is Godot 4.7.2; Zig 0.17.0" },
+    { "id": "go", "url": "https://github.com/quaadgras/graphics.gd.git", "commit": "af2e5393cdf04d36e1cba40cb4d6437624916d40", "license": "MIT", "note": "default branch is 'release'; module graphics.gd; go 1.27" },
+    { "id": "python", "url": "https://github.com/niklas2902/py4godot.git", "commit": "b41ddb82af5f8e59ce4e1a9254bec9cf82a138dd", "license": "MIT", "note": "Cython GDExtension; Python 3.11+; prebuilt zip in Releases" }
   ],
   "adapters": [
-    { "id": "luau", "source": "luau", "integration": "ScriptLanguageExtension", "trust": "trusted-native" },
-    { "id": "fsharp", "source": null, "integration": "managed-library-csharp-bridge", "trust": "trusted-managed" },
-    { "id": "nim", "source": "nim", "integration": "GDExtension", "trust": "trusted-native" },
-    { "id": "odin", "source": "odin", "integration": "GDExtension", "trust": "trusted-native" },
-    { "id": "rust", "source": "rust", "integration": "GDExtension", "trust": "trusted-native" },
-    { "id": "kotlin", "source": "kotlin", "integration": "JVM-GDExtension", "trust": "trusted-native-jvm" },
-    { "id": "sandbox", "source": "sandbox", "integration": "sandbox-GDExtension", "trust": "host-extension-must-be-trusted", "optional": true },
-    { "id": "lua", "source": "lua", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "optional": true }
+    { "id": "luau", "source": "luau", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "verified": true },
+    { "id": "fsharp", "source": null, "integration": "managed-library-csharp-bridge", "trust": "trusted-managed", "verified": true },
+    { "id": "nim", "source": "nim", "integration": "GDExtension", "trust": "trusted-native", "verified": true },
+    { "id": "odin", "source": "odin", "integration": "GDExtension", "trust": "trusted-native", "verified": true },
+    { "id": "rust", "source": "rust", "integration": "GDExtension", "trust": "trusted-native", "verified": true },
+    { "id": "kotlin", "source": "kotlin", "integration": "JVM-GDExtension", "trust": "trusted-native-jvm", "verified": true },
+    { "id": "sandbox", "source": "sandbox", "integration": "sandbox-GDExtension", "trust": "host-extension-must-be-trusted", "optional": true, "verified": true },
+    { "id": "lua", "source": "lua", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "optional": true, "verified": true },
+    { "id": "zig", "source": "zig", "integration": "GDExtension", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["zig"], "status": "Beta2 runtime smoke passed with Zig 0.17.0; full API/export/hot reload unverified" },
+    { "id": "go", "source": "go", "integration": "GDExtension-cgo", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["go", "gcc"], "status": "Beta2 runtime smoke passed with portable Go 1.27.3 and Zig cc; system Go remains 1.21.4" },
+    { "id": "python", "source": "python", "integration": "GDExtension-Cython", "trust": "trusted-native", "optional": true, "verified": false, "requires": ["python", "meson", "ninja"], "status": "py4godot release small arithmetic passed, int64/teardown failed; quarantined experimental. godot4-meson API parser patch is a separate track, not a runtime pass" }
   ]
 }

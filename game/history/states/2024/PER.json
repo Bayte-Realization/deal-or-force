@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2017 census self-identification by region.
 {
   // Amazonas
   "pe_ama": {
     "population": 202536,
     "urbanization": 0.2,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.7669, "native_american": 0.12, "venezuelan": 0.0383, "quechua": 0.03, "chinese_diaspora": 0.0256, "african_american": 0.0128, "japanese": 0.0064 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.027, "Coal": 0.447, "Oil": 0.555, "IronOre": 0.289, "RareEarths": 0.1, "NaturalGas": 0.73, "Timber": 3.356, "Bauxite": 0.057, "Uranium": 0.01 }
   },
@@ -23,7 +24,7 @@
   "pe_apu": {
     "population": 191728,
     "urbanization": 0.45,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "quechua": 0.7, "peruvian": 0.2535, "native_american": 0.019, "venezuelan": 0.0127, "chinese_diaspora": 0.0085, "african_american": 0.0042, "japanese": 0.0021 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.965, "Coal": 0.551, "Oil": 0.655, "IronOre": 0.334, "RareEarths": 0.098, "NaturalGas": 0.786, "Timber": 1.334, "Bauxite": 0.138, "Uranium": 0.011 }
   },
@@ -31,7 +32,7 @@
   "pe_are": {
     "population": 1853211,
     "urbanization": 0.75,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6508, "quechua": 0.2, "native_american": 0.0488, "venezuelan": 0.0325, "aymara": 0.03, "chinese_diaspora": 0.0217, "african_american": 0.0108, "japanese": 0.0054 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 2.318, "Coal": 0.59, "Oil": 0.374, "IronOre": 0.481, "RareEarths": 0.056, "NaturalGas": 1.005, "Timber": 2.876, "Bauxite": 0.143, "Uranium": 0.017 }
   },
@@ -39,7 +40,7 @@
   "pe_aya": {
     "population": 460921,
     "urbanization": 0.69,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "quechua": 0.6499, "peruvian": 0.2958, "native_american": 0.0222, "venezuelan": 0.0148, "chinese_diaspora": 0.0099, "african_american": 0.0049, "japanese": 0.0025 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.347, "Coal": 0.3, "Oil": 0.528, "IronOre": 0.164, "RareEarths": 0.108, "NaturalGas": 0.467, "Timber": 0.702, "Bauxite": 0.153, "Uranium": 0.018 }
   },
@@ -47,7 +48,7 @@
   "pe_caj": {
     "population": 536691,
     "urbanization": 0.66,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.8197, "native_american": 0.0615, "venezuelan": 0.041, "quechua": 0.03, "chinese_diaspora": 0.0273, "african_american": 0.0137, "japanese": 0.0068 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.376, "Coal": 0.201, "Oil": 0.198, "IronOre": 0.098, "RareEarths": 0.035, "NaturalGas": 0.296, "Timber": 0.694, "Bauxite": 0.036, "Uranium": 0.007 }
   },
@@ -55,7 +56,7 @@
   "pe_cus": {
     "population": 1016720,
     "urbanization": 0.63,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "quechua": 0.55, "peruvian": 0.3718, "native_american": 0.0279, "venezuelan": 0.0186, "chinese_diaspora": 0.0124, "aymara": 0.01, "african_american": 0.0062, "japanese": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.693, "Coal": 0.186, "Oil": 0.306, "IronOre": 0.101, "RareEarths": 0.04, "NaturalGas": 0.302, "Timber": 2.096, "Bauxite": 0.06, "Uranium": 0.006 }
   },
@@ -63,7 +64,7 @@
   "pe_huv": {
     "population": 280655,
     "urbanization": 0.33,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "quechua": 0.6499, "peruvian": 0.2958, "native_american": 0.0222, "venezuelan": 0.0148, "chinese_diaspora": 0.0099, "african_american": 0.0049, "japanese": 0.0025 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.038, "Coal": 0.182, "Oil": 0.433, "IronOre": 0.201, "RareEarths": 0.078, "NaturalGas": 0.586, "Timber": 1.666, "Bauxite": 0.06, "Uranium": 0.009 }
   },
@@ -71,7 +72,7 @@
   "pe_huc": {
     "population": 519378,
     "urbanization": 0.64,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.5915, "quechua": 0.3, "native_american": 0.0444, "venezuelan": 0.0296, "chinese_diaspora": 0.0197, "african_american": 0.0099, "japanese": 0.0049 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.072, "Coal": 0.359, "Oil": 0.669, "IronOre": 0.176, "RareEarths": 0.072, "NaturalGas": 0.612, "Timber": 1.805, "Bauxite": 0.122, "Uranium": 0.011 }
   },
@@ -79,7 +80,7 @@
   "pe_ica": {
     "population": 1050931,
     "urbanization": 0.81,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.7774, "quechua": 0.08, "native_american": 0.0583, "venezuelan": 0.0389, "chinese_diaspora": 0.0259, "african_american": 0.013, "japanese": 0.0065 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.755, "Coal": 0.408, "Oil": 0.792, "IronOre": 0.279, "RareEarths": 0.067, "NaturalGas": 0.551, "Timber": 2.237, "Bauxite": 0.18, "Uranium": 0.02 }
   },
@@ -87,7 +88,7 @@
   "pe_jun": {
     "population": 1303828,
     "urbanization": 0.67,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6761, "quechua": 0.2, "native_american": 0.0507, "venezuelan": 0.0338, "chinese_diaspora": 0.0225, "african_american": 0.0113, "japanese": 0.0056 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.564, "Coal": 0.218, "Oil": 0.38, "IronOre": 0.232, "RareEarths": 0.072, "NaturalGas": 0.441, "Timber": 1.882, "Bauxite": 0.062, "Uranium": 0.008 }
   },
@@ -95,7 +96,7 @@
   "pe_lal": {
     "population": 1510354,
     "urbanization": 0.88,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.8282, "native_american": 0.0621, "venezuelan": 0.0414, "chinese_diaspora": 0.0276, "quechua": 0.02, "african_american": 0.0138, "japanese": 0.0069 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 0.877, "Coal": 0.188, "Oil": 0.469, "IronOre": 0.198, "RareEarths": 0.065, "NaturalGas": 0.385, "Timber": 1.083, "Bauxite": 0.041, "Uranium": 0.005 }
   },
@@ -103,7 +104,7 @@
   "pe_lam": {
     "population": 1180386,
     "urbanization": 0.9,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.8282, "native_american": 0.0621, "venezuelan": 0.0414, "chinese_diaspora": 0.0276, "quechua": 0.02, "african_american": 0.0138, "japanese": 0.0069 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 0.994, "Coal": 0.319, "Oil": 0.797, "IronOre": 0.271, "RareEarths": 0.057, "NaturalGas": 0.852, "Timber": 2.288, "Bauxite": 0.109, "Uranium": 0.016 }
   },
@@ -111,7 +112,7 @@
   "pe_lim": {
     "population": 13474432,
     "urbanization": 0.95,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6811, "quechua": 0.22, "venezuelan": 0.0341, "chinese_diaspora": 0.0227, "aymara": 0.02, "african_american": 0.0114, "japanese": 0.0057, "native_american": 0.005 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 2, "Infrastructure": 3 },
     "resources": { "Food": 0.88, "Coal": 0.519, "Oil": 0.572, "IronOre": 0.194, "RareEarths": 0.054, "NaturalGas": 0.98, "Timber": 2.074, "Bauxite": 0.12, "Uranium": 0.012 }
   },
@@ -119,7 +120,7 @@
   "pe_lor": {
     "population": 2085066,
     "urbanization": 0.46,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.7489, "native_american": 0.15, "venezuelan": 0.0374, "chinese_diaspora": 0.025, "quechua": 0.02, "african_american": 0.0125, "japanese": 0.0062 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 1.278, "Coal": 0.499, "Oil": 0.803, "IronOre": 0.359, "RareEarths": 0.093, "NaturalGas": 0.695, "Timber": 1.8, "Bauxite": 0.098, "Uranium": 0.018 }
   },
@@ -127,7 +128,7 @@
   "pe_mdd": {
     "population": 301672,
     "urbanization": 0.35,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.7037, "quechua": 0.15, "native_american": 0.05, "venezuelan": 0.0352, "chinese_diaspora": 0.0235, "aymara": 0.02, "african_american": 0.0117, "japanese": 0.0059 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.439, "Coal": 0.218, "Oil": 0.713, "IronOre": 0.224, "RareEarths": 0.08, "NaturalGas": 0.413, "Timber": 3.235, "Bauxite": 0.173, "Uranium": 0.015 }
   },
@@ -135,7 +136,7 @@
   "pe_moq": {
     "population": 351764,
     "urbanization": 0.48,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6338, "quechua": 0.15, "aymara": 0.1, "native_american": 0.0475, "venezuelan": 0.0317, "chinese_diaspora": 0.0211, "african_american": 0.0106, "japanese": 0.0053 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.333, "Coal": 0.166, "Oil": 0.298, "IronOre": 0.107, "RareEarths": 0.034, "NaturalGas": 0.215, "Timber": 1.089, "Bauxite": 0.073, "Uranium": 0.008 }
   },
@@ -143,7 +144,7 @@
   "pe_pas": {
     "population": 388778,
     "urbanization": 0.56,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6761, "quechua": 0.2, "native_american": 0.0507, "venezuelan": 0.0338, "chinese_diaspora": 0.0225, "african_american": 0.0113, "japanese": 0.0056 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.034, "Coal": 0.324, "Oil": 0.697, "IronOre": 0.169, "RareEarths": 0.106, "NaturalGas": 0.638, "Timber": 3.082, "Bauxite": 0.059, "Uranium": 0.009 }
   },
@@ -151,7 +152,7 @@
   "pe_piu": {
     "population": 1710543,
     "urbanization": 0.86,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.8367, "native_american": 0.0627, "venezuelan": 0.0418, "chinese_diaspora": 0.0279, "african_american": 0.0139, "quechua": 0.01, "japanese": 0.007 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 1.75, "Coal": 0.159, "Oil": 0.208, "IronOre": 0.139, "RareEarths": 0.02, "NaturalGas": 0.251, "Timber": 1.893, "Bauxite": 0.065, "Uranium": 0.008 }
   },
@@ -159,7 +160,7 @@
   "pe_pun": {
     "population": 1278834,
     "urbanization": 0.5,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "quechua": 0.3499, "aymara": 0.3, "peruvian": 0.2958, "native_american": 0.0222, "venezuelan": 0.0148, "chinese_diaspora": 0.0099, "african_american": 0.0049, "japanese": 0.0025 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.866, "Coal": 0.299, "Oil": 0.621, "IronOre": 0.192, "RareEarths": 0.04, "NaturalGas": 0.264, "Timber": 3.218, "Bauxite": 0.06, "Uranium": 0.013 }
   },
@@ -167,7 +168,7 @@
   "pe_sam": {
     "population": 467815,
     "urbanization": 0.43,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.8481, "venezuelan": 0.0424, "quechua": 0.03, "native_american": 0.03, "chinese_diaspora": 0.0283, "african_american": 0.0141, "japanese": 0.0071 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.829, "Coal": 0.132, "Oil": 0.236, "IronOre": 0.127, "RareEarths": 0.042, "NaturalGas": 0.17, "Timber": 2.387, "Bauxite": 0.04, "Uranium": 0.003 }
   },
@@ -175,7 +176,7 @@
   "pe_tac": {
     "population": 538431,
     "urbanization": 0.82,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.6591, "aymara": 0.12, "quechua": 0.1, "native_american": 0.0494, "venezuelan": 0.033, "chinese_diaspora": 0.022, "african_american": 0.011, "japanese": 0.0055 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.229, "Coal": 0.213, "Oil": 0.358, "IronOre": 0.107, "RareEarths": 0.066, "NaturalGas": 0.365, "Timber": 2.051, "Bauxite": 0.059, "Uranium": 0.008 }
   },
@@ -183,7 +184,7 @@
   "pe_uca": {
     "population": 866485,
     "urbanization": 0.57,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.7669, "native_american": 0.12, "venezuelan": 0.0383, "quechua": 0.03, "chinese_diaspora": 0.0256, "african_american": 0.0128, "japanese": 0.0064 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.203, "Coal": 0.532, "Oil": 0.422, "IronOre": 0.423, "RareEarths": 0.089, "NaturalGas": 0.665, "Timber": 3.296, "Bauxite": 0.08, "Uranium": 0.013 }
   },
@@ -191,7 +192,7 @@
   "pe_anc": {
     "population": 939294,
     "urbanization": 0.81,
-    "cultures": { "peruvian": 0.6, "quechua": 0.25, "native_american": 0.045, "aymara": 0.04, "venezuelan": 0.03, "chinese_diaspora": 0.02, "african_american": 0.01, "japanese": 0.005 },
+    "cultures": { "peruvian": 0.5915, "quechua": 0.3, "native_american": 0.0444, "venezuelan": 0.0296, "chinese_diaspora": 0.0197, "african_american": 0.0099, "japanese": 0.0049 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 2.229, "Coal": 0.133, "Oil": 0.249, "IronOre": 0.087, "RareEarths": 0.025, "NaturalGas": 0.187, "Timber": 2.044, "Bauxite": 0.039, "Uranium": 0.003 }
   }

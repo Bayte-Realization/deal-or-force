@@ -24,7 +24,7 @@
       "state.standard_of_living": 0.0005
     },
     "modifiers": {
-      "tax_efficiency": -0.02
+      "output": -0.02
     }
   },
   "open_migration_doors": {

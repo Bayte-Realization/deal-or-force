@@ -13,12 +13,20 @@ public sealed partial class Defines
     /// CivilWarCoupMemoryDays doubles it.
     /// </summary>
     public bool CivilWarOutbreaks { get; set; } = true;
-    public float CivilWarStabilityThreshold { get; set; } = 0.32f;
-    public float CivilWarWeeklyChance { get; set; } = 0.012f;
+    public float CivilWarStabilityThreshold { get; set; } = 0.42f;
+    public float CivilWarWeeklyChance { get; set; } = 0.016f;
     /// <summary>The most civil wars the whole world begins in a year. A century-old campaign
     /// whose stability has drifted down everywhere began thirteen in one year - Japan and
     /// Spain among them - without it.</summary>
-    public int CivilWarWorldPerYear { get; set; } = 3;
+    public int CivilWarWorldPerYear { get; set; } = 5;
+    /// <summary>
+    /// The chance a coup splits the army instead of taking it: the officers who would not go
+    /// along hold part of the country, and it is a civil war from that day (Spain 1936, Sudan
+    /// 2023). A plot found out turns into one at the second chance. Neither waits for the
+    /// stability line; both still count against the world's year.
+    /// </summary>
+    public float CivilWarFromCoupChance { get; set; } = 0.3f;
+    public float CivilWarFromFoiledPlotChance { get; set; } = 0.12f;
     public int CivilWarCoupMemoryDays { get; set; } = 365;
     public int CivilWarEarliestDay { get; set; } = 120;
     public int CivilWarCooldownDays { get; set; } = 1825;
@@ -27,9 +35,10 @@ public sealed partial class Defines
     /// <summary>How much of the country the rising takes, as a share of its people.</summary>
     public float CivilWarRebelShareMin { get; set; } = 0.15f;
     public float CivilWarRebelShareMax { get; set; } = 0.40f;
-    /// <summary>Whether a country somebody plays can have one. Off: a player's state falls
-    /// apart by its own choices, not by a roll it was never shown.</summary>
-    public bool CivilWarStrikesPlayers { get; set; } = false;
+    /// <summary>Whether a country somebody plays can have one. On by default: a player's
+    /// country and the computer's live by the same rules. Off is the campaign option for a
+    /// player who wants its state to fall apart only by its own choices.</summary>
+    public bool CivilWarStrikesPlayers { get; set; } = true;
     /// <summary>How much faster a state's minorities leave while it fights a civil war.</summary>
     public float SecessionCivilWarMultiplier { get; set; } = 3f;
     /// <summary>How much imperial overstretch amplifies secession pressure across foreign regions.</summary>
@@ -95,8 +104,25 @@ public static class CivilWarOutbreak
 
     private static bool Eligible(Campaign c, Nation nation) => EligibilityReason(c, nation).Length == 0;
 
+    /// <summary>
+    /// A coup that splits the army (Coups): at chance, part of the country goes over to the
+    /// officers who would not follow - whatever its stability, within the world's year.
+    /// </summary>
+    public static SecessionReport FromCoup(Campaign c, Nation nation, float chance, int salt)
+    {
+        if (c?.ProvinceMap is null || nation is null || chance <= 0f || !c.Defines.CivilWarOutbreaks) return null;
+        if (StartsInLastYear(c) >= c.Defines.CivilWarWorldPerYear) return null;
+        if (EligibilityReason(c, nation, ignoreStability: true).Length > 0) return null;
+        if (Escalation.Roll(c.Seed, nation.Id, 0xC0C, c.ElapsedDays, salt) >= chance) return null;
+        var report = Break(c, nation, ignoreStability: true);
+        if (report is not null) c.Chronicle.Record(c, "coup_civil_war", nation.Id, report.Seceded.Id);
+        return report;
+    }
+
     /// <summary>The same gates for the simulation and its explanation; no hidden UI approximation.</summary>
-    public static string EligibilityReason(Campaign c, Nation nation)
+    public static string EligibilityReason(Campaign c, Nation nation) => EligibilityReason(c, nation, false);
+
+    private static string EligibilityReason(Campaign c, Nation nation, bool ignoreStability)
     {
         if (c is null || nation is null) return "No governed country selected.";
         var d = c.Defines;
@@ -112,7 +138,7 @@ public static class CivilWarOutbreak
         if (c.Wars.Any(w => !w.Ended && w.CivilConflict && w.Involves(nation.Id))) return "An existing civil war must end before another outbreak.";
         if (nation.Population < d.CivilWarMinimumPopulation || c.StatesOf(nation).Count(s => s.Population > 0) < d.CivilWarMinimumRegions)
             return "Too few residents or governed regions for a territorial civil war.";
-        if (nation.Stability >= d.CivilWarStabilityThreshold) return "Institutions remain above the civil-war instability threshold.";
+        if (!ignoreStability && nation.Stability >= d.CivilWarStabilityThreshold) return "Institutions remain above the civil-war instability threshold.";
         return "";
     }
 
@@ -185,9 +211,9 @@ public static class CivilWarOutbreak
     }
 
     /// <summary>Who rises, where, under what name - and the war.</summary>
-    internal static SecessionReport Break(Campaign c, Nation nation)
+    internal static SecessionReport Break(Campaign c, Nation nation, bool ignoreStability = false)
     {
-        if (!Eligible(c, nation)) return null;
+        if (EligibilityReason(c, nation, ignoreStability).Length > 0) return null;
         var regions = RebelGround(c, nation);
         if (regions.Count == 0) return null;
         var ideology = OppositionTo(nation.Ideology, c.Seed ^ nation.Id);
@@ -199,12 +225,14 @@ public static class CivilWarOutbreak
         };
         var parentTag = nation.Tag;
         var parentName = nation.Name;
+        var rebelFaith = BeliefDynamics.RebelFaith(c, nation, regions);
         var report = SecessionEvents.Uprising(c, nation, regions, born =>
         {
             born.Name = $"rising:{template}:{parentTag}:{parentName}";
             born.Ideology = ideology;
             born.Government = "provisional_government";
             born.LastCivilWarDay = c.ElapsedDays;
+            if (rebelFaith.Length > 0) born.DeclaredReligion = rebelFaith;
         });
         if (report?.Seceded is null) return null;
         nation.LastCivilWarDay = c.ElapsedDays;

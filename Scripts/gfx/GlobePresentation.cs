@@ -144,6 +144,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private readonly Dictionary<(int Nation, string Template), Texture2D> _armyCounterTextures = new();
     private readonly List<(Node3D Node, Vector3 Normal, int Cells)> _countryLabels = new();
     private readonly List<(Label3D Node, float Latitude, float Longitude, Basis SurfaceBasis, float FlatRotation)> _countryGlyphs = new();
+    /// <summary>The size the country letters are drawn at on the flat map, against their full size; negative until applied.</summary>
+    private float _countryGlyphScale = -1f;
     private readonly Dictionary<int, Node3D> _countryLabelGroups = new();
     private SubViewport _viewport = null!;
     private Camera3D _camera = null!;
@@ -450,7 +452,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
             HandleInputLocally = false,
             RenderTargetUpdateMode = SubViewport.UpdateMode.Always,
             Size2DOverrideStretch = true,
-            Scaling3DMode = Viewport.Scaling3DModeEnum.Bilinear
+            Scaling3DMode = Viewport.Scaling3DModeEnum.Bilinear,
+            // The planet's silhouette, the counter quads and the order ribbons are the only true
+            // geometric edges on this screen, and a staircase along the limb is the first thing
+            // a strategy player notices about a map's quality. Four samples is the cheapest
+            // setting that removes it; the map itself is one shader on one sphere, so the cost
+            // is a rasterisation pass and not a scene.
+            // The player's edge smoothing, not a constant: four samples is the smoothest and
+            // costs fill rate, and a machine that can barely draw the map should not pay for it.
+            Msaa3D = MapAntialiasing(),
+            UseTaa = false
         };
         var host = new Node { Name = "GlobeViewportHost" };
         AddChild(host);
@@ -494,6 +505,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         };
         world.AddChild(sun);
         _daySun = sun;
+        ConfigureGlobeGrading();
 
         _orbit = new Node3D { Name = "Orbit" };
         world.AddChild(_orbit);
@@ -510,6 +522,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
         _spaceNode = CreateSpace(world);
         CreateGlobe(world);
+        CreateAtmosphereRim(world);
         if (CloudsEnabled) CreateCloudLayer(world);
         CreateFlatMap(world);
         CreateWeather(world);
@@ -606,7 +619,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (MilitaryMarkersEnabled && _mapApplied)
             using (Simulation.SimProfiler.Measure("f:army motion")) UpdateArmyMarkerMotion((float)delta);
         if (visualDue)
-            UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f, CityHorizon());
+            UpdateMarkerVisibility(_capitalRoot, _capitalMarkers, ViewDistance <= 13.8f && Simulation.WorldLayers.On("capitals"), CityHorizon());
         var armyLod = _flatMap || ViewDistance <= 10.8f;
         _militaryVisualAccumulator += delta;
         if (MilitaryMarkersEnabled && _mapApplied && _campaign is not null && _militaryVisualAccumulator >= 0.12)
@@ -632,6 +645,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:counter layout")) UpdateFlatCounterDensity();
         else if (visualDue && MilitaryMarkersEnabled)
             using (Simulation.SimProfiler.Measure("f:surface layout")) UpdateSurfaceCounterDensity();
+        if (visualDue && MilitaryMarkersEnabled) LayoutSupportCounters();
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
@@ -644,7 +658,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (visualDue)
             using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
         if (_battleMarkers.Count > 0 && (visualDue || _dragging || _boxSelecting || FlatViewInMotion)) QueueRedraw();
-        if (visualDue) UpdateCityLabels(visualStep);
+        if (visualDue) { UpdateCityLabels(visualStep); UpdateSettlementModels(visualStep); }
         UpdateMapModePaletteIfNeeded();
 
         if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
@@ -765,6 +779,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
                     System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
                 GC.Collect(2, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+                // And from here on, play: full blocking collections are what a frame feels as a
+                // hitch, so the runtime is asked to do its oldest-generation work in the
+                // background for the rest of the session. Memory may run somewhat higher; a
+                // stutter in the middle of a battle is worse than a few more megabytes.
+                System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
                 GD.Print($"[dof] map applied; managed heap {GC.GetTotalMemory(false) / (1024 * 1024):N0} MB");
                 GD.Print($"[dof] tactical province topology ready: {_provinceTopology.ProvinceCount:N0} land provinces, " +
                          $"{_provinceTopology.RiverCrossingCount:N0} river crossings, " +
@@ -978,6 +997,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _globeMaterial.SetShaderParameter("selected_region_id", (float)rawRegion);
             _globeMaterial.SetShaderParameter("selected_province_id", (float)provinceId);
             _globeMaterial.SetShaderParameter("selection_active", 1f);
+            SelectedRegionMembers(provinceId > 0 && _campaign?.ProvinceMap is not null ? regionMapIndex : -1);
         }
         pick = new GlobePick(nation, state, provinceId, latitude, longitude);
         return true;
@@ -1014,7 +1034,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public bool MilitaryMarkersEnabled
     {
-        get => _militaryMarkersEnabled;
+        // A game without counters (common/world_layers) has none to switch on.
+        get => _militaryMarkersEnabled && Simulation.WorldLayers.On("military_counters");
         set
         {
             if (_militaryMarkersEnabled == value) return;
@@ -1433,7 +1454,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     PutBorderTarget(borderTargets, p, line.NationId, line.BorderNationId);
                 }
                 if (_objectivePreview.Count == 0 || !_selectedArmyIds.Any(id => line.ArmyIds.Contains(id)))
-                    DrawOffensiveGeometry(line.ObjectiveSequence, line.SourceProvinces, false);
+                    for (var phase = 0; phase < Simulation.OffensivePlanning.PhaseCount(line); phase++)
+                    {
+                        IEnumerable<int> departure = phase == 0 ? line.SourceProvinces : Simulation.OffensivePlanning.PhaseGoals(line, phase - 1);
+                        DrawOffensiveGeometry(Simulation.OffensivePlanning.PhaseGoals(line, phase), departure, false,
+                            phase < line.ActiveOffensivePhase ? -1 : phase == line.ActiveOffensivePhase ? 1 : 2);
+                    }
                 continue;
             }
             var code = PlanCode(line.Kind);
@@ -1762,6 +1788,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _targetFlatX -= delta.X * unitsPerPixel;
             _targetFlatY += delta.Y * unitsPerPixel;
             ClampFlatCamera();
+            // How fast the hand is moving, smoothed over the last few motion events, for the glide.
+            var now = Time.GetTicksUsec();
+            var seconds = Mathf.Clamp((now - _lastFlatDragUsec) / 1_000_000f, 0.004f, 0.1f);
+            _lastFlatDragUsec = now;
+            var speed = new Vector2(-delta.X, delta.Y) * unitsPerPixel / seconds;
+            _flatGlide = _flatGlide.Lerp(speed, 0.45f).LimitLength(_flatZoom * 3.5f);
 
             // And the camera goes there, rather than being asked to.
             //
@@ -1809,6 +1841,44 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _globeMaterial?.SetShaderParameter("selection_active", 0f);
         _globeMaterial?.SetShaderParameter("selected_region_id", -1f);
         _globeMaterial?.SetShaderParameter("selected_province_id", -1f);
+        _globeMaterial?.SetShaderParameter("selected_region_live", 0f);
+    }
+
+    private Image _selectedRegionImage;
+    private ImageTexture _selectedRegionTexture;
+    private readonly byte[] _selectedRegionPixels = new byte[256 * 256];
+
+    /// <summary>
+    /// Light the live region the player picked, every province of it. The tint used to follow
+    /// the authored raster, so a region a border had cut lit up as the whole region it had been
+    /// in 2024 - and a region stitched together from pieces lit up as only the piece clicked.
+    /// One byte per province, read by the shader the way the front membership is.
+    /// </summary>
+    private void SelectedRegionMembers(int liveRegion)
+    {
+        if (_globeMaterial is null) return;
+        var map = _campaign?.ProvinceMap;
+        if (liveRegion < 0 || map is null)
+        {
+            _globeMaterial.SetShaderParameter("selected_region_live", 0f);
+            return;
+        }
+        Array.Clear(_selectedRegionPixels);
+        var states = map.ProvinceToState;
+        for (var province = 1; province < states.Length && province < _selectedRegionPixels.Length; province++)
+            if (states[province] == liveRegion) _selectedRegionPixels[province] = 255;
+        if (_selectedRegionTexture is null)
+        {
+            _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+            _selectedRegionTexture = ImageTexture.CreateFromImage(_selectedRegionImage);
+            _globeMaterial.SetShaderParameter("selected_region_members", _selectedRegionTexture);
+        }
+        else
+        {
+            _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+            _selectedRegionTexture.Update(_selectedRegionImage);
+        }
+        _globeMaterial.SetShaderParameter("selected_region_live", 1f);
     }
 
     public override string _GetTooltip(Vector2 atPosition)
@@ -1828,12 +1898,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 return Simulation.Loc.Format(
                     "Observed battle · province #{0:N0}\n{1} vs {2}\nDetailed foreign combat reports unavailable.",
                     battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown);
-            return Simulation.Loc.Format("BATTLE · province #{0:N0}\n{1} vs {2}\nLosses {3:N0} / {4:N0}",
+            var battleText = Simulation.Loc.Format("BATTLE · province #{0:N0}\n{1} vs {2}\nLosses {3:N0} / {4:N0}",
                        battle.ProvinceId, attacker?.DisplayName ?? unknown, defender?.DisplayName ?? unknown,
                        battle.AttackerLosses, battle.DefenderLosses) + "\n" + BattleMapTooltip(battle) +
                    (latest is null ? "" : "\n" + Simulation.Loc.Format(
                        "Power {0:0.0} / {1:0.0} · plan {2:P0}",
                        latest.AttackerPower, latest.DefenderPower, latest.AttackerPlanning));
+            if (_campaign is not null)
+                foreach (var unit in _campaign.Armies)
+                    if (unit.BattleId == battle.Id)
+                    {
+                        battleText += "\n" + Simulation.StaffReasons.Explain(_campaign, unit);
+                        break;
+                    }
+            return battleText;
         }
         if (TryPickArmyStack(atPosition, out var stack, selectableOnly: false))
         {
@@ -1867,7 +1945,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                            Simulation.ArmyVocabulary.OrderName(lead.OrderKind),
                            Simulation.ArmyVocabulary.StanceName(lead.Stance), lead.Planning)
                        : Simulation.Loc.Get("Click to select every division represented by this counter. A + marks nearby provinces grouped at this zoom.")) +
-                   "\n" + Simulation.ArmyVocabulary.Situation(_campaign, lead);
+                   "\n" + Simulation.ArmyVocabulary.Situation(_campaign, lead) +
+                   "\n" + Simulation.StaffReasons.Explain(_campaign, lead);
         }
         if (!TryPick(atPosition, out var pick, updateSelection: false)) return UnclaimedTooltip(atPosition);
         var state = pick.State is null
@@ -1893,7 +1972,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
         return pick.Nation.DisplayName + " (" + pick.Nation.Tag + ")\n" + state + "\n" +
                Simulation.StateIdentity.Brief(_campaign, pick.Nation) + "\n" +
                Simulation.Loc.Format("Province #{0:N0}", pick.ProvinceId) +
-               (controller is null || controller == pick.Nation ? "" : "\n" + Simulation.Loc.Format(
+               (controller is null || controller == pick.Nation ? ""
+                   // Held by arrangement - a lease, troops without a war - says so, not "occupied".
+                   : pick.State is not null && Simulation.LandArrangementSystem.Covering(_campaign, pick.State.MapIndex, controller.Id) is not null
+                       ? "\n" + Simulation.LandArrangementSystem.Describe(_campaign, pick.State)
+                       : "\n" + Simulation.Loc.Format(
                    "Occupied by {0} · {1:P0} secured\nStill owned by {2}: an occupation is not an annexation. Only a signed peace moves the border.",
                    controller.DisplayName, occupation, pick.Nation.DisplayName)) +
                (_mapMode == StrategicMapMode.Resources && pick.State is not null ? "\n" + Simulation.Loc.Format(
@@ -1960,6 +2043,29 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private TextureRect _picture = null!;
 
+    private bool _measuringGpu;
+
+    /// <summary>
+    /// What the graphics card spent on the globe's last frame, in milliseconds; below zero until
+    /// the first measurement. The quality governor reads it to tell a busy card, which fewer
+    /// pixels help, from a busy processor, which they do not.
+    /// </summary>
+    public double MeasuredGpuMs
+    {
+        get
+        {
+            if (!IsInstanceValid(_viewport)) return -1;
+            var rid = _viewport.GetViewportRid();
+            if (!_measuringGpu)
+            {
+                RenderingServer.ViewportSetMeasureRenderTime(rid, true);
+                _measuringGpu = true;
+                return -1;
+            }
+            return RenderingServer.ViewportGetMeasuredRenderTimeGpu(rid);
+        }
+    }
+
     /// <summary>
     /// What share of the window's pixels the globe's 3D is drawn at, set from the video
     /// settings (`render_scale`): 1 is native, and a weaker graphics card can draw fewer and
@@ -2015,7 +2121,8 @@ uniform sampler2D crossover_excavations : filter_nearest, repeat_enable;
 uniform float crossover_excavations_active = 0.0;
 uniform sampler2D lake_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2D river_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
-uniform float river_inset = 0.18;
+uniform float river_inset = -0.10;
+uniform float river_curve_filter = 1.0;
 uniform float river_near_opacity = 0.92;
 uniform float river_far_opacity = 0.58;
 uniform float water_shore_width = 0.75;
@@ -2060,6 +2167,10 @@ uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
 uniform float political_opacity = 0.68;
+// 1 on the flat map: an atlas sheet read straight on, without the globe's light and curvature
+// to soften it. The terrain tiles showing through the country colours read there as blotches
+// and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
+uniform float flat_projection = 0.0;
 uniform float terrain_repeat = 180.0;
 uniform float terrain_blend_texels = 1.15;
 uniform float id_wander_texels = 0.62;
@@ -2085,6 +2196,10 @@ uniform float selection_active = 0.0;
 uniform float highlighted_nation = -1.0;
 uniform float selected_region_id = -1.0;
 uniform float selected_province_id = -1.0;
+// The live region the player picked, province by province (SelectedRegionMembers): a region a border
+// has cut or a treaty has stitched together is no longer the region the raster was drawn with.
+uniform sampler2D selected_region_members : filter_nearest, repeat_disable;
+uniform float selected_region_live = 0.0;
 uniform float detail_mix = 0.0;
 uniform float province_detail = 0.0;
 uniform float map_mode = 0.0;
@@ -2408,6 +2523,11 @@ vec4 map_mode_color(float nation) {
     float high = floor(nation / 256.0);
     return texture(map_mode_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
 }
+float selected_member(float province) {
+    float low = mod(province, 256.0);
+    float high = floor(province / 256.0);
+    return texture(selected_region_members, (vec2(low, high) + vec2(0.5)) / 256.0).r;
+}
 vec3 front_data(float province) {
     float low = mod(province, 256.0);
     float high = floor(province / 256.0);
@@ -2445,6 +2565,70 @@ uniform sampler2D fog_visibility : filter_nearest, repeat_disable;
 uniform float fog_tint = 1.0;
 uniform float fog_darkness = 0.74;
 uniform float fog_saturation = 0.65;
+// Positive cubic B-spline weights round raster bends without the overshoot of a
+// sharpening cubic. Four hardware-linear fetches reproduce a 4x4 footprint.
+// Called only near a river: most globe fragments retain the single-fetch path.
+float river_contour(vec2 uv, float linear_distance) {
+    if (river_curve_filter < 0.001 || abs(linear_distance) > 2.0) return linear_distance;
+    vec2 size = vec2(textureSize(hydrology_map, 0));
+    vec2 point = uv * size - 0.5;
+    vec2 cell = floor(point);
+    vec2 f = fract(point);
+    vec2 inverse_f = vec2(1.0) - f;
+    vec2 w0 = inverse_f * inverse_f * inverse_f / 6.0;
+    vec2 w1 = (3.0 * f * f * f - 6.0 * f * f + 4.0) / 6.0;
+    vec2 w2 = (-3.0 * f * f * f + 3.0 * f * f + 3.0 * f + 1.0) / 6.0;
+    vec2 w3 = f * f * f / 6.0;
+    vec2 first = w0 + w1;
+    vec2 second = w2 + w3;
+    vec2 a = (cell - 1.0 + w1 / first + 0.5) / size;
+    vec2 b = (cell + 1.0 + w3 / second + 0.5) / size;
+    // Longitude repeats, but neither pole may sample the opposite hemisphere.
+    a.y = clamp(a.y, 0.5 / size.y, 1.0 - 0.5 / size.y);
+    b.y = clamp(b.y, 0.5 / size.y, 1.0 - 0.5 / size.y);
+    float north = texture(hydrology_map, a).g * first.x +
+        texture(hydrology_map, vec2(b.x, a.y)).g * second.x;
+    float south = texture(hydrology_map, vec2(a.x, b.y)).g * first.x +
+        texture(hydrology_map, b).g * second.x;
+    float curved = ((north * first.y + south * second.y) * 255.0 - 128.0) / 16.0;
+    // Keep tiny authored headwaters: cubic averaging must not erase a one-cell source.
+    curved = min(curved, linear_distance + 0.25);
+    return mix(linear_distance, curved, river_curve_filter);
+}
+// Same rounding as DateLineSeam.WrappedFrequency: a whole number of cycles
+// around the world, so the wave at longitude 180 is the wave at -180.
+float seam_frequency(float freq, float width) {
+    return sign(freq) * max(1.0, round(abs(freq) * width / 6.2831853)) * 6.2831853 / max(width, 1.0);
+}
+// Mipmaps are averaged inward, so the column at u=0 never meets the column at
+// u=1 and the date line reads as a second border. Near that cut, bilinear-sample
+// the base level with longitude wrapped and latitude clamped. Poles stay put.
+vec4 seam_lod0(sampler2D tex, vec2 uv) {
+    vec2 size = vec2(textureSize(tex, 0));
+    vec2 p = vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)) * size - 0.5;
+    vec2 f = fract(p);
+    vec2 i = floor(p);
+    float x0 = mod(i.x, size.x);
+    float x1 = mod(i.x + 1.0, size.x);
+    float y0 = clamp(i.y, 0.0, size.y - 1.0);
+    float y1 = clamp(i.y + 1.0, 0.0, size.y - 1.0);
+    vec2 texel = 1.0 / size;
+    vec4 a = textureLod(tex, (vec2(x0, y0) + 0.5) * texel, 0.0);
+    vec4 b = textureLod(tex, (vec2(x1, y0) + 0.5) * texel, 0.0);
+    vec4 c = textureLod(tex, (vec2(x0, y1) + 0.5) * texel, 0.0);
+    vec4 d = textureLod(tex, (vec2(x1, y1) + 0.5) * texel, 0.0);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+vec4 seam_sample(sampler2D tex, vec2 uv) {
+    vec2 wrapped = vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0));
+    vec4 mipped = texture(tex, wrapped);
+    float width = max(float(textureSize(tex, 0).x), 1.0);
+    float span = exp2(max(textureQueryLod(tex, wrapped).y, 0.0)) * 1.5 / width;
+    float along = min(wrapped.x, 1.0 - wrapped.x);
+    float at_seam = 1.0 - smoothstep(span * 0.35, max(span, 0.000001), along);
+    if (at_seam <= 0.0) return mipped;
+    return mix(mipped, seam_lod0(tex, wrapped), at_seam);
+}
 void fragment() {
     float excavation = crossover_excavations_active * texture(crossover_excavations, UV).r;
     // One wander, and every boundary on the map reads through it.
@@ -2500,7 +2684,7 @@ void fragment() {
     // between two countries is recovered as a straight edge at whatever angle it really runs,
     // antialiased over one screen pixel. The raster is not being filtered; it is not being
     // asked.
-    vec4 political_smooth = texture(political_map, UV);
+    vec4 political_smooth = seam_sample(political_map, UV);
     // Smoothed boundaries only where a texel is bigger than a pixel - further out the raster
     // is averaged by its mipmaps and has no staircase to show - and only for a player who
     // has the map smoothed at all.
@@ -2539,7 +2723,7 @@ void fragment() {
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
     // the Sunda shelf, the Grand Banks - is a clear shallow teal, so a coast reads as a coast from
     // orbit, the way it does on every Paradox map, before any border line has been drawn.
-    float sea_floor = ocean_depth_ready > 0.5 ? texture(ocean_depth, UV).r : 0.0;
+    float sea_floor = ocean_depth_ready > 0.5 ? seam_sample(ocean_depth, UV).r : 0.0;
     // A smoothstep over a smooth raster draws contour lines across an ocean that has none in
     // it: the shelf arrives as a band with an edge parallel to the texel rows. The same wander
     // the coast uses is added here, a texel or so wide, so the shelf reads as ground under
@@ -2549,8 +2733,11 @@ void fragment() {
     sea_floor = clamp(sea_floor + sea_wander * 0.014, 0.0, 1.0);
     float slope_rise = smoothstep(0.62, 0.955, sea_floor);
     float shelf = smoothstep(0.945, 0.992, sea_floor);
-    vec3 sea = mix(ocean_color * 0.88, ocean_color * 1.22, slope_rise);
-    sea = mix(sea, ocean_shelf_color, shelf * 0.80);
+    float littoral = smoothstep(0.982, 0.999, sea_floor);
+    vec3 abyss_color = ocean_color * 0.76;
+    vec3 sea = mix(abyss_color, ocean_color * 1.24, slope_rise);
+    sea = mix(sea, ocean_shelf_color, shelf * 0.82);
+    sea = mix(sea, ocean_shelf_color * 1.22 + vec3(0.015, 0.045, 0.055), littoral * 0.55);
     // Living water. Three directional sine waves, crossing at angles, rather than value
     // noise: noise interpolates on its own axis-aligned grid, and on a surface this large
     // the grid arrives as a tiling of diamonds with visible seams. Sines have no grid to
@@ -2558,16 +2745,18 @@ void fragment() {
     // field never lines up with itself into a pattern, and the whole thing drifts slowly.
     // Faded out at strategic zoom, where the mipmaps already average the surface flat and
     // the same field would only add shimmer.
-    vec2 sea_texels = UV * sea_size;
+    vec2 sea_texels = vec2(fract(UV.x) * sea_size.x, clamp(UV.y, 0.0, 1.0) * sea_size.y);
     float wave_fade = clamp(1.0 - id_span, 0.0, 1.0);
     // A slow warp of the sampling point, so even the wave lines breathe rather than march.
-    vec2 warp = vec2(sin(TIME * 0.05 + sea_texels.y * 0.002), cos(TIME * 0.04 + sea_texels.x * 0.002));
+    // The east-west term is a whole number of cycles, or the warp itself is a seam.
+    float warp_x = seam_frequency(0.002, sea_size.x);
+    vec2 warp = vec2(sin(TIME * 0.05 + sea_texels.y * 0.002), cos(TIME * 0.04 + sea_texels.x * warp_x));
     vec2 wave_at = sea_texels + warp * 26.0;
-    float waves = sin(dot(wave_at, vec2(0.0105, 0.0062)) + TIME * 0.55)
-                + 0.62 * sin(dot(wave_at, vec2(-0.0180, 0.0094)) + TIME * 0.41)
-                + 0.38 * sin(dot(wave_at, vec2(0.0072, -0.0230)) + TIME * 0.72);
+    float waves = sin(dot(wave_at, vec2(seam_frequency(0.0105, sea_size.x), 0.0062)) + TIME * 0.55)
+                + 0.62 * sin(dot(wave_at, vec2(seam_frequency(-0.0180, sea_size.x), 0.0094)) + TIME * 0.41)
+                + 0.38 * sin(dot(wave_at, vec2(seam_frequency(0.0072, sea_size.x), -0.0230)) + TIME * 0.72);
     waves /= 2.0;
-    vec3 water = sea * (0.72 + rim * 0.28);
+    vec3 water = sea * (0.74 + rim * 0.26);
     water *= 1.0 + waves * 0.085 * wave_fade;
     // Sun glint riding the sharpest of the three - the crests catching light, which is what
     // tells the eye this is a surface and not a fill. Kept at low zoom too: a flat map has
@@ -2579,12 +2768,15 @@ void fragment() {
     float crest = sin(dot(wave_at, vec2(-0.0180, 0.0094)) + TIME * 0.41
                 + 1.1 * sin(dot(wave_at, vec2(0.0330, 0.0195)) + TIME * 0.9));
     float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0);
-    water += vec3(0.55, 0.72, 0.80) * glint * 0.16 * wave_fade;
-    // Foam: a pale surf line where the sea meets the shore. Its width follows a screen pixel
-    // rather than a texel, so it stays a line and never a halo.
-    float shore_band = max(fwidth(political.a) * 2.0, 0.02);
+    water += vec3(0.58, 0.75, 0.84) * glint * 0.18 * wave_fade;
+    // Foam & coastal ink: a pale surf line where the sea meets the shore, framed by a subtle
+    // cartographic coastal shadow so continents stand out crisply from the ocean.
+    float shore_band = max(fwidth(political.a) * 2.2, 0.022);
     float shore_edge = smoothstep(shore_band, 0.0, abs(political.a - 0.5));
-    water += vec3(0.80, 0.88, 0.92) * shore_edge * 0.45 * wave_fade;
+    float reef_halo = smoothstep(shore_band * 3.8, 0.0, abs(political.a - 0.5)) * (1.0 - political.a);
+    water = mix(water, ocean_shelf_color * 1.38 + vec3(0.03, 0.09, 0.11), reef_halo * 0.42);
+    water += vec3(0.84, 0.91, 0.95) * shore_edge * 0.50 * wave_fade;
+    water = mix(water, water * 0.58, shore_edge * 0.38 * (1.0 - political.a));
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     float region = map_id(region_ids, map_uv);
     float province = map_id(province_ids, map_uv);
@@ -2626,12 +2818,17 @@ void fragment() {
     political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
     // Owner remains the ground; keylined controller ribbons mean occupation,
     // never annexation. One shared style for flat map and globe.
-    float treaty = step(0.75, live_control.a);
+    float treaty = step(0.95, live_control.a);
     float occupied = occupation_mask(live_control);
+    float leased = lease_mask(live_control);
     political.rgb = mix(political.rgb, live_control.rgb * political_light, treaty);
     political.rgb = occupation_ribbons(political.rgb, live_control.rgb, UV,
         province_detail, occupied);
-    vec4 strategic = map_mode_color(nation);
+    political.rgb = lease_weave(political.rgb, live_control.rgb, UV, province_detail, leased);
+    // The map modes colour the country that owns this ground now (near_nation reads the moved
+    // owners), not the one the raster was painted with: the diplomatic view of 2039 drew the
+    // borders of 2024, Belarus annexed and all.
+    vec4 strategic = map_mode_color(near_nation);
     political.rgb = mix(political.rgb, strategic.rgb * mix(0.84, 1.02, political_light),
         map_mode * strategic.a);
     vec2 resource_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
@@ -2668,43 +2865,55 @@ void fragment() {
         // Close in a tile is magnified until its texels show. A second look at the same ground at
         // four times the frequency puts fine grain back under the coarse - as brightness only, so
         // the colours stay the tile's own - and only as close in as the province lines appear.
-        if (terrain_detail > 0.001 && province_detail > 0.001) {
+        if (terrain_detail > 0.001 && province_detail > 0.001 && flat_projection < 0.5) {
             vec3 fine = texture(terrain_tiles, vec3(terrain_uv * 4.0, near_slot)).rgb;
             vec3 tile_mean = textureLod(terrain_tiles, vec3(terrain_uv, near_slot), 7.0).rgb;
             float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
             ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
         }
-        vec3 relief_tint = texture(relief_color, UV).rgb;
+        vec3 relief_tint = seam_sample(relief_color, UV).rgb;
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
         float ground_light = clamp(dot(ground, vec3(0.2126, 0.7152, 0.0722)) * 1.4 + 0.50, 0.62, 1.1);
-        vec3 colored_ground = mix(ground, political.rgb * ground_light, political_opacity);
+        // On the flat sheet the ground's brightness moves the colour within a narrower band, and
+        // the colour covers more of the ground: the relief shows through the hillshade below.
+        ground_light = mix(ground_light, clamp(ground_light, 0.84, 1.03), flat_projection);
+        float colour_cover = mix(political_opacity, min(0.93, political_opacity + 0.17), flat_projection);
+        vec3 colored_ground = mix(ground, political.rgb * ground_light, colour_cover);
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
         base = mix(water, land_surface, political.a);
         vec2 ht = 1.0 / vec2(textureSize(relief_height, 0));
-        float west = texture(relief_height, vec2(fract(UV.x - ht.x), clamp(UV.y, ht.y, 1.0 - ht.y))).r;
-        float east = texture(relief_height, vec2(fract(UV.x + ht.x), clamp(UV.y, ht.y, 1.0 - ht.y))).r;
-        float north = texture(relief_height, vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
-        float south = texture(relief_height, vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
-        vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.0, vec2(-0.8), vec2(0.8));
+        float west = seam_sample(relief_height, vec2(UV.x - ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float east = seam_sample(relief_height, vec2(UV.x + ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float north = seam_sample(relief_height, vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
+        float south = seam_sample(relief_height, vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
+        float elev = (west + east + north + south) * 0.25;
+        vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.5, vec2(-0.85), vec2(0.85));
+        float slope_mag = length(slope);
         vec3 relief_normal = normalize(vec3(slope * political.a, 1.0));
-        NORMAL_MAP = normalize(vec3(slope * political.a * 0.55, 1.0)) * 0.5 + 0.5;
+        NORMAL_MAP = normalize(vec3(slope * political.a * 0.62, 1.0)) * 0.5 + 0.5;
         NORMAL_MAP_DEPTH = 1.0;
         // West and north are -x and +y in the surface's own frame; the light stands high over
         // the north-west. Flat ground keeps its colour exactly: the shade is the difference a
         // slope makes, not a dimmer on the whole map.
-        vec3 atlas_light = normalize(vec3(-0.62, 0.62, 0.48));
+        vec3 atlas_light = normalize(vec3(-0.62, 0.62, 0.46));
         float flat_lit = atlas_light.z;
         float lit = dot(relief_normal, atlas_light);
-        float hillshade = clamp(1.0 + (lit - flat_lit) * 1.35, 0.55, 1.35);
-        base = mix(base, base * hillshade, political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.85));
+        float valley_ao = clamp(1.0 - slope_mag * 0.16 * (1.0 - smoothstep(0.45, 0.78, elev)), 0.78, 1.0);
+        float hillshade = clamp((1.0 + (lit - flat_lit) * 1.48) * valley_ao, 0.52, 1.42);
+        // Subtle alpine ridge highlight on high mountain chains so the Himalayas, Andes, Alps
+        // and Caucasus read with physical relief even through political colour.
+        float alpine_ridge = smoothstep(0.58, 0.86, elev) * smoothstep(0.12, 0.52, slope_mag) * clamp(lit - flat_lit + 0.15, 0.0, 1.0);
+        base = mix(base, base * hillshade + vec3(0.09, 0.095, 0.105) * alpine_ridge,
+            political.a * relief_shading * (terrain_mode > 1.5 ? 1.0 : 0.88));
     }
     // Distance fields describe the drawn shore, never the simulation's river strength.
     // Rivers of low importance no longer disappear at a hard intensity threshold.
     vec3 hydrography = texture(hydrology_map, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).rgb;
     float lake_distance = (hydrography.r * 255.0 - 128.0) / 16.0;
-    float river_distance = (hydrography.g * 255.0 - 128.0) / 16.0 + river_inset;
+    float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
+        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset;
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
     float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
@@ -2775,6 +2984,16 @@ void fragment() {
     float region_selected = (abs(near_region - selected_region_id) < 0.5 ? region_cover
         : abs(other_region_id - selected_region_id) < 0.5 ? 1.0 - region_cover : 0.0)
         * selection_active * political.a;
+    // The whole live region, by its provinces, and its outline where membership changes - not the
+    // authored region the raster still remembers.
+    float near_member = selected_member(near_province);
+    float other_member = selected_member(other_province_id);
+    float live_selected = ((near_member > 0.5 ? province_cover : 0.0) + (other_member > 0.5 ? 1.0 - province_cover : 0.0))
+        * selection_active * political.a;
+    float live_edge = (1.0 - smoothstep(0.0, border_pixels, province_reach / province_aa))
+        * step(0.5, abs(near_member - other_member));
+    region_selected = mix(region_selected, live_selected, step(0.5, selected_region_live));
+    region_edge = mix(region_edge, live_edge, step(0.5, selected_region_live));
     float province_selected = (abs(near_province - selected_province_id) < 0.5 ? province_cover
         : abs(other_province_id - selected_province_id) < 0.5 ? 1.0 - province_cover : 0.0)
         * selection_active * political.a;
@@ -2796,9 +3015,18 @@ void fragment() {
     // in screen pixels rather than in coverage, so the line is the same weight at every zoom
     // - which is what makes it read as a drawn border and not as an artefact of the data.
     float nation_edge_pixels = nation_reach / nation_aa;
-    float country_edge = 1.0 - smoothstep(border_pixels * 0.9, border_pixels * 2.1, nation_edge_pixels);
-    country_edge *= step(0.5, abs(near_nation - other_nation)) *
-                    step(0.5, near_nation) * clamp(2.2 - pixel_texels, 0.0, 1.0);
+    float has_nation_border = step(0.5, abs(near_nation - other_nation)) * step(0.5, near_nation);
+    float country_edge = 1.0 - smoothstep(border_pixels * 0.85, border_pixels * 2.05, nation_edge_pixels);
+    country_edge *= has_nation_border * clamp(2.4 - pixel_texels, 0.0, 1.0);
+    // Paradox-style inner frontier cushion: deepens and enriches each country's colour along the
+    // inside of its international border and coastline, giving territories physical volume.
+    float country_cushion = (1.0 - smoothstep(border_pixels * 1.0, border_pixels * 6.8, nation_edge_pixels)) *
+        has_nation_border * clamp(2.8 - pixel_texels * 0.85, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    float country_inner_rim = smoothstep(border_pixels * 0.75, border_pixels * 1.35, nation_edge_pixels) *
+        (1.0 - smoothstep(border_pixels * 1.35, border_pixels * 2.35, nation_edge_pixels)) *
+        has_nation_border * clamp(2.2 - pixel_texels, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    float region_cushion = (1.0 - smoothstep(border_pixels * 0.5, border_pixels * 2.8, region_reach / region_aa)) *
+        step(0.5, abs(near_region - other_region_id)) * (1.0 - has_nation_border) * (1.0 - step(0.5, terrain_mode));
     vec3 front = front_data(province);
     // Use the same reconstructed boundary as the province contour, not a stripe
     // one/two source texels wide. Source texels become giant steps at close zoom.
@@ -2809,10 +3037,24 @@ void fragment() {
         step(0.20, abs(near_front.g - other_front.g)) *
         step(0.5, abs(near_province - other_province_id));
     float front_edge = (1.0 - smoothstep(front_pixels * 0.45, front_pixels + 0.55, province_distance)) * front_pair;
-    float front_outer = (1.0 - smoothstep(front_pixels + 0.55, front_pixels + 1.2, province_distance)) * front_pair;
+    float front_outer = (1.0 - smoothstep(front_pixels + 0.55, front_pixels + 1.45, province_distance)) * front_pair;
     // The terrain/relief views contain no political front shading.
     front_edge *= 1.0 - step(0.5, terrain_mode);
     front_outer *= 1.0 - step(0.5, terrain_mode);
+
+    // Apply the inner border cushion and subtle regional border shading before crisp strokes.
+    // Two-stage Paradox-grade frontier gradient: a wide velvet vignette (0..8.5px) that gives
+    // territories physical volume, plus a rich saturated inner rim (0.9..2.6px) right inside the
+    // dark cartographic ink line.
+    float country_wide_glow = (1.0 - smoothstep(border_pixels * 1.2, border_pixels * 8.5, nation_edge_pixels)) *
+        has_nation_border * clamp(2.9 - pixel_texels * 0.80, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
+    vec3 saturated_nation = clamp(mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, 1.32) * 0.84, vec3(0.08), vec3(0.95));
+    vec3 cushioned = mix(base * 0.74, base * 0.52 + saturated_nation * 0.38, 0.55);
+    base = mix(base, cushioned, country_cushion * max(detail_mix, 0.48) * political.a * 0.58);
+    base = mix(base, mix(base, saturated_nation, 0.38), country_wide_glow * max(detail_mix, 0.38) * political.a * 0.34);
+    base = mix(base, base * 0.87, region_cushion * detail_mix * political.a * 0.32);
+    base = mix(base, clamp(base * 1.18 + vec3(0.055, 0.048, 0.032), vec3(0.0), vec3(1.0)),
+        country_inner_rim * detail_mix * political.a * 0.40);
 
     // Zoom-gated, screen-space strokes: readable through relief at tactical distance,
     // absent on the world map. A restrained light shoulder also works on dark terrain.
@@ -2820,7 +3062,7 @@ void fragment() {
     base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
-    base = mix(base, vec3(0.05, 0.07, 0.10), country_edge * detail_mix * political.a * 0.78);
+    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.35) * political.a * 0.86);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -2857,15 +3099,22 @@ void fragment() {
     float occupation_stroke = 1.0 - smoothstep(0.35, 1.1, province_distance);
     base = mix(base, vec3(0.045, 0.065, 0.08), occupation_edge * occupation_key * 0.90);
     base = mix(base, vec3(0.92, 0.88, 0.71), occupation_edge * occupation_stroke * 0.94);
+    float lease_edge = abs(lease_mask(near_control) - lease_mask(other_control)) *
+        step(0.5, abs(near_province - other_province_id)) * political.a *
+        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode);
+    float lease_dash = step(0.45, fract((UV.x * 2.0 - UV.y) * mix(90.0, 520.0, province_detail)));
+    vec3 tenant = max(near_control.a, other_control.a) > 0.0
+        ? (lease_mask(near_control) > 0.5 ? near_control.rgb : other_control.rgb) : vec3(0.9);
+    base = mix(base, tenant * 1.08, lease_edge * occupation_stroke * lease_dash * 0.95);
     // A live hostile front takes precedence over the pale occupation contour.
     // The same red stroke remains on unoccupied enemy borders; rear occupation
     // boundaries stay pale rather than pretending to be an active front.
-    base = mix(base, vec3(0.34, 0.045, 0.035), front_outer * 0.65);
-    base = mix(base, vec3(0.98, 0.20, 0.16), front_edge * 0.96);
+    base = mix(base, vec3(0.24, 0.03, 0.025), front_outer * 0.78);
+    base = mix(base, vec3(1.0, 0.26, 0.14), front_edge * 0.98);
     // One narrow cartographic stroke on the shared boundary, never a filled province.
     base = mix(base, vec3(0.30, 0.72, 0.96), border_plan * 0.95);
-    base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.10);
-    base = mix(base, vec3(1.0, 0.84, 0.30), province_selected * province_detail * 0.16);
+    base = mix(base, vec3(0.95, 0.76, 0.25), region_selected * 0.12);
+    base = mix(base, vec3(1.0, 0.84, 0.30), province_selected * province_detail * 0.18);
     float selection_edge = max(region_edge * region_selected, province_edge * province_selected * province_detail);
     // Excavation exposes earth in its exact footprint, never the space behind the globe.
     // The guest renders its real native hole separately; its atlas bake disables this mask.
@@ -2874,14 +3123,20 @@ void fragment() {
     float known = texture(fog_visibility, fog_lookup).r;
     float fog = step(0.0, fog_viewer) * (1.0 - step(0.5, known)) * political.a * fog_tint * (1.0 - resource_mode);
     base = mix(base, mix(vec3(dot(base, vec3(0.2126, 0.7152, 0.0722))), base, fog_saturation) * fog_darkness, fog);
-    ALBEDO = mix(base, vec3(1.0, 0.84, 0.30), selection_edge * 0.92);
-    EMISSION = mix(water * 0.025, vec3(0.28, 0.18, 0.025), selection_edge * 0.48) +
-        plan_color * plan_on * 0.14 +
-        vec3(0.04, 0.012, 0.003) * front_edge +
+    float front_pulse = 0.85 + 0.15 * sin(TIME * 3.0);
+    float front_march = 0.78 + 0.22 * sin((UV.x * 420.0 + UV.y * 280.0) - TIME * 4.2);
+    ALBEDO = mix(base, vec3(1.0, 0.86, 0.34), selection_edge * 0.94);
+    EMISSION = mix(water * 0.025, vec3(0.32, 0.21, 0.035), selection_edge * 0.56) +
+        vec3(0.18, 0.14, 0.04) * highlight_edge * 0.38 +
+        plan_color * plan_on * 0.16 +
+        vec3(0.095, 0.024, 0.006) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    ROUGHNESS = mix(0.92, 0.82, political.a);
+    ROUGHNESS = mix(0.36, mix(0.84, 0.40, inland_coverage), political.a);
     METALLIC = 0.0;
-    SPECULAR = 0.0;
+    SPECULAR = mix(0.48, mix(0.12, 0.40, inland_coverage), political.a);
+    // A flat map is a map: under the orthographic camera the sun's glint on the water landed as
+    // a white haze across whole seas (the Sea of Japan, the open Pacific). The globe keeps it.
+    SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);
 }"
         };
         _globeMaterial = new ShaderMaterial { Shader = shader };
@@ -2994,6 +3249,28 @@ void fragment() {
         return node;
     }
 
+    /// <summary>
+    /// Carry a released drag on and let it die away. While the hand still holds the map the
+    /// glide waits; if the hand has rested more than a moment, there is nothing left to carry.
+    /// </summary>
+    private void UpdateFlatGlide(float delta)
+    {
+        if (_dragging)
+        {
+            if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _flatGlide = Vector2.Zero;
+            return;
+        }
+        if (_flatGlide.LengthSquared() < _flatZoom * _flatZoom * 1e-6f) { _flatGlide = Vector2.Zero; return; }
+        _flatZoomAnchorActive = false;
+        _targetFlatX += _flatGlide.X * delta;
+        _targetFlatY += _flatGlide.Y * delta;
+        ClampFlatCamera();
+        _flatX = _targetFlatX;
+        _flatY = _targetFlatY;
+        // Down to a twentieth in a second: a flick travels, a nudge settles at once.
+        _flatGlide *= Mathf.Pow(0.05f, delta);
+    }
+
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
     private void UpdateOrbitCamera(double delta)
     {
@@ -3014,6 +3291,7 @@ void fragment() {
         _flatY = Mathf.Lerp(_flatY, _targetFlatY, weight);
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
+        if (_flatMap) UpdateFlatGlide((float)delta);
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         if (_flatMap && !typing)
@@ -3485,9 +3763,19 @@ void fragment() {
     /// <summary>The country the interface is looking at, whose army is drawn whatever the setting says.</summary>
     public int ShownCountryId { get; set; } = -1;
 
+    private readonly Dictionary<int, Vector3> _previousArmyPositions = new();
+
     private void ReconcileArmyMarkers(Simulation.Campaign campaign)
     {
         if (!MilitaryMarkersEnabled || !IsInstanceValid(_armyRoot) || _divisionTexture is null) return;
+
+        _previousArmyPositions.Clear();
+        foreach (var m in _armyStacks.Values)
+            if (m.Stack.Count > 0 && m.Node is not null && IsInstanceValid(m.Node))
+            {
+                for (var i = 0; i < m.Stack.Count; i++)
+                    _previousArmyPositions[m.Stack[i].Id] = m.DisplayPosition;
+            }
 
         foreach (var marker in _armyStacks.Values)
         {
@@ -3508,14 +3796,6 @@ void fragment() {
             marker.Seen = true;
             marker.Stack.Add(army);
         }
-
-        var previousPositions = new Dictionary<int, Vector3>();
-        foreach (var m in _armyStacks.Values)
-            if (m.Stack.Count > 0 && m.Node is not null && IsInstanceValid(m.Node))
-            {
-                foreach (var a in m.Stack)
-                    previousPositions[a.Id] = m.DisplayPosition;
-            }
 
         _vanishedStacks.Clear();
         foreach (var (bucket, marker) in _armyStacks)
@@ -3564,7 +3844,7 @@ void fragment() {
                 marker.Normal = SurfacePoint(initialLoc.Latitude, initialLoc.Longitude, 1f);
                 CreateArmyStackMarker(marker, nation, lead, templateId);
                 SizeArmyCounter(marker);
-                if (previousPositions.TryGetValue(lead.Id, out var prevPos) && prevPos != Vector3.Zero)
+                if (_previousArmyPositions.TryGetValue(lead.Id, out var prevPos) && prevPos != Vector3.Zero)
                 {
                     marker.DisplayPosition = prevPos;
                     // This is the same formation crossing into a new province bucket. Start
@@ -3629,17 +3909,17 @@ void fragment() {
             }
             var divCount = Mathf.CeilToInt(divisions);
             var menTenths = (int)MathF.Round(personnel / 100f);
-            if (marker.ShownDivisions != divCount || marker.ShownMenTenths != menTenths || marker.ShownCompact)
+            if (marker.ShownDivisions != divCount || marker.ShownMenTenths != menTenths)
             {
+                var divChanged = marker.ShownDivisions != divCount;
                 marker.ShownDivisions = divCount;
                 marker.ShownMenTenths = menTenths;
-                marker.ShownCompact = false;
                 var countText = $"{divCount}\n{menTenths / 10f:0.#}k";
                 if (!string.Equals(marker.CountText, countText, StringComparison.Ordinal))
                 {
-                    if (!_flatMap && marker.DisplayProvinces <= 1) marker.Count.Text = countText;
+                    if (!marker.ShownCompact && (!_flatMap || marker.DisplayProvinces <= 1)) marker.Count.Text = countText;
                     marker.CountText = countText;
-                    InvalidateFlatCounterDensity();
+                    if (divChanged) InvalidateFlatCounterDensity();
                 }
             }
 
@@ -3951,31 +4231,100 @@ void fragment() {
     {
         const int width = 160;
         const int height = 96;
-        var pixels = new byte[width * height * 4];
-        var background = new Color(0.07f, 0.13f, 0.18f, 0.88f);
-        var border = new Color(0.48f, 0.72f, 0.80f, 0.96f);
-        var ship = new Color(0.78f, 0.89f, 0.92f, 1f);
-        var wave = new Color(0.26f, 0.66f, 0.78f, 1f);
-        for (var y = 0; y < height; y++)
-        for (var x = 0; x < width; x++)
+        const int scale = 3;
+        const int w = width * scale;
+        const int h = height * scale;
+        var image = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
+        var outerDark = new Color(0.03f, 0.06f, 0.09f, 0.98f);
+        var frameTeal = new Color(0.24f, 0.46f, 0.56f, 0.98f);
+        var brassRim = new Color(0.84f, 0.72f, 0.42f, 0.96f);
+        var bodyTop = new Color(0.09f, 0.17f, 0.24f, 0.96f);
+        var bodyBot = new Color(0.05f, 0.10f, 0.15f, 0.96f);
+        var bayFill = new Color(0.03f, 0.07f, 0.11f, 0.96f);
+        var shipLight = new Color(0.86f, 0.93f, 0.97f, 1f);
+        var shipMid = new Color(0.58f, 0.74f, 0.82f, 1f);
+        var wakeCol = new Color(0.38f, 0.78f, 0.90f, 0.92f);
+
+        for (var y = 0; y < h; y++)
+        for (var x = 0; x < w; x++)
         {
-            var color = new Color(0f, 0f, 0f, 0f);
-            var inside = x >= 3 && x < width - 3 && y >= 3 && y < height - 3;
-            if (inside) color = x < 8 || x >= width - 8 || y < 8 || y >= height - 8 ? border : background;
-            // The ship rides low in the card, so the hull count has the clear middle of it
-            // to itself: the number is drawn at the marker's origin and must never sit on
-            // the silhouette or drift off the card.
-            if (y >= 74 && y <= 84 && x >= 34 + (y - 74) && x <= 126 - (y - 74)) color = ship;
-            if (x >= 62 && x <= 98 && y >= 66 && y < 75) color = ship;
-            if (x >= 72 && x <= 84 && y >= 61 && y < 67) color = ship;
-            if (y >= 85 && y <= 87 && ((x / 18) + (y - 85)) % 2 == 0) color = wave;
-            var write = (y * width + x) * 4;
-            pixels[write] = (byte)(color.R * 255f);
-            pixels[write + 1] = (byte)(color.G * 255f);
-            pixels[write + 2] = (byte)(color.B * 255f);
-            pixels[write + 3] = (byte)(color.A * 255f);
+            var ux = x / (float)scale;
+            var uy = y / (float)scale;
+            if (ux < 3f || ux >= width - 3f || uy < 3f || uy >= height - 3f) continue;
+
+            // Rounded corner distance check
+            var cx = ux < 11f ? 11f - ux : ux > width - 12f ? ux - (width - 12f) : 0f;
+            var cy = uy < 11f ? 11f - uy : uy > height - 12f ? uy - (height - 12f) : 0f;
+            var cDist = MathF.Sqrt(cx * cx + cy * cy);
+            if (cDist > 8f) continue;
+
+            var t = (uy - 3f) / (height - 6f);
+            Color col;
+            if (cDist > 6.2f || ux < 5f || ux >= width - 5f || uy < 5f || uy >= height - 5f)
+                col = outerDark;
+            else if (cDist > 4.2f || ux < 8f || ux >= width - 8f || uy < 8f || uy >= height - 8f)
+                col = frameTeal.Lerp(Colors.White, (1f - t) * 0.22f);
+            else if (ux < 10f || ux >= width - 10f || uy < 10f || uy >= height - 10f)
+                col = brassRim.Darkened(t * 0.25f);
+            else
+            {
+                col = bodyTop.Lerp(bodyBot, t);
+                // Top naval header band
+                if (uy < 22f)
+                    col = col.Lightened(0.14f);
+                else if (uy >= 22f && uy < 23.5f)
+                    col = brassRim.Darkened(0.18f);
+
+                // Center recessed hull-count bay (leaves middle clear for FleetHullCount text)
+                if (ux >= 46f && ux <= 114f && uy >= 26f && uy <= 62f)
+                {
+                    var bBorder = ux < 47.5f || ux > 112.5f || uy < 27.5f || uy > 60.5f;
+                    col = bBorder ? brassRim.Darkened(0.35f) : bayFill;
+                }
+
+                // Left & right maritime compass medallions
+                foreach (var medX in new[] { 27f, 133f })
+                {
+                    var d = MathF.Sqrt((ux - medX) * (ux - medX) + (uy - 44f) * (uy - 44f));
+                    if (d <= 11.5f)
+                    {
+                        if (d >= 9.8f) col = brassRim;
+                        else if (d <= 3.2f) col = brassRim.Lightened(0.15f);
+                        else col = bayFill.Lightened(0.06f);
+                    }
+                }
+            }
+
+            // Sleek modern destroyer silhouette along the lower deck (uy 64..84)
+            // Hull with flared bow on the right and tapered stern on the left
+            if (uy >= 73f && uy <= 82f)
+            {
+                var hullLeft = 26f + (uy - 73f) * 0.7f;
+                var hullRight = 136f - (uy - 73f) * 1.4f;
+                if (ux >= hullLeft && ux <= hullRight)
+                    col = uy < 76f ? shipLight : shipMid;
+            }
+            // Main stealth superstructure & bridge
+            if (uy >= 66f && uy < 73f && ux >= 54f + (73f - uy) * 0.8f && ux <= 102f - (73f - uy) * 0.6f)
+                col = shipLight;
+            // Forward radar mast & aft mast
+            if (uy >= 60f && uy < 66f && ((ux >= 74f && ux <= 82f) || (ux >= 58f && ux <= 63f)))
+                col = shipMid;
+            // Forward naval gun turret
+            if (uy >= 69f && uy < 73f && ux >= 108f && ux <= 118f)
+                col = shipLight;
+            if (uy >= 70f && uy < 71.5f && ux > 118f && ux <= 126f)
+                col = shipLight;
+            // Sea wake waves beneath the hull
+            if (uy >= 83.5f && uy <= 85.5f && ux >= 22f && ux <= 138f)
+            {
+                var wave = MathF.Sin((ux - 22f) * 0.35f);
+                if (wave > 0.1f) col = col.Lerp(wakeCol, wave * 0.85f);
+            }
+
+            image.SetPixel(x, y, col);
         }
-        using var image = Image.CreateFromData(width, height, false, Image.Format.Rgba8, pixels);
+        image.Resize(width, height, Image.Interpolation.Lanczos);
         return ImageTexture.CreateFromImage(image);
     }
 
@@ -4084,6 +4433,15 @@ void fragment() {
     private const byte OccupiedStripeAlpha = 160;
 
     /// <summary>
+    /// And this a lease (LandArrangementSystem): held by agreement, not by a war, so it must not
+    /// wear an occupation's stripes - the owner's colour stays, the tenant's shows as a fine
+    /// dotted weave and a dashed hem. Between the occupation band and the full transfer of title.
+    /// </summary>
+    private const byte LeasedAlpha = 214;
+
+    private readonly Dictionary<int, int> _leasedRegionHolder = new();
+
+    /// <summary>
     /// One texel per country, holding the colour the political map paints it.
     ///
     /// The fill used to come from a raster of five thousand by three thousand painted colours,
@@ -4129,50 +4487,34 @@ void fragment() {
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
         var ownerPixels = _ownerPixels ??= new byte[256 * 256 * 4];
         var ownerIds = _ownerIdPixels ??= new byte[256 * 256 * 4];
-        var ownersMoved = false;
-        Array.Clear(pixels);
-        Array.Clear(ownerPixels);
-        Array.Clear(ownerIds);
-        for (var province = 1; province <= topology.ProvinceCount; province++)
-        {
-            var owner = topology.ProvinceToNation[province];
-
-            // Ownership that has moved since the raster was painted. This is what makes a
-            // signed peace visible: the ground is repainted in the colour of whoever owns it
-            // now, whether it changed hands at a conference, at the end of a war, or in a
-            // save that was loaded halfway through one.
-            if (_paintedOwner is not null && province < _paintedOwner.Length && _paintedOwner[province] != owner)
+        // The regions held on lease, and by whom - read once, not once a province.
+        _leasedRegionHolder.Clear();
+        foreach (var arrangement in _campaign.LandArrangements)
+            if (arrangement.Kind == Simulation.LandArrangementSystem.Lease &&
+                _campaign.NationById(arrangement.HolderId) is { } tenant)
+                foreach (var region in arrangement.Regions) _leasedRegionHolder[region] = tenant.MapIndex;
+        var ownersMoved = Simulation.RasterOverlayKernel.PackProvinceOverlays(
+            topology.ProvinceCount,
+            topology.ProvinceToNation,
+            _paintedOwner,
+            _campaign.ProvinceController,
+            _colorByMapIndex,
+            OccupiedStripeAlpha,
+            UnownedPaletteIndex,
+            0x6E7B8BFFu,
+            pixels,
+            ownerPixels,
+            ownerIds);
+        // A lease wears its own code rather than an occupation's stripes (LeasedAlpha).
+        if (_leasedRegionHolder.Count > 0)
+            for (var province = 1; province <= topology.ProvinceCount; province++)
             {
-                var ownerPacked = _colorByMapIndex.TryGetValue(owner, out var ownerColor) ? ownerColor : 0x6E7B8BFFu;
-                var ownerWrite = province * 4;
-                ownerPixels[ownerWrite] = (byte)((ownerPacked >> 24) & 0xFF);
-                ownerPixels[ownerWrite + 1] = (byte)((ownerPacked >> 16) & 0xFF);
-                ownerPixels[ownerWrite + 2] = (byte)((ownerPacked >> 8) & 0xFF);
-                ownerPixels[ownerWrite + 3] = 255;
-                // And the id, for the border stroke - otherwise a country that has been
-                // annexed goes on being outlined inside the country that annexed it. Nobody
-                // is written as its own id rather than as 0, which the shader reads as sea.
-                var drawnOwner = owner == 0 ? UnownedPaletteIndex : owner;
-                ownerIds[ownerWrite] = (byte)(drawnOwner & 0xFF);
-                ownerIds[ownerWrite + 1] = (byte)((drawnOwner >> 8) & 0xFF);
-                ownerIds[ownerWrite + 2] = 255;
-                ownerIds[ownerWrite + 3] = 255;
-                ownersMoved = true;
+                var write = province * 4;
+                if (pixels[write + 3] != OccupiedStripeAlpha) continue;
+                if (_leasedRegionHolder.TryGetValue(topology.ProvinceToState[province], out var tenantIndex) &&
+                    tenantIndex == _campaign.ProvinceController[province])
+                    pixels[write + 3] = LeasedAlpha;
             }
-
-            var controller = _campaign.ProvinceController[province];
-            if (controller == owner) continue;
-            var packed = _colorByMapIndex.TryGetValue(controller, out var color) ? color : 0x6E7B8BFFu;
-            var write = province * 4;
-            pixels[write] = (byte)((packed >> 24) & 0xFF);
-            pixels[write + 1] = (byte)((packed >> 16) & 0xFF);
-            pixels[write + 2] = (byte)((packed >> 8) & 0xFF);
-            // Held, not owned. The shader reads this alpha as an instruction rather than an
-            // opacity: short of full it wears the occupier's colour as stripes over whoever
-            // the province still legally belongs to, so an advance never looks like an
-            // annexation and a peace conference can be read.
-            pixels[write + 3] = OccupiedStripeAlpha;
-        }
         // The peace being negotiated is drawn over the controller map, so the player sees
         // the border they are proposing rather than the one that exists. This one is solid -
         // a full alpha - because a province inside the draft treaty is not being occupied,
@@ -4389,6 +4731,7 @@ void fragment() {
         _lastLabelNames.Clear();
         _countryLabels.Clear();
         _countryGlyphs.Clear();
+        _countryGlyphScale = -1f;
         var activeGroups = new HashSet<int>();
 
         var countryFont = PresentationFonts.For("map.countries");
@@ -4605,15 +4948,30 @@ void fragment() {
     private void UpdateCountryLabelVisibility()
     {
         if (!IsInstanceValid(_countryLabelRoot) || !IsInstanceValid(_camera)) return;
-        if (!CountryLabelsEnabled) { _countryLabelRoot.Visible = false; return; }
+        if (!CountryLabelsEnabled || !Simulation.WorldLayers.On("country_labels")) { _countryLabelRoot.Visible = false; return; }
         // At tactical zoom, country names yield to states/provinces and unit
         // counters. Keeping continent-scale typography there would cover the map.
+        // The flat map's range used to end at 4.4, which is wider than Europe: the view a
+        // player spends most of the game in had no country names at all, while the globe
+        // at the same scale was full of them. It now runs down to the regional view - the
+        // whole of Ukraine on the screen still names Ukraine, as a Paradox map does; the
+        // letters follow the country's own extent, so they stay inside it.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
-            ? _flatZoom is >= 4.4f and <= 10.8f
+            ? _flatZoom is >= 0.85f and <= 10.8f
             : _distance is >= 7.9f and <= 16.5f);
         if (!_countryLabelRoot.Visible) return;
+        // Closer in than 1.7 the letters keep their places - spread across the country - and
+        // grow no larger: at full size POLAND and UKRAINE ran into each other and out of their
+        // borders. Smaller letters spaced wide are how an atlas names a country seen close.
+        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : 1f;
+        if (Math.Abs(glyphScale - _countryGlyphScale) > 0.02f)
+        {
+            _countryGlyphScale = glyphScale;
+            foreach (var glyph in _countryGlyphs)
+                if (IsInstanceValid(glyph.Node)) glyph.Node.Scale = Vector3.One * glyphScale;
+        }
         var minimumCells = _flatMap
-            ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : 150
+            ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : _flatZoom > 2.6f ? 150 : 40
             : _distance > 11.5f ? 26000 : _distance > 9.5f ? 6500 : _distance > 7.4f ? 1500 : 150;
         var viewNormal = _flatMap ? Vector3.Zero : _camera.GlobalPosition.Normalized();
         var horizonThreshold = _distance > 11.5f ? 0.72f : _distance > 9.5f ? 0.62f : _distance > 7.4f ? 0.50f : 0.38f;
@@ -4689,7 +5047,8 @@ void fragment() {
         var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
         var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
-            Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures));
+            Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures,
+            widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
         var labelAnchors = anchorWork.GetAwaiter().GetResult();
 
         for (var y = 0; y < MapHeight; y++)

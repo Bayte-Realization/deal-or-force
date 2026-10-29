@@ -1,0 +1,21 @@
+// Membership crises in organisations (OrganizationCrises.cs).
+{
+  "chronicle.organization_crisis": "{0} требует от организации «{2}» лучших условий — иначе может выйти.",
+  "chronicle.organization_concession": "{0} удерживает {1} в организации «{2}» ценой уступки.",
+  "chronicle.organization_exit_vote": "{0} голосует за выход из организации «{2}».",
+  "chronicle.organization_crisis_passed": "Кризис между {0} и организацией «{2}» миновал: страна остаётся.",
+  "Membership crises are disabled.": "Кризисы членства отключены.",
+  "Your country is already bargaining with this organization.": "Ваша страна уже торгуется с этой организацией.",
+  "Another member's crisis is under way; one at a time.": "Уже идёт кризис другого члена; по одному за раз.",
+  "Too few members to bargain with; leaving is the only lever.": "Слишком мало членов для торга: остаётся только выход.",
+  "Better terms can be demanded again in {0} days.": "Снова потребовать лучших условий можно через {0} дн.",
+  "No member is bargaining for better terms.": "Никто из членов не торгуется за лучшие условия.",
+  "A country cannot buy itself back.": "Страна не может удержать сама себя.",
+  "A concession costs {0}; the treasury holds {1}.": "Уступка стоит {0}; в казне {1}.",
+  "Membership crisis: {0} demands better terms; the vote on leaving is in {1} days.": "Кризис членства: {0} требует лучших условий; голосование о выходе через {1} дн.",
+  "Demand better terms": "Потребовать лучших условий",
+  "Open a membership crisis: for half a year the others may buy your country back with a concession paid to your treasury. If nobody does, nothing forces you out - leaving stays your choice.": "Открыть кризис членства: полгода остальные могут удержать Вашу страну уступкой, выплаченной в Вашу казну. Если никто не уступит, никто Вас и не выгонит — выход остаётся Вашим решением.",
+  "Make a concession ({0})": "Пойти на уступку ({0})",
+  "Pay the bargaining member to stay: its sense of belonging rises for years and it thinks better of your country. The crisis ends.": "Заплатить торгующемуся члену, чтобы он остался: на годы растёт его чувство принадлежности и отношение к Вашей стране. Кризис заканчивается.",
+  "Paid to keep us in the organization": "Заплатили, чтобы мы остались в организации"
+}

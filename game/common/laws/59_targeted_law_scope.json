@@ -1,0 +1,106 @@
+// Integration of the second expansion: existing regional/foreign categories retain their
+// original scope. A national bonus in a regional category would create a second stacking slot.
+{
+  "industry_defense": { "icon": "industry" },
+  "industry_green": { "icon": "industry" },
+  "environment_carbon": { "icon": "industry" },
+  "regional_federal": {
+    "description": "Regional self-government reduces resentment and improves local services, but makes administration less uniform. National tax rates and the country's constitutional structure are unchanged."
+  },
+  "recovery_infrastructure": {
+    "icon": "industry",
+    "description": "Prioritise essential services in this region. Living conditions and stability improve, while deferred requests raise resentment. Buildings are neither repaired nor created instantly."
+  },
+  "recovery_cultural": {
+    "icon": "industry",
+    "description": "Prioritise cultural services in this region. Living conditions and stability improve and resentment declines; monuments and cultural buildings still require normal construction."
+  },
+  "development_corridor": {
+    "icon": "industry",
+    "description": "Concentrate regional services around transport hubs, improving living conditions and stability while peripheral districts grow resentful. Actual railways and supply hubs must still be built."
+  },
+  "development_zones": {
+    "description": "Special local administrative rules improve living conditions but increase social churn. This regional law does not sign foreign trade agreements or set national tax rates."
+  },
+  "foreign_deterrent": {
+    "description": "A pressure-oriented posture reduces trust with this country. Ships and aircraft receive no automatic deployment orders."
+  },
+  "forward_mediation": {
+    "description": "Prioritise steady trust with this country for future mediation. Ending a war still requires a real diplomatic settlement."
+  },
+  "forward_posture": {
+    "description": "A pressure-oriented posture reduces trust with this country. Ships and aircraft receive no automatic deployment orders."
+  },
+  "energy_rationing": {
+    "description": "Supply rationing priorities improve throughput and stability at a cost to output. Equipment and fuel still depend on real stocks and supply connections."
+  },
+  "regional_budget_share": {
+    "scope": "region", "cost_share": 0.00005, "cooldown_days": 180,
+    "description": "Prioritise locally administered services in this region. Living conditions and stability improve, while disputes over allocations raise resentment. National budget sliders are unchanged.",
+    "modifiers": { "living_weekly": 0.0003, "stability_weekly": 0.00015, "radicalism_weekly": 0.0002 }
+  },
+  "regional_assembly_elections": {
+    "scope": "region", "cost_share": 0.00005, "cooldown_days": 180,
+    "description": "Representative regional administration improves stability and reduces resentment at a service-transition cost. This law does not replace the country's existing election calendar.",
+    "modifiers": { "stability_weekly": 0.0004, "radicalism_weekly": -0.0002, "living_weekly": -0.0001 }
+  },
+  "regional_prefect_review": {
+    "scope": "region", "cost_share": 0.00003, "cooldown_days": 180,
+    "description": "Central review strengthens administrative order in this region, but delays services and raises local resentment.",
+    "modifiers": { "stability_weekly": 0.0003, "living_weekly": -0.0002, "radicalism_weekly": 0.0002 }
+  },
+  "development_transport_nodes": {
+    "scope": "region", "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "Concentrate regional services around transport hubs, improving living conditions and stability while peripheral districts grow resentful. Actual railways and supply hubs must still be built.",
+    "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0002, "radicalism_weekly": 0.0002 }
+  },
+  "development_state_farms": {
+    "scope": "region", "cost_share": 0.00004, "cooldown_days": 180,
+    "description": "Central agricultural administration improves local order at a cost to living conditions and rural goodwill. This law does not create farms or settlers instantly.",
+    "modifiers": { "stability_weekly": 0.0004, "living_weekly": -0.0003, "radicalism_weekly": 0.0002 }
+  },
+  "development_broadband": {
+    "scope": "region", "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "Digital service access improves living conditions and administration in the selected region, with resentment over uneven coverage. Infrastructure is not placed on the map automatically.",
+    "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0002, "radicalism_weekly": 0.0001 }
+  },
+  "recovery_clearance_corps": {
+    "scope": "region", "cost_share": 0.00005, "cooldown_days": 180,
+    "description": "A clearance-service mandate improves local stability and living conditions, with resentment over disruption. Damaged buildings still use the normal reconstruction system.",
+    "modifiers": { "stability_weekly": 0.0005, "living_weekly": 0.0002, "radicalism_weekly": 0.00015 }
+  },
+  "recovery_land_registry": {
+    "scope": "region", "cost_share": 0.00004, "cooldown_days": 180,
+    "description": "Clarify land titles in this region: stability improves and resentment falls, but administrative transition burdens living conditions. Ownership on the world map is unchanged.",
+    "modifiers": { "radicalism_weekly": -0.0004, "stability_weekly": 0.0003, "living_weekly": -0.0001 }
+  },
+  "recovery_utility_restoration": {
+    "scope": "region", "cost_share": 0.00006, "cooldown_days": 270,
+    "description": "Prioritise essential services in this region. Living conditions and stability improve, while deferred requests raise resentment. Buildings are neither repaired nor created instantly.",
+    "modifiers": { "living_weekly": 0.0005, "stability_weekly": 0.00015, "radicalism_weekly": 0.0001 }
+  },
+  "foreign_non_aligned_balance": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": 0.02,
+    "description": "Keep a small trust commitment towards this country without promising alignment. The law does not cancel alliances or sign trade agreements."
+  },
+  "foreign_forward_presence": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": -0.10,
+    "description": "A pressure-oriented posture reduces trust with this country. Ships and aircraft receive no automatic deployment orders."
+  },
+  "foreign_mediation_office": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": 0.04,
+    "description": "Prioritise steady trust with this country for future mediation. Ending a war still requires a real diplomatic settlement."
+  },
+  "foreign_targeted_aid": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": 0.08, "cost_share": 0.00004, "cooldown_days": 180,
+    "description": "Make this partner a standing trust priority for assistance. Money and equipment are transferred only through actual aid actions."
+  },
+  "foreign_targeted_sanctions": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": -0.18,
+    "description": "Institutionalise distrust towards this country. Actual embargoes and sanctions still require their normal diplomatic actions."
+  },
+  "foreign_targeted_cultural_centres": {
+    "scope": "foreign", "modifiers": {}, "foreign_trust": 0.05,
+    "description": "Prioritise cultural outreach and trust towards this country. No buildings, population changes or automatic treaty obligations are created."
+  }
+}

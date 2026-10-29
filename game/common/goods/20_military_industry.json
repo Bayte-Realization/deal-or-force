@@ -1,0 +1,9 @@
+// The arsenal: what an army is made of besides rifles and shells. Stable string ids, no enum.
+// Abstract weekly market units, like every other good.
+{
+  "Tanks": { "name": "Tanks", "icon": "TNK", "base_price": 0.140, "essential_weight": 0.01, "description": "Armoured fighting vehicles: steel, engines and fire control. An army without them holds ground but cannot take it." },
+  "Drones": { "name": "Drones", "icon": "UAV", "base_price": 0.105, "essential_weight": 0.01, "description": "Unmanned aircraft, from the hobby quadcopter with a grenade to the strike drone. Cheap, numerous and devoured by a war." },
+  "CombatAircraft": { "name": "Combat aircraft", "icon": "JET", "base_price": 0.210, "essential_weight": 0.01, "description": "Fighters and bombers: aluminium, precision engineering and the most demanding electronics a country makes." },
+  "Missiles": { "name": "Missiles", "icon": "MSL", "base_price": 0.165, "essential_weight": 0.01, "description": "Guided munitions for air defence, ships and long-range strikes." },
+  "Artillery": { "name": "Artillery", "icon": "ART", "base_price": 0.080, "essential_weight": 0.01, "description": "Guns and rocket launchers. Barrels wear out: a war at full intensity eats them as it eats shells." }
+}

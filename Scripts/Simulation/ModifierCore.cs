@@ -224,6 +224,21 @@ public static class ModifierSystem
     public static void Tick(Campaign campaign)
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(ModifierSystem))) return;
+        // Programme deadlines are campaign days, not the next economic settlement.
+        // Remove first: otherwise today's national totals still contain yesterday's
+        // expired bonus, including weekly drifts paid by NationalModifiers.Tick.
+        foreach (var nation in campaign.Nations)
+        {
+            var changed = false;
+            for (var index = nation.Modifiers.Count - 1; index >= 0; index--)
+            {
+                var active = nation.Modifiers[index];
+                if (active.IsPermanent || active.ExpiresDay > campaign.ElapsedDays) continue;
+                nation.Modifiers.RemoveAt(index);
+                changed = true;
+            }
+            if (changed) NationalModifiers.Invalidate(nation);
+        }
         // Every day: what the modifiers add up to, and the weekly ones paid a day at a time.
         NationalModifiers.Tick(campaign);
         if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
@@ -235,12 +250,6 @@ public static class ModifierSystem
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)
             {
                 var active = nation.Modifiers[index];
-                if (!active.IsPermanent && active.ExpiresDay <= campaign.ElapsedDays)
-                {
-                    nation.Modifiers.RemoveAt(index);
-                    continue;
-                }
-
                 ModifierCatalog.Get(active.Id)?.Effects.Apply(campaign, nation);
             }
         }

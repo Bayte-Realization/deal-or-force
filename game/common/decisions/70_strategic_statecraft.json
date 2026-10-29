@@ -22,7 +22,7 @@
     "gdp_cost_share": 0.0028,
     "unavailable": "Defence production consolidation requires an active wartime footing",
     "trigger": { "use": [ "at_war" ] },
-    "effects": { "military_spending": 0.012, "war_support": 0.025, "stability": -0.008 },
+    "effects": { "add_modifier": { "defence_arsenal_consolidation": 270 }, "war_support": 0.025, "stability": -0.008 },
     "ai_will_do": "ai_defence_consolidation"
   },
   "critical_infrastructure_hardening": {
@@ -121,7 +121,7 @@
     "gdp_cost_share": 0.0012,
     "unavailable": "Requires accumulated battlefield combat experience and political authorization",
     "trigger": { "use": [ "solvent" ] },
-    "effects": { "war_support": 0.020, "military_spending": 0.005 },
+    "effects": { "war_support": 0.020, "add_modifier": { "staff_academy_programme": 365 } },
     "ai_will_do": "ai_staff_academy"
   },
   "armament_modernization_field_refit": {
@@ -132,7 +132,7 @@
     "gdp_cost_share": 0.0020,
     "unavailable": "Requires combat experience to refine equipment retrofit packages",
     "trigger": { "use": [ "solvent" ] },
-    "effects": { "military_spending": 0.008, "war_support": 0.015 },
+    "effects": { "add_modifier": { "field_refit_programme": 180 }, "war_support": 0.015 },
     "ai_will_do": "ai_armament_refit"
   }
 }

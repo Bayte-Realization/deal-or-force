@@ -25,27 +25,33 @@ public partial class DealOrForceGame
         var demand = _campaign.UltimatumPapers.FirstOrDefault(candidate => candidate.Id == _ultimatumInboxSelected);
         return $"{Loc.Language}|{_campaign.Player.Id}|{_campaign.ElapsedDays}|{_campaign.MapRevision}|" +
             $"{_campaign.DealInboxRevision}|{_campaign.NationById(paper?.FromId ?? -1)?.Treasury:R}|" +
-            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}";
+            $"{_campaign.NationById(paper?.ToId ?? -1)?.Treasury:R}|u:{_ultimatumInboxSelected}|{demand?.State}|{demand?.ExpiresDay}|{AssistanceInboxKey()}|{ArmsInboxKey()}|{LeaseInboxKey()}";
     }
 
     private void RefreshNegotiationNotifications()
     {
         var count = _observerMode ? 0 : DealNegotiations.Incoming(_campaign, _campaign.Player.Id)
             + ForeignAssistance.Incoming(_campaign, _campaign.Player.Id)
+            + ArmsShipmentRequests.Incoming(_campaign, _campaign.Player.Id)
             + Ultimatum.Incoming(_campaign, _campaign.Player.Id)
-            + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id);
+            + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id)
+            + LeaseOffersIncoming()
+            + DiplomaticActs.Incoming(_campaign, _campaign.Player.Id);
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var assistance = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.AssistanceRequests
             .Where(r => r.State == ForeignAssistanceState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
+        var armsPapers = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.ArmsShipmentRequests
+            .Where(r => r.State == ArmsShipmentState.Pending && r.DonorId == _campaign.Player.Id && r.ExpiresDay > _campaign.ElapsedDays).Select(r => r.Id).ToHashSet();
         // A load or hotseat change primes quietly; receipt still is not a signature.
         if (!_observerMode && !_dealNoticeObserver && _dealNoticeViewer == _campaign.Player.Id &&
-            (incoming.Except(_dealNoticeIds).Any() || ultimatums.Except(_ultimatumNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any()))
+            (incoming.Except(_dealNoticeIds).Any() || ultimatums.Except(_ultimatumNoticeIds).Any() || assistance.Except(_assistanceNoticeIds).Any() || armsPapers.Except(_armsNoticeIds).Any()))
             PlayStrategicCue("deal_received");
         _ultimatumNoticeIds = ultimatums;
         _assistanceNoticeIds = assistance;
+        _armsNoticeIds = armsPapers;
         _dealNoticeViewer = _campaign.Player.Id; _dealNoticeObserver = _observerMode; _dealNoticeIds = incoming;
         if (IsInstanceValid(_dealInboxHudButton))
         {
@@ -75,23 +81,26 @@ public partial class DealOrForceGame
         var panel = TexturedPanel(_dealComposer); panel.Name = "DiplomaticInboxPanel";
         Ui.Place(panel, "modal.deal");
         var rows = PanelRows(panel, 20, 16, 12);
-        var header = new HBoxContainer(); rows.AddChild(header);
-        var title = Title("DIPLOMATIC INBOX", 24, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
-        header.AddChild(HandbookButton("deals"));
-        header.AddChild(ActionButton("×", CloseDealComposer, 38, 32));
-        rows.AddChild(WrappedUltimatumText("Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.", 13));
+        ScreenHeader(rows, "DIPLOMATIC INBOX",
+            "Diplomatic letters await your decision. Reading is not consent; review the live terms before approving any transfer.",
+            false, HandbookButton("deals"), ActionButton("×", CloseDealComposer, 38, 32));
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
         var listFrame = new PanelContainer { Name = "OfferListFrame", CustomMinimumSize = new(290, 0) };
-        listFrame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10)); body.AddChild(listFrame);
+        listFrame.SetMeta("atlas_section_ground", "surface.inset");
+        listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        body.AddChild(listFrame);
         _dealInboxScroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
             SizeFlagsVertical = SizeFlags.ExpandFill, FollowFocus = true };
         listFrame.AddChild(_dealInboxScroll);
         _dealInboxRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _dealInboxRows.AddThemeConstantOverride("separation", 6); _dealInboxScroll.AddChild(_dealInboxRows);
         var detailFrame = new PanelContainer { Name = "OfferDetailFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        detailFrame.AddThemeStyleboxOverride("panel", WarInsetStyle(14, 12)); body.AddChild(detailFrame);
+        detailFrame.SetMeta("atlas_section_ground", "surface.inset");
+        detailFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(detailFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        body.AddChild(detailFrame);
         var detailColumn = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill };
         detailFrame.AddChild(detailColumn);
@@ -138,6 +147,7 @@ public partial class DealOrForceGame
         _dealInboxActions.Visible = false;
         var player = _campaign.Player;
         AddMilitaryAccessInboxRows();
+        AddDiplomaticActInboxRows();
         var papers = _campaign.DealOffers.Where(o => o.FromId == player.Id || o.ToId == player.Id)
             .OrderBy(o => !o.Pending).ThenBy(o => o.Pending ? o.ExpiresDay : -o.Id).ToArray();
         foreach (var paper in papers)
@@ -147,7 +157,7 @@ public partial class DealOrForceGame
             var row = ActionButton(Loc.Format("{0} · {1}\n{2}", paper.ToId == player.Id ? Tr("Incoming") : Tr("Outgoing"),
                 counterpart?.DisplayName ?? "?", Tr(OfferStateKey(paper))), () =>
             {
-                _dealInboxSelected = id; _ultimatumInboxSelected = -1; _assistanceInboxSelected = -1;
+                _dealInboxSelected = id; _ultimatumInboxSelected = -1; _assistanceInboxSelected = -1; ClearArmsInboxSelection();
                 _dealInboxMessage = ""; _dealInboxConfirm = -1;
                 RefreshDealInbox(force: true);
             }, 0, 54, id == _dealInboxSelected && _ultimatumInboxSelected < 0);
@@ -163,7 +173,7 @@ public partial class DealOrForceGame
             var row = ActionButton(Loc.Format("Ultimatum · {0}\n{1}", demander?.DisplayName ?? "?",
                 Tr(demand.Pending ? "Awaiting reply" : demand.State == UltimatumPaperState.Yielded ? "Yielded" : "Refused")), () =>
             {
-                _ultimatumInboxSelected = id; _dealInboxSelected = -1; _assistanceInboxSelected = -1;
+                _ultimatumInboxSelected = id; _dealInboxSelected = -1; _assistanceInboxSelected = -1; ClearArmsInboxSelection();
                 _dealInboxMessage = ""; _ultimatumInboxConfirm = -1;
                 RefreshDealInbox(force: true);
             }, 0, 54, id == _ultimatumInboxSelected);
@@ -173,7 +183,11 @@ public partial class DealOrForceGame
         }
         var showUltimatum = ultimatumPapers.Any(paper => paper.Id == _ultimatumInboxSelected);
         if (!showUltimatum) _ultimatumInboxSelected = -1;
-        var assistanceSelected = AddAssistanceInboxRows(showDetail: !showUltimatum);
+        var playerId = player.Id;
+        var armsExplicit = _campaign.ArmsShipmentRequests.Any(r => r.Id == _armsInboxSelected && (r.RequesterId == playerId || r.DonorId == playerId));
+        var assistanceSelected = AddAssistanceInboxRows(showDetail: !showUltimatum && !armsExplicit);
+        var armsSelected = AddArmsInboxRows(showDetail: !showUltimatum && !assistanceSelected);
+        AddLeaseInboxRows();
         if (papers.Length == 0 && _dealInboxRows.GetChildCount() == 0)
             _dealInboxRows.AddChild(WrappedUltimatumText("No offers yet. Propose a deal from a country's diplomacy page.", 14));
         _dealInboxScroll.SetDeferred("scroll_vertical", scroll);
@@ -184,6 +198,7 @@ public partial class DealOrForceGame
             return;
         }
         if (assistanceSelected) { _dealInboxKey = DealInboxKey(); return; }
+        if (armsSelected) { _dealInboxKey = DealInboxKey(); return; }
         var selected = papers.FirstOrDefault(o => o.Id == _dealInboxSelected) ?? papers.FirstOrDefault();
         if (selected is null)
         {
@@ -275,7 +290,7 @@ public partial class DealOrForceGame
         _dealInboxDetail.AddChild(WrappedUltimatumText(demand.Pending
             ? Loc.Format("Reply within {0} days · offered on campaign day {1}", remaining, demand.CreatedDay)
             : Loc.Format("Closed on campaign day {0}", demand.ClosedDay), 13));
-        _dealInboxDetail.AddChild(WrappedUltimatumText("Nothing has been handed over. Yielding gives them the regions on this paper and starts a truce. Refusing keeps the land and gives them a reason for war.", 13));
+        _dealInboxDetail.AddChild(WrappedUltimatumText("Nothing has been handed over. Yielding gives them exactly what this paper asks and starts a truce. Refusing keeps everything and gives them a reason for war.", 13));
         _dealInboxDetail.AddChild(new HSeparator());
         _dealInboxDetail.AddChild(WrappedUltimatumText(Ultimatum.Summary(_campaign, demand.Terms), 16));
         var preview = new DealTerritoryPreview();
@@ -306,7 +321,7 @@ public partial class DealOrForceGame
         }, 180, 36, true);
         yield.Name = "YieldUltimatum";
         yield.Disabled = !legal || remaining == 0;
-        yield.TooltipText = Ui.Tip(!legal ? refusal : Tr("Two clicks hand over the regions on this paper. Opening or reading it never counts as yielding."));
+        yield.TooltipText = Ui.Tip(!legal ? refusal : Tr("Two clicks hand over exactly what this paper asks. Opening or reading it never counts as yielding."));
         _dealInboxActions.AddChild(yield);
         var refuse = ActionButton("Refuse", () => ReplyToUltimatum(demand.Id, Ultimatum.Answer.Refuse), 120, 36);
         refuse.Name = "RefuseUltimatum";

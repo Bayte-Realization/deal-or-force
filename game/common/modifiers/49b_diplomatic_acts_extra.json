@@ -1,0 +1,39 @@
+// Национальные состояния, которые оставляют новые дипломатические акты. Ни одно из них не
+// трогает налоги и ставки финансирования: это то, что игрок уже решает сам во внутренних делах.
+{
+  "student_exchange": {
+    "name": "Student exchange",
+    "description": "A semester of each other's universities for a decade of knowing who to telephone.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "research_speed": 0.03, "assimilation": 0.01 }
+  },
+  "intelligence_sharing": {
+    "name": "Intelligence sharing",
+    "description": "Two services reading the same file, which is worth a division the country does not have to raise.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "army_defense": 0.02, "deterrence": 0.02 }
+  },
+  "border_commission": {
+    "name": "Border commission",
+    "description": "Commissioners on the ground where the maps disagree, and a frontier that costs less to watch.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "deterrence": 0.03, "stability_weekly": 0.0006 }
+  },
+  "technology_licence": {
+    "name": "Technology licence",
+    "description": "Somebody else's drawings, paid for in cash rather than in years.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "research_speed": 0.06, "construction_speed": 0.02 }
+  },
+  "airspace_cooperation": {
+    "name": "Airspace cooperation",
+    "description": "Shared corridors and shared controllers: fewer detours, fewer arguments at the frontier.",
+    "days": 365,
+    "positive": true,
+    "modifiers": { "support_recovery": 0.04, "trade_reach": 0.02 }
+  }
+}

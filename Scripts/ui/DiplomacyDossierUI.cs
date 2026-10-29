@@ -42,9 +42,11 @@ public partial class DealOrForceGame
         foreach (var page in new[] { "Overview", "Government", "Relations", "Comparison" })
         {
             var captured = page;
-            var button = ActionButton(page, () => SelectDiplomacyDossierPage(captured), 0, 32);
+            var button = ActionButton(page, () => SelectDiplomacyDossierPage(captured), 0, 34);
             button.Name = "DiplomacyPage" + page; button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            button.SetMeta("atlas_tab_button", true);
             button.AddThemeFontSizeOverride("font_size", 12); button.ClipText = true;
+            StyleButton(button, page == _diplomacyDossierPage);
             tabs.AddChild(button); _diplomacyDossierTabs.Add(page, button);
         }
     }

@@ -23,6 +23,9 @@ public sealed class DeleteBattlePlanCommand : ICampaignCommand
             line.Provinces.UnionWith(line.SourceProvinces);
             line.SourceProvinces.Clear();
             line.ObjectiveSequence.Clear();
+            line.OffensivePhases.Clear();
+            line.ActiveOffensivePhase = 0;
+            line.OffensiveRegroupDay = -1;
             line.Objectives.Clear();
             line.Posts.Clear();
             line.PostsDay = int.MinValue;

@@ -34,7 +34,14 @@ public partial class DealOrForceGame
         bar.AddThemeConstantOverride("separation", 1);
         _sideDetail.AddChild(bar);
         var shown = Math.Max(1L, total);
-        foreach (var slice in kept)
+        // Only the slices big enough to see get a segment of their own: at least a hundredth of
+        // the whole, and no more than a dozen. Every segment has a two-pixel floor, so a Paris
+        // of a hundred and seventy-eight peoples used to draw a hundred and seventy-eight
+        // slivers of equal width and the French majority was one of them. The rest share one
+        // segment with whatever the slices do not cover.
+        var drawn = kept.Where(slice => slice.Size >= shown * 0.01f).Take(12).ToList();
+        if (drawn.Count == 0) drawn.Add(kept[0]);
+        foreach (var slice in drawn)
         {
             var segment = new ColorRect
             {
@@ -46,9 +53,10 @@ public partial class DealOrForceGame
             };
             bar.AddChild(segment);
         }
-        // Whatever the listed slices do not cover. Without it a bar of the top eight peoples
+        // Whatever the drawn slices do not cover. Without it a bar of the top eight peoples
         // reads as if they were everybody.
-        var covered = kept.Sum(slice => slice.Size);
+        var covered = drawn.Sum(slice => slice.Size);
+        var others = kept.Count - drawn.Count;
         if (covered < shown * 0.999f)
             bar.AddChild(new ColorRect
             {
@@ -56,7 +64,9 @@ public partial class DealOrForceGame
                 SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 SizeFlagsStretchRatio = Math.Max(0.004f, (shown - covered) / (float)shown),
                 CustomMinimumSize = new Vector2(2, 18),
-                TooltipText = Ui.Tip(Simulation.Loc.Format("Everyone else · {0}", Fmt.People(shown - covered)))
+                TooltipText = Ui.Tip(others > 0
+                    ? Simulation.Loc.Format("Everyone else · {0} ({1} more)", Fmt.People(shown - covered), others)
+                    : Simulation.Loc.Format("Everyone else · {0}", Fmt.People(shown - covered)))
             });
 
         foreach (var slice in kept.Take(rows))

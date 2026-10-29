@@ -59,6 +59,10 @@
   "AiTreasuryFloor": 0.02,
   "AiTreasuryComfort": 0.12,
   "AiTaxStep": 0.012,
+  // A government short of money broadens the base before raising the rate: the consumption tax
+  // up to this, the income tax a little past neutral, the tax on firms up to this, then income.
+  "AiConsumptionTaxCeiling": 0.12,
+  "AiCorporateTaxCeiling": 0.15,
   "AiMinimumTaxRate": 0.08,
   "AiMaximumTaxRate": 0.46,
   "AiWartimeMilitarySpending": 0.16,
@@ -68,7 +72,7 @@
   "AiPeacetimeArmsFocus": 0.04,
   "AiStabilityConcern": 0.52,
   "AiSocialStep": 0.006,
-  "AiBuildTreasuryFloor": 0.03,
+  "AiBuildTreasuryFloor": 0.01,
   "AiMaxConcurrentProjects": 4,
   "AiBuildSaturation": 2.5,
   "AiEconomicWeight": 0.004,

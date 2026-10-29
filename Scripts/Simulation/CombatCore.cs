@@ -12,6 +12,20 @@ public sealed partial class Defines
     /// a fifth softer, rarely both at once; zero makes every battle a sum, as it was.
     /// </summary>
     public float CombatFortune { get; set; } = 0.18f;
+
+    /// <summary>
+    /// The fortune of a whole battle for one side, 1 ± this, triangular, rolled once when it
+    /// begins: the weather that holds, the commander who reads the ground, the bridge that was
+    /// not blown. A day's fortune averages out over a battle of twenty days; this does not, and
+    /// it is what lets an outnumbered side win a battle it should have lost.
+    /// </summary>
+    public float CombatBattleFortune { get; set; } = 0.22f;
+
+    /// <summary>The share of battles that turn on one decisive moment - a brilliant stroke or a blunder.</summary>
+    public float CombatDecisiveChance { get; set; } = 0.06f;
+
+    /// <summary>How far that moment swings the side it falls to, up or down.</summary>
+    public float CombatDecisiveSwing { get; set; } = 0.35f;
 }
 
 public static partial class Warfare
@@ -296,7 +310,8 @@ public static partial class Warfare
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
-                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
+                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army) ||
+                StaffReasons.SupplyHoldsAttack(campaign, army))
                 continue;
 
             var enemyMaps = war.IsAttacking(army.NationId) ? DefenderMaps : AttackerMaps;
@@ -470,14 +485,18 @@ public static partial class Warfare
         return $"{landed.Count:N0} formation(s) landed into a contested beach";
     }
 
-    /// <summary>One side's fortune for today's fighting: 1 ± Defines.CombatFortune, triangular, from the seed.</summary>
+    /// <summary>One side's fortune for today's fighting: the day's, 1 ± Defines.CombatFortune, triangular, times the battle's; from the seed.</summary>
     private static float Fortune(Campaign campaign, LandBattle battle, int side)
     {
-        var spread = M.Clamp(campaign.Defines.CombatFortune, 0f, 0.6f);
-        if (spread <= 0f) return 1f;
-        var first = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F7);
-        var second = Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, 0x6F8);
-        return 1f + spread * (first + second - 1f);
+        // The day's rolls change daily; the battle's (Defines.CombatBattleFortune) and its one
+        // decisive moment (CombatDecisiveChance) are rolled on the day it began. The formula is
+        // WarRhythm's.
+        var defines = campaign.Defines;
+        float Day(int salt) => Escalation.Roll(campaign.Seed, battle.Id, side, campaign.ElapsedDays, salt);
+        float Battle(int salt) => Escalation.Roll(campaign.Seed, battle.Id, side, battle.StartedDay, salt);
+        return WarRhythm.Fortune(defines.CombatFortune, Day(0x6F7), Day(0x6F8),
+            defines.CombatBattleFortune, Battle(0x6F9), Battle(0x6FA),
+            defines.CombatDecisiveChance, Battle(0x6FB), defines.CombatDecisiveSwing, Battle(0x6FC));
     }
 
     private static void ResolveBattles(Campaign campaign)
@@ -534,8 +553,8 @@ public static partial class Warfare
                 M.Clamp(directions - 1, 0, M.Max(0, defines.MaxAttackDirections - 1));
 
             var attackerWantedWidth = WantedWidth(attacking);
-            FrontageReady(attacking, usableWidth, AttackerLine, AttackerReserve, defines.BattleBreakOrganisation);
-            FrontageReady(defending, baseWidth, DefenderLine, DefenderReserve, defines.BattleBreakOrganisation);
+            FrontageReady(attacking, usableWidth, AttackerLine, AttackerReserve, defines.BattleBreakOrganisation, campaign, battle, true);
+            FrontageReady(defending, baseWidth, DefenderLine, DefenderReserve, defines.BattleBreakOrganisation, campaign, battle, false);
             battle.LastAttackerLine.Clear(); battle.LastDefenderLine.Clear();
             foreach (var army in AttackerLine) battle.LastAttackerLine.Add(army.Id);
             foreach (var army in DefenderLine) battle.LastDefenderLine.Add(army.Id);
@@ -589,17 +608,25 @@ public static partial class Warfare
             battle.AttackerSupport = attackerSupportShown;
             battle.DefenderSupport = defenderSupportShown;
 
+            var envelopmentBonus = CombatTempo.EnvelopmentFactor(defines, directions);
+
             var attackerOffence = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, defenderHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
-                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
+                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId)) *
+                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Attack) *
                 attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
-                (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * attackerFire;
+                (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire;
 
             var defenderOffence = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     Offence(army, attackerHardness) * DivisionRules.Attack(army) *
                     MilitaryDoctrine.Attack(army.Stance) * Researched(campaign, army, "army_attack") *
-                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId))) *
+                    StrategicStockpiles.CombatMunitionsFactor(campaign, campaign.NationById(army.NationId)) *
+                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Attack) *
                 defenderEngagement * defenderPierces * defines.DefenderCounterFire * defenderFire;
 
             var dugIn = DefenderLine.Average(army => army.Entrenchment);
@@ -626,15 +653,28 @@ public static partial class Warfare
 
             var defenderProtection = DefenderLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Defense * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense") *
+                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Defence) *
                 defenderEngagement * defines.DefenderAdvantage * terrain.Defense *
                 (1f + dugIn * defines.EntrenchmentBonus) * effectiveDefenderStripped *
                 homelandBonus * frontalBonus;
 
             var attackerProtection = AttackerLine.Sum(army => M.Max(0.01f, army.Power) *
                     UnitTypeCatalog.Get(army.TemplateId).Breakthrough * DivisionRules.Defense(army) *
-                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense")) *
+                    MilitaryDoctrine.Defense(army.Stance) * Researched(campaign, army, "army_defense") *
+                    CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff) *
+                    GuerrillaWar.Spirit(campaign, war, campaign.NationById(army.NationId)) *
+                    Generals.Factors(campaign, army).Defence) *
                 attackerEngagement * attackerStripped;
+
+            // The war of the weak (GuerrillaWar): a rising or a small country defending rough
+            // ground of its own against a far stronger enemy stays in the fight longer, and gives
+            // ground without dying for it - it melts away and fights again.
+            var guerrillaCover = GuerrillaWar.Cover(campaign, defenderNation, campaign.NationById(battle.AttackerId),
+                battle.ProvinceId, terrain);
+            defenderProtection *= 1f + defines.GuerrillaDefence * guerrillaCover;
 
             // The fortunes of war (Defines.CombatFortune): each side's day runs a little above or
             // below what its numbers say - the weather, a commander's call, a bridge that held -
@@ -645,6 +685,27 @@ public static partial class Warfare
             var defenderFortune = Fortune(campaign, battle, 2);
             attackerOffence *= attackerFortune; attackerProtection *= attackerFortune;
             defenderOffence *= defenderFortune; defenderProtection *= defenderFortune;
+
+            // The day's manoeuvres (CombatTactics): each staff's answer to this morning,
+            // drawn from the seed like fortune is and weighted by what its army is made
+            // of, its doctrine book, and its recon/commander initiative.
+            var attackerRecon = Weighted(AttackerLine, army => army.Recon);
+            var defenderRecon = Weighted(DefenderLine, army => army.Recon);
+            var attackerNation = campaign.NationById(battle.AttackerId);
+            var attackerTactic = CombatTactics.Pick(campaign, battle.Id, true, campaign.ElapsedDays,
+                attackerArmour, 0f, attackerOrgBefore, directions, terrain.Id, attackerPlanning,
+                attackerNation, 0f, attackerRecon);
+            var defenderTactic = CombatTactics.Pick(campaign, battle.Id, false, campaign.ElapsedDays,
+                defenderArmour, dugIn, defenderOrgBefore, 1, terrain.Id, 0f,
+                defenderNation, 0f, defenderRecon);
+            battle.AttackerTactic = attackerTactic?.Id ?? "";
+            battle.DefenderTactic = defenderTactic?.Id ?? "";
+            attackerOffence *= CombatTactics.Attack(attackerTactic, defenderTactic, defines) *
+                CombatTactics.EnemyAttack(defenderTactic);
+            defenderProtection *= CombatTactics.Defence(defenderTactic) * CombatTactics.EnemyDefence(attackerTactic);
+            defenderOffence *= CombatTactics.Attack(defenderTactic, attackerTactic, defines) *
+                CombatTactics.EnemyAttack(attackerTactic);
+            attackerProtection *= CombatTactics.Defence(attackerTactic) * CombatTactics.EnemyDefence(defenderTactic);
 
             var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
             var pressureOnAttacker = M.Clamp(defenderOffence / M.Max(0.01f, attackerProtection), 0.05f, 14f);
@@ -668,10 +729,10 @@ public static partial class Warfare
             var counterattack = CombatTempo.Counterattack(defines, pressureOnAttacker, dugIn, defenderSupply,
                 attackerOrgBefore, defenderOrgBefore, isDesperateDefense);
 
-            var defenderOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnDefender),
-                defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
-            var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker),
-                defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            var defenderOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnDefender) *
+                CombatTactics.OrgDamage(attackerTactic), defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
+            var attackerOrgLoss = M.Clamp(defines.BaseOrganisationDamage * MathF.Sqrt(pressureOnAttacker) *
+                CombatTactics.OrgDamage(defenderTactic), defines.MinOrganisationDamage, defines.MaxOrganisationDamage);
             if (breakthrough > 0f)
             {
                 defenderOrgLoss *= 1f + breakthrough * defines.BreakthroughOrganisationBonus;
@@ -682,6 +743,9 @@ public static partial class Warfare
                 attackerOrgLoss *= 1f + counterattack * defines.CounterattackOrganisationBonus;
                 defenderOrgLoss *= 1f - counterattack * defines.CounterattackDefenderRelief;
             }
+            // Ambushes: an attack into guerrilla cover is bled on its way in, by the side roads,
+            // the mines and the villages it has to pass (GuerrillaWar).
+            attackerOrgLoss *= 1f + defines.GuerrillaAmbush * guerrillaCover;
             // However badly a battle goes, it is still two sides shooting at each other: the
             // worse-off side's daily loss per formation is at most this many times the other's.
             // The bounds above allowed seventeen to one, and ten years of it put seven million
@@ -692,7 +756,7 @@ public static partial class Warfare
             // And the same for the dead. Thin templates, a broken line and an aggressive stance
             // each multiply a side's casualties after the cap above, so the share of its men a
             // side loses in a day is held to at most this many times the other side's share.
-            var defenderScale = 1f;
+            var defenderScale = 1f - M.Clamp01(defines.GuerrillaEvasion * guerrillaCover);
             var attackerScale = defines.AttackerCasualtyMultiplier;
             var (defenderMen, defenderDead) = CasualtyTotals(campaign, DefenderLine, defenderOrgLoss, defenderScale);
             var (attackerMen, attackerDead) = CasualtyTotals(campaign, AttackerLine, attackerOrgLoss, attackerScale);
@@ -960,6 +1024,9 @@ public static partial class Warfare
         battle.Ended = true;
         battle.WinnerId = winnerId;
         battle.Outcome = outcome;
+        // Who won it, who lost it, and whether the world will remember its name (Generals).
+        Generals.AfterBattle(campaign, battle, winnerId,
+            outcome.StartsWith("Defenders broke", StringComparison.Ordinal) || outcome.StartsWith("Attack repelled", StringComparison.Ordinal));
         foreach (var army in campaign.Armies)
             if (army.BattleId == battle.Id) army.BattleId = -1;
     }

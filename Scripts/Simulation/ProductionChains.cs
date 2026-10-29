@@ -60,7 +60,9 @@ public static class ProductionChains
     /// </summary>
     private const int SlotTimberYield = 11;
     private const int SlotProductionCapacity = 12;
-    private const int FixedSlots = 13;
+    /// <summary>How far the country's households' appetite has grown with its income (Nation.IncomeFactor).</summary>
+    private const int SlotIncome = 13;
+    private const int FixedSlots = 14;
 
     // Sized for what a mod might add rather than for what the enums name, because a good or
     // a building declared in data is a number past the last one the enum has a name for, and
@@ -393,6 +395,7 @@ public static class ProductionChains
             case "gdp": return SlotGdp;
             case "production_capacity": return SlotProductionCapacity;
             case "arms_productivity": return SlotArmsProductivity;
+            case "income": return SlotIncome;
         }
 
         if (name.StartsWith("deposit:", StringComparison.OrdinalIgnoreCase) &&
@@ -464,6 +467,7 @@ public static class ProductionChains
         slots[SlotUrbanization] = state.Urbanization;
         slots[SlotStandardOfLiving] = state.StandardOfLiving;
         slots[SlotOutputFactor] = outputFactor;
+        slots[SlotIncome] = nation is not null && float.IsFinite(nation.IncomeFactor) && nation.IncomeFactor > 0f ? nation.IncomeFactor : 1f;
 
         foreach (var kind in UsedBuildingsRaw)
             slots[FixedSlots + BuildingKinds + kind] = state.Buildings.GetValueOrDefault((BuildingKind)kind);
@@ -550,6 +554,8 @@ public static class ProductionChains
             {
                 var output = recipe.Sum(recipe.Output, slots);
                 foreach (var need in recipe.Needs) output *= Supplied(nation, need.Good, need.Floor);
+                // What the price says about making more of it (SupplyResponse).
+                if (recipe.Shortfall.Length == 0 && nation is not null) output *= SupplyResponse(nation, quote);
                 foreach (var lack in recipe.Shortfall) output *= Supplied(nation, lack.Good, lack.Floor) - 1f;
                 // A recipe with a shortfall term is a penalty by construction and may go
                 // below zero; anything else may not, because a factory does not un-make
@@ -569,6 +575,29 @@ public static class ProductionChains
                 quote.Demand += MathF.Max(0f, recipe.Sum(recipe.Demand, slots));
         }
         return MathF.Max(0f, grossValue);
+    }
+
+    /// <summary>
+    /// How hard a country's producers work a good: last week's price against the good's base, to
+    /// SupplyResponseElasticity, within SupplyResponseMinimum and SupplyResponseMaximum. Every
+    /// plant used to run flat out whatever the price, so a glut fed itself - the world made four
+    /// times the missiles and twice the phosphates it wanted at the floor price for years. Now a
+    /// glutted good idles part of its plant and a scarce one runs it past its rating, which is
+    /// what keeps a market near clearing and a price worth reading.
+    /// </summary>
+    /// <summary>The campaign's defines for the market pass under way, set by MarketSystem; null runs every plant flat out.</summary>
+    internal static Defines Defines;
+
+    internal static float SupplyResponse(Nation nation, MarketQuote quote)
+    {
+        var d = Defines;
+        if (d is null || d.SupplyResponseElasticity <= 0f) return 1f;
+        var basePrice = CommodityCatalog.Get(quote.Commodity).BasePrice;
+        if (basePrice <= 0f || quote.Price <= 0f || !float.IsFinite(quote.Price)) return 1f;
+        var factor = MathF.Pow(quote.Price / basePrice, d.SupplyResponseElasticity);
+        return float.IsFinite(factor)
+            ? M.Clamp(factor, MathF.Min(1f, d.SupplyResponseMinimum), MathF.Max(1f, d.SupplyResponseMaximum))
+            : 1f;
     }
 
     /// <summary>

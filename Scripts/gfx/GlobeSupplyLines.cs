@@ -24,15 +24,33 @@ public sealed partial class GlobePresentation
 {
     private ImmediateMesh _supplyLineMesh;
     private MeshInstance3D _supplyLinePreview;
+    private ShaderMaterial _supplyLineMaterial;
     private int _supplyLineFingerprint = int.MinValue;
     private readonly List<Vector3> _supplyLinePoints = new();
+    private readonly List<float> _dateLineXs = new();
+    private readonly List<DateLineSeam.Run> _dateLineRuns = new();
     private readonly List<Simulation.Army> _supplyLineArmies = new();
     private readonly Dictionary<int, (float Latitude, float Longitude)> _supplyHubByState = new();
+
+    private const string SupplyLineShader = @"
+shader_type spatial;
+render_mode unshaded, blend_mix, cull_disabled, depth_draw_never, shadows_disabled;
+void fragment() {
+    float flow = fract(UV.x * 1.4 + TIME * 0.85);
+    float dash = smoothstep(0.0, 0.10, flow) * (1.0 - smoothstep(0.58, 0.68, flow));
+    float across = abs(UV.y * 2.0 - 1.0);
+    float core = 1.0 - smoothstep(0.0, 0.62, across);
+    float edge = smoothstep(0.62, 0.96, across) * (1.0 - smoothstep(0.96, 1.0, across));
+    vec3 col = mix(COLOR.rgb * (0.85 + 0.30 * dash), vec3(0.03, 0.05, 0.07), edge * 0.78);
+    ALBEDO = col;
+    ALPHA = COLOR.a * max(core * (0.45 + 0.55 * dash), edge * 0.65);
+}";
 
     private void UpdateSupplyLines()
     {
         if (_campaign?.ProvinceMap is null || !IsInstanceValid(_routePreview)) return;
-        if (!Simulation.MechanicFeatures.SystemEnabled(_campaign, nameof(Simulation.LogisticsSystem)))
+        if (!Simulation.MechanicFeatures.SystemEnabled(_campaign, nameof(Simulation.LogisticsSystem)) ||
+            !Simulation.WorldLayers.On("supply_lines"))
         {
             if (IsInstanceValid(_supplyLinePreview)) _supplyLinePreview.Visible = false;
             return;
@@ -41,18 +59,13 @@ public sealed partial class GlobePresentation
         {
             if (_routePreview.GetParent() is not Node3D world) return;
             _supplyLineMesh = new ImmediateMesh();
+            _supplyLineMaterial = new ShaderMaterial { Shader = new Shader { Code = SupplyLineShader } };
             _supplyLinePreview = new MeshInstance3D
             {
                 Name = "ArmySupplyLines",
                 Mesh = _supplyLineMesh,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-                MaterialOverride = new StandardMaterial3D
-                {
-                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                    VertexColorUseAsAlbedo = true,
-                    CullMode = BaseMaterial3D.CullModeEnum.Disabled,
-                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha
-                },
+                MaterialOverride = _supplyLineMaterial,
                 Visible = false
             };
             world.AddChild(_supplyLinePreview);
@@ -114,34 +127,34 @@ public sealed partial class GlobePresentation
 
         // The ribbon, a strip the width of half a supply line. On the flat map a course
         // over the date line comes out at the other edge; the line breaks there instead
-        // of streaking across the whole map, as a fleet's course does.
-        const float halfWidth = 0.0024f;
-        var open = false;
-        for (var index = 0; index < _supplyLinePoints.Count; index++)
+        // of streaking across the whole map, as a fleet's course does. A piece of one
+        // point is two vertices, which a triangle strip cannot be, so it is left out.
+        const float halfWidth = 0.0028f;
+        CollectDateLineRuns(_supplyLinePoints);
+        foreach (var run in _dateLineRuns)
         {
-            var point = _supplyLinePoints[index];
-            if (index > 0 && _flatMap && MathF.Abs(point.X - _supplyLinePoints[index - 1].X) > FlatMapWidth * 0.5f)
+            _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+            var cumulative = 0f;
+            var endIndex = run.Start + run.Count - 1;
+            for (var index = run.Start; index <= endIndex; index++)
             {
-                if (open) _supplyLineMesh.SurfaceEnd();
-                open = false;
+                var point = _supplyLinePoints[index];
+                if (index > run.Start) cumulative += point.DistanceTo(_supplyLinePoints[index - 1]) * 18f;
+                var before = _supplyLinePoints[Math.Max(run.Start, index - 1)];
+                var after = _supplyLinePoints[Math.Min(endIndex, index + 1)];
+                var tangent = (after - before).Normalized();
+                if (tangent == Vector3.Zero) tangent = Vector3.Right;
+                var normal = _flatMap ? Vector3.Forward : point.Normalized();
+                var side = normal.Cross(tangent).Normalized() * halfWidth;
+                _supplyLineMesh.SurfaceSetColor(colour);
+                _supplyLineMesh.SurfaceSetUV(new Vector2(cumulative, 0f));
+                _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point + side));
+                _supplyLineMesh.SurfaceSetColor(colour);
+                _supplyLineMesh.SurfaceSetUV(new Vector2(cumulative, 1f));
+                _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point - side));
             }
-            if (!open)
-            {
-                _supplyLineMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
-                open = true;
-            }
-            var before = _supplyLinePoints[Math.Max(0, index - 1)];
-            var after = _supplyLinePoints[Math.Min(_supplyLinePoints.Count - 1, index + 1)];
-            var tangent = (after - before).Normalized();
-            if (tangent == Vector3.Zero) tangent = Vector3.Right;
-            var normal = _flatMap ? Vector3.Forward : point.Normalized();
-            var side = normal.Cross(tangent).Normalized() * halfWidth;
-            _supplyLineMesh.SurfaceSetColor(colour);
-            _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-            _supplyLineMesh.SurfaceSetColor(colour);
-            _supplyLineMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+            _supplyLineMesh.SurfaceEnd();
         }
-        if (open) _supplyLineMesh.SurfaceEnd();
 
         // The hub end gets a hollow square, so the far end of a long artery is findable
         // and reads as a place rather than the line simply stopping.
@@ -220,5 +233,22 @@ public sealed partial class GlobePresentation
         var hub = nearest > 0 ? topology.CenterOf(nearest) : (0f, 0f);
         _supplyHubByState[stateMapIndex] = hub;
         return hub;
+    }
+
+    /// <summary>
+    /// Runs of a projected line that stay on one side of the flat sheet. On the
+    /// globe the points already take the short arc, so the whole line is one run.
+    /// </summary>
+    private void CollectDateLineRuns(IReadOnlyList<Vector3> points)
+    {
+        if (!_flatMap)
+        {
+            _dateLineRuns.Clear();
+            if (points.Count >= 2) _dateLineRuns.Add(new DateLineSeam.Run(0, points.Count));
+            return;
+        }
+        _dateLineXs.Clear();
+        for (var i = 0; i < points.Count; i++) _dateLineXs.Add(points[i].X);
+        DateLineSeam.Split(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_dateLineXs), FlatMapWidth, _dateLineRuns);
     }
 }

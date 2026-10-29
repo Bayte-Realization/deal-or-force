@@ -508,6 +508,8 @@ public partial class DealOrForceGame
     private void AddMissionButton(Container parent, FleetMission mission, int width)
     {
         var button = ActionButton(MissionName(mission), () => IssueFleetMission(mission), width, 32);
+        button.SetMeta("atlas_tab_button", true);
+        StyleButton(button, false);
         button.TooltipText = Ui.Tip(Simulation.Loc.Format("{0}\n{1}", MissionName(mission), MissionHelp(mission)));
         _fleetMissionButtons[mission] = button;
         parent.AddChild(button);

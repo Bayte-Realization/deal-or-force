@@ -6,8 +6,8 @@ param(
 $ErrorActionPreference = 'Stop'
 $engine = (Resolve-Path -LiteralPath $GodotExecutable).Path
 $version = (& $engine --version | Out-String).Trim()
-if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta1\.mono\.') {
-    throw "This tested template targets Godot 4.8 beta1 .NET, found: $version"
+if ($LASTEXITCODE -or $version -notmatch '^4\.8\.beta2\.mono\.') {
+    throw "This tested template targets Godot 4.8 beta2 .NET, found: $version"
 }
 $source = (Resolve-Path -LiteralPath $SourceDirectory).Path
 $output = [IO.Path]::GetFullPath($OutputDirectory)

@@ -7,7 +7,7 @@ namespace DealOrForce;
 
 public partial class DealOrForceGame
 {
-    private Control _pickerLayer = null!;
+    private Control _pickerLayer;
     private LineEdit _pickerSearch = null!;
     private VBoxContainer _pickerResults = null!;
     private Label _pickerName = null!;
@@ -60,9 +60,19 @@ public partial class DealOrForceGame
         _pickerSearch.TextChanged += _ => RebuildPickerResults();
         rows.AddChild(_pickerSearch);
 
-        _pickerResults = new VBoxContainer { CustomMinimumSize = new Vector2(0, 142) };
+        var resultsFrame = new PanelContainer
+        {
+            Name = "PickerResultsFrame",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, 148)
+        };
+        resultsFrame.SetMeta("atlas_section_ground", "surface.inset");
+        resultsFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(resultsFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        rows.AddChild(resultsFrame);
+        _pickerResults = new VBoxContainer { CustomMinimumSize = new Vector2(0, 142), SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _pickerResults.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(_pickerResults);
+        resultsFrame.AddChild(_pickerResults);
 
         // The countries without land (Movements): a headquarters instead of a map, so a row of
         // their own rather than something a player has to know to search for. A movement's
@@ -81,7 +91,7 @@ public partial class DealOrForceGame
         _pickerMovementsBox.AddChild(withoutLand);
         var movementScroll = new ScrollContainer
         {
-            CustomMinimumSize = new Vector2(0, 62),
+            CustomMinimumSize = new Vector2(0, 96),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
         _pickerMovementsBox.AddChild(movementScroll);
@@ -262,6 +272,10 @@ public partial class DealOrForceGame
 
     private async void OpenCountryPicker()
     {
+        // Built on first open: the picker is 2 980 ms - the single most expensive thing in the
+        // interface pass - and it is only ever seen after a click on Singleplayer. See
+        // EnsureScreen.
+        EnsureScreen("picker", BuildCountryPicker);
         // A new game is a new world.
         //
         // Returning to the main menu only hid the campaign, so picking a country again
@@ -403,6 +417,8 @@ public partial class DealOrForceGame
                 movement == _pickerNation);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.ClipText = true;
+            // Clipped mid-word read as a typo ("Ambazonia Interi"); an ellipsis reads as "more".
+            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             // Its own flag on the button, the way a country in the list is known by its flag.
             // Read now rather than left to the background loader: the list is built the moment
             // the picker opens, before the loader has reached six flags nobody has asked for yet.
@@ -415,7 +431,9 @@ public partial class DealOrForceGame
             // The width cap scales it down to a small flag instead, and counts in the minimum.
             button.ExpandIcon = false;
             button.AddThemeConstantOverride("icon_max_width", 24);
-            button.TooltipText = Ui.Tip(Simulation.Loc.Get(Movements.DefinitionOf(movement)?.Description ?? ""));
+            // The full name first, since the button may show only part of it.
+            button.TooltipText = Ui.Tip(movement.DisplayName + "\n" +
+                Simulation.Loc.Get(Movements.DefinitionOf(movement)?.Description ?? ""));
             _pickerMovements.AddChild(button);
         }
     }
@@ -451,6 +469,7 @@ public partial class DealOrForceGame
 
     private async void OpenLocalMultiplayer()
     {
+        EnsureScreen("picker", BuildCountryPicker);
         if (_isLoading) return;
         if (_campaignInProgress && !await RebuildCampaignWithLoading()) return;
         _pickerHotseatMode = true;

@@ -70,11 +70,14 @@ static class AiFiscalPolicyTests
     {
         var (c, n, _) = Fixture();
         n.Treasury = 4; n.PublicDebt = 2000; n.DebtMechanicActive = true;
-        var tax = n.TaxRate;
+        // The cabinet broadens the base before it raises the rate, so any tax may be the one that rises.
+        var taxes = new[] { "income_tax", "value_added_tax", "corporate_tax" }.Select(BudgetCore.Find).Where(t => t is not null).ToArray();
+        var rates = taxes.Select(t => BudgetCore.RateOf(n, t)).ToArray();
         Check(BudgetCore.Evaluate(n, n.Gdp / 52, false).Balance < -1,
             "fixture has a real interest-driven deficit, not a stale WeeklyBalance field");
         AiStatecraft.GovernTheBudget(c, n);
-        Check(n.TaxRate > tax, "a short cash runway prompts adjustment before the treasury is already empty");
+        Check(taxes.Where((t, i) => BudgetCore.RateOf(n, t) > rates[i]).Any(),
+            "a short cash runway prompts adjustment before the treasury is already empty");
         Check(c.Construction.Count == 0, "four billion in cash does not fund construction when the current budget burns it within weeks");
     }
 
@@ -192,7 +195,9 @@ static class AiFiscalPolicyTests
     private static void ProjectAffordability()
     {
         var (c, n, _) = Fixture();
-        n.Treasury = 3.06f;
+        // A token above the reserve, whatever the reserve rule is: the floor was 3 % of GDP when
+        // this was written (3.06 against 100), and is 1 % since 28 October 2026.
+        n.Treasury = n.Gdp * c.Defines.AiBuildTreasuryFloor + 0.06f;
         var reserve = AiFiscalPolicy.Assess(c, n, c.Defines.AiBuildTreasuryFloor);
         Check(reserve.CanSpend && !AiFiscalPolicy.CanStartProject(c, n, BuildingKind.CivilianIndustry, reserve),
             "a token deposit does not authorize a capital queue with no money for its near-term payments");

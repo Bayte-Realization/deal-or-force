@@ -20,10 +20,11 @@
         }
       },
       {
-        "title": "Double the garrisons and rule from the centre",
+        "title": "Fortify the approaches and rule from the centre",
         "consequence": "Order holds on the surface; peripheral anger and foreign suspicion deepen.",
         "effects": {
-          "military_spending": 0.01,
+          "treasury_percent": -0.025,
+          "add_modifier": { "border_reserve_programme": 180 },
           "stability": 0.008,
           "state.radicalism": 0.024,
           "notoriety": 3.5
@@ -104,7 +105,7 @@
         "title": "Enact an emergency fiscal compact",
         "consequence": "Curbs inflation and steadies the currency at a sharp political cost.",
         "effects": {
-          "tax_rate": 0.018,
+          "add_modifier": { "revenue_compliance_audit": 270 },
           "inflation": -0.025,
           "stability": -0.015
         }
@@ -134,7 +135,6 @@
         "consequence": "Costly family grants lift birth rates and support young households.",
         "effects": {
           "treasury_percent": -0.05,
-          "welfare_spending": 0.008,
           "standard_of_living": 0.006
         },
         "modifiers": [
@@ -183,7 +183,6 @@
         "consequence": "Turns the birth wave into a lasting demographic boom.",
         "effects": {
           "treasury_percent": -0.04,
-          "education_spending": 0.005,
           "literacy": 0.004
         },
         "modifiers": [

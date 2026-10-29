@@ -134,9 +134,11 @@ public static partial class ForeignAssistance
     }
     public static void Tick(Campaign c)
     {
-        if (c is null) return;
-        foreach (var request in c.AssistanceRequests.Where(r => r.State == ForeignAssistanceState.Pending).OrderBy(r => r.Id).ToArray())
+        if (c is null || !c.StepOpensNewDay) return;
+        for (var i = 0; i < c.AssistanceRequests.Count; i++)
         {
+            var request = c.AssistanceRequests[i];
+            if (request.State != ForeignAssistanceState.Pending) continue;
             if (request.ExpiresDay <= c.ElapsedDays)
                 Close(c, request, ForeignAssistanceState.Expired, "The assistance request has expired. No payment was made.");
             else if (!Enabled(c))
@@ -150,7 +152,7 @@ public static partial class ForeignAssistance
             }
         }
         c.AssistanceCooldowns.RemoveAll(x => !CooldownReserved(c, x));
-        TrimHistory(c);
+        if (c.AssistanceRequests.Count > MaxHistory + MaxActiveRequests) TrimHistory(c);
         if (c.AssistanceLastTickDay == c.ElapsedDays) return;
         c.AssistanceLastTickDay = c.ElapsedDays;
         if (!Enabled(c)) return;
@@ -164,19 +166,32 @@ public static partial class ForeignAssistance
     internal static void ReviewDonors(Campaign c, int cadence, float threshold)
     {
         Nation[] donors = null;
-        foreach (var requester in c.Nations.Where(n => !n.IsHuman).OrderBy(n => n.Id))
+        for (var idx = 0; idx < c.Nations.Count; idx++)
         {
-            if (((long)c.ElapsedDays + requester.Id) % cadence != 0 ||
-                c.AssistanceRequests.Any(r => r.RequesterId == requester.Id && r.State == ForeignAssistanceState.Pending)) continue;
+            var requester = c.Nations[idx];
+            if (requester.IsHuman || requester.Population <= 0 || requester.Movement is not null) continue;
+            if (((long)c.ElapsedDays + requester.Id) % cadence != 0) continue;
+            var hasPending = false;
+            for (var rIdx = 0; rIdx < c.AssistanceRequests.Count; rIdx++)
+                if (c.AssistanceRequests[rIdx].RequesterId == requester.Id && c.AssistanceRequests[rIdx].State == ForeignAssistanceState.Pending)
+                { hasPending = true; break; }
+            if (hasPending) continue;
             var amount = (double)requester.Gdp * c.Defines.AidShareOfRecipientGdp;
             if (!double.IsFinite(amount) || amount < .01 || amount > float.MaxValue) continue;
-            var warId = c.Wars.Where(w => !w.Ended && w.Involves(requester.Id)).OrderBy(w => w.Id).FirstOrDefault()?.Id ?? -1;
+            var warId = -1;
+            for (var wIdx = 0; wIdx < c.Wars.Count; wIdx++)
+            {
+                var w = c.Wars[wIdx];
+                if (!w.Ended && w.Involves(requester.Id) && (warId < 0 || w.Id < warId)) warId = w.Id;
+            }
             // Same predicate as the live payment assessment: without need, no
             // donor can accept. Avoid constructing every impossible assessment.
             if (!HasCurrentNeed(c, requester, warId >= 0)) continue;
             Nation best = null; var bestScore = float.NegativeInfinity;
-            foreach (var donor in donors ??= c.Nations.OrderBy(n => n.Id).ToArray())
+            donors ??= c.Nations.OrderBy(n => n.Id).ToArray();
+            foreach (var donor in donors)
             {
+                if (donor.Id == requester.Id || donor.Population <= 0 || donor.Treasury <= donor.Gdp * c.Defines.AiAidReserveOfGdp) continue;
                 var assessment = CanSubmit(c, requester.Id, donor.Id, (float)amount, warId);
                 if (!assessment.Allowed || assessment.Willingness < threshold || assessment.Willingness <= bestScore) continue;
                 best = donor; bestScore = assessment.Willingness;

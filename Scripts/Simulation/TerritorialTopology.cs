@@ -1293,6 +1293,14 @@ public static class TerritorialTopology
         var minY = LatitudeToY(rule.MaxLatitude, height);
         var maxY = LatitudeToY(rule.MinLatitude, height);
         var changed = 0;
+        // The polygon, rasterised once for this box. Asking `Contains` per cell is what made a
+        // campaign load take minutes; the mask is the same answer from the same float crossings,
+        // and `VerifyPolygonMasks` proves the two agree over every rule in the catalogue.
+        var maskWidth = maxX - minX + 1;
+        var polygonMask = rule.Polygon.Length >= 3
+            ? PolygonMask(rule.Polygon, minX, maxX, minY, maxY, width, height)
+            : null;
+        bool Inside(int x, int y) => polygonMask is null || polygonMask[(y - minY) * maskWidth + (x - minX)];
         // Replacing a placeholder contour must remove its old outside pixels, not union
         // a traced polygon with the circle. Never take land from unrelated neighbours.
         if (rule.ReplaceExisting && rule.Polygon.Length >= 3 && sourceNation != nation)
@@ -1311,8 +1319,7 @@ public static class TerritorialTopology
             for (var y = minY; y <= maxY; y++) for (var x = minX; x <= maxX; x++)
             {
                 var cell = y * width + x;
-                if (control[cell] != nation || donors.Count == 0 ||
-                    Contains(rule.Polygon, XToLongitude(x, width), YToLatitude(y, height))) continue;
+                if (control[cell] != nation || donors.Count == 0 || Inside(x, y)) continue;
                 control[cell] = sourceNation; states[cell] = NearestDonor(donorGrid, boxWidth, boxHeight, x - minX, y - minY); changed++;
             }
         }
@@ -1322,8 +1329,7 @@ public static class TerritorialTopology
             var cell = y * width + x;
             if ((control[cell] != sourceNation && control[cell] != nation) || states[cell] == state) continue;
             if (carveFrom != 0 && states[cell] != carveFrom) continue;
-            if (rule.Polygon.Length >= 3 && !Contains(rule.Polygon,
-                    XToLongitude(x, width), YToLatitude(y, height)))
+            if (!Inside(x, y))
             {
                 rejected.Add(cell);
                 continue;
@@ -1583,6 +1589,97 @@ public static class TerritorialTopology
         }
         return inside;
     }
+
+    /// <summary>
+    /// The same inside/outside test as <see cref="Contains"/>, asked once per pixel of the rule's
+    /// box instead of once per cell per edge.
+    ///
+    /// `Contains` walks every edge of the polygon for every cell, so a traced border with a few
+    /// hundred points costs hundreds of float operations per cell - and a campaign carries a few
+    /// hundred of these rules, each over a box of tens of thousands of cells. That is where the
+    /// minutes at load went.
+    ///
+    /// The arithmetic is not approximated, it is reordered. For a fixed latitude the crossings
+    /// are the same numbers whatever the longitude, and the answer only depends on the parity of
+    /// how many of them lie to the right of the cell. So the crossings are computed once per row,
+    /// sorted, and each cell then costs a walk along them. Every `crossing` is the same float
+    /// expression as in `Contains`, and every comparison is `longitude < crossing` against the
+    /// same `XToLongitude(x, width)`, so the mask is the polygon the old test described - which
+    /// `VerifyPolygonMasks` proves over every rule in the catalogue.
+    /// </summary>
+    private static bool[] PolygonMask(IReadOnlyList<GeoPoint> polygon, int minX, int maxX, int minY, int maxY,
+        int width, int height)
+    {
+        var boxWidth = maxX - minX + 1;
+        var boxHeight = maxY - minY + 1;
+        var mask = new bool[boxWidth * boxHeight];
+        if (boxWidth <= 0 || boxHeight <= 0) return mask;
+        var crossings = new List<float>(polygon.Count);
+        for (var y = minY; y <= maxY; y++)
+        {
+            var latitude = YToLatitude(y, height);
+            crossings.Clear();
+            for (int current = 0, previous = polygon.Count - 1; current < polygon.Count; previous = current++)
+            {
+                var a = polygon[current];
+                var b = polygon[previous];
+                if ((a.Latitude > latitude) == (b.Latitude > latitude)) continue;
+                crossings.Add((b.Longitude - a.Longitude) * (latitude - a.Latitude) /
+                    (b.Latitude - a.Latitude) + a.Longitude);
+            }
+            if (crossings.Count == 0) continue;
+            crossings.Sort();
+            var row = (y - minY) * boxWidth;
+            var next = 0;   // crossings[next] is the first one still to the right of the cell
+            for (var x = minX; x <= maxX; x++)
+            {
+                var longitude = XToLongitude(x, width);
+                while (next < crossings.Count && !(longitude < crossings[next])) next++;
+                // Parity of the crossings to the right: exactly what the toggling loop counts.
+                mask[row + (x - minX)] = ((crossings.Count - next) & 1) == 1;
+            }
+        }
+        return mask;
+    }
+
+    /// <summary>
+    /// Compares the rasterised mask against the per-cell test for every region rule that has a
+    /// polygon, over its whole box. Returns the number of cells that disagree.
+    ///
+    /// This is the price of the speed-up: a reordered polygon test is easy to get subtly wrong,
+    /// and a border that moves by one cell is a border that moved. The test is in the product
+    /// rather than in a bench script because the rules are data: a mod that adds a region adds
+    /// a box that nobody has checked until this runs.
+    /// </summary>
+    internal static (int Mismatches, int Cells, int Rules) VerifyPolygonMasks(int width, int height)
+    {
+        var mismatches = 0;
+        var cells = 0;
+        var rules = 0;
+        foreach (var rule in RegionRules)
+        {
+            if (rule.Polygon is null || rule.Polygon.Length < 3) continue;
+            rules++;
+            var minX = LongitudeToX(rule.MinLongitude, width);
+            var maxX = LongitudeToX(rule.MaxLongitude, width);
+            var minY = LatitudeToY(rule.MaxLatitude, height);
+            var maxY = LatitudeToY(rule.MinLatitude, height);
+            var mask = PolygonMask(rule.Polygon, minX, maxX, minY, maxY, width, height);
+            var boxWidth = maxX - minX + 1;
+            for (var y = minY; y <= maxY; y++)
+            {
+                var latitude = YToLatitude(y, height);
+                for (var x = minX; x <= maxX; x++)
+                {
+                    cells++;
+                    var expected = Contains(rule.Polygon, XToLongitude(x, width), latitude);
+                    if (mask[(y - minY) * boxWidth + (x - minX)] != expected) mismatches++;
+                }
+            }
+        }
+        return (mismatches, cells, rules);
+    }
+
 
     private static int Connect(
         ushort[] control,

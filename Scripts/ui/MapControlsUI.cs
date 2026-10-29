@@ -51,10 +51,13 @@ public partial class DealOrForceGame
         _mapLayerSelector.TooltipText = Ui.Tip(Tr("Choose a map layer. The active layer is named here; every layer is available in the drawer."));
         row.AddChild(_mapLayerSelector);
 
-        // The weather, one press each: a map being read for its borders is better without it.
+        // The weather and world layers, one press each: a map being read for its borders is better without them.
         row.AddChild(MapVisualToggle("map_clouds", "CLOUDS", "Clouds over the world, seen from far away. Press to hide or show them.", 74));
         row.AddChild(MapVisualToggle("map_mist", "FOG", "The drifting mist over ground your country cannot see, close up. Press to hide or show it; what is hidden stays hidden.", 54));
         row.AddChild(MapVisualToggle("map_event_pulses", "EVENTS", "Rings on the map where a war, a split or a new country has just happened. Press to hide them.", 78));
+        row.AddChild(MapVisualToggle("map_trade_traffic", "TRADE", "Ships on the sea lanes between the world's busiest trading partners, and lorries on the roads between neighbours. Press to hide or show them.", 68));
+        row.AddChild(MapVisualToggle("city_names", "CITIES", "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer.", 68));
+        row.AddChild(MapVisualToggle("region_names", "NAMES", "Draw each country's name across its territory.", 68));
 
         _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, 54, 34);
         _showcasePanButton.Name = "ShowcasePan";
@@ -208,7 +211,11 @@ public partial class DealOrForceGame
         {
             SettingsCatalog.Store(setting, !SettingsCatalog.Flag(setting)); ApplySetting(setting); RefreshMapVisualToggles();
         }, width, 34);
-        button.Name = "MapVisualToggle_" + setting; button.ClipText = true; button.ToggleMode = true;
+        button.Name = "MapVisualToggle_" + setting;
+        button.SetMeta("atlas_tab_button", true);
+        button.ClipText = true;
+        button.ToggleMode = true;
+        StyleButton(button, false);
         Tip(button, help); button.AccessibilityName = Tr(caption); _mapVisualToggleButtons.Add((setting, button));
         return button;
     }
@@ -293,12 +300,14 @@ public partial class DealOrForceGame
             Simulation.SpriteCatalog.TextureOf("icon_" + icon,
                 $"res://game/gfx/interface/icons/icon_{icon}.png"));
         button.Name = "MapMode" + mode;
+        button.SetMeta("atlas_tab_button", true);
         button.ClipText = true;
         button.ToggleMode = true;
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         button.CustomMinimumSize = new(0, Ui.Metric("map.controls_button_height", 34)); button.RemoveMeta("icon_caption_minimum");
         button.AccessibilityName = Tr(mode.ToString());
         button.TooltipText = Ui.Tip(Tr(mode.ToString()) + " \u2014 " + Tr(MapModeHelp(mode)));
+        StyleButton(button, mode == StrategicMapMode.Political);
         row.AddChild(button);
         _mapModeButtons[mode] = button;
     }
@@ -316,11 +325,13 @@ public partial class DealOrForceGame
         if (_mapLayerSelector is not null)
         {
             var source = active == StrategicMapMode.Diplomatic ? "Diplomacy" : active.ToString();
+            _mapLayerSelector.SetMeta("atlas_tab_button", true);
             _mapLayerSelector.Text = Tr(source) + " ▴";
             _mapLayerSelector.SetMeta(LocAppliedMeta, _mapLayerSelector.Text);
             _mapLayerSelector.Icon = _mapModeButtons.GetValueOrDefault(active)?.Icon;
             _mapLayerSelector.ExpandIcon = true; _mapLayerSelector.AddThemeConstantOverride("icon_max_width", 21);
-            _mapLayerSelector.AccessibilityName = Tr(source); StyleButton(_mapLayerSelector, false);
+            _mapLayerSelector.AccessibilityName = Tr(source);
+            StyleButton(_mapLayerSelector, active != StrategicMapMode.Political);
         }
         UpdateMapModeTooltips();
     }

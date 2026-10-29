@@ -51,6 +51,11 @@
     { "between": ["ETH", "ERI"], "opinion": -25, "why": "the peace of 2018 gone cold after Tigray" },
     { "between": ["SOM", "ETH"], "opinion": -25, "why": "the Somaliland port deal of 1 January 2024" },
     { "between": ["RWA", "COD"], "opinion": -50, "why": "the M23" },
+    { "between": ["RWA", "BDI"], "opinion": -35, "why": "border closure and rebel accusations in 2024" },
+    { "between": ["SDN", "ARE"], "opinion": -45, "why": "Khartoum accuses Abu Dhabi of arming the RSF" },
+    { "between": ["NER", "FRA"], "opinion": -50, "why": "the 2023 coup and expulsion of French forces" },
+    { "between": ["MLI", "FRA"], "opinion": -45, "why": "the break with Paris and turn to Russian security" },
+    { "between": ["BFA", "FRA"], "opinion": -45, "why": "the expulsion of French troops in 2023" },
     { "between": ["VEN", "GUY"], "opinion": -45, "why": "the Essequibo referendum of December 2023" },
     { "between": ["USA", "VEN"], "opinion": -45, "why": "sanctions; no recognition since 2019" },
     { "between": ["USA", "CUB"], "opinion": -40, "why": "the embargo since 1962" }
@@ -75,10 +80,14 @@
     { "between": ["RUS", "PRK"], "opinion": 25, "why": "the shells for Ukraine" },
     { "between": ["RUS", "SYR"], "opinion": 40, "why": "the intervention of 2015" },
     { "between": ["RUS", "IND"], "opinion": 20, "why": "fifty years of arms and oil" },
+    { "between": ["RUS", "MLI"], "opinion": 30, "why": "Africa Corps security partnership" },
+    { "between": ["RUS", "BFA"], "opinion": 30, "why": "Africa Corps security partnership" },
+    { "between": ["RUS", "NER"], "opinion": 25, "why": "military cooperation after 2023" },
     { "between": ["CHN", "PAK"], "opinion": 40, "why": "the all-weather friendship" },
     { "between": ["CHN", "KHM"], "opinion": 25, "why": "Ream, and the loans" },
     { "between": ["SAU", "ARE"], "opinion": 30, "why": "the Gulf's two pillars" },
     { "between": ["SAU", "EGY"], "opinion": 20, "why": "money for Cairo" },
-    { "between": ["IRN", "SYR"], "opinion": 35, "why": "the axis" }
+    { "between": ["IRN", "SYR"], "opinion": 35, "why": "the axis" },
+    { "between": ["TUR", "QAT"], "opinion": 30, "why": "strategic alignment and the base in Doha" }
   ]
 }

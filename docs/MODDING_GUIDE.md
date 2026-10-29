@@ -260,6 +260,15 @@ The available methods are `get_day()`, `get_date()`, `get_nation(tag)`,
 `set_nation_number(tag, key, value)`, `get_define(name, fallback)`, `set_define(name, value)`
 and `log(text)`.
 
+The numeric setters reject NaN, infinity and values that overflow their actual
+storage type without changing that field. Population truncates fractional input,
+clamps negative values to zero and rejects inputs at or above 2^63 (including the
+rounded double representation of `long.MaxValue`). Define integers retain
+round-to-even conversion; bool defines use zero/nonzero. Text/collection defines
+cannot be written numerically, and their numeric getters return the supplied
+fallback. These trusted-mod setters still apply immediately; they are not queued
+operations or a security sandbox.
+
 The GDScript API is deliberately narrower than the internal C# one: that reduces the chance
 of breaking a save or determinism. New safe actions should be added to `ModApi` rather than
 exposing the whole game scene.

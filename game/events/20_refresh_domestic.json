@@ -1,0 +1,55 @@
+// Свежая пачка событий: быт, армия, урожай. Всё на существующем словаре эффектов и духах —
+// кода не требуется. У каждого варианта есть цена; ни один не даёт денег из воздуха.
+{
+  "grid_failure_capital": {
+    "title": "The lights go out in the capital",
+    "description": "A substation fails at the evening peak and half the capital spends the night in the dark. The operator says the equipment was due for replacement in 2019.",
+    "weight": 1.1,
+    "options": [
+      { "title": "Buy power abroad at any price",
+        "consequence": "The lights come back this week; the bill arrives next quarter.",
+        "effects": { "treasury_percent": -0.045, "stability": 0.012, "standard_of_living": 0.001 } },
+      { "title": "Ration and repair in order",
+        "consequence": "Honest, unpopular, and slower than the newspapers.",
+        "effects": { "productivity": -0.002, "stability": -0.01, "state.radicalism": 0.006 },
+        "modifiers": [ { "id": "infrastructure_drive", "days": 180 } ] },
+      { "title": "Blame the operator and take it over",
+        "consequence": "A scalp for the evening news; the grid is still old.",
+        "effects": { "stability": 0.008, "state.radicalism": 0.004, "treasury_percent": 0.006 } }
+    ]
+  },
+  "general_writes_book": {
+    "title": "A general publishes a book",
+    "description": "Three hundred pages on the last war, the next one, and what the ministry got wrong in both. It is selling better than any novel in the country.",
+    "weight": 0.9,
+    "trigger": { "min_army_experience": 12 },
+    "options": [
+      { "title": "Promote him to the general staff",
+        "consequence": "The army reads it as a promotion of the argument.",
+        "effects": { "army_experience": 6, "political_points": -6, "war_support": 0.01 } },
+      { "title": "Shelve the argument, keep the man",
+        "consequence": "Quiet, and the book keeps selling anyway.",
+        "effects": { "stability": 0.006, "army_experience": -4 },
+        "modifiers": [ { "id": "national_mourning", "days": 90 } ] },
+      { "title": "Let foreign attaches buy it",
+        "consequence": "The ministry's failures become a foreign currency earner.",
+        "effects": { "treasury_percent": 0.012, "war_support": -0.012, "state.radicalism": 0.004 } }
+    ]
+  },
+  "drought_grain_belt": {
+    "title": "Drought in the grain belt",
+    "description": "Six weeks without rain in the country's best soil. The harvest will be short, and everybody who eats bread has already worked that out.",
+    "weight": 1.2,
+    "options": [
+      { "title": "Import grain on the state's account",
+        "consequence": "Bread stays cheap; the budget does not.",
+        "effects": { "treasury_percent": -0.06, "state.standard_of_living": 0.001, "stability": 0.006 } },
+      { "title": "Cap the price of bread",
+        "consequence": "Cheap this month, missing from the shelves next.",
+        "effects": { "state.standard_of_living": -0.002, "state.radicalism": 0.012, "productivity": -0.0015 } },
+      { "title": "Let the market clear",
+        "consequence": "The cities pay; the farms survive to plant again.",
+        "effects": { "state.standard_of_living": -0.004, "state.radicalism": 0.008, "gdp_percent": 0.003 } }
+    ]
+  }
+}

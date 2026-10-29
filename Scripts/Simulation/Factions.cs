@@ -386,6 +386,25 @@ public static class Factions
     /// consolidate its state identity if it completely replaced its parent, or shed its temporary
     /// "rising:..." front label and provisional status so it becomes a regular state.
     /// </summary>
+    /// <summary>
+    /// Whether a side that rose against a state rose on that state's own homeland - a civil war,
+    /// whose winner becomes the state - rather than on its own, whose winner stays itself and
+    /// only takes the ground. A faction of the state - the Houthis of Yemen - is the state's own
+    /// civil war wherever it stands. With no homeland on record, the old answer: yes.
+    /// </summary>
+    internal static bool RoseOnHomelandOf(Campaign campaign, Nation participant, Nation parent)
+    {
+        if (participant.FactionId.Length > 0) return true;
+        if (!campaign.Homelands.TryGetValue(participant.Id, out var home) || home is not { Count: > 0 }) return true;
+        // Most of it, not any of it: a region the front cut in two is the homeland of both sides,
+        // and one such piece of Donetsk would make all of Ukraine Russia's.
+        var shared = 0;
+        foreach (var index in home)
+            if (campaign.States.Find(s => s.MapIndex == index) is { } region &&
+                TerritorialClaims.TitleOf(campaign, parent, region) == TerritorialTitle.Homeland) shared++;
+        return shared * 2 > home.Count;
+    }
+
     public static void SettleCivilWarSurvivors(Campaign campaign, StrategicWar war)
     {
         if (campaign is null || war is null) return;
@@ -408,7 +427,8 @@ public static class Factions
                 var parts = participant.Name.Split(':', 4);
                 var parentTag = parts.Length >= 3 ? parts[2] : "";
                 var parent = campaign.NationByTag(parentTag) ?? campaign.NationById(participant.SecededFromId);
-                if (war.WinnerId == participant.Id && parent is not null && !campaign.HasOwnedLand(parent))
+                if (war.WinnerId == participant.Id && parent is not null && !campaign.HasOwnedLand(parent) &&
+                    RoseOnHomelandOf(campaign, participant, parent))
                 {
                     var formerName = parts.Length >= 4 ? parts[3] : participant.Name;
                     participant.Name = parent.Name;
@@ -447,7 +467,7 @@ public static class Factions
             }
             else if (participant.SecededFromId >= 0 && war.WinnerId == participant.Id &&
                      campaign.NationById(participant.SecededFromId) is { } parent &&
-                     !campaign.HasOwnedLand(parent))
+                     !campaign.HasOwnedLand(parent) && RoseOnHomelandOf(campaign, participant, parent))
             {
                 var formerName = participant.Name;
                 participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
@@ -517,8 +537,9 @@ public static class Factions
 
     /// <summary>
     /// If an uprising, civil-war rebel, or breakaway has lost its army (0 divisions) and holds
-    /// only a tiny defenseless rump (<= 2 regions) surrounded by or bordering its parent state,
-    /// it cannot sustain itself and is peacefully re-absorbed back into the parent country.
+    /// only a tiny rump actually occupied by its parent in their active war, settle that
+    /// military defeat. Having no divisions is NOT consent to annexation: a peaceful,
+    /// protected or newly founded country may legitimately have no standing army.
     /// </summary>
     internal static void SettleDefenselessRebelRemnants(Campaign campaign)
     {
@@ -535,7 +556,7 @@ public static class Factions
                     parent = campaign.NationByTag(states[0].CoreTags[0]);
                 }
             }
-            if (parent is null && (rebel.Name.StartsWith("rising:", StringComparison.Ordinal) || rebel.Tag.StartsWith("U") || rebel.Tag.StartsWith("1")))
+            if (parent is null && rebel.Name.StartsWith("rising:", StringComparison.Ordinal))
             {
                 var states = campaign.StatesOf(rebel);
                 if (states.Length > 0 && states[0].CoreTags.Count > 0)
@@ -551,9 +572,17 @@ public static class Factions
                 }
             }
             if (parent is null || parent.Id == rebel.Id || !campaign.HasOwnedLand(parent)) continue;
+            var war = campaign.Wars.FirstOrDefault(w => !w.Ended && w.Opposes(parent.Id, rebel.Id));
+            if (war is null) continue;
 
             var rebelStates = campaign.StatesOf(rebel);
             if (rebelStates.Length > 2) continue;
+            // A country whose ground is its homeland and not the parent's is a
+            // state that threw off an overlord, not the rump of a rising. Liechtenstein, Monaco
+            // and San Marino, subjects for a few years, broke free and were "reabsorbed" the next
+            // day because they have no army: twenty-five years on, every microstate in Europe was gone.
+            if (rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, rebel, s) == TerritorialTitle.Homeland) &&
+                !rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, parent, s) == TerritorialTitle.Homeland)) continue;
 
             var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f);
             if (hasDivisions) continue;
@@ -563,12 +592,15 @@ public static class Factions
 
             var isRebel = rebel.SecededFromId == parent.Id ||
                           !string.IsNullOrEmpty(rebel.FoundedInRevolt) ||
-                          rebel.Name.StartsWith("rising:", StringComparison.Ordinal) ||
-                          (parent.Tag == "UKR" && rebel.Tag.StartsWith("U")) ||
-                          (parent.Tag == "IND" && rebel.Tag.StartsWith("1"));
+                          rebel.Name.StartsWith("rising:", StringComparison.Ordinal);
             if (!isRebel) continue;
 
             var whole = Reintegration.Everything(campaign, rebel);
+            // Never manufacture victory by painting over the defender's own or a
+            // protector's troops. An unopposed capture must still exist in the war ledger.
+            if (whole.Count == 0 || campaign.ProvinceController is null ||
+                !whole.All(p => campaign.ProvinceController[p] == parent.MapIndex) ||
+                !whole.Any(p => war.OriginalController.TryGetValue(p, out var before) && before == rebel.MapIndex)) continue;
             if (whole.Count > 0)
             {
                 foreach (var p in whole) campaign.SetProvinceController(p, (ushort)parent.MapIndex);
@@ -597,7 +629,12 @@ public static class Factions
     /// </summary>
     public static bool FightsOn(Campaign campaign, Nation faction, float held)
     {
-        if (campaign is null || Of(faction) is not { Insurgency: true }) return false;
+        // Every rising and breakaway, not only the insurgencies the 2024 history names: a war
+        // of the weak is not given up because the strong hold the towns (GuerrillaWar).
+        if (campaign is null || faction is null) return false;
+        if (Of(faction) is not { Insurgency: true } &&
+            !(campaign.Defines.RisingsFightOn && (faction.SecededFromId >= 0 || !string.IsNullOrEmpty(faction.FoundedInRevolt) ||
+                                                  faction.Name.StartsWith("rising:", StringComparison.Ordinal)))) return false;
         if (held >= 0.999f && faction.WarSupport <= campaign.Defines.FactionFightOnSupport * 2f) return false;
         if (faction.WarSupport <= campaign.Defines.FactionFightOnSupport) return false;
         var standing = 0;
@@ -649,6 +686,7 @@ public static class Factions
         });
         born.FactionId = definition.Id;
         born.SecededFromId = parent.Id;
+        born.RevoltParentId = parent.Id;
         if (definition.ParentCapital.Length > 0 && !float.IsNaN(definition.ParentCapitalLatitude))
         {
             parent.CapitalName = definition.ParentCapital;
@@ -730,7 +768,7 @@ public static class Factions
                 var war = new StrategicWar
                 {
                     Id = campaign.Wars.Count == 0 ? 0 : campaign.Wars.Max(other => other.Id) + 1,
-                    Name = definition.WarName.Length > 0 ? definition.WarName : $"{parent.Name}–{born.Name} War",
+                    Name = definition.WarName.Length > 0 ? definition.WarName : $"{parent.DisplayName}–{born.DisplayName} War",
                     AttackerId = parent.Id,
                     DefenderId = born.Id,
                     StartedDay = campaign.ElapsedDays,

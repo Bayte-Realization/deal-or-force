@@ -1,12 +1,21 @@
-# Шесть языков для Godot 4.8 Beta1 .NET
+# Языки для Godot 4.8 Beta2 .NET
 
 [English](GUIDE.md) · [Русский](GUIDE_RU.md)
 
-Проверенная цель: Windows x86-64, `4.8.beta1.mono.official.4d10419ca`.
+Установленная цель: Windows x86-64, `4.8.beta2.mono.official.cafc17a19`
+(`C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe`).
+Совместный прогон 16 октября был на `4.8.beta1.mono.official.4d10419ca`
+([reports/native-bindings.md](reports/native-bindings.md)).
+Таблица пинов и команд на 29 октября — в [GUIDE.md](GUIDE.md).
+F#, Rust, Go и Zig на Beta2 прошли свою пробу. Python не собирался: последний релиз py4godot — 4.7-alpha21.
+Это лаборатория, не тик кампании. Правила штурма на F# остаются.
+Медиана C# на бенчмарке владений была около 2629 мс, Rust — около 3657 мс.
 Это набор исходных адаптеров и локальных примеров, а не новая официальная
 дистрибуция Godot. Исполняемый файл движка и GodotSharp не заменяются.
 
 ## Что именно работает
+
+Строки ниже — совместный прогон 16 октября на Beta1, не проверка Beta2 от 29 октября.
 
 | Язык | Реальная интеграция | Проверенный вызов |
 | --- | --- | --- |
@@ -33,7 +42,7 @@ DLL рядом с Godot.exe. Разные языки не получают ве�
 Комплект устанавливается рядом с редактором:
 
 ```text
-C:/GodotEngineNet 4.8-Beta1/LanguageKit/
+C:/GodotEngineNet 4.8-Beta2/LanguageKit/
   Open Workbench.cmd
   projects/AllSix/       # локальная собранная лаборатория, не в Git
   adapters/             # примеры, рецепты, патчи, лицензии
@@ -52,7 +61,7 @@ PowerShell 7, .NET SDK 10 и Java должны оставаться устано
 ./tests/kit-tests.ps1
 # Для уже собранной лаборатории, из каталога LanguageKit:
 $env:JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-25.0.2.10-hotspot'
-& 'C:/GodotEngineNet 4.8-Beta1/Godot_v4.8-beta1_mono_win64_console.exe' `
+& 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' `
   --headless --path ./projects/AllSix --script res://combined_probe.gd -- `
   fsharp luau rust nim odin kotlin
 ```
@@ -107,7 +116,7 @@ Optional ключи `lua` и `sandbox` не обязательны для шес
   генератора Temple/Godin. Полные generated wrapper и Godin не объявлены готовыми.
 - Rust: минимальные bindings с API/header из конкретного установленного движка.
 
-В Beta1 обнаружена проблема холодного немедленного импорта, согласующаяся с
+В Beta1 воспроизводилась проблема холодного немедленного импорта, согласующаяся с
 [Godot #111048](https://github.com/godotengine/godot/issues/111048): завершение
 может опередить deferred-генерацию документации расширений. Наш bootstrap заранее
 создаёт производный список известных расширений, даёт редактору 300 кадров с

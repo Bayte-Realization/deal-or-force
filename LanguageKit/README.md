@@ -1,8 +1,16 @@
-# Godot 4.8 Beta1 language kit
+# Godot 4.8 Beta2 language kit
 
 Portable integration sources for **Luau, F#, Nim, Odin, Rust and Kotlin** on
-`4.8.beta1.mono.official.4d10419ca`, Windows x86_64. Lua and Godot Sandbox
-are separate optional adapters, not replacements for Luau or F#.
+`4.8.beta2.mono.official.cafc17a19`, Windows x86_64. Lua and Godot Sandbox
+are separate optional adapters, not replacements for Luau or F#. **Zig (gdzig), Go
+(graphics.gd) and Python (py4godot)** have separate dated evidence:
+**Rust, Zig and Go passed real Beta2 runtime smoke tests on 29 October**.
+Python remains experimental: py4godot fails the int64 boundary and teardown gate;
+the alternative `godot4-meson` received a tested API-parser patch, not a runtime certificate.
+The legacy `verified` flags are historical; use the exact-engine `verification` records.
+Other languages retain their Beta1 evidence, not an inferred Beta2 certificate.
+Start with [the current setup guide](START_HERE_RU.md) and
+[the real-call report](reports/beta2-runtime-2026-10-29.md).
 
 This is not a new official Godot distribution and does not replace its executable.
 GDExtensions are loaded **per project**. Keeping DLLs beside the editor alone does
@@ -22,9 +30,10 @@ Use PowerShell 7 and the console executable of the .NET editor. No global PATH
 change is required; portable compiler paths can be supplied to each build recipe.
 
 ```powershell
-./language-kit.ps1 -Action Doctor -EngineDirectory 'C:/GodotEngineNet 4.8-Beta1'
+./language-kit.ps1 -Action Doctor -EngineDirectory 'C:/GodotEngineNet 4.8-Beta2'
 ./tests/kit-tests.ps1
 ./language-kit.ps1 -Action Fetch -Languages rust,nim,odin,kotlin,luau,sandbox,lua
+./language-kit.ps1 -Action Fetch -Languages zig,go,python      # recipe-only tracks
 ./language-kit.ps1 -Action Build -Languages fsharp
 ./language-kit.ps1 -Action Probe -Languages fsharp
 ```
@@ -48,7 +57,7 @@ Do not translate an import/shutdown access violation into a successful test.
 ## Install beside an existing editor
 
 ```powershell
-./language-kit.ps1 -Action InstallKit -EngineDirectory 'C:/GodotEngineNet 4.8-Beta1'
+./language-kit.ps1 -Action InstallKit -EngineDirectory 'C:/GodotEngineNet 4.8-Beta2'
 ```
 
 Copies source recipes, templates, patches, reports and licenses to `LanguageKit/`.
@@ -75,18 +84,23 @@ artifacts, not committed game builds.
 
 ## Boundaries
 
-- Rust is reserved for exceptional hard problems with a measured benefit, not
-  everyday game rules. The ownership Rust/Odin experiments live in
-  [kernels/ownership](kernels/ownership/README.md), with the common
-  benchmark (`Tools/OwnershipKernelBench`) in the game development workspace.
-  Neither implementation beat the existing C# median; no production native hook
-  remains. The game does not require these DLLs.
+- **Rust's veto is lifted (owner's decision, 29 October 2026).** It may be used for kernels,
+  tools and new adapters, not only for exceptional problems. The earlier measurement still
+  stands as advice rather than prohibition: the ownership Rust/Odin experiments in
+  [kernels/ownership](kernels/ownership/README.md) — benchmarked with
+  `Tools/OwnershipKernelBench` in the game development workspace — did not beat the existing
+  C# median, and no production native hook was kept. So: allowed, still measured, and a
+  weighted-sum probe is still not evidence of a game-speed gain.
 
 - The game-specific `experiments/assault-rules` harness needs matching game sources
   in the parent repository. It is not a standalone adapter smoke test. The portable
   F# example is `adapters/fsharp`, which has no dependency on game rules.
 - Trusted native/managed code can access the host. A native language binding is
   not a security sandbox for downloaded mods.
+- The three new tracks are **recipe-only**: `zig` (gdzig vendors a Godot 4.7.2 API snapshot),
+  `go` (graphics.gd compiles per project through `gd build`, needs Go 1.27 and cgo) and
+  `python` (py4godot calls itself an early-phase demo). None of them is a library, an addon or
+  a verified adapter on this engine; their READMEs state the prerequisite and the refusal path.
 - Single-language probes do not prove coexistence, export, hot reload, networking,
   all editor APIs or any other OS. These need separate evidence.
 - The old game's `.lua` Luau adapter is not overwritten by the new `.luau` kit.

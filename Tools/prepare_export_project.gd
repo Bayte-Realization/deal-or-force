@@ -4,16 +4,26 @@ extends SceneTree
 
 func _initialize() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
-	if args.size() != 1:
-		push_error("Expected the staging project.godot destination")
+	if args.size() != 2:
+		push_error("Expected the source and staging project.godot paths")
 		quit(2)
 		return
-	var destination: String = args[0].replace("\\", "/").simplify_path()
-	var allowed: String = ProjectSettings.globalize_path("res://build/").replace("\\", "/").simplify_path() + "/"
-	if not destination.begins_with(allowed) or destination.get_file() != "project.godot":
+	var source: String = args[0].replace("\\", "/").simplify_path()
+	var destination: String = args[1].replace("\\", "/").simplify_path()
+	var allowed: String = source.get_base_dir().path_join("build") + "/"
+	if source.get_file() != "project.godot" or not destination.begins_with(allowed) or destination.get_file() != "project.godot":
 		push_error("Export configuration must remain inside the project's build folder")
 		quit(2)
 		return
+	var source_settings := ConfigFile.new()
+	var load_result: Error = source_settings.load(source)
+	if load_result != OK:
+		push_error("Unable to read the source project.godot: %s" % load_result)
+		quit(2)
+		return
+	for section: String in source_settings.get_sections():
+		for key: String in source_settings.get_section_keys(section):
+			ProjectSettings.set_setting(section + "/" + key, source_settings.get_value(section, key))
 	var removed: int = 0
 	for property: Dictionary in ProjectSettings.get_property_list():
 		var key: String = property.name

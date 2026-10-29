@@ -48,34 +48,31 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.conflicts");
         var rows = PanelRows(panel, 22, 16, 9);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        var title = Title("CONFLICTS", 25, Ui.Colour("text.accent"), upper: true);
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        header.AddChild(HandbookButton("tensions"));
+        var toWars = ActionButton("Wars", () => { CloseConflictsScreen(); OpenWarLedger(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_wars.png");
+        var toDiplomacy = ActionButton("Diplomacy", () => { CloseConflictsScreen(); OpenDiplomacyScreen(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
         var close = ActionButton("×", CloseConflictsScreen, 38, 32);
         close.Name = "CloseConflicts";
         close.TooltipText = Ui.Tip(Tr("Close"));
-        header.AddChild(close);
+        ScreenHeader(rows, "CONFLICTS",
+            "World standoffs, active wars, proxy backers, territorial disputes and international organizations.",
+            true, toWars, toDiplomacy, HandbookButton("tensions"), close);
 
         _conflictsSummary = Title("", 13, Ui.Colour("text.body_soft"));
         rows.AddChild(_conflictsSummary);
 
-        var tabs = new HFlowContainer { Name = "ConflictNavigation" };
-        tabs.AddThemeConstantOverride("h_separation", 6);
-        tabs.AddThemeConstantOverride("v_separation", 4);
-        rows.AddChild(tabs);
+        var tabs = TabStrip(rows, "ConflictNavigation");
         foreach (var index in ConflictTabOrder)
         {
             var captured = index;
-            var tab = ActionButton(ConflictTabNames[index], () => ChangeConflictTab(captured), 0, 32);
+            var tab = TabButton(tabs, ConflictTabNames[index], () => ChangeConflictTab(captured), 0);
             tab.Name = "ConflictTab" + index;
-            tab.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.tab", 13));
+            tab.SetMeta("atlas_tab_button", true);
+            tab.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             tab.TooltipText = Ui.Tip(Tr(ConflictTabNames[index]));
+            StyleButton(tab, index == _conflictTab);
             _conflictTabs[index] = tab;
-            tabs.AddChild(tab);
         }
 
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -89,12 +86,22 @@ public partial class DealOrForceGame
         };
         body.AddChild(listDeck);
         BuildConflictSearch(listDeck);
+        var listFrame = new PanelContainer
+        {
+            Name = "ConflictListFrame",
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill
+        };
+        listFrame.SetMeta("atlas_section_ground", "surface.inset");
+        listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        listDeck.AddChild(listFrame);
         _conflictsListScroll = new ScrollContainer
         {
             Name = "ConflictListScroll", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        listDeck.AddChild(_conflictsListScroll);
+        listFrame.AddChild(_conflictsListScroll);
         _conflictsList = new VBoxContainer { Name = "ConflictsList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _conflictsList.AddThemeConstantOverride("separation", 3);
         _conflictsListScroll.AddChild(_conflictsList);
@@ -301,11 +308,11 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(Title("READ THE SITUATION", 22, Ui.Colour("text.accent")));
         _conflictsPage.AddChild(Title("Choose a conflict on the left to see its causes, recent events and available actions. Search works with country names, tags and war names.",
             14, Ui.Colour("text.body_soft")));
-        _conflictsPage.AddChild(Caption("TENSION IS NOT WAR"));
+        SectionRule(_conflictsPage, "TENSION IS NOT WAR");
         _conflictsPage.AddChild(Title("Friction can grow into a crisis or armed clashes. Hostility, lost land, rivalry and competing foreign backers all matter; deterrence and talks can hold it back.", 14, Ui.Colour("text.body")));
-        _conflictsPage.AddChild(Caption("SUPPORT WITHOUT INTERVENTION"));
+        SectionRule(_conflictsPage, "SUPPORT WITHOUT INTERVENTION");
         _conflictsPage.AddChild(Title("A backer sends money, equipment or volunteers without becoming a belligerent. Open a war to review its sides, costs and support options.", 14, Ui.Colour("text.body")));
-        _conflictsPage.AddChild(Caption("YOUR COUNTRY FIRST"));
+        SectionRule(_conflictsPage, "YOUR COUNTRY FIRST");
         _conflictsPage.AddChild(Title("Our conflicts brings together your standoffs, the wars you fight, the sides you support and those who arm you.", 14, Ui.Colour("text.body")));
     }
 
@@ -338,16 +345,16 @@ public partial class DealOrForceGame
         gaugeRow.AddChild(gauge);
         _conflictsPage.AddChild(gaugeRow);
 
-        _conflictsPage.AddChild(Caption("WHY"));
+        SectionRule(_conflictsPage, "WHY");
         _conflictsPage.AddChild(Title(TensionTip(relation), 14, Ui.Colour("text.body")));
 
-        _conflictsPage.AddChild(Caption("WHAT THEY HOLD AGAINST EACH OTHER"));
+        SectionRule(_conflictsPage, "WHAT THEY HOLD AGAINST EACH OTHER");
         _conflictsPage.AddChild(Title(Simulation.Loc.Format("{0}: grievance {1:0}. {2}: grievance {3:0}. A grievance halves in about thirty years.",
             a.DisplayName, relation.GrievanceA, b.DisplayName, relation.GrievanceB), 14, Ui.Colour("text.body")));
         if (relation.ClashLosses > 0f)
             _conflictsPage.AddChild(Title(Simulation.Loc.Format("Lost to shooting short of war: {0:N0} people.", relation.ClashLosses), 14, Ui.Colour("text.body")));
 
-        _conflictsPage.AddChild(Caption("LATELY"));
+        SectionRule(_conflictsPage, "LATELY");
         // Retain the local branch's bounded reverse walk for long campaigns.
         var recent = new List<ChronicleEntry>();
         var chronicle = _campaign.Chronicle.Entries;

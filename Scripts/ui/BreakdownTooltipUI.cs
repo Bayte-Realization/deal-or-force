@@ -48,11 +48,17 @@ public partial class ExplainedStat : VBoxContainer
 
     public override void _Draw()
     {
-        if (!Hot) return;
         var rect = new Rect2(Vector2.Zero, Size);
-        // Soft instrument card wash and subtle brass accent along the top edge
-        DrawRect(rect, Ui.Colour("button.fill_hover", 0.28f), true);
-        DrawRect(new Rect2(0, 0, Size.X, 1.5f), Ui.Colour("button.border_hover", 0.65f), true);
+        // Always draw a subtle recessed telemetry cell with a left vertical divider so the
+        // top bar reads as a structured instrument strip rather than floating numbers.
+        DrawRect(new Rect2(2f, 1f, MathF.Max(0f, Size.X - 3f), MathF.Max(0f, Size.Y - 2f)),
+            Ui.Colour(Hot ? "button.fill_hover" : "surface.inset", Hot ? 0.58f : 0.42f), true);
+        DrawLine(new Vector2(0.5f, 3f), new Vector2(0.5f, MathF.Max(3f, Size.Y - 3f)),
+            Ui.Colour("surface.line", 0.65f), 1f);
+        DrawLine(new Vector2(2f, 1.5f), new Vector2(MathF.Max(2f, Size.X - 2f), 1.5f),
+            Ui.Colour(Hot ? "button.border_hover" : "surface.line_faint", Hot ? 0.85f : 0.45f), Hot ? 1.5f : 1f);
+        DrawLine(new Vector2(2f, Size.Y - 1.5f), new Vector2(MathF.Max(2f, Size.X - 2f), Size.Y - 1.5f),
+            Ui.Colour("surface.background", 0.55f), 1f);
     }
 
     public override GodotObject _MakeCustomTooltip(string forText) => BreakdownPanel.Build(Explain?.Invoke(), Plain);
@@ -72,10 +78,8 @@ public partial class ExplainedRow : HBoxContainer
     /// How full this row is, nought to one, or negative for a row that is not a proportion
     /// of anything.
     ///
-    /// A row that knows this draws itself as a meter: the share fills its own background
-    /// from the left, behind the text, at a few per cent opacity. It costs no height at all,
-    /// which is the whole point - a column of figures becomes something whose shape can be
-    /// read before any of the words are, and nothing had to grow to make room for it.
+    /// DetailRow gives this share a separate three-pixel track underneath the text. Its
+    /// fill and endpoint never cross the caption, including long wrapped translations.
     /// </summary>
     public float Share = -1f;
 
@@ -95,24 +99,16 @@ public partial class ExplainedRow : HBoxContainer
     public override void _Draw()
     {
         var width = Size.X;
-        if (Share >= 0f)
-        {
-            var filled = Mathf.Clamp(Share, 0f, 1f) * width;
-            if (filled > 1f)
-            {
-                // Quiet enough to sit behind a whole screen of rows without any of them shouting,
-                // and a hairline at the head of the bar so the exact value is readable rather than
-                // guessed from a gradient's edge.
-                DrawRect(new Rect2(0, 2, filled, Size.Y - 4), new Color(Fill, Hot ? 0.16f : 0.10f));
-                DrawRect(new Rect2(filled - 1f, 2, 1f, Size.Y - 4), new Color(Fill, Hot ? 0.55f : 0.38f));
-            }
-        }
-        if (!Hot) return;
-        // Two marks, both cheap: a wash over the row and a tick down its left edge in the
-        // row's own colour. The tick is what makes the shape of a column of percentages
-        // readable when the bars themselves are at ten per cent.
-        DrawRect(new Rect2(0, 0, width, Size.Y), new Color(Fill, 0.06f));
-        DrawRect(new Rect2(0, 2, 2f, Size.Y - 4), new Color(Fill, 0.5f));
+        var height = Size.Y;
+        if (width <= 1f || height <= 1f) return;
+
+        // Subtle recessed strip + bottom hairline + left status edge so every dossier table
+        // reads as a structured instrument ledger rather than floating text.
+        DrawRect(new Rect2(0, 1, width, MathF.Max(0f, height - 2f)),
+            Ui.Colour(Hot ? "button.fill_hover" : "shell.row", Hot ? 0.52f : 0.42f));
+        DrawLine(new Vector2(0, height - 0.5f), new Vector2(width, height - 0.5f),
+            Ui.Colour("surface.line_faint", Hot ? 0.65f : 0.38f), 1f);
+        // A percentage is drawn in its own layout slot by DetailRow, never across a name.
     }
 
     public override void _GuiInput(InputEvent @event)
@@ -234,13 +230,19 @@ public partial class SectionHeading : Label
     /// <summary>The colour of the rule. Transparent draws nothing.</summary>
     public Color Rule = new(1, 1, 1, 0);
 
+    public override void _Ready()
+    {
+        var spacing = new StyleBoxEmpty { ContentMarginBottom = 5 };
+        AddThemeStyleboxOverride("normal", spacing);
+    }
+
     public override void _Draw()
     {
         if (Rule.A <= 0.001f) return;
-        // Under the text, not through it, and fading out to the right so it reads as an
-        // underline for the words rather than a border on the panel.
-        var y = Size.Y - 3f;
-        DrawRect(new Rect2(0, y, Size.X * 0.34f, 1f), new Color(Rule, 0.55f));
-        DrawRect(new Rect2(Size.X * 0.34f, y, Size.X * 0.66f, 1f), new Color(Rule, 0.14f));
+        // Subtle header wash + two-stage brass rule along the baseline so sections inside
+        // a dossier read as distinct architectural compartments.
+        var y = Size.Y - 2f;
+        DrawRect(new Rect2(0, y, Size.X * 0.38f, 1.5f), new Color(Rule, 0.68f));
+        DrawRect(new Rect2(Size.X * 0.38f, y, Size.X * 0.62f, 1f), new Color(Rule, 0.22f));
     }
 }

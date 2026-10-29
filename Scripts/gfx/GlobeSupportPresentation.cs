@@ -26,9 +26,6 @@ public sealed partial class GlobePresentation
         public float Latitude;
         public float Longitude;
         public Vector3 Normal;
-        public int Slot;
-        /// <summary>How many formations share this base, so the group can be centred on it.</summary>
-        public int AtBase = 1;
         public Vector2 DisplayOffset;
         public bool DisplayFaded;
     }
@@ -190,10 +187,6 @@ public sealed partial class GlobePresentation
             hash.Add(formation.TypeId);
             hash.Add(formation.BaseProvinceId);
             hash.Add(formation.StateMapIndex);
-            var hasArmyAtBase = false;
-            foreach (var army in _campaign.Armies)
-                if (army.ProvinceId == formation.BaseProvinceId) { hasArmyAtBase = true; break; }
-            hash.Add(hasArmyAtBase);
         }
         var fingerprint = hash.ToHashCode();
         var reachHash = new HashCode();
@@ -223,21 +216,14 @@ public sealed partial class GlobePresentation
         _supportMapMarkers.Clear();
         _supportVisibility.Clear();
         InvalidateFlatCounterDensity();
-        var withinBase = new Dictionary<int, int>();
         foreach (var formation in owned)
         {
             if (!SupportTypeCatalog.TryGet(formation.TypeId, out var type)) continue;
-            var slot = withinBase.GetValueOrDefault(formation.BaseProvinceId);
-            withinBase[formation.BaseProvinceId] = slot + 1;
             var center = map.CenterOf(formation.BaseProvinceId);
-            // Several wings at the same airbase must not become one unclickable icon,
-            // and if a ground army is stationed in the same province, offset the long-range
-            // air/missile base row slightly north-east so it never covers the ground counter!
-            var hasGroundArmy = false;
-            foreach (var army in _campaign.Armies)
-                if (army.ProvinceId == formation.BaseProvinceId) { hasGroundArmy = true; break; }
-            var latitude = center.Latitude + (hasGroundArmy ? 0.58f : 0f);
-            var longitude = center.Longitude + (hasGroundArmy ? 0.42f : 0f);
+            // Geography is not a collision-avoidance slot. Keep the actual base anchor;
+            // the bounded screen layout may only use room inside this same province.
+            var latitude = center.Latitude;
+            var longitude = center.Longitude;
             var node = new Node3D { Name = $"LongRange_{formation.Id}" };
             _supportMarkerRoot.AddChild(node);
             // The symbol is part of the card now: cut out and fitted into its slot on the
@@ -269,15 +255,13 @@ public sealed partial class GlobePresentation
             var marker = new SupportMapMarker
             {
                 Node = node, Plate = plate, Readiness = readiness,
-                Formation = formation, Latitude = latitude, Longitude = longitude, Normal = normal, Slot = slot
+                Formation = formation, Latitude = latitude, Longitude = longitude, Normal = normal
             };
             _supportMapMarkers[formation.Id] = marker;
             _supportVisibility.Add((node, normal));
             PlaceSupportMarker(marker);
             PaintSupportMarker(marker, formation);
         }
-        foreach (var placed in _supportMapMarkers.Values)
-            placed.AtBase = Math.Max(1, withinBase.GetValueOrDefault(placed.Formation.BaseProvinceId, 1));
         if (!_supportMapMarkers.ContainsKey(_selectedSupportId)) _selectedSupportId = -1;
         _selectedSupportIds.RemoveWhere(id => !_supportMapMarkers.ContainsKey(id));
         RefreshSupportMarkerSelection();
@@ -382,25 +366,8 @@ public sealed partial class GlobePresentation
                         if (marker.Node.Position != position) marker.Node.Position = position;
                         continue;
                     }
-                    // A base's wings sit side by side on the ground around it, in rows of three,
-                    // the group centred on the base and spaced by the card's own size. The
-                    // spacing used to be a fixed 0.14 of a world unit while the cards shrink
-                    // as the camera comes down to keep their size on screen, so close in the
-                    // cards stood a degree or more from their base - out at sea, over the
-                    // neighbour's border - and the group read as nobody's.
                     if (marker.Node.Position != position) marker.Node.Position = position;
                     var card = SurfaceCounterWidth(marker.Node, "support");
-                    var aspect = marker.Plate.Texture is { } face && face.GetWidth() > 0
-                        ? face.GetHeight() / (float)face.GetWidth() : 56f / 96f;
-                    var spacing = Math.Clamp(Ui.Metric("support.globe_slot_spacing", 1.08f), 1f, 3f);
-                    var rows = (marker.AtBase + 2) / 3;
-                    var row = marker.Slot / 3;
-                    var inRow = Math.Min(3, marker.AtBase - row * 3);
-                    var basis = CountryLabelSurfaceBasis(marker.Latitude, marker.Longitude, 1f, 0f);
-                    var offset = basis.X * ((marker.Slot % 3) - (inRow - 1) * .5f) * card * spacing +
-                                 basis.Y * ((rows - 1) * .5f - row) * card * aspect * spacing;
-                    position = (position + offset).Normalized() * SurfaceMarkerRadius * SupportSurfaceDepthFactor;
-                    if (marker.Node.Position != position) marker.Node.Position = position;
                     OrientSurfaceCounter(marker.Node, position.Normalized());
                     marker.Node.Scale = Vector3.One * card;
                 }

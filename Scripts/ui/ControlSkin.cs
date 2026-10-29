@@ -34,99 +34,199 @@ internal static class ControlSkin
         if (theme is null) return;
         var edge = Ui.Colour("text.muted");
         var accent = Ui.Colour("text.accent");
-        var ground = Ui.Colour("surface.overlay");
-        ground.A = 0.55f;
-        var mark = new Color(0.07f, 0.09f, 0.12f);
+        var selected = Ui.Colour("text.accent_dim");
+        var ground = Ui.Colour("surface.inset");
+        var mark = Ui.Colour("surface.background");
         void Set(string name, Texture2D texture) => theme.SetIcon(name, "CheckBox", texture);
         Set("unchecked", Box(edge, ground, false, false, mark, 1f));
-        Set("checked", Box(accent, accent, true, false, mark, 1f));
-        Set("unchecked_disabled", Box(edge, ground, false, false, mark, 0.35f));
-        Set("checked_disabled", Box(accent, accent, true, false, mark, 0.4f));
+        Set("checked", Box(selected, selected, true, false, mark, 1f));
+        Set("unchecked_hover", Box(accent, Ui.Colour("button.fill_hover"), false, false, mark, 1f));
+        Set("checked_hover", Box(accent, selected.Lightened(0.08f), true, false, mark, 1f));
+        Set("unchecked_hover_pressed", Box(accent, Ui.Colour("button.fill_pressed"), false, false, mark, 1f));
+        Set("checked_hover_pressed", Box(accent, selected.Darkened(0.12f), true, false, mark, 1f));
+        Set("unchecked_disabled", Box(edge, Ui.Colour("button.fill_disabled"), false, false, mark, 0.45f));
+        Set("checked_disabled", Box(selected, selected, true, false, mark, 0.45f));
         Set("radio_unchecked", Box(edge, ground, false, true, mark, 1f));
-        Set("radio_checked", Box(accent, ground, true, true, accent, 1f));
-        Set("radio_unchecked_disabled", Box(edge, ground, false, true, mark, 0.35f));
-        Set("radio_checked_disabled", Box(accent, ground, true, true, accent, 0.4f));
+        Set("radio_checked", Box(selected, ground, true, true, selected, 1f));
+        Set("radio_unchecked_hover", Box(accent, Ui.Colour("button.fill_hover"), false, true, mark, 1f));
+        Set("radio_checked_hover", Box(accent, Ui.Colour("button.fill_hover"), true, true, accent, 1f));
+        Set("radio_unchecked_hover_pressed", Box(accent, Ui.Colour("button.fill_pressed"), false, true, mark, 1f));
+        Set("radio_checked_hover_pressed", Box(accent, Ui.Colour("button.fill_pressed"), true, true, selected, 1f));
+        Set("radio_unchecked_disabled", Box(edge, Ui.Colour("button.fill_disabled"), false, true, mark, 0.45f));
+        Set("radio_checked_disabled", Box(selected, Ui.Colour("button.fill_disabled"), true, true, selected, 0.45f));
         theme.SetConstant("h_separation", "CheckBox", 8);
-        Engrave(theme, accent);
-        Gauges(theme, accent, edge);
-        Tooltips(theme, accent);
+        theme.SetColor("font_color", "CheckBox", Ui.Colour("text.body"));
+        theme.SetColor("font_hover_color", "CheckBox", Ui.Colour("text.bright"));
+        theme.SetColor("font_hover_pressed_color", "CheckBox", Ui.Colour("text.bright"));
+        theme.SetColor("font_pressed_color", "CheckBox", Ui.Colour("text.accent_dim"));
+        theme.SetColor("font_focus_color", "CheckBox", Ui.Colour("text.bright"));
+        theme.SetColor("font_disabled_color", "CheckBox", Ui.Colour("button.text_disabled"));
+        var checkFocus = Surface(new Color(0, 0, 0, 0), accent, 0, 0);
+        checkFocus.DrawCenter = false;
+        theme.SetStylebox("focus", "CheckBox", checkFocus);
+        Separators(theme);
+        Gauges(theme, accent);
+        Inputs(theme, accent);
+        Tooltips(theme);
     }
 
-    /// <summary>
-    /// Every tooltip in one frame: the stock one was a flat grey box, the breakdowns drew
-    /// their own, and the two looked like they came from different games. The window colour,
-    /// a fine edge, a brass line along the top as on the screens themselves, and a shadow so
-    /// it lifts off the map.
-    /// </summary>
-    private static void Tooltips(Theme theme, Color accent)
+    private static StyleBoxFlat Surface(Color fill, Color border, int horizontal, int vertical)
     {
-        var frame = new StyleBoxFlat
+        var box = new StyleBoxFlat
         {
-            BgColor = new Color(Ui.Colour("surface.overlay"), 0.97f),
-            BorderColor = Ui.Colour("surface.line"),
-            CornerRadiusTopLeft = 3, CornerRadiusTopRight = 3, CornerRadiusBottomLeft = 3, CornerRadiusBottomRight = 3,
-            ShadowColor = new Color(0f, 0f, 0f, 0.45f),
-            ShadowSize = 6,
-            ShadowOffset = new Vector2(0, 2)
+            BgColor = fill,
+            BorderColor = border,
+            CornerRadiusTopLeft = 4,
+            CornerRadiusTopRight = 4,
+            CornerRadiusBottomLeft = 4,
+            CornerRadiusBottomRight = 4,
+            ContentMarginLeft = horizontal,
+            ContentMarginRight = horizontal,
+            ContentMarginTop = vertical,
+            ContentMarginBottom = vertical
         };
-        frame.SetBorderWidthAll(1);
+        box.SetBorderWidthAll(1);
+        return box;
+    }
+
+    private static void Inputs(Theme theme, Color accent)
+    {
+        var normal = Surface(Ui.Colour("surface.inset"), Ui.Colour("surface.line"), 12, 4);
+        var focus = (StyleBoxFlat)normal.Duplicate();
+        focus.DrawCenter = false;
+        focus.BorderColor = accent;
+        var readOnly = Surface(Ui.Colour("button.fill_disabled"), Ui.Colour("button.border_disabled"), 12, 4);
+        theme.SetStylebox("normal", "LineEdit", normal);
+        theme.SetStylebox("focus", "LineEdit", focus);
+        theme.SetStylebox("read_only", "LineEdit", readOnly);
+        theme.SetColor("font_color", "LineEdit", Ui.Colour("text.bright"));
+        theme.SetColor("font_uneditable_color", "LineEdit", Ui.Colour("text.muted"));
+        theme.SetColor("font_placeholder_color", "LineEdit", Ui.Colour("text.hint"));
+        theme.SetColor("caret_color", "LineEdit", accent);
+        theme.SetColor("selection_color", "LineEdit", Ui.Colour("button.fill_hover"));
+
+        var tabSelected = Surface(Ui.Colour("surface.raised"), accent, 12, 8);
+        tabSelected.CornerRadiusBottomLeft = 0;
+        tabSelected.CornerRadiusBottomRight = 0;
+        var tabUnselected = Surface(Ui.Colour("surface.inset"), Ui.Colour("surface.line_faint"), 12, 8);
+        tabUnselected.CornerRadiusBottomLeft = 0;
+        tabUnselected.CornerRadiusBottomRight = 0;
+        var tabHover = (StyleBoxFlat)tabUnselected.Duplicate();
+        tabHover.BgColor = Ui.Colour("button.fill_hover");
+        tabHover.BorderColor = Ui.Colour("button.border_hover");
+        var tabDisabled = (StyleBoxFlat)tabUnselected.Duplicate();
+        tabDisabled.BgColor = Ui.Colour("button.fill_disabled");
+        tabDisabled.BorderColor = Ui.Colour("button.border_disabled");
+        var tabFocus = (StyleBoxFlat)tabSelected.Duplicate();
+        tabFocus.DrawCenter = false;
+        var tabPanel = Surface(Ui.Colour("surface.base"), Ui.Colour("surface.line"), 12, 12);
+        theme.SetStylebox("tab_selected", "TabContainer", tabSelected);
+        theme.SetStylebox("tab_unselected", "TabContainer", tabUnselected);
+        theme.SetStylebox("tab_hovered", "TabContainer", tabHover);
+        theme.SetStylebox("tab_disabled", "TabContainer", tabDisabled);
+        theme.SetStylebox("tab_focus", "TabContainer", tabFocus);
+        theme.SetStylebox("panel", "TabContainer", tabPanel);
+        theme.SetColor("font_selected_color", "TabContainer", Ui.Colour("text.accent"));
+        theme.SetColor("font_unselected_color", "TabContainer", Ui.Colour("text.muted"));
+        theme.SetColor("font_hovered_color", "TabContainer", Ui.Colour("text.bright"));
+        theme.SetColor("font_disabled_color", "TabContainer", Ui.Colour("button.text_disabled"));
+
+        // Sleek dark-slate scrollbars and sliders so scrollable lists and budget sliders match the shell.
+        var scrollTrackV = Surface(Ui.Colour("surface.inset", 0.72f), Ui.Colour("surface.line_faint", 0.35f), 2, 2);
+        scrollTrackV.SetCornerRadiusAll(3);
+        scrollTrackV.ContentMarginLeft = 3;
+        scrollTrackV.ContentMarginRight = 3;
+        var scrollTrackH = (StyleBoxFlat)scrollTrackV.Duplicate();
+        scrollTrackH.ContentMarginTop = 3;
+        scrollTrackH.ContentMarginBottom = 3;
+        var grabber = Surface(Ui.Colour("surface.line").Lightened(0.08f), Ui.Colour("button.border"), 2, 2);
+        grabber.SetCornerRadiusAll(3);
+        var grabberHover = Surface(Ui.Colour("text.accent_dim"), Ui.Colour("text.accent"), 2, 2);
+        grabberHover.SetCornerRadiusAll(3);
+        var grabberPressed = Surface(Ui.Colour("text.accent"), Ui.Colour("text.bright"), 2, 2);
+        grabberPressed.SetCornerRadiusAll(3);
+        foreach (var bar in new[] { "VScrollBar", "HScrollBar" })
+        {
+            theme.SetStylebox("scroll", bar, bar == "VScrollBar" ? scrollTrackV : scrollTrackH);
+            theme.SetStylebox("scroll_focus", bar, bar == "VScrollBar" ? scrollTrackV : scrollTrackH);
+            theme.SetStylebox("grabber", bar, grabber);
+            theme.SetStylebox("grabber_highlight", bar, grabberHover);
+            theme.SetStylebox("grabber_pressed", bar, grabberPressed);
+        }
+
+        var sliderTrack = Surface(Ui.Colour("surface.inset"), Ui.Colour("surface.line"), 4, 4);
+        sliderTrack.SetCornerRadiusAll(3);
+        var sliderFill = Surface(Ui.Colour("text.accent_dim", 0.78f), Ui.Colour("button.primary_border"), 4, 4);
+        sliderFill.SetCornerRadiusAll(3);
+        var sliderHighlight = Surface(Ui.Colour("text.accent"), Ui.Colour("text.bright"), 4, 4);
+        sliderHighlight.SetCornerRadiusAll(3);
+        theme.SetStylebox("slider", "HSlider", sliderTrack);
+        theme.SetStylebox("grabber_area", "HSlider", sliderFill);
+        theme.SetStylebox("grabber_area_highlight", "HSlider", sliderHighlight);
+
+        var popupPanel = Surface(Ui.Colour("surface.overlay", 0.98f), Ui.Colour("shell.border"), 8, 8);
+        popupPanel.BorderWidthTop = 2;
+        popupPanel.BorderColor = Ui.Colour("button.primary_border");
+        popupPanel.ShadowColor = new Color(0f, 0f, 0f, 0.55f);
+        popupPanel.ShadowSize = 10;
+        popupPanel.ShadowOffset = new Vector2(0, 4);
+        var popupHover = Surface(Ui.Colour("button.fill_hover"), Ui.Colour("button.border_hover"), 6, 4);
+        theme.SetStylebox("panel", "PopupMenu", popupPanel);
+        theme.SetStylebox("hover", "PopupMenu", popupHover);
+        theme.SetColor("font_color", "PopupMenu", Ui.Colour("text.body"));
+        theme.SetColor("font_hover_color", "PopupMenu", Ui.Colour("text.bright"));
+        theme.SetColor("font_Disabled_color", "PopupMenu", Ui.Colour("button.text_disabled"));
+
+        var optNormal = Surface(Ui.Colour("button.fill"), Ui.Colour("button.border"), 10, 5);
+        var optHover = Surface(Ui.Colour("button.fill_hover"), Ui.Colour("button.border_hover"), 10, 5);
+        var optPressed = Surface(Ui.Colour("button.fill_pressed"), Ui.Colour("button.border_pressed"), 10, 5);
+        theme.SetStylebox("normal", "OptionButton", optNormal);
+        theme.SetStylebox("hover", "OptionButton", optHover);
+        theme.SetStylebox("pressed", "OptionButton", optPressed);
+        theme.SetColor("font_color", "OptionButton", Ui.Colour("button.text"));
+        theme.SetColor("font_hover_color", "OptionButton", Ui.Colour("button.text_hover"));
+        theme.SetColor("font_pressed_color", "OptionButton", Ui.Colour("button.text_pressed"));
+    }
+
+    /// <summary>A quiet reading surface with one structural edge and just enough depth to lift it.</summary>
+    private static void Tooltips(Theme theme)
+    {
+        var frame = Surface(Ui.Colour("surface.overlay", 0.98f), Ui.Colour("shell.border"), 12, 8);
         frame.BorderWidthTop = 2;
-        frame.BorderColor = new Color(accent, 0.75f);
-        frame.ContentMarginLeft = 11; frame.ContentMarginRight = 11;
-        frame.ContentMarginTop = 8; frame.ContentMarginBottom = 8;
+        frame.BorderColor = Ui.Colour("button.primary_border", 0.85f);
+        frame.ShadowColor = new Color(0f, 0f, 0f, 0.48f);
+        frame.ShadowSize = 10;
+        frame.ShadowOffset = new Vector2(0, 3);
         theme.SetStylebox("panel", "TooltipPanel", frame);
         theme.SetColor("font_color", "TooltipLabel", Ui.Colour("text.body"));
         theme.SetColor("font_shadow_color", "TooltipLabel", new Color(0f, 0f, 0f, 0f));
     }
 
-    /// <summary>
-    /// A separator as an engraved rule: a brass hairline with a faint shadow under it, fading
-    /// out towards both ends - the line under a heading in an atlas, not a grey bar.
-    /// </summary>
-    private static void Engrave(Theme theme, Color accent)
+    /// <summary>One-pixel neutral rules; their spacing comes from the same 8 px rhythm.</summary>
+    private static void Separators(Theme theme)
     {
-        const int width = 512, height = 5;
-        var image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
-        for (var x = 0; x < width; x++)
-        {
-            var u = x / (float)(width - 1);
-            // Bright in the middle third, gone at the edges.
-            var fade = Mathf.Clamp(Mathf.Sin(u * Mathf.Pi) * 1.35f, 0f, 1f);
-            image.SetPixel(x, 1, new Color(accent, 0.10f * fade));
-            image.SetPixel(x, 2, new Color(accent.Lightened(0.1f), 0.55f * fade));
-            image.SetPixel(x, 3, new Color(0f, 0f, 0f, 0.35f * fade));
-        }
-        var rule = new StyleBoxTexture { Texture = ImageTexture.CreateFromImage(image),
-            AxisStretchHorizontal = StyleBoxTexture.AxisStretchMode.Stretch, ContentMarginTop = 2, ContentMarginBottom = 2 };
-        theme.SetStylebox("separator", "HSeparator", rule);
-        theme.SetConstant("separation", "HSeparator", 9);
+        var horizontal = new StyleBoxLine { Color = Ui.Colour("surface.line"), Thickness = 1 };
+        var vertical = new StyleBoxLine { Color = Ui.Colour("surface.line"), Thickness = 1, Vertical = true };
+        theme.SetStylebox("separator", "HSeparator", horizontal);
+        theme.SetStylebox("separator", "VSeparator", vertical);
+        theme.SetConstant("separation", "HSeparator", 8);
+        theme.SetConstant("separation", "VSeparator", 8);
     }
 
-    /// <summary>
-    /// Progress bars as gauges: a recessed track with a fine edge, and a brass fill that is
-    /// lighter along its top edge, as a filled groove catches the light.
-    /// </summary>
-    private static void Gauges(Theme theme, Color accent, Color edge)
+    /// <summary>A recessed track and a solid, subdued brass fill without a glossy gradient.</summary>
+    private static void Gauges(Theme theme, Color accent)
     {
-        var track = new StyleBoxFlat
-        {
-            BgColor = new Color(0.03f, 0.05f, 0.08f, 0.85f),
-            BorderColor = new Color(edge, 0.35f),
-            BorderWidthBottom = 1, BorderWidthTop = 1, BorderWidthLeft = 1, BorderWidthRight = 1,
-            CornerRadiusBottomLeft = 2, CornerRadiusBottomRight = 2, CornerRadiusTopLeft = 2, CornerRadiusTopRight = 2
-        };
-        const int height = 16;
-        var image = Image.CreateEmpty(4, height, false, Image.Format.Rgba8);
-        for (var y = 0; y < height; y++)
-        {
-            var v = y / (float)(height - 1);
-            var shade = v < 0.2f ? accent.Lightened(0.35f) : accent.Darkened(0.25f * v);
-            for (var x = 0; x < 4; x++) image.SetPixel(x, y, new Color(shade, 0.95f));
-        }
-        var fill = new StyleBoxTexture { Texture = ImageTexture.CreateFromImage(image),
-            TextureMarginLeft = 1, TextureMarginRight = 1 };
+        var track = Surface(Ui.Colour("surface.inset"), Ui.Colour("surface.line_faint"), 4, 2);
+        track.SetCornerRadiusAll(3);
+        var fillColour = Ui.Colour("text.accent_dim");
+        var fill = Surface(fillColour, fillColour.Darkened(0.25f), 4, 2);
+        fill.SetCornerRadiusAll(3);
         theme.SetStylebox("background", "ProgressBar", track);
         theme.SetStylebox("fill", "ProgressBar", fill);
+        theme.SetColor("font_color", "ProgressBar", Ui.Colour("text.bright"));
+        theme.SetColor("font_outline_color", "ProgressBar", Ui.Colour("surface.background"));
+        theme.SetConstant("outline_size", "ProgressBar", 1);
+        theme.SetColor("font_shadow_color", "ProgressBar", new Color(accent, 0f));
     }
 
     /// <summary>One icon, drawn by distance so its edges are smooth at any scale.</summary>

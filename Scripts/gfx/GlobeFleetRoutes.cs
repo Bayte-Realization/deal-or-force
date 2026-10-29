@@ -84,35 +84,31 @@ public sealed partial class GlobePresentation
         var colour = fleet.Mission == Simulation.FleetMission.Invasion
             ? new Color(0.95f, 0.62f, 0.38f, 0.9f)
             : new Color(0.78f, 0.9f, 1f, 0.85f);
+        // On the flat map a course over the date line comes out at the other edge; the
+        // line breaks there instead of streaking across the whole map. A one-point
+        // piece is not a strip.
         const float halfWidth = 0.0032f;
-        var open = false;
-        for (var index = 0; index < _fleetRoutePoints.Count; index++)
+        CollectDateLineRuns(_fleetRoutePoints);
+        foreach (var run in _dateLineRuns)
         {
-            var point = _fleetRoutePoints[index];
-            // On the flat map a course over the date line comes out at the other edge; the
-            // line breaks there instead of streaking across the whole map.
-            if (index > 0 && _flatMap && MathF.Abs(point.X - _fleetRoutePoints[index - 1].X) > FlatMapWidth * 0.5f)
+            _fleetRouteMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+            var endIndex = run.Start + run.Count - 1;
+            for (var index = run.Start; index <= endIndex; index++)
             {
-                if (open) _fleetRouteMesh.SurfaceEnd();
-                open = false;
+                var point = _fleetRoutePoints[index];
+                var before = _fleetRoutePoints[Math.Max(run.Start, index - 1)];
+                var after = _fleetRoutePoints[Math.Min(endIndex, index + 1)];
+                var tangent = (after - before).Normalized();
+                if (tangent == Vector3.Zero) tangent = Vector3.Right;
+                var normal = _flatMap ? Vector3.Forward : point.Normalized();
+                var side = normal.Cross(tangent).Normalized() * halfWidth;
+                _fleetRouteMesh.SurfaceSetColor(colour);
+                _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point + side));
+                _fleetRouteMesh.SurfaceSetColor(colour);
+                _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point - side));
             }
-            if (!open)
-            {
-                _fleetRouteMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
-                open = true;
-            }
-            var before = _fleetRoutePoints[Math.Max(0, index - 1)];
-            var after = _fleetRoutePoints[Math.Min(_fleetRoutePoints.Count - 1, index + 1)];
-            var tangent = (after - before).Normalized();
-            if (tangent == Vector3.Zero) tangent = Vector3.Right;
-            var normal = _flatMap ? Vector3.Forward : point.Normalized();
-            var side = normal.Cross(tangent).Normalized() * halfWidth;
-            _fleetRouteMesh.SurfaceSetColor(colour);
-            _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-            _fleetRouteMesh.SurfaceSetColor(colour);
-            _fleetRouteMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+            _fleetRouteMesh.SurfaceEnd();
         }
-        if (open) _fleetRouteMesh.SurfaceEnd();
 
         // Where it stops: a small diamond, so the end of a long course is findable.
         var end = _fleetRoutePoints[^1];

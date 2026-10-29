@@ -12,7 +12,7 @@
       "state.radicalism": -0.0008
     },
     "modifiers": {
-      "tax_efficiency": 0.02
+      "credit_capacity": 0.02
     }
   },
   "broken_promise": {
@@ -25,7 +25,7 @@
       "state.radicalism": 0.0006
     },
     "modifiers": {
-      "tax_efficiency": -0.01
+      "credit_capacity": -0.01
     }
   }
 }

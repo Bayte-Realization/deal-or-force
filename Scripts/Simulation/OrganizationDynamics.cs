@@ -161,6 +161,8 @@ public static class OrganizationDynamics
         if (member.NationalCourse.Dominant is "isolationism" or "armed_neutrality") belonging -= 0.20f;
         if (member.DebtCondition >= DebtCondition.Insolvent) belonging -= 0.12f;
         belonging -= LeadershipFriction(c,org,member,leader);
+        // What a concession bought back, fading over the years (OrganizationCrises).
+        belonging += OrganizationCrises.ConcessionBelonging(c, org, member);
         return M.Clamp01(belonging);
     }
 
@@ -268,6 +270,8 @@ public static class OrganizationDynamics
             if (c.NationById(id) is { } weighed && !weighed.OrganizationBelongingAtStart.ContainsKey(org.Id))
                 weighed.OrganizationBelongingAtStart[org.Id] = Belonging(c, org, weighed,leader);
         if (c.ElapsedDays - org.FoundedDay < defines.OrganizationGraceDays) return;
+        // A member bargaining for better terms: bought back, still bargaining, or gone by its vote.
+        if (OrganizationCrises.Week(c, org, m => Belonging(c, org, m, leader), m => Leave(c, org, m))) return;
         foreach (var id in org.Members.ToArray())
         {
             var member = c.NationById(id);
@@ -287,6 +291,8 @@ public static class OrganizationDynamics
             var estrangement = M.Clamp01((floor - belonging) / MathF.Max(0.01f, floor) * 2.5f);
             var chance = defines.OrganizationDepartureChance * estrangement * estrangement;
             if (MovementRules.Roll(c.Seed, member.Id, c.ElapsedDays, 4600 + org.Id) >= chance) continue;
+            // It bargains first, when crises are on; it walks out when one is already under way.
+            if (OrganizationCrises.Open(c, org, member)) continue;
             Leave(c, org, member);
             if (org.Dissolved) return;
         }

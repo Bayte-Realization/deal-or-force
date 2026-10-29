@@ -40,7 +40,9 @@ static class ProductionUnitsTests
         Produce();
         Check(Near(n.Market[Commodity.ConsumerGoods].Production, 3), "five units make exactly half a civilian factory's output");
         Check(Near(n.Market[Commodity.Arms].Production, 2.04f), "military line scales arms factories separately from civilian workshops");
-        Check(Near(n.Market[Commodity.Coal].Demand, 1.04f), "coal input demand is not incorrectly scaled as a coal production line");
+        // Two civilian factories at the coal recipe's CivilianIndustry weight (1.302 since the
+        // 28 October recalibration), whatever the production lines say.
+        Check(Near(n.Market[Commodity.Coal].Demand, 2.604f), "coal input demand is not incorrectly scaled as a coal production line");
         s.Buildings[BuildingKind.CivilianIndustry] = 3; Produce();
         Check(A().Assigned(Commodity.ConsumerGoods) == 5 && Near(n.Market[Commodity.ConsumerGoods].Production, 3),
             "new factories add free capacity, not hidden assignments or extra output to existing lines");

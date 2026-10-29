@@ -7,7 +7,7 @@ using Godot;
 namespace DealOrForce;
 
 /// <summary>
-/// The doctrine tree: six books of war, each drawn as what it is.
+/// The doctrine tree: every book of war, each drawn as what it is.
 ///
 /// The page used to list every article of every book as a row. A row said what a book contains
 /// and nothing about its shape - that the articles of a book are a tree, that the last ones wait
@@ -99,20 +99,33 @@ public partial class DealOrForceGame
     private void TacticalDoctrinePage(Nation n, VBoxContainer rows = null)
     {
         rows ??= _policyOptions;
-        var memory = n.TacticalDoctrine;
-        PolicyHeading(rows, "TACTICAL DOCTRINES");
+        TacticalDoctrines.EnsureShelves(n);
+        // The section head carries a live count: "3 / 12 in force" says at a glance what a
+        // list of twelve books cannot.
+        SectionRule(rows, "TACTICAL DOCTRINES", Loc.Format("{0} / {1} in force",
+            TacticalDoctrines.Books(n).Count(), TacticalDoctrineCatalog.All.Count()));
         PolicyText(rows, Loc.Format(
-            "Six books of war, each a tree of articles. Articles are paid for in the experience of their own service; a crash course costs more and lands at once. {0} and the army relearns what it thought it knew, until the new articles are drilled in.",
-            Loc.Format("Abandoning a book costs {0} political points",
+            "A country may hold {0} tactical doctrines and {1} general doctrine at once. Ground, air and sea are learned side by side; a further tactical doctrine is refused. Articles are paid for in the experience of their own service; the staff's book is paid for in political credit. A crash course costs more and lands at once. {2} and that service relearns what it thought it knew, until the new articles are drilled in.",
+            _campaign.Defines.DoctrineTacticalSlots.ToString(),
+            _campaign.Defines.DoctrineGeneralSlots.ToString(),
+            Loc.Format("Abandoning a book on a shelf costs {0} political points",
                 Fmt.Number(_campaign.Defines.DoctrineRewritePoliticalCost))));
 
+        var shelves = new HashSet<string>(DoctrineSlots.All, StringComparer.Ordinal);
+        var publishedShelves = TacticalDoctrineCatalog.All.Select(branch => branch.Slot)
+            .Where(shelves.Contains).Distinct(StringComparer.Ordinal).ToArray();
         if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
-            _doctrineBook = memory.Branch.Length > 0
-                ? memory.Branch
-                : TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
+        {
+            _doctrineBook = TacticalDoctrines.BookOn(n, DoctrineSlots.Ground)?.Id ??
+                publishedShelves.Select(slot => TacticalDoctrines.BookOn(n, slot)?.Id)
+                    .FirstOrDefault(id => !string.IsNullOrEmpty(id)) ??
+                TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
+        }
         var book = TacticalDoctrineCatalog.Find(_doctrineBook);
 
-        // One full-width selector instead of six equally clipped "Doctrine..." tabs.
+        // One full-width selector instead of six equally clipped "Doctrine..." tabs. Every entry
+        // says which shelf its book stands on, because that is what decides whether taking it
+        // costs political credit.
         // Keep the native popup and selected book alive across ordinary daily refreshes.
         if (_doctrineBookSelect is null)
         {
@@ -141,12 +154,16 @@ public partial class DealOrForceGame
             }
         }
         var bookIndex = 0;
-        foreach (var branch in TacticalDoctrineCatalog.All)
+        foreach (var branch in books)
         {
             var id = branch.Id;
-            var written = string.Equals(memory.Branch, id, StringComparison.Ordinal)
-                ? branch.Nodes.Count(node => TacticalDoctrines.Known(n, node.Id)) : 0;
-            _doctrineBookSelect.SetItemText(bookIndex, Loc.Format("{0} · {1}/{2}", Tr(branch.Name), written, branch.Nodes.Count));
+            var track = TacticalDoctrines.TrackFor(n, branch);
+            var written = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal)
+                ? track.Known.Count : 0;
+            var inForce = string.Equals(TacticalDoctrines.BookOn(n, branch.Slot)?.Id, id, StringComparison.Ordinal);
+            _doctrineBookSelect.SetItemText(bookIndex, Loc.Format("{0}: {1} · {2}/{3}{4}",
+                Tr(DoctrineSlots.Name(branch.Slot)), Tr(branch.Name), written, branch.Nodes.Count,
+                inForce ? " ✓" : ""));
             _doctrineBookSelect.GetPopup().SetItemTooltip(bookIndex, Ui.Tip(Tr(branch.Description) + "\n" +
                 Loc.Format("Paid for in {0}.", Loc.Get(TacticalDoctrines.ServiceName(branch.Experience)))));
             if (_doctrineBook == id) _doctrineBookSelect.Select(bookIndex);
@@ -311,20 +328,20 @@ public partial class DealOrForceGame
     /// </summary>
     private void RefreshDoctrineTree(Nation n, DoctrineBranch branch)
     {
-        var memory = n.TacticalDoctrine;
-        var inForce = string.Equals(memory.Branch, branch.Id, StringComparison.Ordinal);
-        var left = Math.Max(0, memory.LearningDoneDay - _campaign.ElapsedDays);
+        var track = TacticalDoctrines.TrackFor(n, branch);
+        var inForce = track is not null && string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
+        var left = Math.Max(0, track?.LearningDoneDay ?? -1) - _campaign.ElapsedDays;
         foreach (var node in branch.Nodes)
         {
             if (!_doctrineCards.TryGetValue(node.Id, out var card)) continue;
             var body = card.GetNodeOrNull<Control>("Body");
             if (body is null) continue;
-            var known = inForce && TacticalDoctrines.Known(n, node.Id);
+            var known = inForce && track.Known.Contains(node.Id);
             // The first patient article starts the book only when its study finishes.
             // Its pending branch still has to show Learning immediately, not Not started.
-            var learning = string.Equals(memory.LearningBranch, branch.Id, StringComparison.Ordinal) &&
-                string.Equals(memory.LearningNode, node.Id, StringComparison.Ordinal);
-            var missing = node.Requires.Where(need => !inForce || !TacticalDoctrines.Known(n, need))
+            var learning = string.Equals(track?.LearningBranch, branch.Id, StringComparison.Ordinal) &&
+                string.Equals(track?.LearningNode, node.Id, StringComparison.Ordinal);
+            var missing = node.Requires.Where(need => !inForce || !track.Known.Contains(need))
                 .Select(need => Tr(branch.Find(need)?.Name ?? need)).ToArray();
 
             var state = body.GetNodeOrNull<Label>("State_" + node.Id);
@@ -332,7 +349,7 @@ public partial class DealOrForceGame
             {
                 state.Text = known ? Loc.Get("in force")
                     : learning ? Loc.Format("being learned · {0} days left", left)
-                    : !inForce ? (memory.Branch.Length > 0
+                    : !inForce ? ((track?.Branch.Length ?? 0) > 0
                         ? Loc.Get("another book is in force")
                         : Loc.Get("not started"))
                     : missing.Length > 0 ? Loc.Format("waits on {0}", string.Join(", ", missing))

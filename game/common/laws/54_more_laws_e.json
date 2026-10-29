@@ -1,0 +1,90 @@
+// Второй пакет законов, часть пятая: точечная внешняя политика, торговля, валюта, энергетика.
+{
+  "foreign_targeted_aid": {
+    "name": "Targeted development aid",
+    "category": "Targeted foreign policy",
+    "icon": "treaty",
+    "description": "Money and engineers to one named partner rather than a fund for everybody, which buys a friend and a market at once.",
+    "modifiers": { "trade_reach": 0.05, "research_speed": 0.02, "credit_capacity": -0.02 }
+  },
+  "foreign_targeted_sanctions": {
+    "name": "Targeted sanctions desk",
+    "category": "Targeted foreign policy",
+    "icon": "treaty",
+    "description": "One office that names the banks, ships and families rather than the whole country, which hurts precisely and is remembered exactly.",
+    "modifiers": { "trade_reach": -0.03, "deterrence": 0.04, "output": -0.02 }
+  },
+  "foreign_targeted_cultural_centres": {
+    "name": "Cultural centres abroad",
+    "category": "Targeted foreign policy",
+    "icon": "treaty",
+    "description": "Libraries, language classes and a hall in six foreign capitals, which is the cheapest embassy a country can build.",
+    "modifiers": { "trade_reach": 0.03, "assimilation": 0.05, "living_weekly": -0.0001 }
+  },
+
+  "trade_preferential_harbours": {
+    "name": "Preferential harbours",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "Four ports get the dredging, the cranes and the customs staff, and the rest of the coast complains about it for a decade.",
+    "modifiers": { "trade_reach": 0.08, "supply": 0.03, "living_weekly": -0.0002 }
+  },
+  "trade_standards_union": {
+    "name": "Standards union",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "Common technical standards with the neighbours, which lets goods move without inspection and forces every workshop to retool once.",
+    "modifiers": { "trade_reach": 0.05, "research_speed": 0.03, "construction_cost": 0.02 }
+  },
+  "trade_strategic_export_controls": {
+    "name": "Strategic export controls",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "The short list of things a country will not sell to certain buyers, which costs trade and keeps the wrong machinery at home.",
+    "modifiers": { "deterrence": 0.03, "trade_reach": -0.06, "research_speed": 0.02 }
+  },
+
+  "currency_independent_rate": {
+    "name": "Independent policy rate",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "The central bank sets the rate for the currency rather than for the budget, which steadies the bond market and annoys the cabinet.",
+    "modifiers": { "credit_capacity": 0.05, "borrowing_cost": -0.08, "living_weekly": -0.0002 }
+  },
+  "currency_managed_band": {
+    "name": "Managed band",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "The rate floats inside a range the bank defends, which gives exporters a floor and importers a ceiling.",
+    "modifiers": { "trade_reach": 0.04, "borrowing_cost": 0.04, "output": 0.02 }
+  },
+  "currency_digital_settlement": {
+    "name": "Digital settlement rail",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "A state settlement network between banks and the treasury, which collects faster and leaves a record of everything.",
+    "modifiers": { "tax_efficiency": 0.03, "trade_reach": 0.03, "credit_capacity": 0.02 }
+  },
+
+  "energy_grid_interconnection": {
+    "name": "Grid interconnection",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Lines to the neighbours' grids, so that a failure at home is a dip rather than a blackout.",
+    "modifiers": { "supply": 0.04, "output": 0.03, "construction_cost": 0.02 }
+  },
+  "energy_strategic_refining": {
+    "name": "Strategic refining",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Refineries built for the fuel the army actually burns, which keeps the fleet moving and the market short.",
+    "modifiers": { "supply": 0.05, "naval_speed": 0.02, "output": -0.02 }
+  },
+  "energy_demand_restraint": {
+    "name": "Demand restraint programme",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Insulation, rationing and a public campaign, which costs output now and buys a winter that does not run out.",
+    "modifiers": { "output": -0.03, "living_weekly": -0.0002, "credit_capacity": 0.02 }
+  }
+}

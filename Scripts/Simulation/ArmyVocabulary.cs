@@ -30,6 +30,8 @@ public static class ArmyVocabulary
     {
         ArmyStance.Cautious => "Cautious",
         ArmyStance.Aggressive => "Aggressive",
+        ArmyStance.LastStand => "Last stand",
+        ArmyStance.ForceAttack => "Force attack",
         _ => "Balanced"
     });
 

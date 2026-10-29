@@ -21,6 +21,8 @@ static class AiFrontRecoveryTests
         EmergencyRecoveryRespectsOrders();
         AdvancesAreBorrowedOnlyForThreatenedHoles();
         RecoveryKeepsItsRepostingBudget();
+        ReserveFillsBeforeAnAdvanceIsPulled();
+        UnorderedDivisionIsCalledUp();
     }
 
     static void ReserveCanRecoverAnEmptyFront()
@@ -208,6 +210,43 @@ static class AiFrontRecoveryTests
         FrontManager.Balance(c, war);
         Check(FrontManager.Reposts - before == budget && c.Armies.Count(a => a.OrderKind == ArmyOrder.DefendFront) == budget,
             "recovering several empty posts still obeys the existing per-review reposting budget");
+    }
+
+    static void ReserveFillsBeforeAnAdvanceIsPulled()
+    {
+        var c = Fixture();
+        Check(c.Nations[0].Id == 0 && c.Nations[0] == c.Nations[0], "nation id 0 stands at index 0");
+        Check(!c.Defines.FrontStaffMovesAdvances, "advances are not spread along the front");
+        var war = c.Wars[0];
+        war.AttackerFront.Add(4);
+        war.DefenderFront.Add(5);
+        var advance = Unit(c, 0, 0, 7, ArmyOrder.AdvanceFront);
+        var reserve = Unit(c, 1, 0, 12, ArmyOrder.ReserveFront);
+        Unit(c, 2, 1, 5, ArmyOrder.Manual, 4f);
+        var before = Snapshot(advance);
+        FrontManager.Balance(c, war);
+        Check(reserve.OrderKind == ArmyOrder.DefendFront && reserve.OrderProvinceId == 4,
+            "an empty post receives a free reserve before anyone is pulled off an attack");
+        Check(Snapshot(advance) == before, "the advance keeps its order");
+    }
+
+    static void UnorderedDivisionIsCalledUp()
+    {
+        var c = Fixture();
+        var war = c.Wars[0];
+        war.AttackerFront.Add(4);
+        war.DefenderFront.Add(5);
+        var idle = Unit(c, 0, 0, 12, ArmyOrder.Manual);
+        idle.AssignedWarId = war.Id;
+        idle.DirectOrder = false;
+        var held = Unit(c, 1, 0, 7, ArmyOrder.Manual);
+        held.AssignedWarId = war.Id;
+        held.DirectOrder = true;
+        FrontManager.Tick(c);
+        Check(idle.OrderKind is ArmyOrder.DefendFront or ArmyOrder.AdvanceFront,
+            "an unordered division on a war is given a front order");
+        Check(held.OrderKind == ArmyOrder.Manual && held.DirectOrder,
+            "a direct player order is not overwritten");
     }
 
     static string Snapshot(Army army) => JsonSerializer.Serialize(army,

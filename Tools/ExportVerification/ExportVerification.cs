@@ -43,8 +43,8 @@ public partial class ExportVerification : Node
             Check(ProjectSettings.GetSetting("application/config/version").AsString() == GameBuildInfo.Version &&
                 SaveSystem.GameVersion == GameBuildInfo.Version,
                 "project, menu and new-save release versions agree: " + GameBuildInfo.Version);
-            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0" &&
-                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version + ".0",
+            Check(typeof(GameBuildInfo).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version &&
+                typeof(Rules.AssaultRules).Assembly.GetName().Version?.ToString() == GameBuildInfo.Version,
                 "game and production rules assembly versions agree");
             await Wait(DisplayServer.GetName() == "headless" ? .25 : 6);
             var args = OS.GetCmdlineUserArgs();
@@ -75,29 +75,81 @@ public partial class ExportVerification : Node
                     Check(!ProjectSettings.GetSetting(key).AsString().TrimStart('*').StartsWith("res://addons/", StringComparison.Ordinal),
                         "export autoload is not editor tooling: " + key);
             }
+            if (developmentProbe && args.Contains("--verify-application-exit-only"))
+            {
+                await VerifyApplicationExit((MainMenuScene)tree.CurrentScene, args);
+                return;
+            }
             if (args.Contains("--verify-release-only"))
             {
-                await VerifyReleaseMenu((MainMenuScene)tree.CurrentScene);
+                await VerifyReleaseMenu((MainMenuScene)tree.CurrentScene, developmentProbe);
                 GD.Print($"EXPORT_VERIFY failures={_failures}");
-                GetTree().Quit(_failures == 0 ? 0 : 1);
+                ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                return;
+            }
+            if (developmentProbe && args.Contains("--verify-branding-only"))
+            {
+                await VerifyBranding((MainMenuScene)tree.CurrentScene);
+                GD.Print($"EXPORT_VERIFY failures={_failures}");
+                ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                 return;
             }
             await Capture("menu");
+            if (developmentProbe && args.Contains("--verify-mod-scalars-only"))
+            {
+                VerifyModScalars();
+                VerifyMusicExitResources();
+                // Dispose scoped Callable owners before the engine tears down the
+                // script resources used by the bridge and this headless menu probe.
+                await Wait(.1);
+                System.GC.Collect();
+                System.GC.WaitForPendingFinalizers();
+                await Wait(.1);
+                GD.Print($"EXPORT_VERIFY failures={_failures}");
+                ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                return;
+            }
             Check(tree.ChangeSceneToFile("res://Scenes/Main.tscn") == Error.Ok, "campaign scene opens from the pack");
-            var deadline = Time.GetTicksMsec() + 120_000;
+            // How long the world may take to appear before the gate calls it a hang.
+            //
+            // Measured on a loaded developer machine: 285 seconds to "political map now holds
+            // 323 countries" - the map is a few hundred megabytes of raster, 35 295 provinces of
+            // topology and a shader compiled on first use, and the first load after an import
+            // cache rebuild pays for all of it. Two minutes was too short and four still failed,
+            // because the loop itself loses wall-clock time while the main thread is loading.
+            // The check exists to catch a scene that never arrives, not to police a slow disk,
+            // and a gate that fails for being busy is a gate people learn to ignore. Seven
+            // minutes is a ceiling, and the failure prints how long it actually waited.
+            const ulong loadBudgetMilliseconds = 420_000;
+            var startedLoading = Time.GetTicksMsec();
+            var deadline = startedLoading + loadBudgetMilliseconds;
             DealOrForceGame game = null;
             while (Time.GetTicksMsec() < deadline)
             {
                 await Wait(.25);
                 game = tree.CurrentScene as DealOrForceGame;
                 var loading = game?.FindChild("LoadingScreen", true, false) as Control;
-                if (game?.FindChild("MapModePolitical", true, false) is not null && (loading is null || !loading.Visible)) break;
+                // Ready means the campaign exists and the cover is gone.
+                //
+                // It used to also require a node called `MapModePolitical`, and that node is not
+                // there when the map is rebuilt: the world loaded in fifteen seconds and the
+                // probe then waited four more minutes for a button that had been replaced. The
+                // game already exposes the campaign to this probe for exactly this reason -
+                // `VerificationWorld` - so ask that.
+                if (game?.VerificationWorld is not null && (loading is null || !loading.Visible)) break;
                 game = null;
             }
+            if (game is null)
+                GD.Print($"[verify] world did not finish loading in {Time.GetTicksMsec() - startedLoading} ms");
             Check(game is not null, "world, loose data and managed campaign finish loading");
             if (game is not null)
             {
                 game.Call("BeginSession");
+                if (developmentProbe && args.Contains("--verify-campaign-exit-only"))
+                {
+                    VerifyCampaignApplicationExit(game);
+                    return;
+                }
                 // Startup reapplies the user's saved language. Verification must override
                 // only this isolated process, never write its choice to user preferences.
                 if (languageAt >= 0 && languageAt + 1 < args.Length)
@@ -110,78 +162,88 @@ public partial class ExportVerification : Node
                 {
                     await VerifyPoliticalAppointments(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-campaign-alerts-only"))
                 {
                     await VerifyCampaignAlerts(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 var lateSaveAt = Array.IndexOf(args, "--verify-late-save");
+                if (developmentProbe && args.Contains("--verify-negotiation-workspace-only"))
+                {
+                    await VerifyNegotiationWorkspace(game);
+                    await VerifyPeaceBeneficiary(game);
+                    await VerifyDeskSelectionClearance(game);
+                    await VerifyAtheistChoice(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-diplomatic-participation-only"))
                 {
                     await VerifyDiplomaticParticipation(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-secession-response-only"))
                 {
                     await VerifySecessionResponse(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-government-supply-only"))
                 {
                     await VerifyGovernmentSupply(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-isolated-depot-only"))
                 {
                     await VerifyIsolatedDepot(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-equipment-replenishment-only"))
                 {
                     await VerifyEquipmentReplenishment(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-battle-orders-only"))
                 {
                     await VerifyBattleOrderSafety(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-military-access-only"))
                 {
                     await VerifyMilitaryAccess(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-paused-doctrines-only"))
                 {
                     await VerifyPausedDoctrines(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && args.Contains("--verify-enemy-readiness-only"))
                 {
                     await VerifyEnemyReadiness(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (developmentProbe && lateSaveAt >= 0 && lateSaveAt + 1 < args.Length)
@@ -191,7 +253,7 @@ public partial class ExportVerification : Node
                         ? Math.Clamp(parsedDays, 1, 365) : 30;
                     await VerifyLateSaveStability(game, args[lateSaveAt + 1], soakDays);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-counter-textures-only"))
@@ -200,7 +262,7 @@ public partial class ExportVerification : Node
                     if (!args.Contains("--verify-partial-withdrawal-only"))
                     {
                         GD.Print($"EXPORT_VERIFY failures={_failures}");
-                        GetTree().Quit(_failures == 0 ? 0 : 1);
+                        ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                         return;
                     }
                 }
@@ -210,28 +272,28 @@ public partial class ExportVerification : Node
                     if (args.Contains("--verify-benelux-motto")) await VerifyBeneluxMotto(game);
                     if (args.Contains("--verify-capital-loss")) await VerifyCapitalLoss(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-benelux-motto"))
                 {
                     await VerifyBeneluxMotto(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-capital-loss"))
                 {
                     await VerifyCapitalLoss(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-partial-withdrawal-only"))
                 {
                     await VerifyPartialWithdrawal(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-portraits-front-only"))
@@ -240,7 +302,7 @@ public partial class ExportVerification : Node
                     VerifyLeaderPhotoFormats();
                     await VerifyFrontOverlay(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-institutions-only"))
@@ -249,63 +311,96 @@ public partial class ExportVerification : Node
                     VerifyLeaderPhotoFormats();
                     await VerifyInstitutions(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-country-dossier-only"))
                 {
                     await VerifyCountryDossier(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
+                }
+                if (developmentProbe && args.Contains("--verify-cartography-only"))
+                {
+                    await VerifyCartography(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-visual-continuity-only"))
+                {
+                    await VerifyVisualContinuity(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures==0?0:1);return;
+                }
+                if (developmentProbe && args.Contains("--verify-support-anchors-only"))
+                {
+                    await VerifySupportProvinceAnchors(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures==0?0:1);return;
                 }
                 if (args.Contains("--verify-occupation-map-only"))
                 {
                     await VerifyOccupationMap(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-audio-focus-only"))
                 {
                     await VerifyAudioFocus(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-policy-workspace-only"))
+                {
+                    await VerifyPolicyWorkspace(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-policy-programmes-only"))
+                {
+                    await VerifyPolicyProgrammes(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-decision-resources-only"))
                 {
                     await VerifyDecisionResources(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-hud-only"))
                 {
                     await VerifyHudText(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-war-score-scale-only"))
                 {
                     await VerifyWarScoreScale(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-diplomacy-only"))
                 {
                     await VerifyDiplomacyLayout(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-army-activity-only"))
                 {
                     await VerifyArmyActivity(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 if (args.Contains("--verify-movement-only"))
@@ -313,14 +408,14 @@ public partial class ExportVerification : Node
                     VerifyCivilWarBanners(game);
                     await VerifyMovementDiplomacy(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 await VerifyAgendaWorkspace(game);
                 if (args.Contains("--verify-agenda-only"))
                 {
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
-                    GetTree().Quit(_failures == 0 ? 0 : 1);
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
                 await VerifyDiplomacyLayout(game);
@@ -361,7 +456,7 @@ public partial class ExportVerification : Node
             GD.PushError("EXPORT_VERIFY " + error);
         }
         GD.Print("EXPORT_VERIFY failures=" + _failures);
-        GetTree().Quit(_failures == 0 ? 0 : 1);
+        ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
     }
 
     private async Task VerifyReligionAndOccupation(DealOrForceGame game)

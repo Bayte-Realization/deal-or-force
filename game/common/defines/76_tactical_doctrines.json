@@ -19,5 +19,9 @@
   // Цена переписывания устава и срок переучивания.
   "DoctrineRewritePoliticalCost": 12,
   "DoctrineRetrainingDays": 180,
-  "DoctrineAiRewriteCooldownDays": 365
+  "DoctrineAiRewriteCooldownDays": 365,
+  // Три тактические полки (земля, воздух, море) и одна полка генштаба. Мод может снизить число.
+  "DoctrineTracks": 4,
+  "DoctrineTacticalSlots": 3,
+  "DoctrineGeneralSlots": 1
 }

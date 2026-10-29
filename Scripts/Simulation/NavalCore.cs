@@ -711,6 +711,8 @@ public static class NavalOperations
         trade?.Add("Shipping lost to enemy navies", -lost);
     }
 
+    private static Campaign _reachesCampaign;
+    private static int _reachesRevision = -1;
     private static readonly Dictionary<long, (float Latitude, float Longitude, int Week, float Reach)> Reaches = new();
 
     /// <summary>
@@ -721,6 +723,12 @@ public static class NavalOperations
     {
         var map = campaign.ProvinceMap;
         if (map is null) return 0f;
+        if (!ReferenceEquals(_reachesCampaign, campaign) || _reachesRevision != campaign.MapRevision)
+        {
+            Reaches.Clear();
+            _reachesCampaign = campaign;
+            _reachesRevision = campaign.MapRevision;
+        }
         var key = ((long)fleet.Id << 32) | (uint)nation.MapIndex;
         var week = campaign.ElapsedDays / 7;
         if (Reaches.TryGetValue(key, out var known) && known.Week == week &&

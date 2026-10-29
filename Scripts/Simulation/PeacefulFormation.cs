@@ -32,8 +32,12 @@ public static class PeacefulFormation
     private static bool AtPeace(Campaign campaign, Nation nation) =>
         !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id));
 
+    // An observer watches; nobody sits at the country's desk to answer an invitation, so the
+    // country answers it the way any government nobody plays would. Asked, it was handed a
+    // window it could not see - and observer mode then took the first option, which signed
+    // Spain into a Mexican union nobody had chosen.
     private static bool HumanControlled(Campaign campaign, Nation nation) =>
-        nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id);
+        !campaign.ObserverMode && (nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id));
 
     public static bool Consented(Campaign campaign, Nation founder, Nation partner, FormableNation definition) =>
         definition.PeacefulAccession && partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until)
@@ -226,7 +230,8 @@ public static class PeacefulFormation
     }
 
     /// <summary>Direct bilateral integration of a partner state (e.g. cultural shard or consented merger).</summary>
-    public static void IntegratePartner(Campaign campaign, Nation founder, Nation partner)
+    public static void IntegratePartner(Campaign campaign, Nation founder, Nation partner, bool transferPlayerSeat = true,
+        bool combineCultures = true)
     {
         if (campaign is null || founder is null || partner is null || founder.Id == partner.Id) return;
         var map = campaign.ProvinceMap;
@@ -263,9 +268,10 @@ public static class PeacefulFormation
             else existing.Units = (int)Math.Min(int.MaxValue, (long)existing.Units + line.Units);
         }
         partner.ProductionLines.Clear(); partner.ConvertedCivilianUnits = 0;
-        foreach (var culture in DemographyCatalog.PrimaryCultures(founder.Tag).Concat(partner.FoundedCultures)
-                     .Concat(DemographyCatalog.PrimaryCultures(partner.Tag)))
-            if (!founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) founder.FoundedCultures.Add(culture);
+        if (combineCultures)
+            foreach (var culture in DemographyCatalog.PrimaryCultures(founder.Tag).Concat(partner.FoundedCultures)
+                         .Concat(DemographyCatalog.PrimaryCultures(partner.Tag)))
+                if (!founder.FoundedCultures.Contains(culture, StringComparer.OrdinalIgnoreCase)) founder.FoundedCultures.Add(culture);
         foreach (var technology in partner.Technologies)
             if (!founder.Technologies.Contains(technology)) founder.Technologies.Add(technology);
         foreach (var progress in partner.ResearchProgress)
@@ -283,7 +289,7 @@ public static class PeacefulFormation
         SubjectSystem.Release(campaign, partner);
         partner.CapitalStateMapIndex = 0; partner.CapitalProvinceId = 0;
         partner.GovernmentSeatProvinceId = 0;
-        if (partner.IsHuman) campaign.ConfigureSinglePlayer(founder.Id);
+        if (partner.IsHuman && transferPlayerSeat) campaign.ConfigureSinglePlayer(founder.Id);
 
         founder.Population = campaign.StatesOf(founder).Sum(s => s.Population);
         if (founder.FoundedCultures.Count > 0) DemographyCatalog.Declare(founder.Tag, founder.FoundedCultures);

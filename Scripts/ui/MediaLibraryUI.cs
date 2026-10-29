@@ -42,6 +42,7 @@ public partial class DealOrForceGame
         art.SetAnchorsAndOffsetsPreset(LayoutPreset.TopWide); art.OffsetBottom = 84; ground.AddChild(art);
     }
 
+    private readonly System.Collections.Generic.Dictionary<string, Button> _mediaFilterButtons = new();
     private void BuildMediaLibrary()
     {
         _mediaLibraryLayer = FullLayer("MediaLibrary"); _mediaLibraryLayer.Visible = false; AddChild(_mediaLibraryLayer);
@@ -49,16 +50,21 @@ public partial class DealOrForceGame
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); _mediaLibraryLayer.AddChild(veil);
         var panel = TexturedPanel(_mediaLibraryLayer); panel.Name = "MediaLibraryPanel"; Ui.Place(panel, "workspace.media");
         var rows = PanelRows(panel, 22, 16, 10);
-        var header = new HBoxContainer(); rows.AddChild(header);
-        var title = SituationText("SOUND AND ARTWORK", 24, "text.accent"); title.SizeFlagsHorizontal = SizeFlags.ExpandFill; header.AddChild(title);
-        var close = ActionButton("×", CloseMediaLibrary, 38, 32); close.Name = "CloseMediaLibrary"; header.AddChild(close);
-        rows.AddChild(SituationText("Audition without changing the campaign. Volume follows your audio settings.", 12, "text.caption"));
+        var close = ActionButton("×", CloseMediaLibrary, 38, 32); close.Name = "CloseMediaLibrary";
+        ScreenHeader(rows, "SOUND AND ARTWORK",
+            "Audition without changing the campaign. Volume follows your audio settings.",
+            false, close);
         var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", 6); rows.AddChild(filters);
         foreach (var kind in new LibraryMediaKind?[] { null, LibraryMediaKind.Music, LibraryMediaKind.Sound, LibraryMediaKind.Image, LibraryMediaKind.Video })
         {
             var capture = kind;
-            var button = ActionButton(MediaKindName(kind), () => { _mediaKind = capture; RebuildMediaList(); }, 0, 28);
-            button.Name = "MediaFilter_" + (kind?.ToString() ?? "All"); filters.AddChild(button);
+            var filterKey = kind?.ToString() ?? "All";
+            var button = ActionButton(MediaKindName(kind), () => { _mediaKind = capture; RebuildMediaList(); }, 0, 30);
+            button.Name = "MediaFilter_" + filterKey;
+            button.SetMeta("atlas_tab_button", true);
+            StyleButton(button, kind == _mediaKind);
+            filters.AddChild(button);
+            _mediaFilterButtons[filterKey] = button;
         }
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
@@ -66,8 +72,13 @@ public partial class DealOrForceGame
             SizeFlagsStretchRatio = .7f, SizeFlagsVertical = SizeFlags.ExpandFill }; body.AddChild(left);
         _mediaLibrarySearch = Placeholder(new LineEdit { Name = "MediaLibrarySearch", ClearButtonEnabled = true }, "Find a recording or texture...");
         _mediaLibrarySearch.TextChanged += _ => RebuildMediaList(); left.AddChild(_mediaLibrarySearch);
+        var listFrame = new PanelContainer { Name = "MediaListFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        listFrame.SetMeta("atlas_section_ground", "surface.inset");
+        listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        left.AddChild(listFrame);
         var scroll = new ScrollContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true }; left.AddChild(scroll);
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true }; listFrame.AddChild(scroll);
         _mediaLibraryList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; scroll.AddChild(_mediaLibraryList);
         var right = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             SizeFlagsStretchRatio = 1.4f }; right.AddThemeConstantOverride("separation", 10); body.AddChild(right);
@@ -132,6 +143,9 @@ public partial class DealOrForceGame
     }
     private void RebuildMediaList()
     {
+        var activeKey = _mediaKind?.ToString() ?? "All";
+        foreach (var (key, btn) in _mediaFilterButtons)
+            if (IsInstanceValid(btn)) StyleButton(btn, key == activeKey);
         var query = _mediaLibrarySearch.Text.Trim();
         foreach (var child in _mediaLibraryList.GetChildren()) { _mediaLibraryList.RemoveChild(child); child.QueueFree(); }
         var items = MediaLibraryCatalog.All.Where(x => (!_mediaKind.HasValue || x.Kind == _mediaKind) &&

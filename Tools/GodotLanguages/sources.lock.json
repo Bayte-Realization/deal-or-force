@@ -1,27 +1,33 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "engine": {
-    "version": "4.8.beta1.mono.official.4d10419ca",
-    "directory": "C:/GodotEngineNet 4.8-Beta1",
-    "executable": "Godot_v4.8-beta1_mono_win64_console.exe",
-    "gui_sha256": "6A76B684EDBA16C12348663CB9759B6ECB42FC4C0969470C69B1A75727E42CF9",
+    "version": "4.8.beta2.mono.official.cafc17a19",
+    "directory": "C:/GodotEngineNet 4.8-Beta2",
+    "executable": "Godot_v4.8-beta2_mono_win64_console.exe",
+    "gui_sha256": "6B894EF7578A8999266ECDBC267BCD424CAADB16B8F15E0F6DEE4D3FC0596524",
     "platform": "windows-x86_64"
   },
   "sources": [
-    { "id": "rust", "url": "https://github.com/godot-rust/gdext.git", "commit": "0b680b4d59c4790d4673b2293110687d2e5261c7", "license": "MPL-2.0" },
-    { "id": "nim", "url": "https://github.com/godot-nim/gdext-nim.git", "commit": "15b69a92ba2642f2bea117e01e3bbcd112c9f57d", "license": "MIT" },
-    { "id": "odin", "url": "https://github.com/dresswithpockets/odin-godot.git", "commit": "93395901a76f62a9f2adff76c2eb38a185d91513", "license": "Apache-2.0" },
-    { "id": "kotlin", "url": "https://github.com/utopia-rise/godot-jvm.git", "commit": "5d39c7e3fbe5be78853837e3c89676e7a92c9ec9", "license": "MIT" },
-    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "b43ed1619abc12a669c59cb0aa25c4582873a7b9", "license": "BSD-3-Clause" },
-    { "id": "luau", "url": "https://github.com/Fumohouse/godot-luau-script.git", "commit": "7942ce6def8023596ca0cb8d819b032eb40a4bce", "license": "MIT", "archived": true },
-    { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "note": "Lua/LuaJIT, not Luau" }
+    { "id": "rust", "url": "https://github.com/godot-rust/gdext.git", "commit": "0b680b4d59c4790d4673b2293110687d2e5261c7", "license": "MPL-2.0", "status": "production", "note": "veto lifted 2026-10-29: adapters and experiments first; the game tick still needs a measured profile (LANGUAGE_ALLOCATION_2026_10_27)" },
+    { "id": "go", "url": "https://github.com/grow-graphics/gd.git", "commit": "af2e5393cdf04d36e1cba40cb4d6437624916d40", "license": "MIT", "status": "production", "branch": "release", "note": "import path graphics.gd; the umbrella's blessed Go binding; c-shared or `gd run`; badge Godot 4.7.2, matching and newer accepted" },
+    { "id": "zig", "url": "https://github.com/gdzig/gdzig.git", "commit": "c1b0cc3c7befc4c2483624d078e1e650b07b2dfa", "license": "MIT", "status": "pre-stable", "note": "Zig 0.17.0 + Godot 4.7.2 exactly, compatibility minimum 4.6; rapid refactoring until stable" },
+    { "id": "python", "url": "https://github.com/niklas2902/py4godot.git", "commit": "b41ddb82af5f8e59ce4e1a9254bec9cf82a138dd", "license": "MIT", "status": "early", "note": "addon-zip install, Python 3.11+, Win64/Linux64 today; treat as demo-grade until it says otherwise" },
+    { "id": "nim", "url": "https://github.com/godot-nim/gdext-nim.git", "commit": "15b69a92ba2642f2bea117e01e3bbcd112c9f57d", "license": "MIT", "status": "production" },
+    { "id": "odin", "url": "https://github.com/dresswithpockets/odin-godot.git", "commit": "93395901a76f62a9f2adff76c2eb38a185d91513", "license": "Apache-2.0", "status": "upcoming" },
+    { "id": "kotlin", "url": "https://github.com/utopia-rise/godot-jvm.git", "commit": "5d39c7e3fbe5be78853837e3c89676e7a92c9ec9", "license": "MIT", "status": "production" },
+    { "id": "sandbox", "url": "https://github.com/libriscv/godot-sandbox.git", "commit": "b43ed1619abc12a669c59cb0aa25c4582873a7b9", "license": "BSD-3-Clause", "status": "production", "note": "C++/Rust/Zig sandboxed; the modding answer" },
+    { "id": "luau", "url": "https://github.com/Fumohouse/godot-luau-script.git", "commit": "7942ce6def8023596ca0cb8d819b032eb40a4bce", "license": "MIT", "archived": true, "note": "source archived; our Luau worker is native, this adapter is dormant" },
+    { "id": "lua", "url": "https://github.com/gilzoide/lua-gdextension.git", "commit": "58cb05e62557741ff646f0096fa4fdc8d09b1ae3", "license": "MIT", "status": "production", "note": "Lua/LuaJIT, not Luau" }
   ],
   "adapters": [
-    { "id": "luau", "source": "luau", "integration": "ScriptLanguageExtension", "trust": "trusted-native" },
-    { "id": "fsharp", "source": null, "integration": "managed-library-csharp-bridge", "trust": "trusted-managed" },
+    { "id": "luau", "source": "luau", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "optional": true },
+    { "id": "fsharp", "source": null, "integration": "managed-library-csharp-bridge", "trust": "trusted-managed", "note": "the game's rule kernels - ten and counting" },
     { "id": "nim", "source": "nim", "integration": "GDExtension", "trust": "trusted-native" },
     { "id": "odin", "source": "odin", "integration": "GDExtension", "trust": "trusted-native" },
     { "id": "rust", "source": "rust", "integration": "GDExtension", "trust": "trusted-native" },
+    { "id": "go", "source": "go", "integration": "GDExtension-c-shared", "trust": "trusted-native" },
+    { "id": "zig", "source": "zig", "integration": "GDExtension", "trust": "trusted-native" },
+    { "id": "python", "source": "python", "integration": "GDExtension-addon", "trust": "trusted-native", "optional": true },
     { "id": "kotlin", "source": "kotlin", "integration": "JVM-GDExtension", "trust": "trusted-native-jvm" },
     { "id": "sandbox", "source": "sandbox", "integration": "sandbox-GDExtension", "trust": "host-extension-must-be-trusted", "optional": true },
     { "id": "lua", "source": "lua", "integration": "ScriptLanguageExtension", "trust": "trusted-native", "optional": true }

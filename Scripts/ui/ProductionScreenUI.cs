@@ -56,13 +56,15 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.production");
         panel.Name = "ProductionPanel";
         var rows = PanelRows(panel, 16, 12, 10);
-        var header = new HBoxContainer();
-        rows.AddChild(header);
-        var title = Title("PRODUCTION", 23, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        header.AddChild(HandbookButton("production"));
-        header.AddChild(ActionButton("×", CloseProductionScreen, 38, 32));
+        // Same masthead as the other workspaces: the screen said PRODUCTION in the accent colour
+        // with nothing under it, so the eye had no edge to start from.
+        var toEconomy = ActionButton("Economy", () => { CloseProductionScreen(); OpenScreen("Economy"); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_economy.png");
+        var toTrade = ActionButton("Trade", () => { CloseProductionScreen(); OpenTradeScreen(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_trade.png");
+        ScreenHeader(rows, "Production",
+            "Two pools, what each is building, and how much of the civilian pool feeds the army.",
+            false, toEconomy, toTrade, HandbookButton("production"), ActionButton("×", CloseProductionScreen, 38, 32));
         _productionSummary = ProductionLabel("", 12, "text.caption");
         _productionSummary.Name = "ProductionPools";
         _productionSummary.ClipText = true;
@@ -218,6 +220,8 @@ public partial class DealOrForceGame
 
     private void OpenProductionScreen()
     {
+        // Built on first open: 404 ms of pools and rows that a campaign start does not need.
+        EnsureScreen("production", BuildProductionScreen);
         _openScreen = "Production";
         _sidePanel.Visible = false;
         RaiseWorkspaceLayer(_productionLayer);

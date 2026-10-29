@@ -153,10 +153,10 @@ static class InterfaceIconTests
         using var recipe = System.Text.Json.JsonDocument.Parse(File.ReadAllText(
             Path.Combine(root, "..", "Tools", "IconCompiler", "Source", "Icons", "minimal-icons.json")));
         var authored = recipe.RootElement.EnumerateArray().Select(item => item.GetProperty("name").GetString()).ToArray();
-        Check(authored.Length == 51 && authored.Distinct().Count() == 51,
-            "editable geometry defines fifty-one distinct PNG assets");
+        Check(authored.Length == 56 && authored.Distinct().Count() == 56,
+            "editable geometry defines fifty-six distinct PNG assets");
         Check(CommodityCatalog.All.All(good => authored.Contains(CommodityCatalog.IconNameOf(good))),
-            "all thirty-four goods have editable artwork, not just the newer strategic goods");
+            "every good has editable artwork, the arsenal and the newer strategic goods included");
         Check(authored.All(name => SpriteCatalog.Get("icon_" + name).SourceColour ==
             (name.StartsWith("good_", StringComparison.Ordinal) ? "#b48732" : "#e7bd69")),
             "all commodity PNGs declare bronze while command artwork keeps its gold palette");

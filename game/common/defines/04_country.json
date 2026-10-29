@@ -62,8 +62,26 @@
   "WorldMarketAccess": 0.80,
   "ImportMarkup": 1.06,
   "MarketTreasuryTradeShare": 0.08,
+  // Households buy more as the country's real output per head rises above where it began: demand
+  // terms written with "income" in common/production grow to this power, within these bounds.
+  "IncomeDemandElasticity": 0.85,
+  "IncomeFactorMinimum": 0.5,
+  "IncomeFactorMaximum": 3,
+  // Diminishing returns to capital: up to CapitalDeepeningHeadroom times the jobs per worker its
+  // buildings first asked for, every building adds its full output; past it the plant as a whole
+  // yields as its size to CapitalDeepeningShare. 0 turns them off.
+  "CapitalDeepeningHeadroom": 1.3,
+  "CapitalDeepeningShare": 0.4,
+  // How producers answer the price: output scales as last week's price against the base to
+  // SupplyResponseElasticity, between the minimum (a glut idles plant) and the maximum (a
+  // shortage runs it past its rating). 0 runs every plant flat out whatever the price.
+  "SupplyResponseElasticity": 0.5,
+  "SupplyResponseMinimum": 0.5,
+  "SupplyResponseMaximum": 1.15,
   "ShortageAnnualGrowthPenalty": 0.08,
   "GdpConvergenceRate": 0.10,
+  // Days at the start in which GDP holds the scenario's figures while trade and prices settle.
+  "OutputSpinUpDays": 182,
   "ShortageSolWeeklyPenalty": 0.004,
   "DebtInterest": 0.0008,
   "DebtRepayment": 0.15,

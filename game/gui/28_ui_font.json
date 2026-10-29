@@ -1,30 +1,40 @@
-// The interface's type sizes, in pixels.
+// The interface's type scale, in pixels.
 //
-// Screens read these through Ui.Metric instead of hard-coding a size per label, so the type of
-// the whole interface can be retuned from data without recompiling - and so two screens that
-// mean the same thing by a caption actually set the same size for it.
+// Seven or eight steps, and that is the point. The interface used to be built out of
+// twenty-four sizes - 9, 10, 11, 12, 13, 14, 15 ... 34 - and roughly eighty-five per cent of
+// every heading in the game sat in 11-14 px. Twenty-four steps are not a scale; they are a set
+// of numbers that each grew by hand. The eye cannot rank 12 against 13, so nothing on the
+// screen reads as more important than anything else, and the whole interface looks flat
+// however carefully it is coloured.
 //
-// The names are a scale, not a set of independent numbers: button_small <= button <=
-// button_large, caption <= body, heading_small <= heading < heading_large, and nothing below
-// ten, which is the smallest size worth putting in front of a player. A mod is free to retune
-// the whole scale; Tools/FormableTests/ResponsiveHudLayoutTests.cs holds it to the order.
+//   micro 10 < caption 11 < body 12/13 < heading 16 < title 20 < display 28 < display_large 34
 //
-// These are values, not a redesign. Each caller passes the number it used before as its
-// fallback, so nothing moves until a mod or the base game changes a token here.
+// `ui.font.leading` is the extra line height for reading blocks, and `ui.font.track_caps` the
+// letter spacing (in pixels) that upper-case micro-labels get - a capital without tracking is
+// the loudest "made in a hurry" signal a dark interface can send.
+//
+// Screens read these through `Ui.Metric` or `Ui.TypeStep` instead of hard-coding a size, so the
+// type of the whole interface can be retuned from data without recompiling.
 {
   "metrics": {
-    "ui.font.button": 12,
-    "ui.font.button_small": 11,
-    "ui.font.button_large": 13,
+    "ui.font.micro": 10,
     "ui.font.caption": 11,
-    "ui.font.body": 13,
+    "ui.font.button_small": 11,
+    "ui.font.body": 12,
+    "ui.font.button": 13,
+    "ui.font.button_large": 13,
+    "ui.font.tab": 13,
     "ui.font.tooltip": 12,
     "ui.font.heading_small": 13,
     "ui.font.heading": 16,
+    "ui.font.title": 20,
     "ui.font.heading_large": 24,
+    "ui.font.display": 28,
+    "ui.font.display_large": 34,
     "ui.font.navigation": 11,
-    "ui.font.tab": 13,
     "ui.font.console": 14,
+    "ui.font.leading": 3,
+    "ui.font.track_caps": 1,
     "ui.font.handbook.caption": 11,
     "ui.font.handbook.button": 13,
     "ui.font.handbook.heading": 24,

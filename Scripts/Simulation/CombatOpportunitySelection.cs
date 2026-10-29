@@ -174,16 +174,40 @@ public static partial class Warfare
             // Player battle plans and AI orders use the same reconnaissance. Deep
             // hidden formations must not influence which sector the planner probes.
             var observedResistance = 0f;
+            var observedEntrenchment = 0f;
             foreach (var defender in InProvince(province))
                 if (war.Opposes(army.NationId, defender.NationId) && CampaignIntel.CanSeeArmy(campaign, army.NationId, defender))
+                {
                     observedResistance += defender.Power;
+                    observedEntrenchment += defender.Entrenchment * M.Max(0f, defender.Divisions);
+                }
             // Weighted, not divided. Dividing the enemy's strength by your own makes
             // resistance dominate the score by an order of magnitude over everything
             // else, so every formation on the front picks the single weakest sector and
             // the front concentrates itself into a breakthrough. The weight keeps the
-            // preference a preference: probe the weak spot, but not across a river.
+            // preference a preference: probe the weak spot, avoid throwing regular
+            // infantry against mountain/urban fortifications or deep entrenchments
+            // when an open or unentrenched sector is available beside it.
+            var terrainPenalty = (1f - M.Clamp01(topology.TerrainAt(province).Attack)) * terrainWeight * 0.35f;
+            var multiAxisBonus = 0f;
+            foreach (var candidate in campaign.Battles)
+            {
+                if (candidate.Ended || candidate.WarId != war.Id || candidate.ProvinceId != province) continue;
+                multiAxisBonus = -0.18f;
+                break;
+            }
+            var pocketBonus = 0f;
+            var enemyNeighbors = 0;
+            foreach (var adj in topology.Neighbors[province])
+                if (adj > 0 && adj < controllers.Length && enemyMaps.Contains(controllers[adj]) && !topology.IsWater(adj))
+                    enemyNeighbors++;
+            if (enemyNeighbors <= 1) pocketBonus = -0.22f;
+
             var score = topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
-                observedResistance * 0.018f;
+                terrainPenalty +
+                observedResistance * 0.018f +
+                observedEntrenchment * 0.008f * terrainWeight +
+                multiAxisBonus + pocketBonus;
             if (target >= 0 && (score > bestScore || (score == bestScore && province > target))) continue;
             bestScore = score;
             target = province;

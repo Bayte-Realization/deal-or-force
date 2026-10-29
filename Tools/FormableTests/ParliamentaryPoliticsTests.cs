@@ -271,27 +271,30 @@ public static class ParliamentaryPoliticsTests
     {
         var c = World();
         var dem = c.NationById(0);
+        dem.Treasury = 50f;
         SetElapsedDays(c, 25);
 
         ParliamentaryPolitics.Review(c, dem);
         var favoredCat = dem.Parliament.FavoredLawCategory;
+        Check(favoredCat == "trade", $"baseline parliament favors trade domain ({favoredCat})");
         dem.Parliament.FactionDiscontent = 0.40f;
         var initStab = dem.Stability;
 
-        var law = new PoliticalPolicy
-        {
-            Id = "test_reform_law",
-            Name = "Consensus Reform Law",
-            Category = favoredCat
-        };
-
-        ParliamentaryPolitics.OnLawAdopted(c, dem, law);
+        var realTradeLaw = PoliticalPolicyCatalog.Find("trade_open");
+        Check(realTradeLaw is not null && realTradeLaw.Category == "Trade policy", "real catalog trade law found");
+        Check(PoliticalPolicies.Adopt(c, dem, realTradeLaw, "", 0, false, out var refusal),
+            $"adopting real catalog trade law succeeds ({refusal})");
 
         Check(dem.Parliament.FactionDiscontent <= 0.25f,
-            $"enacting favored law category ({favoredCat}) reduces legislative friction ({dem.Parliament.FactionDiscontent})");
+            $"enacting real catalog law in favored domain ({favoredCat} -> {realTradeLaw.Category}) reduces legislative friction ({dem.Parliament.FactionDiscontent})");
         Check(dem.Stability > initStab, "stability increased by cross-bench law consensus");
         Check(c.Chronicle.Entries.Any(e => e.Kind == "parliament_law_supported" && e.ActorId == dem.Id),
             "parliament_law_supported recorded in chronicle");
+
+        Check(ParliamentaryPolitics.MatchesFavoredLawCategory("Fiscal mandate", "fiscal"), "Fiscal mandate matches fiscal domain");
+        Check(ParliamentaryPolitics.MatchesFavoredLawCategory("Military service", "peace"), "Military service matches peace domain");
+        Check(ParliamentaryPolitics.MatchesFavoredLawCategory("Civil rights", "rights"), "Civil rights matches rights domain");
+        Check(ParliamentaryPolitics.MatchesFavoredLawCategory("Industrial policy", "trade"), "Industrial policy matches trade domain");
     }
 
     private static void FingerprintPreservationAndSerialization()

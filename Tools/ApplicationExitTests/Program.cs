@@ -1,0 +1,1 @@
+ApplicationExitTests.Run();

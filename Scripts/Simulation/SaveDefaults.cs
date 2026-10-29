@@ -33,7 +33,7 @@ internal static class SaveDefaults
     /// and a row that does not say which country it is cannot be found or edited.
     /// </summary>
     private static bool Pinned(JsonTypeInfo info, JsonPropertyInfo property) =>
-        info.Type.Name == "CampaignSave" && property.Name == "History" ||
+        info.Type.Name == "CampaignSave" && property.Name is "History" or "ProvinceState" ||
         property.Name.EndsWith("Id", StringComparison.Ordinal) || property.Name.EndsWith("Tag", StringComparison.Ordinal) ||
         property.Name is "Name" or "A" or "B" or "Kind" or "Day";
 

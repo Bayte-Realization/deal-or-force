@@ -62,7 +62,7 @@ public partial class DealOrForceGame
 
         var shade = new ColorRect
         {
-            Color = new Color(0.015f, 0.026f, 0.041f, 0.72f),
+            Color = Ui.Colour("surface.overlay"),
             MouseFilter = MouseFilterEnum.Stop
         };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -72,25 +72,24 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.ledger");
 
         var rows = ScrollablePanelRows(panel, 22, 16, 10);
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        _stateAffairsTitle = Title("STATE AFFAIRS", 25, Ui.Colour("text.accent"));
-        _stateAffairsTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(_stateAffairsTitle);
         var toLedger = ActionButton("Open the ledger", () =>
         {
             CloseStateAffairs();
             OpenLedger();
         }, 148, 32);
         toLedger.TooltipText = Ui.Tip(Tr("The figures behind these decisions: charts, history and rankings, for any country."));
-        header.AddChild(toLedger);
         var debt = ActionButton("Public debt", OpenSovereignFinance, 0, 32);
         debt.Name = "BudgetOpenSovereignFinance";
         debt.TooltipText = Ui.Tip(Tr("Cash, borrowing, overdue bills and restructuring in one financial workspace."));
-        header.AddChild(debt);
-        header.AddChild(HandbookButton("budget"));
-        header.AddChild(ActionButton("×", CloseStateAffairs, 38, 32));
+        var toLaws = ActionButton("Laws", () =>
+        {
+            CloseStateAffairs();
+            OpenScreen("Laws");
+        }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_laws.png");
+        var head = ScreenHeader(rows, "STATE AFFAIRS",
+            "What the country raised, what it spent, and every lever that decides both.",
+            false, toLedger, debt, toLaws, HandbookButton("budget"), ActionButton("×", CloseStateAffairs, 38, 32));
+        _stateAffairsTitle = HeaderTitle(head);
 
         _stateAffairsSummary = Title("", 13, Ui.Colour("text.body_soft"));
         _stateAffairsSummary.CustomMinimumSize = new Vector2(0, 52);
@@ -132,12 +131,7 @@ public partial class DealOrForceGame
     /// <summary>A heading and a sentence saying what the controls under it are for.</summary>
     private void StateSection(VBoxContainer rows, string heading, string explanation)
     {
-        rows.AddChild(new ColorRect
-        {
-            Color = Ui.Colour("surface.line"),
-            CustomMinimumSize = new Vector2(0, 1)
-        });
-        rows.AddChild(Title(heading, 12, Ui.Colour("text.accent")));
+        SectionRule(rows, heading);
         var note = Title(explanation, 11, Ui.Colour("text.caption"));
         note.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(note);
@@ -145,6 +139,9 @@ public partial class DealOrForceGame
 
     private void OpenStateAffairs()
     {
+        // Built on first open: it is 1 221 ms of rows and textures, and nothing on the map needs
+        // it. See EnsureScreen in DealOrForceGame.
+        EnsureScreen("state_affairs", BuildStateAffairsInterface);
         MarkFirstStep("budget");
         _openScreen = "State Affairs";
         _sidePanel.Visible = false;
@@ -178,11 +175,11 @@ public partial class DealOrForceGame
     /// picker has seventeen rows - and is the only thing that keeps "Agricultural complex"
     /// from sitting in the middle of a Russian screen.
     /// </summary>
-    private static string BuildingPickerItem(BuildingKind kind)
+    private string BuildingPickerItem(BuildingKind kind)
     {
         var definition = BuildingCatalog.Get(kind);
         return Simulation.Loc.Format("{0} · {1}",
-            Simulation.Loc.Get(definition.Name), Fmt.Money(definition.Cost));
+            Simulation.Loc.Get(definition.Name), Fmt.Money(ConstructionCost.Of(_campaign, _campaign?.Player, kind)));
     }
 
     /// <summary>Put the picker back into the player's language, keeping what was chosen.</summary>
@@ -513,7 +510,7 @@ public partial class DealOrForceGame
         var definition = BuildingCatalog.Get(kind);
 
         var running = _campaign.Construction.Count(project => project.NationId == nation.Id);
-        var slots = _campaign.Defines.MaxConstructionProjects;
+        var slots = ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects);
         if (running >= slots)
         {
             _stateFiscalFeedback.Text = Simulation.Loc.Format(
@@ -521,9 +518,9 @@ public partial class DealOrForceGame
                 slots);
             return;
         }
-        if (nation.Treasury < MathF.Min(0.05f, definition.Cost))
+        if (nation.Treasury < MathF.Min(0.05f, ConstructionCost.Of(_campaign, nation, kind)))
         {
-            _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(definition.Cost));
+            _stateFiscalFeedback.Text = Simulation.Loc.Format("The treasury holds {0} and cannot open a {1} site.", Fmt.Money(nation.Treasury), Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)));
             return;
         }
         var dry = Waterfront.Refusal(_campaign, stateMapIndex, kind);
@@ -542,11 +539,11 @@ public partial class DealOrForceGame
             Waterfront.NeedsWater(kind)
             ? Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(definition.Cost), definition.Days,
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days,
                 Fmt.Percent(Waterfront.Yield(_campaign, WaterAccess.Inland)))
             : Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(definition.Cost), definition.Days);
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days);
         RefreshStateAffairs();
     }
     /// <summary>
@@ -600,11 +597,14 @@ public partial class DealOrForceGame
         {
             _stateConstructionQueue.Text = Simulation.Loc.Format(
                 "Nothing under construction. {0} sites may run at once.",
-                _campaign.Defines.MaxConstructionProjects);
+                ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects));
             return;
         }
-        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites running",
-            projects.Count, _campaign.Defines.MaxConstructionProjects);
+        // Open is not the same as worked: a country's economy works only so many sites at once
+        // (ConstructionCost.WorkingSites) and the rest wait, oldest first.
+        _stateConstructionQueue.Text = Simulation.Loc.Format("{0} of {1} sites open · {2} worked at a time",
+            projects.Count, ConstructionCost.Limit(_campaign, nation, _campaign.Defines.MaxConstructionProjects),
+            ConstructionCost.WorkingSites(_campaign, nation));
         foreach (var project in projects.OrderByDescending(project => project.Progress))
         {
             var place = _campaign.States.FirstOrDefault(state => state.MapIndex == project.StateMapIndex);

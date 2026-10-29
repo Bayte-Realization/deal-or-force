@@ -1,0 +1,533 @@
+// Расширенный пакет законов для всех 23 существующих категорий (common/laws/40_expanded_laws.json).
+//
+// Каждая запись добавляет новые варианты выбора (пункты) в существующую категорию законов,
+// не меняя базовый закон по умолчанию (`default: true`). Все иконки используют существующие
+// спрайты (`treasury`, `army_defend`, `research`, `population`, `industry`, `terrain`,
+// `decisions`, `government`, `treaty`, `trade`, `energy`), а все модификаторы — строго из
+// каталога `NationalModifiers` (для `scope: "region"` — только `radicalism_weekly`,
+// `living_weekly`, `stability_weekly`; для `scope: "foreign"` — `foreign_trust`).
+{
+  "//": "Additional law options across all 23 existing categories.",
+
+  "fiscal_austerity": {
+    "name": "Sovereign debtbrake",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "Constitutional limits on deficit borrowing keep bond yields low and tax collection strict, at the price of slower public works and social strain.",
+    "modifiers": { "tax_efficiency": 0.10, "borrowing_cost": -0.22, "credit_capacity": 0.08, "construction_speed": -0.06, "living_weekly": -0.0003 }
+  },
+  "fiscal_war_chest": {
+    "name": "Strategic war chest",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "Ring-fence state revenues for military logistics and emergency stockpiles, squeezing civilian output.",
+    "modifiers": { "supply": 0.06, "tax_efficiency": 0.04, "output": -0.04, "war_support_weekly": 0.0003 }
+  },
+  "fiscal_developmental_credit": {
+    "name": "National reconstruction credit",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "State development banks underwrite regional rebuilding and industrial plant at the cost of higher borrowing spreads.",
+    "modifiers": { "reconstruction_speed": 0.14, "construction_cost": -0.05, "borrowing_cost": 0.12 }
+  },
+
+  "service_cadre": {
+    "name": "Elite volunteer cadre",
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "Long-service volunteer professionals with superior fire discipline and rapid recovery, but expensive to train in numbers.",
+    "modifiers": { "army_attack": 0.05, "army_defense": 0.04, "organisation_recovery": 0.06, "recruitment_cost": 0.10, "recruitment_speed": -0.06 }
+  },
+  "service_selective": {
+    "name": "Selective ballot service",
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "A lottery draft fills specialist and reserve battalions without pulling the entire workforce out of the factories.",
+    "modifiers": { "reinforcement_rate": 0.06, "recruitment_speed": 0.05, "recruitment_cost": -0.04, "radicalism_weekly": 0.0002 }
+  },
+  "service_total_levy": {
+    "name": "Universal wartime levy",
+    "requires_war": true,
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "Every adult citizen is registered for front-line or auxiliary duty: immense replacement capacity at a heavy economic and social price.",
+    "modifiers": { "recruitment_speed": 0.24, "reinforcement_rate": 0.16, "militia_readiness": 0.18, "output": -0.09, "radicalism_weekly": 0.0005 }
+  },
+
+  "education_elite_academies": {
+    "name": "National science academies",
+    "category": "Education",
+    "icon": "research",
+    "description": "Concentrate funding on flagship polytechnics and research institutes: rapid breakthroughs, while provincial schools lag behind.",
+    "modifiers": { "research_speed": 0.14, "living_weekly": -0.0002, "radicalism_weekly": 0.0002 }
+  },
+  "education_vocational": {
+    "name": "Industrial apprenticeship guilds",
+    "category": "Education",
+    "icon": "research",
+    "description": "Pair secondary schools directly with factories and railways so graduates step straight onto the shop floor.",
+    "modifiers": { "output": 0.04, "construction_speed": 0.06, "research_speed": -0.03 }
+  },
+  "education_patriotic": {
+    "name": "Civic and patriotic curriculum",
+    "category": "Education",
+    "icon": "research",
+    "description": "History, drill and national language take pride of place in every classroom, strengthening cohesion over pure inquiry.",
+    "modifiers": { "war_support_weekly": 0.0004, "assimilation": 0.30, "militia_readiness": 0.06, "research_speed": -0.04 }
+  },
+
+  "rights_constitutional": {
+    "name": "Entrenched bill of rights",
+    "category": "Civil rights",
+    "icon": "population",
+    "description": "Independent courts review every decree: citizens trust the state and scholars thrive, though emergency powers are harder to wield.",
+    "modifiers": { "stability_weekly": 0.0004, "research_speed": 0.04, "radicalism_weekly": -0.0005, "movement_activity": 0.10, "army_defense": -0.02 }
+  },
+  "rights_surveillance": {
+    "name": "Preventive security registration",
+    "category": "Civil rights",
+    "icon": "population",
+    "description": "Administrative registration of assemblies and communications curbs underground organisation before it reaches the street.",
+    "modifiers": { "movement_activity": -0.14, "tax_efficiency": 0.03, "radicalism_weekly": 0.0003 }
+  },
+  "rights_martial_tribunals": {
+    "name": "Military summary tribunals",
+    "category": "Civil rights",
+    "icon": "population",
+    "description": "Sedition and sabotage are tried by army courts: organized resistance is crushed, but public resentment festers.",
+    "modifiers": { "movement_activity": -0.28, "militia_readiness": 0.08, "radicalism_weekly": 0.0008, "research_speed": -0.05 }
+  },
+
+  "welfare_workfare": {
+    "name": "Employment-linked relief",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "Benefits are tied to public infrastructure brigades and factory placement, keeping output high while offering a rough floor.",
+    "modifiers": { "construction_speed": 0.05, "output": 0.02, "living_weekly": 0.0001, "radicalism_weekly": 0.0002 }
+  },
+  "welfare_veterans": {
+    "name": "Veterans and front-line family charter",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "Pensions, housing and medical priority go first to soldiers' households, sustaining war morale at a fiscal cost.",
+    "modifiers": { "war_support_weekly": 0.0005, "reinforcement_rate": 0.06, "living_weekly": 0.0002, "tax_efficiency": -0.04 }
+  },
+  "welfare_austerity_floor": {
+    "name": "Minimal charity relief",
+    "category": "Social guarantees",
+    "icon": "population",
+    "description": "Leave social support to families and municipalities, sparing the central budget while inequality widens.",
+    "modifiers": { "tax_efficiency": 0.05, "borrowing_cost": -0.06, "living_weekly": -0.0004, "radicalism_weekly": 0.0005 }
+  },
+
+  "industry_champions": {
+    "name": "National industrial champions",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "Subsidised flagship conglomerates dominate steel, electronics and heavy machinery, accelerating big projects and exports.",
+    "modifiers": { "output": 0.05, "construction_speed": 0.05, "trade_reach": 0.04, "tax_efficiency": -0.05 }
+  },
+  "industry_defense_complex": {
+    "name": "Military-industrial priority",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "Arsenals and shipyards get first call on machine tools, power and engineers.",
+    "modifiers": { "recruitment_cost": -0.08, "shipbuilding_speed": 0.10, "supply": 0.05, "living_weekly": -0.0003 }
+  },
+  "industry_import_substitution": {
+    "name": "Import-substitution industrialization",
+    "category": "Industrial policy",
+    "icon": "industry",
+    "description": "Build domestic replacements for foreign machinery and chemicals: slower trade, stronger home factories.",
+    "modifiers": { "output": 0.04, "construction_cost": -0.04, "trade_reach": -0.10, "research_speed": -0.02 }
+  },
+
+  "labour_corporatist": {
+    "name": "Tripartite wage councils",
+    "category": "Labour regulation",
+    "icon": "population",
+    "description": "State, unions and employers set wages around one table: strikes are rare and stability rises, though restructuring is slow.",
+    "modifiers": { "stability_weekly": 0.0004, "radicalism_weekly": -0.0004, "output": -0.015, "construction_cost": 0.02 }
+  },
+  "labour_wartime_shifts": {
+    "name": "Mandatory overtime & shift discipline",
+    "category": "Labour regulation",
+    "icon": "population",
+    "description": "Round-the-clock factory shifts and strike bans drive output and construction at the cost of worker exhaustion.",
+    "modifiers": { "output": 0.07, "construction_speed": 0.07, "living_weekly": -0.0004, "radicalism_weekly": 0.0007 }
+  },
+  "labour_cooperatives": {
+    "name": "Workplace profit-sharing",
+    "category": "Labour regulation",
+    "icon": "population",
+    "description": "Workers hold seats on enterprise boards and share in surplus, raising living standards while dampening outside investment.",
+    "modifiers": { "living_weekly": 0.0005, "radicalism_weekly": -0.0005, "borrowing_cost": 0.08, "output": -0.02 }
+  },
+
+  "migration_open_settlement": {
+    "name": "Open demographic settlement",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "Fast-track residency and land grants for newcomers who fill empty factories and frontier towns.",
+    "modifiers": { "output": 0.04, "construction_speed": 0.05, "trade_reach": 0.05, "radicalism_weekly": 0.0004 }
+  },
+  "migration_diaspora_return": {
+    "name": "Diaspora repatriation charter",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "Right-of-return grants and tax holidays bring kindred populations and expatriate specialists home.",
+    "modifiers": { "assimilation": 0.40, "settlement": 0.40, "research_speed": 0.03, "tax_efficiency": -0.03 }
+  },
+  "migration_exit_controls": {
+    "name": "Strict exit visas & border seal",
+    "category": "Migration policy",
+    "icon": "population",
+    "description": "Citizens and specialists need state permission to travel abroad, stemming flight while isolating the economy.",
+    "modifiers": { "movement_activity": -0.10, "recruitment_speed": 0.05, "trade_reach": -0.08, "research_speed": -0.04 }
+  },
+
+  "environment_green_transition": {
+    "name": "Clean technology transition",
+    "category": "Environmental regulation",
+    "icon": "terrain",
+    "description": "Strict emissions rules paired with green R&D: cleaner cities and faster science, at a real cost to heavy industry.",
+    "modifiers": { "research_speed": 0.06, "living_weekly": 0.0004, "output": -0.03, "construction_cost": 0.06 }
+  },
+  "environment_conservation_corps": {
+    "name": "National land & water reclamation",
+    "category": "Environmental regulation",
+    "icon": "terrain",
+    "description": "State engineering brigades restore watersheds, forests and war-scarred farmland.",
+    "modifiers": { "reconstruction_speed": 0.15, "stability_weekly": 0.0003, "tax_efficiency": -0.03 }
+  },
+  "environment_unrestricted_extraction": {
+    "name": "Unrestricted resource extraction",
+    "category": "Environmental regulation",
+    "icon": "terrain",
+    "description": "Suspend environmental review for mines, smelters and oilfields: immediate industrial surge, lasting local damage.",
+    "modifiers": { "output": 0.06, "construction_cost": -0.07, "construction_speed": 0.06, "living_weekly": -0.0006, "radicalism_weekly": 0.0004 }
+  },
+
+  "security_gendarmerie": {
+    "name": "National gendarmerie & internal troops",
+    "category": "Security mandate",
+    "icon": "army_defend",
+    "description": "Paramilitary rural and highway brigades secure rail hubs and suppress armed bands before they grow.",
+    "modifiers": { "movement_activity": -0.12, "supply": 0.04, "militia_readiness": 0.06, "tax_efficiency": -0.02 }
+  },
+  "security_cyber_counterintel": {
+    "name": "Counter-intelligence & signal shield",
+    "category": "Security mandate",
+    "icon": "army_defend",
+    "description": "Harden ministries, depots and air-defence nets against foreign infiltration and long-range strikes.",
+    "modifiers": { "support_losses": -0.06, "deterrence": 0.04, "movement_activity": -0.08, "research_speed": -0.02 }
+  },
+  "security_civic_ombudsman": {
+    "name": "Civilian oversight & judicial warrants",
+    "category": "Security mandate",
+    "icon": "army_defend",
+    "description": "Police and intelligence services answer to parliamentary committees, building public trust.",
+    "modifiers": { "stability_weekly": 0.0004, "radicalism_weekly": -0.0005, "movement_activity": 0.08, "militia_readiness": -0.04 }
+  },
+
+  "media_public_broadcaster": {
+    "name": "Independent public broadcasting",
+    "category": "Public information",
+    "icon": "decisions",
+    "description": "Chartered national broadcasters and fact-checked educational programming steady civic trust and literacy.",
+    "modifiers": { "stability_weekly": 0.0003, "research_speed": 0.04, "tax_efficiency": -0.02 }
+  },
+  "media_wartime_censorship": {
+    "name": "Military press censorship",
+    "category": "Public information",
+    "icon": "decisions",
+    "description": "Front-line dispatches and economic figures pass through the censor's office, shielding war support while stifling inquiry.",
+    "modifiers": { "war_support_weekly": 0.0007, "movement_activity": -0.16, "research_speed": -0.06, "radicalism_weekly": 0.0003 }
+  },
+  "media_algorithmic_sovereignty": {
+    "name": "Sovereign information space",
+    "category": "Public information",
+    "icon": "decisions",
+    "description": "Domestic platforms and firewall rules insulate public opinion from foreign campaigns at the cost of global exchange.",
+    "modifiers": { "stability_weekly": 0.0003, "movement_activity": -0.12, "trade_reach": -0.05, "research_speed": -0.03 }
+  },
+
+  "administration_meritocratic": {
+    "name": "Mandarin civil-service examinations",
+    "category": "Administration",
+    "icon": "government",
+    "description": "Competitive examinations and inspectorates staff every ministry, raising fiscal efficiency and administrative reach.",
+    "modifiers": { "tax_efficiency": 0.07, "research_speed": 0.03, "construction_cost": -0.03, "radicalism_weekly": 0.0002 }
+  },
+  "administration_digital": {
+    "name": "Digital e-governance & cadastre",
+    "category": "Administration",
+    "icon": "government",
+    "description": "Automated tax registries, procurement portals and digital IDs cut leakage and speed up permits.",
+    "modifiers": { "tax_efficiency": 0.06, "construction_speed": 0.05, "borrowing_cost": -0.05, "movement_activity": -0.04 }
+  },
+  "administration_federal_compact": {
+    "name": "Federal revenue-sharing compact",
+    "category": "Administration",
+    "icon": "government",
+    "description": "Constitutional revenue sharing with provincial chambers calms regional politics while leaving less in the central treasury.",
+    "modifiers": { "stability_weekly": 0.0005, "radicalism_weekly": -0.0005, "reconstruction_speed": 0.06, "tax_efficiency": -0.05 }
+  },
+
+  "regional_cultural_charter": {
+    "name": "Cultural & linguistic charter",
+    "category": "Regional autonomy",
+    "scope": "region",
+    "icon": "government",
+    "description": "Guarantee local courts, schools and symbols in this region, sharply cooling separatist anger.",
+    "modifiers": { "radicalism_weekly": -0.0012, "stability_weekly": 0.0004 }
+  },
+  "regional_special_economic_zone": {
+    "name": "Special economic & free-port zone",
+    "category": "Regional autonomy",
+    "scope": "region",
+    "icon": "government",
+    "description": "Customs exemptions and regulatory freedom lift regional living standards, alongside sharper social churn.",
+    "modifiers": { "living_weekly": 0.0008, "radicalism_weekly": 0.0002 }
+  },
+  "regional_garrison_governorate": {
+    "name": "Military governorate",
+    "category": "Regional autonomy",
+    "scope": "region",
+    "icon": "army_defend",
+    "description": "Place the province under a general's direct command: order holds, while local living standards and goodwill suffer.",
+    "modifiers": { "stability_weekly": 0.0009, "living_weekly": -0.0004, "radicalism_weekly": 0.0006 }
+  },
+
+  "recovery_housing_blitz": {
+    "name": "Emergency housing & clinics drive",
+    "category": "Regional recovery",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Prefabricated apartments, water mains and field hospitals rapidly restore everyday life in this region.",
+    "modifiers": { "living_weekly": 0.0009, "radicalism_weekly": -0.0005 }
+  },
+  "recovery_amnesty_reintegration": {
+    "name": "Local amnesty & reintegration",
+    "category": "Regional recovery",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Pardon former insurgents and fold local leaders into municipal councils to heal post-war divisions.",
+    "modifiers": { "radicalism_weekly": -0.0010, "stability_weekly": 0.0004 }
+  },
+  "recovery_industrial_mobilisation": {
+    "name": "Requisitioned reconstruction brigades",
+    "category": "Regional recovery",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Conscript local labour and plant to restore strategic infrastructure first, stabilizing the province under strict discipline.",
+    "modifiers": { "stability_weekly": 0.0008, "living_weekly": -0.0002, "radicalism_weekly": 0.0003 }
+  },
+
+  "foreign_allied_integration": {
+    "name": "Deep treaty integration",
+    "category": "Targeted foreign policy",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Bind diplomatic, industrial and security planning closely with this country.",
+    "foreign_trust": 0.14
+  },
+  "foreign_detente": {
+    "name": "Guarded détente",
+    "category": "Targeted foreign policy",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Maintain hotlines, border protocols and predictable trade even across ideological divides.",
+    "foreign_trust": 0.03
+  },
+  "foreign_hostile_isolation": {
+    "name": "Maximum diplomatic isolation",
+    "category": "Targeted foreign policy",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Treat this government as an adversary in every forum and corridor.",
+    "foreign_trust": -0.24
+  },
+
+  "trade_export_campeones": {
+    "name": "Export-led mercantilism",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "Subsidised shipping, export credit agencies and undervalued goods push national products into every foreign port.",
+    "modifiers": { "trade_reach": 0.12, "output": 0.04, "living_weekly": -0.0003, "borrowing_cost": 0.04 }
+  },
+  "trade_customs_bloc": {
+    "name": "Preferential customs union",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "Harmonise tariffs and rail gauges with treaty partners for reliable supply chains.",
+    "modifiers": { "trade_reach": 0.07, "supply": 0.04, "tax_efficiency": -0.03 }
+  },
+  "trade_autarky": {
+    "name": "Fortress autarky",
+    "category": "Trade policy",
+    "icon": "trade",
+    "description": "Synthetics, rationing and domestic substitutes insulate the war effort from blockade, at a steep price to growth.",
+    "modifiers": { "supply": 0.09, "army_defense": 0.03, "trade_reach": -0.18, "output": -0.04 }
+  },
+
+  "currency_gold_reserve": {
+    "name": "Bullion & commodity reserve backing",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "Back the currency with gold and strategic commodities: rock-solid creditor confidence, tight liquidity.",
+    "modifiers": { "credit_capacity": 0.10, "borrowing_cost": -0.14, "construction_speed": -0.05 }
+  },
+  "currency_capital_controls": {
+    "name": "Strict capital controls",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "Savings stay inside the country to fund domestic bonds and industry, while foreign traders demand a premium.",
+    "modifiers": { "credit_capacity": 0.05, "tax_efficiency": 0.04, "trade_reach": -0.07 }
+  },
+  "currency_export_peg": {
+    "name": "Competitive export peg",
+    "category": "Currency regime",
+    "icon": "treasury",
+    "description": "Hold the exchange rate low to keep factories humming and exports cheap, squeezing household purchasing power.",
+    "modifiers": { "trade_reach": 0.08, "output": 0.03, "living_weekly": -0.0003 }
+  },
+
+  "energy_nuclear_renaissance": {
+    "name": "Atomic & baseload grid programme",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Heavy capital outlays on nuclear and hydro plants deliver abundant, blockade-proof power for industry and science.",
+    "modifiers": { "output": 0.05, "research_speed": 0.04, "supply": 0.05, "construction_cost": 0.07 }
+  },
+  "energy_strategic_reserve": {
+    "name": "Strategic fuel caverns & rationing",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Stockpile months of aviation and diesel fuel in salt caverns so the armed forces never stall.",
+    "modifiers": { "supply": 0.08, "army_speed": 0.04, "naval_speed": 0.04, "output": -0.03 }
+  },
+  "energy_cheap_hydrocarbons": {
+    "name": "Subsidised domestic fuel",
+    "category": "Energy policy",
+    "icon": "energy",
+    "description": "Cap fuel and electricity prices below market for households and hauliers, draining fiscal efficiency.",
+    "modifiers": { "living_weekly": 0.0004, "output": 0.03, "tax_efficiency": -0.06 }
+  },
+
+  "research_open_universities": {
+    "name": "International scientific commons",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "Open fellowships and international laboratory exchanges accelerate discovery, at some risk to secrecy.",
+    "modifiers": { "research_speed": 0.11, "trade_reach": 0.04, "deterrence": -0.02 }
+  },
+  "research_dual_use": {
+    "name": "Dual-use DARPA directorate",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "Fund high-risk electronics, propulsion and computing that serve both civilian industry and the arsenal.",
+    "modifiers": { "research_speed": 0.07, "army_attack": 0.03, "support_recovery": 0.05, "tax_efficiency": -0.04 }
+  },
+  "research_reverse_engineering": {
+    "name": "Reverse-engineering & licensing bureaus",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "Copy proven foreign designs and adapt them for mass production right away.",
+    "modifiers": { "construction_cost": -0.05, "recruitment_cost": -0.05, "research_speed": 0.04, "trade_reach": -0.04 }
+  },
+
+  "pension_pronatal_family": {
+    "name": "Intergenerational family endowment",
+    "category": "Pension policy",
+    "icon": "population",
+    "description": "Tie retirement security and tax relief to raising children and multi-generational households.",
+    "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0003, "tax_efficiency": -0.04 }
+  },
+  "pension_late_retirement": {
+    "name": "Raised retirement age",
+    "category": "Pension policy",
+    "icon": "treasury",
+    "description": "Keep experienced workers in the factories longer and ease the fiscal burden, provoking fierce street anger.",
+    "modifiers": { "output": 0.04, "tax_efficiency": 0.05, "borrowing_cost": -0.05, "radicalism_weekly": 0.0006 }
+  },
+  "pension_state_service": {
+    "name": "Service-ranked state pensions",
+    "category": "Pension policy",
+    "icon": "population",
+    "description": "Generous early pensions for soldiers, miners, teachers and civil servants.",
+    "modifiers": { "recruitment_speed": 0.06, "stability_weekly": 0.0002, "tax_efficiency": -0.03 }
+  },
+
+  "development_corridors": {
+    "name": "Logistics & rail corridor priority",
+    "category": "Regional development",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Channel regional funds into trunk railways, ports and industrial parks.",
+    "modifiers": { "living_weekly": 0.0005, "stability_weekly": 0.0003 }
+  },
+  "development_rural_electrification": {
+    "name": "Rural clinics & electrification",
+    "category": "Regional development",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Bring paved roads, clean water and clinics to every village in the province, draining rural discontent.",
+    "modifiers": { "living_weekly": 0.0004, "radicalism_weekly": -0.0007 }
+  },
+  "development_extraction_quota": {
+    "name": "Extractive quota regime",
+    "category": "Regional development",
+    "scope": "region",
+    "icon": "industry",
+    "description": "Run the province as a resource supplier for the metropolis, enforcing order while local grievances mount.",
+    "modifiers": { "stability_weekly": 0.0004, "living_weekly": -0.0004, "radicalism_weekly": 0.0006 }
+  },
+
+  "foreign_co_prosperity": {
+    "name": "Shared sphere of co-prosperity",
+    "category": "Foreign posture",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Treat this nation as a permanent pillar of our regional economic and security architecture.",
+    "foreign_trust": 0.16
+  },
+  "foreign_realpolitik": {
+    "name": "Armed watchfulness",
+    "category": "Foreign posture",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Expect friction and keep the powder dry whenever dealing with this capital.",
+    "foreign_trust": -0.12
+  },
+  "foreign_rivalry_doctrine": {
+    "name": "Systemic rivalry posture",
+    "category": "Foreign posture",
+    "scope": "foreign",
+    "icon": "treaty",
+    "description": "Define this power as a strategic rival across trade, diplomacy and alliances.",
+    "foreign_trust": -0.22
+  },
+
+  "nationalities_consociational": {
+    "name": "Consociational power-sharing",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "Guaranteed cabinet quotas, proportional civil service posts and cultural vetoes keep a multi-ethnic state at peace, at the price of slower central decisions.",
+    "modifiers": { "assimilation": -0.4, "stability_weekly": 0.0005, "radicalism_weekly": -0.0006, "tax_efficiency": -0.03 }
+  },
+  "nationalities_regional_federation": {
+    "name": "Ethno-federal republics",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "Each homeland people governs its own constituent republic with its own schools and assembly, easing unrest while empowering local movements.",
+    "modifiers": { "assimilation": -0.8, "radicalism_weekly": -0.0005, "movement_activity": 0.12, "reconstruction_speed": 0.05 }
+  },
+  "nationalities_frontier_colonisation": {
+    "name": "Frontier military-agricultural colonies",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "Veteran homesteads and garrison towns anchor strategic borderlands with the state's core population.",
+    "modifiers": { "settlement": 0.8, "assimilation": 0.4, "militia_readiness": 0.08, "army_defense": 0.03, "radicalism_weekly": 0.0005 }
+  }
+}

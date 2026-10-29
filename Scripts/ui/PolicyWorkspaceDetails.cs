@@ -14,13 +14,14 @@ public partial class DealOrForceGame
     {
         if (_policyTab == "Crises") { ShowDomesticCrisisWorkspace(); return; }
         ClearPolicyRows(_policyOptions);
+        _policyChoices.Clear();
         _policyConfirmation = "";
         if (_policyTab == "Course")
         {
             ShowNationalCourse(_campaign.Player, _policyOptions);
             RefreshPolicyPreview(); return;
         }
-        var choices = WorkspacePolicies().Where(p => p.Category == _policyCategory).ToArray();
+        var choices = WorkspacePolicies().Where(p => p.Category == _policyCategory && PolicyMatchesSearch(p)).ToArray();
         if (choices.Length == 0)
         {
             PolicyText(_policyOptions, "Choose another section or clear your search.");
@@ -30,33 +31,69 @@ public partial class DealOrForceGame
             PoliticalPolicies.Effective(_campaign.Player, choices[0], _lawTarget, _lawRegion);
         if (!choices.Any(p => p.Id == _policySelected)) _policySelected =
             choices.FirstOrDefault(p => p.Id == current?.Id)?.Id ?? choices[0].Id;
-        PolicyHeading(_policyOptions, _policyCategory);
-        PolicyText(_policyOptions, PolicyIsAgenda ? "A government promise is a measurable commitment, not an instant change of national character." :
-            "Compare alternatives before reforming. Only one law in each category applies to the selected target.");
+        SectionRule(_policyOptions, _policyCategory, choices.Length.ToString());
         foreach (var policy in choices)
         {
-            var card = new PanelContainer { Name = "Policy_" + policy.Id };
-            card.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10)); _policyOptions.AddChild(card);
-            var rows = new VBoxContainer(); rows.AddThemeConstantOverride("separation", 6); card.AddChild(rows);
-            var button = ActionButton(policy.Name, () => { _policySelected = policy.Id; ShowPolicyOptions(); }, 0, 38,
-                policy.Id == _policySelected, "res://game/gfx/interface/icons/icon_" + policy.Icon + ".png");
-            button.Name = "SelectPolicy_" + policy.Id; button.ClipText = true;
-            button.TooltipText = Ui.Tip(Tr(policy.Name)); rows.AddChild(button);
-            PolicyText(rows, policy.Id == current?.Id ? "Currently in force" : policy.Default ? "Institutional baseline" : "Alternative policy",
-                policy.Id == current?.Id ? "state.positive" : "text.caption");
-            PolicyText(rows, policy.Description);
+            var button = ActionButton("", () => SelectWorkspacePolicy(policy.Id), 0, 76, policy.Id == _policySelected);
+            button.Name = "SelectPolicy_" + policy.Id;
+            button.TooltipText = Ui.Tip(Tr(policy.Name) + "\n\n" + Tr(policy.Description));
+            _policyOptions.AddChild(button);
+            var inset = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
+            inset.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+            foreach (var side in new[] { "left", "right" }) inset.AddThemeConstantOverride("margin_" + side, 12);
+            foreach (var side in new[] { "top", "bottom" }) inset.AddThemeConstantOverride("margin_" + side, 8);
+            button.AddChild(inset);
+            var rows = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore }; rows.AddThemeConstantOverride("separation", 3); inset.AddChild(rows);
+            var title = Title(policy.Name, 14, Ui.Colour("text.bright"));
+            title.MaxLinesVisible = 2; title.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            title.MouseFilter = MouseFilterEnum.Ignore; rows.AddChild(title);
+            var status = Title("", 11, Ui.Colour("text.caption"));
+            status.MouseFilter = MouseFilterEnum.Ignore; status.MaxLinesVisible = 1;
+            status.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis; rows.AddChild(status);
+            _policyChoices[policy.Id] = (button, status);
         }
+        PaintPolicyChoices(current);
         RefreshPolicyPreview();
+    }
+
+    private bool PolicyMatchesSearch(PoliticalPolicy policy)
+    {
+        var query = _policySearch.Text.Trim();
+        return query.Length == 0 || Tr(policy.Category).Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            Tr(policy.Name).Contains(query, StringComparison.OrdinalIgnoreCase) || policy.Id.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void SelectWorkspacePolicy(string id)
+    {
+        if (_policySelected == id) return;
+        _policySelected = id; _policyConfirmation = ""; _policyWorkspaceFeedback.Visible = false;
+        var p = PoliticalPolicyCatalog.Find(id, PolicyIsAgenda);
+        PaintPolicyChoices(PolicyIsAgenda ? PoliticalPolicyCatalog.Find(_campaign.Player.Agenda?.Id, true) :
+            PoliticalPolicies.Effective(_campaign.Player, p, _lawTarget, _lawRegion));
+        _policyPreviewScroll.ScrollVertical = 0; RefreshPolicyPreview();
+    }
+
+    private void PaintPolicyChoices(PoliticalPolicy current)
+    {
+        foreach (var (id, row) in _policyChoices)
+        {
+            var selected = id == _policySelected;
+            StyleButton(row.Button, selected);
+            row.Status.Text = Tr(current?.Id == id ? "Currently in force" : selected ? "Selected for review" : "Alternative policy");
+            row.Status.AddThemeColorOverride("font_color", Ui.Colour(current?.Id == id ? "state.positive" : selected ? "text.accent" : "text.caption"));
+        }
     }
 
     private void RefreshPolicyPreview()
     {
         if (_policyPreview is null || _campaign?.Player is not { } n) return;
         if (_policyTab == "Crises") return;
-        ClearPolicyRows(_policyPreview); _policyEnact = null;
+        var scroll = _policyPreviewScroll.ScrollVertical;
+        ClearPolicyRows(_policyPreview);
         if (_policyTab == "Doctrines")
         {
             ShowDoctrinePreview(n);
+            FitPolicyTypography();
             return;
         }
         if (_policyTab == "Course")
@@ -75,34 +112,17 @@ public partial class DealOrForceGame
                 PolicyText(_policyPreview, Simulation.Loc.Format("In the lead for {0} days.", memory.ChallengerDays));
             }
             PolicyText(_policyPreview, "Laws, living conditions and great events shape it over the years.");
+            FitPolicyTypography();
             return;
         }
         if (PolicyIsAgenda) ShowPromiseProgress(n);
         var p = PoliticalPolicyCatalog.Find(_policySelected, PolicyIsAgenda);
-        if (p is null) { PolicyText(_policyPreview, "No policy selected"); return; }
-        PolicyHeading(_policyPreview, "SELECTED POLICY");
-        PolicyStat(_policyPreview, p.Name, Tr(p.Category), p.Icon);
+        if (p is null) { PolicyText(_policyPreview, "No policy selected"); RefreshPolicyReformBar(true); FitPolicyTypography(); return; }
+        SectionRule(_policyPreview, "SELECTED POLICY");
+        _policyPreview.AddChild(Title(p.Name, 22, Ui.Colour("text.bright")));
         PolicyText(_policyPreview, p.Description);
-        PolicyHeading(_policyPreview, "EFFECTS");
-        var lines = NationalModifiers.Lines(p.Modifiers).ToList();
-        if (p.ForeignTrust != 0) lines.Add(Simulation.Loc.Format("Sustainable alliance trust: {0:P0}", p.ForeignTrust));
-        PolicyText(_policyPreview, string.Join("\n", lines.Count > 0 ? lines : new[] { Tr("Neutral institutional baseline") }));
         var currentLaw = PolicyIsAgenda ? null : PoliticalPolicies.Effective(n, p, _lawTarget, _lawRegion);
-        var comparisonLines = PolicyDeltaLines(n, currentLaw, p, PolicyScope == "national" && !PolicyIsAgenda);
-        if (comparisonLines.Count > 0)
-        {
-            PolicyHeading(_policyPreview, "IMPACT VS CURRENT LAW");
-            PolicyText(_policyPreview, string.Join("\n", comparisonLines));
-        }
-        PolicyHeading(_policyPreview, "REFORM TERMS");
-        var reformCost = n.Gdp * p.CostShare;
-        PolicyStat(_policyPreview, "Reform cost",
-            Simulation.Loc.Format("{0} ({1} → {2})", Fmt.Money(reformCost), Fmt.Money(n.Treasury), Fmt.Money(n.Treasury - reformCost)), "economy");
-        PolicyStat(_policyPreview, "Cooling-off period", Simulation.Loc.Format("{0} days", p.CooldownDays), "history");
-        if (PolicyScope == "region") PolicyStat(_policyPreview, "Governed region",
-            _campaign.StatesOf(n).FirstOrDefault(s => s.MapIndex == _lawRegion)?.DisplayName ?? Tr("No governed regions"), "nation");
-        if (PolicyScope == "foreign") PolicyStat(_policyPreview, "Country or movement",
-            _campaign.NationByTag(_lawTarget)?.DisplayName ?? "—", "diplomacy");
+        BuildPolicyComparison(n, currentLaw, p);
         if (PolicyIsAgenda)
         {
             PolicyStat(_policyPreview, "Term progress", Simulation.Loc.Format("{0} days", p.DurationDays), "agenda");
@@ -110,15 +130,9 @@ public partial class DealOrForceGame
                 "peace" => "Remain at peace", _ => "Stability target" }) + (p.Goal == "peace" ? "" : ": " + Fmt.Percent(p.GoalValue)));
             PolicyText(_policyPreview, "The goal must be met at the end and for at least a third of the term.");
         }
-        var may = PoliticalPolicies.CanAdopt(_campaign, n, p, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal);
-        var ready = n.PolicyReadyOnDay.GetValueOrDefault(PolicyIsAgenda ? "agenda" : PoliticalPolicies.Slot(p, _lawTarget, _lawRegion));
-        PolicyText(_policyPreview, may ? "Ready for consideration" : Tr(refusal), may ? "state.positive" : "state.warning");
-        if (ready > _campaign.ElapsedDays) PolicyText(_policyPreview, Simulation.Loc.Format("Next reform in {0} days.", ready - _campaign.ElapsedDays));
-        _policyEnact = ActionButton(_policyConfirmation == p.Id ? "Confirm reform" : PolicyIsAgenda ? "Announce promise" : "Enact law",
-            EnactWorkspacePolicy, 0, 38, true, "res://game/gfx/interface/icons/icon_" + p.Icon + ".png");
-        _policyEnact.Name = "PolicyEnact"; _policyEnact.Disabled = !may;
-        _policyEnact.TooltipText = Ui.Tip(may ? Tr("Review the reform, then click again to confirm payment and adoption.") : Tr(refusal));
-        _policyPreview.AddChild(_policyEnact);
+        _policyPreviewScroll.ScrollVertical = scroll;
+        RefreshPolicyReformBar(true);
+        FitPolicyTypography();
     }
 
     private void ShowPromiseProgress(Nation n)
@@ -140,6 +154,7 @@ public partial class DealOrForceGame
         if (!PoliticalPolicies.CanAdopt(_campaign, n, p, _lawTarget, _lawRegion, PolicyIsAgenda, out var refusal))
         {
             _policyWorkspaceFeedback.Text = Tr(refusal);
+            _policyWorkspaceFeedback.Visible = true;
             PlayStrategicCue("action_denied");
             RefreshPolicyPreview();
             return;
@@ -148,6 +163,7 @@ public partial class DealOrForceGame
         {
             _policyConfirmation = p.Id;
             _policyWorkspaceFeedback.Text = Simulation.Loc.Format("Confirm {0}: {1} will be paid from the treasury.", Tr(p.Name), Fmt.Money(n.Gdp * p.CostShare));
+            _policyWorkspaceFeedback.Visible = false; // The persistent footer carries the confirmation and exact price.
             RefreshPolicyPreview(); _policyEnact.GrabFocus(); return;
         }
         // Normal authority-checked command path: local UI, multiplayer and mods agree.
@@ -156,10 +172,21 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         PlayStrategicCue("policy_changed");
         _policyWorkspaceFeedback.Text = Simulation.Loc.Format("Adopted: {0}.", Tr(p.Name));
+        _policyWorkspaceFeedback.Visible = true;
         ShowPolicyOptions(); _policyBuiltDay = -1; RefreshPolicyWorkspace();
     }
 
-    private void PolicyHeading(VBoxContainer rows, string caption) => rows.AddChild(Title(caption, 13, Ui.Colour("text.accent"), true));
+    private void PolicyHeading(VBoxContainer rows, string caption)
+    {
+        // A section head, in one place for every policy screen: tracked micro-caps with a rule
+        // under them. It used to be a 13-pixel upper-case caption floating over a list, which is
+        // what made a page of decisions read as one long form rather than as sections.
+        var block = new VBoxContainer { Name = "PolicyHeading_" + caption };
+        block.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(block);
+        block.AddChild(Title(caption, (int)Ui.Metric("ui.font.caption", 11), Ui.Colour("text.accent"), true));
+        block.AddChild(new HSeparator { Name = "PolicyHeadingRule" });
+    }
     private void PolicyText(VBoxContainer rows, string text, string color = "text.body_soft")
     {
         if (!string.IsNullOrWhiteSpace(text)) rows.AddChild(Title(text, 13, Ui.Colour(color)));
@@ -181,34 +208,4 @@ public partial class DealOrForceGame
         text.AddChild(val);
     }
 
-    private static List<string> PolicyDeltaLines(Nation n, PoliticalPolicy current, PoliticalPolicy candidate, bool nationalScope)
-    {
-        var result = new List<string>();
-        if (n is null || candidate is null || current?.Id == candidate.Id) return result;
-        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (current?.Modifiers is not null) foreach (var k in current.Modifiers.Keys) keys.Add(k);
-        if (candidate.Modifiers is not null) foreach (var k in candidate.Modifiers.Keys) keys.Add(k);
-        foreach (var key in keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase))
-        {
-            var oldVal = current?.Modifiers?.GetValueOrDefault(key) ?? 0f;
-            var newVal = candidate.Modifiers?.GetValueOrDefault(key) ?? 0f;
-            var delta = newVal - oldVal;
-            if (MathF.Abs(delta) < 0.0001f) continue;
-            var def = NationalModifiers.Of(key);
-            var label = Tr(def?.Name ?? key);
-            var deltaText = (delta * 100f).ToString("+0.##;-0.##;0.##", System.Globalization.CultureInfo.CurrentCulture) + "%";
-            if (nationalScope)
-            {
-                var totalNow = NationalModifiers.Of(n, key);
-                var totalAfter = totalNow + delta;
-                result.Add(Simulation.Loc.Format("· {0}: {1} → {2} ({3})",
-                    label, Fmt.Percent(totalNow), Fmt.Percent(totalAfter), deltaText));
-            }
-            else
-            {
-                result.Add(Simulation.Loc.Format("· {0}: {1}", label, deltaText));
-            }
-        }
-        return result;
-    }
 }

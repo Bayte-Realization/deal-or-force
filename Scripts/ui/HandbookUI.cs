@@ -36,7 +36,7 @@ public partial class DealOrForceGame
         _handbookLayer.Visible = false;
         _hudLayer.AddChild(_handbookLayer);
 
-        var shade = new ColorRect { Color = new Color(0.015f, 0.026f, 0.041f, 0.72f), MouseFilter = MouseFilterEnum.Stop };
+        var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _handbookLayer.AddChild(shade);
 
@@ -44,17 +44,9 @@ public partial class DealOrForceGame
         Ui.Place(panel, "modal.handbook");
         var rows = PanelRows(panel, 22, 16, 10);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        var title = Title("HANDBOOK", 25, Ui.Colour("text.accent"), upper: true);
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        header.AddChild(ActionButton("×", CloseHandbook, 38, 32));
-
-        var hint = Title("What every screen is for, what its figures mean and what to do about them. F1 opens this from anywhere.",
-            13, Ui.Colour("text.body_soft"));
-        rows.AddChild(hint);
+        ScreenHeader(rows, "HANDBOOK",
+            "What every screen is for, what its figures mean and what to do about them. F1 opens this from anywhere.",
+            true, ActionButton("×", CloseHandbook, 38, 32));
 
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16);
@@ -67,22 +59,32 @@ public partial class DealOrForceGame
         _handbookSearch.Name = "HandbookSearch";
         _handbookSearch.TextChanged += _ => RebuildHandbookList();
         left.AddChild(_handbookSearch);
+        var listFrame = new PanelContainer { Name = "HandbookListFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        listFrame.SetMeta("atlas_section_ground", "surface.inset");
+        listFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(listFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        left.AddChild(listFrame);
         var listScroll = new ScrollContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        left.AddChild(listScroll);
+        listFrame.AddChild(listScroll);
         _handbookList = new VBoxContainer { Name = "HandbookList", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _handbookList.AddThemeConstantOverride("separation", 3);
         listScroll.AddChild(_handbookList);
 
+        var pageFrame = new PanelContainer { Name = "HandbookPageFrame", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        pageFrame.SetMeta("atlas_section_ground", "surface.inset");
+        pageFrame.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(pageFrame, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        body.AddChild(pageFrame);
         _handbookPageScroll = new ScrollContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
         };
-        body.AddChild(_handbookPageScroll);
+        pageFrame.AddChild(_handbookPageScroll);
         _handbookPage = new VBoxContainer { Name = "HandbookPage", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _handbookPage.AddThemeConstantOverride("separation", 10);
         _handbookPageScroll.AddChild(_handbookPage);

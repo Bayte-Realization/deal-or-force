@@ -56,5 +56,9 @@ public sealed class ModContext
         ModOperations.QueueDebt(Campaign, issuerTag, action, amount);
     public bool AddCourseShock(string issuerTag, double strength, string reason) =>
         ModOperations.QueueCourseShock(Campaign, issuerTag, strength, reason);
+    public bool StudyDoctrine(string issuerTag, string branchId, string nodeId, bool rush = false) =>
+        ModOperations.QueueStudyDoctrine(Campaign, issuerTag, branchId, nodeId, rush);
+    public bool ProposeDiplomaticAct(string issuerTag, string targetTag, string actName) =>
+        ModOperations.QueueDiplomaticAct(Campaign, issuerTag, targetTag, actName);
     public void Log(string message) => _logger?.Invoke(message);
 }

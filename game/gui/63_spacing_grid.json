@@ -16,6 +16,14 @@
     "spacing.xl": 24,
     "panel.gutter": 12,
     "panel.pad": 12,
+    // The tab strip: one gap and one height for every workspace, so a row of tabs reads the same
+    // in the ledger, the conflict board and the settings screen. Before this token each of those
+    // three picked its own numbers - 6 and 6, 6 and 4, 6 and 5 - which is invisible until the
+    // screens are seen side by side.
+    "tab.gap": 6,
+    "tab.height": 32,
+    "control.height": 32,
+    "control.height.small": 28,
     "hud.density": 1
   }
 }

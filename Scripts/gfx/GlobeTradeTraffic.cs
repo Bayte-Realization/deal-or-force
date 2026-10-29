@@ -52,6 +52,8 @@ public sealed partial class GlobePresentation
         public int Weight = 1;
         public float LengthMetres = 1f;
         public MultiMeshInstance3D Layer;
+        /// <summary>A glTF model brings its own materials; an inline one is painted by its vertex colours.</summary>
+        public bool OwnMaterials;
     }
 
     private bool _tradeTrafficShown = true;
@@ -68,6 +70,7 @@ public sealed partial class GlobePresentation
     private double _tradeClock;
     private MeshInstance3D _tradeLaneLines;
     private ImmediateMesh _tradeLaneMesh;
+    private readonly List<Vector3> _tradeDrawPoints = new();
     private ShaderMaterial _tradeLaneMaterial;
     private int _tradeLaneFingerprint = int.MinValue;
 
@@ -103,7 +106,7 @@ void fragment() {
         var material = new StandardMaterial3D { VertexColorUseAsAlbedo = true, Roughness = 0.82f };
         foreach (var model in LoadTradeModels())
         {
-            model.Layer.MaterialOverride = material;
+            if (!model.OwnMaterials) model.Layer.MaterialOverride = material;
             _tradeRoot.AddChild(model.Layer);
             _tradeModels.Add(model);
         }
@@ -117,42 +120,32 @@ void fragment() {
         _tradeRoot.AddChild(_tradeLaneLines);
     }
 
-    /// <summary>Every model in game/gfx/models/trade: positions, normals and colours, in metres.</summary>
+    /// <summary>
+    /// Every model in game/gfx/models/trade, in metres: a JSON file carrying its own positions,
+    /// normals and colours (what the Blender script in models/source writes), or a JSON file whose
+    /// "mesh" names a .glb or .gltf beside it - any glTF a modeller exports, with its materials.
+    /// See game/gfx/models/README.md.
+    /// </summary>
     private static IEnumerable<TradeModel> LoadTradeModels()
     {
-        foreach (var document in Simulation.GameDataLoader.DataDocuments("gfx", "models", "trade"))
+        foreach (var file in Simulation.GameDataLoader.DataFiles("gfx", "models", "trade"))
+        {
+            JsonDocument document;
+            try { document = JsonDocument.Parse(Simulation.StructuredData.ReadJson(file), Simulation.GameDataLoader.ForgivingJson); }
+            catch (Exception error) { GD.PushWarning($"[dof] trade model {file} ignored: {error.Message}"); continue; }
             using (document)
             {
                 var root = document.RootElement;
                 if (root.ValueKind != JsonValueKind.Object) continue;
-                float[] Floats(string key) => root.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.Array
-                    ? e.EnumerateArray().Select(v => v.GetSingle()).ToArray() : Array.Empty<float>();
-                var positions = Floats("positions");
-                var normals = Floats("normals");
-                var colours = Floats("colors");
-                var indices = root.TryGetProperty("indices", out var ie) && ie.ValueKind == JsonValueKind.Array
-                    ? ie.EnumerateArray().Select(v => v.GetInt32()).ToArray() : Array.Empty<int>();
-                var count = positions.Length / 3;
-                if (count == 0 || normals.Length != positions.Length || colours.Length != positions.Length || indices.Length < 3) continue;
-                var vertices = new Vector3[count];
-                var normalArray = new Vector3[count];
-                var colourArray = new Color[count];
-                for (var i = 0; i < count; i++)
+                Mesh mesh;
+                var own = false;
+                if (root.TryGetProperty("mesh", out var linked) && linked.ValueKind == JsonValueKind.String)
                 {
-                    vertices[i] = new Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
-                    normalArray[i] = new Vector3(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
-                    colourArray[i] = new Color(colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2]);
+                    mesh = LoadGltfMesh(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(file) ?? "", linked.GetString() ?? ""));
+                    own = true;
                 }
-                // Godot winds front faces clockwise; the exported triangles are anticlockwise.
-                for (var i = 0; i + 2 < indices.Length; i += 3) (indices[i + 1], indices[i + 2]) = (indices[i + 2], indices[i + 1]);
-                var arrays = new Godot.Collections.Array();
-                arrays.Resize((int)Mesh.ArrayType.Max);
-                arrays[(int)Mesh.ArrayType.Vertex] = vertices;
-                arrays[(int)Mesh.ArrayType.Normal] = normalArray;
-                arrays[(int)Mesh.ArrayType.Color] = colourArray;
-                arrays[(int)Mesh.ArrayType.Index] = indices;
-                var mesh = new ArrayMesh();
-                mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+                else mesh = InlineMesh(root);
+                if (mesh is null) continue;
                 var role = root.TryGetProperty("role", out var r) && r.ValueKind == JsonValueKind.String ? r.GetString() : "ship";
                 var name = root.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString() : "trade";
                 var length = root.TryGetProperty("length_m", out var l) && l.ValueKind == JsonValueKind.Number ? l.GetSingle() : 1f;
@@ -160,7 +153,7 @@ void fragment() {
                 yield return new TradeModel
                 {
                     Name = name, Ship = !string.Equals(role, "lorry", StringComparison.OrdinalIgnoreCase), Weight = weight,
-                    LengthMetres = MathF.Max(1f, length),
+                    LengthMetres = MathF.Max(1f, length), OwnMaterials = own,
                     Layer = new MultiMeshInstance3D
                     {
                         Name = "Trade_" + name, CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
@@ -172,6 +165,62 @@ void fragment() {
                     }
                 };
             }
+        }
+    }
+
+    /// <summary>A mesh written out inline: positions, normals and colours per vertex, and triangles.</summary>
+    private static Mesh InlineMesh(JsonElement root)
+    {
+        float[] Floats(string key) => root.TryGetProperty(key, out var e) && e.ValueKind == JsonValueKind.Array
+            ? e.EnumerateArray().Select(v => v.GetSingle()).ToArray() : Array.Empty<float>();
+        var positions = Floats("positions");
+        var normals = Floats("normals");
+        var colours = Floats("colors");
+        var indices = root.TryGetProperty("indices", out var ie) && ie.ValueKind == JsonValueKind.Array
+            ? ie.EnumerateArray().Select(v => v.GetInt32()).ToArray() : Array.Empty<int>();
+        var count = positions.Length / 3;
+        if (count == 0 || normals.Length != positions.Length || colours.Length != positions.Length || indices.Length < 3) return null;
+        var vertices = new Vector3[count];
+        var normalArray = new Vector3[count];
+        var colourArray = new Color[count];
+        for (var i = 0; i < count; i++)
+        {
+            vertices[i] = new Vector3(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+            normalArray[i] = new Vector3(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]);
+            colourArray[i] = new Color(colours[i * 3], colours[i * 3 + 1], colours[i * 3 + 2]);
+        }
+        // Godot winds front faces clockwise; the exported triangles are anticlockwise.
+        for (var i = 0; i + 2 < indices.Length; i += 3) (indices[i + 1], indices[i + 2]) = (indices[i + 2], indices[i + 1]);
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Normal] = normalArray;
+        arrays[(int)Mesh.ArrayType.Color] = colourArray;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    /// <summary>The first mesh of a glTF file, with its materials; null when the file will not load.</summary>
+    private static Mesh LoadGltfMesh(string path)
+    {
+        if (!System.IO.File.Exists(path)) { GD.PushWarning($"[dof] trade model mesh {path} not found"); return null; }
+        var document = new GltfDocument();
+        var state = new GltfState();
+        if (document.AppendFromFile(path, state) != Error.Ok) { GD.PushWarning($"[dof] trade model mesh {path} will not load"); return null; }
+        var scene = document.GenerateScene(state);
+        try { return FirstMesh(scene); }
+        finally { scene?.Free(); }
+    }
+
+    private static Mesh FirstMesh(Node node)
+    {
+        if (node is null) return null;
+        if (node is MeshInstance3D instance && instance.Mesh is not null) return instance.Mesh;
+        foreach (var child in node.GetChildren())
+            if (FirstMesh(child) is { } mesh) return mesh;
+        return null;
     }
 
     private int[] _tradeModelCounts = Array.Empty<int>();
@@ -182,7 +231,9 @@ void fragment() {
     private void UpdateTradeTraffic(double delta)
     {
         if (_tradeRoot is null || !IsInstanceValid(_tradeRoot) || _campaign?.ProvinceMap is null) return;
-        if (!QualityTradeTraffic || !_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0)
+        if (IsInstanceValid(_tradeLaneLines) && !Simulation.WorldLayers.On("trade_lanes")) _tradeLaneLines.Visible = false;
+        if (!QualityTradeTraffic || !_tradeTrafficShown || !_mapApplied || _tradeModels.Count == 0 ||
+            !Simulation.WorldLayers.On("trade_traffic"))
         {
             foreach (var model in _tradeModels) model.Layer.Multimesh.VisibleInstanceCount = 0;
             return;
@@ -286,36 +337,42 @@ void fragment() {
         foreach (var lane in _tradeLanes.Take(TradeLinesDrawn))
         {
             var colour = lane.Sea ? new Color(0.86f, 0.82f, 0.68f, 0.26f) : new Color(0.9f, 0.76f, 0.5f, 0.3f);
-            var open = false;
-            Vector3? previous = null;
+            _tradeDrawPoints.Clear();
             for (var i = 0; i < lane.Points.Count; i++)
             {
                 var point = lane.Points[i];
-                var here = _flatMap ? FlatPoint(point.X, point.Y, FlatLineZ) : SurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f);
-                if (previous is { } last && _flatMap && MathF.Abs(here.X - last.X) > FlatMapWidth * 0.5f)
-                {
-                    if (open) _tradeLaneMesh.SurfaceEnd();
-                    open = false;
-                }
-                if (!open) { _tradeLaneMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip); open = true; }
-                var next = lane.Points[Math.Min(lane.Points.Count - 1, i + 1)];
-                var ahead = _flatMap ? FlatPoint(next.X, next.Y, FlatLineZ) : SurfacePoint(next.X, next.Y, GlobeRadius * 1.0013f);
-                var tangent = (ahead - (previous ?? here)).Normalized();
-                if (tangent == Vector3.Zero) tangent = Vector3.Right;
-                var normal = _flatMap ? Vector3.Back : here.Normalized();
-                var side = normal.Cross(tangent).Normalized() * halfWidth;
-                // The ends fade in and out, so a lane begins at a port rather than at a full stop.
-                var fade = Math.Clamp(MathF.Min(lane.Along[i], lane.Length - lane.Along[i]) / 1.5f, 0f, 1f);
-                var shade = new Color(colour.R, colour.G, colour.B, colour.A * fade);
-                _tradeLaneMesh.SurfaceSetColor(shade);
-                _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 0f));
-                _tradeLaneMesh.SurfaceAddVertex(here + side);
-                _tradeLaneMesh.SurfaceSetColor(shade);
-                _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 1f));
-                _tradeLaneMesh.SurfaceAddVertex(here - side);
-                previous = here;
+                _tradeDrawPoints.Add(_flatMap
+                    ? FlatPoint(point.X, point.Y, FlatLineZ)
+                    : SurfacePoint(point.X, point.Y, GlobeRadius * 1.0013f));
             }
-            if (open) _tradeLaneMesh.SurfaceEnd();
+            // A lane across the date line breaks at the sheet edge. One point on a
+            // side is not a triangle strip, so that side is not begun.
+            CollectDateLineRuns(_tradeDrawPoints);
+            foreach (var run in _dateLineRuns)
+            {
+                _tradeLaneMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
+                var endIndex = run.Start + run.Count - 1;
+                for (var i = run.Start; i <= endIndex; i++)
+                {
+                    var here = _tradeDrawPoints[i];
+                    var before = _tradeDrawPoints[Math.Max(run.Start, i - 1)];
+                    var ahead = _tradeDrawPoints[Math.Min(endIndex, i + 1)];
+                    var tangent = (ahead - before).Normalized();
+                    if (tangent == Vector3.Zero) tangent = Vector3.Right;
+                    var normal = _flatMap ? Vector3.Back : here.Normalized();
+                    var side = normal.Cross(tangent).Normalized() * halfWidth;
+                    // The ends fade in and out, so a lane begins at a port rather than at a full stop.
+                    var fade = Math.Clamp(MathF.Min(lane.Along[i], lane.Length - lane.Along[i]) / 1.5f, 0f, 1f);
+                    var shade = new Color(colour.R, colour.G, colour.B, colour.A * fade);
+                    _tradeLaneMesh.SurfaceSetColor(shade);
+                    _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 0f));
+                    _tradeLaneMesh.SurfaceAddVertex(here + side);
+                    _tradeLaneMesh.SurfaceSetColor(shade);
+                    _tradeLaneMesh.SurfaceSetUV(new Vector2(lane.Along[i], 1f));
+                    _tradeLaneMesh.SurfaceAddVertex(here - side);
+                }
+                _tradeLaneMesh.SurfaceEnd();
+            }
         }
     }
 

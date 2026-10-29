@@ -1,0 +1,10 @@
+{
+  "Bikol": "Bikol",
+  "Hiligaynon": "Hiligaynon",
+  "Waray": "Waray",
+  "Sri Lankan Moor": "Sri Lankan Moor",
+  "Map edge smoothing": "Map edge smoothing",
+  "The planet's silhouette and the markers standing on it are the only hard geometric edges on the map, and smoothing them costs a little fill rate. Off shows the staircase and costs nothing; four samples is the smoothest. Takes effect when a campaign is loaded.": "The planet's silhouette and the markers standing on it are the only hard geometric edges on the map, and smoothing them costs a little fill rate. Off shows the staircase and costs nothing; four samples is the smoothest. Takes effect when a campaign is loaded.",
+  "Report a problem": "Report a problem",
+  "Write a zip with the build, the logs, the settings and the save, so a problem can be looked at.": "Write a zip with the build, the logs, the settings and the save, so a problem can be looked at."
+}

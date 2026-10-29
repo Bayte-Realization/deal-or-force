@@ -7,7 +7,7 @@ public sealed partial class GlobePresentation
 {
     public bool BorderPaintMode { get; set; }
     public bool ObjectivePaintMode { get; set; }
-    public event Action<GlobePick, bool, bool> BorderStrokeStarted;
+    public event Action<GlobePick, bool, bool, bool> BorderStrokeStarted;
     public event Action<GlobePick> BorderStrokeMoved;
     public event Action BorderStrokeFinished;
     private bool _borderPainting;
@@ -23,7 +23,7 @@ public sealed partial class GlobePresentation
                 if (TryPick(button.Position, out var pick, updateSelection: false))
                 {
                     _borderPainting = button.ButtonIndex == MouseButton.Right;
-                    BorderStrokeStarted?.Invoke(pick, !_borderPainting, button.AltPressed);
+                    BorderStrokeStarted?.Invoke(pick, !_borderPainting, button.AltPressed, button.ShiftPressed);
                     if (!_borderPainting) BorderStrokeFinished?.Invoke();
                 }
             }

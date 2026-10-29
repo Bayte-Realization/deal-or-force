@@ -26,7 +26,7 @@ public sealed partial class GlobePresentation
         return PresentationPoint(p.Latitude, p.Longitude, SurfaceLineRadius);
     }
 
-    private void DrawOffensiveGeometry(IReadOnlyList<int> goals, IEnumerable<int> departure, bool preview)
+    private void DrawOffensiveGeometry(IReadOnlyList<int> goals, IEnumerable<int> departure, bool preview, int phaseState = 1)
     {
         if (goals.Count == 0) return;
         var points = goals.Select(PlanPoint).ToList();
@@ -38,7 +38,9 @@ public sealed partial class GlobePresentation
             points[0] = OnOrderSurface(point - side * .012f);
             points.Add(OnOrderSurface(point + side * .012f));
         }
-        var color = preview ? new Color(1f, .66f, .30f, .95f) : new Color(.95f, .29f, .20f, .95f);
+        var color = preview ? new Color(1f, .66f, .30f, .95f) : phaseState < 0
+            ? new Color(.48f, .68f, .52f, .72f) : phaseState > 1
+            ? new Color(.95f, .67f, .24f, .78f) : new Color(.95f, .29f, .20f, .95f);
         PlanStroke(points, .0017f, color, false);
         var end = PlanPoint(goals[goals.Count / 2]);
         var starts = departure.Select(PlanPoint).ToArray();

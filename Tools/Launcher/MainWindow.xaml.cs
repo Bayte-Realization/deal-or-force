@@ -23,7 +23,8 @@ public partial class MainWindow : Window
         _godot = godot ?? (File.Exists(_enginePath) ? File.ReadAllText(_enginePath).Trim() : Environment.GetEnvironmentVariable("GODOT_NET"));
         InitializeComponent();
         KeyArt.Source = KeyArtOfTheDay();
-        VersionChip.Text = DealOrForce.Simulation.GameBuildInfo.VersionLabel.Replace("DoF ", "");
+        VersionChip.Text = DealOrForce.Simulation.GameBuildInfo.VersionLabel;
+        ProfileButton.ToolTip = catalog.Profile;
         L.TranslateTree(this);
         LanguageButton.Content = L.LanguageLabel;
         EngineButton.Visibility = catalog.IsProject ? Visibility.Visible : Visibility.Collapsed;
@@ -164,7 +165,7 @@ public partial class MainWindow : Window
         Status.Text = L.T("List refreshed. Settings take effect at the next launch.");
         RefreshView();
     }
-    private void OpenPackageFolder(object sender, RoutedEventArgs e) => OpenFolder((PackageList.SelectedItem as Package)?.Path ?? Path.Combine(_catalog.Root, _dlc ? "dlc" : "mods"));
+    private void OpenPackageFolder(object sender, RoutedEventArgs e) => OpenFolder((PackageList.SelectedItem as Package)?.Path ?? Path.Combine(_catalog.Profile, _dlc ? "dlc" : "mods"));
     private void OpenProfile(object sender, RoutedEventArgs e) => OpenFolder(_catalog.Profile);
     private void OpenFolder(string path)
     {

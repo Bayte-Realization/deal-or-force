@@ -180,6 +180,10 @@ public static partial class AiStatecraft
         }
 
         if (TryAid(campaign, nation, friend, relation)) return true;
+        // Optional visits and exchanges must not pre-empt the ally's existing
+        // reserve-aware aid decision (or spend the operating cash it protects).
+        if (opinion >= 15f && relation.Stance != DiplomaticStance.Allied &&
+            DiplomaticActs.TryAi(campaign, nation, friend)) return true;
         // Warming a tie into friendship is a real move with a real price, and the price is the
         // player's: the same overture ImproveRelationsCommand charges for - money out of the
         // treasury, a fortnight's silence, and an opinion high enough to carry it. Setting the
@@ -267,6 +271,7 @@ public static partial class AiStatecraft
     {
         if (campaign?.ProvinceMap is null || buyer is null || buyer.Population <= 0) return false;
         if (!campaign.FeatureEnabled("deals")) return false;
+        if (buyer.Treasury * M.Clamp01(campaign.Defines.AiKindredTreasuryShare) < 0.01f) return false;
         if (DemographyCatalog.PrimarySet(buyer.Tag) is not { Count: > 0 } &&
             (!campaign.Homelands.TryGetValue(buyer.Id, out var homes) || homes.Count == 0)) return false;
         EnsureDailyTables(campaign);
@@ -351,6 +356,22 @@ public static partial class AiStatecraft
         var shortAt = defines.AiSupplyHedgeSatisfaction;
         if (!float.IsFinite(shortAt)) shortAt = 0.875f;
         shortAt = Math.Clamp(shortAt, 0.05f, 0.99f);
+
+        // Quick pre-check: if no imported good is scarce or heavily imported, skip building the full route exposure table!
+        var anyCandidateGood = false;
+        foreach (var quote in nation.Market.Values)
+        {
+            if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
+                !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
+            if (nation.DecisionAvailableDay.GetValueOrDefault("supply_hedge/" + (int)quote.Commodity) > campaign.ElapsedDays)
+                continue;
+            if (quote.Satisfaction < shortAt || quote.Imports / quote.Demand >= 0.5f)
+            {
+                anyCandidateGood = true;
+                break;
+            }
+        }
+        if (!anyCandidateGood) return false;
 
         EconomicExposure.Row chosen = null;
         foreach (var row in EconomicExposure.Read(campaign, nation))

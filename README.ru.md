@@ -1,8 +1,8 @@
-[English](README.md) · [Русский](README.ru.md)
+﻿[English](README.md) · [Русский](README.ru.md)
 
 # Deal or Force
 
-Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10. Версия **0.8.2**.
+Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10. Версия **0.3.0.3** — **EntertAlpha 0.3.0.3**.
 
 > **[LanguageKit](LanguageKit/GUIDE_RU.md)** — языковой комплект Godot 4.8 Beta1: исходные интеграции
 > Luau, F#, Nim, Odin, Rust и Kotlin со сборочными рецептами, проверками и лабораторией

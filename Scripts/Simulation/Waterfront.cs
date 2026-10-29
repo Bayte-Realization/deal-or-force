@@ -44,7 +44,9 @@ public static class Waterfront
     // Regions are cut by wars - a partition gives half a coastal region to somebody else -
     // so the region answer is stamped with how many regions there are. Geography does not
     // move, but which province belongs to which region does.
+    private static Campaign _regionCampaign;
     private static int _regionStamp = -1;
+    private static int _regionRevision = -1;
     private static readonly Dictionary<int, WaterAccess> ByRegion = new();
 
     /// <summary>
@@ -73,9 +75,11 @@ public static class Waterfront
         Refresh(map);
 
         var stamp = campaign.States?.Count ?? 0;
-        if (stamp != _regionStamp)
+        if (!ReferenceEquals(_regionCampaign, campaign) || stamp != _regionStamp || _regionRevision != campaign.MapRevision)
         {
+            _regionCampaign = campaign;
             _regionStamp = stamp;
+            _regionRevision = campaign.MapRevision;
             ByRegion.Clear();
             for (var province = 1; province <= map.ProvinceCount; province++)
             {

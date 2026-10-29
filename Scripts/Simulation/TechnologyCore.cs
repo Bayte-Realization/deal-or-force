@@ -486,6 +486,31 @@ public static class ResearchSystem
 
     private static TechnologyDefinition Choose(Campaign campaign, Nation nation, Survey survey)
     {
+        // The proliferation race: a country that faces a rival's deterrent and could build
+        // its own reaches for it ahead of the cheap shelf. The history of the club is not
+        // countries shopping by price - it is each one racing the rival that already had
+        // one. Nothing forces the choice: the country still has to afford the research,
+        // and a country at peace with every holder shops the ordinary way.
+        if (Deterrence.TierOf(campaign, nation) < 1)
+        {
+            var threatened = false;
+            foreach (var other in campaign.Nations)
+            {
+                if (other == nation || Deterrence.TierOf(campaign, other) < 1) continue;
+                var relation = CampaignDiplomacy.Peek(campaign, nation.Id, other.Id);
+                if (relation is { Stance: DiplomaticStance.Rival or DiplomaticStance.AtWar })
+                {
+                    threatened = true;
+                    break;
+                }
+            }
+            if (threatened)
+            {
+                var deterrent = AvailableTo(nation)
+                    .FirstOrDefault(technology => technology.Effects.ContainsKey("deterrence"));
+                if (deterrent is not null) return deterrent;
+            }
+        }
         var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
         return AvailableTo(nation)
             .OrderBy(technology => survey is null ? CostFor(campaign, nation, technology) : CostFor(campaign, survey, nation, technology))

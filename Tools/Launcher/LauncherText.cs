@@ -29,25 +29,37 @@ public static partial class L
 
     public static bool IsRussian => Language == "russian";
 
+    /// <summary>The game's settings file: `settings/settings.json` inside the one game folder.</summary>
+    private static string SettingsFile(string profile) => Path.Combine(profile, "settings", "settings.json");
+
+    /// <summary>Where the file lived before the folders were consolidated.</summary>
+    private static string OldSettingsFile(string profile) => Path.Combine(profile, "settings.json");
+
     /// <summary>Follow the language the game was last set to, if it has been run.</summary>
     public static void Choose(string profile)
     {
+        if (TryRead(SettingsFile(profile))) return;
+        TryRead(OldSettingsFile(profile));
+    }
+
+    private static bool TryRead(string path)
+    {
         try
         {
-            var path = Path.Combine(profile, "settings.json");
-            if (!File.Exists(path)) return;
+            if (!File.Exists(path)) return false;
             using var document = JsonDocument.Parse(File.ReadAllText(path),
                 new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
             if (!document.RootElement.TryGetProperty("language", out var value) ||
-                value.ValueKind != JsonValueKind.String) return;
+                value.ValueKind != JsonValueKind.String) return false;
             var chosen = value.GetString()?.Trim().ToLowerInvariant() ?? "";
             // The game can carry more languages than these two - a mod can add one. The
             // launcher knows two, and English is what it falls back to for the rest.
             if (chosen.Length > 0) Language = chosen == "russian" ? "russian" : "english";
+            return chosen.Length > 0;
         }
-        catch (IOException) { }
-        catch (JsonException) { }
-        catch (UnauthorizedAccessException) { }
+        catch (IOException) { return false; }
+        catch (JsonException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>The two the launcher speaks, in the order its button steps through them.</summary>
@@ -70,18 +82,22 @@ public static partial class L
     {
         try
         {
-            var path = Path.Combine(profile, "settings.json");
+            // The game reads `settings/settings.json`; the file in the folder's root is what an
+            // install from before the consolidation has. Start from whichever exists, then
+            // write the new place, so a language chosen in the launcher survives either way.
+            var path = SettingsFile(profile);
+            var source = File.Exists(path) ? path : OldSettingsFile(profile);
             System.Text.Json.Nodes.JsonObject settings;
-            if (File.Exists(path))
+            if (File.Exists(source))
             {
-                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path), null,
+                var parsed = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(source), null,
                     new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
                 if (parsed is not System.Text.Json.Nodes.JsonObject existing) return false;
                 settings = existing;
             }
             else settings = new System.Text.Json.Nodes.JsonObject();
             settings["language"] = language;
-            Directory.CreateDirectory(profile);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temporary = path + ".tmp";
             File.WriteAllText(temporary, settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
             File.Move(temporary, path, true);
@@ -102,6 +118,8 @@ public static partial class L
     // rule as the game's tables. A string missing here simply stays English.
     private static readonly Dictionary<string, string> Russian = new(StringComparer.Ordinal)
     {
+        ["Windows could not locate the Documents folder."] = "Windows не удалось определить папку «Документы».",
+        ["Snapshot size must be at least 980x660."] = "Размер снимка должен быть не меньше 980x660.",
         // The window
         ["Deal or Force — Launcher"] = "Deal or Force — Лаунчер",
         ["DEAL OR FORCE  /  LAUNCH CENTRE"] = "DEAL OR FORCE  /  ЦЕНТР ЗАПУСКА",

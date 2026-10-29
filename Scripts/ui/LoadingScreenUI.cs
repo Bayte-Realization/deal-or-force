@@ -58,7 +58,7 @@ public partial class DealOrForceGame
             _loadingScreen.ShowFailure(exception.Message, _loadingCanReturn, () =>
             {
                 if (_loadingCanReturn) CloseLoadingScreen();
-                else GetTree().Quit();
+                else ApplicationExit.Request(this);
             });
             return false;
         }

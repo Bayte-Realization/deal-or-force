@@ -70,6 +70,7 @@ public partial class DealOrForceGame : Control
 
     public override async void _Ready()
     {
+        ApplicationExit.Ensure(this);
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         Input.MouseMode = Input.MouseModeEnum.Visible;
         WrapGuard.Install(GetTree());
@@ -81,9 +82,13 @@ public partial class DealOrForceGame : Control
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
         await RunLoadingOperation("Preparing the world", async () =>
         {
+            // Folders first: the journal below writes into `logs/`, and the first thing a
+            // support conversation needs is one known folder rather than two.
+            GamePaths.Prepare();
             StartDiagnostics();
-            // The engine-neutral settings layer is told where the player's files live.
-            Simulation.PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
+            // The engine-neutral settings layer is told where the player's files live: one
+            // folder under Documents, not the engine's folder in AppData.
+            Simulation.PlayerSettings.UseDirectory(GamePaths.Settings);
             await LoadingPhase("Loading interface and content catalogs", 10);
             // Resolve/migrate old saves only after the first loading frame is visible.
             GD.Print($"[dof] saves: {SaveRoot}");
@@ -128,8 +133,8 @@ public partial class DealOrForceGame : Control
         // The country card's facts panel is sized to its own contents, and that height is only
         // knowable after the layout pass rather than when the card is built. See the method.
         SyncCountryFactsHeight();
-        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
-        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && _pickerLayer is { Visible: false };
+        if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
+        if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // The lens and the roll move while a key is held, so the line that reports them
         // has to be written every frame rather than when something is pressed.
         if (_freeCameraMode) RefreshFreeCameraReadout();
@@ -345,6 +350,40 @@ public partial class DealOrForceGame : Control
 
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+
+        // The index of everywhere. Ctrl+K because that is where a hand that lives in an editor
+        // reaches, and Ctrl+P because that is where a hand that lives in a code editor reaches
+        // when it means exactly the same thing. Not F1: that key already opens the handbook, and
+        // taking a documented key away from a documented button is how a key map starts lying.
+        //
+        // While it is up it owns Escape and the arrow keys; everything else is left unhandled so
+        // the search field keeps typing. Marking a key handled here does not stop the field from
+        // receiving it, it only stops the other handlers below from acting on it.
+        if (_navigatorLayer is { Visible: true })
+        {
+            switch (key.Keycode)
+            {
+                case Key.Escape:
+                    CloseNavigator();
+                    GetViewport().SetInputAsHandled();
+                    break;
+                case Key.Down:
+                    MoveNavigator(1);
+                    GetViewport().SetInputAsHandled();
+                    break;
+                case Key.Up:
+                    MoveNavigator(-1);
+                    GetViewport().SetInputAsHandled();
+                    break;
+            }
+            return;
+        }
+        if (((key.CtrlPressed || key.MetaPressed) && Letter(key) is Key.K or Key.P))
+        {
+            ToggleNavigator();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (key.Keycode == Key.Escape && MovementPanelOwnsEscape())
         {
             // The movement card is a HUD dock, and a focused control inside it may otherwise
@@ -623,7 +662,7 @@ public partial class DealOrForceGame : Control
             CloseSidePanel();
         else if (MapSelectionShowing)
             CloseMapSelection();
-        else if (_pickerLayer.Visible)
+        else if (_pickerLayer is { Visible: true })
             ShowMainMenu();
         else if (_hudLayer.Visible)
             ShowPauseMenu();
@@ -691,7 +730,19 @@ public partial class DealOrForceGame : Control
 
     private void BuildInterface()
     {
-        InitializeModding();
+        // The stage that runs this takes ten and a half seconds of a fifteen-second load, and the
+        // screens it builds are timed individually into the performance channel: a table beats an
+        // opinion about which screen is the slow one. `state_affairs` alone is 1.2 s.
+        var interfaceClock = System.Diagnostics.Stopwatch.StartNew();
+        void Built(string name, System.Action build)
+        {
+            interfaceClock.Restart();
+            build();
+            Simulation.DiagnosticLogs.Write("performance",
+                $"INTERFACE_PART part={name} ms={interfaceClock.Elapsed.TotalMilliseconds:F1}");
+        }
+
+        Built("modding", InitializeModding);
         var background = new ColorRect
         {
             Color = Ui.Colour("surface.background"),
@@ -700,36 +751,40 @@ public partial class DealOrForceGame : Control
         background.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(background);
 
-        _globe = new GlobePresentation();
-        _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
-        _globe.CountryPicked += OnCountryPicked;
-        _globe.UnclaimedPicked += OnUnclaimedPicked;
-        _globe.ArmyPicked += OnArmyPicked;
-        _globe.FleetPicked += OnFleetPicked;
-        _globe.SupportPicked += OnSupportPicked;
-        _globe.SupportBoxPicked += OnSupportBoxPicked;
-        _globe.BattlePicked += ShowBattleDetails;
-        _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
-        _globe.ProvinceCommanded += OnProvinceCommanded;
-        AddChild(_globe);
+        Built("globe", () =>
+        {
+            _globe = new GlobePresentation();
+            _modLoader.SetCrossoverPresentation = enabled => _globe.SetCrossoverPresentation(enabled);
+            _globe.CountryPicked += OnCountryPicked;
+            _globe.UnclaimedPicked += OnUnclaimedPicked;
+            _globe.ArmyPicked += OnArmyPicked;
+            _globe.FleetPicked += OnFleetPicked;
+            _globe.SupportPicked += OnSupportPicked;
+            _globe.SupportBoxPicked += OnSupportBoxPicked;
+            _globe.BattlePicked += ShowBattleDetails;
+            _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
+            _globe.ProvinceCommanded += OnProvinceCommanded;
+            AddChild(_globe);
+        });
 
-        BuildMainMenu();
-        BuildCountryPicker();
-        BuildHud();
-        BuildMovementPanel();
-        BuildHotseatInterface();
-        BuildNetworkMultiplayerInterface();
+        Built("menu", BuildMainMenu);
+        // The country picker (2 980 ms) is built on first open, in OpenCountryPicker and
+        // OpenLocalMultiplayer: a player who starts a campaign from a save never needs it.
+        Built("hud", BuildHud);
+        Built("movement", BuildMovementPanel);
+        Built("hotseat", BuildHotseatInterface);
+        Built("network", BuildNetworkMultiplayerInterface);
         // Over the campaign and its interface, under the pause menu and the console.
-        BuildWorldCurseLayer();
-        BuildPauseMenu();
-        BuildSaveLoadInterface();
-        BuildEventInterface();
-        BuildPeaceOfferInterface();
-        BuildStrategicAudio();
-        BuildDeveloperConsole();
-        BuildFreeCameraOverlay();
-        BuildObserverHint();
-        BuildSettingsInterface();
+        Built("world_curse", BuildWorldCurseLayer);
+        Built("pause_menu", BuildPauseMenu);
+        Built("save_load", BuildSaveLoadInterface);
+        Built("events", BuildEventInterface);
+        Built("peace_offer", BuildPeaceOfferInterface);
+        Built("audio", BuildStrategicAudio);
+        Built("console", BuildDeveloperConsole);
+        Built("free_camera", BuildFreeCameraOverlay);
+        Built("observer_hint", BuildObserverHint);
+        Built("settings", BuildSettingsInterface);
 
         // Last, because it reaches into everything the lines above have just built. From
         // here on the screen and the running game cannot disagree: both go through
@@ -738,6 +793,26 @@ public partial class DealOrForceGame : Control
     }
 
     /// <summary>
+    /// <summary>
+    /// Screens that are built the first time somebody opens them, not at load.
+    ///
+    /// Every screen used to be constructed on the first frame of a campaign whether or not the
+    /// player would ever open it, and the stage that did it took ten and a half seconds - a third
+    /// of the whole load. The measurement named the two worst: the state-affairs workspace at
+    /// 1 221 ms and production at 404 ms. Both are modal pages with a lot of rows and textures,
+    /// both are reached by one button, and neither is needed to draw a map.
+    ///
+    /// The guard is a set rather than a null check because a layer that failed to build must not
+    /// be built again on every open, and because the name says what it is at the call site.
+    /// </summary>
+    private readonly System.Collections.Generic.HashSet<string> _builtScreens =
+        new(StringComparer.Ordinal);
+
+    private void EnsureScreen(string key, System.Action build)
+    {
+        if (_builtScreens.Add(key)) build();
+    }
+
     private void BuildHud()
     {
         _hudLayer = FullLayer("GameHud");
@@ -750,21 +825,36 @@ public partial class DealOrForceGame : Control
 
         BuildArmyPanel();
         BuildFleetPanel(_hudLayer);
-        BuildPeaceConference();
-        BuildLedgerInterface();
-        BuildStateAffairsInterface();
-        BuildWarLedger();
-        BuildDiplomacyScreen();
-        BuildPolicyWorkspace();
-        BuildTradeScreen();
-        BuildProductionScreen();
-        BuildSupportScreen();
-        BuildResearchScreen();
-        BuildDoctrineScreen();
-        BuildHandbook();
-        BuildConflictsScreen();
-        BuildMapControls();
-        BuildStrategicHud();
+
+        // Every screen below is built here, on the first frame of a campaign, whether or not the
+        // player will open it. The stage that does it takes ten and a half seconds - a third of
+        // the whole load - and the honest way to cut that is to know which screen costs what
+        // before restructuring anything. Each builder is timed into the performance channel, so
+        // the table is there on the next run.
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        void Timed(string name, System.Action build)
+        {
+            watch.Restart();
+            build();
+            Simulation.DiagnosticLogs.Write("performance",
+                $"INTERFACE_BUILD screen={name} ms={watch.Elapsed.TotalMilliseconds:F1}");
+        }
+
+        Timed("peace", BuildPeaceConference);
+        Timed("ledger", BuildLedgerInterface);
+        // State affairs and production are built on first open: 1.6 s of the ten-second stage,
+        // spent before the player has asked for either. See EnsureScreen.
+        Timed("war_ledger", BuildWarLedger);
+        Timed("diplomacy", BuildDiplomacyScreen);
+        Timed("policy", BuildPolicyWorkspace);
+        Timed("trade", BuildTradeScreen);
+        Timed("support", BuildSupportScreen);
+        Timed("research", BuildResearchScreen);
+        Timed("doctrine", BuildDoctrineScreen);
+        Timed("handbook", BuildHandbook);
+        Timed("conflicts", BuildConflictsScreen);
+        Timed("map_controls", BuildMapControls);
+        Timed("strategic_hud", BuildStrategicHud);
         Resized += LayoutCampaignShell;
         LayoutCampaignShell();
     }
@@ -775,7 +865,7 @@ public partial class DealOrForceGame : Control
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
         _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        if (_pickerLayer is not null) _pickerLayer.Visible = false;
         _hudLayer.Visible = true;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         _campaign.IsPaused = true;
@@ -1105,6 +1195,11 @@ public partial class DealOrForceGame : Control
                     iconPath: "res://game/gfx/interface/icons/icon_laws.png");
                 warBookBtn.Name = "MilitaryOpenDoctrineScreen";
                 _sideDetail.AddChild(warBookBtn);
+                var generalsBtn = ActionButton(Loc.Get("Generals"), OpenGeneralsScreen, 180, 38,
+                    iconPath: "res://game/gfx/interface/icons/icon_military.png");
+                generalsBtn.Name = "MilitaryOpenGenerals";
+                generalsBtn.TooltipText = Ui.Tip(Tr("Every army group's commander, their record, and relieving one."));
+                _sideDetail.AddChild(generalsBtn);
                 DetailRow("Divisions", divisions.ToString("0.#"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");
@@ -1190,7 +1285,7 @@ public partial class DealOrForceGame : Control
         _selectedProvinceId = pick.ProvinceId;
         // Its army is drawn while it is the country being looked at, whatever the map shows otherwise.
         _globe.ShownCountryId = pick.Nation?.Id ?? -1;
-        if (_pickerLayer.Visible)
+        if (_pickerLayer is { Visible: true })
         {
             SetPickerNation(pick.Nation, false);
             UpdatePickerLocation(pick);
@@ -1282,6 +1377,7 @@ public partial class DealOrForceGame : Control
         RefreshPeaceOfferInterface();
         RefreshNegotiationNotifications();
         RefreshSituationRoom();
+        RefreshSituationDesk();
         RefreshStrategicHud();
         RefreshBattleDossier();
         if (_ledgerLayer is { Visible: true } && !InterfaceInteractionGuard.Busy(_ledgerLayer)) RefreshLedger();
@@ -1399,71 +1495,33 @@ public partial class DealOrForceGame : Control
 
 
     /// <summary>
-    /// What a window looks like inside a campaign, by what kind of window it is.
-    ///
-    /// Every panel used to get the same flat box here, because this asked for a surface and
-    /// then ignored it. A strip of speed controls, a rail of alerts, a dossier and a modal
-    /// that has stopped the game are four different objects, and the first thing a frame has
-    /// to say is which one a player is looking at.
-    ///
-    /// Built ON the shell style rather than instead of it: the colours are still the shell's
-    /// tokens, so a reskin of `shell.*` still drives all four, and what is added here is only
-    /// the difference between them.
+    /// One restrained frame for campaign windows. Surface roles change depth and padding,
+    /// while the shell palette remains moddable and brass marks only an interruption.
     /// </summary>
     private static StyleBoxFlat CampaignPanelStyle(PanelSurface surface)
     {
         var style = ShellPanelStyle();
-        var brass = Ui.Colour("button.primary_border");
-
-        switch (surface)
+        var modal = surface == PanelSurface.Modal;
+        style.BgColor = Ui.Colour(modal ? "surface.raised" : "shell.background");
+        style.BorderColor = Ui.Colour(modal ? "button.primary_border" : "surface.line", modal ? 0.78f : 1f);
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(modal ? 4 : 3);
+        style.SetContentMarginAll(modal ? 8 : 4);
+        style.ShadowColor = Ui.Colour("surface.background", surface switch
         {
-            case PanelSurface.Modal:
-                // The one window on screen that is an interruption, and the only one with
-                // rounded corners - so it reads as a card laid over the game rather than a
-                // part of it.
-                style.BorderColor = brass;
-                style.BorderWidthTop = 2;
-                style.BorderWidthLeft = 2;
-                style.BorderWidthRight = 2;
-                style.BorderWidthBottom = 2;
-                style.SetCornerRadiusAll(6);
-                style.ShadowColor = new Color(0, 0, 0, 0.55f);
-                style.ShadowSize = 14;
-                style.ShadowOffset = new Vector2(0, 6);
-                break;
-
-            case PanelSurface.CommandStrip:
-                // Part of the frame of the screen, not a thing sitting on it.
-                style.BorderWidthTop = 1;
-                style.ShadowSize = 0;
-                style.ShadowOffset = Vector2.Zero;
-                break;
-
-            case PanelSurface.Command:
-                // An instrument: tight, cool, and framed with enough shadow to lift cleanly off the map.
-                style.BorderColor = brass;
-                style.BorderWidthTop = 2;
-                style.BorderWidthLeft = 1;
-                style.BorderWidthRight = 1;
-                style.BorderWidthBottom = 1;
-                style.ShadowColor = new Color(0, 0, 0, 0.45f);
-                style.ShadowSize = 10;
-                style.ShadowOffset = new Vector2(0, 4);
-                break;
-
-            default:
-                // A document. The brass rule along the top is the one ornament a dossier
-                // gets, and it is what makes a reading window look like a page.
-                style.BorderColor = brass;
-                style.BorderWidthTop = 3;
-                style.BorderWidthLeft = 1;
-                style.BorderWidthRight = 1;
-                style.BorderWidthBottom = 1;
-                style.ShadowColor = new Color(0, 0, 0, 0.50f);
-                style.ShadowSize = 12;
-                style.ShadowOffset = new Vector2(0, 5);
-                break;
-        }
+            PanelSurface.Modal => 0.72f,
+            PanelSurface.Dossier => 0.50f,
+            PanelSurface.Command => 0.42f,
+            _ => 0.30f
+        });
+        style.ShadowSize = surface switch
+        {
+            PanelSurface.Modal => 12,
+            PanelSurface.Dossier => 8,
+            PanelSurface.Command => 6,
+            _ => 4
+        };
+        style.ShadowOffset = new Vector2(0, modal ? 4 : 2);
         return style;
     }
 
@@ -1471,28 +1529,17 @@ public partial class DealOrForceGame : Control
     {
         var panel = new PanelContainer
         {
-            // A panel is a hard layout boundary. This is deliberately enabled in
-            // addition to the safe content inset below: if a future mod or dynamic
-            // label grows unexpectedly, it can scroll/wrap inside its window but it
-            // cannot paint over the map outside the ornamental frame.
             ClipContents = true
         };
         var inCampaign = _hudLayer is not null && (parent == _hudLayer || _hudLayer.IsAncestorOf(parent));
         panel.SetMeta("skin_panel_surface", (int)surface);
         panel.SetMeta("skin_campaign_surface", inCampaign);
-        panel.AddThemeStyleboxOverride("panel",
-            inCampaign ? CampaignPanelStyle(surface) : PanelStyle(surface));
+        panel.AddThemeStyleboxOverride("panel", PanelStyle(surface, inCampaign));
         parent.AddChild(panel);
-        if (inCampaign)
-            AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
-                ? AtlasSurfaceSkin.Level.Instrument : AtlasSurfaceSkin.Level.Document);
-        else
+        AtlasSurfaceSkin.Attach(panel, surface is PanelSurface.Command or PanelSurface.CommandStrip
+            ? AtlasSurfaceSkin.Level.Instrument : AtlasSurfaceSkin.Level.Document);
+        if (!inCampaign)
         {
-            // Outside the campaign a window is painted by the old panel artwork, and that artwork's
-            // own frame is faint enough that the picker, the workshop and the settings read as flat
-            // dark rectangles with no edge at all. The shell's line is drawn over it and behind the
-            // content: the same edge the game's panels carry, around the art the menus were painted
-            // with (CampaignShellUI.ShellEdgeStyle).
             var edge = new Panel
             {
                 Name = "ShellEdge",
@@ -1501,8 +1548,16 @@ public partial class DealOrForceGame : Control
             };
             edge.AddThemeStyleboxOverride("panel", ShellEdgeStyle());
             panel.AddChild(edge);
-            panel.MoveChild(edge, 0);
+            panel.MoveChild(edge, 1);
         }
+        panel.Resized += panel.QueueRedraw;
+        panel.Draw += () =>
+        {
+            if (panel.Size.X <= 8f) return;
+            var modal = surface == PanelSurface.Modal;
+            var light = Ui.Colour(modal ? "button.primary_border" : "text.body", modal ? 0.16f : 0.08f);
+            panel.DrawLine(new Vector2(4f, 1.5f), new Vector2(panel.Size.X - 4f, 1.5f), light, 1f, true);
+        };
         return panel;
     }
 
@@ -1594,15 +1649,32 @@ public partial class DealOrForceGame : Control
 
     private static Label Title(string text, int size, Color color, bool upper = false)
     {
+        // One door for type. Every title in the game comes through here, so the scale and the
+        // two faces are applied once instead of in six hundred call sites: an arbitrary size
+        // is snapped to the nearest step, a heading-sized step is set in the display face, and
+        // an upper-case micro-label gets the letter spacing capitals need.
+        //
+        // Capitals are recognised, not only requested. Half of the interface's section labels
+        // were written as "POSTURE" in the source and never passed `upper`, so they were set in
+        // crowded capitals with no tracking - the single loudest "made in a hurry" signal a dark
+        // interface can send. Asking whether the text is already in capitals costs one pass and
+        // fixes every one of them at once.
+        var caps = upper || LooksUppercase(text);
+        var step = Ui.TypeStep(size);
         var label = new Label
         {
             Text = upper ? Tr(text).ToUpperInvariant() : Tr(text),
             AutowrapMode = TextServer.AutowrapMode.WordSmart
         };
         label.SetMeta(LocSourceMeta, text);
-        if (upper) label.SetMeta(LocUpperMeta, true);
+        if (caps) label.SetMeta(LocUpperMeta, true);
         label.SetMeta(LocAppliedMeta, label.Text);
-        label.AddThemeFontSizeOverride("font_size", size);
+        label.AddThemeFontSizeOverride("font_size", step);
+        if (caps) label.AddThemeFontOverride("font", Ui.Tracked());
+        else if (step >= Ui.DisplayThreshold)
+            // A big heading is set in the serif, and a big figure is not: digits in a serif
+            // read as a quotation, digits in the tabular face read as a measurement.
+            label.AddThemeFontOverride("font", FigureLike(label.Text) ? Ui.NumberFont : Ui.DisplayFont);
         label.AddThemeColorOverride("font_color", color);
         var colourToken = Ui.ColourToken(color);
         if (colourToken.Length > 0)
@@ -1611,6 +1683,37 @@ public partial class DealOrForceGame : Control
             label.SetMeta("skin_label_applied", color);
         }
         return label;
+    }
+
+    /// <summary>Whether a string is already set in capitals: two letters or more, none of them small.</summary>
+    private static bool LooksUppercase(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        var letters = 0;
+        foreach (var character in text)
+        {
+            if (!char.IsLetter(character)) continue;
+            letters++;
+            if (char.IsLower(character)) return false;
+        }
+        return letters >= 2;
+    }
+
+    /// <summary>
+    /// Whether a string is a figure rather than a word: digits, signs, separators and a unit.
+    /// Used only to choose a face, never to change what is written.
+    /// </summary>
+    private static bool FigureLike(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return false;
+        var figures = 0;
+        var letters = 0;
+        foreach (var character in text)
+        {
+            if (char.IsDigit(character)) figures++;
+            else if (char.IsLetter(character)) letters++;
+        }
+        return figures > 0 && letters <= 2;
     }
 
     /// <summary>
@@ -1690,7 +1793,7 @@ public partial class DealOrForceGame : Control
         button.SetMeta(LocSourceMeta, text);
         button.SetMeta(LocAppliedMeta, button.Text);
         StyleButton(button, primary);
-        button.AddThemeFontSizeOverride("font_size", height >= 42 ? 15 : 13);
+        button.AddThemeFontSizeOverride("font_size", Ui.TypeStep(height >= 42 ? 15 : 13));
         if (width <= 0 && button.Icon is not null && button.Text.Length > 0)
         {
             button.SetMeta("icon_caption_minimum", true);
@@ -1791,6 +1894,7 @@ public partial class DealOrForceGame : Control
         UpdateMapModeButtons(_activeMapMode);
         LayoutCampaignNavigation();
         _strategicHudFingerprint = int.MinValue;
+        RefreshSituationDesk();
         RefreshStrategicHud();
         if (_hudLayer is { Visible: true } && _militarySpending is not null && _campaign?.Player is { } player)
             RefreshTopBar(player);
@@ -1898,24 +2002,72 @@ public partial class DealOrForceGame : Control
         // A rail button carries its picture above its word (`icon_above`).
         var above = button.HasMeta("icon_above") && button.GetMeta("icon_above").AsBool();
         var rounded = button.HasMeta("atlas_round_button") && button.GetMeta("atlas_round_button").AsBool();
+        var navTile = button.HasMeta("atlas_nav_tile") && button.GetMeta("atlas_nav_tile").AsBool();
+        var tabPill = button.HasMeta("atlas_tab_button") && button.GetMeta("atlas_tab_button").AsBool();
+        var outlinerGroup = button.HasMeta("atlas_outliner_group") && button.GetMeta("atlas_outliner_group").AsBool();
+        var outlinerRow = button.HasMeta("atlas_outliner_row") ? button.GetMeta("atlas_outliner_row").AsString() : "";
         button.IconAlignment = iconOnly || above ? HorizontalAlignment.Center : HorizontalAlignment.Left;
         button.VerticalIconAlignment = above ? VerticalAlignment.Top : VerticalAlignment.Center;
 
-        button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above, rounded));
-        button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above, rounded));
-        button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above, rounded));
-        // `primary` survives into the disabled look, and that is the whole of telling
-        // "this is what we are" apart from "you may not have this". The politics screen
-        // disables the form of government and the ideology a country already has - you
-        // cannot adopt what you already are - and with a flat grey disabled style that made
-        // the country's own ideology look exactly like one the game was refusing.
-        button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above, rounded));
+        if (navTile)
+        {
+            button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.NavTile(primary, 0));
+            button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.NavTile(primary, 1));
+            button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.NavTile(primary, 2));
+            button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.NavTile(primary, 3));
+        }
+        else if (tabPill)
+        {
+            button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.TabPill(primary, 0));
+            button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.TabPill(primary, 1));
+            button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.TabPill(primary, 2));
+            button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.TabPill(primary, 3));
+        }
+        else if (outlinerGroup)
+        {
+            button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.OutlinerGroupBar(0));
+            button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.OutlinerGroupBar(1));
+            button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.OutlinerGroupBar(2));
+            button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.OutlinerGroupBar(0));
+        }
+        else if (outlinerRow.Length > 0)
+        {
+            button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.OutlinerCardRow(outlinerRow, 0));
+            button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.OutlinerCardRow(outlinerRow, 1));
+            button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.OutlinerCardRow(outlinerRow, 2));
+            button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.OutlinerCardRow(outlinerRow, 0));
+        }
+        else
+        {
+            button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above, rounded));
+            button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above, rounded));
+            button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above, rounded));
+            // `primary` survives into the disabled look, and that is the whole of telling
+            // "this is what we are" apart from "you may not have this". The politics screen
+            // disables the form of government and the ideology a country already has - you
+            // cannot adopt what you already are - and with a flat grey disabled style that made
+            // the country's own ideology look exactly like one the game was refusing.
+            button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above, rounded));
+        }
         button.AddThemeStyleboxOverride("focus", AtlasSurfaceSkin.Focus(rounded));
-        button.AddThemeColorOverride("font_color", primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
+        var normalTextColour = outlinerGroup
+            ? Ui.Colour("text.accent_dim")
+            : navTile
+                ? (primary ? Ui.Colour("text.accent") : Ui.Colour("text.body_soft"))
+                : tabPill
+                    ? (primary ? Ui.Colour("text.accent") : Ui.Colour("text.muted"))
+                    : (primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text"));
+        button.AddThemeColorOverride("font_color", normalTextColour);
         button.AddThemeColorOverride("font_hover_color", Ui.Colour("button.text_hover"));
         button.AddThemeColorOverride("font_pressed_color", Ui.Colour("button.text_pressed"));
         button.AddThemeColorOverride("font_disabled_color",
-            primary ? Ui.Colour("button.text_hover") : Ui.Colour("button.text_disabled"));
+            primary ? Ui.Colour("text.accent_dim", 0.55f) : Ui.Colour("button.text_disabled"));
+        if (navTile)
+        {
+            button.AddThemeColorOverride("icon_normal_color", primary ? Ui.Colour("text.accent") : Ui.Colour("text.body_soft"));
+            button.AddThemeColorOverride("icon_hover_color", Ui.Colour("button.text_hover"));
+            button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("text.accent"));
+        }
         // Compensate the authored palette so gold PNGs do not receive a second gold tint.
         // Reapply on selection and presentation reload as well as initial construction.
         if (button.HasMeta("army_monochrome_icon") && button.GetMeta("army_monochrome_icon").AsBool())
@@ -1935,54 +2087,66 @@ public partial class DealOrForceGame : Control
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 
-    private static StyleBox ButtonStyle(bool primary, int state, bool iconOnly = false, bool narrow = false, bool rounded = false) =>
-        AtlasSurfaceSkin.Button(primary, state, iconOnly, narrow, rounded);
-
-    private StyleBox PanelStyle(PanelSurface surface)
+    private static StyleBox ButtonStyle(bool primary, int state, bool iconOnly = false, bool narrow = false, bool rounded = false)
     {
-        // A modal is a document, not an instrument: it takes the dossier artwork. Testing
-        // "not Dossier" put it on the command frame, which is the tall rail meant to sit
-        // beside a map for an hour - the wrong shape entirely for a window that appears,
-        // asks one question and goes.
+        var fill = Ui.Colour(state switch
+        {
+            1 => primary ? "button.primary_fill_hover" : "button.fill_hover",
+            2 => primary ? "button.primary_fill_pressed" : "button.fill_pressed",
+            3 => "button.fill_disabled",
+            _ => primary ? "button.primary_fill" : "button.fill"
+        });
+        var edge = primary && state == 3
+            ? Ui.Colour("button.primary_border", 0.38f)
+            : Ui.Colour(state switch
+            {
+                1 => "button.border_hover",
+                2 => "button.border_pressed",
+                3 => "button.border_disabled",
+                _ => primary ? "button.primary_border" : "button.border"
+            });
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = edge,
+            ContentMarginLeft = narrow ? 4 : 12,
+            ContentMarginRight = narrow ? 4 : 12,
+            ContentMarginTop = 4,
+            ContentMarginBottom = 4
+        };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(rounded ? 8 : 3);
+        return style;
+    }
+
+    private StyleBox PanelStyle(PanelSurface surface, bool inCampaign = false)
+    {
         var command = surface is PanelSurface.Command or PanelSurface.CommandStrip;
-        var modal = surface == PanelSurface.Modal;
         var strip = surface == PanelSurface.CommandStrip;
+        var sprite = strip ? "panel_command_strip" : command ? "panel_command_frame" : "panel_dossier";
+        var shipped = $"res://game/gfx/interface/panels/{sprite}.png";
+        var path = SpriteCatalog.TextureOf(sprite, shipped);
+        if (path.Equals(shipped, StringComparison.OrdinalIgnoreCase))
+        {
+            var style = CampaignPanelStyle(surface);
+            if (!inCampaign)
+                style.BgColor = Ui.Colour(surface == PanelSurface.Modal ? "surface.raised" : "surface.overlay");
+            return style;
+        }
         var textureMargin = strip ? 20f : command ? 48f : 28f;
-        // The tall command artwork draws its visible inner rail about 30 px from
-        // the outer edge. Keep controls on the inside of that rail. Callers add a
-        // further 8-16 px semantic margin, so 22 px lands text and buttons safely
-        // inside the frame without sacrificing the useful width of narrow panels.
-        // A modal breathes: it is the one window with nothing competing for its space.
-        var contentHorizontal = strip ? 6f : command ? 28f : modal ? 14f : 6f;
-        var contentVertical = strip ? 4f : command ? 22f : modal ? 12f : 4f;
+        var contentHorizontal = strip ? 6f : command ? 28f : surface == PanelSurface.Modal ? 14f : 6f;
+        var contentVertical = strip ? 4f : command ? 22f : surface == PanelSurface.Modal ? 12f : 4f;
         return new StyleBoxTexture
         {
-            Texture = strip
-                ? Art("panel_command_strip", "res://game/gfx/interface/panels/panel_command_strip.png")
-                : command
-                    ? Art("panel_command_frame", "res://game/gfx/interface/panels/panel_command_frame.png")
-                    : Art("panel_dossier", "res://game/gfx/interface/panels/panel_dossier.png"),
+            Texture = Art(sprite, shipped),
             TextureMarginLeft = textureMargin,
             TextureMarginTop = textureMargin,
             TextureMarginRight = textureMargin,
             TextureMarginBottom = textureMargin,
-            // Texture margins describe the nine-slice artwork, not layout padding.
-            // Letting Godot derive content margins from them adds 56/96 px to a panel's
-            // minimum size, while zero on every surface makes shallow frames collapse.
-            // These small explicit values keep the visual frame intact; callers still
-            // own the semantic padding through MarginContainer.
             ContentMarginLeft = contentHorizontal,
             ContentMarginTop = contentVertical,
             ContentMarginRight = contentHorizontal,
-            ContentMarginBottom = contentVertical,
-            // Lit rather than tinted cool: the interruption should feel like a lamp has
-            // been turned on over it, which is most of what makes it read as urgent
-            // without a single new piece of artwork.
-            ModulateColor = modal
-                ? new Color(1.04f, 1.0f, 0.94f, 1f)
-                : command
-                    ? new Color(0.88f, 0.92f, 0.98f, 0.985f)
-                    : new Color(0.9f, 0.94f, 1f, 0.98f)
+            ContentMarginBottom = contentVertical
         };
     }
 }

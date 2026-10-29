@@ -86,6 +86,7 @@ public static class MovementRules
                 Owners(campaign, rebuild: true);
                 using (SimProfiler.Measure("    mov:homelands")) MovementFall.RememberHomelands(campaign);
                 using (SimProfiler.Measure("    mov:fall")) MovementFall.Decide(campaign);
+                using (SimProfiler.Measure("    mov:fall")) MovementFall.EndLostWars(campaign);
             }
         }
         yield return 0;
@@ -136,6 +137,10 @@ public static class MovementRules
         // Land HELD is the opposite door: the movement graduates into the state it has
         // become, and everything below stops applying to it.
         SynchroniseTerritory(campaign, nation);
+        // Ground of its own makes it a country (GraduateToStatehood) - including a movement a
+        // save from before that rule left holding land as a movement.
+        if (nation.Movement is { Landless: false, Exile: false } && campaign.HasOwnedLand(nation))
+            GraduateToStatehood(campaign, nation);
         state = nation.Movement;
         if (state is null) return;
 
@@ -587,6 +592,9 @@ public static class MovementRules
         if (landless) BecomeLandless(campaign, nation);
         else
         {
+            // Marked here, graduated on its own week (or at the end of the transfer that gave
+            // it the ground): this runs on every map change, in the middle of transfers that
+            // still need the movement to settle the ground they are handing it.
             state.Landless = false;
             if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
         }
@@ -594,23 +602,28 @@ public static class MovementRules
     }
 
     /// <summary>The transition the map itself declares: a movement with borders is a state.
-    /// The tag, the name, the flag and the wars stay; the movement bookkeeping goes.</summary>
+    /// The tag, the name, the flag and the wars stay; the movement bookkeeping goes - all of
+    /// it. A movement used to keep its movement while it held ground: Silesia governed a
+    /// region for years as a party with cadres, recognitions and a terrorist listing, out of
+    /// reach of everything a state does and with everything a movement does besides. What it
+    /// claimed and does not hold yet stays its homeland, so the new state claims the rest of
+    /// it as any state claims its irredenta; and the day it gained itself is the day it last
+    /// seceded, which every "too young to do that" rule already reads.</summary>
     internal static void GraduateToStatehood(Campaign campaign, Nation nation, bool restoration = false)
     {
         var state = nation.Movement;
         if (state is null) return;
+        var homeland = Movements.DefinitionOf(nation)?.Homeland ?? new List<string>();
+        if (!campaign.Homelands.TryGetValue(nation.Id, out var homes)) campaign.Homelands[nation.Id] = homes = new List<int>();
+        foreach (var id in homeland)
+            if (Movements.StateById(campaign, id) is { } region && !homes.Contains(region.MapIndex)) homes.Add(region.MapIndex);
+        foreach (var region in campaign.StatesOf(nation))
+            if (!homes.Contains(region.MapIndex)) homes.Add(region.MapIndex);
         state.DesignatedBy.Clear();
         state.RecognisedBy.Clear();
         campaign.Fallen.Remove(nation.Id);
-        if (restoration || state.Exile)
-        {
-            nation.Movement = null;
-        }
-        else
-        {
-            state.Landless = false;
-            if (state.StatehoodDay < 0) state.StatehoodDay = campaign.ElapsedDays;
-        }
+        nation.Movement = null;
+        if (!restoration) nation.LastSecessionDay = campaign.ElapsedDays;
         nation.NameProclaimed = true;
         nation.PoliticsChangedDay = campaign.ElapsedDays;
         var held = campaign.StatesOf(nation);
@@ -738,6 +751,15 @@ public static class MovementRules
             seed is null || owner is null) return zone;
         zone.Add(seed);
         var ownerTotalStates = campaign.StatesOf(owner).Length;
+        // Most votes are one question asked of the whole homeland - Scotland in 2014, Quebec in
+        // 1995 - and a carried vote takes the whole of it, the regions that voted no along with
+        // the ones that voted yes. Asked region by region it left one-county Silesias and
+        // Scotlands for decades. Some settlements are drawn county by county all the same
+        // (Ireland's partition, the 1920 Schleswig plebiscites): a quarter of them, decided
+        // once per movement and flashpoint so a campaign replays its own map.
+        var oneConstituency = peacefulVote &&
+            Roll(campaign.Seed, nation.Id, seed.MapIndex, 0x5C0) >= campaign.Defines.CivilReferendumByRegionShare &&
+            HomelandCarries(campaign, nation, definition, seed, owner);
         // Map order, so the same campaign always takes the same borders in the same sequence.
         foreach (var region in campaign.States.OrderBy(candidate => candidate.MapIndex))
         {
@@ -753,7 +775,7 @@ public static class MovementRules
             if (peacefulVote)
             {
                 var votes = CivilIndependence.ResidentSupport(nation, region);
-                if (!float.IsFinite(votes) || votes <= campaign.Defines.CivilReferendumMajority) continue;
+                if (!float.IsFinite(votes) || (!oneConstituency && votes <= campaign.Defines.CivilReferendumMajority)) continue;
             }
             // A rising spreads where a rising could start. The flashpoint carries the rest of
             // the homeland only over ground the holder is not actually standing on: the army
@@ -771,6 +793,26 @@ public static class MovementRules
         // A vote frees each region that carried it, joined up or not; a rising holds what it
         // can reach from the flashpoint.
         return peacefulVote ? zone : Connected(campaign, nation, zone);
+    }
+
+    /// <summary>
+    /// Whether the homeland this government holds, counted as one constituency, votes for
+    /// independence: the residents' support weighted by how many live in each region.
+    /// </summary>
+    private static bool HomelandCarries(Campaign campaign, Nation nation, MovementDefinition definition,
+        ScenarioState seed, Nation owner)
+    {
+        double people = 0, yes = 0;
+        foreach (var region in campaign.States)
+        {
+            if (region is null || region.NationMapIndex != owner.MapIndex || region.Unclaimed || region.Population <= 0) continue;
+            if (region.MapIndex != seed.MapIndex && !MovementReach.IsHomeland(campaign, definition, region)) continue;
+            var votes = CivilIndependence.ResidentSupport(nation, region);
+            if (!float.IsFinite(votes)) continue;
+            people += region.Population;
+            yes += region.Population * (double)votes;
+        }
+        return people > 0 && yes / people > campaign.Defines.CivilReferendumMajority;
     }
 
     /// <summary>

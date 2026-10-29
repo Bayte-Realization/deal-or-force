@@ -16,6 +16,19 @@ public sealed partial class Defines
 
     /// <summary>The deposit a region must hold of a good before a country opens a mine there for it.</summary>
     public float AiMineDeposit { get; set; } = 0.5f;
+
+    /// <summary>
+    /// A good the whole world makes this many times what it wants is one a country short of it
+    /// buys rather than builds for: its shortage is a trade route, not a missing factory.
+    /// </summary>
+    public float AiBuildWorldGlut { get; set; } = 1.4f;
+
+    /// <summary>
+    /// A country whose buildings already ask for more hands than it has - it fills less than
+    /// this share of its jobs - builds for its shortages but puts up no factory just to have
+    /// one. 0: civilian industry whatever the labour, as before.
+    /// </summary>
+    public float AiBuildLabourFloor { get; set; } = 0f;
 }
 
 /// <summary>
@@ -56,6 +69,9 @@ public static class AiBuilder
         foreach (var quote in nation.Market.Values)
         {
             if (quote.Demand <= 0.05f || quote.Satisfaction >= defines.AiBuildShortage) continue;
+            // Twenty-eight countries short of coal while the world mined six times what it burned
+            // each opened mines of their own, and the glut fed on itself for five years.
+            if (WorldRatio(campaign, quote.Commodity) > defines.AiBuildWorldGlut) continue;
             Shortages.Add((quote.Commodity, (1f - quote.Satisfaction) * quote.Demand * MathF.Max(0.01f, quote.Price)));
         }
         if (Shortages.Count == 0) return false;
@@ -90,6 +106,36 @@ public static class AiBuilder
             }
         }
         return false;
+    }
+
+    /// <summary>
+    /// Whether the country is short of anything an arms factory makes. A country at war built
+    /// one every month whatever its arsenals held: in five years the world made four times the
+    /// missiles, tanks and aircraft it wanted.
+    /// </summary>
+    public static bool ShortOfArms(Campaign campaign, Nation nation)
+    {
+        ProductionChains.RolesOf(BuildingKind.ArmsIndustry, Makes, Uses);
+        foreach (var good in Makes)
+            if (nation.Market.TryGetValue(good, out var quote) && quote.Demand > 0.05f &&
+                quote.Satisfaction < campaign.Defines.AiBuildShortage &&
+                WorldRatio(campaign, good) <= campaign.Defines.AiBuildWorldGlut)
+                return true;
+        return false;
+    }
+
+    /// <summary>What the world makes of a good for each unit it wants.</summary>
+    internal static float WorldRatio(Campaign campaign, Commodity good)
+    {
+        var production = 0f;
+        var demand = 0f;
+        foreach (var nation in campaign.Nations)
+        {
+            if (!nation.Market.TryGetValue(good, out var quote)) continue;
+            production += quote.Production;
+            demand += quote.Demand;
+        }
+        return demand <= 0.001f ? float.MaxValue : production / demand;
     }
 
     /// <summary>The region whose deposit of this good is richest for the mines it already has.</summary>

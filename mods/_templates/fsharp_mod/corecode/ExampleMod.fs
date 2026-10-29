@@ -10,6 +10,10 @@ type GovernanceHelpers =
         context.EnactPolicy(tag, policy, "", 0, false)
     static member CourseShock(context: ModContext, tag: string, strength: double, reason: string) =
         context.AddCourseShock(tag, strength, reason)
+    static member StudyDoctrine(context: ModContext, tag: string, branch: string, node: string, rush: bool) =
+        context.StudyDoctrine(tag, branch, node, rush)
+    static member ProposeAct(context: ModContext, issuer: string, target: string, act: string) =
+        context.ProposeDiplomaticAct(issuer, target, act)
 
 // Same language-neutral managed contract as C# mods. No Godot inheritance required.
 type ExampleMod() =

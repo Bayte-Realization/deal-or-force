@@ -1,4 +1,3 @@
-// Deal or Force - the de facto powers of 2024 (history/factions): names, seats, wars, descriptions.
 {
   "Aden": "Аден",
   "Alliance Fleuve Congo": "Альянс реки Конго",
@@ -66,7 +65,6 @@
   "Below {0} stability officers may start plotting, the more the lower it falls - most of all against a junta or a provisional government, when a war is being lost, or after a coup next door. A plot ripens in {1} days unless stability is back above the line.": "При стабильности ниже {0} офицеры могут начать заговор, и тем вероятнее, чем она ниже, - особенно против хунты или временного правительства, при проигрываемой войне или после переворота у соседа. Заговор созревает за {1} дн., если стабильность не вернётся выше черты.",
   "PROMISED TO DEFEND US": "ОБЕЩАЛИ НАС ЗАЩИЩАТЬ",
   "SITUATION": "ОБСТАНОВКА",
-  "Wars": "Войны",
   "{0} and {1} more": "{0} и ещё {1}",
   "Hottest standoff": "Самое горячее противостояние",
   "The country this one is likeliest to fight next, and how far the tension between them has gone. The Conflicts screen has the rest.": "Страна, с которой эта, скорее всего, будет воевать следующей, и насколько далеко зашла напряжённость. Остальное - на экране «Конфликты».",
@@ -87,7 +85,7 @@
   "United Wa State Army": "Объединённая армия государства Ва",
   "Myanmar National Democratic Alliance Army": "Армия национально-демократического альянса Мьянмы",
   "Ta'ang National Liberation Army": "Национально-освободительная армия та-анг",
-  "Southern Transitional Council": "Южный переходный совет",
+  "Southern Transitional Council": "Переходный южный совет",
   "SPLM-North (al-Hilu)": "НОДС-Север (аль-Хилу)",
   "Kurdistan Region": "Регион Курдистан",
   "Puntland": "Пунтленд",

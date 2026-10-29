@@ -8,12 +8,88 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly List<StatReadout> _hudStats = new();
+    private VBoxContainer _identityPortraitSlot;
+    private string _identityPortraitLeaderKey = "";
+
+    private static int HudRhythm(string key, float fallback) =>
+        Math.Max(4, (int)Math.Round(Ui.Metric(key, fallback) / 4f, MidpointRounding.AwayFromZero) * 4);
+
+    private static void ApplyHudFrame(PanelContainer panel, bool floating = false)
+    {
+        var style = new StyleBoxFlat
+        {
+            BgColor = Ui.Colour("shell.background"),
+            BorderColor = Ui.Colour("shell.border"),
+            ShadowColor = Ui.Colour(floating ? "surface.background" : "text.body", floating ? 0.42f : 0.06f),
+            ShadowSize = floating ? 6 : 1,
+            ShadowOffset = floating ? new Vector2(0, 3) : new Vector2(0, -1)
+        };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(3);
+        style.SetContentMarginAll(1);
+        panel.AddThemeStyleboxOverride("panel", style);
+        if (panel.GetNodeOrNull<AtlasPanelFinish>("AtlasMaterial") is { } finish) finish.Visible = false;
+    }
+
+    private static StyleBoxFlat HudButtonStyle(bool primary, int state, bool compact, bool quiet = false)
+    {
+        var fill = Ui.Colour(state switch
+        {
+            1 => primary ? "button.primary_fill_hover" : "button.fill_hover",
+            2 => primary ? "button.primary_fill_pressed" : "button.fill_pressed",
+            3 => primary ? "button.primary_fill" : "button.fill_disabled",
+            _ => primary ? "button.primary_fill" : "button.fill"
+        });
+        var edge = Ui.Colour(state switch
+        {
+            1 => "button.border_hover", 2 => "button.border_pressed",
+            3 => primary ? "button.primary_border" : "button.border_disabled",
+            _ => primary ? "button.primary_border" : "button.border"
+        });
+        if (quiet && state == 0 && !primary)
+        {
+            fill = Ui.Colour("surface.inset", 0f);
+            edge = Ui.Colour("surface.line_faint", 0f);
+        }
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill, BorderColor = edge,
+            ContentMarginLeft = compact ? 2 : 8, ContentMarginRight = compact ? 2 : 8,
+            ContentMarginTop = compact ? 2 : 4, ContentMarginBottom = compact ? 2 : 4
+        };
+        style.SetBorderWidthAll(quiet && state == 0 && !primary ? 0 : 1);
+        style.SetCornerRadiusAll(3);
+        return style;
+    }
+
+    private static void StyleHudButton(Button button, bool primary, bool quiet = false)
+    {
+        StyleButton(button, primary);
+        var iconOnly = button.Icon is not null && string.IsNullOrEmpty(button.Text);
+        var above = button.HasMeta("icon_above") && button.GetMeta("icon_above").AsBool();
+        var compact = iconOnly || above || button.HasMeta("navigation_short");
+        button.AddThemeStyleboxOverride("normal", HudButtonStyle(primary, 0, compact, quiet));
+        button.AddThemeStyleboxOverride("hover", HudButtonStyle(primary, 1, compact, quiet));
+        button.AddThemeStyleboxOverride("pressed", HudButtonStyle(primary, 2, compact, quiet));
+        button.AddThemeStyleboxOverride("disabled", HudButtonStyle(primary, 3, compact, quiet));
+    }
+
+    private static void StyleCampaignNavigationButton(Button button, bool selected)
+    {
+        StyleHudButton(button, selected, true);
+        button.AddThemeColorOverride("font_color", Ui.Colour(selected ? "button.text_hover" : "text.body_soft"));
+        button.AddThemeColorOverride("icon_normal_color", Ui.Colour(selected ? "text.accent" : "text.muted"));
+        button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
+        button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("text.accent_dim"));
+        button.AddThemeColorOverride("icon_disabled_color", Ui.Colour("button.text_disabled"));
+    }
 
     private void BuildTopBar()
     {
         var top = TexturedPanel(_hudLayer, PanelSurface.CommandStrip);
         _hudTopPanel = top;
         top.Name = "CampaignTopBar";
+        ApplyHudFrame(top);
         Ui.Place(top, "hud.top");
 
         var margin = Margin(top, 12, 6);
@@ -28,61 +104,115 @@ public partial class DealOrForceGame
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
         row.AddChild(_identityFlag);
 
-        var identityBox = new VBoxContainer { CustomMinimumSize = new Vector2(154, 0) };
+        _identityPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        row.AddChild(_identityPortraitSlot);
+
+        var identityBox = new StructuredMetricCell { CustomMinimumSize = new Vector2(158, 0), AccentToken = "text.accent" };
         _hudIdentityBox = identityBox;
         identityBox.AddThemeConstantOverride("separation", 2);
+        identityBox.MouseFilter = MouseFilterEnum.Stop;
+        identityBox.MouseDefaultCursorShape = CursorShape.PointingHand;
+        identityBox.GuiInput += input =>
+        {
+            if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+            {
+                PlayStrategicCue("ui_select");
+                OpenScreen("State Affairs");
+                identityBox.AcceptEvent();
+            }
+        };
         row.AddChild(identityBox);
         _identity = Title("South Korea", 18, Ui.Colour("text.accent"));
         _identity.ClipText = true;
         _identity.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _identity.MouseFilter = MouseFilterEnum.Pass;
         // The bar is two lines tall and no more. A name too wide for the column has to
         // widen the column, not wrap into the line underneath it - which is what
         // "South Korea" did the moment it became "Южная Корея".
         _identity.AutowrapMode = TextServer.AutowrapMode.Off;
         identityBox.AddChild(_identity);
-        _identityTag = Title("KOR · player nation", 13, Ui.Colour("text.muted"));
+        _identityTag = Title("KOR · player nation", 12, Ui.Colour("text.body_soft"));
+        _identityTag.ClipText = true;
+        _identityTag.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
+        _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
         _hudStats.Clear();
-        stats.AddThemeConstantOverride("separation", 7);
+        stats.AddThemeConstantOverride("separation", 8);
         row.AddChild(stats);
         foreach (var field in CampaignUiCatalog.TopStats)
             switch (field)
             {
-                case "TREASURY": _treasury = Stat(stats, field, "Cash on hand. The line below is the change over the last week of campaign time."); break;
+                case "TREASURY":
+                    _treasury = Stat(stats, field, "Cash on hand. The line below is the change over the last week of campaign time.");
+                    BindStatShortcut(_treasury, () => OpenScreen("State Affairs"));
+                    break;
                 case "DEBT":
                     _publicDebt = Stat(stats, field, "Borrowed principal, separate from cash. Open sovereign finance to inspect interest, overdue bills and credit access.");
                     BindDebtHeadline();
                     break;
-                case "BALANCE": _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget); break;
-                case "GDP": _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces."); break;
-                case "POPULATION": _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week.", () => _campaign?.Player is { } p ? HouseholdEconomy.ExplainNationPopulation(_campaign, p) : null); break;
-                case "STABILITY": _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers); break;
-                case "MANPOWER": _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends."); break;
+                case "BALANCE":
+                    _balance = Stat(stats, field, "What the treasury gains or loses each week, and everything that goes into it.", () => _campaign?.Player?.Budget);
+                    BindStatShortcut(_balance, () => OpenScreen("State Affairs"));
+                    break;
+                case "GDP":
+                    _gdp = Stat(stats, field, "Annual gross domestic product, as it emerges from what your economy actually produces.");
+                    BindStatShortcut(_gdp, () => OpenScreen("Economy"));
+                    break;
+                case "POPULATION":
+                    _population = Stat(stats, field, "Everyone living in your states, and how that has moved over the last week.", () => _campaign?.Player is { } p ? HouseholdEconomy.ExplainNationPopulation(_campaign, p) : null);
+                    BindStatShortcut(_population, () => OpenScreen("Nation"));
+                    break;
+                case "STABILITY":
+                    _stability = Stat(stats, field, "How settled the country is. Unrest costs money to police and output to bear.", () => _campaign?.Player?.StabilityDrivers);
+                    BindStatShortcut(_stability, () => OpenScreen("Laws"));
+                    break;
+                case "MANPOWER":
+                    _manpower = Stat(stats, field, "People left to put in uniform. A war that outruns this is a war that ends.");
+                    BindStatShortcut(_manpower, () => OpenRecruitment());
+                    break;
                 // What the army has learned, and what the government can push through: the
                 // currencies of the war doctrines (MilitaryExperience, TacticalDoctrines).
-                case "ARMY XP": _armyExperience = Stat(stats, field, "What the army has learned from fighting, drilling and being funded. Its line below is the price of the next article open to it."); break;
-                case "AIR XP": _airExperience = Stat(stats, field, "What the air service has learned from flying real missions. It is what a doctrine of the sky is paid for in."); break;
-                case "NAVY XP": _navyExperience = Stat(stats, field, "What the fleet has learned from sea time and action. It is what a doctrine of the coast is paid for in."); break;
-                case "POLITICAL CAPITAL": _politicalPoints = Stat(stats, field, "What a government can push through besides money: rewriting a doctrine, or forcing a reform through the staff. Its line below is the weekly gain."); break;
+                case "ARMY XP":
+                    _armyExperience = Stat(stats, field, "What the army has learned from fighting, drilling and being funded. Its line below is the price of the next article open to it.");
+                    BindStatShortcut(_armyExperience, OpenDoctrineScreen);
+                    break;
+                case "AIR XP":
+                    _airExperience = Stat(stats, field, "What the air service has learned from flying real missions. It is what a doctrine of the sky is paid for in.");
+                    BindStatShortcut(_airExperience, OpenDoctrineScreen);
+                    break;
+                case "NAVY XP":
+                    _navyExperience = Stat(stats, field, "What the fleet has learned from sea time and action. It is what a doctrine of the coast is paid for in.");
+                    BindStatShortcut(_navyExperience, OpenDoctrineScreen);
+                    break;
+                case "POLITICAL CAPITAL":
+                    _politicalPoints = Stat(stats, field, "What a government can push through besides money: rewriting a doctrine, or forcing a reform through the staff. Its line below is the weekly gain.");
+                    BindStatShortcut(_politicalPoints, () => OpenScreen("Laws"));
+                    break;
                 // Hover for the reasons, the same as stability: a rate with nothing behind
                 // it cannot answer the question a player actually asks about it.
-                case "INFLATION": _inflation = Stat(stats, field, "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.", () => _campaign?.Player?.InflationDrivers); break;
+                case "INFLATION":
+                    _inflation = Stat(stats, field, "How fast prices are rising. Caused by what the government spends, what the market cannot supply and what the war costs; answered with the policy rate in the budget.", () => _campaign?.Player?.InflationDrivers);
+                    BindStatShortcut(_inflation, () => OpenScreen("State Affairs"));
+                    break;
             }
 
-        var clock = new VBoxContainer { CustomMinimumSize = new Vector2(224, 0) };
+        var clock = new StructuredMetricCell { CustomMinimumSize = new Vector2(224, 0), AccentToken = "button.primary_border" };
         _hudClockBox = clock;
         clock.AddThemeConstantOverride("separation", 2);
         row.AddChild(clock);
-        _date = Title("1 January 2024", 15, Ui.Colour("text.bright"));
+        _date = Title("1 January 2024", 15, Ui.Colour("text.accent"));
+        _date.AddThemeFontOverride("font", Ui.NumberFont);
+        _date.AutowrapMode = TextServer.AutowrapMode.Off;
+        _date.ClipText = true;
         _date.HorizontalAlignment = HorizontalAlignment.Right;
         clock.AddChild(_date);
 
         var speeds = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
-        speeds.AddThemeConstantOverride("separation", 5);
+        speeds.AddThemeConstantOverride("separation", 4);
         clock.AddChild(speeds);
 
         // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
@@ -91,16 +221,28 @@ public partial class DealOrForceGame
         var handbook = ActionButton("Handbook", () => OpenHandbook(), 0, 28);
         handbook.Name = "OpenHandbook";
         handbook.TooltipText = Ui.Tip(Tr("What every screen is for and what its figures mean (F1)."));
+        StyleHudButton(handbook, false);
         speeds.AddChild(handbook);
+
+        // The index of everywhere, next to the handbook and for the same reason: a key nobody
+        // is told about is a key nobody uses. Ctrl+K is printed on the button's own tooltip.
+        var find = ActionButton("Find", ToggleNavigator, 0, 28);
+        find.Name = "OpenNavigator";
+        find.TooltipText = Ui.Tip(Tr("Every screen in the campaign, searchable (Ctrl+K)."));
+        StyleHudButton(find, false);
+        speeds.AddChild(find);
         _dealInboxHudButton = ActionButton("Deals", OpenDealInbox, 0, 28);
         _dealInboxHudButton.Name = "PendingDiplomaticOffers";
         _dealInboxHudButton.Visible = false;
+        StyleHudButton(_dealInboxHudButton, false);
         speeds.AddChild(_dealInboxHudButton);
         var menu = ActionButton("Menu", ShowPauseMenu, 62, 28);
         menu.TooltipText = Ui.Tip(Tr("Pause menu (Esc): save, load, settings, and the way back to the main menu. F5 quick-saves, F9 loads, F10 flies the camera."));
+        StyleHudButton(menu, false);
         speeds.AddChild(menu);
         _pause = ActionButton("II", TogglePause, 32, 28, true);
         _pause.TooltipText = Ui.Tip(Tr("Pause or resume (Space)."));
+        StyleHudButton(_pause, true);
         speeds.AddChild(_pause);
         _speedButtons.Clear();
         for (var speed = 1; speed <= 5; speed++)
@@ -113,6 +255,7 @@ public partial class DealOrForceGame
         UpdateSpeedButtons();
 
         _mediaButton = MusicShortcut();
+        StyleHudButton(_mediaButton, false);
         speeds.AddChild(_mediaButton);
         var window = GetWindow();
         window.SizeChanged += LayoutCampaignShell;
@@ -129,10 +272,29 @@ public partial class DealOrForceGame
                System.Math.Max(154, _identity.Size.X)) identitySize--;
         _identity.AddThemeFontSizeOverride("font_size", identitySize);
         // No tag for nobody: "OBS" read in Russian as "НАБ", a word nobody could place.
+        var leader = Rulers.HeadOfState(_campaign, player);
         _identityTag.Text = _observerMode
             ? Tr("Observer mode")
-            : player.Tag + " · " + Tr("player nation");
+            : !string.IsNullOrEmpty(leader.Name)
+                ? $"{player.Tag} · {leader.Name}"
+                : player.Tag + " · " + Tr("player nation");
+        _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}");
         SetFlag(_identityFlag, player.Tag, 34);
+        if (_identityPortraitSlot is not null)
+        {
+            var portraitKey = _observerMode ? "obs" : $"{player.Tag}:{leader.Name}:{leader.Age}:{player.Color}";
+            if (portraitKey != _identityPortraitLeaderKey)
+            {
+                _identityPortraitLeaderKey = portraitKey;
+                ClearRuntimeChildren(_identityPortraitSlot);
+                if (!_observerMode && !string.IsNullOrEmpty(leader.Name))
+                {
+                    var badge = BuildLeaderPortraitBadge(leader, player.Color, 34, 42);
+                    badge.TooltipText = _identityTag.TooltipText;
+                    _identityPortraitSlot.AddChild(badge);
+                }
+            }
+        }
         // The clock, whenever the campaign is running on something shorter than a day. At a
         // whole-day step the hour is always midnight and printing it would be noise; below
         // that it is the whole point, and it moves.
@@ -276,15 +438,17 @@ public partial class DealOrForceGame
     }
 
     /// <summary>
-    /// The cheapest article the country's book has open right now: the number a player needs
-    /// under the army's experience to know what it is saving for. Nought when nothing is open.
+    /// The cheapest article one of the country's books has open right now: the number a player
+    /// needs under a service's experience to know what it is saving for. Nought when nothing is
+    /// open on that shelf.
     /// </summary>
-    private float NextArticlePrice(Nation player)
+    private float NextArticlePrice(Nation player) => NextArticlePrice(player, DoctrineSlots.Ground);
+
+    private float NextArticlePrice(Nation player, string slot)
     {
         if (!_campaign.FeatureEnabled("tactical_doctrines")) return 0f;
-        var branch = player.TacticalDoctrine.Branch.Length > 0
-            ? player.TacticalDoctrine.Branch
-            : TacticalDoctrines.PreferredBranch(_campaign, player);
+        var book = TacticalDoctrines.BookOn(player, slot);
+        var branch = book?.Id ?? TacticalDoctrines.PreferredBranch(_campaign, player, slot);
         var price = 0f;
         foreach (var node in TacticalDoctrines.Available(player, branch))
             if (price == 0f || node.Cost < price) price = node.Cost;
@@ -335,6 +499,27 @@ public partial class DealOrForceGame
         _ => ""
     });
 
+    private void BindStatShortcut(StatReadout stat, System.Action open)
+    {
+        if (stat?.Box is null || open is null) return;
+        stat.Box.FocusMode = FocusModeEnum.All;
+        stat.Box.MouseDefaultCursorShape = CursorShape.PointingHand;
+        stat.Value.MouseFilter = MouseFilterEnum.Pass;
+        stat.Delta.MouseFilter = MouseFilterEnum.Pass;
+        stat.Box.GuiInput += input =>
+        {
+            if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } ||
+                input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Enter or Key.KpEnter })
+            {
+                PlayStrategicCue("ui_select");
+                open();
+                stat.Box.AcceptEvent();
+            }
+        };
+        stat.Box.FocusEntered += () => stat.Caption.AddThemeColorOverride("font_color", Ui.Colour("text.accent"));
+        stat.Box.FocusExited += () => stat.Caption.AddThemeColorOverride("font_color", Ui.Colour("text.caption"));
+    }
+
     private StatReadout Stat(Container parent, string caption, string tooltip,
         System.Func<Simulation.Breakdown> explain = null)
     {
@@ -345,18 +530,19 @@ public partial class DealOrForceGame
             Name = "HudStat_" + caption.Replace(' ', '_'),
             CustomMinimumSize = new Vector2(68, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            ClipContents = true,
             Explain = explain,
             Plain = explain is null ? "" : Tr(tooltip)
         };
         // The caption is in the tooltip now rather than gone: a symbol a player has not
         // learned yet has to be able to say what it is.
         Tip(box, Tr(caption) + " \u00b7 " + Tr(tooltip));
-        box.AddThemeConstantOverride("separation", 1);
+        box.AddThemeConstantOverride("separation", 2);
         box.MouseFilter = MouseFilterEnum.Stop;
         parent.AddChild(box);
         // Keep a short label beside the symbol: unfamiliar icons must not hide meaning.
         var heading = new HBoxContainer { Name = "StatHeading", MouseFilter = MouseFilterEnum.Ignore };
-        heading.AddThemeConstantOverride("separation", 5);
+        heading.AddThemeConstantOverride("separation", 4);
         box.AddChild(heading);
         TextureRect glyph = null;
         var symbol = StatIcon(caption);
@@ -373,12 +559,12 @@ public partial class DealOrForceGame
                 // the sprite.
                 CustomMinimumSize = new Vector2(16, 16),
                 MouseFilter = MouseFilterEnum.Ignore,
-                Modulate = Ui.Colour("text.accent_dim")
+                Modulate = Ui.Colour("text.muted")
             };
             glyph.SizeFlagsHorizontal = SizeFlags.ShrinkBegin;
             heading.AddChild(glyph);
         }
-        var statCaption = Title(caption, 10, Ui.Colour("text.caption"));
+        var statCaption = Title(caption, 10, Ui.Colour("text.caption"), upper: true);
         statCaption.Name = "StatCaption";
         statCaption.AutowrapMode = TextServer.AutowrapMode.Off;
         statCaption.ClipText = true;
@@ -394,7 +580,7 @@ public partial class DealOrForceGame
             CountryCaption = caption,
             CaptionKey = caption,
             Box = box,
-            Value = Title("—", 17, Ui.Colour("text.bright")),
+            Value = Title("—", 18, Ui.Colour("text.bright")),
             Delta = Title("", 11, Ui.Colour("text.faint"))
         };
         // Neither of these may wrap. The bar is one row tall and the column is sized to the
@@ -433,6 +619,10 @@ public partial class DealOrForceGame
         string shortDelta = null)
     {
         if (stat is null) return;
+        // Figures are set in the tabular face, so a column of them lines up digit for digit and
+        // a changing number does not shift the labels beside it.
+        stat.Value.AddThemeFontOverride("font", Ui.NumberFont);
+        stat.Delta.AddThemeFontOverride("font", Ui.NumberFont);
         stat.Value.Text = compact;
         stat.Value.TooltipText = Ui.Tip(exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
@@ -467,7 +657,7 @@ public partial class DealOrForceGame
         var shortCaption = Simulation.Loc.Has(shortKey) ? Tr(shortKey) : caption;
         var headingWidth = width - (stat.Glyph is { Visible: true } ? 21 : 0);
         FitHudLine(stat.Caption, caption, shortCaption, headingWidth, 10, 10);
-        FitHudLine(stat.Value, stat.Value.Text, stat.Value.Text, width, 17, 11);
+        FitHudLine(stat.Value, stat.Value.Text, stat.Value.Text, width, 18, 12);
         var full = stat.FullDelta;
         var shorter = stat.ShortDelta;
         var font = stat.Delta.GetThemeFont("font");
@@ -554,7 +744,7 @@ public partial class DealOrForceGame
         {
             var button = _speedButtons[index];
             if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleButton(button, running && index + 1 == _speed);
+            StyleHudButton(button, running && index + 1 == _speed);
             button.TooltipText = Ui.Tip(_campaign is null
                 ? Simulation.Loc.Format("Campaign speed {0}", index + 1)
                 : Simulation.Loc.Format("Campaign speed {0} · {1:0.#} campaign hours a second, {2} hour(s) a step",
@@ -562,7 +752,7 @@ public partial class DealOrForceGame
         }
     }
 
-    /// <summary>The screen currently open, lit in the bottom bar.</summary>
+    /// <summary>The screen currently open, highlighted in the navigation rail.</summary>
     private void UpdateScreenButtons()
     {
         var open =
@@ -582,7 +772,7 @@ public partial class DealOrForceGame
         foreach (var (screen, button) in _screenButtons)
         {
             if (!GodotObject.IsInstanceValid(button)) continue;
-            StyleButton(button, screen == open);
+            StyleCampaignNavigationButton(button, screen == open);
         }
         RefreshMapVisualToggles();
     }

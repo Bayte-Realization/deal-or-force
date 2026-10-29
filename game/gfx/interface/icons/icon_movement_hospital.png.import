@@ -2,7 +2,7 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cwy5brxt4r0xa"
+uid="uid://dbgkaiaddq0ye"
 path="res://.godot/imported/icon_movement_hospital.png-5221d936667082fe17a28338aaad7c3b.ctex"
 metadata={
 "vram_texture": false
@@ -24,7 +24,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 mipmaps/preserve_alpha_test_coverage=false
 mipmaps/alpha_test_threshold=0.5

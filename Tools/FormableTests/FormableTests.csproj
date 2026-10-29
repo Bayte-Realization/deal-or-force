@@ -8,6 +8,11 @@
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
   </PropertyGroup>
   <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/Modding/ModCodePaths.cs"/><Compile Include="../../Scripts/Modding/WorkerModBackend.cs"/><Compile Include="../../Scripts/Modding/ModOperations.cs"/><Compile Include="../../Scripts/Modding/ModContracts.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/gfx/HydrologySurfaceData.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/gfx/DateLineSeam.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/StartupTimeline.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/ApplicationExitState.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Modding/ModScalarAccess.cs" /></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
   <ItemGroup><Compile Include="../Shared/ArmyOrderObservation.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../Shared/ExposureReadOracle.cs" /></ItemGroup>
@@ -19,6 +24,7 @@
   <ItemGroup><Compile Include="../../Scripts/Boot/AssaultRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/WarScoreRulesFSharpBoot.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Boot/PeaceRulesFSharpBoot.cs"/></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Boot/WarRhythmRulesFSharpBoot.cs"/></ItemGroup>
   <!-- The managed F# pure rule is part of the game now; the test stand references the same
        net8.0 target the simulation sources compile against. -->
   <ItemGroup><ProjectReference Include="../../Scripts/Rules/DealOrForce.Rules.fsproj" /></ItemGroup>

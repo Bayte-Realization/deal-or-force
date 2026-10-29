@@ -77,7 +77,7 @@ public partial class DealOrForceGame
 
         var shade = new ColorRect
         {
-            Color = new Color(0.015f, 0.026f, 0.041f, 0.72f),
+            Color = Ui.Colour("surface.overlay"),
             MouseFilter = MouseFilterEnum.Stop
         };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
@@ -89,32 +89,27 @@ public partial class DealOrForceGame
 
         var rows = PanelRows(_warLedgerPanel, 22, 16, 10);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        _warLedgerTitle = Title("WARS OF THE WORLD", 25, Ui.Colour("text.accent"));
-        _warLedgerTitle.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        _warLedgerTitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        _warLedgerTitle.ClipText = true;
-        header.AddChild(_warLedgerTitle);
-
         _warBackButton = ActionButton("← All wars", ShowWarLedgerList, 118, 30);
         _warBackButton.Visible = false;
-        header.AddChild(_warBackButton);
-
         _warFilterAll = ActionButton("Every war", () => SetWarLedgerFilter(false), 108, 30, true);
-        header.AddChild(_warFilterAll);
+        _warFilterAll.SetMeta("atlas_tab_button", true);
+        StyleButton(_warFilterAll, true);
         _warFilterMine = ActionButton("Mine", () => SetWarLedgerFilter(true), 78, 30);
-        header.AddChild(_warFilterMine);
-        header.AddChild(HandbookButton("wars"));
-        header.AddChild(ActionButton("×", CloseWarLedger, 34, 30));
+        _warFilterMine.SetMeta("atlas_tab_button", true);
+        StyleButton(_warFilterMine, false);
+        var toConflicts = ActionButton("Conflicts", () => { CloseWarLedger(); OpenConflictsScreen(); }, 0, 30,
+            iconPath: "res://game/gfx/interface/icons/icon_unrest.png");
+        var head = ScreenHeader(rows, "WARS OF THE WORLD",
+            "Active theatres, belligerents, front-line war score, casualties and peace settlements.",
+            false, _warBackButton, _warFilterAll, _warFilterMine, toConflicts, HandbookButton("wars"), ActionButton("×", CloseWarLedger, 34, 30));
+        _warLedgerTitle = HeaderTitle(head);
 
         // ------------------------------------------------------------------ the world
         _warReadouts = new PanelContainer();
         _warReadouts.AddThemeStyleboxOverride("panel", WarInsetStyle(16, 9));
         rows.AddChild(_warReadouts);
         var readouts = new HBoxContainer();
-        readouts.AddThemeConstantOverride("separation", 18);
+        readouts.AddThemeConstantOverride("separation", Ui.Gap(18));
         _warReadouts.AddChild(readouts);
         foreach (var (key, caption) in new[]
                  {
@@ -122,20 +117,10 @@ public partial class DealOrForceGame
                      ("battles", "ENGAGEMENTS"), ("losses", "LOSSES"), ("mine", "YOUR WARS")
                  })
         {
-            if (readouts.GetChildCount() > 0)
-                readouts.AddChild(new ColorRect
-                {
-                    Color = Ui.Colour("war.inset_border"),
-                    CustomMinimumSize = new Vector2(1, 0),
-                    MouseFilter = MouseFilterEnum.Ignore
-                });
-            var readout = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-            readout.AddThemeConstantOverride("separation", 0);
-            readout.AddChild(RowLabel(caption, 10, Ui.Colour("text.caption")));
-            var value = RowLabel("—", 21, Ui.Colour("text.bright"));
-            readout.AddChild(value);
-            _warReadoutValues[key] = value;
-            readouts.AddChild(readout);
+            var cell = NumberCell(caption, "—");
+            cell.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            _warReadoutValues[key] = (Label)cell.GetNode("FigureValue");
+            readouts.AddChild(cell);
         }
 
         _warLedgerSummary = RowLabel("", 12, Ui.Colour("text.body_soft"));
@@ -195,11 +180,15 @@ public partial class DealOrForceGame
         {
             BgColor = Ui.Colour("war.inset"),
             BorderColor = Ui.Colour("war.inset_border"),
+            ShadowColor = new Color(0f, 0f, 0f, 0.36f),
+            ShadowSize = 5,
+            ShadowOffset = new Vector2(0, 2),
             ContentMarginLeft = horizontal, ContentMarginRight = horizontal,
             ContentMarginTop = vertical, ContentMarginBottom = vertical
         };
         style.SetBorderWidthAll(1);
-        style.SetCornerRadiusAll(3);
+        style.BorderWidthTop = 2;
+        style.SetCornerRadiusAll(4);
         return style;
     }
 

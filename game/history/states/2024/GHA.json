@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: 2021 census by region.
 {
   // Ashanti
   "gh_ah": {
     "population": 7883917,
     "urbanization": 0.72,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "akan": 0.85, "dagomba": 0.07, "ewe": 0.04, "ga": 0.02, "hausa": 0.02 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 0.93, "Coal": 0.14, "Oil": 0.411, "IronOre": 0.098, "RareEarths": 0.064, "NaturalGas": 0.201, "Timber": 1.714, "Bauxite": 0.034, "Uranium": 0.008 }
   },
@@ -23,7 +24,7 @@
   "gh_ba": {
     "population": 1340702,
     "urbanization": 0.27,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "akan": 0.7, "dagomba": 0.2, "ewe": 0.05, "hausa": 0.03, "fulani": 0.02 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.338, "Coal": 0.292, "Oil": 0.595, "IronOre": 0.287, "RareEarths": 0.062, "NaturalGas": 0.379, "Timber": 2.981, "Bauxite": 0.053, "Uranium": 0.008 }
   },
@@ -31,7 +32,7 @@
   "gh_ep": {
     "population": 10772715,
     "urbanization": 0.65,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "akan": 0.55, "ga": 0.25, "ewe": 0.12, "dagomba": 0.05, "hausa": 0.03 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.446, "Coal": 0.219, "Oil": 0.24, "IronOre": 0.141, "RareEarths": 0.045, "NaturalGas": 0.164, "Timber": 3.252, "Bauxite": 0.028, "Uranium": 0.006 }
   },
@@ -39,7 +40,7 @@
   "gh_np": {
     "population": 3924581,
     "urbanization": 0.44,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "dagomba": 0.75, "mossi": 0.08, "fulani": 0.07, "akan": 0.05, "hausa": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.074, "Coal": 0.245, "Oil": 0.607, "IronOre": 0.177, "RareEarths": 0.11, "NaturalGas": 0.507, "Timber": 2.274, "Bauxite": 0.144, "Uranium": 0.007 }
   },
@@ -47,7 +48,7 @@
   "gh_uw": {
     "population": 343311,
     "urbanization": 0.7,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "dagomba": 0.85, "mossi": 0.08, "akan": 0.04, "fulani": 0.03 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.457, "Coal": 0.132, "Oil": 0.153, "IronOre": 0.126, "RareEarths": 0.024, "NaturalGas": 0.284, "Timber": 0.706, "Bauxite": 0.031, "Uranium": 0.002 }
   },
@@ -55,7 +56,7 @@
   "gh_tv": {
     "population": 1422512,
     "urbanization": 0.2,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "ewe": 0.75, "akan": 0.12, "ga": 0.05, "dagomba": 0.05, "hausa": 0.03 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.999, "Coal": 0.124, "Oil": 0.22, "IronOre": 0.198, "RareEarths": 0.028, "NaturalGas": 0.234, "Timber": 0.708, "Bauxite": 0.046, "Uranium": 0.003 }
   },
@@ -63,7 +64,7 @@
   "gh_wp": {
     "population": 4730118,
     "urbanization": 0.5,
-    "cultures": { "akan": 0.475, "mossi": 0.165, "ewe": 0.138, "hausa": 0.045, "bassa": 0.04, "senufo": 0.04, "fulani": 0.03, "kru": 0.03, "yoruba": 0.02, "songhai": 0.017 },
+    "cultures": { "akan": 0.82, "ewe": 0.07, "dagomba": 0.06, "ga": 0.03, "hausa": 0.02 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
     "resources": { "Food": 2.217, "Coal": 0.364, "Oil": 0.938, "IronOre": 0.318, "RareEarths": 0.075, "NaturalGas": 0.609, "Timber": 3.281, "Bauxite": 0.091, "Uranium": 0.011 }
   }

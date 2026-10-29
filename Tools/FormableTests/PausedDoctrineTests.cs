@@ -15,6 +15,9 @@ static class PausedDoctrineTests
 
     static bool Near(float left, float right) => Math.Abs(left - right) < .001f;
 
+    /// <summary>The shelf a book stands on: what a country is reading there, and what it is learning.</summary>
+    static DoctrineTrack Track(Nation n, DoctrineBranch branch) => n.TacticalDoctrine.Track(branch.Slot);
+
     static (Campaign Campaign, Nation Nation) World()
     {
         var c = Campaign.CreateBootstrap(20261023);
@@ -53,6 +56,7 @@ static class PausedDoctrineTests
             {
                 n.TacticalDoctrine = new TacticalDoctrineMemory();
                 n.ArmyExperience = n.AirExperience = n.NavalExperience = 1000;
+                n.PoliticalPoints = 1000;
                 NationalModifiers.Invalidate(n);
                 var time = c.ElapsedHours; var random = c.Random.State;
                 var command = new StudyDoctrineCommand
@@ -67,11 +71,12 @@ static class PausedDoctrineTests
                     (branch.Experience == MilitaryExperience.Air || n.AirExperience == 1000) &&
                     (branch.Experience == MilitaryExperience.Navy || n.NavalExperience == 1000),
                     name + " does not charge the other services");
+                var track = Track(n, branch);
                 Check(rush
-                    ? n.TacticalDoctrine.Branch == branch.Id && TacticalDoctrines.Known(n, root.Id) &&
-                        n.TacticalDoctrine.LearningNode.Length == 0
-                    : n.TacticalDoctrine.LearningBranch == branch.Id && n.TacticalDoctrine.LearningNode == root.Id &&
-                        n.TacticalDoctrine.LearningDoneDay == c.ElapsedDays + Math.Max(1, root.Days) &&
+                    ? track.Branch == branch.Id && TacticalDoctrines.Known(n, root.Id) &&
+                        track.LearningNode.Length == 0
+                    : track.LearningBranch == branch.Id && track.LearningNode == root.Id &&
+                        track.LearningDoneDay == c.ElapsedDays + Math.Max(1, root.Days) &&
                         !TacticalDoctrines.Known(n, root.Id),
                     name + (rush ? " is in force immediately" : " starts immediately without skipping its study days"));
                 Check(c.IsPaused && c.ElapsedHours == time && !c.MidStep && c.Random.State == random,
@@ -84,17 +89,18 @@ static class PausedDoctrineTests
         }
 
         var first = TacticalDoctrineCatalog.All.First();
-        var replacement = TacticalDoctrineCatalog.All.First(branch => branch.Id != first.Id);
+        var replacement = TacticalDoctrineCatalog.OnShelf(first.Slot).First(branch => branch.Id != first.Id);
         var oldRoot = first.Nodes.First(node => node.Requires.Count == 0);
         var newRoot = replacement.Nodes.First(node => node.Requires.Count == 0);
-        n.TacticalDoctrine = new TacticalDoctrineMemory { Branch = first.Id };
-        n.TacticalDoctrine.Known.Add(oldRoot.Id);
+        var firstTrack = n.TacticalDoctrine.Track(first.Slot);
+        firstTrack.Branch = first.Id;
+        firstTrack.Known.Add(oldRoot.Id);
         n.ArmyExperience = n.AirExperience = n.NavalExperience = 1000;
         var points = n.PoliticalPoints; var hours = c.ElapsedHours; var rng = c.Random.State;
         Submit(c, new StudyDoctrineCommand
             { IssuerId = n.Id, BranchId = replacement.Id, NodeId = newRoot.Id, Rush = true });
-        Check(n.TacticalDoctrine.Branch == replacement.Id &&
-            n.TacticalDoctrine.Known.SequenceEqual(new[] { newRoot.Id }), "rewriting replaces the old book while paused");
+        Check(Track(n, replacement).Branch == replacement.Id &&
+            Track(n, replacement).Known.SequenceEqual(new[] { newRoot.Id }), "rewriting replaces the old book while paused");
         Check(Near(n.PoliticalPoints, points - c.Defines.DoctrineRewritePoliticalCost) &&
             n.Modifiers.Any(modifier => modifier.Id == TacticalDoctrines.RetrainingModifier),
             "paused rewrite pays its normal political price and keeps retraining consequences");
@@ -157,7 +163,7 @@ static class PausedDoctrineTests
         c.Commands.Enqueue(new StudyDoctrineCommand { IssuerId = n.Id, BranchId = branch.Id, NodeId = root.Id, Rush = true });
         c.Commands.Enqueue(new StudyDoctrineCommand { IssuerId = n.Id, BranchId = branch.Id, NodeId = child.Id });
         c.Commands.ApplyAll(c);
-        Check(TacticalDoctrines.Known(n, root.Id) && n.TacticalDoctrine.LearningNode == child.Id &&
+        Check(TacticalDoctrines.Known(n, root.Id) && Track(n, branch).LearningNode == child.Id &&
             Near(TacticalDoctrines.Experience(n, branch.Experience), 1000 - root.RushCost - child.Cost),
             "paused queue keeps FIFO prerequisites and charges each order exactly once");
         Check(c.IsPaused && c.ElapsedHours == 0 && c.Commands.Count == 0,
@@ -182,7 +188,7 @@ static class PausedDoctrineTests
         var page = File.ReadAllText(Path.Combine(repo, "Scripts", "ui", "DoctrineUI.cs"));
         Check(tree.Contains("ApplyDoctrineCommand(new StudyDoctrineCommand", StringComparison.Ordinal),
             "normal and rushed tactical buttons use the immediate doctrine dispatcher");
-        Check(tree.Contains("string.Equals(memory.LearningBranch, branch.Id, StringComparison.Ordinal)", StringComparison.Ordinal),
+        Check(tree.Contains("string.Equals(track?.LearningBranch, branch.Id, StringComparison.Ordinal)", StringComparison.Ordinal),
             "a first article is shown as learning even before any book is in force");
         var refresh = tree[tree.IndexOf("private void RefreshDoctrineTree(", StringComparison.Ordinal)..];
         Check(refresh.Contains("title.Text = Tr(node.Name);", StringComparison.Ordinal),

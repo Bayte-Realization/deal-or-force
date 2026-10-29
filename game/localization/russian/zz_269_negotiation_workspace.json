@@ -1,0 +1,21 @@
+{
+  "Peace treaty: {0}": "Мирный договор: {0}",
+  "Who deals with whom, on what terms, and what can be done about it today.": "Кто с кем договаривается, на каких условиях и что можно предпринять сегодня.",
+  "Diplomatic actions": "Дипломатические действия",
+  "Find an action…": "Найти действие…",
+  "Search action names. Unavailable actions keep their explanations.": "Поиск по названиям действий. Объяснения недоступных действий сохраняются.",
+  "No diplomatic actions match. Clear the search to see all actions.": "Подходящих действий нет. Очистите поиск, чтобы увидеть все действия.",
+  "No countries match. Try a name, a country tag or another filter.": "Страны не найдены. Попробуйте название, тег страны или другой фильтр.",
+  "{0} actions · {1} available": "Действий: {0} · доступно: {1}",
+  "Treaty terms": "Условия договора",
+  "War leverage": "Ресурс переговоров",
+  "Settlement cost": "Цена требований",
+  "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map": "ЛКМ: потребовать · ПКМ: убрать · Shift: рамка · WASD / СКМ: двигать карту",
+  "{0} regions · {1} selectable": "Регионов: {0} · доступно: {1}",
+  "Their weight": "Их оценка",
+  "You pay": "Вы платите",
+  "They pay": "Они платят",
+  "Strength ratio": "Соотношение сил",
+  "Population share": "Доля населения",
+  "Secession is turned off for this campaign.": "Отделение выключено в этой кампании."
+}

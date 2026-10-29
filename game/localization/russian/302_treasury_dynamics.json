@@ -1,0 +1,22 @@
+// Crises, contagion, pandemics and disasters (TreasuryDynamics.cs).
+{
+  "chronicle.financial_crisis": "В стране {0} разражается финансовый кризис: банки рушатся, государство спасает их, начинается рецессия (тяжесть {2} %).",
+  "chronicle.crisis_contagion": "Кризис перекидывается из страны {1} в страну {0} через торговые связи (тяжесть {2} %).",
+  "chronicle.pandemic": "По миру прокатывается пандемия; сильнее всех пострадала страна {0}. Экономики повсюду сжимаются.",
+  "chronicle.disaster_earthquake": "Землетрясение в регионе {3} (страна {0}): ущерб {2}.",
+  "chronicle.disaster_flood": "Наводнение в регионе {3} (страна {0}): ущерб {2}.",
+  "chronicle.disaster_storm": "Ураган обрушивается на регион {3} (страна {0}): ущерб {2}.",
+  "chronicle.disaster_drought": "Засуха в регионе {3} (страна {0}): потери {2}.",
+  "chronicle.disaster_epidemic": "Эпидемия в регионе {3} (страна {0}): расходы {2}.",
+  "chronicle.disaster_industrial_accident": "Техногенная катастрофа в регионе {3} (страна {0}): ущерб {2}.",
+  "Recession: output -{0}": "Рецессия: выпуск -{0}",
+  "A financial crisis, its contagion or a pandemic has the economy contracting until {0}.": "Финансовый кризис, его волна или пандемия сжимают экономику до {0}.",
+  "Treasury overflowing": "Казна переполнена",
+  "Reserves above {0} of GDP are spent down every week - handouts and tax cuts where voters rule, leakage where nobody answers to them. Invest it, or watch it go.": "Резервы сверх {0} ВВП каждую неделю утекают - на раздачи и снижение налогов там, где правят избиратели, и в карманы там, где никто ни перед кем не отвечает. Вложите их - или смотрите, как они уходят.",
+  "Earthquake": "Землетрясение",
+  "Floods": "Наводнения",
+  "Hurricane": "Ураган",
+  "Drought": "Засуха",
+  "Epidemic": "Эпидемия",
+  "Industrial disaster": "Техногенная катастрофа"
+}

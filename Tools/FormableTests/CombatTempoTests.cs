@@ -45,5 +45,32 @@ static class CombatTempoTests
 
         var desperateCounter = CombatTempo.Counterattack(defines, 0.5f, 0.8f, 0.9f, 0.45f, 0.25f, true);
         Check(desperateCounter > 0.20f, "desperate homeland defense mounts tenacious counter-thrusts");
+
+        // Cauldron / encirclement combat penalty tests
+        Check(CombatTempo.EncirclementFactor(defines, false, 10) == 1f,
+            "supplied formation suffers no encirclement combat penalty");
+        Check(CombatTempo.EncirclementFactor(defines, true, 0) == 1f,
+            "zero days cut off suffers no encirclement combat penalty yet");
+        var halfCutOff = CombatTempo.EncirclementFactor(defines, true, Math.Max(1, defines.SupplyCutoffDays / 2));
+        var fullCutOff = CombatTempo.EncirclementFactor(defines, true, defines.SupplyCutoffDays * 2);
+        Check(halfCutOff < 1f && halfCutOff > fullCutOff,
+            "encirclement combat penalty deepens as pocket isolation matures");
+        Check(MathF.Abs(fullCutOff - (1f - defines.EncirclementMaxCombatPenalty)) < 0.001f,
+            "mature encirclement reaches the configured cauldron combat penalty cap");
+        Check(CombatTempo.EncirclementFactor(null, true, 10) == 1f,
+            "null defines never NaN or zero out encirclement factor");
+
+        // Multi-directional envelopment bonus tests
+        Check(CombatTempo.EnvelopmentFactor(defines, 1) == 1f && CombatTempo.EnvelopmentFactor(defines, 0) == 1f,
+            "single-direction frontal attack gets no multi-axis envelopment bonus");
+        var twoAxes = CombatTempo.EnvelopmentFactor(defines, 2);
+        var threeAxes = CombatTempo.EnvelopmentFactor(defines, 3);
+        var cappedAxes = CombatTempo.EnvelopmentFactor(defines, defines.MaxAttackDirections + 5);
+        Check(twoAxes > 1f && threeAxes > twoAxes,
+            "attacking from multiple provinces grants an increasing envelopment bonus");
+        Check(MathF.Abs(cappedAxes - CombatTempo.EnvelopmentFactor(defines, defines.MaxAttackDirections)) < 0.0001f,
+            "envelopment bonus caps cleanly at MaxAttackDirections");
+        Check(CombatTempo.EnvelopmentFactor(null, 3) == 1f,
+            "null defines return neutral envelopment factor");
     }
 }

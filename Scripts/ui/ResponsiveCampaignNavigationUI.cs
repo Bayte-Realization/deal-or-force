@@ -28,10 +28,11 @@ public partial class DealOrForceGame
         _hudNavigationPanel = navigation;
         navigation.Resized += LayoutCampaignNavigation;
         navigation.Name = "CampaignNavigation";
+        ApplyHudFrame(navigation);
         Ui.Place(navigation, "hud.navigation");
         var margin = Margin(navigation, (int)Ui.Metric("spacing.xs", 4), 6);
         var stack = new VBoxContainer();
-        stack.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
+        stack.AddThemeConstantOverride("separation", HudRhythm("shell.navigation_row_gap", 4));
         margin.AddChild(stack);
 
         _campaignNavigationCategory = new OptionButton
@@ -73,7 +74,7 @@ public partial class DealOrForceGame
         };
         stack.AddChild(_campaignNavigationScroll);
         _campaignNavigationRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _campaignNavigationRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.navigation_row_gap", 4));
+        _campaignNavigationRows.AddThemeConstantOverride("separation", HudRhythm("shell.navigation_row_gap", 4));
         _campaignNavigationScroll.AddChild(_campaignNavigationRows);
         _screenButtons.Clear(); _campaignNavigationGroups.Clear(); _campaignNavigationEntries.Clear(); _campaignNavigationCaptions.Clear();
         _campaignNavigationScreenGroups.Clear();
@@ -89,25 +90,45 @@ public partial class DealOrForceGame
             }
             if (group != lastGroup)
             {
-                var caption = Fixed(Title(group, 9, Ui.Colour("text.caption")));
-                caption.Name = "NavGroup" + group.Replace(" ", "");
-                caption.HorizontalAlignment = HorizontalAlignment.Center;
-                caption.SetMeta(LocUpperMeta, true); caption.Text = caption.Text.ToUpperInvariant();
-                _campaignNavigationCaptions.Add(caption); _campaignNavigationRows.AddChild(caption); lastGroup = group;
+                lastGroup = group;
+                // A caption that repeats the name of the row under it is a duplicate, not a
+                // heading: the rail said COUNTRY and then COUNTRY, and the second one was the
+                // country dossier itself. The caption is skipped when the first row of the group
+                // already says the word - the grouping is still there, it just stops stuttering.
+                if (!string.Equals(Tr(group), Tr(item.Short), StringComparison.OrdinalIgnoreCase))
+                {
+                    var caption = Fixed(Title(group, 10, Ui.Colour("text.caption")));
+                    caption.Name = "NavGroup" + group.Replace(" ", "");
+                    caption.HorizontalAlignment = HorizontalAlignment.Center;
+                    // Localised group names can be longer than the narrow rail.
+                    // Let the container grow to two lines instead of painting across it.
+                    caption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                    caption.ClipText = false;
+                    caption.SetMeta(LocUpperMeta, true); caption.Text = caption.Text.ToUpperInvariant();
+                    _campaignNavigationCaptions.Add(caption); _campaignNavigationRows.AddChild(caption);
+                }
             }
             var captured = item.Screen;
             var button = ActionButton(item.Short, () => ToggleCampaignScreen(captured), 0, 50, false,
                 SpriteCatalog.TextureOf($"icon_{item.Icon}", $"res://game/gfx/interface/icons/icon_{item.Icon}.png"));
             button.Name = "Nav" + item.Screen.Replace(" ", "");
             button.SetMeta("navigation_short", item.Short);
-            button.SetMeta("icon_above", true); button.ClipText = true;
+            button.SetMeta("icon_above", true);
+            button.SetMeta("atlas_nav_tile", true);
+            button.SetMeta(LocUpperMeta, true);
+            button.Text = button.Text.ToUpperInvariant();
+            button.SetMeta(LocAppliedMeta, button.Text);
+            button.AddThemeFontOverride("font", Ui.Tracked());
+            button.ClipText = true;
             // The rail is ninety pixels and the caption is the whole destination: a cut
             // with no ellipsis reads as a word nobody wrote. Same cure as the outliner.
             button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10));
-            button.AddThemeConstantOverride("icon_max_width", 23);
+            FitNavigationCaption(button, (int)Ui.Metric("ui.font.navigation", 10));
+            button.AddThemeConstantOverride("icon_max_width", 22);
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.RemoveMeta("icon_caption_minimum"); button.CustomMinimumSize = new(0, 50);
+            StyleCampaignNavigationButton(button, false);
             Tip(button, Tr(item.Label) + "\n" + Tr(item.Help)); button.AccessibilityName = Tr(item.Label);
             _screenButtons[captured] = button; _campaignNavigationEntries.Add((button, group)); _campaignNavigationRows.AddChild(button);
             _campaignNavigationScreenGroups[captured] = group;
@@ -115,9 +136,17 @@ public partial class DealOrForceGame
         _campaignNavigationGroup = _campaignNavigationGroups.FirstOrDefault() ?? "";
         var media = ActionButton("Sound / Art", OpenMediaLibrary, 0, 42, false,
             SpriteCatalog.TextureOf("icon_ledger", "res://game/gfx/interface/icons/icon_ledger.png"));
-        media.Name = "OpenMediaLibraryNavigation"; media.SetMeta("icon_above", true); StyleButton(media, false);
+        media.Name = "OpenMediaLibraryNavigation";
+        media.SetMeta("icon_above", true);
+        media.SetMeta("atlas_nav_tile", true);
+        media.SetMeta(LocUpperMeta, true);
+        media.Text = media.Text.ToUpperInvariant();
+        media.SetMeta(LocAppliedMeta, media.Text);
+        media.AddThemeFontOverride("font", Ui.Tracked());
+        StyleCampaignNavigationButton(media, false);
         media.RemoveMeta("icon_caption_minimum"); media.CustomMinimumSize = new(0, Ui.Metric("shell.navigation_media_height", 42));
-        media.ClipText = true; media.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10)); media.AddThemeConstantOverride("icon_max_width", 18);
+        media.ClipText = true; media.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        media.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.navigation", 10)); media.AddThemeConstantOverride("icon_max_width", 18);
         media.AccessibilityName = Tr("Sound and artwork");
         Tip(media, "Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign.");
         var mediaGroup = _campaignNavigationGroups.LastOrDefault() ?? "OTHER SCREENS";
@@ -164,7 +193,7 @@ public partial class DealOrForceGame
             entry.Button.CustomMinimumSize = new(0, plan.ButtonHeight);
             entry.Button.SetMeta("icon_above", plan.ButtonHeight >= 42);
             entry.Button.AddThemeConstantOverride("icon_max_width", (int)Math.Clamp(plan.ButtonHeight * .44f, 12, 23));
-            StyleButton(entry.Button, entry.Button.HasMeta("skin_button_primary") && entry.Button.GetMeta("skin_button_primary").AsBool());
+            StyleCampaignNavigationButton(entry.Button, entry.Button.HasMeta("skin_button_primary") && entry.Button.GetMeta("skin_button_primary").AsBool());
         }
         // Localisation can change while a campaign is open; native menu entries have no
         // label node for RefreshLocalisedText to visit, so refresh their captions explicitly.

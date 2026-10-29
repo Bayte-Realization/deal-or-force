@@ -1,0 +1,21 @@
+{
+  "Peace treaty: {0}": "Peace treaty: {0}",
+  "Who deals with whom, on what terms, and what can be done about it today.": "Who deals with whom, on what terms, and what can be done about it today.",
+  "Diplomatic actions": "Diplomatic actions",
+  "Find an action…": "Find an action…",
+  "Search action names. Unavailable actions keep their explanations.": "Search action names. Unavailable actions keep their explanations.",
+  "No diplomatic actions match. Clear the search to see all actions.": "No diplomatic actions match. Clear the search to see all actions.",
+  "No countries match. Try a name, a country tag or another filter.": "No countries match. Try a name, a country tag or another filter.",
+  "{0} actions · {1} available": "{0} actions · {1} available",
+  "Treaty terms": "Treaty terms",
+  "War leverage": "War leverage",
+  "Settlement cost": "Settlement cost",
+  "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map": "LMB: claim · RMB: release · Shift: frame · WASD / MMB: move map",
+  "{0} regions · {1} selectable": "{0} regions · {1} selectable",
+  "Their weight": "Their weight",
+  "You pay": "You pay",
+  "They pay": "They pay",
+  "Strength ratio": "Strength ratio",
+  "Population share": "Population share",
+  "Secession is turned off for this campaign.": "Secession is turned off for this campaign."
+}

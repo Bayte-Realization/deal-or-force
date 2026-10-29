@@ -10,6 +10,7 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Valencian spoken at home, Generalitat survey.
 {
   // A Coruña
   "es_c": {
@@ -231,7 +232,7 @@
   "es_v": {
     "population": 1510938,
     "urbanization": 0.89,
-    "cultures": { "catalan": 0.97, "spanish": 0.0256, "arab_maghrebi": 0.0007, "romanian": 0.0005, "berber": 0.0004, "romani": 0.0004, "ukrainian": 0.0003, "colombian": 0.0003, "ecuadorian": 0.0002, "italian": 0.0002, "venezuelan": 0.0002, "argentine": 0.0002, "chinese_diaspora": 0.0002, "bulgarian": 0.0001, "dominican": 0.0001, "peruvian": 0.0001, "portuguese": 0.0001, "wolof": 0.0001 },
+    "cultures": { "catalan": 0.4999, "spanish": 0.44, "arab_maghrebi": 0.0102, "romanian": 0.0073, "berber": 0.0059, "romani": 0.0059, "ukrainian": 0.0044, "colombian": 0.0044, "ecuadorian": 0.0029, "italian": 0.0029, "venezuelan": 0.0029, "argentine": 0.0029, "chinese_diaspora": 0.0029, "bulgarian": 0.0015, "dominican": 0.0015, "peruvian": 0.0015, "portuguese": 0.0015, "wolof": 0.0015 },
     "buildings": { "Infrastructure": 3 },
     "resources": { "Food": 1.285, "Coal": 0.13, "Oil": 0.343, "IronOre": 0.198, "RareEarths": 0.038, "NaturalGas": 0.202, "Timber": 1.016, "Bauxite": 0.032, "Uranium": 0.004 }
   },

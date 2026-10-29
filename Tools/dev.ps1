@@ -37,6 +37,7 @@ param(
     [switch]$Headless,
     [string]$CaptureDirectory,
     [string]$Godot,
+    [switch]$Doctor,
     [switch]$All
 )
 
@@ -54,7 +55,7 @@ function Find-Godot {
             if ($path -and (Test-Path -LiteralPath $path)) { return $path }
         } catch { }
     }
-    return 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
+    return 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
 }
 
 function Invoke-Build {
@@ -79,7 +80,7 @@ function Find-MatchingGodot {
     if ($sdk -match '/(?<major>\d+)\.(?<minor>\d+)') {
         $wanted = "$($Matches.major).$($Matches.minor)."
         if (-not $version.StartsWith($wanted, [StringComparison]::Ordinal)) {
-            $fallback = 'C:\GodotEngineNet 4.8-Beta1\Godot_v4.8-beta1_mono_win64_console.exe'
+            $fallback = 'C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe'
             if (-not (Test-Path -LiteralPath $fallback)) {
                 throw "Godot $version does not match the project's $wanted SDK, and no matching fallback exists."
             }
@@ -152,11 +153,64 @@ function Invoke-Game {
     if ($failures -ne 0 -or $exit -ne 0) { throw "the game failed its own verification (exit $exit); log: $log" }
 }
 
+function Invoke-Doctor {
+    Write-Host '== what starts with the game ==' -ForegroundColor Cyan
+    $engine = Find-Godot
+    Write-Host ("  engine          {0}" -f $(if (Test-Path -LiteralPath $engine) { $engine } else { "MISSING: $engine" }))
+    $sdk = (dotnet --version) 2>$null
+    Write-Host ("  .NET SDK        {0}" -f $sdk)
+
+    # Autoloads are the first frames of every start: each one is a script that runs before a
+    # single screen exists, and one that waits on a network or a device is felt by the player.
+    # Listing them keeps "we added another runtime" a visible change rather than a mystery stall.
+    $autoloads = Select-String -LiteralPath (Join-Path $project 'project.godot') -Pattern '^([A-Za-z_][A-Za-z0-9_]*)="\*(res://[^"]+)"' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value + ' -> ' + $_.Matches[0].Groups[2].Value }
+    Write-Host ("  autoloads       {0} before any screen" -f $autoloads.Count)
+    foreach ($line in $autoloads) { Write-Host ("                  {0}" -f $line) -ForegroundColor DarkGray }
+
+    # The language budget, as a fact rather than a policy: three languages ship (C#, the F# pure
+    # rules, one GDScript guard) and every other one in the repository is a bench or a lab.
+    $gd = Get-ChildItem -LiteralPath (Join-Path $project 'Scripts') -Filter *.gd -Recurse -File
+    $cs = Get-ChildItem -LiteralPath (Join-Path $project 'Scripts') -Filter *.cs -Recurse -File
+    $fs = Get-ChildItem -LiteralPath (Join-Path $project 'Scripts') -Filter *.fs -Recurse -File
+    Write-Host ("  scripts         {0} C#, {1} F#, {2} GDScript" -f $cs.Count, $fs.Count, $gd.Count)
+    if ($gd.Count -gt 1) { Write-Host '  WARNING: more than one GDScript file in Scripts; the guard is the only one meant to ship.' -ForegroundColor Yellow }
+
+    foreach ($binary in @('.godot/mono/temp/bin/Debug/DealOrForce.dll',
+                          'Scripts/Rules/bin/Debug/net8.0/DealOrForce.Rules.dll')) {
+        $path = Join-Path $project $binary
+        $size = if (Test-Path -LiteralPath $path) { [math]::Round((Get-Item -LiteralPath $path).Length / 1KB) } else { $null }
+        Write-Host ("  {0,-15} {1}" -f (Split-Path -Leaf $binary), $(if ($size) { "$size KB" } else { 'not built' }))
+    }
+
+    # Optional runtimes are the ones that cost a player something at start: the Luau adapter adds
+    # a GDExtension, and the JVM adapters add a runtime. Neither belongs in a normal boot, so a
+    # present-but-unused one should be visible here.
+    foreach ($extension in @('game/extensions/luau/luau_script.gdextension',
+                             'game/extensions/kotlin/kotlin_script.gdextension')) {
+        $present = Test-Path -LiteralPath (Join-Path $project $extension)
+        Write-Host ("  {0,-15} {1}" -f (Split-Path -Leaf $extension), $(if ($present) { 'installed (optional, mods only)' } else { 'not installed' }))
+    }
+
+    $data = Join-Path $project 'game'
+    if (Test-Path -LiteralPath $data) {
+        $mb = [math]::Round(((Get-ChildItem -LiteralPath $data -Recurse -File | Measure-Object Length -Sum).Sum / 1MB))
+        Write-Host ("  content         {0} MB of game data" -f $mb)
+    }
+    $saves = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Bayte Realization\Deal or Force\saves'
+    if (Test-Path -LiteralPath $saves) {
+        $count = (Get-ChildItem -LiteralPath $saves -Filter *.bdfsave -File | Measure-Object).Count
+        Write-Host ("  saves           {0} campaigns in {1}" -f $count, $saves)
+    }
+    Write-Host ''
+}
+
 if ($All) { $Build = $true; $Test = $true; $Game = $true }
-if (-not ($Build -or $Test -or $Import -or $Game)) {
-    Write-Host 'Nothing asked for. Use -Build, -Test, -Import, -Game or -All.' -ForegroundColor Yellow
+if (-not ($Build -or $Test -or $Import -or $Game -or $Doctor)) {
+    Write-Host 'Nothing asked for. Use -Build, -Test, -Import, -Game, -Doctor or -All.' -ForegroundColor Yellow
     exit 0
 }
+if ($Doctor) { Invoke-Doctor }
 if ($Build) { Invoke-Build }
 if ($Import) { Invoke-Import }
 if ($Test) { Invoke-Tests }

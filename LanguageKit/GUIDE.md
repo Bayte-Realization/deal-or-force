@@ -1,12 +1,33 @@
-# Six languages for Godot 4.8 Beta1 .NET
+# Languages for Godot 4.8 Beta2 .NET
 
 [English](GUIDE.md) · [Русский](GUIDE_RU.md)
 
-Tested target: Windows x86-64, `4.8.beta1.mono.official.4d10419ca`.
+Installed target: Windows x86-64, `4.8.beta2.mono.official.cafc17a19`
+(`C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe`).
+The October 16 joint run was `4.8.beta1.mono.official.4d10419ca`
+([reports/native-bindings.md](reports/native-bindings.md)). This kit is a lab. It is not
+on the campaign tick. F# assault rules stay. Do not read a binding as a faster simulation:
+the ownership benchmark's C# median was about 2629 ms against Rust at about 3657 ms.
+
+## Status on 29 October 2026
+
+| Language | In this repo | Upstream pin | Beta2 on this machine | One command |
+| --- | --- | --- | --- | --- |
+| F# | `adapters/fsharp` managed bridge. Not a scene script. | none (our template). SDK `Godot.NET.Sdk/4.8.0-beta.2` | Built and probed. `LANGUAGE_KIT_PASS language=fsharp` | `./adapters/fsharp/build.ps1` then `probe.ps1`, console exe above |
+| Rust | `adapters/rust` `DofRustKernel`. Not a simulation kernel. | gdext `0b680b4d59c4790d4673b2293110687d2e5261c7` (crate 0.5.5, 4 Oct 2026). Release tag v0.5.5 is the older `e7b3a4a7dc9678a5502dc8432c258c702ff89429`. Master `a6318ab080aba694814962fcf09a398b09af3e2f` (25 Oct) still has no `api-4-8` feature | Built and probed. `RUST_PROBE PASS weighted_sum=20 empty=0`. `api-custom` from the Beta2 executable | `./adapters/rust/build.ps1 -GodotExecutable <beta2 console> -SourceDirectory <that commit> -OutputDirectory <scratch>` then `probe.ps1` |
+| Go | `adapters/go` `DofGoKernel` via graphics.gd. Not the globe renderer. | `quaadgras/graphics.gd` `af2e5393cdf04d36e1cba40cb4d6437624916d40` (`go 1.27`) | Probe passed: `GO_PROBE PASS`. PATH Go 1.21.4 is rejected. The DLL used Go 1.27.3 | `./adapters/go/build.ps1` with `-GoExecutable` pointing at Go 1.27+, then `probe.ps1` |
+| Zig | `adapters/zig` `DofZigKernel`. Not the globe renderer. | gdzig `c1b0cc3c7befc4c2483624d078e1e650b07b2dfa` (27 Oct 2026). Vendored API is Godot 4.7.2; Zig 0.17.0 | Probe passed: `ZIG_PROBE PASS`. That does not cover 4.8-only APIs | `./adapters/zig/build.ps1` with Zig 0.17.0, then `probe.ps1` |
+| Python | `adapters/python` recipe. Not on the tick. | py4godot `b41ddb82af5f8e59ce4e1a9254bec9cf82a138dd` (29 Oct, meson fix). Latest **release** is `4.7-alpha21` (`d8e17428deeb0428587349b663f6da26cd71ef3a`) | Not built. No 4.8 release. Upstream still calls it a demo | do not treat `build.ps1` as a green Beta2 run |
+| Nim, Odin, Kotlin, Luau, Lua | Existing adapters, pins unchanged in `sources.lock.json` | same commits as the October lock | Not rebuilt this pass. `adapters/lua/build.ps1` and `adapters/luau/build.ps1` still refuse any engine that is not Beta1 | Doctor, then that adapter's README |
+| Sandbox | `adapters/sandbox` plus the 4.8 patch. Not the campaign tick | godot-sandbox **v0.60** `b43ed1619abc12a669c59cb0aa25c4582873a7b9` (still the latest GitHub release). Master has later commits; they were not rebuilt | Not rebuilt | `./adapters/sandbox/build.ps1` only after a fresh pin review |
+
+GDScript is the engine's language. C# is the game (`Godot.NET.Sdk/4.8.0-beta.2` already). Neither was retargeted here.
 This is a set of source adapters and local examples, not a new official Godot
 distribution. The engine executable and GodotSharp are not replaced.
 
 ## What actually works
+
+The rows below are the 16 October joint run on Beta1, not the 29 October Beta2 check.
 
 | Language | Real integration | Call that was tested |
 | --- | --- | --- |
@@ -33,7 +54,7 @@ Godot.exe. The languages do not get the whole 4.8 API automatically.
 The kit is installed next to the editor:
 
 ```text
-C:/GodotEngineNet 4.8-Beta1/LanguageKit/
+C:/GodotEngineNet 4.8-Beta2/LanguageKit/
   Open Workbench.cmd
   projects/AllSix/       # the local built workbench, not in Git
   adapters/             # examples, recipes, patches, licences
@@ -52,7 +73,7 @@ sources; the computational regression is run separately:
 ./tests/kit-tests.ps1
 # For an already built workbench, from the LanguageKit folder:
 $env:JAVA_HOME = 'C:/Program Files/Eclipse Adoptium/jdk-25.0.2.10-hotspot'
-& 'C:/GodotEngineNet 4.8-Beta1/Godot_v4.8-beta1_mono_win64_console.exe' `
+& 'C:/GodotEngineNet 4.8-Beta2/Godot_v4.8-beta2_mono_win64_console.exe' `
   --headless --path ./projects/AllSix --script res://combined_probe.gd -- `
   fsharp luau rust nim odin kotlin
 ```
@@ -107,8 +128,10 @@ libraries keep MIT, MPL-2.0, Apache-2.0 or BSD-3-Clause and their own notices.
   work with the new Odin. Full generated wrappers and Godin are not declared ready.
 - Rust: minimal bindings with the API and header of the specific installed engine.
 
-Beta1 has a cold immediate-import problem consistent with
-[Godot #111048](https://github.com/godotengine/godot/issues/111048): shutdown can
+Beta1 had a cold immediate-import problem consistent with
+[Godot #111048](https://github.com/godotengine/godot/issues/111048); the Beta2 pass did not
+re-test it, so treat the bootstrap below as a workaround that still earns its place, not as a
+closed issue: shutdown can
 overtake the deferred generation of extension documentation. Our bootstrap creates the
 derived list of known extensions in advance, gives the editor 300 frames with a 20 ms
 frame delay, and then requires an ordinary import and runtime without errors. This is a

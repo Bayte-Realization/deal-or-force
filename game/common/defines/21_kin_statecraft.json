@@ -1,0 +1,65 @@
+// Deal or Force - a country's own hand among its own people across a border (KinStatecraft.cs).
+//
+// Organisers and volunteers, sent to a foreign region where the country's own peoples live.
+// Unrest rises where the ground is worked; fighters join a rising of those peoples; the host
+// takes a grievance, and a service that notices turns a quiet grievance into a public scandal.
+// 0 for either AI chance leaves the computer's half of it off without touching the player's.
+{
+  // How much of a region has to be ours before working it is worth the risk.
+  "KinAgitationMinShare": 0.15,
+  // Organisers, printing and travel: per million of our people there, and the smallest bill.
+  "KinAgitationCashPerMillion": 0.004,
+  "KinAgitationCashFloor": 0.002,
+  // What one operation does to the region's unrest, how long the network needs after it,
+  // and how often the host's service notices where the leaflets come from.
+  "KinAgitationRadicalism": 0.030,
+  "KinAgitationCooldownDays": 150,
+  "KinAgitationDiscovery": 0.22,
+  // The grievance the host takes quietly, and what being caught adds on top of it.
+  "KinAgitationGrievance": 5,
+  "KinAgitationCaughtGrievance": 12,
+  // Volunteers: fighters per million of our people there, the smallest party worth sending,
+  // what a thousand of them costs the treasury, and the cooldown.
+  "KinVolunteersPerMillion": 60,
+  "KinVolunteersFloor": 120,
+  "KinVolunteersCashPerThousand": 0.006,
+  "KinVolunteersCooldownDays": 240,
+  "KinVolunteersGrievance": 9,
+  "KinVolunteersCaughtGrievance": 20,
+  // What the computer is willing to risk: whose opinion of it is bad enough to work against,
+  // the monthly chances, and the years of revenue it keeps in hand before spending any.
+  "AiKinOpinion": -25,
+  "AiKinAgitationChance": 0.10,
+  "AiKinVolunteersChance": 0.05,
+  "AiKinTreasuryYears": 2,
+
+  // A proxy movement: how much of the region must be ours, the cash and political credit,
+  // the cooldown, what the founders put in, the following it starts with, and what the host
+  // carries when it is founded and when it is caught being founded.
+  "KinProxyMinShare": 0.35,
+  "KinProxyCashPerMillion": 0.010,
+  "KinProxyPoliticalCost": 8,
+  "KinProxyCooldownDays": 540,
+  "KinProxyCadresPerMillion": 900,
+  "KinProxyLegitimacy": 0.18,
+  "KinProxySupportSeed": 0.70,
+  "KinProxyGrievance": 14,
+  "KinProxyCaughtGrievance": 26,
+  "KinProxyDiscovery": 0.45,
+  "AiKinProxyChance": 0.02,
+
+  // Parallel administration: our own offices inside somebody else's region. It needs a quarter
+  // of the region, costs cash and credit to open, takes the region's share of the host's tax
+  // (net of what it costs us to run), sours the ground, and can be discovered and shut.
+  "KinAdminMinShare": 0.25,
+  "KinAdminOpenCashPerMillion": 0.006,
+  "KinAdminPoliticalCost": 5,
+  "KinAdminLevy": 0.55,
+  "KinAdminUpkeepPerMillion": 0.0009,
+  "KinAdminRadicalism": 0.004,
+  "KinAdminDiscovery": 0.035,
+  "KinAdminGrievance": 6,
+  "KinAdminCaughtGrievance": 18,
+  "KinAdminShutdownChance": 0.18,
+  "AiKinAdminChance": 0.03
+}

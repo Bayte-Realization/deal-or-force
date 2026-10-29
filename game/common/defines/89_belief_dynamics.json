@@ -1,0 +1,6 @@
+// Bounded annual game rate. Existing population cohorts carry the resulting belief;
+// old saves are not reseeded, and declaration never instantly converts residents.
+{
+  "BeliefConversionEnabled": true,
+  "BeliefConversionAnnual": 0.008
+}

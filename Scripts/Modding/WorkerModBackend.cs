@@ -185,6 +185,28 @@ public sealed class WorkerModBackend
                     pending.Add(new ModCourseShockCommand { IssuerId = issuer.Id, Strength = (float)strength, Reason = reason });
                     continue;
                 }
+                if (kind == "study_doctrine")
+                {
+                    var branchId = item.GetProperty("branch").GetString() ?? "";
+                    var nodeId = item.GetProperty("node").GetString() ?? "";
+                    var rush = item.TryGetProperty("rush", out var rushVal) && rushVal.GetBoolean();
+                    var branch = TacticalDoctrineCatalog.Find(branchId);
+                    if (branch is null || branch.Find(nodeId) is null)
+                        throw new InvalidDataException("Invalid doctrine branch or node.");
+                    pending.Add(new StudyDoctrineCommand { IssuerId = issuer.Id, BranchId = branchId, NodeId = nodeId, Rush = rush });
+                    continue;
+                }
+                if (kind == "propose_diplomatic_act")
+                {
+                    var actTarget = c.NationByTag(item.GetProperty("target").GetString());
+                    var actRaw = item.GetProperty("act").GetString() ?? "";
+                    if (actTarget is null || issuer.Id == actTarget.Id ||
+                        !Enum.TryParse<DiplomaticAct>(actRaw.Replace("_", "", StringComparison.Ordinal), true, out var act))
+                        throw new InvalidDataException("Invalid diplomatic act or target.");
+                    pending.Add(new DiplomaticActCommand {
+                        IssuerId = issuer.Id, TargetId = actTarget.Id, Act = act, Step = DiplomaticActStep.Propose });
+                    continue;
+                }
                 var target = c.NationByTag(item.GetProperty("target").GetString());
                 if (issuer is null || target is null || issuer.Id == target.Id) throw new InvalidDataException("Invalid country pair.");
                 pending.Add(kind switch

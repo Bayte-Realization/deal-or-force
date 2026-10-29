@@ -35,14 +35,15 @@ public partial class DealOrForceGame
     private string _saveRoot;
 
     /// <summary>
-    /// Where the saves live, with the old folder emptied into it once.
+    /// Where the saves live: `saves/` inside the one game folder. This used to be a path built
+    /// here out of three strings - `Documents/Deal or Force/save games` - which is exactly how
+    /// the game ended up with its saves in one folder and its settings in another. The layout
+    /// belongs to <see cref="GamePaths"/> now and this asks for it.
     ///
-    /// `Documents` is where a player looks and where a support request can point. If the
-    /// system will not name a documents folder - it is allowed not to - this falls back to
-    /// `user://save_games`, which is where saves have always been: never wrong, only hard
-    /// to find.
+    /// The two older places are emptied into it once, by the folder's own migration: the engine's
+    /// `user://save_games` and the pre-publisher `Documents/Deal or Force/save games`.
     /// </summary>
-    private string SaveRoot => string.IsNullOrEmpty(_saveRoot) ? _saveRoot = ResolveSaveRoot() : _saveRoot;
+    private string SaveRoot => string.IsNullOrEmpty(_saveRoot) ? _saveRoot = GamePaths.Saves : _saveRoot;
 
     /// <summary>
     /// The folder itself, worked out without a campaign - so the main menu, which is a scene
@@ -50,46 +51,20 @@ public partial class DealOrForceGame
     /// </summary>
     internal static string ResolveSaveRoot()
     {
-        var legacy = ProjectSettings.GlobalizePath("user://save_games");
-        var documents = OS.GetSystemDir(OS.SystemDir.Documents);
-        if (string.IsNullOrWhiteSpace(documents) || !Directory.Exists(documents)) return legacy;
-
-        // Godot hands back a path with forward slashes and Path.Combine adds backslashes,
-        // so without this the folder is shown to the player as
-        // `C:/Users/User/Documents\Deal or Force\save games`, which reads like a bug.
-        var chosen = Path.GetFullPath(Path.Combine(documents, "Deal or Force", "save games"));
+        GamePaths.Prepare();
         try
         {
-            Directory.CreateDirectory(chosen);
-            MigrateSaves(legacy, chosen);
-            return chosen;
+            Directory.CreateDirectory(GamePaths.Saves);
+            return GamePaths.Saves;
         }
         catch (Exception exception)
         {
-            // A documents folder that cannot be written to is a real situation - a
-            // redirected profile, a locked-down machine - and not worth losing the
-            // ability to save over.
+            // A documents folder that cannot be written to is a real situation - a redirected
+            // profile, a locked-down machine - and not worth losing the ability to save over.
             DiagnosticLogs.Write("errors", $"SAVE_ROOT_FALLBACK {exception.Message}");
+            var legacy = System.IO.Path.Combine(ProjectSettings.GlobalizePath("user://"), "save_games");
+            try { Directory.CreateDirectory(legacy); } catch (Exception) { /* reported by the caller */ }
             return legacy;
-        }
-    }
-
-    /// <summary>Copy what is already saved into the folder saves live in now, once.</summary>
-    private static void MigrateSaves(string from, string to)
-    {
-        if (!Directory.Exists(from)) return;
-        foreach (var file in Directory.EnumerateFiles(from))
-        {
-            var target = Path.Combine(to, Path.GetFileName(file));
-            // Never overwrite. If both folders hold a quicksave, the one already in the new
-            // folder is the more recent decision.
-            if (File.Exists(target)) continue;
-            try { File.Copy(file, target); }
-            catch (Exception exception)
-            {
-                DiagnosticLogs.Write("errors",
-                    $"SAVE_MIGRATE_FAILED file={Path.GetFileName(file)} {exception.Message}");
-            }
         }
     }
 
@@ -103,16 +78,18 @@ public partial class DealOrForceGame
         _saveLoadLayer.MouseFilter = MouseFilterEnum.Stop;
         AddChild(_saveLoadLayer);
 
-        var veil = new ColorRect { Color = new Color(0.01f, 0.02f, 0.035f, 0.84f), MouseFilter = MouseFilterEnum.Stop };
+        var veil = new ColorRect { Color = Ui.Colour("surface.overlay", 0.84f), MouseFilter = MouseFilterEnum.Stop };
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _saveLoadLayer.AddChild(veil);
 
         var panel = TexturedPanel(_saveLoadLayer, PanelSurface.Modal);
         Ui.Place(panel, "modal.save_load");
         var rows = ScrollablePanelRows(panel, 28, 24, 10);
-        rows.AddChild(Title("CAMPAIGN ARCHIVE", 28, Ui.Colour("text.accent")));
-        rows.AddChild(Title("Compressed saves by default · F5 quicksave · F9 quickload",
-            13, Ui.Colour("text.muted")));
+        var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
+        openFolder.TooltipText = Ui.Tip(Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody."));
+        ScreenHeader(rows, "CAMPAIGN ARCHIVE",
+            "Compressed saves by default · F5 quicksave · F9 quickload",
+            false, openFolder, ActionButton("×", HideSaveLoadInterface, 38, 32));
 
         var folderRow = new HBoxContainer();
         folderRow.AddThemeConstantOverride("separation", 8);
@@ -120,9 +97,6 @@ public partial class DealOrForceGame
         _saveFolderLine = RowLabel("", 11, Ui.Colour("text.faint"));
         _saveFolderLine.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         folderRow.AddChild(_saveFolderLine);
-        var openFolder = ActionButton("Open folder", OpenSaveFolder, 128, 32);
-        openFolder.TooltipText = Ui.Tip(Tr("Open the folder these are kept in, to copy a campaign somewhere or send one to somebody."));
-        folderRow.AddChild(openFolder);
 
         var newRow = new HBoxContainer();
         newRow.AddThemeConstantOverride("separation", 8);
@@ -140,9 +114,15 @@ public partial class DealOrForceGame
         _saveStatus = Title("", 13, Ui.Colour("text.accent_dim"));
         rows.AddChild(_saveStatus);
 
+        SectionRule(rows, "SAVED CAMPAIGNS");
+        var saveWell = new PanelContainer { Name = "SaveListWell", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        saveWell.SetMeta("atlas_section_ground", "surface.inset");
+        saveWell.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(saveWell, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        rows.AddChild(saveWell);
         _saveList = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _saveList.AddThemeConstantOverride("separation", 4);
-        rows.AddChild(_saveList);
+        saveWell.AddChild(_saveList);
 
         rows.AddChild(ActionButton("Close", HideSaveLoadInterface, 160, 38));
     }
@@ -211,9 +191,25 @@ public partial class DealOrForceGame
 
     private void AddSaveRow(SaveMetadata save)
     {
-        var row = new HBoxContainer();
+        var accent = save.Slot switch
+        {
+            SaveSystem.AutoSlot => "text.caption",
+            SaveSystem.QuickSlot => "state.info",
+            _ => "button.primary_border"
+        };
+        var row = new StructuredFactRow
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            AccentToken = accent,
+            Alternate = _saveList.GetChildCount() % 2 == 1
+        };
         row.AddThemeConstantOverride("separation", 8);
         _saveList.AddChild(row);
+        var edge = new Panel { CustomMinimumSize = new Vector2(3, 0), MouseFilter = MouseFilterEnum.Ignore };
+        var edgeStyle = new StyleBoxFlat { BgColor = Ui.Colour(accent) };
+        edgeStyle.SetCornerRadiusAll(1);
+        edge.AddThemeStyleboxOverride("panel", edgeStyle);
+        row.AddChild(edge);
 
         var title = save.Slot switch
         {
@@ -327,7 +323,7 @@ public partial class DealOrForceGame
         GD.PushError(message);
     }
 
-    private AcceptDialog _campaignFaultDialog;
+    private Control _campaignFaultDialog;
 
     private void ShowCampaignFault(string message, string diagnosticPath, string detail)
     {
@@ -335,20 +331,44 @@ public partial class DealOrForceGame
         var diagnostic = string.IsNullOrEmpty(diagnosticPath)
             ? Tr("A diagnostic snapshot could not be written; see the error log.")
             : Simulation.Loc.Format("Diagnostic snapshot (not a playable save): {0}", diagnosticPath);
-        _campaignFaultDialog = new AcceptDialog
+        var layer = FullLayer("CampaignFaultModal");
+        layer.MouseFilter = MouseFilterEnum.Stop;
+        AddChild(layer);
+        _campaignFaultDialog = layer;
+        var veil = new ColorRect { Color = Ui.Colour("surface.overlay", 0.82f), MouseFilter = MouseFilterEnum.Stop };
+        veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        layer.AddChild(veil);
+        var panel = TexturedPanel(layer, PanelSurface.Modal);
+        panel.Name = "CampaignFaultPanel";
+        Ui.Place(panel, "modal.peace_offer");
+        var rows = PanelRows(panel, 28, 22, 12);
+        void Dismiss() { if (IsInstanceValid(layer)) layer.QueueFree(); }
+        ScreenHeader(rows, "Campaign integrity",
+            message,
+            false, ActionButton("×", Dismiss, 38, 32));
+        var well = new PanelContainer { Name = "FaultDiagnosticWell", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        well.SetMeta("atlas_section_ground", "surface.inset");
+        well.AddThemeStyleboxOverride("panel", AtlasSurfaceSkin.Section("surface.inset"));
+        AtlasSurfaceSkin.Attach(well, AtlasSurfaceSkin.Level.Inset, "surface.inset");
+        rows.AddChild(well);
+        var wellRows = PanelRows(well, 12, 10, 8);
+        var diagLabel = Title(diagnostic, 12, Ui.Colour("text.body_soft"));
+        diagLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        wellRows.AddChild(diagLabel);
+        var detailSummary = detail.Length > 240 ? detail[..240] + "…" : detail;
+        if (!string.IsNullOrEmpty(detailSummary))
         {
-            Title = Tr("Campaign integrity"),
-            // The complete list is in the diagnostic file. Do not expand a native
-            // dialog beyond the screen with dozens of technical paths.
-            DialogText = message + "\n\n" + diagnostic + "\n\n" +
-                (detail.Length > 240 ? detail[..240] + "…" : detail),
-            MinSize = new Vector2I(680, 250)
-        };
-        _campaignFaultDialog.GetLabel().AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        AddChild(_campaignFaultDialog);
-        _campaignFaultDialog.Confirmed += () => _campaignFaultDialog.QueueFree();
-        _campaignFaultDialog.CloseRequested += () => _campaignFaultDialog.QueueFree();
-        _campaignFaultDialog.PopupCentered();
+            var detailLabel = Title(detailSummary, 12, Ui.Colour("state.warning"));
+            detailLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            wellRows.AddChild(detailLabel);
+        }
+        var actions = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End };
+        actions.AddThemeConstantOverride("separation", 8);
+        rows.AddChild(actions);
+        if (!string.IsNullOrEmpty(diagnosticPath))
+            actions.AddChild(ActionButton("Copy diagnostic path", () => DisplayServer.ClipboardSet(diagnosticPath), 190, 36));
+        actions.AddChild(ActionButton("Close", Dismiss, 120, 36, true));
+        layer.MoveToFront();
         _campaign.MarkStrategicChange();
     }
 

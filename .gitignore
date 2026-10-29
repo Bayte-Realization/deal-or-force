@@ -30,6 +30,9 @@ addons/
 # Local assistant instructions and generated agent state are not game content.
 /.agents/
 /.mimosa/
+**/.mimosa/
+# Interrupted Godot safe-save files are editor scratch, not project assets.
+*~RF*.TMP
 /.mcp.json
 /.mcp.json.bak
 /.devin/config.local.json

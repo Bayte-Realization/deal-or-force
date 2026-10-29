@@ -80,7 +80,7 @@ public static class AiFiscalPolicy
     {
         if (!assessment.CanSpend) return false;
         var definition = BuildingCatalog.Get(kind);
-        var cost = definition.Cost * NationalModifiers.Factor(n, "construction_cost");
+        var cost = ConstructionCost.Of(c, n, kind);
         var speed = NationalModifiers.Factor(n, "construction_speed");
         if (!float.IsFinite(cost) || cost < 0 || !float.IsFinite(speed) || speed <= 0) return false;
         var days = Math.Max(1, (int)MathF.Round(definition.Days / speed));

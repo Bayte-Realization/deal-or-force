@@ -105,7 +105,7 @@ public static partial class Warfare
                 var objectiveLine = BattlePlanning.LineFor(campaign, army);
                 if (!army.DirectOrder && objectiveLine is { Kind: FrontLineKind.Offensive } && objectiveLine.Objectives.Count > 0)
                 {
-                    army.PlanActive = false;
+                    army.PlanActive = OffensivePlanning.HasNextPhase(objectiveLine);
                     army.PlannedRoute.Clear();
                     continue;
                 }

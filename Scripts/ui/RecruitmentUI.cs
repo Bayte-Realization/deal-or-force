@@ -34,27 +34,27 @@ public partial class DealOrForceGame
         {
             _recruitmentLayer = FullLayer("Recruitment");
             _hudLayer.AddChild(_recruitmentLayer);
-            var shade = new ColorRect { Color = new Color(.015f, .026f, .041f, .82f), MouseFilter = MouseFilterEnum.Stop };
+            var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
             _recruitmentLayer.AddChild(shade);
             shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
             var panel = TexturedPanel(_recruitmentLayer);
             Ui.Place(panel, "modal.ledger");
             var rows = PanelRows(panel, 28, 22, 10);
 
-            var header = new HBoxContainer();
-            header.AddThemeConstantOverride("separation", 10);
-            rows.AddChild(header);
-            var title = Title("RECRUIT, MOBILISE & NAVAL COMMISSIONING", 24, Ui.Colour("text.accent"));
-            title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            header.AddChild(title);
-            header.AddChild(ActionButton("Production & Lines", () =>
+            var prodBtn = ActionButton("Production & Lines", () =>
             {
                 _recruitmentLayer.Hide();
                 OpenScreen("Production");
-            }, 170, 32));
-            header.AddChild(ActionButton("×", () => _recruitmentLayer.Hide(), 36, 32));
-
-            rows.AddChild(Title("Mobilise field divisions and naval squadrons. Every batch draws directly from your strategic stockpiles, manpower reserves and treasury.", 13, Ui.Colour("text.body_soft")));
+            }, 170, 32);
+            var docBtn = ActionButton("Doctrines", () =>
+            {
+                _recruitmentLayer.Hide();
+                OpenDoctrineScreen();
+            }, 0, 32, iconPath: "res://game/gfx/interface/icons/icon_laws.png");
+            var closeBtn = ActionButton("×", () => _recruitmentLayer.Hide(), 36, 32);
+            ScreenHeader(rows, "RECRUIT, MOBILISE & NAVAL COMMISSIONING",
+                "Mobilise field divisions and naval squadrons. Every batch draws directly from your strategic stockpiles, manpower reserves and treasury.",
+                false, prodBtn, docBtn, closeBtn);
 
             var scroll = new ScrollContainer
             {
@@ -67,13 +67,13 @@ public partial class DealOrForceGame
             scroll.AddChild(body);
 
             // 1. Strategic Stockpile Depots Dashboard
-            body.AddChild(Title("STRATEGIC STOCKPILE DEPOTS & DAILY BURN", 12, Ui.Colour("text.accent")));
+            SectionRule(body, "STRATEGIC STOCKPILE DEPOTS & DAILY BURN");
             _recruitmentStockpileHost = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             _recruitmentStockpileHost.AddThemeConstantOverride("separation", 6);
             body.AddChild(_recruitmentStockpileHost);
 
             // 2. Mobilisation Posture Selector
-            body.AddChild(Title("1. MOBILISATION POSTURE & SPEED", 12, Ui.Colour("text.accent")));
+            SectionRule(body, "1. MOBILISATION POSTURE & SPEED");
             _recruitmentModeButtonsHost = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
             _recruitmentModeButtonsHost.AddThemeConstantOverride("separation", 8);
             body.AddChild(_recruitmentModeButtonsHost);
@@ -93,14 +93,16 @@ public partial class DealOrForceGame
                     _recruitmentMode = captured;
                     RefreshRecruitment();
                 }, 0, 36, captured == _recruitmentMode);
+                btn.SetMeta("atlas_tab_button", true);
                 btn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 btn.TooltipText = Ui.Tip(Tr(tip));
+                StyleButton(btn, captured == _recruitmentMode);
                 _recruitmentModeButtons[captured] = btn;
                 _recruitmentModeButtonsHost.AddChild(btn);
             }
 
             // 3. Visual Template Selector Cards + Dropdown kept for compatibility
-            body.AddChild(Title("2. FORMATION TEMPLATE", 12, Ui.Colour("text.accent")));
+            SectionRule(body, "2. FORMATION TEMPLATE");
             _recruitmentTemplate = new OptionButton { CustomMinimumSize = new Vector2(0, 36), SizeFlagsHorizontal = SizeFlags.ExpandFill };
             body.AddChild(_recruitmentTemplate);
             _recruitmentTemplate.ItemSelected += _ => RefreshRecruitment();

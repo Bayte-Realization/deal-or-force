@@ -265,7 +265,6 @@ public sealed class TakeDecisionCommand : ICampaignCommand
                 break;
             case DecisionKind.AntiCorruptionDrive:
                 nation.Stability = M.Clamp01(nation.Stability + 0.025f);
-                nation.TaxRate = M.Clamp(nation.TaxRate + 0.005f, 0f, 0.60f);
                 break;
             case DecisionKind.EmergencyMobilisation:
                 nation.Stability = M.Clamp01(nation.Stability - 0.025f);

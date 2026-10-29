@@ -25,12 +25,18 @@ public static partial class Warfare
     /// redrawn every day, a formation that has been shot to pieces drops out of the line by
     /// itself and a fresh one takes its place, which is how a reserve rotates in without a
     /// rotation rule.
+    ///
+    /// When <paramref name="campaign"/> and <paramref name="battle"/> are supplied (the live
+    /// battle day), HOI4-style reinforcement chance gates whether a reserve formation that was
+    /// NOT in the firing line yesterday manages to move into an open slot today, scaled by
+    /// signal/recon initiative and <c>reinforcement_rate</c> doctrine modifiers.
     /// </summary>
     private static void Frontage(IReadOnlyCollection<Army> side, float room, List<Army> line, List<Army> reserve)
-        => FrontageReady(side, room, line, reserve, 0f);
+        => FrontageReady(side, room, line, reserve, 0f, null, null, false);
 
     private static void FrontageReady(IReadOnlyCollection<Army> side, float room, List<Army> line,
-        List<Army> reserve, float breakOrganisation)
+        List<Army> reserve, float breakOrganisation, Campaign campaign = null, LandBattle battle = null,
+        bool attacker = false)
     {
         line.Clear();
         reserve.Clear();
@@ -38,13 +44,23 @@ public static partial class Warfare
 
         LineCandidates.Clear();
         LineCandidates.AddRange(side);
-        LineCandidates.Sort(static (left, right) =>
+        var prevLine = battle is null ? null : attacker ? battle.LastAttackerLine : battle.LastDefenderLine;
+        var hasPrevLine = prevLine is { Count: > 0 };
+
+        LineCandidates.Sort((left, right) =>
         {
+            if (hasPrevLine)
+            {
+                var leftInLine = prevLine.Contains(left.Id) && left.Organisation > breakOrganisation;
+                var rightInLine = prevLine.Contains(right.Id) && right.Organisation > breakOrganisation;
+                if (leftInLine != rightInLine) return rightInLine.CompareTo(leftInLine);
+            }
             var byPower = right.Power.CompareTo(left.Power);
             return byPower != 0 ? byPower : left.Id.CompareTo(right.Id);
         });
 
         var held = 0f;
+        var baseChance = campaign?.Defines.CombatReinforceBaseChance ?? 0.55f;
         foreach (var army in LineCandidates)
         {
             if (army.Organisation <= breakOrganisation) { reserve.Add(army); continue; }
@@ -53,6 +69,18 @@ public static partial class Warfare
             // holds the province, and the overcrowding penalty is what it pays for ground
             // it does not have. Everything after it has to fit.
             if (line.Count > 0 && held + width > room + 0.001f) { reserve.Add(army); continue; }
+            if (hasPrevLine && line.Count > 0 && !prevLine.Contains(army.Id) && campaign is not null && battle is not null)
+            {
+                var nation = campaign.NationById(army.NationId);
+                var docBonus = nation is null ? 0f : NationalModifiers.Of(nation, "reinforcement_rate") * 0.5f;
+                var chance = M.Clamp(baseChance + army.Recon * 0.25f + army.Cohesion * 0.15f + docBonus, 0.18f, 0.96f);
+                var roll = Escalation.Roll(campaign.Seed, battle.Id, army.Id, campaign.ElapsedDays, 0x51C);
+                if (roll > chance)
+                {
+                    reserve.Add(army);
+                    continue;
+                }
+            }
             line.Add(army);
             held += width;
         }
@@ -64,6 +92,12 @@ public static partial class Warfare
 
 public sealed partial class Defines
 {
+    /// <summary>
+    /// Base daily probability (0..1) that a reserve formation in the battle province moves into
+    /// an open frontage slot during an active battle (HOI4 combat reinforcement chance).
+    /// </summary>
+    public float CombatReinforceBaseChance { get; set; } = 0.55f;
+
     /// <summary>
     /// How much of a day's fighting reaches a formation waiting behind the line, as a share
     /// of what the formation in the line takes. Shelling that misses the front finds the

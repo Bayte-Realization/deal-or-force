@@ -67,25 +67,29 @@ public static class StateIdentity
 {
     /// <summary>The answers a government may always take: no church, no nation named.</summary>
     public static readonly HashSet<string> Secular = new(StringComparer.OrdinalIgnoreCase)
-    { "irreligion", "atheism", "state_atheism", "secularism" };
+    { "irreligion", "secularism" };
 
     /// <summary>
     /// The one secular answer the interface offers.
     ///
-    /// The four ids above are synonyms a mod or an old save may use; presenting all of them
-    /// gave a player two or three buttons that all meant "no state church". They stay valid
-    /// in <see cref="IsSecular"/> so an existing declaration still reads as secular, but the
-    /// choice list shows this one.
+    /// Irreligion/secularism remain the neutral no-state-church policy. Atheism is a
+    /// separate cohort and state programme; legacy state_atheism still names that programme.
     /// </summary>
     public const string SecularChoice = "irreligion";
 
     public static bool IsSecular(string id) => !string.IsNullOrWhiteSpace(id) && Secular.Contains(id);
+    public static bool IsAtheist(string id) => string.Equals(id, "atheism", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(id, "state_atheism", StringComparison.OrdinalIgnoreCase);
+    public static string CanonicalFaith(string id) => IsAtheist(id) ? "atheism" : id ?? "";
+    public static bool SameFaith(string left, string right) =>
+        string.Equals(CanonicalFaith(left), CanonicalFaith(right), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The name of an identity as the state declares it, not as a census counts it.</summary>
     public static string Name(string id, bool religion)
     {
         if (string.IsNullOrWhiteSpace(id)) return Loc.Get("none declared");
         if (religion && IsSecular(id)) return Loc.Get("Secular state");
+        if (religion && IsAtheist(id)) return Loc.Get("Atheist state");
         return religion ? DemographyCatalog.ReligionName(id) : DemographyCatalog.CultureName(id);
     }
 
@@ -136,7 +140,7 @@ public static class StateIdentity
             foreach (var (religion, size) in EconomySystem.Religions(state))
             {
                 total += size;
-                if (religion.Equals(religionId, StringComparison.OrdinalIgnoreCase)) counted += size;
+                if (SameFaith(religion, religionId)) counted += size;
             }
         }
         return total <= 0 ? 0f : counted / (float)total;
@@ -179,18 +183,17 @@ public static class StateIdentity
                 .ToList();
     }
 
-    /// <summary>Demographic faiths plus the one secular policy, once per identity, not once per source.</summary>
+    /// <summary>Demographic faiths, one neutral secular policy and one explicit atheist policy.</summary>
     public static List<(string Id, float Share)> ReligionChoices(Campaign campaign, Nation nation)
     {
-        // A person who is irreligious is a demographic fact; a state with no church is a
-        // policy. Both used to arrive as buttons, and the synonyms behind them could arrive
-        // twice. The faith list now carries faiths only, and exactly one secular answer
-        // follows it, whatever a mod or an old save calls that answer.
+        // Non-affiliation is not a positive assertion of atheism. Offer both policies once,
+        // preserving every resident's actual beliefs until the demographic review changes them.
         var result = Candidates(campaign, nation, true)
-            .Where(choice => !IsSecular(choice.Id))
+            .Where(choice => !IsSecular(choice.Id) && !IsAtheist(choice.Id))
             .Take(8)
             .ToList();
         result.Add((SecularChoice, ReligionShare(campaign, nation, SecularChoice)));
+        result.Add(("atheism", ReligionShare(campaign, nation, "atheism")));
         return result;
     }
 
@@ -204,10 +207,11 @@ public static class StateIdentity
         if (!string.IsNullOrWhiteSpace(religionId) &&
             !religionId.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase))
         {
-            if (DemographyCatalog.Religion(religionId) is null && !IsSecular(religionId))
+            if (DemographyCatalog.Religion(CanonicalFaith(religionId)) is null && !IsSecular(religionId))
                 return Loc.Get("No such faith is known");
-            // A secular answer needs nobody's permission; a church needs a congregation.
-            if (!IsSecular(religionId) &&
+            // Neutrality and an explicitly atheist government can be declared as policies;
+            // only neutrality is exempt from the ongoing costs of opposing residents' beliefs.
+            if (!IsSecular(religionId) && !IsAtheist(religionId) &&
                 ReligionShare(campaign, nation, religionId) < campaign.Defines.StateIdentityShare)
                 return Loc.Format("That faith is too small in the country to be declared: under {0}",
                     campaign.Defines.StateIdentityShare.ToString("0%"));
@@ -280,7 +284,7 @@ public static class StateIdentity
         if (left is null || right is null) return 0f;
         var total = 0f;
         if (left.DeclaredReligion.Length > 0 &&
-            left.DeclaredReligion.Equals(right.DeclaredReligion, StringComparison.OrdinalIgnoreCase)) total += weight;
+            SameFaith(left.DeclaredReligion, right.DeclaredReligion)) total += weight;
         if (left.DeclaredCulture.Length > 0 &&
             left.DeclaredCulture.Equals(right.DeclaredCulture, StringComparison.OrdinalIgnoreCase)) total += weight * 0.5f;
         return total;
@@ -299,7 +303,7 @@ public static class StateIdentity
         a is not null && b is not null &&
         !string.IsNullOrWhiteSpace(a.DeclaredReligion) &&
         !IsSecular(a.DeclaredReligion) &&
-        a.DeclaredReligion.Equals(b.DeclaredReligion, StringComparison.OrdinalIgnoreCase);
+        SameFaith(a.DeclaredReligion, b.DeclaredReligion);
 
     /// <summary>
     /// How far a region's people sit outside the state's declared faith or culture (0 to 1).
@@ -323,7 +327,7 @@ public static class StateIdentity
             var group = groups[i];
             if (group.Size <= 0) continue;
             total += group.Size;
-            if (hasReligion && string.Equals(group.Religion, nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase))
+            if (hasReligion && SameFaith(group.Religion, nation.DeclaredReligion))
                 faithMatch += group.Size;
             if (hasCulture && string.Equals(group.Culture, nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase))
                 cultureMatch += group.Size;
@@ -351,10 +355,10 @@ public sealed class DeclareStateIdentityCommand : ICampaignCommand
 
         var changed = false;
         var faithChange = !string.IsNullOrWhiteSpace(Religion) &&
-                          !Religion.Equals(nation.DeclaredReligion, StringComparison.OrdinalIgnoreCase);
+                          !StateIdentity.SameFaith(Religion, nation.DeclaredReligion);
         var cultureChange = !string.IsNullOrWhiteSpace(Culture) &&
                             !Culture.Equals(nation.DeclaredCulture, StringComparison.OrdinalIgnoreCase);
-        if (faithChange) { nation.DeclaredReligion = Religion; changed = true; }
+        if (faithChange) { nation.DeclaredReligion = StateIdentity.CanonicalFaith(Religion); changed = true; }
         if (cultureChange) { nation.DeclaredCulture = Culture; changed = true; }
         if (!changed) return;
         nation.IdentityChangedDay = campaign.ElapsedDays;

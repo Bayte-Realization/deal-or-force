@@ -224,6 +224,9 @@ public static class SubjectInteractions
         {
             SubjectSystem.Release(campaign, reb, broke: true);
             reb.SecededFromId = overlord.Id;
+            // A subject that walked out is born of its overlord for good, whatever a later peace
+            // says about the war.
+            if (reb.RevoltParentId < 0) reb.RevoltParentId = overlord.Id;
             reb.WarSupport = MathF.Max(reb.WarSupport, 0.82f);
             reb.Stability = MathF.Max(reb.Stability, 0.55f);
             var rel = CampaignDiplomacy.Get(campaign, overlord.Id, reb.Id);
@@ -1045,6 +1048,9 @@ public static class CountryRelease
         born.IdentityChangedDay = campaign.ElapsedDays;
         born.SecededFromId = parent.Id;
         born.ReleasedFromId = parent.Id;
+        // A country released out of another is still born of it: the permanent record is what
+        // keeps a later war over the same ground from being read as a war between strangers.
+        if (born.RevoltParentId < 0) born.RevoltParentId = parent.Id;
 
         if (!string.IsNullOrWhiteSpace(culture))
         {

@@ -31,6 +31,8 @@ category, and never the executable.
         decisions/       the buttons a government may press
         defines/         every tuning number in the simulation
         escalation/      the incidents that happen under tension between two countries
+        generals/        commanders' temperaments: what each does to attack and defence
+        world_layers/    which drawn layers exist at all: trade traffic, weather, counters...
         factions/        (a mod's) de facto powers, in the format of history/factions
         handbook/        the in-game handbook (F1): its topics and articles
         goods/           the commodities the market trades
@@ -47,6 +49,8 @@ category, and never the executable.
         interface/icons/ the icons on buttons
         interface/panels/ the frames panels are drawn on
         globe/           what is drawn on the globe itself
+        models/          3D models, one folder per kind (trade/: ships and lorries) - see
+                         gfx/models/README.md; inline JSON meshes or any .glb/.gltf
       gui/               where the panels sit - anchors and offsets
       interface/         what the game is made of - the colour palette and its metrics
       history/           what was true when the bookmark opens
@@ -86,6 +90,19 @@ opens `gfx/`.
 
 Where a `gfx/` file sits does not matter - the whole tree is read, subfolders and all, in
 path order. The subfolders are there to be read by people, not by the game.
+
+## Another age
+
+A scenario set in another century usually wants three things the base game takes for
+granted switched off, and all three are data:
+
+- **Mechanics** - the `Features` table in `common/defines` (`"navy"`, `"colonisation"`,
+  `"secession"`, `"coups"`, `"drones"`, `"aviation"`, `"long_range_forces"` and the rest):
+  `{ "Features": { "drones": false, "aviation": false } }` in a file of your own.
+- **What the map draws** - `common/world_layers`: `{ "trade_traffic": false,
+  "supply_lines": false }`. Every layer is on unless a file says otherwise.
+- **What the map draws it with** - `gfx/models`: replace the container ships with cogs by
+  shipping files under the same names, or add a galley as a `.glb` with a small JSON beside it.
 
 ## The pieces you are most likely to want
 

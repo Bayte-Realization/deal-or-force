@@ -163,6 +163,7 @@ public static class PeaceShape
         return Anchors(campaign, Graph(campaign), winner, winnerRegions).Contains(region);
     }
 
+    private static Campaign _nearCacheCampaign;
     private static readonly Dictionary<long, (int Revision, bool Near)> NearCache = new();
 
     /// <summary>
@@ -183,6 +184,11 @@ public static class PeaceShape
         if (map is null || from is null || other is null) return false;
         var reach = campaign.Defines.PeaceShapeBridgeheadKm;
         if (reach <= 0f) return true;
+        if (!ReferenceEquals(_nearCacheCampaign, campaign))
+        {
+            NearCache.Clear();
+            _nearCacheCampaign = campaign;
+        }
         var key = ((long)from.Id << 32) | (uint)other.Id;
         if (NearCache.TryGetValue(key, out var known) && known.Revision == campaign.MapRevision) return known.Near;
         // By who owns the ground, not by whose troops stand on it: the border table the AI
@@ -896,13 +902,37 @@ public static class PeaceRulesHook
     public delegate bool LeafDelegate(Func<int, IEnumerable<int>> adjacency, ISet<int> chosen, ISet<int> anchors, int region);
     public delegate int[][] PartsDelegate(Func<int, IEnumerable<int>> adjacency, IEnumerable<int> nodes);
 
+    /// <summary>The stalemate discount over an achievable war aim: five numbers in, one out.</summary>
+    public delegate float StalemateDelegate(int durationDays, bool statusQuo, bool stalled,
+        float weariness, float responderOccupied);
+
     private static LeafDelegate _leaf;
     private static PartsDelegate _parts;
+    private static StalemateDelegate _stalemate;
 
     public static void Install(LeafDelegate leaf, PartsDelegate parts)
     {
         _leaf = leaf;
         _parts = parts;
+    }
+
+    /// <summary>
+    /// Install the pure F# arithmetic for the stalemate discount. Kept apart from
+    /// <see cref="Install"/> so the game still has a working verdict when only one of the two is
+    /// wired: a missing hook falls back to the managed formula, never to zero.
+    /// </summary>
+    public static void InstallStalemate(StalemateDelegate stalemate) => _stalemate = stalemate;
+
+    public static bool TryStalemate(int durationDays, bool statusQuo, bool stalled,
+        float weariness, float responderOccupied, out float discount)
+    {
+        if (_stalemate is not null)
+        {
+            discount = _stalemate(durationDays, statusQuo, stalled, weariness, responderOccupied);
+            return true;
+        }
+        discount = 0f;
+        return false;
     }
 
     public static bool TryLeaf(Func<int, IEnumerable<int>> adjacency, ISet<int> chosen, ISet<int> anchors, int region, out bool result)

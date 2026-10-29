@@ -1,6 +1,8 @@
 param(
     [ValidateSet('Doctor', 'Fetch', 'Build', 'Probe', 'InstallKit')][string]$Action = 'Doctor',
-    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta1',
+    [string]$EngineDirectory = 'C:/GodotEngineNet 4.8-Beta2',
+    # The six reviewed languages. zig, go, python, lua and sandbox are opt-in: ask for them by
+    # name (`-Languages zig`) even though their pins and recipes ship in this kit.
     [string[]]$Languages = @('luau', 'fsharp', 'nim', 'odin', 'rust', 'kotlin'),
     [string]$CacheDirectory = (Join-Path $PSScriptRoot '.cache/sources'),
     [string]$OutputDirectory = (Join-Path $PSScriptRoot '.cache/artifacts'),
@@ -25,11 +27,48 @@ switch ($Action) {
     'Doctor' {
         Write-Host "ENGINE $($engine.Version)"
         Write-Host "EXECUTABLE $($engine.Executable)"
-        foreach ($name in @('git', 'dotnet', 'cmake', 'ninja', 'uv', 'cargo', 'nim', 'odin', 'java')) {
+        Write-Host "DIRECTORY $($engine.Directory)"
+        foreach ($name in @('git', 'dotnet', 'cmake', 'ninja', 'uv', 'cargo', 'rustc', 'nim', 'odin', 'java', 'gradle',
+                            'zig', 'go', 'gcc', 'python', 'meson', 'pip')) {
             $tool = Get-Command $name -ErrorAction SilentlyContinue
             if ($tool) { Write-Host "$name $($tool.Source)" } else { Write-Host "$name NOT_ON_PATH (portable compiler parameters are supported)" }
         }
-        foreach ($adapter in $selected) { Write-Host "ADAPTER $($adapter.id) $($adapter.integration) -- build/probe evidence is in reports, not inferred from presence" }
+        # Every adapter in the lock, not only the selected ones: knowing what is available is
+        # the point of a doctor, and a language left out of -Languages is still worth seeing.
+        foreach ($adapter in $lock.adapters) {
+            $verifiedProperty = $adapter.PSObject.Properties['verified']
+            $verified = if ($verifiedProperty) { [bool]$verifiedProperty.Value } else { $true }
+            $statusProperty = $adapter.PSObject.Properties['status']
+            $status = if ($statusProperty) { [string]$statusProperty.Value } else { '' }
+            $requiresProperty = $adapter.PSObject.Properties['requires']
+            $requires = if ($requiresProperty) { @($requiresProperty.Value) } else { @() }
+            # Historical Beta1 results do not turn into Beta2 verification when
+            # the engine pin changes. Only exact-engine evidence gets this label.
+            $evidence = if ($lock.PSObject.Properties['verification']) { $lock.verification.PSObject.Properties[$adapter.id] } else { $null }
+            $verdict = if ($evidence -and $evidence.Value.engine -eq $engine.Version) {
+                if ($evidence.Value.stage -eq 'runtime-smoke') { 'RUNTIME-SMOKE-VERIFIED' }
+                else { 'REJECTED-' + $evidence.Value.stage }
+            } elseif ($verified) { 'HISTORICAL-ONLY (Beta1; selected engine unverified)' } else { 'RECIPE-ONLY' }
+            $line = "ADAPTER $($adapter.id) $($adapter.integration) $verdict"
+            if ($status.Length -gt 0) { $line += " -- $status" }
+            Write-Host $line
+            foreach ($requirement in $requires) {
+                $found = Get-Command $requirement -ErrorAction SilentlyContinue
+                if ($found -and $requirement -eq 'go') {
+                    $raw = (& $found.Source version | Out-String).Trim()
+                    if ($raw -match 'go1\.(\d+)' -and [int]$Matches[1] -ge 27) { Write-Host "  requires go READY $raw $($found.Source)" }
+                    else { Write-Host "  requires go INCOMPATIBLE $raw (needs 1.27+; portable toolchain can be supplied)" }
+                }
+                elseif ($found -and $requirement -eq 'zig') {
+                    $raw = (& $found.Source version | Out-String).Trim()
+                    if ($raw -eq '0.17.0') { Write-Host "  requires zig READY $raw $($found.Source)" }
+                    else { Write-Host "  requires zig INCOMPATIBLE $raw (needs exactly 0.17.0)" }
+                }
+                elseif ($found) { Write-Host "  requires $requirement READY $($found.Source)" }
+                else { Write-Host "  requires $requirement MISSING (install it, or pass its path to -BuildOptions)" }
+            }
+        }
+        Write-Host 'ADAPTER presence is not proof: build/probe evidence lives in reports/, and a successful build alone is not a runtime pass.'
     }
     'Fetch' {
         foreach ($adapter in $selected) {

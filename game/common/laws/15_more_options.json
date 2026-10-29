@@ -1,0 +1,76 @@
+// Forty-four further answers to the twenty-two questions the policy workspace already
+// asks. Every category below is an existing one; every option is one more answer to it,
+// and every answer is a trade, never an upgrade - the rule the shipped files follow.
+//
+// A `modifiers` block uses the keys in Scripts/Simulation/NationalModifiers.cs; `icon`
+// names a sprite without the `icon_` prefix, exactly as the shipped options do. Foreign
+// options carry `foreign_trust`, the targeted-posture number, rather than modifiers.
+{
+  "//": "More options for existing categories: two further answers to each question.",
+
+  "fiscal_war": { "name": "War finance mandate", "category": "Fiscal mandate", "icon": "treasury", "description": "The treasury borrows what the war needs and collects harder while it does.", "modifiers": { "tax_efficiency": 0.04, "borrowing_cost": 0.10, "war_support_weekly": 0.0008 } },
+  "fiscal_austerity": { "name": "Austerity", "category": "Fiscal mandate", "icon": "treasury", "description": "Spending cut to what the taxes already cover. Credit thanks the country; the country does not thank it.", "modifiers": { "tax_efficiency": 0.05, "construction_speed": -0.05, "living_weekly": -0.0005 } },
+
+  "service_contract": { "name": "Contract service", "category": "Military service", "icon": "army_defend", "description": "Longer terms and professional pay: formations that fight better and cost more to raise.", "modifiers": { "recruitment_speed": 0.05, "recruitment_cost": 0.10, "army_attack": 0.02 } },
+  "service_elite": { "name": "Elite small force", "category": "Military service", "icon": "army_defend", "description": "Fewer divisions, better ones, and no depth behind them: replacements arrive slowly.", "modifiers": { "army_attack": 0.05, "army_defense": 0.04, "recruitment_speed": -0.08, "reinforcement_rate": -0.10 } },
+
+  "education_digital": { "name": "Digital literacy drive", "category": "Education", "icon": "research", "description": "Computers in every school and a generation that speaks to machines - and organises on them.", "modifiers": { "research_speed": 0.06, "tax_efficiency": -0.02, "movement_activity": 0.05 } },
+  "education_classical": { "name": "Classical curriculum", "category": "Education", "icon": "research", "description": "Grammar, history and obedience to the textbook. A settled country, not a fast one.", "modifiers": { "stability_weekly": 0.0003, "tax_efficiency": 0.02, "research_speed": -0.02 } },
+
+  "rights_digital": { "name": "Digital rights charter", "category": "Civil rights", "icon": "population", "description": "Privacy of the wire in law. Science moves to where it is safe to think; the state hears less.", "modifiers": { "research_speed": 0.04, "movement_activity": 0.08, "war_support_weekly": -0.0003 } },
+  "rights_oversight": { "name": "Security oversight", "category": "Civil rights", "icon": "population", "description": "Courts that answer quickly and quietly. Organisation is harder; so is surprise.", "modifiers": { "movement_activity": -0.12, "radicalism_weekly": -0.0002, "research_speed": -0.02 } },
+
+  "welfare_workfare": { "name": "Workfare", "category": "Social guarantees", "icon": "population", "description": "Support that has to be worked for. More output, and resentment from those counted off the rolls.", "modifiers": { "output": 0.02, "living_weekly": 0.0002, "radicalism_weekly": 0.0003 } },
+  "welfare_family": { "name": "Family support", "category": "Social guarantees", "icon": "population", "description": "Grants, leave and housing for households with children. Dear now, demography later.", "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0002, "output": -0.02 } },
+
+  "industry_defense": { "name": "Defence industrial base", "category": "Industrial policy", "icon": "construction", "description": "Shells and steel reserved for the state's own orders, whatever the world price.", "modifiers": { "supply": 0.05, "army_attack": 0.02, "trade_reach": -0.05 } },
+  "industry_green": { "name": "Green industrial policy", "category": "Industrial policy", "icon": "construction", "description": "Capital rebuilt around what does not burn. Slower, cleaner, steadier.", "modifiers": { "construction_speed": 0.05, "output": -0.02, "living_weekly": 0.0002 } },
+
+  "labour_codetermination": { "name": "Co-determination", "category": "Labour regulation", "icon": "population", "description": "Workers on every board. Decisions take longer and hold better.", "modifiers": { "stability_weekly": 0.0003, "radicalism_weekly": -0.0002, "output": -0.02 } },
+  "labour_platform": { "name": "Platform labour rules", "category": "Labour regulation", "icon": "population", "description": "The gig economy in law: cheap, quick, and precariously employed.", "modifiers": { "output": 0.03, "living_weekly": -0.0002, "radicalism_weekly": 0.0005 } },
+
+  "migration_open": { "name": "Open doors", "category": "Migration policy", "icon": "population", "description": "Anyone who arrives and works, stays. A faster country and an angrier argument.", "modifiers": { "research_speed": 0.04, "output": 0.03, "radicalism_weekly": 0.0004 } },
+  "migration_diaspora": { "name": "Diaspora engagement", "category": "Migration policy", "icon": "population", "description": "The country's own abroad as a trade network, courted rather than forgotten.", "modifiers": { "trade_reach": 0.06, "research_speed": 0.02, "tax_efficiency": -0.02 } },
+
+  "environment_carbon": { "name": "Carbon pricing", "category": "Environmental regulation", "icon": "construction", "description": "What burns pays for burning. The budget gains, the furnaces grumble.", "modifiers": { "tax_efficiency": 0.05, "output": -0.03, "living_weekly": 0.0002 } },
+  "environment_nuclear": { "name": "Nuclear expansion", "category": "Environmental regulation", "icon": "energy", "description": "Reactors on the coast and the river, and the argument that follows them.", "modifiers": { "output": 0.05, "supply": 0.02, "radicalism_weekly": 0.0003 } },
+
+  "security_intelligence": { "name": "Intelligence mandate", "category": "Security mandate", "icon": "decisions", "description": "The quiet service grows. Long-range formations are looked after; letters are read.", "modifiers": { "support_losses": -0.05, "movement_activity": -0.05, "tax_efficiency": -0.03 } },
+  "security_gendarmerie": { "name": "Gendarmerie", "category": "Security mandate", "icon": "army_defend", "description": "A paramilitary police in every province: order that arrives quickly and remembers faces.", "modifiers": { "militia_readiness": 0.10, "stability_weekly": 0.0002, "radicalism_weekly": -0.0004, "output": -0.01 } },
+
+  "media_public": { "name": "Public broadcaster", "category": "Public information", "icon": "decisions", "description": "One channel the state funds and does not own. Boring, trusted, useful in a crisis.", "modifiers": { "stability_weekly": 0.0002, "research_speed": 0.02, "war_support_weekly": 0.0002 } },
+  "media_secrets": { "name": "Official secrets", "category": "Public information", "icon": "decisions", "description": "What the state does not publish, nobody publishes. Quiet, and incurious.", "modifiers": { "movement_activity": -0.12, "stability_weekly": 0.0004, "research_speed": -0.05 } },
+
+  "administration_digital": { "name": "Digital administration", "category": "Administration", "icon": "government", "description": "The state's paperwork in one machine. It collects better and remembers everything.", "modifiers": { "tax_efficiency": 0.06, "research_speed": 0.02, "radicalism_weekly": 0.0002 } },
+  "administration_merit": { "name": "Merit commission", "category": "Administration", "icon": "government", "description": "Examinations for office, and the patronage that cannot be handed out.", "modifiers": { "tax_efficiency": 0.03, "construction_speed": 0.02, "stability_weekly": -0.0002 } },
+
+  "regional_federal": { "name": "Federal settlement", "category": "Regional autonomy", "scope": "region", "icon": "government", "description": "The region keeps its own police, schools and taxes. Quieter, poorer at the centre.", "modifiers": { "radicalism_weekly": -0.0010, "living_weekly": 0.0003, "stability_weekly": -0.0002 } },
+  "regional_appointed": { "name": "Appointed governors", "category": "Regional autonomy", "scope": "region", "icon": "government", "description": "The centre's own men in the provinces. Steadier hands, angrier streets.", "modifiers": { "stability_weekly": 0.0004, "radicalism_weekly": 0.0005 } },
+
+  "recovery_infrastructure": { "name": "Infrastructure-led recovery", "category": "Regional recovery", "scope": "region", "icon": "construction", "description": "Roads and mains first: the rebuilding that every later rebuilding stands on, at a price.", "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0003, "radicalism_weekly": 0.0001 } },
+  "recovery_cultural": { "name": "Cultural restoration", "category": "Regional recovery", "scope": "region", "icon": "construction", "description": "Churches, theatres and monuments before anything that pays. A region that wants to stay.", "modifiers": { "living_weekly": 0.0004, "stability_weekly": 0.0002, "radicalism_weekly": -0.0002 } },
+
+  "foreign_summit": { "name": "Summit diplomacy", "category": "Targeted foreign policy", "scope": "foreign", "icon": "treaty", "description": "Meetings, photographs and patience with this one country.", "foreign_trust": 0.10 },
+  "foreign_deterrent": { "name": "Deterrent posture", "category": "Targeted foreign policy", "scope": "foreign", "icon": "army_defend", "description": "This border is held by what stands behind it, and the neighbour is told so.", "foreign_trust": -0.10 },
+
+  "trade_regional": { "name": "Regional preference", "category": "Trade policy", "icon": "trade", "description": "The neighbours first, tariffs second. A bloc, and the world's dearer credit.", "modifiers": { "trade_reach": 0.03, "output": 0.02, "borrowing_cost": 0.03 } },
+  "trade_services": { "name": "Services export", "category": "Trade policy", "icon": "trade", "description": "What the country sells arrives by wire. Richer ledgers, thinner docks.", "modifiers": { "tax_efficiency": 0.04, "trade_reach": 0.02, "output": -0.01 } },
+
+  "currency_dollarised": { "name": "Dollarisation", "category": "Currency regime", "icon": "treasury", "description": "Somebody else's money, at somebody else's price: cheap credit and no lever of one's own.", "modifiers": { "borrowing_cost": -0.10, "output": -0.03, "construction_speed": -0.04 } },
+  "currency_digital": { "name": "Digital currency", "category": "Currency regime", "icon": "treasury", "description": "The currency as a ledger entry. Everything collected, everything watched.", "modifiers": { "tax_efficiency": 0.05, "trade_reach": 0.03, "radicalism_weekly": 0.0002 } },
+
+  "energy_renewable": { "name": "Renewable build-out", "category": "Energy policy", "icon": "energy", "description": "Wind and sun and the lines to carry them. Dear to build, cheap to run.", "modifiers": { "construction_speed": 0.04, "supply": 0.02, "output": -0.02 } },
+  "energy_rationing": { "name": "Rationing readiness", "category": "Energy policy", "icon": "energy", "description": "Plans to share out whatever arrives less of. The army never goes short; the towns do.", "modifiers": { "supply": 0.05, "output": -0.04, "stability_weekly": 0.0002 } },
+
+  "research_space": { "name": "Space programme", "category": "Research policy", "icon": "research", "description": "Orbit as prestige and reconnaissance both. The laboratories reach for it.", "modifiers": { "research_speed": 0.05, "deterrence": 0.05, "output": -0.02 } },
+  "research_open": { "name": "Open science", "category": "Research policy", "icon": "research", "description": "Published, shared, and borrowed back with interest from everywhere.", "modifiers": { "research_speed": 0.04, "trade_reach": 0.03, "tax_efficiency": -0.03 } },
+
+  "pension_minimum": { "name": "Minimum pension guarantee", "category": "Pension policy", "icon": "population", "description": "Nobody old is poor, and everybody working pays for it.", "modifiers": { "living_weekly": 0.0003, "stability_weekly": 0.0002, "output": -0.02 } },
+  "pension_private": { "name": "Private accounts", "category": "Pension policy", "icon": "treasury", "description": "Every worker an investor. Deeper credit markets, thinner guarantees.", "modifiers": { "output": 0.03, "borrowing_cost": -0.03, "living_weekly": -0.0002 } },
+
+  "development_corridor": { "name": "Corridor development", "category": "Regional development", "scope": "region", "icon": "construction", "description": "The country grows along its roads: faster building where the corridor runs.", "modifiers": { "living_weekly": 0.00035, "stability_weekly": 0.0002, "radicalism_weekly": 0.00015 } },
+  "development_zones": { "name": "Special economic zones", "category": "Regional development", "scope": "region", "icon": "trade", "description": "Enclaves of somebody else's rules. They attract; they also negotiate.", "modifiers": { "living_weekly": 0.0004, "radicalism_weekly": 0.0002 } },
+
+  "forward_mediation": { "name": "Mediating power", "category": "Foreign posture", "scope": "foreign", "icon": "treaty", "description": "The country others bring their quarrels to. Standing without enemies, or fleets.", "foreign_trust": 0.06 },
+  "forward_posture": { "name": "Forward posture", "category": "Foreign posture", "scope": "foreign", "icon": "army_defend", "description": "The forces stand on other people's borders, and the borrowing stands behind them.", "foreign_trust": -0.12 }
+}

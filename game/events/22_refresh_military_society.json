@@ -1,0 +1,69 @@
+// Свежая пачка событий: армия, наука, общество.
+{
+  "fighter_prototype": {
+    "title": "The prototype flies",
+    "description": "Eleven years and two ministers after the programme started, the prototype leaves the ground and stays there for forty minutes.",
+    "weight": 0.7,
+    "options": [
+      { "title": "Order it into service now",
+        "consequence": "The wing gets an aircraft; the budget gets a hole.",
+        "effects": { "treasury_percent": -0.06, "army_experience": 5, "air_experience": 4 },
+        "modifiers": [ { "id": "military_reform", "days": 365 } ] },
+      { "title": "Keep testing for three more years",
+        "consequence": "The safest aircraft in the world, delivered to nobody.",
+        "effects": { "treasury_percent": -0.02, "army_experience": 3, "political_points": -4 } },
+      { "title": "Offer it for export",
+        "consequence": "Somebody else's air force pays for ours.",
+        "effects": { "treasury_percent": 0.035, "market_access": 0.02, "army_experience": -2 } }
+    ]
+  },
+  "teachers_pay_demand": {
+    "title": "The teachers stop marking",
+    "description": "A work-to-rule in every school in the country. The union's demand is a number the finance ministry has already refused twice.",
+    "weight": 1.1,
+    "options": [
+      { "title": "Meet the demand",
+        "consequence": "Schools reopen Monday and the wage bill never comes back down.",
+        "effects": { "treasury_percent": -0.03, "state.standard_of_living": 0.001, "stability": 0.008 } },
+      { "title": "Refuse and wait them out",
+        "consequence": "The union breaks in six weeks and remembers for six years.",
+        "effects": { "state.radicalism": 0.014, "stability": -0.006, "research": -4 } },
+      { "title": "Reform the pay scale instead",
+        "consequence": "Fewer teachers, paid better, in larger classes.",
+        "effects": { "political_points": -8, "research": 6, "state.radicalism": 0.004 } }
+    ]
+  },
+  "pipeline_sabotage": {
+    "title": "Sabotage on the pipeline",
+    "description": "Two charges, one valve, and a week of lost pressure. The service says it was professional; the border service says it was the neighbours.",
+    "weight": 0.8,
+    "options": [
+      { "title": "Repair it and say nothing",
+        "consequence": "The gas returns and the question does not.",
+        "effects": { "treasury_percent": -0.025, "construction_capacity": 0.02, "stability": -0.004 } },
+      { "title": "Name the neighbour publicly",
+        "consequence": "A useful grievance, and a harder border.",
+        "effects": { "war_support": 0.018, "stability": 0.006, "market_access": -0.02 } },
+      { "title": "Diversify the route",
+        "consequence": "Expensive now, impossible to cut twice.",
+        "effects": { "treasury_percent": -0.04, "construction_capacity": -0.03, "construction_capacity": 0.04 },
+        "modifiers": [ { "id": "infrastructure_drive", "days": 270 } ] }
+    ]
+  },
+  "defector_with_folder": {
+    "title": "A defector and a folder",
+    "description": "He crossed at a quiet post with a diplomatic passport and a folder. He wants residency, a house and a publisher; the folder is worth more than all three.",
+    "weight": 0.7,
+    "options": [
+      { "title": "Publish everything",
+        "consequence": "The public learns a great deal; so do the neighbours.",
+        "effects": { "political_points": 8, "stability": -0.008, "state.radicalism": 0.008 } },
+      { "title": "Trade him back quietly",
+        "consequence": "Two of ours come home. The folder goes back too.",
+        "effects": { "stability": 0.01, "war_support": 0.006, "political_points": -4 } },
+      { "title": "Keep him and say nothing",
+        "consequence": "An asset nobody can use in daylight.",
+        "effects": { "army_experience": 2, "army_experience": 1.5, "state.radicalism": 0.002 } }
+    ]
+  }
+}

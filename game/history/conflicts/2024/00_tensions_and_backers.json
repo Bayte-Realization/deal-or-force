@@ -88,7 +88,17 @@
     { "between": ["DOM", "HTI"], "structural": 35, "tension": 40 },
     // The Helmand water dispute, the border clashes of 2023-2024, and millions of Afghan
     // refugees Tehran is driving back over the frontier.
-    { "between": ["AFG", "IRN"], "structural": 25, "tension": 40 }
+    { "between": ["AFG", "IRN"], "structural": 25, "tension": 40 },
+    // Sahel juntas vs ECOWAS coastal states after the 2023 Niger coup and withdrawal from ECOWAS.
+    { "between": ["NER", "NGA"], "structural": 25, "tension": 52, "grievance": [20, 15] },
+    { "between": ["MLI", "CIV"], "structural": 20, "tension": 44, "grievance": [15, 10] },
+    // Khartoum accuses Abu Dhabi and N'Djamena of supplying the Rapid Support Forces across Darfur.
+    { "between": ["SDN", "ARE"], "structural": 30, "tension": 64, "grievance": [45, 10] },
+    // Red Sea and Horn of Africa strategic rivalries.
+    { "between": ["ERI", "DJI"], "structural": 20, "tension": 38, "grievance": [15, 15] },
+    // Andean diplomatic crisis of early 2024.
+    { "between": ["ECU", "MEX"], "structural": 15, "tension": 46, "grievance": [15, 25] },
+    { "between": ["COL", "VEN"], "structural": 20, "tension": 34 }
   ],
 
   // Who was arming whom in the war being fought. Levels: 1 advisers and money, 2 weapons,

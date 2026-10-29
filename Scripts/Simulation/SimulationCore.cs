@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -347,6 +347,15 @@ public sealed partial class Nation
     /// being its own free-running number - see EconomySystem.Tick.
     /// </summary>
     public float GrossOutput;
+    /// <summary>
+    /// What a head of its people makes, at base prices, the first week it is measured, and how far
+    /// its households' appetite has grown with it since (MarketCore, the recipes' "income"): one at
+    /// the start, so the calibrated 2024 market is untouched, and rising as the country gets richer.
+    /// </summary>
+    public float IncomeBaseline;
+    public float IncomeFactor = 1f;
+    /// <summary>Jobs per worker its buildings asked for in its first market (MarketSystem.CapitalReturns).</summary>
+    public float CapitalIntensityReference;
 
     /// <summary>
     /// Converts weekly gross output into the GDP scale the campaign was authored in.
@@ -674,9 +683,18 @@ public sealed partial class Campaign
             if (Nations[i].MapIndex == mapIndex) return Nations[i];
         return null;
     }
-    public Nation NationByTag(string tag) => Nations.FirstOrDefault(n =>
-        string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(n.Iso, tag, StringComparison.OrdinalIgnoreCase));
+    public Nation NationByTag(string tag)
+    {
+        if (string.IsNullOrEmpty(tag)) return null;
+        for (var i = 0; i < Nations.Count; i++)
+        {
+            var n = Nations[i];
+            if (string.Equals(n.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(n.Iso, tag, StringComparison.OrdinalIgnoreCase))
+                return n;
+        }
+        return null;
+    }
 
     /// <summary>
     /// Advance one whole campaign day, whatever the step length is.
@@ -825,13 +843,19 @@ public sealed partial class Campaign
         // step is, which is what lets a six-hour tick move an army a quarter of the way
         // instead of not at all.
         using (SimProfiler.Measure("military access")) MilitaryAccess.Tick(this);
+        using (SimProfiler.Measure("diplomatic acts")) DiplomaticActs.Tick(this);
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
+        // A frame may stop here and between the fleets and the fighting: the same passes in the
+        // same order, but the step's heaviest pair - supply and the battles with their staff
+        // work, thirty milliseconds together - no longer has to land in one frame.
+        yield return 0;
         using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
         using (SimProfiler.Measure("naval"))
         {
             using (SimProfiler.Measure("  naval:admiralty")) AiAdmiralty.Tick(this);
             using (SimProfiler.Measure("  naval:operations")) NavalOperations.Tick(this);
         }
+        yield return 0;
         using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
@@ -857,8 +881,9 @@ public sealed partial class Campaign
         // whether the campaign is stepping six hours at a time or three days.
         for (var day = 0; day < daysCrossed; day++)
         {
-            RecruitmentSystem.Tick(this);
-            Contractors.Tick(this);
+            using (SimProfiler.Measure("recruitment")) RecruitmentSystem.Tick(this);
+            yield return 0;
+            using (SimProfiler.Measure("contractors")) Contractors.Tick(this);
             using (SimProfiler.Measure("stockpiles")) StrategicStockpiles.TickDay(this);
             yield return 0;
             SupportCore.Tick(this);
@@ -875,19 +900,45 @@ public sealed partial class Campaign
             // Offers and requests that nobody answered stop occupying the tie. Both are state
             // that travels in a save, so both have to expire somewhere.
             using (SimProfiler.Measure("diplomatic_offers")) { Guarantee.Tick(this); AgreementSystem.Tick(this); }
+            // Visits, shows of force, mediation and loans (DiplomaticGestures): the instalments weekly, the computer's choices monthly.
+            using (SimProfiler.Measure("diplomatic_gestures")) { DiplomaticGestures.Tick(this); DiplomaticGestures.AiTick(this); }
+            // Rents, terms, the troops that stay and the owners who answer them (LandArrangements).
+            using (SimProfiler.Measure("land_arrangements")) LandArrangementSystem.Tick(this);
+            // Why money does not pile up: erosion, the pressure to spend, the credit cycle, the bills nobody budgets for.
+            using (SimProfiler.Measure("treasury_dynamics")) TreasuryDynamics.Tick(this);
+            // Somebody else's paperwork inside somebody else's region: what it takes, what it
+            // costs, and whether the host has noticed (ParallelAdministration).
+            using (SimProfiler.Measure("parallel administration")) ParallelAdministration.Tick(this);
+            // Votes under the troops in regions held a year or more (HeldRegions).
+            HeldRegions.AiMonth(this);
+            // A government relieves the commander who keeps losing (Generals).
+            Generals.AiMonth(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
-            using (SimProfiler.Measure("brain drain")) BrainDrain.Tick(this);
+            // In stages, like the economy before it (BrainDrain.Stages).
+            using (var drain = BrainDrain.Stages(this).GetEnumerator())
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("brain drain")) more = drain.MoveNext();
+                    yield return 0;
+                    if (!more) break;
+                }
             // And inside each country: from the regions that are worse off to the ones that are
             // better, and away from the fighting, carrying who they are.
             using (SimProfiler.Measure("internal migration")) InternalMigration.Tick(this);
+            yield return 0;
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
-            if (ElapsedDays % 7 == 0 && NumericIntegrity.FirstLiveIssue(this) is { } invalid)
+            string invalid = null;
+            if (ElapsedDays % 7 == 0)
+                using (SimProfiler.Measure("integrity")) invalid = NumericIntegrity.FirstLiveIssue(this);
+            if (invalid is not null)
             {
                 BlockSimulation(invalid);
                 throw new CampaignIntegrityException(invalid);
             }
+            yield return 0;
             using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
@@ -901,6 +952,7 @@ public sealed partial class Campaign
             // A formation that has been cut off or is standing among its own people can
             // change sides. Monthly, deterministic, and only after the fighting has moved.
             using (SimProfiler.Measure("defections")) Defections.Tick(this);
+            using (SimProfiler.Measure("desertion")) Desertion.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("coups")) Coups.Tick(this);
             yield return 0;
@@ -917,6 +969,12 @@ public sealed partial class Campaign
             foreach (var _ in MovementAi.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("movements"))
             using (SimProfiler.Measure("  mov:methods")) MovementMethods.Tick(this);
+            yield return 0;
+            // A country's own hand among its own people abroad (KinStatecraft): organisers and
+            // volunteers across a border, monthly and quiet, where the demography gives it a
+            // people to work. It happens after the movements have acted, because what it may do
+            // about a rising is join one that already exists.
+            using (SimProfiler.Measure("kin statecraft")) KinStatecraft.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
             yield return 0;
@@ -957,10 +1015,15 @@ public sealed partial class Campaign
         // Age structure and the cultures that migration moves: the demographic cycle reads the births
         // and deaths the household review has just counted, and aggregates the country's shape so a
         // tooltip or a modifier source reads one number (DemographicCycle).
-        using (SimProfiler.Measure("demography"))
-        {
-            DemographicCycle.Tick(this);
-        }
+        // In stages, so the week's heaviest pass does not land in one frame (DemographicCycle.Stages).
+        using (var demography = DemographicCycle.Stages(this).GetEnumerator())
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("demography")) more = demography.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
         // A country that is running out of people is counted here, straight after the cycle that
         // counts them. What becomes of its empty ground is a later decision about inheritance,
         // deliberately not this line (DEMOGRAPHIC_EXTINCTION_DESIGN_RU.md).
@@ -1018,6 +1081,9 @@ public sealed partial class Campaign
 
             // Ground held by a country nobody is at war with goes home: whatever ended the
             // war today - a peace, a submission, a subjugation - the troops do not stay.
+            // Ground held by arrangement first - a lease, troops in without a war - so the
+            // occupations that go home below are only the ones nothing holds there.
+            if (FeatureEnabled("land_arrangements")) using (SimProfiler.Measure("land arrangements")) LandArrangementSystem.Enforce(this);
             using (SimProfiler.Measure("occupations")) Occupations.Tick(this);
             yield return 0;
 
@@ -1191,6 +1257,8 @@ public sealed partial class Campaign
         UnclaimedLand.ApplyToGround(this, topology, ProvinceController);
         // And where history says somebody else's troops hold a region, they do (Gaza).
         HeldGround.ApplyToGround(this, topology, ProvinceController);
+        // And ground held by arrangement - Baikonur, Guantanamo - from the first look, not the first day.
+        LandArrangementSystem.LayOnGround(this, topology, ProvinceController);
         ProvinceOccupation = new float[topology.ProvinceCount + 1];
 
         // A fleet's home port is a province, and provinces only exist once the map is
@@ -1260,6 +1328,10 @@ public sealed partial class Campaign
         // back where their headquarters stand on a loaded one (Movements).
         Movements.Found(this);
         Movements.Place(this);
+        // A save written before the permanent record existed still knows a live claim and, for a
+        // faction, its parent in the data. Adopt it here so an old campaign gains the memory
+        // instead of falling back to reading tag prefixes for the rest of its life.
+        Reintegration.AdoptLegacyLineage(this);
         if (ElapsedDays == 0 && FeatureEnabled("national_courses"))
             foreach (var nation in Nations) NationalCourses.Initialize(this, nation);
         // Who leads: a person per chair, rolled once at the world's first morning.
@@ -1364,8 +1436,13 @@ public sealed partial class Campaign
                 nation.CapitalName = state.Name;
             }
         }
+        // A landless headquarters stands at its host's capital or its region's main city
+        // (Movements.Place), so it moves when they do. Left until the next load it kept the old
+        // spot, and a save read back a different headquarters from the one it wrote.
+        Movements.Place(this);
     }
 
+    internal ushort[] PendingProvinceController => _pendingProvinceController;
     private ushort[] _pendingProvinceOwner;
     private ushort[] _pendingProvinceState;
     // A disk-load migration request, not campaign state. A network snapshot never sets it.

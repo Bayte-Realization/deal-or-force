@@ -27,6 +27,7 @@ public sealed record PoliticalPolicy
     public string Description { get; init; } = "";
     public string Icon { get; init; } = "government";
     public bool Default { get; init; }
+    public bool RequiresWar { get; init; }
     public float CostShare { get; init; } = .00002f;
     public int CooldownDays { get; init; } = 90;
     public int DurationDays { get; init; } = 180;
@@ -55,11 +56,12 @@ public static class PoliticalPolicyCatalog
     public static IEnumerable<PoliticalPolicy> AllAgendas => Agendas.Values.OrderBy(p => p.Id, StringComparer.Ordinal);
     public static PoliticalPolicy Find(string id, bool agenda = false) => id is null ? null : (agenda ? Agendas : Laws).GetValueOrDefault(id);
     static PoliticalPolicyCatalog() => ResetCatalog();
-    public static void ResetCatalog()
+    public static void ResetCatalog() => ResetCatalog(null);
+    public static void ResetCatalog(List<string> errors)
     {
         Laws.Clear(); Agendas.Clear(); NationalCategoryRows = null; Baselines = null;
-        foreach (var doc in GameDataLoader.DataDocuments("common", "laws")) using (doc) MergeLaws(doc.RootElement);
-        foreach (var doc in GameDataLoader.DataDocuments("common", "agendas")) using (doc) MergeAgendas(doc.RootElement);
+        foreach (var doc in GameDataLoader.DataDocuments("common", "laws")) using (doc) MergeLaws(doc.RootElement, errors);
+        foreach (var doc in GameDataLoader.DataDocuments("common", "agendas")) using (doc) MergeAgendas(doc.RootElement, errors);
     }
     public static void MergeLaws(JsonElement root, List<string> errors = null) => Merge(root, false, errors);
     public static void MergeAgendas(JsonElement root, List<string> errors = null) => Merge(root, true, errors);
@@ -99,6 +101,9 @@ public static class PoliticalPolicyCatalog
                 if (e.TryGetProperty("default", out var baseline))
                     d = d with { Default = baseline.ValueKind is JsonValueKind.True or JsonValueKind.False
                         ? baseline.GetBoolean() : throw new ArgumentException("default must be boolean") };
+                if (e.TryGetProperty("requires_war", out var wartime))
+                    d = d with { RequiresWar = wartime.ValueKind is JsonValueKind.True or JsonValueKind.False
+                        ? wartime.GetBoolean() : throw new ArgumentException("requires_war must be boolean") };
                 if (d.Scope is not ("nation" or "region" or "foreign") || d.Category.Length == 0)
                     throw new ArgumentException("scope must be nation/region/foreign and category is required");
                 if (agenda && (d.Scope != "nation" || d.Goal is not ("stability" or "living" or "debt_ratio" or "peace")))

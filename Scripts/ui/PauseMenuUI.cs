@@ -38,7 +38,7 @@ public partial class DealOrForceGame
         var leave = ActionButton("Return to main menu", ReturnToMainMenu, 330, 42);
         leave.TooltipText = Ui.Tip(Tr("Leave the campaign and go back to the title screen. Nothing is saved on the way out - quick-save first if this campaign is worth keeping."));
         rows.AddChild(leave);
-        rows.AddChild(ActionButton("Quit to desktop", () => GetTree().Quit(), 330, 42));
+        rows.AddChild(ActionButton("Quit to desktop", () => ApplicationExit.Request(this), 330, 42));
     }
 
     private void ShowPauseMenu()

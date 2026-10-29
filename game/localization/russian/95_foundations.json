@@ -34,6 +34,6 @@
   "Consent to join the declared foundation when it is proclaimed.": "Согласиться на присоединение предусмотренных территорий при провозглашении.",
   "Retain our independence": "Сохранить независимость",
   "No borders or institutions change.": "Границы и государственные институты не меняются.",
-  "chronicle.accession_signed": "{0} подписывает с {1} договор об объединении в государство {2}.",
-  "chronicle.accession_declined": "{0} отклоняет приглашение от {1} основать государство {2}."
+  "chronicle.accession_signed": "{0} подписывает договор о присоединении: {2}.",
+  "chronicle.accession_declined": "{0} отклоняет приглашение в {2}."
 }

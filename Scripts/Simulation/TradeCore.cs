@@ -124,6 +124,9 @@ public static class TradeNetwork
         internal bool IndexReady;
         internal int FiledCount;
         internal readonly Dictionary<int, List<TradeRoute>> Touching = new();
+        // Each country's customs unions this week: the organisations it belongs to that have
+        // chosen a common market (doctrine "common_market").
+        internal readonly Dictionary<int, List<int>> CustomsUnions = new();
     }
 
     private static readonly TradeRoute[] NoRoutes = Array.Empty<TradeRoute>();
@@ -213,6 +216,16 @@ public static class TradeNetwork
             EnsureDistances(campaign, work);
             MeasureReach(campaign, work);
             work.PartnerAffinityScores.Clear();
+            work.CustomsUnions.Clear();
+            foreach (var organization in campaign.Organizations)
+            {
+                if (organization.Dissolved || organization.DoctrineId != campaign.Defines.CustomsUnionDoctrine) continue;
+                foreach (var member in organization.Members)
+                {
+                    if (!work.CustomsUnions.TryGetValue(member, out var unions)) work.CustomsUnions[member] = unions = new List<int>();
+                    unions.Add(organization.Id);
+                }
+            }
         }
         yield return 0;
 
@@ -305,14 +318,38 @@ public static class TradeNetwork
             // Rank this week's exporters from where the buyer is standing.
             SellerScore.Clear();
             SellerOrder.Clear();
+            var availableCapacity = 0f;
+            var blockedCapacity = 0f;
             for (var seat = 0; seat < SellerIds.Count; seat++)
             {
-                if (SellerCapacity[seat] <= 0.0001f || SellerIds[seat] == buyer.Id) continue;
+                var cap = SellerCapacity[seat];
+                if (cap <= 0.0001f || SellerIds[seat] == buyer.Id) continue;
                 var seller = campaign.NationById(SellerIds[seat]);
                 if (seller is null) continue;
                 var score = Affinity(campaign, buyer, seller, commodity, work);
-                if (score <= 0.0001f) continue;
+                if (score <= 0.0001f)
+                {
+                    // If a real exporter is cut off by an embargo or war, track the lost
+                    // supplier capacity so an embargo inflicts real switching friction.
+                    if (TradeDesk.Forbidden(buyer, seller, commodity) ||
+                        CampaignDiplomacy.Peek(campaign, buyer.Id, seller.Id) is { } rel &&
+                        (rel.Stance == DiplomaticStance.AtWar || rel.EmbargoByA || rel.EmbargoByB))
+                    {
+                        var reachWeight = CampaignDiplomacy.SharesLandBorder(campaign, buyer.MapIndex, seller.MapIndex)
+                            ? 1f
+                            : 1f / (1f + MathF.Pow(Kilometres(campaign, buyer, seller, work) / HalfReachKilometres, 2f));
+                        blockedCapacity += cap * reachWeight;
+                    }
+                    continue;
+                }
+                availableCapacity += cap * score;
                 Insert(SellerOrder, SellerScore, seat, score, int.MaxValue);
+            }
+
+            if (blockedCapacity > 0.0001f)
+            {
+                var blockedShare = blockedCapacity / MathF.Max(0.0001f, availableCapacity + blockedCapacity);
+                deficit *= 1f - 0.35f * M.Clamp01(blockedShare);
             }
 
             for (var rank = 0; rank < SellerOrder.Count && deficit > 0.0001f; rank++)
@@ -421,6 +458,18 @@ public static class TradeNetwork
             if (relation.TradeAgreement) score *= 1.75f;
             if (relation.Stance == DiplomaticStance.Allied) score *= 1.30f;
             else if (relation.Stance == DiplomaticStance.Rival) score *= 0.68f;
+        }
+        // A customs union: members buy from each other first and from outside it less - the
+        // common external tariff - which is what makes joining one, and leaving it, matter.
+        var buyerUnions = work.CustomsUnions.GetValueOrDefault(buyer.Id);
+        if (buyerUnions is not null)
+        {
+            var sellerUnions = work.CustomsUnions.GetValueOrDefault(seller.Id);
+            var shared = false;
+            if (sellerUnions is not null)
+                foreach (var union in buyerUnions)
+                    if (sellerUnions.Contains(union)) { shared = true; break; }
+            score *= shared ? campaign.Defines.CustomsUnionInsideTrade : campaign.Defines.CustomsUnionOutsideTrade;
         }
 
         // Neighbours trade over a border; everyone else trades over a distance, and needs

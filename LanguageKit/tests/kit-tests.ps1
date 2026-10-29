@@ -12,7 +12,15 @@ function Reject([scriptblock]$Action, [string]$Label) {
     Check $rejected $Label
 }
 $lock = Read-KitLock $KitRoot
-Check ($lock.adapters.Count -eq 8) 'six requested languages plus two separately labelled optional adapters'
+Check ($lock.adapters.Count -eq 11) 'six reviewed languages, two labelled optional adapters, three new adapters'
+Check (@($lock.adapters | Where-Object { -not $_.PSObject.Properties['verified'] }).Count -eq 0) 'every adapter states its historical verification flag'
+Check (@($lock.adapters | Where-Object { $_.verified -eq $false }).Count -eq 3) 'legacy flags are not silently upgraded by changing the engine pin'
+foreach ($id in @('rust','zig','go')) {
+    Check ($lock.verification.$id.stage -eq 'runtime-smoke' -and $lock.verification.$id.engine -eq $lock.engine.version) "$id smoke evidence names the exact target engine"
+}
+Check ($lock.verification.python.stage -eq 'failed-teardown') 'Python teardown failure is not presented as success'
+Check (@($lock.adapters | Where-Object { $_.verified -eq $false -and -not $_.PSObject.Properties['requires'] }).Count -eq 0) 'an unverified adapter names the toolchain it needs'
+Check (@($lock.adapters | Where-Object { $_.verified -eq $false -and -not $_.PSObject.Properties['status'] }).Count -eq 0) 'an unverified adapter says why it is unverified'
 Check (($lock.adapters | Where-Object { $_.id -eq 'fsharp' }).integration -eq 'managed-library-csharp-bridge') 'F# is not misrepresented as a new ScriptLanguage'
 Check (($lock.sources | Where-Object { $_.id -eq 'luau' }).url -ne ($lock.sources | Where-Object { $_.id -eq 'lua' }).url) 'Lua is not silently substituted for Luau'
 Check (@($lock.sources | Where-Object { $_.commit -notmatch '^[a-f0-9]{40}$' }).Count -eq 0) 'all upstream sources are pinned to complete commits'

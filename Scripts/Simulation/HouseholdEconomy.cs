@@ -35,16 +35,30 @@ public static class HouseholdEconomy
     public static float Labour(ScenarioState s)
     {
         var share = DemographicCycle.WorkingShare(s);
-        return s.PopulationGroups.Count == 0 ? s.Population * share * 1e-6f :
-            (float)s.PopulationGroups.Sum(g => g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1));
+        var groups = s.PopulationGroups;
+        if (groups.Count == 0) return s.Population * share * 1e-6f;
+        var sum = 0.0;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var g = groups[i];
+            sum += g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1);
+        }
+        return (float)sum;
     }
 
     public static float Employment(ScenarioState s)
     {
         var labour = Labour(s);
+        if (labour <= 0) return 0;
         var share = DemographicCycle.WorkingShare(s);
-        return labour <= 0 ? 0 : (float)s.PopulationGroups.Sum(g => g.Size * share * 1e-6 *
-            (g.Class == SocialClass.Upper ? .15 : 1) * g.Employment) / labour;
+        var groups = s.PopulationGroups;
+        var sum = 0.0;
+        for (var i = 0; i < groups.Count; i++)
+        {
+            var g = groups[i];
+            sum += g.Size * share * 1e-6 * (g.Class == SocialClass.Upper ? .15 : 1) * g.Employment;
+        }
+        return (float)sum / labour;
     }
 
     private static float Supply(Nation n, Commodity good) =>
@@ -88,6 +102,7 @@ public static class HouseholdEconomy
         s.ReviewDeaths = Math.Min(s.Population + s.ReviewBirths, (long)Math.Round(s.Population * (double)death * interval));
         EconomySystem.AdjustStatePopulation(s, s.ReviewBirths - s.ReviewDeaths);
         s.Radicalism = Math.Clamp(s.Radicalism + s.LivelihoodStress * .001f, 0, 1);
+        BeliefDynamics.Review(c, n, s, c.Defines.EconomyTickDays);
     }
 
     /// <summary>
@@ -120,7 +135,7 @@ public static class HouseholdEconomy
         var traditionBonus = s.Urbanization > 0.01f && n.Ideology is "traditionalism" or "theocratic_rule" or "agrarianism"
             ? 0.0035f
             : 0f;
-        var secularPenalty = s.Urbanization > 0.01f && StateIdentity.IsSecular(n.DeclaredReligion)
+        var secularPenalty = s.Urbanization > 0.01f && (StateIdentity.IsSecular(n.DeclaredReligion) || StateIdentity.IsAtheist(n.DeclaredReligion))
             ? -0.0020f
             : 0f;
         var pronatalist = ModifierSystem.Has(n, "pronatalist_drive") ? 0.0065f

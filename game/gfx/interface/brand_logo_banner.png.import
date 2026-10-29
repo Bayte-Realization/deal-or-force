@@ -2,7 +2,7 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cakwkqmwrt18s"
+uid="uid://djx1tf8pemfei"
 path="res://.godot/imported/brand_logo_banner.png-2e63d11306d3102ae5bfbcaaa6964e80.ctex"
 metadata={
 "vram_texture": false
@@ -24,7 +24,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=true
+mipmaps/generate=false
 mipmaps/limit=-1
 mipmaps/preserve_alpha_test_coverage=false
 mipmaps/alpha_test_threshold=0.5

@@ -3,15 +3,15 @@
   // the colours of what a war has cost. The same values are compiled in (InterfaceSkin), so a
   // mod lists only the token it changes.
   "colours": {
-    "war.card": "#132230",
-    "war.card_hover": "#1a2d3d",
-    "war.card_border": "#2b3e4f",
-    "war.card_border_hover": "#9c8540",
-    "war.card_mine": "#c7a94e",
-    "war.track": "#0a131c",
+    "war.card": "#101b27",
+    "war.card_hover": "#162535",
+    "war.card_border": "#28394a",
+    "war.card_border_hover": "#a68d43",
+    "war.card_mine": "#d4b459",
+    "war.track": "#070d14",
     "war.front_line": "#f0d575",
-    "war.inset": "#0e1a25",
-    "war.inset_border": "#273848",
+    "war.inset": "#091119",
+    "war.inset_border": "#223142",
     "war.killed": "#c2474f",
     "war.wounded": "#cf9446",
     "war.captured": "#7e93aa"

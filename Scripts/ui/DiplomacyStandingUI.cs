@@ -58,7 +58,14 @@ public partial class DealOrForceGame
             {
                 var pill = new PanelContainer { TooltipText = tip.Length > 0 ? Ui.Tip(tip) : "", MouseFilter = MouseFilterEnum.Pass };
                 pill.AddThemeStyleboxOverride("panel", WarInsetStyle(8, 3));
-                pill.AddChild(text(words, 12, Ui.Colour("text.bright")));
+                // A pill can carry a whole country name - the crisis chips do - and it was as wide
+                // as its text, so the next pill in the row was pushed onto it. It wraps inside a
+                // fixed column instead, two lines at most, and the full words stay in the tooltip.
+                var pillLabel = text(words, 12, Ui.Colour("text.bright"));
+                pillLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                pillLabel.CustomMinimumSize = new Vector2(150, 0);
+                pillLabel.MaxLinesVisible = 2;
+                pill.AddChild(pillLabel);
                 flow.AddChild(pill);
             }
             Row(caption).AddChild(flow);

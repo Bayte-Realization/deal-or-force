@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: Isan Lao, Northern Khmer, Pattani Malay, hill peoples by province (Ethnologue and NSO estimates).
 {
   // Buri Ram
   "th_31": {
     "population": 1346080,
     "urbanization": 0.22,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.4003, "khmer": 0.3, "thai": 0.2684, "han": 0.011, "malay": 0.0094, "burmese": 0.0031, "karen": 0.0031, "shan": 0.0031, "vietnamese": 0.0016 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.15, "Coal": 0.343, "Oil": 0.357, "IronOre": 0.158, "RareEarths": 0.035, "NaturalGas": 0.524, "Timber": 2.983, "Bauxite": 0.082, "Uranium": 0.01 }
   },
@@ -23,7 +24,7 @@
   "th_36": {
     "population": 709712,
     "urbanization": 0.22,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.7002, "thai": 0.2643, "han": 0.0108, "malay": 0.0093, "khmer": 0.0046, "burmese": 0.0031, "karen": 0.0031, "shan": 0.0031, "vietnamese": 0.0015 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 1.742, "Coal": 0.292, "Oil": 0.592, "IronOre": 0.278, "RareEarths": 0.112, "NaturalGas": 0.419, "Timber": 0.839, "Bauxite": 0.071, "Uranium": 0.017 }
   },
@@ -31,7 +32,7 @@
   "th_50": {
     "population": 2417720,
     "urbanization": 0.59,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.7586, "karen": 0.08, "shan": 0.05, "han": 0.0311, "lao": 0.0266, "malay": 0.0266, "khmer": 0.0133, "burmese": 0.0089, "vietnamese": 0.0044, "russian": 0.0005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.291, "Coal": 0.424, "Oil": 0.373, "IronOre": 0.31, "RareEarths": 0.052, "NaturalGas": 0.591, "Timber": 2.75, "Bauxite": 0.105, "Uranium": 0.011 }
   },
@@ -55,7 +56,7 @@
   "th_16": {
     "population": 24182926,
     "urbanization": 0.8,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.7365, "han": 0.12, "lao": 0.1, "khmer": 0.0129, "burmese": 0.0086, "karen": 0.0086, "shan": 0.0086, "vietnamese": 0.0043, "russian": 0.0005 },
     "buildings": { "Agriculture": 3, "CivilianIndustry": 2, "Infrastructure": 3 },
     "resources": { "Food": 1.236, "Coal": 0.185, "Oil": 0.321, "IronOre": 0.187, "RareEarths": 0.062, "NaturalGas": 0.295, "Timber": 2.702, "Bauxite": 0.112, "Uranium": 0.01 }
   },
@@ -63,7 +64,7 @@
   "th_58": {
     "population": 239130,
     "urbanization": 0.1,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "shan": 0.4001, "karen": 0.3, "thai": 0.2616, "han": 0.0107, "lao": 0.0092, "malay": 0.0092, "khmer": 0.0046, "burmese": 0.0031, "vietnamese": 0.0015 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.093, "Coal": 0.428, "Oil": 0.435, "IronOre": 0.312, "RareEarths": 0.106, "NaturalGas": 0.532, "Timber": 2.322, "Bauxite": 0.058, "Uranium": 0.009 }
   },
@@ -71,7 +72,7 @@
   "th_30": {
     "population": 2461359,
     "urbanization": 0.38,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.5288, "lao": 0.4, "han": 0.0216, "malay": 0.0186, "khmer": 0.0093, "burmese": 0.0062, "karen": 0.0062, "shan": 0.0062, "vietnamese": 0.0031 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.89, "Coal": 0.449, "Oil": 0.369, "IronOre": 0.29, "RareEarths": 0.076, "NaturalGas": 0.405, "Timber": 2.716, "Bauxite": 0.143, "Uranium": 0.018 }
   },
@@ -87,7 +88,7 @@
   "th_80": {
     "population": 5877900,
     "urbanization": 0.55,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.6611, "malay": 0.25, "han": 0.0271, "lao": 0.0232, "khmer": 0.0116, "burmese": 0.0077, "karen": 0.0077, "shan": 0.0077, "vietnamese": 0.0039 },
     "buildings": { "Agriculture": 2, "CivilianIndustry": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.293, "Coal": 0.206, "Oil": 0.693, "IronOre": 0.255, "RareEarths": 0.044, "NaturalGas": 0.433, "Timber": 2.791, "Bauxite": 0.069, "Uranium": 0.014 }
   },
@@ -135,7 +136,7 @@
   "th_45": {
     "population": 2325184,
     "urbanization": 0.19,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.8503, "thai": 0.1321, "han": 0.0054, "malay": 0.0046, "khmer": 0.0023, "burmese": 0.0015, "karen": 0.0015, "shan": 0.0015, "vietnamese": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.252, "Coal": 0.203, "Oil": 0.627, "IronOre": 0.266, "RareEarths": 0.082, "NaturalGas": 0.417, "Timber": 2.217, "Bauxite": 0.153, "Uranium": 0.013 }
   },
@@ -143,7 +144,7 @@
   "th_47": {
     "population": 1345900,
     "urbanization": 0.15,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.8503, "thai": 0.1321, "han": 0.0054, "malay": 0.0046, "khmer": 0.0023, "burmese": 0.0015, "karen": 0.0015, "shan": 0.0015, "vietnamese": 0.0008 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.576, "Coal": 0.502, "Oil": 0.605, "IronOre": 0.206, "RareEarths": 0.047, "NaturalGas": 0.761, "Timber": 1.009, "Bauxite": 0.153, "Uranium": 0.009 }
   },
@@ -151,7 +152,7 @@
   "th_84": {
     "population": 2562198,
     "urbanization": 0.47,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.8544, "han": 0.035, "malay": 0.03, "lao": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.056, "Coal": 0.498, "Oil": 0.366, "IronOre": 0.331, "RareEarths": 0.055, "NaturalGas": 0.764, "Timber": 1.986, "Bauxite": 0.064, "Uranium": 0.009 }
   },
@@ -159,7 +160,7 @@
   "th_63": {
     "population": 524725,
     "urbanization": 0.4,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "thai": 0.6108, "karen": 0.2, "burmese": 0.1, "han": 0.025, "lao": 0.0214, "malay": 0.0214, "khmer": 0.0107, "shan": 0.0071, "vietnamese": 0.0036 },
     "buildings": { "Infrastructure": 1 },
     "resources": { "Food": 2.333, "Coal": 0.224, "Oil": 0.522, "IronOre": 0.154, "RareEarths": 0.111, "NaturalGas": 0.496, "Timber": 3.016, "Bauxite": 0.105, "Uranium": 0.006 }
   },
@@ -167,7 +168,7 @@
   "th_34": {
     "population": 2560689,
     "urbanization": 0.33,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.8, "thai": 0.1762, "han": 0.0072, "malay": 0.0062, "khmer": 0.0031, "burmese": 0.0021, "karen": 0.0021, "shan": 0.0021, "vietnamese": 0.001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.19, "Coal": 0.395, "Oil": 0.315, "IronOre": 0.398, "RareEarths": 0.102, "NaturalGas": 0.48, "Timber": 1.198, "Bauxite": 0.07, "Uranium": 0.013 }
   },
@@ -175,7 +176,7 @@
   "th_41": {
     "population": 5098822,
     "urbanization": 0.33,
-    "cultures": { "thai": 0.8545, "han": 0.035, "lao": 0.03, "malay": 0.03, "khmer": 0.015, "burmese": 0.01, "karen": 0.01, "shan": 0.01, "vietnamese": 0.005, "russian": 0.0006 },
+    "cultures": { "lao": 0.8503, "thai": 0.1321, "han": 0.0054, "malay": 0.0046, "khmer": 0.0023, "burmese": 0.0015, "karen": 0.0015, "shan": 0.0015, "vietnamese": 0.0008 },
     "buildings": { "Agriculture": 2, "Infrastructure": 1 },
     "resources": { "Food": 0.794, "Coal": 0.117, "Oil": 0.24, "IronOre": 0.204, "RareEarths": 0.045, "NaturalGas": 0.356, "Timber": 2.619, "Bauxite": 0.055, "Uranium": 0.008 }
   }

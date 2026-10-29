@@ -62,6 +62,11 @@
   "war": 0.14,
   "war_support": 0.40,
 
+  // An ally in someone else's war pays this share of the standing cost above; the cost of
+  // falling war support it pays in full. A country that joined every ally's war used to pay
+  // for each as if it were its own: the United States fell from 0.75 to 0.12 in ten years.
+  "war_ally_share": 0.4,
+
   // What it costs to have someone else's army standing in the region. Raised with the war
   // terms for the same reason: occupied ground is the state visibly not governing, and it was
   // priced as a footnote.

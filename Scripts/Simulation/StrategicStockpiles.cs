@@ -70,6 +70,11 @@ public sealed partial class Defines
     /// <summary>The share of its weight a force fights with when no ammunition, or no arms, reached it.</summary>
     public float StockpileDryAmmunitionCombat { get; set; } = 0.60f;
     public float StockpileDryArmsCombat { get; set; } = 0.75f;
+    /// <summary>
+    /// How much the arsenal - tanks, artillery, drones, aircraft, missiles - weighs in battle:
+    /// at 1 a force none of it reached fights at 0.77 of its weight. 0 leaves it out of combat.
+    /// </summary>
+    public float StockpileArsenalCombatWeight { get; set; } = 1f;
 
     public float StockpileHullAtSeaDailyFuel { get; set; } = 0.018f;
     public float StockpileHullActionDailyAmmunition { get; set; } = 0.045f;
@@ -122,7 +127,27 @@ public static class StrategicStockpiles
         "Steel",
         "MotorVehicles",
         "Electronics",
-        "Food"
+        "Food",
+        "Tanks",
+        "Artillery",
+        "Drones",
+        "CombatAircraft",
+        "Missiles"
+    };
+
+    /// <summary>
+    /// The arsenal (common/goods/20_military_industry.json) and how much of a force's weight
+    /// each piece of it carries in battle: a force none of it reached fights at 1 minus the sum,
+    /// times <see cref="Defines.StockpileArsenalCombatWeight"/>. Shells and rifles stay
+    /// the heavy terms; this is what turns a long war into a war of factories as well.
+    /// </summary>
+    private static readonly (string Good, float Weight)[] Arsenal =
+    {
+        ("Artillery", 0.06f),
+        ("Tanks", 0.05f),
+        ("Drones", 0.05f),
+        ("CombatAircraft", 0.04f),
+        ("Missiles", 0.03f)
     };
 
     public static void EnsureSeeded(Campaign campaign, Nation nation)
@@ -130,14 +155,7 @@ public static class StrategicStockpiles
         if (campaign is null || nation is null || nation.StockpilesSeeded) return;
         nation.StockpilesSeeded = true;
 
-        var divisions = 0f;
-        foreach (var a in campaign.Armies)
-            if (a.NationId == nation.Id) divisions += a.Divisions;
-        var hulls = 0;
-        foreach (var f in campaign.Fleets)
-            if (f.NationId == nation.Id) hulls += f.Hulls;
-
-        var baseScale = MathF.Max(1.5f, divisions * 1.4f + hulls * 0.6f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 0.8f);
+        var baseScale = SeedScale(campaign, nation);
         SetIfMissing(nation, "Arms", baseScale * 4.5f);
         SetIfMissing(nation, "Ammunition", baseScale * 5.0f);
         SetIfMissing(nation, "Oil", baseScale * 4.2f);
@@ -145,6 +163,37 @@ public static class StrategicStockpiles
         SetIfMissing(nation, "MotorVehicles", baseScale * 2.4f);
         SetIfMissing(nation, "Electronics", baseScale * 1.8f);
         SetIfMissing(nation, "Food", baseScale * 6.0f);
+        SeedArsenal(nation, baseScale);
+    }
+
+    /// <summary>
+    /// The arsenal's opening depots - also for a campaign saved before the arsenal existed,
+    /// whose depots were seeded without it and would otherwise go to its first battle empty.
+    /// </summary>
+    private static void EnsureArsenal(Campaign campaign, Nation nation)
+    {
+        if (!nation.Stockpiles.ContainsKey(Arsenal[0].Good) || !nation.Stockpiles.ContainsKey(Arsenal[^1].Good))
+            SeedArsenal(nation, SeedScale(campaign, nation));
+    }
+
+    private static void SeedArsenal(Nation nation, float baseScale)
+    {
+        SetIfMissing(nation, "Tanks", baseScale * 2.0f);
+        SetIfMissing(nation, "Artillery", baseScale * 2.6f);
+        SetIfMissing(nation, "Drones", baseScale * 1.6f);
+        SetIfMissing(nation, "CombatAircraft", baseScale * 1.2f);
+        SetIfMissing(nation, "Missiles", baseScale * 1.4f);
+    }
+
+    private static float SeedScale(Campaign campaign, Nation nation)
+    {
+        var divisions = 0f;
+        foreach (var a in campaign.Armies)
+            if (a.NationId == nation.Id) divisions += a.Divisions;
+        var hulls = 0;
+        foreach (var f in campaign.Fleets)
+            if (f.NationId == nation.Id) hulls += f.Hulls;
+        return MathF.Max(1.5f, divisions * 1.4f + hulls * 0.6f + MathF.Sqrt(MathF.Max(1f, nation.Gdp)) * 0.8f);
     }
 
     private static void SetIfMissing(Nation nation, string key, float amount)
@@ -349,6 +398,7 @@ public static class StrategicStockpiles
         {
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
+            else EnsureArsenal(campaign, nation);
             nation.DailyStockpileBurn.Clear();
             nation.DailyStockpileGain.Clear();
             nation.DailyEquipmentReplacement.Clear();
@@ -378,6 +428,13 @@ public static class StrategicStockpiles
                     "MotorVehicles" => marching * 0.008f + fighting * 0.014f,
                     "Electronics" => fighting * 0.010f + navalCombat * 0.015f,
                     "Food" => divs * defines.StockpileDivisionDailyRations + afloat * 0.005f,
+                    // The arsenal is spent in battle: armour and barrels wear out, drones and
+                    // aircraft are shot down, and missiles go to the ships and the air defence.
+                    "Tanks" => fighting * 0.010f,
+                    "Artillery" => fighting * 0.014f,
+                    "Drones" => fighting * 0.022f,
+                    "CombatAircraft" => fighting * 0.004f + navalCombat * 0.004f,
+                    "Missiles" => fighting * 0.006f + navalCombat * 0.012f,
                     _ => 0f
                 };
 
@@ -483,14 +540,25 @@ public static class StrategicStockpiles
         var dryArms = M.Clamp01(campaign.Defines.StockpileDryArmsCombat);
         var ammoFactor = dryAmmo + (1f - dryAmmo) * Coverage(nation, "Ammunition");
         var armsFactor = dryArms + (1f - dryArms) * Coverage(nation, "Arms");
-        return ammoFactor * armsFactor;
+        return ammoFactor * armsFactor * ArsenalFactor(campaign, nation);
     }
 
-    private static readonly string[] Shipped = { "Ammunition", "Arms" };
+    /// <summary>The share of its weight a force fights with for the arsenal it was short of yesterday.</summary>
+    public static float ArsenalFactor(Campaign campaign, Nation nation)
+    {
+        var weight = MathF.Max(0f, campaign.Defines.StockpileArsenalCombatWeight);
+        if (weight <= 0f) return 1f;
+        var lost = 0f;
+        foreach (var (good, share) in Arsenal)
+            lost += share * (1f - Coverage(nation, good));
+        return MathF.Max(0.3f, 1f - weight * lost);
+    }
+
+    private static readonly string[] Shipped = { "Ammunition", "Arms", "Artillery", "Drones" };
 
     /// <summary>
     /// A backer's shipment from its own depots: this share of what its industry and market
-    /// add to them a day, for each of the days since the last one, of ammunition and of arms.
+    /// add to them a day, for each of the days since the last one, of ammunition, arms, guns and drones.
     /// Physical, not priced - the shells that reached Ukraine were drawn from the stocks of
     /// the countries that sent them. A backer short of a good itself sends none of it, and
     /// nothing goes past what the client's depots hold. Returns what was shipped.

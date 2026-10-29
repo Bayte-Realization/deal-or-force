@@ -1,0 +1,91 @@
+// Три новых пункта в каждую из существующих категорий законов. База остаётся в 00_policies.json,
+// здесь только альтернативы. Модификаторы — строго из каталога NationalModifiers.
+{
+  "fiscal_countercyclical_reserve": {
+    "name": "Counter-cyclical reserve fund",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "Revenue above trend is locked away for the next bad year, which steadies the state's credit and slows what it can build while the sun shines.",
+    "modifiers": { "credit_capacity": 0.06, "borrowing_cost": -0.10, "output": -0.02, "living_weekly": -0.0002 }
+  },
+  "fiscal_shadow_economy_amnesty": {
+    "name": "Shadow-economy amnesty",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "One year to declare hidden income without penalty brings a wave of registrations and a smaller, more visible economy afterwards.",
+    "modifiers": { "tax_efficiency": 0.06, "credit_capacity": 0.02, "radicalism_weekly": 0.0002 }
+  },
+  "fiscal_war_bonds": {
+    "name": "Patriotic war bonds",
+    "category": "Fiscal mandate",
+    "icon": "treasury",
+    "description": "Households lend to the state below the market rate and are thanked for it; borrowing capacity rises while consumption does not.",
+    "modifiers": { "credit_capacity": 0.05, "war_support_weekly": 0.0004, "living_weekly": -0.0003 }
+  },
+
+  "service_territorial_militia": {
+    "name": "Territorial militia",
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "Each district keeps a part-time battalion that knows its own ground: cheap to raise and poor at taking someone else's.",
+    "modifiers": { "militia_readiness": 0.12, "army_defense": 0.03, "army_attack": -0.03, "recruitment_cost": -0.05 }
+  },
+  "service_naval_conscription": {
+    "name": "Naval conscription",
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "Coastal districts owe the fleet their young men for three years, which fills the lower deck and empties the yards.",
+    "modifiers": { "naval_speed": 0.04, "shipbuilding_speed": 0.04, "recruitment_speed": -0.04 }
+  },
+  "service_specialist_corps": {
+    "name": "Specialist corps",
+    "category": "Military service",
+    "icon": "army_defend",
+    "description": "Signals, engineers and gunners are kept as a separate career with its own schools, which costs more and pays at the front.",
+    "modifiers": { "army_attack": 0.04, "support_recovery": 0.04, "recruitment_cost": 0.06 }
+  },
+
+  "education_apprenticeship_levy": {
+    "name": "Apprenticeship levy",
+    "category": "Education",
+    "icon": "research",
+    "description": "Firms that do not train pay for those that do, which fills the workshops with people who can already work.",
+    "modifiers": { "recruitment_cost": -0.04, "output": 0.02, "research_speed": -0.02 }
+  },
+  "education_exam_meritocracy": {
+    "name": "Examination meritocracy",
+    "category": "Education",
+    "icon": "research",
+    "description": "University places and civil-service posts follow one national examination, which finds talent in the provinces and irritates the capital.",
+    "modifiers": { "research_speed": 0.05, "assimilation": 0.05, "stability_weekly": -0.0002 }
+  },
+  "education_adult_literacy": {
+    "name": "Adult literacy drive",
+    "category": "Education",
+    "icon": "research",
+    "description": "Evening classes in every district, taught by the same teachers twice a day, which shows in the workshops within a year.",
+    "modifiers": { "output": 0.03, "research_speed": 0.03, "living_weekly": 0.0003 }
+  },
+
+  "rights_labour_courts": {
+    "name": "Labour courts",
+    "category": "Civil rights",
+    "icon": "government",
+    "description": "Disputes go to a judge who knows a workshop from a ledger; the workplace settles down and the employer watches the clock.",
+    "modifiers": { "living_weekly": 0.0004, "radicalism_weekly": -0.0003, "output": -0.01 }
+  },
+  "rights_press_registry": {
+    "name": "Press registry",
+    "category": "Civil rights",
+    "icon": "government",
+    "description": "Every publication must name its owner and its funding; the state reads the list, and so does everybody else.",
+    "modifiers": { "stability_weekly": 0.0003, "radicalism_weekly": 0.0002, "research_speed": -0.02 }
+  },
+  "rights_jury_trial": {
+    "name": "Jury trial",
+    "category": "Civil rights",
+    "icon": "government",
+    "description": "Ordinary citizens decide the ordinary cases, which nobody can buy twice and which slows every prosecution down.",
+    "modifiers": { "stability_weekly": 0.0004, "movement_activity": -0.05, "tax_efficiency": -0.01 }
+  }
+}

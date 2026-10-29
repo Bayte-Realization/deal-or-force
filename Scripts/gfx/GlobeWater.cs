@@ -17,6 +17,8 @@ public sealed partial class GlobePresentation
             ? ImageTexture.CreateFromImage(river) : LoadWaterTile(water.RiverTexture, water.TileResolution));
         prepared?.River?.Dispose();
         _globeMaterial.SetShaderParameter("river_inset", water.RiverInset);
+        _globeMaterial.SetShaderParameter("river_curve_filter",
+            Math.Clamp(InterfaceSkin.Metric("map.river_curve_filter", 1f), 0f, 1f));
         _globeMaterial.SetShaderParameter("river_near_opacity", water.RiverNearOpacity);
         _globeMaterial.SetShaderParameter("river_far_opacity", water.RiverFarOpacity);
         _globeMaterial.SetShaderParameter("water_shore_width", water.ShoreWidth);

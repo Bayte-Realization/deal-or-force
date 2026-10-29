@@ -4,16 +4,17 @@
 
 ## Один раз: шаблоны экспорта
 
-Актуальный выпуск игры: **0.8.2**. Номер должен совпадать в
+Актуальный выпуск игры: **EntertAlpha 0.3.0.3**. Номер должен совпадать в
 `GameVersion.props`, `GameBuildInfo.Version`, `project.godot`, Windows-пресете
-и обоих README; `Tools/Test-ReleaseVersion.ps1` проверяет это до экспорта.
+и обоих README/инструкциях сборки; `Tools/Test-ReleaseVersion.ps1` проверяет это до экспорта.
 Версия `SaveSystem.GameVersion` берётся из `GameBuildInfo`.
 Папки `docs` и `licenses` в новом пакете не создаются: сведения о сторонних
 материалах сохраняются в `THIRD_PARTY_NOTICES.md`, корневые LICENSE и
 LICENSE-EXCEPTIONS.md остаются. Проверка упаковки: `Tools/Test-PlayerNotices.ps1`.
 
-На 25 октября используется Godot `4.8.beta1.mono` из `C:\GodotEngineNet 4.8-Beta1`;
-путь `4.8-dev7` ниже относится к ранней настройке, не к текущему экспорту.
+На 29 октября используется Godot `4.8.beta2.mono` из `C:\GodotEngineNet 4.8-Beta2`.
+Нужны шаблоны **4.8.beta2.mono**; пути `4.8-dev7` ниже относятся к ранней настройке,
+не к текущему экспорту. SDK задаётся в `DealOrForce.csproj`.
 
 Godot умеет запускать проект в редакторе без всякой подготовки, но собрать самостоятельный
 `.exe` он может только из **шаблонов экспорта** — это отдельная загрузка, около гигабайта.

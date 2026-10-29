@@ -99,40 +99,50 @@ public partial class DealOrForceGame
 
         var shade = new ColorRect
         {
-            Color = new Color(0.015f, 0.026f, 0.041f, 0.72f),
+            Color = Ui.Colour("surface.overlay"),
             MouseFilter = MouseFilterEnum.Stop
         };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _diplomacyLayer.AddChild(shade);
 
         var panel = TexturedPanel(_diplomacyLayer);
+        panel.Name = "DiplomacyWorkspacePanel";
         Ui.Place(panel, "modal.diplomacy");
 
         var rows = PanelRows(panel, 22, 16, 9);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        var title = Title("DIPLOMACY", 25, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
         var ownCountry = ActionButton("My country", () => SelectDiplomacyNation(_campaign.Player), 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
         ownCountry.Name = "DiplomacyMyCountry";
         ownCountry.TooltipText = Ui.Tip(Tr("Open your own country's diplomacy dossier."));
-        header.AddChild(ownCountry);
         _diplomacyInboxButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
         _diplomacyInboxButton.Name = "DiplomacyInbox";
         _diplomacyInboxButton.Disabled = _observerMode;
-        header.AddChild(_diplomacyInboxButton);
-        header.AddChild(ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
-            iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png"));
-        header.AddChild(ActionButton("Subjects", () => OpenSubjectsModal(), 0, 32));
-        header.AddChild(ActionButton("Release country", () => OpenReleaseCountryModal(), 0, 32));
-        header.AddChild(HandbookButton("diplomacy"));
-        header.AddChild(ActionButton("×", CloseDiplomacyScreen, 38, 32));
+        var organizations = ActionButton("Organizations", () => { CloseDiplomacyScreen(); _conflictTab = 4; OpenScreen("Conflicts"); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_diplomacy.png");
+        var toConflicts = ActionButton("Conflicts", () => { CloseDiplomacyScreen(); OpenConflictsScreen(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_unrest.png");
+        var toWars = ActionButton("Wars", () => { CloseDiplomacyScreen(); OpenWarLedger(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_wars.png");
+        var subjects = ActionButton("Subjects", () => OpenSubjectsModal(), 0, 32);
+        var release = ActionButton("Release country", () => OpenReleaseCountryModal(), 0, 32);
+        var handbook = HandbookButton("diplomacy");
+        var close = ActionButton("×", CloseDiplomacyScreen, 38, 32);
+        close.TooltipText = Ui.Tip(Tr("Close"));
 
-        _diplomacySummary = Title("", 13, Ui.Colour("text.body_soft"));
+        // The head of the page, from the shared vocabulary: a display title, what the screen is
+        // for, and the shortcuts on the right, over one rule.
+        ScreenHeader(rows, "DIPLOMACY",
+            "Who deals with whom, on what terms, and what can be done about it today.",
+            right: new Control[] { handbook, close });
+        var shortcuts = new HFlowContainer { Name = "DiplomacyShortcuts" };
+        shortcuts.AddThemeConstantOverride("h_separation", 6);
+        shortcuts.AddThemeConstantOverride("v_separation", 6);
+        rows.AddChild(shortcuts);
+        foreach (var shortcut in new[] { ownCountry, _diplomacyInboxButton, toConflicts, toWars, organizations, subjects, release })
+            shortcuts.AddChild(shortcut);
+
+        _diplomacySummary = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body_soft"));
         _diplomacySummary.CustomMinimumSize = new Vector2(0, 22);
         rows.AddChild(_diplomacySummary);
 
@@ -152,6 +162,7 @@ public partial class DealOrForceGame
             SizeFlagsVertical = SizeFlags.ExpandFill
         };
         list.AddThemeConstantOverride("separation", 6);
+        _diplomacyCountryColumn = list;
         body.AddChild(list);
 
         _diplomacySearch = Placeholder(new LineEdit
@@ -178,12 +189,15 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true
         };
         list.AddChild(listScroll);
         _diplomacyListRows = new VBoxContainer { Name = "DiplomacyListRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _diplomacyListRows.AddThemeConstantOverride("separation", 2);
         listScroll.AddChild(_diplomacyListRows);
+        _diplomacyCountryEmpty = Title("No countries match. Try a name, a country tag or another filter.", 13, Ui.Colour("text.muted"));
+        _diplomacyCountryEmpty.Name = "DiplomacyCountryEmpty";
+        _diplomacyCountryEmpty.Visible = false; list.AddChild(_diplomacyCountryEmpty);
 
         // ---- the page: the country itself.
         var page = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
@@ -196,7 +210,7 @@ public partial class DealOrForceGame
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto
+            VerticalScrollMode = ScrollContainer.ScrollMode.Auto, FollowFocus = true
         };
         _diplomacyDossierScroll = pageScroll;
         page.AddChild(pageScroll);
@@ -225,6 +239,7 @@ public partial class DealOrForceGame
         actions.AddThemeConstantOverride("separation", 7);
         _diplomacyActionColumn = actions;
         body.AddChild(actions);
+        BuildDiplomacyActionDiscovery(actions);
         var actionScroll = new ScrollContainer
         {
             Name = "WideDiplomaticActionScroll", SizeFlagsVertical = SizeFlags.ExpandFill,
@@ -269,8 +284,12 @@ public partial class DealOrForceGame
         _diplomacyRequestAssistance = AddDiplomacyAction("AGREEMENTS", "Request funds",
             () => RequestAssistanceFrom(DiplomacyTarget()));
         _diplomacyRequestAssistance.Name = "RequestFinancialAssistance";
+        _diplomacyAskArms = AddDiplomacyAction("AGREEMENTS", "Ask for a shipment",
+            () => RequestArmsFrom(DiplomacyTarget()));
+        _diplomacyAskArms.Name = "AskForArmsShipment";
         _diplomacyEmbargoButton = AddDiplomacyAction("AGREEMENTS", "Embargo",
             () => ToggleEmbargoOn(DiplomacyTarget(), _diplomacyFeedback));
+        AddDiplomaticActButtons();
         AddIntelNetworkAction();
 
         _diplomacySubmissionActions = new VBoxContainer { Name = "WideInfluenceActions" };
@@ -327,11 +346,16 @@ public partial class DealOrForceGame
         // empty actions column when only a few actions are available for the selected country.
         var _ = new Control { SizeFlagsVertical = SizeFlags.ExpandFill };
         _diplomacyActionRows.AddChild(_);
+        WrapDiplomacyActionBlocks();
 
         _diplomacyFeedback = Title("", 12, Ui.Colour("text.body_soft"));
         _diplomacyFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        _diplomacyFeedback.CustomMinimumSize = new Vector2(0, 44);
         actions.AddChild(_diplomacyFeedback);
+        GetWindow().SizeChanged += () =>
+        {
+            if (_diplomacyLayer.Visible) FitNegotiationTypography(_diplomacyLayer);
+            if (_peaceLayer is { Visible: true }) FitNegotiationTypography(_peaceWorkspacePanel);
+        };
     }
 
     private readonly HashSet<string> _diplomacyActionSections = new();
@@ -353,7 +377,9 @@ public partial class DealOrForceGame
     private void AddDiplomacyFilter(HBoxContainer parent, string caption, DiplomacyFilter filter)
     {
         var button = ActionButton(caption, () => SetDiplomacyFilter(filter), 0, 28, filter == _diplomacyFilter);
+        button.SetMeta("atlas_tab_button", true);
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        StyleButton(button, filter == _diplomacyFilter);
         parent.AddChild(button);
         _diplomacyFilterButtons[filter] = button;
     }
@@ -473,6 +499,8 @@ public partial class DealOrForceGame
 
         _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
                                  (query.Length > 0 ? " · " + Tr("found by name") : "");
+        _diplomacyCountryEmpty.Visible = matches.Length == 0;
+        FitNegotiationTypography(_diplomacyLayer);
     }
 
     private DiplomacyRow BuildDiplomacyRow()
@@ -518,13 +546,26 @@ public partial class DealOrForceGame
         text.AddChild(row.Name);
         row.Identity = Title("", 10, Ui.Colour("text.muted"));
         row.Identity.Name = "DiplomacyCountryIdentity";
-        row.Identity.ClipText = true;
+        // Not clipped: this line wraps, and a clipped label keeps a one-line minimum however
+        // many lines it draws, so the row never learns that Russian needs three of them.
+        row.Identity.ClipText = false;
         // Both demographics are useful when choosing a diplomatic partner. Ellipsising
         // this line hid the culture almost everywhere, especially in Russian at 720p.
         // Wrap in the existing column instead of widening the whole window over the map.
         row.Identity.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.Identity.MaxLinesVisible = -1;
         text.AddChild(row.Identity);
+        // A row is a Button, and a Button takes its height from its own text, not from the
+        // column laid out inside it - so a wrapped identity line drew past the row and the
+        // culture was cut off. Russian needs a third line at 1920 and at 720, and the row has to
+        // grow with the language rather than clip it. The column reports when its minimum size
+        // changes (when the text is set, and again when the width it wraps into changes), and
+        // the row follows it.
+        void FitRowHeight() =>
+            row.Select.CustomMinimumSize = new Vector2(0,
+                MathF.Max(44f, text.GetCombinedMinimumSize().Y + 8f));
+        text.MinimumSizeChanged += FitRowHeight;
+        row.Identity.MinimumSizeChanged += FitRowHeight;
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
         Fixed(row.Stance, 64);
         row.Stance.VerticalAlignment = VerticalAlignment.Center;
@@ -1234,7 +1275,9 @@ public partial class DealOrForceGame
     private void RefreshDiplomacyActions(Nation player, Nation nation)
     {
         RefreshAgreementButtons(nation, _diplomacyTradeButton, _diplomacyPactButton, _diplomacyAidButton, _diplomacyEmbargoButton);
+        RefreshDiplomaticActButtons(nation);
         RefreshAssistanceAction(nation);
+        RefreshArmsRequestAction(nation);
         RefreshSubmissionButtons(nation, _diplomacySubmissionActions, _diplomacySubmissionButtons);
         RefreshDiplomaticPeaceButton(_diplomacyPeaceButton, nation);
         RefreshIntelNetworkAction(player, nation);
@@ -1324,6 +1367,8 @@ public partial class DealOrForceGame
                 ? Tr("Take it into your country. Its regions become yours.")
                 : why);
         }
+        FilterDiplomacyActions();
+        FitNegotiationTypography(_diplomacyLayer);
     }
 
     private Nation DiplomacyTarget()

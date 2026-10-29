@@ -10,12 +10,13 @@
 // key, so a mod that changes one number writes that one number and inherits the rest.
 // Who owns a province is history/provinces/ownership.csv; the file a region is in is only
 // where to find it.
+// Peoples by region: ethnographic distribution by region.
 {
   // Adamawa
   "cm_ad": {
     "population": 1308815,
     "urbanization": 0.5,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "fulani": 0.45, "gbaya": 0.3, "kirdi": 0.15, "hausa": 0.05, "beti": 0.05 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.262, "Coal": 0.235, "Oil": 0.239, "IronOre": 0.137, "RareEarths": 0.061, "NaturalGas": 0.502, "Timber": 1.727, "Bauxite": 0.093, "Uranium": 0.008 }
   },
@@ -23,7 +24,7 @@
   "cm_ce": {
     "population": 5124934,
     "urbanization": 0.64,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "beti": 0.7, "bamileke": 0.12, "grassfields": 0.05, "kirdi": 0.05, "fulani": 0.04, "duala": 0.04 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 1.274, "Coal": 0.508, "Oil": 0.727, "IronOre": 0.29, "RareEarths": 0.065, "NaturalGas": 0.896, "Timber": 3.269, "Bauxite": 0.115, "Uranium": 0.016 }
   },
@@ -31,7 +32,7 @@
   "cm_es": {
     "population": 1434733,
     "urbanization": 0.39,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "gbaya": 0.5, "beti": 0.25, "fulani": 0.1, "bamileke": 0.1, "kirdi": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 1.009, "Coal": 0.288, "Oil": 0.372, "IronOre": 0.144, "RareEarths": 0.035, "NaturalGas": 0.605, "Timber": 2.191, "Bauxite": 0.111, "Uranium": 0.007 }
   },
@@ -39,7 +40,7 @@
   "cm_en": {
     "population": 4600943,
     "urbanization": 0.53,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "kirdi": 0.55, "fulani": 0.25, "kanuri": 0.1, "arab_sudanese": 0.05, "hausa": 0.05 },
     "buildings": { "Agriculture": 2, "Infrastructure": 2 },
     "resources": { "Food": 0.946, "Coal": 0.23, "Oil": 0.247, "IronOre": 0.285, "RareEarths": 0.051, "NaturalGas": 0.639, "Timber": 1.853, "Bauxite": 0.057, "Uranium": 0.009 }
   },
@@ -47,7 +48,7 @@
   "cm_lt": {
     "population": 5169109,
     "urbanization": 0.79,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "bamileke": 0.35, "duala": 0.3, "grassfields": 0.12, "beti": 0.1, "kirdi": 0.05, "igbo": 0.05, "fulani": 0.03 },
     "buildings": { "Agriculture": 1, "CivilianIndustry": 1, "Infrastructure": 3 },
     "resources": { "Food": 2.216, "Coal": 0.554, "Oil": 0.729, "IronOre": 0.366, "RareEarths": 0.099, "NaturalGas": 0.806, "Timber": 1.665, "Bauxite": 0.149, "Uranium": 0.009 }
   },
@@ -55,7 +56,7 @@
   "cm_no": {
     "population": 2646941,
     "urbanization": 0.37,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "fulani": 0.5, "kirdi": 0.35, "hausa": 0.08, "kanuri": 0.04, "beti": 0.03 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.374, "Coal": 0.196, "Oil": 0.284, "IronOre": 0.177, "RareEarths": 0.032, "NaturalGas": 0.403, "Timber": 1.696, "Bauxite": 0.045, "Uranium": 0.009 }
   },
@@ -63,7 +64,7 @@
   "cm_nw": {
     "population": 1590074,
     "urbanization": 0.74,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "grassfields": 0.88, "fulani": 0.07, "bamileke": 0.05 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.41, "Coal": 0.16, "Oil": 0.263, "IronOre": 0.118, "RareEarths": 0.015, "NaturalGas": 0.226, "Timber": 0.68, "Bauxite": 0.039, "Uranium": 0.002 }
   },
@@ -71,7 +72,7 @@
   "cm_su": {
     "population": 1072767,
     "urbanization": 0.25,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "beti": 0.8, "bamileke": 0.1, "duala": 0.05, "fulani": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.175, "Coal": 0.563, "Oil": 0.64, "IronOre": 0.243, "RareEarths": 0.113, "NaturalGas": 0.553, "Timber": 2.284, "Bauxite": 0.109, "Uranium": 0.012 }
   },
@@ -79,7 +80,7 @@
   "cm_sw": {
     "population": 1469372,
     "urbanization": 0.49,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "grassfields": 0.55, "duala": 0.2, "igbo": 0.1, "bamileke": 0.1, "beti": 0.05 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 2.246, "Coal": 0.149, "Oil": 0.412, "IronOre": 0.219, "RareEarths": 0.049, "NaturalGas": 0.322, "Timber": 2.985, "Bauxite": 0.095, "Uranium": 0.007 }
   },
@@ -87,7 +88,7 @@
   "cm_ou": {
     "population": 1458692,
     "urbanization": 0.6,
-    "cultures": { "fang": 0.19, "fulani": 0.14, "mongo": 0.13, "bakongo": 0.09, "tiv": 0.08, "hausa": 0.06, "sara": 0.06, "akan": 0.04, "igbo": 0.04, "kanuri": 0.04, "yoruba": 0.04, "ewe": 0.03, "ijaw": 0.03, "kru": 0.03 },
+    "cultures": { "bamileke": 0.88, "grassfields": 0.05, "beti": 0.04, "fulani": 0.03 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 2.104, "Coal": 0.402, "Oil": 0.288, "IronOre": 0.348, "RareEarths": 0.06, "NaturalGas": 0.364, "Timber": 3.133, "Bauxite": 0.098, "Uranium": 0.01 }
   }

@@ -71,22 +71,42 @@ static class MovementPowerFingerprintTests
         // back 0x8359F0BC7D23DB59 here.
         // 24 October: isolated differential probes prove that removing crisis_ladder and
         // the two new crisis-command bindings restores the exact 21 October pair below.
+        // 29 October: land_arrangements, LandArrangementCommand and LandArrangementSystem are
+        // registered; removing exactly those (and the built-in) restores the 24 October pair.
+        // 29 October (KinStatecraft): `KinStatecraft` (FeatureSystems) and
+        // `KinStatecraftCommand` (FeatureCommands) are two more authoritative catalogue
+        // entries. Removing exactly those two from these fixtures restored
+        // 0x7B051756BBBE690C (no movement) and 0x3B53145C88719B80 (empty movement) before
+        // re-recording, so the shift is those two and nothing else.
         // Pin one current value, not an accumulating allowance of historical goldens.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
-        Check(withoutMovement == 0x32B25385D69F91BBUL,
+        Check(withoutMovement == 0xA51130DBC982C7E3UL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x2464DCDBD46983DBUL,
+        Check(withMovement == 0x3B861D79212F6DD3UL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
+        MechanicFeatures.BuiltIns.Remove("land_arrangements");
+        try
+        {
         foreach (var movement in new[] { false, true })
         {
-            var oldMetadata = Fixture(movement);
+            var beforeLand = Fixture(movement);
+            beforeLand.Defines.Features.Remove("land_arrangements");
+            beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
+            beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
+            var beforeLandPrint = CampaignFingerprint.Of(beforeLand);
+            Check(beforeLandPrint == (movement ? 0x6DFF324AB26F9608UL : 0x9FA0DB7DB966B9C4UL),
+                $"removing exactly the land arrangement registrations restores the golden without them: {movement} (got 0x{beforeLandPrint:X16})");
+            var oldMetadata = beforeLand;
             oldMetadata.Defines.Features.Remove("crisis_ladder");
             oldMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");
             oldMetadata.Defines.FeatureCommands.Remove("InterveneCrisisCommand");
-            Check(CampaignFingerprint.Of(oldMetadata) == (movement ? 0x792CD510E6A1ECC2UL : 0x1180F22A98EAE162UL),
-                "removing exactly the crisis registrations restores the strict legacy movement golden: " + movement);
+            var oldPrint = CampaignFingerprint.Of(oldMetadata);
+            Check(oldPrint == (movement ? 0x616C58CF74279AE1UL : 0x8AE8A8C79C9F227DUL),
+                $"removing exactly the crisis registrations restores the strict legacy movement golden: {movement} (got 0x{oldPrint:X16})");
         }
+        }
+        finally { MechanicFeatures.BuiltIns.Add("land_arrangements"); }
         var legacy = JsonSerializer.Deserialize<Defines>("{}");
         Check(CampaignFingerprint.Of(Fixture(false, legacy)) == CampaignFingerprint.Of(Fixture(false)),
             "omitted legacy rules acquire the same compiled defaults, not new thresholds");

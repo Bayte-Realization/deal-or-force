@@ -44,8 +44,8 @@ public static class InterfaceSkin
     {
         // Text - a five-step ramp from the brightest figure to the faintest footnote,
         // plus the gold that marks a heading and the caption grey above a control.
-        ("text.accent",         "#e7c966"),
-        ("text.accent_dim",     "#d3bf72"),
+        ("text.accent",         "#ddc17a"),
+        ("text.accent_dim",     "#c2ad76"),
         ("icon.commodity",      "#b48732"),
         ("text.bright",         "#eef4fb"),
         ("text.body",           "#e9eef5"),
@@ -95,12 +95,12 @@ public static class InterfaceSkin
         ("state.critical",      "#b473e0"),
 
         // Surfaces
-        ("surface.background",  "#060b13"),
-        ("surface.panel_tint",  "#c7dbf0fa"),
-        ("surface.overlay",     "#0d1722e8"),
-        ("surface.inset",       "#172635"),
-        ("surface.line",        "#50677d"),
-        ("surface.line_faint",  "#33455688"),
+        ("surface.background",  "#070b11"),
+        ("surface.panel_tint",  "#d6dee8fa"),
+        ("surface.overlay",     "#080e16f2"),
+        ("surface.inset",       "#0b1118"),
+        ("surface.line",        "#34404d"),
+        ("surface.line_faint",  "#252f3ba8"),
         // Named by screens written after this list, and missing from it. An unknown token comes
         // back magenta on purpose, but on a panel *ground* that is not a wrong pixel: the whole
         // full-screen workspace is filled with it, which is how the budget and the state-affairs
@@ -108,28 +108,28 @@ public static class InterfaceSkin
         // workspaces, `surface.raised` a card lifted off it, and `surface.panel` the neutral fill
         // the territory preview asks for. A ground that is still misspelt is now caught by
         // AtlasSurfaceSkin.Attach rather than shown.
-        ("surface.base",        "#131f2c"),
-        ("surface.raised",      "#1b2b3a"),
-        ("surface.panel",       "#131f2c"),
+        ("surface.base",        "#101720"),
+        ("surface.raised",      "#18222d"),
+        ("surface.panel",       "#111923"),
         ("brand.paper",         "#e9e4d9"),
 
         // Buttons
         ("button.text",             "#edf2f7"),
-        ("button.text_hover",       "#fff0b0"),
-        ("button.text_pressed",     "#d7c581"),
+        ("button.text_hover",       "#f5f7fa"),
+        ("button.text_pressed",     "#d8c48c"),
         ("button.text_disabled",    "#667586"),
-        ("button.fill",             "#1a2735"),
-        ("button.fill_hover",       "#273647"),
-        ("button.fill_pressed",     "#101923"),
-        ("button.fill_disabled",    "#111923"),
-        ("button.border",           "#60758a"),
-        ("button.border_hover",     "#edcf68"),
-        ("button.border_pressed",   "#9f8845"),
-        ("button.border_disabled",  "#354351"),
-        ("button.primary_fill",         "#55451f"),
-        ("button.primary_fill_hover",   "#6b5620"),
-        ("button.primary_fill_pressed", "#382f19"),
-        ("button.primary_border",       "#c7a94e"),
+        ("button.fill",             "#151e28"),
+        ("button.fill_hover",       "#1b2733"),
+        ("button.fill_pressed",     "#0d141c"),
+        ("button.fill_disabled",    "#10161e"),
+        ("button.border",           "#3b4856"),
+        ("button.border_hover",     "#7c8997"),
+        ("button.border_pressed",   "#a89058"),
+        ("button.border_disabled",  "#29333d"),
+        ("button.primary_fill",         "#3d321f"),
+        ("button.primary_fill_hover",   "#514326"),
+        ("button.primary_fill_pressed", "#292216"),
+        ("button.primary_border",       "#c8ab63"),
 
         // Map modes. A total conversion repainting the political map does it here.
         ("map.player",          "#4fb477"),
@@ -161,11 +161,11 @@ public static class InterfaceSkin
         //
         // shell.space is what the globe hangs against when a skin supplies no sky of its
         // own, which is why it is a shade deeper than globe.space rather than equal to it.
-        ("shell.background",    "#101d28f7"),
-        ("shell.border",        "#536775"),
-        ("shell.row",           "#152532"),
-        ("shell.row_alternate", "#1b2d3b"),
-        ("shell.space",         "#080f18"),
+        ("shell.background",    "#0d141df8"),
+        ("shell.border",        "#35424f"),
+        ("shell.row",           "#121b25"),
+        ("shell.row_alternate", "#18232e"),
+        ("shell.space",         "#060b12"),
 
         // Globe
         ("globe.space",                  "#030914"),
@@ -180,6 +180,8 @@ public static class InterfaceSkin
         ("globe.city",                   "#eef2f4"),
         ("globe.city_outline",           "#0b1117"),
         ("globe.city_capital",           "#f7df92"),
+        ("globe.atmosphere",             "#6fb0ee"),
+        ("brand.intro_background",       "#10151c"),
 
         // Formation counters
         ("military.routed",         "#ef8c62"),
@@ -228,15 +230,15 @@ public static class InterfaceSkin
 
         // The Wars screen - its cards, the bar with the front line on it, and what a war has
         // cost. Mirrors game/gui/36_war_ledger.json, which ships the same values.
-        ("war.card",              "#132230"),
-        ("war.card_hover",        "#1a2d3d"),
-        ("war.card_border",       "#2b3e4f"),
-        ("war.card_border_hover", "#9c8540"),
-        ("war.card_mine",         "#c7a94e"),
-        ("war.track",             "#0a131c"),
+        ("war.card",              "#101b27"),
+        ("war.card_hover",        "#162535"),
+        ("war.card_border",       "#28394a"),
+        ("war.card_border_hover", "#a68d43"),
+        ("war.card_mine",         "#d4b459"),
+        ("war.track",             "#070d14"),
         ("war.front_line",        "#f0d575"),
-        ("war.inset",             "#0e1a25"),
-        ("war.inset_border",      "#273848"),
+        ("war.inset",             "#091119"),
+        ("war.inset_border",      "#223142"),
         ("war.killed",            "#c2474f"),
         ("portrait.anonymous_background", "#b8bcc2"),
         ("portrait.anonymous_foreground", "#f7f7f7"),
@@ -308,12 +310,12 @@ public static class InterfaceSkin
         ("hud.network",        new PanelRect(0f, 1f, 0f, 1f,      106f, -54f, 425f, -6f)),
 
         // Full-screen and modal panels
-        ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -400f, 270f, 400f)),
+        ("menu.main",          new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -270f, -346f, 270f, 346f)),
         ("picker.heading",     new PanelRect(0f, 0f, 0f, 0f,      18f, 18f, 455f, 106f)),
         ("picker.country",     new PanelRect(1f, 0.5f, 1f, 0.5f, -420f, -338f, -18f, 338f)),
         ("picker.actions",     new PanelRect(0f, 1f, 0f, 1f,      18f, -126f, 638f, -18f)),
         ("modal.pause",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -210f, -245f, 210f, 245f)),
-        ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -225f, 310f, 225f)),
+        ("modal.event",        new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -310f, -315f, 310f, 315f)),
         ("modal.peace_offer",  new PanelRect(0.5f, 0.5f, 0.5f, 0.5f, -330f, -200f, 330f, 200f)),
         ("modal.ultimatum",    new PanelRect(0.22f, 0.13f, 0.79f, 0.89f, 0f, 0f, 0f, 0f)),
         ("modal.deal",         new PanelRect(0f, 0.115f, 0.945f, 0.9f,  92f, 0f, 0f, 0f)),
@@ -367,6 +369,10 @@ public static class InterfaceSkin
         ("multiplayer.connection", new PanelRect(0f, 0f, 0f, 1f,    12f, 12f, 368f, -12f)),
         ("multiplayer.countries",  new PanelRect(1f, 0f, 1f, 1f,  -324f, 12f, -12f, -12f)),
         ("workshop.panel",         new PanelRect(0f, 0f, 1f, 1f,    40f, 30f, -40f, -30f)),
+        ("hud.desk_right",         new PanelRect(1f, 0f, 1f, 1f,  -336f, 150f, -14f, -150f)),
+        ("hud.desk_left",          new PanelRect(0f, 0f, 0f, 1f,    96f, 150f, 418f, -150f)),
+        ("hud.desk_tab_right",     new PanelRect(1f, 0f, 1f, 0f,  -150f, 150f, -14f, 186f)),
+        ("hud.desk_tab_left",      new PanelRect(0f, 0f, 0f, 0f,    96f, 150f, 232f, 186f)),
     };
 
     /// <summary>A panel's rectangle, or a sane full-screen one if the name is unknown.</summary>

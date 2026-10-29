@@ -1,0 +1,68 @@
+// Второй пакет законов, часть шестая: наука, пенсии, национальная политика.
+{
+  "research_standards_institute": {
+    "name": "Standards institute",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "One body that writes the tolerances every factory must hold, which spreads best practice faster than any subsidy.",
+    "modifiers": { "research_speed": 0.05, "construction_speed": 0.03, "living_weekly": -0.0001 }
+  },
+  "research_mission_programmes": {
+    "name": "Mission programmes",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "Money is aimed at four named problems with a deadline attached, which concentrates the laboratories and neglects everything else.",
+    "modifiers": { "research_speed": 0.07, "output": -0.02, "construction_speed": -0.02 }
+  },
+  "research_field_stations": {
+    "name": "Field stations",
+    "category": "Research policy",
+    "icon": "research",
+    "description": "Small stations in the far regions, measuring soil, water and weather, which nobody funds and everybody uses.",
+    "modifiers": { "research_speed": 0.03, "reconstruction_speed": 0.04, "settlement": 0.05 }
+  },
+
+  "pension_second_pillar": {
+    "name": "Second pillar",
+    "category": "Pension policy",
+    "icon": "population",
+    "description": "Private accounts on top of the state pension, which builds a domestic investor class and takes years to feel like anything.",
+    "modifiers": { "living_weekly": 0.0004, "credit_capacity": 0.03, "tax_efficiency": -0.02 }
+  },
+  "pension_indexation_rule": {
+    "name": "Indexation rule",
+    "category": "Pension policy",
+    "icon": "population",
+    "description": "Pensions rise with prices by statute rather than by budget, which ends the annual argument and fixes the annual cost.",
+    "modifiers": { "living_weekly": 0.0005, "credit_capacity": -0.03, "stability_weekly": 0.0003 }
+  },
+  "pension_survivor_benefit": {
+    "name": "Survivor benefit",
+    "category": "Pension policy",
+    "icon": "population",
+    "description": "A widow's share of her husband's pension for life, which the army asks for first and the treasury counts twice.",
+    "modifiers": { "living_weekly": 0.0004, "recruitment_speed": 0.02, "output": -0.01 }
+  },
+
+  "nationalities_language_charter": {
+    "name": "Language charter",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "One language for the army, the courts and the schools, taught hard and resented in the districts that had another.",
+    "modifiers": { "assimilation": 0.10, "radicalism_weekly": 0.0002, "research_speed": 0.02 }
+  },
+  "nationalities_civil_service_quotas": {
+    "name": "Civil-service quotas",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "Each people gets its share of the ministries whether or not it has the candidates this year, which is fair on paper and slow in practice.",
+    "modifiers": { "stability_weekly": 0.0003, "assimilation": -0.15, "tax_efficiency": -0.02 }
+  },
+  "nationalities_dispute_commission": {
+    "name": "Minority dispute commission",
+    "category": "Nationalities policy",
+    "icon": "population",
+    "description": "A standing commission with the power to hear a grievance before it becomes a movement.",
+    "modifiers": { "radicalism_weekly": -0.0004, "stability_weekly": 0.0002, "movement_activity": 0.03 }
+  }
+}

@@ -75,23 +75,62 @@ public static class PoliticalPolicies
 
     public static bool CanAdopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
     {
-        reason = "";
-        if (n is null || p is null || !c.FeatureEnabled(agenda ? "political_agendas" : "laws")) reason = "Mechanic unavailable";
-        else if (agenda && n.Agenda is { Completed: false }) reason = "An agenda is already in progress";
-        else if (p.Scope == "region" && !c.StatesOf(n).Any(s => s.MapIndex == region)) reason = "Choose a region you govern";
-        else if (p.Scope == "foreign" && (c.NationByTag(target) is not { } other || other.Id == n.Id || c.Fallen.Contains(other.Id)))
-            reason = "Choose an existing foreign country or movement";
-        else if (!agenda && Effective(n, p, target, region)?.Id == p.Id) reason = "Already enacted";
-        else if (!agenda && n.Laws.Count >= 64 && !n.Laws.ContainsKey(Slot(p, target, region))) reason = "Too many targeted laws";
-        else if (n.PolicyReadyOnDay.GetValueOrDefault(agenda ? "agenda" : Slot(p, target, region)) > c.ElapsedDays)
-            reason = "Reform cooling-off period";
-        else if (n.Treasury < n.Gdp * p.CostShare) reason = "Insufficient treasury for reform";
+        var hasNation = n is not null;
+        var hasPolicy = p is not null;
+        var featureEnabled = c is not null && hasPolicy && c.FeatureEnabled(agenda ? "political_agendas" : "laws");
+        var scopeCode = !hasPolicy ? 0 : p.Scope == "region" ? 1 : p.Scope == "foreign" ? 2 : 0;
+        var ownsRegion = scopeCode == 1 && hasNation && c is not null && c.StatesOf(n).Any(s => s.MapIndex == region);
+        var validForeignTarget = scopeCode == 2 && hasNation && c is not null &&
+            c.NationByTag(target) is { } other && other.Id != n.Id && !c.Fallen.Contains(other.Id);
+        var atWar = hasNation && c is not null && c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var slot = hasPolicy ? Slot(p, target, region) : "";
+        var alreadyEnacted = !agenda && hasNation && hasPolicy && Effective(n, p, target, region)?.Id == p.Id;
+        var hasSlotKey = hasNation && hasPolicy && n.Laws.ContainsKey(slot);
+        var readyOnDay = hasNation && hasPolicy ? n.PolicyReadyOnDay.GetValueOrDefault(agenda ? "agenda" : slot) : 0;
+
+        var code = DealOrForce.Rules.PoliticalPolicyRules.EvaluateAdoption(
+            hasNation,
+            hasPolicy,
+            featureEnabled,
+            agenda,
+            hasNation && n.Agenda is { Completed: false },
+            scopeCode,
+            ownsRegion,
+            validForeignTarget,
+            hasPolicy && p.RequiresWar,
+            atWar,
+            alreadyEnacted,
+            hasNation ? n.Laws.Count : 0,
+            hasSlotKey,
+            readyOnDay,
+            c?.ElapsedDays ?? 0,
+            hasNation ? n.Treasury : 0f,
+            hasNation ? n.Gdp : 0f,
+            hasPolicy ? p.CostShare : 0f);
+
+        reason = code switch
+        {
+            DealOrForce.Rules.PolicyAdoptRefusal.Allowed => "",
+            DealOrForce.Rules.PolicyAdoptRefusal.MechanicUnavailable => "Mechanic unavailable",
+            DealOrForce.Rules.PolicyAdoptRefusal.AgendaInProgress => "An agenda is already in progress",
+            DealOrForce.Rules.PolicyAdoptRefusal.InvalidRegion => "Choose a region you govern",
+            DealOrForce.Rules.PolicyAdoptRefusal.InvalidForeignTarget => "Choose an existing foreign country or movement",
+            DealOrForce.Rules.PolicyAdoptRefusal.RequiresActiveWar => "Requires an active war",
+            DealOrForce.Rules.PolicyAdoptRefusal.AlreadyEnacted => "Already enacted",
+            DealOrForce.Rules.PolicyAdoptRefusal.TooManyTargetedLaws => "Too many targeted laws",
+            DealOrForce.Rules.PolicyAdoptRefusal.CoolingOff => "Reform cooling-off period",
+            DealOrForce.Rules.PolicyAdoptRefusal.InsufficientTreasury => "Insufficient treasury for reform",
+            _ => "Mechanic unavailable"
+        };
         return reason.Length == 0;
     }
 
-    public static bool Adopt(Campaign c, Nation n, PoliticalPolicy p, string target = "", int region = 0, bool agenda = false)
+    public static bool Adopt(Campaign c, Nation n, PoliticalPolicy p, string target = "", int region = 0, bool agenda = false) =>
+        Adopt(c, n, p, target, region, agenda, out _);
+
+    public static bool Adopt(Campaign c, Nation n, PoliticalPolicy p, string target, int region, bool agenda, out string reason)
     {
-        if (!CanAdopt(c, n, p, target, region, agenda, out _)) return false;
+        if (!CanAdopt(c, n, p, target, region, agenda, out reason)) return false;
         n.Treasury -= MathF.Max(0, n.Gdp * p.CostShare);
         n.PolicyReadyOnDay[agenda ? "agenda" : Slot(p, target, region)] = c.ElapsedDays + p.CooldownDays;
         if (agenda) n.Agenda = new PoliticalAgenda { Id = p.Id, DurationDays = p.DurationDays, Goal = p.Goal, GoalValue = p.GoalValue };
@@ -111,13 +150,14 @@ public static class PoliticalPolicies
         return Math.Clamp(sum, -.3f, .3f);
     }
 
-    public static bool GoalMet(Campaign c, Nation n, PoliticalAgenda a) => a.Goal switch
+    public static bool GoalMet(Campaign c, Nation n, PoliticalAgenda a)
     {
-        "living" => n.StandardOfLiving >= a.GoalValue,
-        "debt_ratio" => n.PublicDebt / MathF.Max(.01f, n.Gdp) <= a.GoalValue && n.DebtCondition < DebtCondition.Default,
-        "peace" => !c.Wars.Any(w => !w.Ended && w.Involves(n.Id)),
-        _ => n.Stability >= a.GoalValue
-    };
+        var kind = DealOrForce.Rules.PoliticalPolicyRules.GoalKind(a.Goal);
+        // Only peace goals inspect wars, preserving the old short-circuit cost.
+        var atWar = kind == 3 && c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        return DealOrForce.Rules.PoliticalPolicyRules.GoalMet(kind,a.GoalValue,n.StandardOfLiving,
+            n.PublicDebt,n.Gdp,(int)n.DebtCondition,atWar,n.Stability,(int)DebtCondition.Default);
+    }
 
     public static void Tick(Campaign c)
     {
@@ -133,7 +173,13 @@ public static class PoliticalPolicies
             if (reformDay && !n.IsHuman && !c.Fallen.Contains(n.Id))
             {
                 var desired = n.DebtCondition >= DebtCondition.Stressed ? "fiscal_discipline" :
-                    n.Stability < .50f ? "security_community" : n.Ideology == "liberalism" ? "rights_association" : "education_technical";
+                    n.Stability < .42f ? "security_civic_ombudsman" :
+                    n.Stability < .50f ? "security_community" :
+                    n.Ideology == "liberalism" ? "rights_association" :
+                    n.Ideology == "social_democracy" ? "labour_corporatist" :
+                    n.Ideology == "communism" ? "industry_champions" :
+                    n.Ideology == "fascism" ? c.Wars.Any(w => !w.Ended && w.Involves(n.Id)) ? "service_total_levy" : "service_reserve" :
+                    "education_technical";
                 Adopt(c, n, PoliticalPolicyCatalog.Find(desired));
                 // What a state does about its minorities changes with what it believes, and
                 // only then: a fascist state settles, a liberal one stops settling and forcing.

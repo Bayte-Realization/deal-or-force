@@ -1,0 +1,8 @@
+{
+  "map_city_models": {
+    "category": "interface", "order": 249, "kind": "toggle",
+    "name": "Urban district miniatures",
+    "description": "Small three-dimensional city districts at close map zoom. They follow known city locations, avoid water, and disappear in the strategic overview. Stylised landmarks, not real street layouts. Disabled automatically with reduced city detail.",
+    "default": true
+  }
+}

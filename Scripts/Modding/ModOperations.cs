@@ -32,6 +32,27 @@ public static class ModOperations
         c.Commands.Enqueue(new ModCourseShockCommand { IssuerId = n.Id, Strength = (float)strength, Reason = reason });
         return true;
     }
+
+    public static bool QueueStudyDoctrine(Campaign c, string issuerTag, string branchId, string nodeId, bool rush = false)
+    {
+        var n = c?.NationByTag(issuerTag);
+        if (n is null || string.IsNullOrWhiteSpace(branchId) || string.IsNullOrWhiteSpace(nodeId) ||
+            TacticalDoctrines.Refusal(c, n, branchId, nodeId, rush).Length > 0) return false;
+        c.Commands.Enqueue(new StudyDoctrineCommand { IssuerId = n.Id, BranchId = branchId, NodeId = nodeId, Rush = rush });
+        return true;
+    }
+
+    public static bool QueueDiplomaticAct(Campaign c, string issuerTag, string targetTag, string actName)
+    {
+        var issuer = c?.NationByTag(issuerTag);
+        var target = c?.NationByTag(targetTag);
+        if (issuer is null || target is null || issuer.Id == target.Id ||
+            !Enum.TryParse<DiplomaticAct>(actName?.Replace("_", "", StringComparison.Ordinal), true, out var act) ||
+            DiplomaticActs.Refusal(c, issuer, target, act).Length > 0) return false;
+        c.Commands.Enqueue(new DiplomaticActCommand {
+            IssuerId = issuer.Id, TargetId = target.Id, Act = act, Step = DiplomaticActStep.Propose });
+        return true;
+    }
 }
 
 public sealed class ModCourseShockCommand : ICampaignCommand

@@ -96,14 +96,13 @@ public partial class DealOrForceGame
 
         var rows = PanelRows(panel, 22, 16, 9);
 
-        var header = new HBoxContainer();
-        header.AddThemeConstantOverride("separation", 8);
-        rows.AddChild(header);
-        var title = Title("TRADE", 25, Ui.Colour("text.accent"));
-        title.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        header.AddChild(title);
-        header.AddChild(HandbookButton("trade"));
-        header.AddChild(ActionButton("×", CloseTradeScreen, 38, 32));
+        var toEconomy = ActionButton("Economy", () => { CloseTradeScreen(); OpenScreen("Economy"); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_economy.png");
+        var toProduction = ActionButton("Production", () => { CloseTradeScreen(); OpenProductionScreen(); }, 0, 32,
+            iconPath: "res://game/gfx/interface/icons/icon_industry.png");
+        ScreenHeader(rows, "Trade",
+            "What the country buys, what it sells, and what it cannot make for itself.",
+            false, toEconomy, toProduction, HandbookButton("trade"), ActionButton("×", CloseTradeScreen, 38, 32));
 
         _tradeScreenSummary = Title("", 13, Ui.Colour("text.body_soft"));
         _tradeScreenSummary.CustomMinimumSize = new Vector2(0, 22);
@@ -143,6 +142,8 @@ public partial class DealOrForceGame
             var captured = policy;
             var button = ActionButton(TradePolicyRules.Name(captured), () => SetStateTradePolicy(captured), 114, 30,
                 captured == TradePolicy.BalancedTrade);
+            button.SetMeta("atlas_tab_button", true);
+            StyleButton(button, captured == TradePolicy.BalancedTrade);
             button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
             button.TooltipText = Ui.Tip(TradePolicyRules.Description(captured));
             policyRow.AddChild(button);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -629,6 +629,8 @@ public static class SecessionEvents
             born = matchingMovement;
             born.FoundedInRevolt = revolt;
             born.SecededFromId = parent.Id;
+            // Permanent: the live link may be cleared by a later peace, and this one may not.
+            born.RevoltParentId = parent.Id;
             var movementStateName = MovementCatalog.Of(matchingMovement.Movement?.Id)?.StateName;
             if (!string.IsNullOrEmpty(movementStateName)) born.Name = movementStateName;
             var share = parent.Population <= 0 ? 0f : M.Clamp01(people / (float)parent.Population);
@@ -658,6 +660,7 @@ public static class SecessionEvents
             if (born is null) return null;
             born.FoundedInRevolt = revolt;
             born.SecededFromId = parent.Id;
+            born.RevoltParentId = parent.Id;
         }
         // The land that left is the new country's homeland from its first minute: without
         // this seed the fall flow (MovementFall.Decide) never sees a secession-born country
@@ -672,7 +675,10 @@ public static class SecessionEvents
             homeland = earlier.Concat(homeland).Distinct().ToList();
         campaign.Homelands[born.Id] = homeland;
         var coreRegions = homeland.ToHashSet();
-        shape?.Invoke(born);
+        // A people taking back its own ground under its own exiled government is that country
+        // restored, not the parent's opposition: Ukraine's government rose in occupied Chernihiv,
+        // was renamed Russia's "transitional council", won, and became Russia.
+        if (matchingMovement is null) shape?.Invoke(born);
 
         // Partition productive capacity BEFORE changing the parent's resident count:
         // ProductionCapacity already scales its reference by the population still present.
@@ -1028,7 +1034,9 @@ public static class SecessionEvents
                 n != parent &&
                 string.Equals(n.Name, country, StringComparison.OrdinalIgnoreCase) &&
                 campaign.StatesOf(n).Length > 0);
-            if (!homeland || exists)
+            // The seat's own name, unless a country already wears it: Nigeria's Niger State
+            // does not found a second Niger beside the real one.
+            if ((!homeland || exists) && !WornByAState(campaign, StripAdministrativeSuffix(seat)))
                 return StripAdministrativeSuffix(seat);
         }
         var state = campaign.States.Find(candidate =>
@@ -1050,14 +1058,26 @@ public static class SecessionEvents
         return string.IsNullOrWhiteSpace(people) ? parent?.Name ?? "" : people;
     }
 
+    /// <summary>Whether a country that holds ground already goes by this name. A movement that only hopes to does not count.</summary>
+    private static bool WornByAState(Campaign campaign, string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        foreach (var nation in campaign.Nations)
+            if (nation.Movement is null && campaign.StatesOf(nation).Length > 0 &&
+                (string.Equals(CountryNames.Resolve(nation, false), name, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(CountryNames.Resolve(nation, true), name, StringComparison.OrdinalIgnoreCase)))
+                return true;
+        return false;
+    }
+
     internal static string StripAdministrativeSuffix(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "";
-        var trimmed = name.Trim();
+        var trimmed = NationNaming.StripRepublicPrefix(name.Trim());
         foreach (var suffix in new[]
         {
             " Governorate", " Oblast", " Krai", " Province", " Prefecture",
-            " Department", " Region", " District", " Voivodeship", " County"
+            " Department", " Region", " District", " Voivodeship", " County", " Republic"
         })
         {
             if (trimmed.Length > suffix.Length + 2 &&

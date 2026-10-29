@@ -1,0 +1,90 @@
+// Второй пакет законов, часть третья: экология, безопасность, информация, администрация.
+{
+  "environment_carbon_levy": {
+    "name": "Carbon levy",
+    "category": "Environmental regulation",
+    "icon": "energy",
+    "description": "The dirtiest tonne pays and the cleanest is excused, which closes the oldest plant and pays for the newest.",
+    "modifiers": { "output": -0.03, "tax_efficiency": 0.02, "research_speed": 0.03 }
+  },
+  "environment_water_rights": {
+    "name": "Water rights registry",
+    "category": "Environmental regulation",
+    "icon": "energy",
+    "description": "Every abstraction is recorded and priced, which ends the quiet theft of the rivers and the quiet free ride of the farms.",
+    "modifiers": { "output": 0.02, "radicalism_weekly": -0.0002, "construction_cost": 0.02 }
+  },
+  "environment_forest_service": {
+    "name": "Forest service",
+    "category": "Environmental regulation",
+    "icon": "energy",
+    "description": "A uniformed service that plants, patrols and fights fires, useful in exactly the regions nobody else visits.",
+    "modifiers": { "reconstruction_speed": 0.05, "settlement": 0.05, "output": -0.01 }
+  },
+
+  "security_neighbourhood_watch": {
+    "name": "Neighbourhood watch",
+    "category": "Security mandate",
+    "icon": "decisions",
+    "description": "Streets that report to each other and to a constable: cheap, effective, and hard to switch off.",
+    "modifiers": { "militia_readiness": 0.10, "stability_weekly": 0.0002, "movement_activity": 0.04 }
+  },
+  "security_financial_intelligence": {
+    "name": "Financial intelligence unit",
+    "category": "Security mandate",
+    "icon": "decisions",
+    "description": "One office that reads the banks' returns, which finds the launderers and frightens the investors who were merely clever.",
+    "modifiers": { "credit_capacity": 0.03, "tax_efficiency": 0.03, "radicalism_weekly": 0.0001 }
+  },
+  "security_border_guard_service": {
+    "name": "Border guard service",
+    "category": "Security mandate",
+    "icon": "decisions",
+    "description": "A separate armed service for the frontier, which is where the first week of any war is actually decided.",
+    "modifiers": { "deterrence": 0.04, "army_defense": 0.02, "recruitment_cost": 0.03 }
+  },
+
+  "media_community_radio": {
+    "name": "Community radio",
+    "category": "Public information",
+    "icon": "government",
+    "description": "Local stations with a licence and a transmitter, which carry the weather, the market and, eventually, the argument.",
+    "modifiers": { "stability_weekly": 0.0003, "living_weekly": 0.0002, "research_speed": -0.01 }
+  },
+  "media_disinformation_register": {
+    "name": "Disinformation register",
+    "category": "Public information",
+    "icon": "government",
+    "description": "A public list of outlets caught inventing, which is cheaper than courts and rougher than they are.",
+    "modifiers": { "stability_weekly": 0.0004, "movement_activity": -0.04, "research_speed": -0.02 }
+  },
+  "media_open_archives": {
+    "name": "Open state archives",
+    "category": "Public information",
+    "icon": "government",
+    "description": "Thirty-year files opened to anybody with a reader's card, which historians love and ministries quietly dread.",
+    "modifiers": { "research_speed": 0.04, "stability_weekly": 0.0002, "radicalism_weekly": 0.0002 }
+  },
+
+  "administration_performance_pay": {
+    "name": "Performance pay",
+    "category": "Administration",
+    "icon": "government",
+    "description": "Officials are paid for what their office delivers, which moves the ambitious to the counters and the careful out of them.",
+    "modifiers": { "tax_efficiency": 0.04, "construction_speed": 0.02, "living_weekly": -0.0002 }
+  },
+  "administration_regional_offices": {
+    "name": "Regional service offices",
+    "category": "Administration",
+    "icon": "government",
+    "description": "One building per district where the papers are actually signed, instead of three capitals and a postal service.",
+    "modifiers": { "reconstruction_speed": 0.05, "stability_weekly": 0.0003, "tax_efficiency": -0.02 }
+  },
+  "administration_open_procurement": {
+    "name": "Open procurement",
+    "category": "Administration",
+    "icon": "government",
+    "description": "Every contract above a threshold published in full, which costs the state the premium it used to pay for discretion.",
+    "modifiers": { "construction_cost": -0.05, "tax_efficiency": 0.02, "radicalism_weekly": -0.0001 }
+  }
+}

@@ -134,6 +134,13 @@ public sealed partial class GlobePresentation
     private void UpdateWeather(double delta)
     {
         if (_cloudMaterial is null || _mistMaterial is null) return;
+        // A game without weather (common/world_layers) draws none of it.
+        if (!Simulation.WorldLayers.On("weather"))
+        {
+            foreach (var layer in new[] { _cloudDeck, _cloudShade, _mistShell, _airGlow })
+                if (IsInstanceValid(layer)) layer.Visible = false;
+            return;
+        }
         var defines = _campaign?.Defines;
         var distance = ViewDistance;
 
@@ -314,10 +321,12 @@ void fragment() {
     float along = dot(centre, ray);
     float miss = length(centre - ray * along);
     float depth = clamp((outer - miss) / (outer - inner), 0.0, 1.0);
-    float glow = pow(depth, 2.6) * step(inner * 0.985, miss);
+    float glow = pow(depth, 2.4) * step(inner * 0.985, miss);
+    float horizon_band = pow(depth, 5.2) * step(inner * 0.992, miss);
     // Seen from close by, the haze is the horizon itself; keep it, but quieter.
     float height = clamp((length(centre) - inner) / (inner * 1.4), 0.0, 1.0);
-    ALBEDO = vec3(0.30, 0.55, 0.95) * glow * mix(0.35, 0.85, height);
+    vec3 rayleigh = mix(vec3(0.24, 0.48, 0.92), vec3(0.46, 0.72, 1.0), horizon_band);
+    ALBEDO = rayleigh * glow * mix(0.38, 0.90, height);
     ALPHA = 1.0;
 }";
 

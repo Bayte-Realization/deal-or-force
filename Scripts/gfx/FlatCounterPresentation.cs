@@ -16,6 +16,9 @@ public sealed partial class GlobePresentation
     private bool _counterDensityDirty = true;
     private bool _flatStrategicCounters;
     private readonly Dictionary<int, List<ArmyStackMarker>> _provinceStackScratch = new();
+    // The strategic view's merged counters: a host and the counters of the same country it took in.
+    private readonly List<(ArmyStackMarker Marker, Rect2 Room)> _strategicHosts = new();
+    private readonly Dictionary<ArmyStackMarker, List<ArmyStackMarker>> _strategicMerges = new();
     private readonly List<List<ArmyStackMarker>> _provinceStackPool = new();
 
     // Geography is authoritative. Collision avoidance must never move a division
@@ -224,7 +227,6 @@ public sealed partial class GlobePresentation
     {
         _counterDensityDirty = true;
         _nextCounterDensityMs = 0;
-        _cityDirty = true;
     }
 
     /// <summary>Only auxiliary counters search for arbitrary free space. Army counters keep
@@ -243,9 +245,11 @@ public sealed partial class GlobePresentation
         _counterDensityDirty = false;
         _densityViewport = Size;
         _densityView = new Vector3(_flatX, _flatY, _flatZoom);
-        _occupiedCounterCells.Clear();
+        ClearCounterRooms();
         LayoutFlatArmyStackOffsets();
         var screenBounds = new Rect2(-80, -50, Size.X + 160, Size.Y + 100);
+        _strategicHosts.Clear();
+        foreach (var list in _strategicMerges.Values) list.Clear();
         foreach (var marker in _armyStacks.Values)
         {
             marker.TargetPosition = ArmyMarkerPosition(marker);
@@ -257,18 +261,54 @@ public sealed partial class GlobePresentation
             if (!marker.Node.IsVisibleInTree() || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
             var at = _camera.UnprojectPosition(marker.Node.GlobalPosition);
             if (!screenBounds.HasPoint(at)) continue;
-            RefreshProvinceCounterDisplay(marker, _flatStrategicCounters);
             var half = marker.Plate.Texture.GetSize() * marker.Plate.PixelSize * _counterFlatFar * .5f;
-            TakeCounterRoom(new Rect2(at - half, half * 2f));
+            var room = new Rect2(at - half, half * 2f);
+            // The counters of one country that would overlap become one counter with all their
+            // divisions - as a Paradox map does - instead of forty plates and forty labels piled
+            // on each other until only the labels could be read. At every zoom, not only the
+            // farthest: South Korea's thirty-four divisions covered the whole country, its name
+            // included, at the zoom a player reads a region at. Close in they stand apart and
+            // nothing merges; at the strategic distance a near miss merges too.
+            var reach = _flatStrategicCounters ? half.X * 0.35f : -half.X * 0.25f;
+            ArmyStackMarker host = null;
+            foreach (var (candidate, taken) in _strategicHosts)
+                if (candidate.NationId == marker.NationId && taken.Grow(reach).Intersects(room)) { host = candidate; break; }
+            if (host is not null)
+            {
+                if (!_strategicMerges.TryGetValue(host, out var merged)) _strategicMerges[host] = merged = new List<ArmyStackMarker>();
+                merged.Add(marker);
+                continue;
+            }
+            _strategicHosts.Add((marker, room));
+        }
+        // The hosts show everything they took in; the counters taken in show nothing, and a click
+        // on one selects the whole merged group.
+        foreach (var (host, room) in _strategicHosts)
+        {
+            _strategicMerges.TryGetValue(host, out var merged);
+            RefreshProvinceCounterDisplay(host, _flatStrategicCounters, merged);
+            TakeCounterRoom(room);
+            if (merged is null) continue;
+            var ids = host.Node.GetMeta("display_army_ids");
+            foreach (var taken in merged)
+            {
+                taken.Plate.Visible = false;
+                taken.Count.Visible = false;
+                if (taken.ConditionBars is not null) taken.ConditionBars.Visible = false;
+                taken.DisplayFingerprint = 0;
+                taken.Node.SetMeta("display_army_ids", ids);
+            }
         }
         LayoutFlatAuxiliaryCounters();
         QueueRedraw();
     }
 
-    private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact)
+    private void RefreshProvinceCounterDisplay(ArmyStackMarker marker, bool compact, List<ArmyStackMarker> merged = null)
     {
         marker.DisplayStack.Clear();
         marker.DisplayStack.AddRange(marker.Stack);
+        if (merged is not null)
+            foreach (var taken in merged) marker.DisplayStack.AddRange(taken.Stack);
         marker.DisplayProvinces = 1;
         marker.Compact = compact;
         marker.Plate.Visible = true;
@@ -294,7 +334,7 @@ public sealed partial class GlobePresentation
             marker.ShownMenTenths = menTenths;
             marker.ShownCompact = compact;
             var text = compact
-                ? (menTenths > 0 ? $"{divCount}·{menTenths / 10f:0.#}k" : divCount.ToString())
+                ? divCount.ToString()
                 : $"{divCount}\n{menTenths / 10f:0.#}k";
             marker.CountText = text;
             if (marker.Count.Text != text) marker.Count.Text = text;
@@ -326,10 +366,10 @@ public sealed partial class GlobePresentation
         return TryFindFreeCounterOffset(room, out var offset) ? offset : Vector2.Zero;
     }
 
-    private bool TryFindFreeCounterOffset(Rect2 room, out Vector2 result)
+    private bool TryFindFreeCounterOffset(Rect2 room, out Vector2 result, Func<Vector2,bool> allowed = null)
     {
         result = Vector2.Zero;
-        if (!CounterRoomOccupied(room)) return true;
+        if (!CounterRoomOccupied(room) && (allowed is null || allowed(Vector2.Zero))) return true;
         var limit = Math.Clamp(Ui.Metric("map.flat_counter_local_radius", 96), 48, 160);
         // Bounded rectangular spiral; prefer the nearest free slot on each ring.
         // Stable auxiliary-id ordering keeps base/port layout deterministic.
@@ -346,6 +386,7 @@ public sealed partial class GlobePresentation
                 if (offset.LengthSquared() >= bestDistance) continue;
                 var test = new Rect2(room.Position + offset, room.Size);
                 if (CounterRoomOccupied(test)) continue;
+                if (allowed is not null && !allowed(offset)) continue;
                 best = offset;
                 bestDistance = offset.LengthSquared();
             }
@@ -367,12 +408,8 @@ public sealed partial class GlobePresentation
     private void LayoutFlatAuxiliaryCounters()
     {
         _auxiliaryCounters.Clear();
-        foreach (var (id, marker) in _supportMapMarkers)
-        {
-            if (!marker.Node.IsVisibleInTree()) continue;
-            var anchor = FlatPoint(marker.Latitude, marker.Longitude, FlatMarkerZ - .002f);
-            _auxiliaryCounters.Add((marker.Node, marker.Plate, anchor, id, marker));
-        }
+        // Support uses a province-constrained layout in both projections, after army
+        // placement. The unconstrained fleet/port spiral must never move an airbase.
         foreach (var (id, parts) in _fleetNodes)
         {
             if (!parts.Node.IsVisibleInTree() || !_fleetByMarker.TryGetValue(parts.Node, out var fleet)) continue;
@@ -429,5 +466,13 @@ public sealed partial class GlobePresentation
                 _occupiedCounterCells[cell] = entries = new();
             entries.Add(room);
         }
+    }
+
+    private void ClearCounterRooms()
+    {
+        // Screen-space buckets are bounded by viewport size. Reuse their lists rather
+        // than allocate them again for every camera/layout refresh.
+        if(_occupiedCounterCells.Count>4096)_occupiedCounterCells.Clear();
+        else foreach(var entries in _occupiedCounterCells.Values)entries.Clear();
     }
 }

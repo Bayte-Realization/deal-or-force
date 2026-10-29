@@ -13,6 +13,7 @@ public partial class DealOrForceGame
     private VBoxContainer _alertRows = null!;
     private VBoxContainer _outlinerGroupRows;
     private ScrollContainer _outlinerScroll;
+    private HBoxContainer _outlinerHeader;
     private readonly HashSet<string> _collapsedOutlinerGroups = new();
     private VBoxContainer _battleDetailControls = null!;
     private int _selectedBattleId = -1;
@@ -23,6 +24,7 @@ public partial class DealOrForceGame
     {
         _outliner = TexturedPanel(_hudLayer, PanelSurface.Command);
         _outliner.Name = "StrategicOutliner";
+        ApplyHudFrame(_outliner, true);
         Ui.Place(_outliner, "hud.outliner");
         // A right-anchored panel whose content is wider than its column would otherwise grow
         // to the right, past the screen edge. Let it take the extra width from the map side.
@@ -36,23 +38,29 @@ public partial class DealOrForceGame
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             ClipContents = true
         };
-        column.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_stack_gap", 6));
+        column.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_stack_gap", 8));
         outer.AddChild(column);
-        var toggle = ActionButton("Situation report  −", ToggleOutliner, 0, 30);
+        _outlinerHeader = new HBoxContainer { Name = "OutlinerHeader" };
+        _outlinerHeader.AddThemeConstantOverride("separation", 4); column.AddChild(_outlinerHeader);
+        var toggle = ActionButton("Situation report  −", ToggleOutliner, 0, 32);
         toggle.Name = "OutlinerToggle";
         toggle.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         toggle.ClipText = true;
-        column.AddChild(toggle);
+        toggle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        StyleHudButton(toggle, false, true);
+        _outlinerHeader.AddChild(toggle);
         _situationRailButton = ActionButton("Situation room", OpenSituationRoom, 0, 32,
             iconPath: "res://game/gfx/interface/icons/icon_ledger.png");
         _situationRailButton.Name = "OpenSituationRoom";
         _situationRailButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        StyleHudButton(_situationRailButton, false);
         column.AddChild(_situationRailButton);
         _dealInboxHudButton = ActionButton("Diplomatic inbox", OpenDealInbox, 0, 32);
         _dealInboxHudButton.Name = "OpenDiplomaticInbox";
         _dealInboxHudButton.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _dealInboxHudButton.ClipText = true;
         _dealInboxHudButton.Visible = false;
+        StyleHudButton(_dealInboxHudButton, false);
         column.AddChild(_dealInboxHudButton);
         var scroll = new ScrollContainer
         {
@@ -67,10 +75,10 @@ public partial class DealOrForceGame
         _outlinerScroll = scroll;
         column.AddChild(scroll);
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_group_gap", 10));
+        body.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_group_gap", 12));
         scroll.AddChild(body);
         _alertRows = new VBoxContainer { Name = "StrategicAlerts" };
-        _alertRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
+        _alertRows.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_row_gap", 4));
         body.AddChild(_alertRows);
         _outlinerRows = new VBoxContainer
         {
@@ -78,7 +86,7 @@ public partial class DealOrForceGame
             CustomMinimumSize = Vector2.Zero,
             ClipContents = true
         };
-        _outlinerRows.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_row_gap", 4));
+        _outlinerRows.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_row_gap", 4));
         body.AddChild(_outlinerRows);
     }
 
@@ -191,6 +199,22 @@ public partial class DealOrForceGame
                 Simulation.Loc.Format("Inflation: {0}", player.Inflation.ToString("P0")),
                 () => OpenEconomyTab("Budget"),
                 Tr("Prices are rising well past the comfortable rate. The policy rate in the budget is the lever."));
+
+        // A recession from a financial crisis, its contagion or a pandemic (TreasuryDynamics), and
+        // a treasury so full the country wants it spent: both slow emergencies of the same kind.
+        var recession = 1f - Simulation.TreasuryDynamics.OutputFactor(_campaign, player);
+        if (recession > 0.005f)
+            AddAlert(recession >= 0.05f ? AlertLevel.Critical : AlertLevel.Warning, "inflation",
+                Simulation.Loc.Format("Recession: output -{0}", Fmt.Percent(recession)),
+                () => OpenEconomyTab("Budget"),
+                Simulation.Loc.Format("A financial crisis, its contagion or a pandemic has the economy contracting until {0}.",
+                    Simulation.LandArrangementSystem.DateOfDay(_campaign, player.RecessionUntilDay)));
+        else if (_campaign.Defines.TreasuryDynamicsEnabled && player.Gdp > 0f &&
+                 player.Treasury > player.Gdp * _campaign.Defines.TreasuryComfortShare)
+            AddAlert(AlertLevel.Notice, "inflation", Tr("Treasury overflowing"),
+                () => OpenEconomyTab("Budget"),
+                Simulation.Loc.Format("Reserves above {0} of GDP are spent down every week - handouts and tax cuts where voters rule, leakage where nobody answers to them. Invest it, or watch it go.",
+                    Fmt.Percent(_campaign.Defines.TreasuryComfortShare)));
 
         if (player.BrainDrainRate <= -0.10f && player.WeeklyNetMigration < 0)
             AddAlert(player.BrainDrainRate <= -0.22f ? AlertLevel.Critical : AlertLevel.Warning, "literacy",
@@ -399,10 +423,32 @@ public partial class DealOrForceGame
         _ => "state.positive"
     };
 
+    private static void StyleOutlinerAlertButton(Button button, AlertLevel level)
+    {
+        StyleHudButton(button, false);
+        var normal = HudButtonStyle(false, 0, false);
+        normal.BgColor = Ui.Colour("surface.inset", 0.72f);
+        normal.BorderColor = Ui.Colour("surface.line_faint", 0.8f);
+        var hover = HudButtonStyle(false, 1, false);
+        hover.BorderColor = Ui.Colour(AlertColour(level), 0.7f);
+        var pressed = HudButtonStyle(false, 2, false);
+        pressed.BorderColor = Ui.Colour(AlertColour(level), 0.85f);
+        button.AddThemeStyleboxOverride("normal", normal);
+        button.AddThemeStyleboxOverride("hover", hover);
+        button.AddThemeStyleboxOverride("pressed", pressed);
+        var colour = Ui.Colour(AlertColour(level));
+        button.AddThemeColorOverride("font_color", colour);
+        button.AddThemeColorOverride("font_hover_color", colour.Lightened(0.25f));
+        button.AddThemeColorOverride("font_pressed_color", colour);
+        button.AddThemeColorOverride("icon_normal_color", colour);
+        button.AddThemeColorOverride("icon_hover_color", colour.Lightened(0.25f));
+        button.AddThemeColorOverride("icon_pressed_color", colour);
+    }
+
     /// <summary>
     /// Draw them, worst first.
     ///
-    /// Each is an icon, a very short line, and a border in its level's colour; the sentence
+    /// Each is an icon, a very short line, and a stripe and text in its level's colour; the sentence
     /// explaining it is in the tooltip. A tooltip is a trade - screen space for a click -
     /// and it is worth making here precisely because this rail is the one part of the
     /// screen that is always short of room.
@@ -425,7 +471,7 @@ public partial class DealOrForceGame
             var age = now - _alertFirstSeen[key];
 
             var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", (int)Ui.Metric("hud.alert_row_gap", 6));
+            row.AddThemeConstantOverride("separation", HudRhythm("hud.alert_row_gap", 8));
             _alertRows.AddChild(row);
 
             // The level as a stripe down the row's edge, read before the words are.
@@ -438,20 +484,16 @@ public partial class DealOrForceGame
             };
             row.AddChild(stripe);
 
-            var button = ActionButton(alert.Text, alert.Action, 0, 30,
+            var button = ActionButton(alert.Text, alert.Action, 0, 32,
                 alert.Level == AlertLevel.Critical,
                 SpriteCatalog.TextureOf($"icon_{alert.Icon}",
                     $"res://game/gfx/interface/icons/icon_{alert.Icon}.png"));
             button.Alignment = HorizontalAlignment.Left;
             button.ClipText = true;
+            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
             button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             button.TooltipText = Ui.Tip(alert.Tooltip);
-
-            // The severity, in the one place a player's eye is already going: the edge of
-            // the thing they are reading.
-            var colour = Ui.Colour(AlertColour(alert.Level));
-            button.AddThemeColorOverride("font_color", colour);
-            button.AddThemeColorOverride("font_hover_color", colour.Lightened(0.25f));
+            StyleOutlinerAlertButton(button, alert.Level);
             row.AddChild(button);
             if (age < AlertFlashMs) Flash(row, stripe, age);
         }
@@ -498,6 +540,7 @@ public partial class DealOrForceGame
     /// rule, once, for all of them.
     /// </summary>
     private string _pendingOutlinerHeader;
+    private string _activeOutlinerSection = "";
 
     /// <summary>Whether anything at all has been listed, so the empty case can say so once.</summary>
     private bool _outlinerHasRows;
@@ -509,7 +552,56 @@ public partial class DealOrForceGame
     /// </summary>
     private bool _alertsDrawn;
 
-    private void AddOutlinerHeader(string text) => _pendingOutlinerHeader = text;
+    private void AddOutlinerHeader(string text)
+    {
+        _pendingOutlinerHeader = text;
+        _activeOutlinerSection = text;
+    }
+
+    private static string OutlinerSectionStripe(string section) => section switch
+    {
+        "WARS" or "BATTLES" => "state.negative",
+        "NAVY" => "state.info",
+        "MARKET" or "WATCHLIST" => "state.warning",
+        "CONSTRUCTION" or "FIRST STEPS" => "state.positive",
+        _ => "button.primary_border"
+    };
+
+    private static void StyleOutlinerGroupButton(Button button)
+    {
+        StyleHudButton(button, false, true);
+        var normal = HudButtonStyle(false, 0, false, true);
+        normal.BorderColor = Ui.Colour("surface.line_faint");
+        normal.BorderWidthBottom = 1;
+        var hover = HudButtonStyle(false, 1, false);
+        hover.BorderColor = Ui.Colour("surface.line");
+        var pressed = HudButtonStyle(false, 2, false);
+        pressed.BorderColor = Ui.Colour("button.primary_border", 0.65f);
+        button.AddThemeStyleboxOverride("normal", normal);
+        button.AddThemeStyleboxOverride("hover", hover);
+        button.AddThemeStyleboxOverride("pressed", pressed);
+        button.AddThemeColorOverride("font_color", Ui.Colour("text.caption"));
+        button.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
+        button.AddThemeColorOverride("font_pressed_color", Ui.Colour("text.accent"));
+    }
+
+    private static void StyleOutlinerRowButton(Button button, string stripeToken)
+    {
+        StyleHudButton(button, false, true);
+        var normal = HudButtonStyle(false, 0, false, true);
+        normal.BorderWidthLeft = 1;
+        normal.BorderColor = Ui.Colour(stripeToken, 0.35f);
+        var hover = HudButtonStyle(false, 1, false);
+        hover.BorderColor = Ui.Colour(stripeToken, 0.7f);
+        var pressed = HudButtonStyle(false, 2, false);
+        pressed.BorderColor = Ui.Colour(stripeToken, 0.85f);
+        button.AddThemeStyleboxOverride("normal", normal);
+        button.AddThemeStyleboxOverride("hover", hover);
+        button.AddThemeStyleboxOverride("pressed", pressed);
+        button.AddThemeColorOverride("font_color", Ui.Colour("text.body_soft"));
+        button.AddThemeColorOverride("font_hover_color", Ui.Colour("text.bright"));
+        button.AddThemeColorOverride("font_pressed_color", Ui.Colour("text.accent"));
+    }
 
     /// <summary>Draw the buffered heading, now that there is something to put under it.</summary>
     private void OpenOutlinerGroup()
@@ -523,7 +615,7 @@ public partial class DealOrForceGame
         var hidden = CampaignUiCatalog.HiddenOutliner.Contains(text);
         var group = new VBoxContainer { Visible = !collapsed && !hidden };
         group.SetMeta("outliner_section", text);
-        group.AddThemeConstantOverride("separation", (int)Ui.Metric("shell.outliner_section_gap", 3));
+        group.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_section_gap", 4));
         var button = ActionButton((collapsed ? "▸ " : "▾ ") + Tr(text), () =>
         {
             if (!_collapsedOutlinerGroups.Add(text)) _collapsedOutlinerGroups.Remove(text);
@@ -532,10 +624,14 @@ public partial class DealOrForceGame
         }, 0, 28);
         button.Name = "Group" + text.Replace(" ", "");
         button.SetMeta("outliner_section", text);
+        button.SetMeta("atlas_outliner_group", true);
+        button.AddThemeFontOverride("font", Ui.Tracked());
         button.Visible = !hidden;
         button.Alignment = HorizontalAlignment.Left;
         button.ClipText = true;
-        button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button", 12));
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        button.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.caption", 11));
+        StyleOutlinerGroupButton(button);
         _outlinerRows.AddChild(button);
         _outlinerRows.AddChild(group);
         var position = 0;
@@ -553,17 +649,20 @@ public partial class DealOrForceGame
         label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         label.ClipText = true;
         label.MaxLinesVisible = 2;
-        label.CustomMinimumSize = new Vector2(0, 18);
+        label.CustomMinimumSize = new Vector2(0, 20);
         _outlinerGroupRows.AddChild(label);
     }
 
     private Button AddOutlinerButton(string text, Action action, string tooltip)
     {
         OpenOutlinerGroup();
-        var button = ActionButton(text, action, 0, 29);
+        var button = ActionButton(text, action, 0, 32);
+        var stripeToken = OutlinerSectionStripe(_activeOutlinerSection);
+        button.SetMeta("atlas_outliner_row", stripeToken);
+        StyleOutlinerRowButton(button, stripeToken);
         button.Alignment = HorizontalAlignment.Left;
         button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        button.CustomMinimumSize = new Vector2(0, 29);
+        button.CustomMinimumSize = new Vector2(0, 32);
         button.ClipText = true;
         // A row that does not fit says so. The rail is a fixed 270 pixels and a row's text is
         // a name plus its figures, so a longer language simply runs out of room - and a clip

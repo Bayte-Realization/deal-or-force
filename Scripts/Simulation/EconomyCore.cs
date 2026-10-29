@@ -324,14 +324,17 @@ public sealed class QueueConstructionCommand : ICampaignCommand
         ScenarioState state = null;
         foreach (var candidate in campaign.States)
             if (candidate.MapIndex == StateMapIndex) { state = candidate; break; }
-        if (state is null || state.NationMapIndex != nation.MapIndex) return;
+        // Its own regions, and those it administers although another owns them (HeldRegions):
+        // held ground is built on as one's own.
+        if (state is null || (state.NationMapIndex != nation.MapIndex &&
+                              !(state.HeldById == nation.Id && HeldRegions.Administered(campaign, state)))) return;
 
         var running = 0;
         var highest = 0;
         foreach (var project in campaign.Construction)
         {
             if (project.Id > highest) highest = project.Id;
-            if (project.NationId == nation.Id && ++running >= campaign.Defines.MaxConstructionProjects) return;
+            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, campaign.Defines.MaxConstructionProjects)) return;
         }
 
         // A wharf needs water. The AI never orders one and the player's button now says
@@ -341,16 +344,17 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             Waterfront.OfRegion(campaign, state) == WaterAccess.None) return;
 
         var definition = BuildingCatalog.Get(Building);
-        if (nation.Treasury < Math.Min(0.05f, definition.Cost)) return;
+        var cost = ConstructionCost.Of(campaign, nation, Building);
+        if (nation.Treasury < Math.Min(0.05f, cost)) return;
         campaign.Construction.Add(new ConstructionProject
         {
             Id = highest + 1,
             NationId = nation.Id,
             StateMapIndex = state.MapIndex,
             Building = Building,
-            // What the country's modifiers make of it: cheaper, and quicker, while a
-            // construction drive or a war economy lasts (NationalModifiers).
-            Cost = definition.Cost * NationalModifiers.Factor(nation, "construction_cost"),
+            // What building costs in this country (ConstructionCost), and what its modifiers make
+            // of it: cheaper, and quicker, while a construction drive or a war economy lasts.
+            Cost = cost,
             DurationDays = Math.Max(1, (int)MathF.Round(definition.Days / NationalModifiers.Factor(nation, "construction_speed")))
         });
         campaign.MarkStrategicChange();
@@ -397,7 +401,7 @@ public sealed class DemolishBuildingCommand : ICampaignCommand
 
         nation.Gdp = MathF.Max(0.01f, nation.Gdp - definition.GdpGain * yield);
         nation.ConstructionCapacity = MathF.Max(0f, nation.ConstructionCapacity - definition.CapacityGain * yield);
-        nation.Treasury += definition.Cost * campaign.Defines.DemolitionRefund;
+        nation.Treasury += ConstructionCost.Of(campaign, nation, Building) * campaign.Defines.DemolitionRefund;
 
         if (Building == BuildingKind.University)
         {
@@ -971,6 +975,13 @@ public static class EconomySystem
             // the drags of war and empire (SecularCycle) - the only thing that lets the order of
             // 2024 change.
             SecularCycle.Week(campaign, nation, atWar);
+            // The spin-up (Defines.OutputSpinUpDays): the market is still settling, so the
+            // calibration follows it and GDP stays where the scenario put it.
+            if (campaign.ElapsedDays < campaign.Defines.OutputSpinUpDays && nation.GrossOutput > 0f && nation.Gdp > 0f)
+            {
+                var spun = nation.Gdp / (nation.GrossOutput * 52d);
+                if (double.IsFinite(spun) && spun > 0d && spun < float.MaxValue) nation.OutputScale = (float)spun;
+            }
             if (nation.GrossOutput > 0f && nation.OutputScale > 0f)
             {
                 // Multiply in double: finite operands can overflow an intermediate float
@@ -1507,38 +1518,53 @@ public static class ConstructionSystem
         // it is not the one this is.
         if (!campaign.StepOpensNewDay) return;
 
-        // The oldest unfinished project each country has, found by hand. Where().OrderBy()
-        // .FirstOrDefault() built a closure, an enumerator, a sorter and its key buffer for
-        // every one of the two hundred and sixty-one countries every single day, to pick
-        // one item out of a list that is usually a few hundred long.
+        // Plant wears out, once a week (CapitalDepreciation).
+        CapitalDepreciation.Week(campaign);
+
+        // The oldest sites a country has open work today - as many as the size of its economy
+        // runs (ConstructionCost.WorkingSites) - while the treasury pays for them. Only the oldest
+        // single project used to move: a country with forty-eight sites finished one at a time, so
+        // India and China completed what Malta did, a building or two a year, and their real
+        // output stood still for a decade. ConstructionSitesInParallel false is the old queue.
+        Working.Clear();
+        foreach (var item in campaign.Construction)
+        {
+            if (!Working.TryGetValue(item.NationId, out var list)) Working[item.NationId] = list = new List<ConstructionProject>();
+            list.Add(item);
+        }
         foreach (var nation in campaign.Nations)
         {
-            ConstructionProject project = null;
-            foreach (var item in campaign.Construction)
+            if (!Working.TryGetValue(nation.Id, out var sites) || sites.Count == 0) continue;
+            sites.Sort((a, b) => a.Id.CompareTo(b.Id));
+            var working = ConstructionCost.WorkingSites(campaign, nation);
+            foreach (var project in sites)
             {
-                if (item.NationId != nation.Id) continue;
-                if (project is null || item.Id < project.Id) project = item;
+                if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
+                    !float.IsFinite(project.Paid) || project.Paid < 0 ||
+                    !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) break;
+                var required = project.Cost / Math.Max(1, project.DurationDays);
+                var outstanding = Math.Max(0f, project.Cost - project.Paid);
+                var paid = Math.Min(outstanding,
+                    Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
+                // Capacity can fund a site before its work time is complete. Continue that
+                // work, but never charge beyond the contract or require fresh cash for a
+                // fully funded site. Old overpayments are not refunded or rewritten here.
+                // A site the treasury cannot pay today waits, and so does every newer one.
+                if (outstanding > 0f && paid <= 0f) break;
+                nation.Treasury -= paid;
+                project.Paid += paid;
+                project.ProgressDays++;
+                if (project.Progress >= 0.999f)
+                {
+                    Complete(campaign, nation, project);
+                    campaign.Construction.Remove(project);
+                }
+                if (--working <= 0) break;
             }
-            if (project is null) continue;
-            if (!float.IsFinite(project.Cost) || project.Cost < 0 ||
-                !float.IsFinite(project.Paid) || project.Paid < 0 ||
-                !float.IsFinite(nation.Treasury) || !float.IsFinite(nation.ConstructionCapacity)) continue;
-            var required = project.Cost / Math.Max(1, project.DurationDays);
-            var outstanding = Math.Max(0f, project.Cost - project.Paid);
-            var paid = Math.Min(outstanding,
-                Math.Min(required * Math.Max(0.25f, nation.ConstructionCapacity), Math.Max(0f, nation.Treasury)));
-            // Capacity can fund a site before its work time is complete. Continue that
-            // work, but never charge beyond the contract or require fresh cash for a
-            // fully funded site. Old overpayments are not refunded or rewritten here.
-            if (outstanding > 0f && paid <= 0f) continue;
-            nation.Treasury -= paid;
-            project.Paid += paid;
-            project.ProgressDays++;
-            if (project.Progress < 0.999f) continue;
-            Complete(campaign, nation, project);
-            campaign.Construction.Remove(project);
         }
     }
+
+    private static readonly Dictionary<int, List<ConstructionProject>> Working = new();
 
     private static void Complete(Campaign campaign, Nation nation, ConstructionProject project)
     {

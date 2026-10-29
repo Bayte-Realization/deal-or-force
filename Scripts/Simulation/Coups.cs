@@ -11,7 +11,7 @@ public sealed partial class Defines
     /// <summary>How often the officers of every country are asked whether they have had enough, in days.</summary>
     public int CoupReviewDays { get; set; } = 30;
     /// <summary>Stability at and above which nobody plots; below it the risk grows with how far below.</summary>
-    public float CoupStabilityThreshold { get; set; } = 0.35f;
+    public float CoupStabilityThreshold { get; set; } = 0.42f;
     /// <summary>The chance of a plot in a review for a country at no stability at all, before its government and its neighbours.</summary>
     public float CoupBaseChance { get; set; } = 0.04f;
     /// <summary>How long a plot is in the making: a government that is stable again by then has seen it off.</summary>
@@ -26,6 +26,12 @@ public sealed partial class Defines
     public float CoupWarSupportGain { get; set; } = 0.05f;
     /// <summary>How long a junta that has just taken power is left alone by its own officers.</summary>
     public int CoupGraceDays { get; set; } = 730;
+    /// <summary>
+    /// The output per head, in dollars, at which a country's coup risk is halved; it falls with the
+    /// square beyond. No democracy richer than Argentina in 1975 has been overthrown by its army
+    /// (Przeworski): Italy's officers do not march on Rome however unstable the coalition. 0: off.
+    /// </summary>
+    public float CoupWealthReference { get; set; } = 0f;
 }
 
 public sealed partial class Nation
@@ -129,9 +135,13 @@ public static class Coups
                 {
                     nation.CoupPlotDay = -1;
                     c.Chronicle.Record(c, "coup_foiled", nation.Id, isPublic: false);
+                    // Officers found out have nothing left to lose: some take their units with them.
+                    CivilWarOutbreak.FromCoup(c, nation, defines.CivilWarFromFoiledPlotChance, 2);
                     continue;
                 }
                 Seize(c, nation);
+                // And some coups split the army instead of taking it.
+                CivilWarOutbreak.FromCoup(c, nation, defines.CivilWarFromCoupChance, 1);
                 continue;
             }
 
@@ -142,6 +152,16 @@ public static class Coups
             c.Chronicle.Record(c, "coup_plot", nation.Id, isPublic: nation.IsHuman);
             DiagnosticLogs.Write("simulation", $"COUP_PLOT nation={nation.Tag} stability={nation.Stability:0.00} chance={chance:0.000}");
         }
+    }
+
+    /// <summary>What a country's wealth does to its coup risk: 1 for a poor one, a twentieth for the richest.</summary>
+    public static float WealthFactor(Campaign c, Nation nation)
+    {
+        var reference = c.Defines.CoupWealthReference;
+        if (reference <= 0f || nation.Population <= 0) return 1f;
+        var perHead = MathF.Max(0f, nation.Gdp) * 1e9f / nation.Population;
+        var ratio = perHead / reference;
+        return float.IsFinite(ratio) ? 1f / (1f + ratio * ratio) : 1f;
     }
 
     /// <summary>The chance of a plot against this government in one review.</summary>
@@ -157,7 +177,7 @@ public static class Coups
         // The officers who have just taken power hold the army for a while.
         if (c.ElapsedDays - nation.LastCoupDay < defines.CoupGraceDays) return 0f;
         var below = (threshold - nation.Stability) / threshold;
-        var chance = defines.CoupBaseChance * below * GovernmentRisk(nation);
+        var chance = defines.CoupBaseChance * below * GovernmentRisk(nation) * WealthFactor(c, nation);
         if (LosingAWar(c, nation)) chance *= defines.CoupLosingWar;
         if (CoupNextDoor(c, nation)) chance *= defines.CoupContagion;
         return M.Clamp01(chance);

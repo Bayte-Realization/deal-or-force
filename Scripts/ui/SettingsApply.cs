@@ -162,10 +162,12 @@ public partial class DealOrForceGame
 
             case "region_names":
                 if (_globe is not null) _globe.CountryLabelsEnabled = SettingsCatalog.Flag("region_names");
+                RefreshMapVisualToggles();
                 break;
 
             case "city_names":
                 if (_globe is not null) _globe.CityLabelsEnabled = SettingsCatalog.Flag("city_names");
+                RefreshMapVisualToggles();
                 break;
 
             case "movement_flags":
@@ -201,10 +203,12 @@ public partial class DealOrForceGame
 
             case "map_trade_traffic":
                 if (_globe is not null) _globe.TradeTrafficShown = SettingsCatalog.Flag("map_trade_traffic");
+                RefreshMapVisualToggles();
                 break;
 
             case "map_event_pulses":
                 if (_globe is not null) _globe.EventPulsesShown = SettingsCatalog.Flag("map_event_pulses");
+                RefreshMapVisualToggles();
                 break;
 
             case "map_smoothing":

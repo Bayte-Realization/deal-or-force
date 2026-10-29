@@ -1,0 +1,19 @@
+// Ground one state owns and another holds by arrangement on 1 January 2024 (LandArrangements.cs).
+//
+//   kind      "lease" (a term at a rent) or "presence" (troops without a war)
+//   owner     the state the land belongs to in law; holder - the one that holds it
+//   region    a region id (or "regions": [...]); until - the year a lease ends, left out for none
+//   rent      billions a year; purpose - "spaceport", "naval_base", "military_base"
+//
+// A mod adds a line; a scenario of another age writes its own - Hong Kong's New Territories to
+// Britain until 1997, Port Arthur to Russia, the Panama Canal Zone to the United States.
+{
+  "arrangements": [
+    // Baikonur: Kazakh ground, leased to Russia from 1994 for 115 million dollars a year,
+    // extended in 2004 to 2050. The town and the cosmodrome are run by Russia.
+    { "kind": "lease", "owner": "KAZ", "holder": "RUS", "region": "99_x05", "until": 2050, "rent": 0.115, "purpose": "spaceport" },
+    // Guantanamo Bay: leased to the United States in 1903 with no end but by both parties'
+    // consent; the rent of 4,085 dollars a year, which Havana has refused to cash since 1959.
+    { "kind": "lease", "owner": "CUB", "holder": "USA", "region": "99_x13", "rent": 0.000004, "purpose": "naval_base" }
+  ]
+}

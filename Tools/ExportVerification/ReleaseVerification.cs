@@ -8,21 +8,26 @@ namespace DealOrForce;
 
 public partial class ExportVerification
 {
-    private async Task VerifyReleaseMenu(MainMenuScene menu)
+    private async Task VerifyReleaseMenu(MainMenuScene menu, bool developmentProbe)
     {
-        var root = Path.GetDirectoryName(OS.GetExecutablePath());
-        foreach (var file in new[] { "Deal or Force.exe", "Deal or Force Launcher.exe" })
+        // Source-menu checks cannot certify a packaged EXE. Keep every redistribution
+        // assertion mandatory for the exported probe (which never uses development).
+        if (!developmentProbe)
         {
-            var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(Path.Combine(root, file));
-            Check(version.FileVersion == GameBuildInfo.Version + ".0" &&
-                (version.ProductVersion == GameBuildInfo.Version || version.ProductVersion == GameBuildInfo.Version + ".0"),
-                file + " Windows file/product version is " + GameBuildInfo.Version);
+            var root = Path.GetDirectoryName(OS.GetExecutablePath());
+            foreach (var file in new[] { "Deal or Force.exe", "Deal or Force Launcher.exe" })
+            {
+                var version = System.Diagnostics.FileVersionInfo.GetVersionInfo(Path.Combine(root, file));
+            Check(version.FileVersion == GameBuildInfo.Version &&
+                    (version.ProductVersion == GameBuildInfo.Version || version.ProductVersion == GameBuildInfo.Version + ".0"),
+                    file + " Windows file/product version is " + GameBuildInfo.Version);
+            }
+            Check(File.Exists(Path.Combine(root, "THIRD_PARTY_NOTICES.md")) &&
+                File.Exists(Path.Combine(root, "LICENSE")) && File.Exists(Path.Combine(root, "LICENSE-EXCEPTIONS.md")),
+                "root redistribution notices are present");
+            Check(!Directory.Exists(Path.Combine(root, "licenses")) && !Directory.Exists(Path.Combine(root, "docs")),
+                "no licenses or docs directory beside the executable");
         }
-        Check(File.Exists(Path.Combine(root, "THIRD_PARTY_NOTICES.md")) &&
-            File.Exists(Path.Combine(root, "LICENSE")) && File.Exists(Path.Combine(root, "LICENSE-EXCEPTIONS.md")),
-            "root redistribution notices are present");
-        Check(!Directory.Exists(Path.Combine(root, "licenses")) && !Directory.Exists(Path.Combine(root, "docs")),
-            "no licenses or docs directory beside the executable");
         foreach (var language in new[] { "english", "russian" })
         {
             menu.VerificationReleaseLanguage(language);

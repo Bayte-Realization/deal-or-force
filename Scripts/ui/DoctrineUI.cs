@@ -16,14 +16,25 @@ public partial class DealOrForceGame
         string Strategy, float Army, float Air, float Navy, float Political, float RewriteCost,
         int TacticalRevision, int StrategicRevision, bool TacticalEnabled, bool StrategicEnabled);
 
-    private DoctrinePresentationState DoctrinePresentation(Nation n) => new(
-        n, Loc.Language, _doctrineBook, _doctrineView,
-        n.TacticalDoctrine.Branch, string.Join(',', n.TacticalDoctrine.Known),
-        n.TacticalDoctrine.LearningBranch, n.TacticalDoctrine.LearningNode, n.TacticalDoctrine.LearningDoneDay,
-        n.StrategicDoctrine.Id, n.ArmyExperience, n.AirExperience, n.NavalExperience, n.PoliticalPoints,
-        _campaign.Defines.DoctrineRewritePoliticalCost, TacticalDoctrineCatalog.Revision,
-        StrategicDoctrineCatalog.Revision, _campaign.FeatureEnabled("tactical_doctrines"),
-        _campaign.FeatureEnabled("strategic_doctrines"));
+    private DoctrinePresentationState DoctrinePresentation(Nation n)
+    {
+        TacticalDoctrines.EnsureShelves(n);
+        var books = string.Join(';', DoctrineSlots.All.Select(slot =>
+        {
+            var track = n.TacticalDoctrine.Tracks.GetValueOrDefault(slot);
+            return track is null
+                ? slot + "="
+                : slot + "=" + track.Branch + "/" + string.Join(',', track.Known) + "/" +
+                  track.LearningNode + "/" + track.LearningDoneDay;
+        }));
+        return new DoctrinePresentationState(
+            n, Loc.Language, _doctrineBook, _doctrineView,
+            books, "", "", "", -1,
+            n.StrategicDoctrine.Id, n.ArmyExperience, n.AirExperience, n.NavalExperience, n.PoliticalPoints,
+            _campaign.Defines.DoctrineRewritePoliticalCost, TacticalDoctrineCatalog.Revision,
+            StrategicDoctrineCatalog.Revision, _campaign.FeatureEnabled("tactical_doctrines"),
+            _campaign.FeatureEnabled("strategic_doctrines"));
+    }
 
     /// <summary>
     /// The page behind the Doctrines tab (Laws workspace): the country's book of war, the grand
@@ -102,7 +113,7 @@ public partial class DealOrForceGame
             line.AddChild(box);
         }
 
-        var next = NextArticlePrice(n);
+        var next = NextArticlePrice(n, DoctrineSlots.Ground);
         Currency("military", "ARMY XP", n.ArmyExperience,
             next > 0f ? Loc.Format("next article {0}", Fmt.Number(next)) : Loc.Get("no article open"));
         Currency("air", "AIR XP", n.AirExperience, Loc.Format("{0} flying", WingsFlying(n.Id)));
@@ -110,8 +121,13 @@ public partial class DealOrForceGame
         if (!withPolitical) return;
         var weekly = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
+        // Political credit is also the general staff's purse: the one shelf that is not bought
+        // with a service's experience.
+        var generalNext = NextArticlePrice(n, DoctrineSlots.General);
         Currency("agenda", "POLITICAL CAPITAL", n.PoliticalPoints,
-            Loc.Format("{0}/week", Fmt.Number(weekly)));
+            generalNext > 0f
+                ? Loc.Format("{0}/week · next staff article {1}", Fmt.Number(weekly), Fmt.Number(generalNext))
+                : Loc.Format("{0}/week", Fmt.Number(weekly)));
     }
 
     // The tactical book is drawn as what it is - a tree of articles - in DoctrineTreeUI, where
@@ -198,35 +214,42 @@ public partial class DealOrForceGame
     /// </summary>
     private void ShowDoctrinePreview(Nation n, VBoxContainer host = null)
     {
-        var memory = n.TacticalDoctrine;
         var rows = host ?? _policyPreview;
         PolicyHeading(rows, "WHAT THE ARMY IS READING");
-        var book = TacticalDoctrineCatalog.Find(memory.Branch);
-        if (book is null)
+        TacticalDoctrines.EnsureShelves(n);
+        foreach (var slot in DoctrineSlots.All)
         {
-            PolicyText(rows, Loc.Get("No book yet. The first article of any book costs nothing political; abandoning one later does."));
-        }
-        else
-        {
-            PolicyText(rows, Tr(book.Name));
+            var track = n.TacticalDoctrine.Track(slot);
+            var book = TacticalDoctrines.BookOn(n, slot);
+            var shelf = Title(Tr(DoctrineSlots.Name(slot)).ToUpperInvariant(), 12, Ui.Colour("text.caption"));
+            rows.AddChild(shelf);
+            if (book is null)
+            {
+                PolicyText(rows, Loc.Get("Shelf empty. The first article of any book costs nothing political; abandoning one later does."));
+                continue;
+            }
+            PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(book.Name), track.Known.Count, book.Nodes.Count),
+                "text.accent");
             var written = 0;
             foreach (var node in book.Nodes)
             {
-                if (!TacticalDoctrines.Known(n, node.Id)) continue;
+                if (!track.Known.Contains(node.Id)) continue;
                 written++;
                 var effects = NationalModifiers.Block(node.Modifiers);
                 PolicyText(rows, "· " + Tr(node.Name) + (string.IsNullOrEmpty(effects) ? "" : " — " + effects));
             }
             if (written == 0) PolicyText(rows, Loc.Get("Nothing of it is drilled in yet."));
         }
-        // A country's very first article is already being studied before it has a
-        // doctrine in force. Its progress belongs here too, not only inside book != null.
-        if (memory.LearningNode.Length > 0)
+        // A country's very first article is already being studied before it has a book in
+        // force. Its progress belongs here too, on every shelf that is studying something.
+        foreach (var slot in DoctrineSlots.All)
         {
-            var studying = TacticalDoctrineCatalog.Find(memory.LearningBranch)?.Find(memory.LearningNode);
+            var track = n.TacticalDoctrine.Track(slot);
+            if (track.LearningNode.Length == 0) continue;
+            var studying = TacticalDoctrineCatalog.Find(track.LearningBranch)?.Find(track.LearningNode);
             PolicyText(rows, Loc.Format("{0}: {1} days left.",
-                Tr(studying?.Name ?? memory.LearningNode),
-                Math.Max(0, memory.LearningDoneDay - _campaign.ElapsedDays)), "text.accent");
+                Tr(studying?.Name ?? track.LearningNode),
+                Math.Max(0, track.LearningDoneDay - _campaign.ElapsedDays)), "text.accent");
         }
 
         PolicyHeading(rows, "WHAT THE STATE INTENDS");

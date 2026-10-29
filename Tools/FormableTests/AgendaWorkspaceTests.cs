@@ -52,7 +52,7 @@ static class AgendaWorkspaceTests
         {
             Loc.Language = "russian";
             var translated = Loc.Get(decisions[0].Name);
-            Check(Loc.Get("The peace dividend") == "Дивиденд мира", "Russian goal title is not overwritten by a corrupt translation layer");
+            Check(Loc.Get("The peace dividend") == "Дивиденды мира", "Russian goal title is not overwritten by a corrupt translation layer");
             Check(AgendaWorkspace.Entries(c, ntn, AgendaWorkspace.Section.Decisions, translated).Any(r => r.Id == decisions[0].Id),
                 "search uses translated names, not English-only names");
         }

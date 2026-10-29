@@ -17,9 +17,53 @@ static class EnemyReadinessAiTests
     {
         PreferObservedWeakSector("organisation", a => a.Organisation = .25f);
         PreferObservedWeakSector("equipment", a => a.Equipment = .05f);
+        PreferUnentrenchedObservedSector();
+        PreferFavorableTerrainSector();
         HiddenConditionDoesNotChooseTargets();
         OwnReadinessStillMatters();
         ObservationIsReadOnly();
+    }
+
+    static void PreferUnentrenchedObservedSector()
+    {
+        var (c, _, defenders) = World(visible: true);
+        foreach (var d in defenders) d.Entrenchment = 0.85f;
+        var unentrenched = defenders[^1];
+        unentrenched.Entrenchment = 0f;
+        Warfare.Tick(c);
+        Check(c.Battles.Count == 1 && c.Battles[0].ProvinceId == unentrenched.ProvinceId,
+            "autonomous advance probes visible unentrenched sector over heavily entrenched line");
+
+        var (hidden, _, hiddenDefenders) = World(visible: false);
+        foreach (var d in hiddenDefenders) d.Entrenchment = 0.85f;
+        hiddenDefenders[^1].Entrenchment = 0f;
+        Warfare.Tick(hidden);
+        Check(hidden.Battles.Count == 1 && hidden.Battles[0].ProvinceId == hiddenDefenders[0].ProvinceId,
+            "hidden enemy entrenchment does not leak into target selection");
+    }
+
+    static void PreferFavorableTerrainSector()
+    {
+        var (c, _, defenders) = World(visible: true);
+        if (c.ProvinceMap.TerrainByProvince.Length <= c.ProvinceMap.ProvinceCount)
+        {
+            var plainsColor = TerrainCatalog.Get("plains").Color;
+            var terrainRgb = new byte[96 * 96 * 3];
+            for (var p = 0; p < terrainRgb.Length; p += 3)
+            {
+                terrainRgb[p] = (byte)(plainsColor >> 16);
+                terrainRgb[p + 1] = (byte)(plainsColor >> 8);
+                terrainRgb[p + 2] = (byte)plainsColor;
+            }
+            c.ProvinceMap.AttachTerrain(new RgbDataMap(96, 96, terrainRgb));
+        }
+        for (var i = 0; i < defenders.Length - 1; i++)
+            c.ProvinceMap.TerrainByProvince[defenders[i].ProvinceId] = TerrainCatalog.Get("mountains");
+        var openTarget = defenders[^1];
+        c.ProvinceMap.TerrainByProvince[openTarget.ProvinceId] = TerrainCatalog.Get("plains");
+        Warfare.Tick(c);
+        Check(c.Battles.Count == 1 && c.Battles[0].ProvinceId == openTarget.ProvinceId,
+            "autonomous advance prefers open plains over fortified mountain sectors when defenders are equal");
     }
 
     static (Campaign Campaign, Army Attacker, Army[] Defenders) World(bool visible = true)

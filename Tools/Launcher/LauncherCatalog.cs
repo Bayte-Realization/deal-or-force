@@ -30,6 +30,11 @@ public sealed class Package
 
 public sealed class LauncherCatalog
 {
+    // The game owns the publisher/game folder names; do not duplicate that policy here.
+    public static string ProfileInDocuments(string documents) =>
+        DealOrForce.Simulation.GameFolders.For(documents)?.Root ??
+        throw new DirectoryNotFoundException(L.T("Windows could not locate the Documents folder."));
+
     public string Root { get; }
     public string Profile { get; }
     public string SelectionPath => System.IO.Path.Combine(Profile, "content_selection.json");
