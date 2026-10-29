@@ -27,7 +27,7 @@ public sealed class OrganizationMotion
     public Dictionary<int, bool> Votes = new();
 }
 
-public sealed class InternationalOrganization
+public sealed partial class InternationalOrganization
 {
     public int Id, FounderId, FoundedDay, LastReviewDay = -1, NextMotionId = 1;
     public string Name = "", CharterId = "", LastOutcome = "";
@@ -312,6 +312,9 @@ public static class InternationalOrganizations
         }
         if (!member) return Loc.Get("Only members can decide the organization's affairs.");
         if (cmd.Action == "leave") return "";
+        // A membership crisis: demanding better terms, or buying a member back (OrganizationCrises).
+        if (cmd.Action == "demand_terms") return OrganizationCrises.DemandRefusal(c, org, n);
+        if (cmd.Action == "concede") return OrganizationCrises.ConcedeRefusal(c, org, n);
         if (cmd.Action == "defend")
         {
             var war = c.Wars.Find(w => w.Id == cmd.WarId && !w.Ended);
@@ -398,6 +401,8 @@ public static class InternationalOrganizations
                     if (org.Members.Count == 0) { n.Treasury += org.Budget; org.Budget = 0; org.Dissolved = true; org.Motion = null; }
                     break;
                 case "vote": org.Motion.Votes[n.Id] = cmd.Yes; break;
+                case "demand_terms": OrganizationCrises.Demand(c, org, n); break;
+                case "concede": OrganizationCrises.Concede(c, org, n); break;
                 case "defend":
                     var war = c.Wars.Find(w => w.Id == cmd.WarId);
                     if (!CampaignDiplomacy.JoinWar(c, war, n.Id, defending: true, "declared_war_on_us")) return;

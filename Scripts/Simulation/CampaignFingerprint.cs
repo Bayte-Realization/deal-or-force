@@ -349,6 +349,7 @@ public static class CampaignFingerprint
             Mix(o.Id); Mix(o.FounderId); Mix(o.FoundedDay); Mix(o.LastReviewDay); Mix(o.NextMotionId);
             MixText(o.Name); MixText(o.GeneratedCountryTag); MixText(o.CharterId); MixFloat(o.Budget); MixFloat(o.Cohesion); Mix(o.Dissolved ? 1 : 0);
             if (!string.IsNullOrEmpty(o.DoctrineId)) { MixText("org_doctrine"); MixText(o.DoctrineId); }
+            if (o.CrisisMemberId >= 0) { MixText("org_crisis"); Mix(o.CrisisMemberId); Mix(o.CrisisSinceDay); }
             MixText(o.LastOutcome); Mix(o.LastYes); Mix(o.LastVoters);
             foreach (var member in o.Members.OrderBy(id => id)) Mix(member); Mix(-20);
             foreach (var invitation in o.Invitations.OrderBy(id => id)) Mix(invitation); Mix(-21);
@@ -558,6 +559,11 @@ public static class CampaignFingerprint
             // bytes, keeping pre-feature fingerprints compatible with untouched worlds.
             MixFloatDictionary("intel_networks", nation.IntelNetworks);
             MixFloatDictionary("organization_belonging_at_start", nation.OrganizationBelongingAtStart);
+            if (nation.OrganizationConcessions.Count > 0)
+            {
+                MixText("organization_concessions");
+                foreach (var pair in nation.OrganizationConcessions.OrderBy(p => p.Key)) { Mix(pair.Key); Mix(pair.Value); }
+            }
             if (nation.CovertOperations.Count > 0)
             {
                 MixText("covert_operations"); Mix(nation.CovertOperations.Count);

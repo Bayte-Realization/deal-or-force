@@ -1,0 +1,21 @@
+// Membership crises in organisations (OrganizationCrises.cs).
+{
+  "chronicle.organization_crisis": "{0} demands better terms from {2}, or it may leave.",
+  "chronicle.organization_concession": "{0} buys {1} back into {2} with a concession.",
+  "chronicle.organization_exit_vote": "{0} votes to leave {2}.",
+  "chronicle.organization_crisis_passed": "{0}'s crisis with {2} passes; it stays.",
+  "Membership crises are disabled.": "Membership crises are disabled.",
+  "Your country is already bargaining with this organization.": "Your country is already bargaining with this organization.",
+  "Another member's crisis is under way; one at a time.": "Another member's crisis is under way; one at a time.",
+  "Too few members to bargain with; leaving is the only lever.": "Too few members to bargain with; leaving is the only lever.",
+  "Better terms can be demanded again in {0} days.": "Better terms can be demanded again in {0} days.",
+  "No member is bargaining for better terms.": "No member is bargaining for better terms.",
+  "A country cannot buy itself back.": "A country cannot buy itself back.",
+  "A concession costs {0}; the treasury holds {1}.": "A concession costs {0}; the treasury holds {1}.",
+  "Membership crisis: {0} demands better terms; the vote on leaving is in {1} days.": "Membership crisis: {0} demands better terms; the vote on leaving is in {1} days.",
+  "Demand better terms": "Demand better terms",
+  "Open a membership crisis: for half a year the others may buy your country back with a concession paid to your treasury. If nobody does, nothing forces you out - leaving stays your choice.": "Open a membership crisis: for half a year the others may buy your country back with a concession paid to your treasury. If nobody does, nothing forces you out - leaving stays your choice.",
+  "Make a concession ({0})": "Make a concession ({0})",
+  "Pay the bargaining member to stay: its sense of belonging rises for years and it thinks better of your country. The crisis ends.": "Pay the bargaining member to stay: its sense of belonging rises for years and it thinks better of your country. The crisis ends.",
+  "Paid to keep us in the organization": "Paid to keep us in the organization"
+}

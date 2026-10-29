@@ -330,3 +330,69 @@ static class CustomsUnionTests
         Check(union > plain, $"its members buy more of what they import from each other ({union:P0} against {plain:P0})");
     }
 }
+
+/// <summary>Membership crises (OrganizationCrises.cs): bargaining before leaving, concessions, the vote.</summary>
+static class OrganizationCrisisTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("organization crisis: " + note); Console.WriteLine("PASS organization crisis: " + note); }
+
+    public static void Run()
+    {
+        var c = Campaign.CreateBootstrap(20261029);
+        c.Defines.OrganizationCrisisDays = 180;
+        c.Defines.AiConcessionChance = 0f;
+        var eu = c.Organizations.First(o => o.Name == "European Union");
+        var hungary = c.NationByTag("HUN"); var poland = c.NationByTag("POL"); var germany = c.NationByTag("DEU");
+        hungary.IsHuman = false; poland.IsHuman = false; germany.IsHuman = false;
+
+        Check(OrganizationCrises.Open(c, eu, hungary) && eu.CrisisMemberId == hungary.Id &&
+              c.Chronicle.Entries.Any(e => e.Kind == "organization_crisis" && e.ActorId == hungary.Id),
+            "a member that would leave opens a crisis instead and the world hears of it");
+        Check(!OrganizationCrises.Open(c, eu, poland) && eu.CrisisMemberId == hungary.Id,
+            "one crisis at a time: a second estranged member would simply leave");
+
+        var cost = OrganizationCrises.ConcessionCost(c, hungary);
+        var berlin = germany.Treasury; var budapest = hungary.Treasury;
+        var before = OrganizationDynamics.Belonging(c, eu, hungary);
+        c.Commands.Enqueue(new OrganizationCommand { IssuerId = germany.Id, OrganizationId = eu.Id, Action = "concede" });
+        c.Commands.ApplyAll(c);
+        Check(eu.CrisisMemberId < 0 && Math.Abs(germany.Treasury - (berlin - cost)) < 0.001f &&
+              Math.Abs(hungary.Treasury - (budapest + cost)) < 0.001f,
+            "a concession is paid by the giver to the bargaining member and ends the crisis");
+        Check(OrganizationDynamics.Belonging(c, eu, hungary) > before - 0.0001f && OrganizationCrises.ConcessionBelonging(c, eu, hungary) > 0.17f,
+            "the member bought back belongs more");
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 365L * 6 * 24);
+        Check(OrganizationCrises.ConcessionBelonging(c, eu, hungary) < 0.05f, "and the concession fades over the years: a quarter after six years");
+
+        c.Commands.Enqueue(new OrganizationCommand { IssuerId = poland.Id, OrganizationId = eu.Id, Action = "demand_terms" });
+        c.Commands.ApplyAll(c);
+        Check(eu.CrisisMemberId == poland.Id, "a member can open a crisis of its own by demanding better terms");
+        var stay = c.Chronicle.Entries.Count(e => e.Kind == "organization_crisis_passed");
+        eu.CrisisSinceDay = c.ElapsedDays - 200;
+        OrganizationCrises.Week(c, eu, _ => 0.9f, _ => throw new Exception("must not leave"));
+        Check(eu.CrisisMemberId < 0 && eu.Members.Contains(poland.Id) &&
+              c.Chronicle.Entries.Count(e => e.Kind == "organization_crisis_passed") == stay + 1,
+            "a member that belongs again by the vote stays");
+        Check(InternationalOrganizations.Refusal(c, new OrganizationCommand { IssuerId = poland.Id, OrganizationId = eu.Id, Action = "demand_terms" }).Length > 0,
+            "better terms cannot be demanded again at once");
+
+        OrganizationCrises.Open(c, eu, hungary);
+        eu.CrisisSinceDay = c.ElapsedDays - 200;
+        var left = false;
+        OrganizationCrises.Week(c, eu, _ => 0.05f, m => { left = m.Id == hungary.Id; eu.Members.Remove(m.Id); });
+        Check(left && c.Chronicle.Entries.Any(e => e.Kind == "organization_exit_vote" && e.ActorId == hungary.Id),
+            "a member nobody bought back, still estranged at the vote, leaves");
+
+        c.Defines.AiConcessionChance = 1f;
+        c.Defines.AiConcessionValueShare = 0f;
+        var leader = InternationalOrganizations.Leader(c, eu);
+        leader.IsHuman = false; leader.Treasury = 1000f;
+        var bargainer = eu.Members.Select(c.NationById).First(n => n.Id != leader.Id);
+        bargainer.IsHuman = false;
+        OrganizationCrises.Open(c, eu, bargainer);
+        OrganizationCrises.Week(c, eu, _ => 0.05f, _ => throw new Exception("must not leave"));
+        Check(eu.CrisisMemberId < 0 && bargainer.OrganizationConcessions.ContainsKey(eu.Id),
+            "the computer's leader buys back a member worth keeping, by the same rule");
+    }
+}

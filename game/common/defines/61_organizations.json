@@ -2,4 +2,7 @@
  "OrganizationFoundingDeposit":0.25, "OrganizationMembershipLimit":6, "OrganizationApplicationCooldownDays":30,
  "AiMayFoundOrganizations":true, "AiOrganizationWorldLimit":28,
  "OrganizationArrearsCohesionLoss":0.012, "OrganizationDepartureTruceDays":180,
- "CustomsUnionDoctrine":"common_market", "CustomsUnionInsideTrade":1.6, "CustomsUnionOutsideTrade":0.88}
+ "CustomsUnionDoctrine":"common_market", "CustomsUnionInsideTrade":1.6, "CustomsUnionOutsideTrade":0.88,
+ "OrganizationCrisisDays":180, "OrganizationCrisisCohesionDrain":0.006, "OrganizationCrisisMinimumMembers":3,
+ "OrganizationConcessionShare":0.003, "OrganizationConcessionBelonging":0.18, "OrganizationConcessionHalfLifeYears":3,
+ "OrganizationDemandCooldownDays":730, "AiConcessionValueShare":0.04, "AiConcessionChance":0.25}
