@@ -144,6 +144,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private readonly Dictionary<(int Nation, string Template), Texture2D> _armyCounterTextures = new();
     private readonly List<(Node3D Node, Vector3 Normal, int Cells)> _countryLabels = new();
     private readonly List<(Label3D Node, float Latitude, float Longitude, Basis SurfaceBasis, float FlatRotation)> _countryGlyphs = new();
+    /// <summary>The size the country letters are drawn at on the flat map, against their full size; negative until applied.</summary>
+    private float _countryGlyphScale = -1f;
     private readonly Dictionary<int, Node3D> _countryLabelGroups = new();
     private SubViewport _viewport = null!;
     private Camera3D _camera = null!;
@@ -4546,6 +4548,7 @@ void fragment() {
         _lastLabelNames.Clear();
         _countryLabels.Clear();
         _countryGlyphs.Clear();
+        _countryGlyphScale = -1f;
         var activeGroups = new HashSet<int>();
 
         var countryFont = PresentationFonts.For("map.countries");
@@ -4767,11 +4770,23 @@ void fragment() {
         // counters. Keeping continent-scale typography there would cover the map.
         // The flat map's range used to end at 4.4, which is wider than Europe: the view a
         // player spends most of the game in had no country names at all, while the globe
-        // at the same scale was full of them. It now runs down to the regional view.
+        // at the same scale was full of them. It now runs down to the regional view - the
+        // whole of Ukraine on the screen still names Ukraine, as a Paradox map does; the
+        // letters follow the country's own extent, so they stay inside it.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
-            ? _flatZoom is >= 1.7f and <= 10.8f
+            ? _flatZoom is >= 0.85f and <= 10.8f
             : _distance is >= 7.9f and <= 16.5f);
         if (!_countryLabelRoot.Visible) return;
+        // Closer in than 1.7 the letters keep their places - spread across the country - and
+        // grow no larger: at full size POLAND and UKRAINE ran into each other and out of their
+        // borders. Smaller letters spaced wide are how an atlas names a country seen close.
+        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : 1f;
+        if (Math.Abs(glyphScale - _countryGlyphScale) > 0.02f)
+        {
+            _countryGlyphScale = glyphScale;
+            foreach (var glyph in _countryGlyphs)
+                if (IsInstanceValid(glyph.Node)) glyph.Node.Scale = Vector3.One * glyphScale;
+        }
         var minimumCells = _flatMap
             ? _flatZoom > 8.8f ? 26000 : _flatZoom > 6.2f ? 6500 : _flatZoom > 4.0f ? 1500 : _flatZoom > 2.6f ? 150 : 40
             : _distance > 11.5f ? 26000 : _distance > 9.5f ? 6500 : _distance > 7.4f ? 1500 : 150;

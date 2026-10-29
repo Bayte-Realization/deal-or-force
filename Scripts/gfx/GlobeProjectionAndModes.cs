@@ -429,6 +429,8 @@ public sealed partial class GlobePresentation
             glyph.Node.Position = SurfacePoint(glyph.Latitude, glyph.Longitude, SurfaceTextRadius);
             glyph.Node.Basis = glyph.SurfaceBasis;
         }
+        // The basis carries the scale: the letters are full size on the globe again.
+        _countryGlyphScale = 1f;
         ReprojectBattleMarkers();
     }
 
