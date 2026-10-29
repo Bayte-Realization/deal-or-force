@@ -554,6 +554,12 @@ public static class Factions
 
             var rebelStates = campaign.StatesOf(rebel);
             if (rebelStates.Length > 2) continue;
+            // A country whose ground is its homeland and not the parent's is a
+            // state that threw off an overlord, not the rump of a rising. Liechtenstein, Monaco
+            // and San Marino, subjects for a few years, broke free and were "reabsorbed" the next
+            // day because they have no army: twenty-five years on, every microstate in Europe was gone.
+            if (rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, rebel, s) == TerritorialTitle.Homeland) &&
+                !rebelStates.Any(s => TerritorialClaims.TitleOf(campaign, parent, s) == TerritorialTitle.Homeland)) continue;
 
             var hasDivisions = campaign.Armies.Any(a => a.NationId == rebel.Id && a.Strength > 0.05f);
             if (hasDivisions) continue;

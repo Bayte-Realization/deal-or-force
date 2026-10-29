@@ -396,3 +396,28 @@ static class OrganizationCrisisTests
             "the computer's leader buys back a member worth keeping, by the same rule");
     }
 }
+
+/// <summary>A state that threw off its overlord is not the rump of a rising (Factions.SettleDefenselessRebelRemnants).</summary>
+static class SovereignRemnantTests
+{
+    static void Check(bool ok, string note)
+    { if (!ok) throw new Exception("sovereign remnant: " + note); Console.WriteLine("PASS sovereign remnant: " + note); }
+
+    public static void Run()
+    {
+        var c = Campaign.CreateBootstrap(20261029);
+        MapRasterCatalog.ResetCatalog(); TerrainCatalog.ResetCatalog();
+        Check(MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+            WorldMapSource.Width, WorldMapSource.Height, out var map, out var message), message);
+        c.AttachProvinceTopology(map);
+        var austria = c.NationByTag("AUT"); var liechtenstein = c.NationByTag("LIE");
+        Check(austria is not null && liechtenstein is not null && c.StatesOf(liechtenstein).Length > 0, "Austria and Liechtenstein are on the map");
+        liechtenstein.IsHuman = false;
+        liechtenstein.SecededFromId = austria.Id;
+        c.Armies.RemoveAll(a => a.NationId == liechtenstein.Id);
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 40L * 24);
+        Factions.SettleDefenselessRebelRemnants(c);
+        Check(c.HasOwnedLand(liechtenstein) && c.StatesOf(liechtenstein).All(s => s.NationId == "LIE"),
+            "Liechtenstein, free of Austria and with no army, keeps its own ground");
+    }
+}
