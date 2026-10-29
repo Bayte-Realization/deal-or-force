@@ -704,6 +704,7 @@ public static class Program
             long covertSeen = 0;
             var covert = new Dictionary<string, int>();
             var largest = 0;
+            var bornFrom = campaign.Nations.Count;
             for (var day = 1; day <= pulseDays; day++)
             {
                 campaign.TickDay();
@@ -748,6 +749,12 @@ public static class Program
             Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
                 .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
             foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
+            // The countries the run gave birth to, as the player would read them on the map: the
+            // test of whether new states carry names worth reading.
+            foreach (var born in campaign.Nations.Skip(bornFrom))
+                Console.WriteLine($"PULSE born {born.Tag} \"{born.DisplayName}\" from {campaign.NationById(born.SecededFromId)?.Tag ?? "-"} " +
+                                  $"people {string.Join("/", born.FoundedCultures.Take(2))} regions {campaign.StatesOf(born).Length}" +
+                                  (born.Movement is not null ? " movement" : ""));
             Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
             foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
                 Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");

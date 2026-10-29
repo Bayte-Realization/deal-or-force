@@ -316,6 +316,12 @@ public static class NationNaming
     public static bool CarriesStateForm(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
+        // A name that is itself a republic - "Central African Republic", "Czech Republic",
+        // "Республика Дагестан" - was becoming "Republic of Central African Republic".
+        var trimmed = name.Trim();
+        if (trimmed.EndsWith(" Republic", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Republic ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.Contains("Республика", StringComparison.OrdinalIgnoreCase)) return true;
         foreach (var phrase in FormPhrases)
         {
             if (phrase.Length >= 3 && name.Contains(phrase, StringComparison.OrdinalIgnoreCase))
@@ -329,6 +335,15 @@ public static class NationNaming
             var head = pattern.Split("{0}")[0].Trim();
             if (head.Length >= 3 && name.Contains(head, StringComparison.OrdinalIgnoreCase)) return true;
         }
+        return false;
+    }
+
+    /// <summary>Whether any word of a name is a side of the compass: "Matabeleland South", "North Kivu", "Восточный Казахстан".</summary>
+    public static bool NamesASide(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        foreach (var word in name.Split(' ', '-', ','))
+            if (CompassDirection(word).Length > 0) return true;
         return false;
     }
 
@@ -782,9 +797,11 @@ public static class NationNaming
                     return Loc.GetOr(fDef.Name, fDef.Name);
                 return nation.FoundNameBase;
             case "direction":
-                return ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id)
-                    ? Loc.Format("name.direction." + direction, SourceName(kind, id, nation.FoundNameBase))
-                    : nation.FoundNameBase;
+                if (!ReadDirection(nation.FoundNameId, out var direction, out var kind, out var id)) return nation.FoundNameBase;
+                var sided = SourceName(kind, id, nation.FoundNameBase);
+                // A source that already names a side takes no second one: "Northern
+                // Matabeleland South" was a state founded on Matabeleland South.
+                return NamesASide(sided) ? sided : Loc.Format("name.direction." + direction, sided);
             default:
                 // An unknown recipe from an older save: its stored name is a name unless it
                 // is a key, in which case the country's own name is the only honest answer.
@@ -1205,15 +1222,37 @@ public static class NationNaming
         if (campaign is null || nation is null || !string.IsNullOrWhiteSpace(nation.CustomName)) return;
         var name = Render(campaign, nation, false);
         if (name.Length == 0) return;
+        // The base as well as the whole name: "Republic of Zimbabwe" does not equal "Zimbabwe",
+        // and a Shona rising in Mozambique wore it beside the real one. The country it rose from
+        // is left out - a claimant to its own state carries that state's name on purpose.
+        var basis = BaseOf(campaign, nation);
+        var parentId = nation.SecededFromId >= 0 ? nation.SecededFromId : nation.ReleasedFromId;
         var clash = false;
         foreach (var other in campaign.Nations)
         {
-            if (ReferenceEquals(other, nation) || other.Population <= 0) continue;
-            if (!string.Equals(CountryNames.Resolve(other, false), name, StringComparison.OrdinalIgnoreCase)) continue;
+            if (ReferenceEquals(other, nation) || other.Population <= 0 || other.Id == parentId) continue;
+            var full = CountryNames.Resolve(other, false);
+            var shortName = CountryNames.Resolve(other, true);
+            if (!string.Equals(full, name, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(full, basis, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(shortName, basis, StringComparison.OrdinalIgnoreCase)) continue;
             clash = true;
             break;
         }
         if (!clash) return;
+        // Its people's adjective first - the Shona Republic - and only then its largest region.
+        var people = nation.FoundedCultures.FirstOrDefault(c => CultureAdjective(c).Length > 0);
+        if (people is not null && !(nation.FoundNameKind == "culture_adj" && nation.FoundNameId == people))
+        {
+            var keptKind = nation.FoundNameKind;
+            var keptId = nation.FoundNameId;
+            nation.FoundNameKind = "culture_adj";
+            nation.FoundNameId = people;
+            var renamed = Render(campaign, nation, false);
+            if (!NameAlreadyTaken(campaign, renamed)) { nation.FoundNameBase = BaseName(campaign, nation); return; }
+            nation.FoundNameKind = keptKind;
+            nation.FoundNameId = keptId;
+        }
         var region = LargestRegion(campaign, regions);
         if (region is null || (nation.FoundNameKind == "region" && nation.FoundNameId == region.Id)) return;
         nation.FoundNameKind = "region";
