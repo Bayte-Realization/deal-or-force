@@ -965,6 +965,14 @@ public sealed partial class Defines
 	/// <summary>Days a formation needs after being driven out of a province.</summary>
 	public int RestAfterRetreatDays { get; set; } = 7;
 
+	/// <summary>
+	/// How many provinces deep a beaten formation looks for its own side's line before it
+	/// surrenders: through ground no enemy stands in, to ground its side holds. 1: only the
+	/// provinces next to it, as before - on a front of small provinces a division whose
+	/// neighbours had all changed hands surrendered whole with its own line two provinces away.
+	/// </summary>
+	public int RetreatSearchDepth { get; set; } = 1;
+
 	/// <summary>How many provinces out from itself a division is taken to hold ground.</summary>
 	public int FrontCoverageRadius { get; set; } = 2;
 

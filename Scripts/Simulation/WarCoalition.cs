@@ -201,6 +201,37 @@ public static class WarCoalition
                 bestProvince = p;
             }
         }
-        return bestProvince;
+        if (bestProvince > 0 || !beaten || c.Defines.RetreatSearchDepth <= 1) return bestProvince;
+        return DeepRetreatProvince(c, war, army, from, c.Defines.RetreatSearchDepth);
+    }
+
+    /// <summary>
+    /// A beaten formation with no friendly ground next to it breaks out towards its own line: the
+    /// nearest province its side holds and no enemy stands in, reached through provinces no enemy
+    /// stands in, at most this many steps away. Breadth first, lowest province first at each step,
+    /// so the answer is the same on every machine. 0 when there is none: a pocket.
+    /// </summary>
+    private static int DeepRetreatProvince(Campaign c, StrategicWar war, Army army, int from, int depth)
+    {
+        var map = c.ProvinceMap;
+        var controls = c.ProvinceController;
+        var own = c.NationById(army.NationId);
+        var seen = new HashSet<int> { from };
+        var ring = new List<int> { from };
+        for (var step = 1; step <= depth && ring.Count > 0; step++)
+        {
+            var next = new List<int>();
+            foreach (var at in ring)
+                foreach (var p in map.Neighbors[at])
+                {
+                    if (map.IsWater(p) || !seen.Add(p) || EnemyStandsIn(c, war, army.NationId, p)) continue;
+                    next.Add(p);
+                }
+            next.Sort();
+            foreach (var p in next)
+                if (controls[p] == own.MapIndex || FriendlyController(c, war, army.NationId, controls[p])) return p;
+            ring = next;
+        }
+        return 0;
     }
 }

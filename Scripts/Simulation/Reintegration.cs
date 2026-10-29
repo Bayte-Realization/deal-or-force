@@ -127,7 +127,17 @@ public static class Reintegration
     }
 
     /// <summary>Whether a region belongs to the same people, culture group, homeland or unification project as the winner.</summary>
-    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region)
+    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region) =>
+        IsKindredRegion(c, winner, region, byCultureGroup: true);
+
+    /// <summary>
+    /// The same, with the culture group counted or not. A whole state is not its neighbour's
+    /// lost province because both peoples belong to one family of cultures: Ukrainians and
+    /// Russians are East Slavs, Serbs and Croats South Slavs, and by the group rule every region
+    /// of Ukraine was Russia's kin - its 2024 war became a reunification, and a decisive one took
+    /// the whole country unconditionally in nineteen of twenty-four two-year runs.
+    /// </summary>
+    public static bool IsKindredRegion(Campaign c, Nation winner, ScenarioState region, bool byCultureGroup)
     {
         if (c is null || winner is null || region is null || region.Population <= 0) return false;
         if (TerritorialClaims.TitleOf(c, winner, region) == TerritorialTitle.Homeland ||
@@ -136,7 +146,7 @@ public static class Reintegration
         var cultures = WarAims.Cultures(winner);
         if (cultures.Count == 0) return false;
         if (WarAims.CultureShare(region, cultures) >= 0.40f) return true;
-        return CultureGroupShare(region, cultures) >= 0.55f;
+        return byCultureGroup && CultureGroupShare(region, cultures) >= 0.55f;
     }
 
     /// <summary>
@@ -168,7 +178,7 @@ public static class Reintegration
         {
             var pop = Math.Max(0L, state.Population);
             totalPop += pop;
-            if (IsKindredRegion(c, winner, state))
+            if (IsKindredRegion(c, winner, state, byCultureGroup: false))
             {
                 kindredPop += pop;
                 kindredRegions++;
