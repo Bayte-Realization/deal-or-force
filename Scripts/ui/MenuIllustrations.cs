@@ -11,7 +11,9 @@ namespace DealOrForce;
 /// The drawn backdrop alone said "atlas" and nothing else; a Paradox front door says what the
 /// game is about before a button is read. The pictures are the same loading_* sprites a mod
 /// replaces or adds (LoadingScreen.IllustrationPaths), the player's "no generated art" setting
-/// takes them away, and how dark they sit is the skin's `menu.backdrop_brightness`.
+/// for the menu (`menu_without_ai_art`) takes them away - the menu is then the drawn atlas it was
+/// at first, graticule and globe limb (AtlasBackdrop) - and how dark they sit is the skin's
+/// `menu.backdrop_brightness`.
 /// </summary>
 public partial class MenuIllustrations : Control
 {
@@ -22,26 +24,47 @@ public partial class MenuIllustrations : Control
     /// <summary>How much closer a picture drifts over its time on screen: six per cent.</summary>
     private const float Approach = 0.06f;
 
+    /// <summary>The menu's own switch for the generated pictures, apart from the loading screen's.</summary>
+    internal const string Setting = "menu_without_ai_art";
+
     private string[] _paths = System.Array.Empty<string>();
     private TextureRect _front, _back;
     private int _turn;
     private float _clock;
+    private bool _plain;
+    private float _sinceCheck;
 
     public override void _Ready()
     {
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         MouseFilter = MouseFilterEnum.Ignore;
         ClipContents = true;
-        _paths = LoadingScreen.IllustrationPaths();
-        if (_paths.Length == 0) { Visible = false; return; }
-        _turn = (int)(Time.GetUnixTimeFromSystem() / 60 % _paths.Length);
         _back = Picture();
         _front = Picture();
         AddChild(_back);
         AddChild(_front);
-        _front.Texture = LoadingScreen.Picture(_paths[_turn]);
         var brightness = Mathf.Clamp(InterfaceSkin.Metric("menu.backdrop_brightness", 0.42f), 0.05f, 1f);
         Modulate = new Color(brightness, brightness, brightness);
+        ShowPictures(LoadingScreen.Plain(Setting));
+    }
+
+    /// <summary>
+    /// The pictures, or none: the switch is in the options on this very screen, so it is read again
+    /// twice a second and takes effect the moment it is flipped rather than at the next start.
+    /// </summary>
+    private void ShowPictures(bool plain)
+    {
+        _plain = plain;
+        _paths = plain ? System.Array.Empty<string>() : LoadingScreen.IllustrationPaths(Setting);
+        _front.Texture = null;
+        _back.Texture = null;
+        _front.Modulate = Colors.White;
+        _back.Modulate = Colors.White;
+        _clock = 0f;
+        Visible = _paths.Length > 0;
+        if (!Visible) return;
+        _turn = (int)(Time.GetUnixTimeFromSystem() / 60 % _paths.Length);
+        _front.Texture = LoadingScreen.Picture(_paths[_turn]);
     }
 
     private static TextureRect Picture() => new()
@@ -53,6 +76,13 @@ public partial class MenuIllustrations : Control
 
     public override void _Process(double delta)
     {
+        _sinceCheck += (float)delta;
+        if (_sinceCheck >= 0.5f)
+        {
+            _sinceCheck = 0f;
+            var plain = LoadingScreen.Plain(Setting);
+            if (plain != _plain) ShowPictures(plain);
+        }
         if (_paths.Length == 0 || _front is null) return;
         _clock += (float)delta;
         var size = Size;

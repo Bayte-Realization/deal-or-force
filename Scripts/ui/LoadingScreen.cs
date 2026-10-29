@@ -37,15 +37,16 @@ public partial class LoadingScreen : Control
     /// The setting that takes the generated pictures away (`loading_without_ai_art`): the screen
     /// is then the plain chart it was at first - grid, frame, seal and dossier. Read straight from
     /// the player's file, because the first loading screen stands before the catalogues exist.
+    /// The main menu has its own setting (`menu_without_ai_art`, MenuIllustrations).
     /// </summary>
-    private static bool Plain()
+    internal static bool Plain(string setting = "loading_without_ai_art")
     {
         try
         {
             // The campaign scene started on its own (from the editor) shows its first loading
             // screen before it has told the settings where the player's file is.
             if (!PlayerSettings.Located) PlayerSettings.UseDirectory(ProjectSettings.GlobalizePath("user://"));
-            return SettingsCatalog.Flag("loading_without_ai_art");
+            return SettingsCatalog.Flag(setting);
         }
         catch (System.Exception) { return false; }
     }
@@ -200,10 +201,10 @@ public partial class LoadingScreen : Control
         return Picture(paths[_sceneTurn]);
     }
 
-    /// <summary>Every loading_* illustration, base game and mods alike, in name order; none when the player turned them off.</summary>
-    internal static string[] IllustrationPaths()
+    /// <summary>Every loading_* illustration, base game and mods alike, in name order; none when the player turned them off with this setting.</summary>
+    internal static string[] IllustrationPaths(string setting = "loading_without_ai_art")
     {
-        if (Plain()) return System.Array.Empty<string>();
+        if (Plain(setting)) return System.Array.Empty<string>();
         string[] paths;
         try
         {
