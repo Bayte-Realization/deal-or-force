@@ -1105,6 +1105,11 @@ public partial class DealOrForceGame : Control
                     iconPath: "res://game/gfx/interface/icons/icon_laws.png");
                 warBookBtn.Name = "MilitaryOpenDoctrineScreen";
                 _sideDetail.AddChild(warBookBtn);
+                var generalsBtn = ActionButton(Loc.Get("Generals"), OpenGeneralsScreen, 180, 38,
+                    iconPath: "res://game/gfx/interface/icons/icon_military.png");
+                generalsBtn.Name = "MilitaryOpenGenerals";
+                generalsBtn.TooltipText = Ui.Tip(Tr("Every army group's commander, their record, and relieving one."));
+                _sideDetail.AddChild(generalsBtn);
                 DetailRow("Divisions", divisions.ToString("0.#"),
                     "Independent formations under your flag. Each takes frontage in a battle, so more of " +
                     "them is not the same as more strength in one province.");

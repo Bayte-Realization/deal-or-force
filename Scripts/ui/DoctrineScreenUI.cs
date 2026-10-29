@@ -31,7 +31,7 @@ public partial class DealOrForceGame
     private HBoxContainer _doctrineToolbar;
     private Label _doctrineScreenSummary;
     private Label _doctrineZoomLabel;
-    private Button _doctrineTacticalView, _doctrineCourseView;
+    private Button _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView;
     private string _doctrineView = "tactical";
     private int _doctrineScreenDay = -1;
     private DoctrinePresentationState? _doctrineScreenState;
@@ -70,6 +70,10 @@ public partial class DealOrForceGame
             "res://game/gfx/interface/icons/icon_agenda.png");
         _doctrineCourseView.Name = "DoctrineCourseView";
         header.AddChild(_doctrineCourseView);
+        _doctrineGeneralsView = ActionButton("Generals", () => SetDoctrineView("generals"), 150, 32, false,
+            "res://game/gfx/interface/icons/icon_military.png");
+        _doctrineGeneralsView.Name = "DoctrineGeneralsView";
+        header.AddChild(_doctrineGeneralsView);
         var close = ActionButton("×", CloseDoctrineScreen, 38, 32);
         close.Name = "CloseDoctrineScreen";
         close.TooltipText = Ui.Tip(Tr("Close"));
@@ -181,6 +185,7 @@ public partial class DealOrForceGame
         }
         StyleButton(_doctrineTacticalView, _doctrineView == "tactical");
         StyleButton(_doctrineCourseView, _doctrineView == "course");
+        StyleButton(_doctrineGeneralsView, _doctrineView == "generals");
         UpdateDoctrineZoomLabel();
         if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
             _doctrineBook = n.TacticalDoctrine.Branch.Length > 0
@@ -199,7 +204,23 @@ public partial class DealOrForceGame
         RebuildDoctrineBookList(n);
 
         ClearPolicyRows(_doctrineCentre);
-        if (_doctrineView == "course")
+        if (_doctrineView == "generals")
+        {
+            var generalsScroll = new ScrollContainer
+            {
+                Name = "DoctrineGeneralsScroll",
+                SizeFlagsVertical = SizeFlags.ExpandFill,
+                SizeFlagsHorizontal = SizeFlags.ExpandFill,
+                HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+                FollowFocus = true
+            };
+            _doctrineCentre.AddChild(generalsScroll);
+            var generalsRows = new VBoxContainer { Name = "DoctrineGeneralsRows", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+            generalsRows.AddThemeConstantOverride("separation", 8);
+            generalsScroll.AddChild(generalsRows);
+            GeneralsPage(n, generalsRows);
+        }
+        else if (_doctrineView == "course")
         {
             var courseScroll = new ScrollContainer
             {
@@ -227,7 +248,8 @@ public partial class DealOrForceGame
         }
 
         ClearPolicyRows(_doctrineSide);
-        ShowDoctrinePreview(n, _doctrineSide);
+        if (_doctrineView == "generals") GeneralsSide(_doctrineSide);
+        else ShowDoctrinePreview(n, _doctrineSide);
     }
 
     /// <summary>The six books as a column: what each is, and how much of it is written down.</summary>

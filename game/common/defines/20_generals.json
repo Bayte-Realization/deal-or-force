@@ -1,0 +1,21 @@
+// Deal or Force - relieving a commander (Generals.cs, the Book of war's Generals page).
+//
+// Every army group has a commander drawn from its country's name pool. A government may relieve
+// one and give the group to an officer put forward for it - the same rule and price for the
+// player and for the governments the computer runs.
+{
+  // Political credit for the change, and how long a new commander holds the group before they
+  // can be relieved in turn.
+  "CommanderReliefPoliticalCost": 10,
+  "CommanderReliefCooldownDays": 90,
+  // Officers put forward for the post each time.
+  "CommanderCandidates": 3,
+  // Relieving a victorious commander in wartime costs war support: this much for each battle won
+  // beyond those lost, up to the maximum. Truman relieved MacArthur in 1951 and paid for it.
+  "CommanderReliefWarSupportPerVictory": 0.01,
+  "CommanderReliefWarSupportMax": 0.06,
+  // Governments the computer runs relieve a commander with at least this many defeats and at
+  // least twice the victories plus one, when an abler officer is put forward.
+  "AiRelievesFailedCommanders": true,
+  "AiCommanderReliefDefeats": 3
+}

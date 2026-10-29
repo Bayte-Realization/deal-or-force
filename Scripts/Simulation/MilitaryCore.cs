@@ -61,6 +61,8 @@ public sealed class ArmyGroup
     public int Defeats;
     public int CommanderSinceDay = -1;
     public int CommandersLost;
+    /// <summary>How many of its commanders the government has relieved (Generals.Relieve).</summary>
+    public int CommandersRelieved;
 }
 
 /// <summary>

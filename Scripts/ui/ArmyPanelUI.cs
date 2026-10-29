@@ -502,7 +502,8 @@ public partial class DealOrForceGame
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
         _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
-            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description)));
+            "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
+            "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
         _armyPanelCount.Text = Simulation.Loc.Format("{0:N0} selected", divisions.Count);
         // Selection counts are localised; a fixed English-sized slot clips Russian.
         _armyPanelCount.CustomMinimumSize = new Vector2(Mathf.Max(84,

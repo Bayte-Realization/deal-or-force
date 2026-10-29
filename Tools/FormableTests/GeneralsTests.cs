@@ -58,6 +58,59 @@ static class GeneralsTests
             "a commander whose side broke can fall, and somebody new takes the group");
         Check(c.Chronicle.Entries.Any(e => e.Kind == "great_battle" && e.ActorId == battle.AttackerId),
             "a battle that cost twenty thousand men is remembered by name");
+
+        Relief();
+    }
+
+    /// <summary>Relieving a commander: the officers put forward, the price, the wait, and the computer's governments.</summary>
+    static void Relief()
+    {
+        var c = Campaign.CreateBootstrap(20261029);
+        var ukraine = c.NationByTag("UKR");
+        var group = c.ArmyGroups.First(g => g.NationId == ukraine.Id);
+        Generals.EnsureCommander(c, group);
+        var candidates = Generals.Candidates(c, group);
+        Check(candidates.Length == c.Defines.CommanderCandidates && candidates.Select(o => o.Name).Distinct().Count() == candidates.Length &&
+              candidates.All(o => o.Name != group.Commander),
+            "three different officers are put forward, none of them the commander in post");
+        Check(Generals.Candidates(c, group).Select(o => o.Name + o.Trait + o.Skill).SequenceEqual(candidates.Select(o => o.Name + o.Trait + o.Skill)),
+            "the same officers are put forward until somebody is relieved");
+
+        ukraine.PoliticalPoints = 50f;
+        group.CommanderSinceDay = c.ElapsedDays;
+        Check(!Generals.MayRelieve(c, ukraine, group, out var wait) && wait.Length > 0,
+            "a commander who has just taken the group cannot be relieved at once");
+        group.CommanderSinceDay = c.ElapsedDays - c.Defines.CommanderReliefCooldownDays;
+        group.Victories = 5; group.Defeats = 1;
+        var support = ukraine.WarSupport;
+        var expected = Generals.ReliefWarSupportCost(c, group);
+        Check(expected > 0f, "Ukraine is at war, so removing a victorious commander costs war support");
+        c.Commands.Enqueue(new RelieveCommanderCommand { IssuerId = ukraine.Id, GroupId = group.Id, Candidate = 1 });
+        c.Commands.ApplyAll(c);
+        Check(group.Commander == candidates[1].Name && group.CommanderTrait == candidates[1].Trait &&
+              group.Victories == 0 && group.CommandersRelieved == 1,
+            "the chosen officer takes the group with a clean record");
+        Check(Math.Abs(ukraine.PoliticalPoints - (50f - c.Defines.CommanderReliefPoliticalCost)) < 0.001f &&
+              ukraine.WarSupport < support - expected + 0.0001f,
+            "the relief is paid in political credit, and the victor's removal in war support");
+        Check(c.Chronicle.Entries.Any(e => e.Kind == "general_relieved" && e.ActorId == ukraine.Id),
+            "the world hears of it");
+        Check(!Generals.Candidates(c, group).Select(o => o.Name).SequenceEqual(candidates.Select(o => o.Name)),
+            "after a relief, other officers are put forward");
+
+        // The computer's governments, by the same rule.
+        var russia = c.NationByTag("RUS");
+        var losing = c.ArmyGroups.First(g => g.NationId == russia.Id);
+        Generals.EnsureCommander(c, losing);
+        losing.StaffSkill = 0.2f; losing.Victories = 0; losing.Defeats = 4;
+        losing.CommanderSinceDay = -1000;
+        russia.PoliticalPoints = 50f; russia.IsHuman = false;
+        var loser = losing.Commander;
+        c.Defines.AiRelievesFailedCommanders = true;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 19L * 24);
+        Generals.AiMonth(c);
+        Check(losing.Commander != loser && losing.CommandersRelieved == 1 && losing.StaffSkill > 0.2f,
+            "a government the computer runs relieves the commander who keeps losing and picks an abler one");
     }
 }
 

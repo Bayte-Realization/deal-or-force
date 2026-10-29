@@ -898,6 +898,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("treasury_dynamics")) TreasuryDynamics.Tick(this);
             // Votes under the troops in regions held a year or more (HeldRegions).
             HeldRegions.AiMonth(this);
+            // A government relieves the commander who keeps losing (Generals).
+            Generals.AiMonth(this);
             yield return 0;
             foreach (var _ in EconomySystem.TickStages(this)) yield return 0;
             // In stages, like the economy before it (BrainDrain.Stages).

@@ -759,6 +759,7 @@ public static class CampaignFingerprint
             MixText("army_group"); Mix(group.Id); Mix(group.NationId); MixText(group.Commander);
             MixFloat(group.StaffSkill); MixText(group.CommanderTrait); Mix(group.Victories);
             Mix(group.Defeats); Mix(group.CommanderSinceDay); Mix(group.CommandersLost);
+            if (group.CommandersRelieved != 0) { MixText("relieved"); Mix(group.CommandersRelieved); }
         }
         foreach (var army in Ordered(campaign.Armies, army => army.Id))
         {
