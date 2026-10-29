@@ -871,8 +871,9 @@ public sealed partial class Campaign
         // whether the campaign is stepping six hours at a time or three days.
         for (var day = 0; day < daysCrossed; day++)
         {
-            RecruitmentSystem.Tick(this);
-            Contractors.Tick(this);
+            using (SimProfiler.Measure("recruitment")) RecruitmentSystem.Tick(this);
+            yield return 0;
+            using (SimProfiler.Measure("contractors")) Contractors.Tick(this);
             using (SimProfiler.Measure("stockpiles")) StrategicStockpiles.TickDay(this);
             yield return 0;
             SupportCore.Tick(this);
