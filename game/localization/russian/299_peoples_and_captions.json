@@ -55,6 +55,6 @@
   "Wolaita": "Волайта",
   "Yao": "Яо",
   "Zande": "Азанде",
-  "They have not answered the last request yet.": "Они ещё не ответили на прошлую просьбу.",
+  "They have not answered the last request yet.": "Они ещё не ответили на предыдущий запрос.",
   "chronicle.building_worn_out": "{0}: износ - {2} выведено из строя в регионе {3}."
 }

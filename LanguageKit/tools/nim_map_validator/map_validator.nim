@@ -2,15 +2,15 @@
 	# Nim Map & Regional Data Validator for Deal or Force.
 	# Validates province definition rows (definition.csv), claims.csv, and regional state JSONs
 	# before launching the game, using deterministic ORC memory management.
-	
+
 	import std/[os, strutils, parsecsv, streams, json, tables, sets]
-	
+
 	type
 	  ValidationReport* = object
 		provincesChecked*: int
 		statesChecked*: int
 		errors*: seq[string]
-	
+
 	proc validateDefinitionCsv*(path: string, report: var ValidationReport, seenIds: var HashSet[int]) =
 	  if not fileExists(path):
 		report.errors.add("Missing definition.csv: " & path)
@@ -43,7 +43,7 @@
 		  if lineNum > 1:
 			report.errors.add(path & ":" & $lineNum & " invalid province ID: " & first)
 	  close(parser)
-	
+
 	proc validateStateJsonDir*(dirPath: string, report: var ValidationReport) =
 	  if not dirExists(dirPath): return
 	  for kind, file in walkDir(dirPath):
@@ -61,7 +61,7 @@
 				  report.errors.add(file & " (" & id & "): negative population " & $pop)
 		  except CatchableError as e:
 			report.errors.add(file & ": JSON parse error: " & e.msg)
-	
+
 	when isMainModule:
 	  let root = if paramCount() >= 1: paramStr(1) else: "game"
 	  var report = ValidationReport()
@@ -74,4 +74,3 @@
 	  for err in report.errors:
 		echo "  ERROR: ", err
 	  quit(if report.errors.len == 0: 0 else: 1)
-	

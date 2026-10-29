@@ -140,6 +140,6 @@
   "none": "none",
   "Locate counterpart": "Locate counterpart",
   "Jump to hotspot": "Jump to hotspot",
-  "chronicle.organization_sanction": "{0}, speaking for {2}, brought the assembly's embargo upon {1}.",
-  "chronicle.organization_doctrine": "{0} carried {2} into the doctrine of {3}."
+  "chronicle.organization_sanction": "{2} votes collective sanctions against {1} at the motion of {0}.",
+  "chronicle.organization_doctrine": "{2} adopts the doctrine of {3} under the initiative of {0}."
 }

@@ -849,6 +849,7 @@ public partial class DealOrForceGame
         box.Explain = null;
         box.Plain = "";
         box.TooltipText = Ui.Tip(tooltip);
+        if (box.HasMeta("hud_tip_is_brief")) box.RemoveMeta("hud_tip_is_brief");
         SetHudCaption(stat, icon switch
         {
             "income" => "Income",
@@ -873,6 +874,7 @@ public partial class DealOrForceGame
             box.Explain = country.Explain;
             box.Plain = country.Plain;
             box.TooltipText = country.Tooltip;
+            if (box.HasMeta("hud_tip_is_brief")) box.RemoveMeta("hud_tip_is_brief");
             SetHudCaption(stat, stat.CountryCaption);
             if (stat.Glyph is { } glyph && country.Icon is not null) glyph.Texture = country.Icon;
         }

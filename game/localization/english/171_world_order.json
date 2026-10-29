@@ -15,7 +15,7 @@
   "chronicle.organization_sanction": "{2} votes collective sanctions against {1} at the motion of {0}.",
   "chronicle.organization_doctrine": "{2} adopts the doctrine of {3} under the initiative of {0}.",
   "chronicle.organization_reorganized": "{0} leads the reorganization into {2}.",
-  "chronicle.subject_broke_free": "{0} breaks free from {1} as its overlord's grip falters.",
+  "chronicle.subject_broke_free": "{0} breaks free of {1}.",
   "org.name.pact": "{0}–{1} Pact",
   "org.name.community": "{0}–{1} Community",
   "org.name.forum": "{0}–{1} Forum",

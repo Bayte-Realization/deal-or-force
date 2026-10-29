@@ -134,5 +134,3 @@ Godot --verbose --path <проект> -- --verify-build --verify-development \
    всё в `Scripts/gfx/GlobeAtmosphere.cs`, цвет — токен `globe.atmosphere`.
 3. Дальше по снимкам экранов — геометрия вкладок на общем `TabStrip` и остальные модальные
    головы на `ScreenHeader`.
-
-

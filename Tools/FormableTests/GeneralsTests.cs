@@ -12,6 +12,18 @@ static class GeneralsTests
     public static void Run()
     {
         Generals.ResetCatalog();
+        var language = Loc.Language;
+        try
+        {
+            Loc.Language = "russian";
+            Check(Loc.Get(Generals.Trait("cautious").Name) == "Осторожный" && Loc.Get("Cautious") == "Осторожная",
+                "a commander's temperament does not overwrite a posture's grammatical context");
+            Check(Loc.Get("Campaign") == "Кампания" && Loc.Get("Campaign for support") == "Вести агитацию",
+                "a game campaign and movement agitation have separate Russian captions");
+            Loc.Language = "english";
+            Check(Loc.Get(Generals.Trait("cautious").Name) == "Cautious", "the contextual temperament has an English caption");
+        }
+        finally { Loc.Language = language; }
         Check(Generals.All.Count >= 6 && Generals.All.Any(t => t.Attack > 1.1f) && Generals.All.Any(t => t.Defence > 1.1f),
             "the temperaments come from common/generals");
 

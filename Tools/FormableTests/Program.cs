@@ -10,7 +10,11 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--stage-budget-baseline")) { StageBudgetTests.Allocations(false); return; }
+        if (args.Contains("--stage-budget-only")) { StageBudgetTests.Run(); return; }
+        if (args.Length == 0) StageBudgetTests.Run();
         if (args.Contains("--date-line-only")) { DateLineSeamTests.Run(); return; }
+        if (args.Contains("--compact-hud-only")) { CompactHudTests.Run(); return; }
         if (args.Contains("--river-width-only")) { RiverWidthTests.Run(); return; }
         if (args.Length == 0) RiverWidthTests.Run();
         if (args.Contains("--version-label-only")) { VersionLabelTests.Run(); return; }
@@ -594,7 +598,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
             "chosen seed reseeds an authored scenario without replacing its historical data");
         Loc.ResetCatalog(); Loc.Language = "russian";
         var rus = new Nation { Tag = "RUS", Name = "Russia" };
-        Check(rus.DisplayName == "Р РѕСЃСЃРёСЏ" && rus.MapName == "Р РѕСЃСЃРёСЏ", "Russian identity and map names use stable keys");
+        Check(rus.DisplayName == "Россия" && rus.MapName == "Россия", "Russian identity and map names use stable keys");
         Loc.Language = "english";
         Check(rus.DisplayName == "Russia", "missing localized stable key falls back to country name");
     }

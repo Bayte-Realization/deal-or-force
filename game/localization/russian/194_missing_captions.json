@@ -1,10 +1,10 @@
 {
   "Bikol": "Бикольцы",
   "Hiligaynon": "Хилигайноны",
-  "Waray": "Вараи",
-  "Sri Lankan Moor": "Шри-ланкийские мавры",
+  "Waray": "Варай",
+  "Sri Lankan Moor": "Ланкийские мавры",
   "Map edge smoothing": "Сглаживание краёв карты",
   "The planet's silhouette and the markers standing on it are the only hard geometric edges on the map, and smoothing them costs a little fill rate. Off shows the staircase and costs nothing; four samples is the smoothest. Takes effect when a campaign is loaded.": "Силуэт планеты и стоящие на ней метки — единственные жёсткие геометрические края на карте, и их сглаживание стоит немного fill rate. «Выкл» показывает ступеньки и не стоит ничего; четыре сэмпла — самое гладкое. Вступает в силу при загрузке кампании.",
   "Report a problem": "Сообщить о проблеме",
-  "Write a zip with the build, the logs, the settings and the save, so a problem can be looked at.": "Собрать zip со сборкой, журналами, настройками и сейвом, чтобы проблему можно было рассмотреть."
+  "Write a zip with the build, the logs, the settings and the save, so a problem can be looked at.": "Записать архив со сборкой, журналами, настройками и сохранением, чтобы проблему можно было разобрать."
 }

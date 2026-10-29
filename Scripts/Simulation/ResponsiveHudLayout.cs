@@ -60,5 +60,40 @@ public static class ResponsiveHudLayout
     public static int DrawerColumns(float width, float desiredCellWidth = 190, int maximum = 3) =>
         Math.Clamp((int)MathF.Floor(Math.Max(1, Finite(width, 1)) / Math.Max(80, Finite(desiredCellWidth, 190))), 1, Math.Clamp(maximum, 1, 8));
 
+    /// <summary>
+    /// Whether the clock row keeps the long figures or the short ones, and whether that
+    /// row has to drop below the clock. A narrow window used to grow a second row of the
+    /// long sentences and push the map down. The short form stays on the clock row when
+    /// it fits; asking for the long form puts the sentences back.
+    /// </summary>
+    public readonly record struct ClockPlan(bool Brief, bool SecondRow, float HeaderExtra);
+
+    public static ClockPlan Clock(float barWidth, float windowWidth, float longWidth, float briefWidth,
+        bool askLong, bool askBrief, float twoRowBelow = 1600f, float longRowHeight = 52f, float briefRowHeight = 32f)
+    {
+        var window = Math.Max(1f, Finite(windowWidth, 1f));
+        var room = Math.Min(Math.Max(1f, Finite(barWidth, window)), window);
+        longRowHeight = Math.Max(0f, Finite(longRowHeight, 52f));
+        briefRowHeight = Math.Max(0f, Finite(briefRowHeight, 32f));
+        twoRowBelow = Math.Max(1f, Finite(twoRowBelow, 1600f));
+        longWidth = Math.Max(0f, Finite(longWidth, 0f));
+        briefWidth = Math.Max(0f, Finite(briefWidth, 0f));
+        if (longWidth <= 1f)
+        {
+            var crowded = window < twoRowBelow;
+            if (askLong) return new ClockPlan(false, crowded, crowded ? longRowHeight : 0f);
+            if (askBrief || crowded) return new ClockPlan(true, false, 0f);
+            return new ClockPlan(false, false, 0f);
+        }
+        var narrow = window < twoRowBelow;
+        var longFits = longWidth <= room && !narrow;
+        var briefFits = briefWidth <= room;
+        if (askLong) return new ClockPlan(false, !longFits, !longFits ? longRowHeight : 0f);
+        if (askBrief) return new ClockPlan(true, !briefFits, !briefFits ? briefRowHeight : 0f);
+        if (longFits) return new ClockPlan(false, false, 0f);
+        if (briefFits) return new ClockPlan(true, false, 0f);
+        return new ClockPlan(true, true, briefRowHeight);
+    }
+
     private static float Finite(float value, float fallback) => float.IsFinite(value) ? value : fallback;
 }

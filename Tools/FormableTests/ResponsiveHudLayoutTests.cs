@@ -61,6 +61,7 @@ static class ResponsiveHudLayoutTests
         try
         {
             string[] englishKeys = null;
+            System.Collections.Generic.Dictionary<string, string> englishText = null;
             foreach (var language in new[] { "english", "russian" })
             {
                 using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(GameDataLoader.DataFolder(),
@@ -68,14 +69,20 @@ static class ResponsiveHudLayoutTests
                 var entries = document.RootElement.EnumerateObject().ToArray();
                 var keys = entries.Select(entry => entry.Name).OrderBy(key => key, StringComparer.Ordinal).ToArray();
                 Check(keys.Distinct(StringComparer.Ordinal).Count() == keys.Length, language + " HUD keys are unique");
-                if (englishKeys is null) englishKeys = keys;
+                if (englishKeys is null)
+                {
+                    englishKeys = keys;
+                    englishText = entries.ToDictionary(entry => entry.Name, entry => entry.Value.GetString(), StringComparer.Ordinal);
+                    Check(Loc.Placeholders(englishText["hud.brief.war"]).SetEquals(new[] { 0, 1 }),
+                        "the semantic war caption declares both format arguments in its English text");
+                }
                 else Check(keys.SequenceEqual(englishKeys), "compact HUD keys exist in both languages");
                 Loc.Language = language;
                 foreach (var entry in entries)
                 {
                     var text = entry.Value.GetString();
                     Check(!string.IsNullOrWhiteSpace(text) && Loc.Get(entry.Name) == text &&
-                        Loc.Placeholders(entry.Name).SetEquals(Loc.Placeholders(text)),
+                        Loc.Placeholders(englishText[entry.Name]).SetEquals(Loc.Placeholders(text)),
                         language + " HUD text resolves with its placeholders: " + entry.Name);
                 }
             }

@@ -23,6 +23,9 @@ param(
     [switch]$NoZip,
     [switch]$IncludeExperimentalNativeLuau,
     [switch]$SkipRuntimeVerification,
+    # Explicit recovery after an interrupted import/export. The raw export must
+    # already exist; packaging, content checks and executable verification still run.
+    [switch]$FinalizeExistingExport,
     [string]$OutputDirectory,
     [switch]$ReplaceExistingOutput
 )
@@ -98,6 +101,7 @@ if (-not (Test-Path $solution)) {
 $sdk = "C:\Program Files\dotnet"
 if (Test-Path (Join-Path $sdk "dotnet.exe")) { $env:PATH = "$sdk;$env:PATH" }
 
+if (-not $FinalizeExistingExport) {
 Write-Host '== checking source compilation before copying/exporting ==' -ForegroundColor Cyan
 & dotnet build (Join-Path $project 'DealOrForce.csproj') --nologo
 if ($LASTEXITCODE -ne 0) { throw 'Source compilation failed; no export was started.' }
@@ -228,6 +232,20 @@ try {
 finally {
     $ErrorActionPreference = $previousPreference
     Write-Host "  isolated export project retained at $stage" -ForegroundColor DarkGray
+}
+}
+else {
+    if (-not $OutputDirectory -or -not (Test-Path -LiteralPath $exe -PathType Leaf)) {
+        throw 'FinalizeExistingExport requires an explicit build directory containing a raw exported executable.'
+    }
+    if ($ReplaceExistingOutput) { throw 'Finalization must not replace/delete its input export.' }
+    $actualVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+    $expectedVersion = ([xml](Get-Content -LiteralPath (Join-Path $project 'GameVersion.props') -Raw)).Project.PropertyGroup.Version
+    if ($actualVersion -ne $expectedVersion) { throw "Raw export version $actualVersion does not match source $expectedVersion." }
+    $stage = Assert-BuildChild (Join-Path (Join-Path $project 'build') ('.finalize-' + [Guid]::NewGuid().ToString('N')))
+    New-Item -ItemType Directory -Path $stage | Out-Null
+    $exportExitCode = 0
+    Write-Host '== finalizing existing raw export; all package/runtime gates remain enabled ==' -ForegroundColor Cyan
 }
 
 # Reject a failed engine process AND inspect the actual output. Godot may still

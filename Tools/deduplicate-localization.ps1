@@ -18,7 +18,7 @@ foreach ($file in $otherFiles) {
     $content = Get-Content -Path $file.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
     $modified = $false
     $currentKeys = @($content.PSObject.Properties.Name)
-    
+
     foreach ($key in $currentKeys) {
         if ($baseKeys -contains $key) {
             $content.PSObject.Properties.Remove($key)
@@ -26,7 +26,7 @@ foreach ($file in $otherFiles) {
             $totalRemoved++
         }
     }
-    
+
     if ($modified) {
         Write-Host "Cleaning duplicates in $($file.Name)..."
         $newJson = $content | ConvertTo-Json -Depth 10

@@ -5,7 +5,7 @@ def patch_file(filepath, key, value):
     try:
         with open(filepath, 'r', encoding='utf-8-sig') as f:
             data = json.load(f)
-        
+
         # Рекурсивный поиск ключа для обновления
         def update_key(obj, target_key, new_val):
             if isinstance(obj, dict):
@@ -27,7 +27,7 @@ def patch_file(filepath, key, value):
             print(f"Patched {filepath}")
         else:
             print(f"Key {key} not found in {filepath}")
-            
+
     except Exception as e:
         print(f"Error patching {filepath}: {e}")
 

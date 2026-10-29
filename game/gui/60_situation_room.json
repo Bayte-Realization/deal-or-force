@@ -5,6 +5,7 @@
   "metrics": {
     "hud.two_row_below": 1600,
     "hud.second_row_height": 52,
+    "hud.brief_row_height": 32,
     // Situation room internal spacing (SituationRoomUI.cs). Named so the room's density is
     // data a mod can retune; each reads with its current literal as the fallback.
     "situation.header_gap": 10,

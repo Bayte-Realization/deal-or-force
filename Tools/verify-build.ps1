@@ -4,6 +4,7 @@ param(
     [ValidateRange(10, 900)][int]$TimeoutSeconds = 180
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'ExportDiagnostics.ps1')
 $verificationExecutable = [IO.Path]::GetFullPath($Executable)
 if (-not (Test-Path -LiteralPath $verificationExecutable -PathType Leaf)) { throw "Missing game executable: $verificationExecutable" }
 if (-not $LogDirectory) {
@@ -29,9 +30,12 @@ while (-not $verificationProcess.WaitForExit(1000)) {
     }
 }
 $verificationOutput = Get-Content -LiteralPath $stdoutPath -Raw
+$verificationError = Get-Content -LiteralPath $stderrPath -Raw
+$engineFailures = @(Get-FatalExportDiagnostic $verificationOutput $verificationError)
 Get-Content -LiteralPath $stdoutPath -Tail 12 | Write-Host
-if ($verificationProcess.ExitCode -ne 0 -or $verificationOutput -notmatch '(?m)^EXPORT_VERIFY failures=0\s*$') {
+if ($verificationProcess.ExitCode -ne 0 -or $verificationOutput -notmatch '(?m)^EXPORT_VERIFY failures=0\s*$' -or $engineFailures.Count -gt 0) {
+    $engineFailures | Write-Host
     Get-Content -LiteralPath $stderrPath -Tail 20 | Write-Host
     throw "Export verification failed, including possible shutdown failure (exit $($verificationProcess.ExitCode)). Logs: $LogDirectory"
 }
-Write-Host "Export verification passed, including clean process shutdown. Logs: $LogDirectory" -ForegroundColor Green
+Write-Host "Export verification passed, including clean process shutdown and no shader/script errors. Logs: $LogDirectory" -ForegroundColor Green

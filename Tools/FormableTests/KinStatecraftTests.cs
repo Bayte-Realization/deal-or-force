@@ -333,6 +333,60 @@ static class KinStatecraftTests
             Check(Math.Abs(abroad.Radicalism - before) < 1e-6f,
                 "with the movements feature off, the command does nothing");
         }
+
+        // ---- the discovery roll is a probability, not a sentence ----------------------
+        // Six attempts in a bench year were all caught at a stated 22%, which has an expected
+        // chance of one in ten thousand. The effect still applies on exposure, so a roll that
+        // never lands reads as "always caught" rather than as a bug - and nobody notices.
+        {
+            const int samples = 40_000;
+            var caughtLow = 0;
+            var caughtHigh = 0;
+            for (var i = 0; i < samples; i++)
+            {
+                // Inputs shaped like a real world: country ids into the hundreds, days into
+                // decades, a few thousand regions.
+                var roll = MovementRules.Roll(947986505, 1 + i % 327, i / 3, 1 + i % 1870);
+                if (roll < 0.22f) caughtLow++;
+                if (roll < 0.45f) caughtHigh++;
+            }
+            var low = caughtLow / (float)samples;
+            var high = caughtHigh / (float)samples;
+            Check(Math.Abs(low - 0.22f) < 0.01f, $"the 22% discovery roll catches about 22% of attempts ({low:P2})");
+            Check(Math.Abs(high - 0.45f) < 0.01f, $"the 45% discovery roll catches about 45% of attempts ({high:P2})");
+            Check(MovementRules.Roll(947986505, 12, 400, 7) == MovementRules.Roll(947986505, 12, 400, 7),
+                "the same country, day and region roll the same number twice");
+            var differing = 0;
+            for (var day = 0; day < 200; day++)
+                if (Math.Abs(MovementRules.Roll(947986505, 12, day, 7) - MovementRules.Roll(947986505, 12, day + 1, 7)) > 1e-6f)
+                    differing++;
+            Check(differing > 180, "consecutive days are not the same number");
+        }
+
+        // ---- the decision to act and the discovery roll are two different dice --------
+        // The computer acts on a roll under its own chance (2-10 %) and Do decides exposure on
+        // a roll under 15-45 %. One salt for both means the second die is never really thrown:
+        // the operation that happened was already below every threshold. Ten years of the bench
+        // recorded 26 agitations and 26 exposures before the two were split apart.
+        {
+            var c = Fixture(out var ours, out _, out var abroad, out _);
+            var selectionSalt = abroad.MapIndex;
+            Check(KinStatecraft.DiscoverySalt(abroad, "agitate") != selectionSalt,
+                "discovery rolls on a different salt than the decision to act");
+            var acted = 0;
+            var caught = 0;
+            for (var day = 0; day < 4000; day++)
+            {
+                if (MovementRules.Roll(c.Seed, ours.Id, day, selectionSalt) >= 0.10f) continue;
+                acted++;
+                if (MovementRules.Roll(c.Seed, ours.Id, day,
+                        KinStatecraft.DiscoverySalt(abroad, "agitate")) < 0.22f) caught++;
+            }
+            Check(acted > 300, $"the computer would have acted on {acted} of 4000 days");
+            var share = caught / (float)acted;
+            Check(Math.Abs(share - 0.22f) < 0.05f,
+                $"of the days it acted, about 22% are caught rather than all of them ({share:P1})");
+        }
         }
         finally
         {

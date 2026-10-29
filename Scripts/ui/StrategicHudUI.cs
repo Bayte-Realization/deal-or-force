@@ -115,7 +115,8 @@ public partial class DealOrForceGame
             playerBattles,
             _campaign.Construction.Count(project => project.NationId == player.Id),
             _campaign.PendingEvents.Count,
-            (availableDecisions, _campaign.FeatureEnabled("navy"), _campaign.FeatureEnabled("construction"), _campaign.Chronicle.Entries.Count == 0
+            (availableDecisions, _campaign.FeatureEnabled("navy"), _campaign.FeatureEnabled("construction"), _hudBriefActive ? 1 : 0,
+                _campaign.Chronicle.Entries.Count == 0
                 ? 0
                 : _campaign.Chronicle.Entries[^1].Sequence));
         if (fingerprint == _strategicHudFingerprint) return;
@@ -131,8 +132,15 @@ public partial class DealOrForceGame
         _pendingOutlinerHeader = null;
         _outlinerHasRows = false;
 
+        if (_hudBriefActive)
+        {
+            DrawBriefStrategicHud(player);
+            Callable.From(FitOutliner).CallDeferred();
+            return;
+        }
+
         var armies = _campaign.Armies.Where(army => army.NationId == player.Id).ToArray();
-        var lowSupply = armies.Count(army => army.SupplyLevel < 0.45f || army.CutOff);
+        var lowSupply = armies.Count(army => army.SupplyLevel < StrategicHudBrief.LowSupply || army.CutOff);
         var construction = _campaign.Construction.Where(project => project.NationId == player.Id).ToArray();
 
         // Every alert is a level, an icon, a count and a sentence kept for the tooltip. They
@@ -183,7 +191,7 @@ public partial class DealOrForceGame
         if (lowSupply > 0)
             AddAlert(AlertLevel.Warning, "alert_supply",
                 Simulation.Loc.Format("Out of supply: {0}", lowSupply),
-                () => FocusArmy(armies.First(army => army.SupplyLevel < 0.45f || army.CutOff)),
+                () => FocusArmy(armies.First(army => army.SupplyLevel < StrategicHudBrief.LowSupply || army.CutOff)),
                 Tr("Formations are undersupplied or cut off."));
 
         if (playerBattles > 0)
@@ -715,6 +723,96 @@ public partial class DealOrForceGame
         if (_campaign.ProvinceMap is null || provinceId <= 0) return;
         var center = _campaign.ProvinceMap.CenterOf(provinceId);
         _globe.FocusOn(center.Latitude, center.Longitude, distance);
+    }
+
+    /// <summary>
+    /// The same facts as the long report, one fixed line each. World lines stay in this
+    /// rail. A click still only opens a screen or focuses the map; it does not give an order.
+    /// </summary>
+    private void DrawBriefStrategicHud(Nation player)
+    {
+        var lines = StrategicHudBrief.Read(_campaign, player);
+        _alertsDrawn = lines.Count > 0;
+        foreach (var line in lines)
+        {
+            var captured = line;
+            AddBriefLine(captured.Short, captured.Full, captured.ColourToken, () => OpenBriefLine(captured));
+        }
+        var headlines = NewsFeed.Headlines(_campaign,
+            (int)Math.Clamp(InterfaceSkin.Metric("news.feed_rows", 3), 1, 12)).ToList();
+        if (headlines.Count > 0)
+        {
+            AddOutlinerHeader("WORLD");
+            foreach (var line in headlines)
+            {
+                NewsFeed.Line captured = line;
+                var facts = NewsFeed.Context(_campaign, captured);
+                var tip = line.Text;
+                if (facts.Length > 0) tip += System.Environment.NewLine + facts;
+                tip += System.Environment.NewLine + Simulation.Loc.Format("Campaign day {0}", captured.Day)
+                    + System.Environment.NewLine + Tr("Show it on the map.");
+                var news = AddOutlinerButton(line.Text, () => FocusNews(captured), tip);
+                news.Name = "WorldNews_" + line.Sequence;
+                news.AutowrapMode = TextServer.AutowrapMode.Off;
+                news.ClipText = true;
+                news.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+                news.CustomMinimumSize = new Vector2(0, 28);
+            }
+        }
+        if (lines.Count == 0 && headlines.Count == 0)
+        {
+            var quiet = Fixed(Title(Tr(StrategicHudBrief.QuietSentence), 12, Ui.Colour("text.faint")));
+            quiet.Name = "HudBriefQuiet";
+            quiet.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+            quiet.TooltipText = Ui.Tip(Tr(StrategicHudBrief.QuietSentence) + "\n" + Tr("hud.brief.quiet.tip"));
+            _outlinerRows.AddChild(quiet);
+        }
+    }
+
+    private void AddBriefLine(string text, string tooltip, string colourToken, System.Action action)
+    {
+        _outlinerHasRows = true;
+        var button = ActionButton(text, action, 0, 28);
+        button.Alignment = HorizontalAlignment.Left;
+        button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        button.ClipText = true;
+        button.AutowrapMode = TextServer.AutowrapMode.Off;
+        button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        button.TooltipText = Ui.Tip(tooltip);
+        StyleOutlinerRowButton(button, colourToken);
+        var colour = Ui.Colour(colourToken);
+        button.AddThemeColorOverride("font_color", colour);
+        button.AddThemeColorOverride("font_hover_color", colour.Lightened(0.25f));
+        button.AddThemeColorOverride("font_pressed_color", colour);
+        _outlinerRows.AddChild(button);
+    }
+
+    private void OpenBriefLine(StrategicHudBrief.Line line)
+    {
+        if (line.Id is "clashes" or "crisis")
+        {
+            _conflictTab = 2;
+            OpenConflictsScreen();
+            return;
+        }
+        if (line.Id == "peace") { RefreshPeaceOfferInterface(); return; }
+        if (line.Id == "event") { RefreshEventInterface(); return; }
+        if (line.ArmyId >= 0)
+        {
+            foreach (var army in _campaign.Armies)
+                if (army.Id == line.ArmyId) { FocusArmy(army); return; }
+        }
+        if (line.BattleId >= 0)
+        {
+            foreach (var battle in _campaign.Battles)
+                if (battle.Id == line.BattleId) { ShowBattleDetails(battle); return; }
+        }
+        if (line.WarId >= 0)
+        {
+            foreach (var war in _campaign.Wars)
+                if (war.Id == line.WarId) { FocusWar(war); return; }
+        }
+        if (!string.IsNullOrEmpty(line.Screen)) OpenScreen(line.Screen);
     }
 
 }

@@ -4,7 +4,7 @@
   "It is not a corridor to somewhere else. It is a dot in the line. Buying it asks for that region whole, and only when the region is the dot.": "Это не коридор куда-то ещё. Это точка в линии. Покупка просит регион целиком, и только если регион и есть эта точка.",
   "Asking spends nothing until they accept. Their capital is never the dot.": "Просьба ничего не тратит, пока они не согласятся. Их столица точкой не бывает.",
   "Inside the border": "Внутри границы",
-  "Held by": "Держит",
+  "Held by": "Удерживает",
   "Ask to buy it out": "Попросить выкупить",
   "Nothing foreign is shut inside this border.": "Внутри этой границы нет чужой земли."
 }

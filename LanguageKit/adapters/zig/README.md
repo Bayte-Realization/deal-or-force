@@ -19,4 +19,3 @@ has an owner marker and .gdignore.
 The upstream API snapshot remains 4.7.2. This small Beta2 smoke test does
 not certify every API, export, hot reload, other OSes or performance.
 See [current evidence](../../reports/beta2-runtime-2026-10-29.md).
-

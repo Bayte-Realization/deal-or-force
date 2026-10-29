@@ -1,0 +1,19 @@
+// Future-era events use the shipped illustration set; this changes presentation only.
+{
+  "events": {
+    "loitering_munitions_maturity_2027": "air_raid",
+    "counter_uas_wall_2028": "battlefield",
+    "rare_earth_squeeze_2029": "industry",
+    "orbital_broadband_2030": "digital",
+    "solid_state_batteries_2031": "laboratory",
+    "demographic_winter_2033": "home_front",
+    "ai_governance_referendum_2034": "election",
+    "arctic_routes_2036": "sea_lanes",
+    "lunar_industrialisation_2039": "laboratory",
+    "grey_fleet_decarbonisation_2042": "naval",
+    "warning_satellite_scare_2032": "nuclear_brink",
+    "the_black_suitcase_2035": "coup",
+    "second_caribbean_moment_2038": "nuclear_brink",
+    "red_line_treaty_2041": "diplomacy"
+  }
+}

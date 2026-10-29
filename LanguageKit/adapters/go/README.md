@@ -18,4 +18,3 @@ Go 1.27.3 and Zig 0.17.0 cc. This does not certify every engine API,
 export, hot reload, sandboxing or a game-performance improvement.
 
 See [current evidence](../../reports/beta2-runtime-2026-10-29.md).
-

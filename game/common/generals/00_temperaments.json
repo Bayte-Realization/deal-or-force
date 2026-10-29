@@ -28,7 +28,7 @@
     "attack": 1.18, "defence": 0.88, "weight": 1.2
   },
   "cautious": {
-    "name": "Cautious",
+    "name": "general.trait.cautious",
     "description": "Never loses an army and seldom wins a war. Waits for the odds to be certain.",
     "attack": 0.92, "defence": 1.07, "weight": 2
   },

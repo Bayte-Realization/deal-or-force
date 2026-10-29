@@ -38,7 +38,7 @@ public static class MovementActions
     public static readonly IReadOnlyList<Kind> Kinds = new Kind[]
     {
         new("move", "Move the headquarters", "Take the headquarters to another country that will have it. A month on the road; the heat stays behind.", true, false),
-        new("campaign", "Campaign", "Organise, preach and hand out leaflets among its peoples in a region: support rises there, and so does the host's temper.", true, false),
+        new("campaign", "Campaign for support", "Organise, preach and hand out leaflets among its peoples in a region: support rises there, and so does the host's temper.", true, false),
         new("fundraise", "Fundraise", "Pass the hat round the whole following: two months of donations at once, and a little standing spent asking.", false, false),
         new("recruit", "Recruit", "Pay to train organisers and volunteers: cadres, which uprisings are made of.", false, false),
         new("recognition", "Seek recognition", "Ask a country to recognise it. One that thinks well enough of it does, and the movement's standing rises with every one.", false, true),

@@ -60,4 +60,3 @@ An ORIGINAL compact digital critter sits beside the hero lettering, a low, wide 
 
 Lower area: full-name horizontal lockup "Bayte Realization", "Bayte" dark indigo and "Realization" coral using the SAME bespoke lettering; one small icon-only study in single indigo ink; one beautifully enlarged clean close-up of the jaws gripping the external tile. Small studies must repeat the SAME mascot, not reinvent it. Exact brand text only, no labels, no slogans, no explanation, no decorative numbers. Hero and full-name lockup should feel composed as a professional brand system, not a busy collage. Broad margins, one restrained hairline divider. No wings, no realistic beetle shell, no bitten cookie, no BR monogram, no famous trademarks, no merchandise mockups, no watermark. Raster identity concept, not an actual font file.
 ```
-

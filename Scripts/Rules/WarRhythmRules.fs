@@ -81,4 +81,3 @@ type WarRhythmRules private () =
             + clamp01 unpaid * 0.5f
             + max 0.0f (1.0f - spirit) * 1.5f
         max 0.0f (min (max 0.0f cap) (max 0.0f baseRate * pressure * pressure))
-

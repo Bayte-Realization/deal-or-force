@@ -215,6 +215,15 @@ public partial class DealOrForceGame
         speeds.AddThemeConstantOverride("separation", 4);
         clock.AddChild(speeds);
 
+        // Short captions, or the week's sentence under each figure. The tooltip names
+        // which form the click opens. Reading either form does not write the campaign.
+        _hudFiguresButton = ActionButton("hud.figures.brief", ToggleHudFigures, 0, 28);
+        _hudFiguresButton.Name = "HudFiguresForm";
+        _hudFiguresButton.ClipText = true;
+        _hudFiguresButton.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        StyleHudButton(_hudFiguresButton, false);
+        speeds.AddChild(_hudFiguresButton);
+
         // Labelled rather than drawn. This was a hamburger glyph, and the one tester who
         // plays grand strategy for an audience reported that the game had no way out to the
         // main menu - it had two, Escape and this, and neither of them said so.
@@ -408,11 +417,17 @@ public partial class DealOrForceGame
         _inflation?.Spark?.Push(day, player.Inflation);
         WriteMovementTopBar(player);
         foreach (var stat in _hudStats) FitHudStat(stat);
+        NoteFigureTips();
 
         _militarySpending.SetValueNoSignal(player.MilitarySpending);
         UpdateSpendingReadout(player);
         UpdateSpeedButtons();
         UpdateScreenButtons();
+        if (ResolveHudFigures())
+        {
+            PlaceHudChrome();
+            _strategicHudFingerprint = int.MinValue;
+        }
     }
 
     /// <summary>
@@ -428,6 +443,7 @@ public partial class DealOrForceGame
         internal TextureRect Glyph;
         internal string CountryCaption = "";
         internal string CaptionKey = "";
+        internal string Exact = "";
         internal string FullDelta = "";
         internal string ShortDelta = "";
         /// <summary>Tooltip for the movement line when it already shows a war-support percent.</summary>
@@ -590,6 +606,7 @@ public partial class DealOrForceGame
         readout.Value.AutowrapMode = TextServer.AutowrapMode.Off;
         readout.Delta.AutowrapMode = TextServer.AutowrapMode.Off;
         readout.Value.ClipText = true;
+        readout.Value.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         readout.Delta.ClipText = true;
         readout.Delta.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         readout.Value.AddThemeFontOverride("font", PresentationFonts.Tabular());
@@ -624,7 +641,8 @@ public partial class DealOrForceGame
         stat.Value.AddThemeFontOverride("font", Ui.NumberFont);
         stat.Delta.AddThemeFontOverride("font", Ui.NumberFont);
         stat.Value.Text = compact;
-        stat.Value.TooltipText = Ui.Tip(exact);
+        stat.Exact = exact ?? "";
+        stat.Value.TooltipText = Ui.Tip(stat.Exact);
         stat.Value.MouseFilter = MouseFilterEnum.Stop;
         stat.FullDelta = delta;
         stat.ShortDelta = shortDelta ?? delta;

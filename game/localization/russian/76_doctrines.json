@@ -1,11 +1,11 @@
 {
   "Tactical doctrines": "Тактические доктрины",
-  "Doctrine of manoeuvre": "Доктрина манёвра",
-  "Doctrine of fire": "Доктрина огня",
-  "Doctrine of the fortress": "Доктрина твердыни",
-  "Doctrine of the levy": "Доктрина всеобщего ратника",
-  "Doctrine of the sky": "Доктрина неба",
-  "Doctrine of the coast": "Доктрина берега",
+  "Doctrine of manoeuvre": "Манёвренная доктрина",
+  "Doctrine of fire": "Огневая доктрина",
+  "Doctrine of the fortress": "Оборонительная доктрина",
+  "Doctrine of the levy": "Мобилизационная доктрина",
+  "Doctrine of the sky": "Воздушная доктрина",
+  "Doctrine of the coast": "Морская доктрина",
 
   "Marching columns": "Походные колонны",
   "Divisions on the road move and recover faster than the old book allowed.": "Дивизии на марше идут и восстанавливаются быстрее, чем позволяла старая доктрина.",

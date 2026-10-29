@@ -1,8 +1,8 @@
 // Addresses to the nation (AddressToNation.cs).
 {
   "chronicle.address_to_nation": "{0}'s government addresses the nation: {2}.",
-  "chronicle.promise_kept": "{0}'s government has kept its promise: {2}.",
-  "chronicle.promise_broken": "{0}'s government has broken its promise ({2}), and the country remembers.",
+  "chronicle.promise_kept": "{0} keeps its public promise: {2}.",
+  "chronicle.promise_broken": "{0} misses its public promise: {2}.",
   "ADDRESS TO THE NATION": "ADDRESS TO THE NATION",
   "Speak to the country. It works at once and less each time - a people addressed every month stops listening - and whatever is promised is remembered on the day it falls due.": "Speak to the country. It works at once and less each time - a people addressed every month stops listening - and whatever is promised is remembered on the day it falls due.",
   "The country is listening: an address now lands with {0} of its full weight.": "The country is listening: an address now lands with {0} of its full weight.",

@@ -2603,32 +2603,7 @@ float seam_frequency(float freq, float width) {
 // Mipmaps are averaged inward, so the column at u=0 never meets the column at
 // u=1 and the date line reads as a second border. Near that cut, bilinear-sample
 // the base level with longitude wrapped and latitude clamped. Poles stay put.
-vec4 seam_lod0(sampler2D tex, vec2 uv) {
-    vec2 size = vec2(textureSize(tex, 0));
-    vec2 p = vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0)) * size - 0.5;
-    vec2 f = fract(p);
-    vec2 i = floor(p);
-    float x0 = mod(i.x, size.x);
-    float x1 = mod(i.x + 1.0, size.x);
-    float y0 = clamp(i.y, 0.0, size.y - 1.0);
-    float y1 = clamp(i.y + 1.0, 0.0, size.y - 1.0);
-    vec2 texel = 1.0 / size;
-    vec4 a = textureLod(tex, (vec2(x0, y0) + 0.5) * texel, 0.0);
-    vec4 b = textureLod(tex, (vec2(x1, y0) + 0.5) * texel, 0.0);
-    vec4 c = textureLod(tex, (vec2(x0, y1) + 0.5) * texel, 0.0);
-    vec4 d = textureLod(tex, (vec2(x1, y1) + 0.5) * texel, 0.0);
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-vec4 seam_sample(sampler2D tex, vec2 uv) {
-    vec2 wrapped = vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0));
-    vec4 mipped = texture(tex, wrapped);
-    float width = max(float(textureSize(tex, 0).x), 1.0);
-    float span = exp2(max(textureQueryLod(tex, wrapped).y, 0.0)) * 1.5 / width;
-    float along = min(wrapped.x, 1.0 - wrapped.x);
-    float at_seam = 1.0 - smoothstep(span * 0.35, max(span, 0.000001), along);
-    if (at_seam <= 0.0) return mipped;
-    return mix(mipped, seam_lod0(tex, wrapped), at_seam);
-}
+" + SeamSamplingFunctions() + @"
 void fragment() {
     float excavation = crossover_excavations_active * texture(crossover_excavations, UV).r;
     // One wander, and every boundary on the map reads through it.
@@ -2684,7 +2659,7 @@ void fragment() {
     // between two countries is recovered as a straight edge at whatever angle it really runs,
     // antialiased over one screen pixel. The raster is not being filtered; it is not being
     // asked.
-    vec4 political_smooth = seam_sample(political_map, UV);
+    vec4 political_smooth = seam_sample_political_map(UV);
     // Smoothed boundaries only where a texel is bigger than a pixel - further out the raster
     // is averaged by its mipmaps and has no staircase to show - and only for a player who
     // has the map smoothed at all.
@@ -2723,7 +2698,7 @@ void fragment() {
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
     // the Sunda shelf, the Grand Banks - is a clear shallow teal, so a coast reads as a coast from
     // orbit, the way it does on every Paradox map, before any border line has been drawn.
-    float sea_floor = ocean_depth_ready > 0.5 ? seam_sample(ocean_depth, UV).r : 0.0;
+    float sea_floor = ocean_depth_ready > 0.5 ? seam_sample_ocean_depth(UV).r : 0.0;
     // A smoothstep over a smooth raster draws contour lines across an ocean that has none in
     // it: the shelf arrives as a band with an edge parallel to the texel rows. The same wander
     // the coast uses is added here, a texel or so wide, so the shelf reads as ground under
@@ -2871,7 +2846,7 @@ void fragment() {
             float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
             ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
         }
-        vec3 relief_tint = seam_sample(relief_color, UV).rgb;
+        vec3 relief_tint = seam_sample_relief_color(UV).rgb;
         ground = mix(ground, relief_tint, relief_color_opacity);
         // Political tint is an albedo blend, not transparent 3D geometry.
         // Keep surface detail while preserving recognisable controller colours.
@@ -2884,10 +2859,10 @@ void fragment() {
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
         base = mix(water, land_surface, political.a);
         vec2 ht = 1.0 / vec2(textureSize(relief_height, 0));
-        float west = seam_sample(relief_height, vec2(UV.x - ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
-        float east = seam_sample(relief_height, vec2(UV.x + ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
-        float north = seam_sample(relief_height, vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
-        float south = seam_sample(relief_height, vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
+        float west = seam_sample_relief_height(vec2(UV.x - ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float east = seam_sample_relief_height(vec2(UV.x + ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float north = seam_sample_relief_height(vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
+        float south = seam_sample_relief_height(vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
         float elev = (west + east + north + south) * 0.25;
         vec2 slope = clamp(vec2(west - east, south - north) * relief_strength * 8.5, vec2(-0.85), vec2(0.85));
         float slope_mag = length(slope);

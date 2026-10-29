@@ -353,6 +353,25 @@ public static class KinStatecraft
 
     // ------------------------------------------------------------- doing it -------
 
+    /// <summary>
+    /// The salt the discovery roll uses, kept apart from the salt that decides whether the
+    /// computer acts at all. Two decisions that share one die are not two decisions: with a
+    /// single salt, a computer operation was caught every time it took place, because acting
+    /// required a roll below 2-10 % and being caught only below 15-45 %.
+    ///
+    /// The region is multiplied past the whole range decision salts use (regions number in the
+    /// tens of thousands), so a discovery die cannot be another decision's die either. The
+    /// multipliers stay under the integer limit for the largest map.
+    /// </summary>
+    internal static int DiscoverySalt(ScenarioState region, string action) =>
+        region.MapIndex * 50_000 + (action switch
+        {
+            "agitate" => 1,
+            "volunteers" => 2,
+            "found_proxy" => 3,
+            _ => 4
+        });
+
     /// <summary>Do one operation. The caller has already asked <see cref="Refusal"/>.</summary>
     public static bool Do(Campaign campaign, Nation country, ScenarioState region, string action)
     {
@@ -375,7 +394,13 @@ public static class KinStatecraft
             "found_proxy" => campaign.Defines.KinProxyDiscovery,
             _ => campaign.Defines.KinAgitationDiscovery * 0.7f
         };
-        var caught = MovementRules.Roll(campaign.Seed, country.Id, campaign.ElapsedDays, region.MapIndex) < discovery;
+        // The die that says whether we are caught must not be the die that decided to act. The
+        // computer calls Do for a country, day and region after a roll below its own chance -
+        // 2 % to 10 % - so one salt for both made every computer operation caught by
+        // construction: acting proved the roll was under the discovery threshold. Ten years of
+        // the bench showed 26 agitations, 26 exposures, and none of it was bad luck.
+        var caught = MovementRules.Roll(campaign.Seed, country.Id, campaign.ElapsedDays,
+            DiscoverySalt(region, action)) < discovery;
         var cost = Cost(campaign, country, region, action);
         switch (action)
         {

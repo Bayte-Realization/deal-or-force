@@ -760,7 +760,10 @@ public sealed partial class Campaign
 
     private bool RunStages(IEnumerator<int> stages, double milliseconds)
     {
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        // A whole-step caller has no deadline. Bounded frames use a monotonic
+        // timestamp, not a heap-allocated Stopwatch on every iterator resume.
+        var bounded = !double.IsPositiveInfinity(milliseconds);
+        var started = bounded ? System.Diagnostics.Stopwatch.GetTimestamp() : 0L;
         var finished = false;
         var startedHours = _stepStartedHours;
         _runningStages = true;
@@ -769,7 +772,7 @@ public sealed partial class Campaign
             while (true)
             {
                 if (!stages.MoveNext()) { finished = true; break; }
-                if (clock.Elapsed.TotalMilliseconds >= milliseconds) break;
+                if (bounded && System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds >= milliseconds) break;
             }
         }
         catch (Exception ex)

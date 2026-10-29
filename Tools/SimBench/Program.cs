@@ -49,6 +49,16 @@ public static class Program
                 int.TryParse(args[buildAt + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var buildRepeats)
                     ? buildRepeats : 1);
 
+        // Recheck content and refund regressions without rerunning the independent
+        // decade-long geography preflight. The ordinary 365-day run remains unchanged.
+        if (args.Contains("--release-content-only"))
+        {
+            var contentFailures = Check("every word an event puts on the screen is in both tables",
+                AnEventSpeaksTheLanguageTheGameIsIn());
+            contentFailures += Check("what is built can be pulled down again", AWorldThatCanBeUnbuilt());
+            return contentFailures == 0 ? 0 : 1;
+        }
+
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
         // The roster contract covers the world the bookmark opens with. Countries the
@@ -12398,6 +12408,7 @@ public static class Program
         var gdp = nation.Gdp;
         var capacity = nation.ConstructionCapacity;
         var treasury = nation.Treasury;
+        var demolitionValue = ConstructionCost.Of(campaign, nation, BuildingKind.CivilianIndustry);
 
         // Up. Ordered and finished on the spot rather than waited out: what is being tested
         // is the arithmetic of the two orders, not the calendar between them.
@@ -12458,7 +12469,8 @@ public static class Program
             return $"{nation.Tag}'s construction capacity is {nation.ConstructionCapacity:0.###} " +
                    $"against {capacity:0.###} before";
 
-        var scrap = definition.Cost * campaign.Defines.DemolitionRefund;
+        // Refund a share of this country's construction price, not the unscaled catalogue price.
+        var scrap = demolitionValue * campaign.Defines.DemolitionRefund;
         if (MathF.Abs(nation.Treasury - (treasury + scrap)) > 0.01f)
             return $"demolition returned {nation.Treasury - treasury:0.###} rather than the " +
                    $"{scrap:0.###} the defines promise";

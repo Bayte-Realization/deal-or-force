@@ -22,7 +22,18 @@ static class WorkerBackendTests
     {
         var c = Campaign.CreateBootstrap(802); var logs = new List<string>();
         c.SetFeature("aviation", false);
+        // Launch the managed protocol fixture with the framework host when present.
+        // Apphost self-spawn and framework-host launch behave differently on this Windows
+        // machine; neither the production worker deadline nor its failure cases change.
         var path = Environment.ProcessPath;
+        if (!Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
+            if (string.IsNullOrWhiteSpace(host) || !File.Exists(host))
+                host = Path.GetFullPath(Path.Combine(System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(),
+                    "..", "..", "..", OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet"));
+            if (File.Exists(host)) path = host;
+        }
         string[] Args(string kind) => Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase)
             ? new[] { typeof(WorkerBackendTests).Assembly.Location, "--worker-fixture", kind }
             : new[] { "--worker-fixture", kind };
