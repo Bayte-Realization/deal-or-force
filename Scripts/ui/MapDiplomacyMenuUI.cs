@@ -156,6 +156,8 @@ public partial class DealOrForceGame
         AddGestureAction(rows, target, "state_visit", "State visit", "INFLUENCE");
         AddGestureAction(rows, target, "show_of_force", "Show of force", "INFLUENCE");
         AddGestureAction(rows, target, "loan", "Development loan", "AGREEMENTS");
+        AddGestureAction(rows, target, "joint_exercises", "Joint exercises", "INFLUENCE");
+        AddGestureAction(rows, target, "expel_diplomats", "Expel their diplomats", "INFLUENCE");
         if (!atWar) AddGestureAction(rows, target, "mediate", "Mediate their war", "War and peace");
 
         // --- Agreements ---
@@ -245,6 +247,9 @@ public partial class DealOrForceGame
                 war is null ? "" : WarNames.Of(_campaign, war), d.MediationPoliticalCost),
             "loan" => Simulation.Loc.Format("Lend them {0} for their development, repaid with {1:0}% interest over {2} weeks. Opinion +15; a default costs them our trust for ten years.",
                 Fmt.Money(DiplomaticGestures.LoanSize(_campaign, player, target)), d.LoanInterest * 100f, d.LoanWeeks),
+            "joint_exercises" => Simulation.Loc.Format("Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.",
+                d.ExercisesPoliticalCost, Fmt.Money(d.ExercisesCash)),
+            "expel_diplomats" => Simulation.Loc.Get("Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud."),
             _ => ""
         };
         button.Disabled = refusal.Length > 0;

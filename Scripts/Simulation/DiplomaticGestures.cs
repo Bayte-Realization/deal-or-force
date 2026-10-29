@@ -24,6 +24,16 @@ public sealed partial class Defines
     public float LoanInterest { get; set; } = 0.12f;
     public int LoanWeeks { get; set; } = 104;
     public int LoanDefaultWeeks { get; set; } = 8;
+    /// <summary>Expelling their diplomats: the tension it adds, the grievance it leaves, what the hawks at home make of it, how long before the next.</summary>
+    public float ExpelTension { get; set; } = 8f;
+    public float ExpelGrievance { get; set; } = 4f;
+    public float ExpelWarSupport { get; set; } = 0.02f;
+    public int ExpelCooldownDays { get; set; } = 365;
+    /// <summary>Joint exercises with a partner: what they cost, the tension they add with the partners' common rivals, how long before the next.</summary>
+    public float ExercisesCash { get; set; } = 0.15f;
+    public float ExercisesPoliticalCost { get; set; } = 5f;
+    public float ExercisesRivalTension { get; set; } = 5f;
+    public int ExercisesCooldownDays { get; set; } = 365;
 }
 
 public sealed partial class DiplomaticRelation
@@ -49,7 +59,7 @@ public sealed partial class DiplomaticRelation
 /// </summary>
 public static class DiplomaticGestures
 {
-    public static readonly string[] All = { "state_visit", "show_of_force", "mediate", "loan" };
+    public static readonly string[] All = { "state_visit", "show_of_force", "mediate", "loan", "expel_diplomats", "joint_exercises" };
 
     private static string Key(string gesture, int target) => $"gesture:{gesture}:{target}";
 
@@ -95,9 +105,38 @@ public static class DiplomaticGestures
                 var amount = LoanSize(c, issuer, target);
                 if (amount <= 0f) return Loc.Get("The treasury cannot pay for it.");
                 return issuer.Treasury < amount * 2f ? Loc.Get("The treasury cannot spare it.") : "";
+            case "expel_diplomats":
+                if (atWar) return Loc.Get("We are already at war with them.");
+                if (relation is { Stance: DiplomaticStance.Allied }) return Loc.Get("Not against an ally.");
+                return "";
+            case "joint_exercises":
+                if (atWar) return Loc.Get("Not with a country we are at war with.");
+                if (relation is null || relation.Stance is not (DiplomaticStance.Allied or DiplomaticStance.Friendly) || relation.Opinion < 20f)
+                    return Loc.Get("Only with an ally or a friend who thinks well of us.");
+                if (issuer.PoliticalPoints < d.ExercisesPoliticalCost)
+                    return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.ExercisesPoliticalCost, issuer.PoliticalPoints);
+                return issuer.Treasury < d.ExercisesCash ? Loc.Get("The treasury cannot pay for it.") : "";
             default:
                 return Loc.Get("This cannot be done.");
         }
+    }
+
+    /// <summary>The countries both of them are rivals with or near a crisis with: who joint exercises are a message to.</summary>
+    public static List<Nation> CommonRivals(Campaign c, Nation a, Nation b)
+    {
+        var rivals = new List<Nation>();
+        foreach (var other in c.Nations)
+        {
+            if (other.Id == a.Id || other.Id == b.Id || other.Movement is not null || other.Population <= 0) continue;
+            bool Rival(Nation n)
+            {
+                var tie = CampaignDiplomacy.Peek(c, n.Id, other.Id);
+                return tie is not null && (tie.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+                                           tie.Tension >= c.Defines.TensionCrisisAt * 0.6f || tie.Opinion <= -40f);
+            }
+            if (Rival(a) && Rival(b)) rivals.Add(other);
+        }
+        return rivals;
     }
 
     /// <summary>The war of theirs we could mediate: one they lead or fight in that we are not part of, the oldest first.</summary>
@@ -174,6 +213,34 @@ public static class DiplomaticGestures
                 OpinionSystem.Remember(c, relation, "development_loan");
                 c.Chronicle.Record(c, "development_loan", issuerId, targetId, Fmt.Money(amount));
                 cooldown = 0;
+                break;
+            case "expel_diplomats":
+                // A public slap: they think worse of us, the two are closer to a crisis, and the
+                // hawks at home applaud. Nothing is gained but the gesture - which is the point.
+                OpinionSystem.Remember(c, relation, "expelled_diplomats");
+                relation.Tension = MathF.Min(100f, relation.Tension + d.ExpelTension);
+                if (relation.A == targetId) relation.GrievanceA = MathF.Min(100f, relation.GrievanceA + d.ExpelGrievance);
+                else relation.GrievanceB = MathF.Min(100f, relation.GrievanceB + d.ExpelGrievance);
+                issuer.WarSupport = M.Clamp01(issuer.WarSupport + d.ExpelWarSupport);
+                c.Chronicle.Record(c, "diplomats_expelled", issuerId, targetId);
+                cooldown = d.ExpelCooldownDays;
+                break;
+            case "joint_exercises":
+                issuer.PoliticalPoints -= d.ExercisesPoliticalCost;
+                issuer.Treasury -= d.ExercisesCash;
+                OpinionSystem.Remember(c, relation, "joint_exercises");
+                // A message to whoever both of them stand against: it is heard, and remembered.
+                var rivals = CommonRivals(c, issuer, target);
+                foreach (var rival in rivals)
+                    foreach (var side in new[] { issuer, target })
+                    {
+                        var tie = CampaignDiplomacy.Get(c, side.Id, rival.Id);
+                        tie.Tension = MathF.Min(100f, tie.Tension + d.ExercisesRivalTension);
+                        OpinionSystem.Remember(c, tie, "exercises_against_us");
+                    }
+                c.Chronicle.Record(c, "joint_exercises", issuerId, targetId,
+                    rivals.Count == 0 ? "" : string.Join(", ", rivals.Take(3).Select(r => r.DisplayName)));
+                cooldown = d.ExercisesCooldownDays;
                 break;
             default:
                 return false;
@@ -252,6 +319,17 @@ public static class DiplomaticGestures
                         Perform(c, nation.Id, war.DefenderId, "mediate");
                         break;
                     }
+
+            // Diplomats expelled from a rival already deep in a crisis with us: rare, and loud.
+            if (Roll(5) < 0.04f && relations.Where(r => r.Tension >= c.Defines.TensionCrisisAt && r.Opinion <= -50f &&
+                    r.Stance != DiplomaticStance.AtWar).OrderByDescending(r => r.Tension).ThenBy(Other).FirstOrDefault() is { } offender)
+                Perform(c, nation.Id, Other(offender), "expel_diplomats");
+
+            // Exercises with an ally, when there is somebody both of them want to impress.
+            if (Roll(6) < 0.08f && relations.Where(r => r.Stance == DiplomaticStance.Allied && r.Opinion >= 20f)
+                    .OrderByDescending(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } ally &&
+                c.NationById(Other(ally)) is { } allied && CommonRivals(c, nation, allied).Count > 0)
+                Perform(c, nation.Id, allied.Id, "joint_exercises");
 
             if (Roll(4) < 0.05f && nation.Gdp > 500f &&
                 relations.Where(r => r.Opinion >= 30f && c.NationById(Other(r)) is { } poor && poor.Gdp < nation.Gdp * 0.05f)

@@ -205,5 +205,35 @@ static class DiplomaticGestureTests
         mediation.Apply(c);
         Check(turkey.PoliticalPoints < 100f && (mediation.Done || mediation.Refusal.Length > 0),
             "the offer is made and paid for, whether or not the sides are ready");
+
+        // Expelling diplomats: free, loud, remembered.
+        var poland = c.NationByTag("POL");
+        var tie = CampaignDiplomacy.Get(c, poland.Id, russia.Id);
+        var tension = tie.Tension;
+        var support = poland.WarSupport = 0.5f;
+        Check(DiplomaticGestures.Perform(c, poland.Id, russia.Id, "expel_diplomats") && tie.Tension > tension &&
+              poland.WarSupport > support && tie.Reasons.Any(r => r.Id == "expelled_diplomats"),
+            "expelling their diplomats raises the tension, cheers the hawks and is remembered");
+
+        // Joint exercises: a message to the rival both partners share.
+        var lithuania = c.NationByTag("LTU");
+        CampaignDiplomacy.Get(c, poland.Id, lithuania.Id).Stance = DiplomaticStance.Allied;
+        CampaignDiplomacy.Get(c, poland.Id, lithuania.Id).Opinion = 60f;
+        CampaignDiplomacy.Get(c, lithuania.Id, russia.Id).Stance = DiplomaticStance.Rival;
+        CampaignDiplomacy.Get(c, poland.Id, russia.Id).Stance = DiplomaticStance.Rival;
+        poland.PoliticalPoints = 100f; poland.Treasury = 100f;
+        var rivalTension = CampaignDiplomacy.Get(c, lithuania.Id, russia.Id).Tension;
+        Check(DiplomaticGestures.CommonRivals(c, poland, lithuania).Contains(russia), "the partners' common rival is known");
+        Check(DiplomaticGestures.Perform(c, poland.Id, lithuania.Id, "joint_exercises") &&
+              CampaignDiplomacy.Get(c, lithuania.Id, russia.Id).Tension > rivalTension,
+            "joint exercises warm the partners and raise the tension with their common rival");
+
+        // Producers answer the price: a glut idles plant, a shortage runs it hard.
+        ProductionChains.Defines = c.Defines;
+        var glut = new MarketQuote { Commodity = Commodity.Machinery, Price = CommodityCatalog.Get(Commodity.Machinery).BasePrice * 0.4f };
+        var dear = new MarketQuote { Commodity = Commodity.Machinery, Price = CommodityCatalog.Get(Commodity.Machinery).BasePrice * 2f };
+        Check(ProductionChains.SupplyResponse(france, glut) < 0.7f && ProductionChains.SupplyResponse(france, dear) > 1.05f &&
+              ProductionChains.SupplyResponse(france, dear) <= c.Defines.SupplyResponseMaximum + 1e-5f,
+            "a glutted good is made less of and a dear one more, within the bounds");
     }
 }

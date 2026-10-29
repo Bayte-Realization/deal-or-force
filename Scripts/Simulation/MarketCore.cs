@@ -92,6 +92,15 @@ public sealed partial class Defines
     /// </summary>
     public float CapitalDeepeningHeadroom { get; set; } = 1.3f;
     public float CapitalDeepeningShare { get; set; } = 0.4f;
+
+    /// <summary>
+    /// How producers answer the price (ProductionChains.SupplyResponse): output scales as last
+    /// week's price against the base to this power, between the minimum (a glut idles plant) and
+    /// the maximum (a shortage runs it past its rating). 0 runs every plant flat out.
+    /// </summary>
+    public float SupplyResponseElasticity { get; set; } = 0.5f;
+    public float SupplyResponseMinimum { get; set; } = 0.5f;
+    public float SupplyResponseMaximum { get; set; } = 1.15f;
 }
 
 public static class CommodityCatalog
@@ -521,6 +530,7 @@ public static class MarketSystem
         // The regions whose economy answers to it: its own, less those another country holds,
         // and those it holds of others (HeldRegions) - held ground is ground.
         var states = HeldRegions.EconomyOf(campaign, nation).ToArray();
+        ProductionChains.Defines = campaign.Defines;
 
         // How much of the labour its buildings ask for the nation can actually staff.
         // A country whose industry has outgrown its workforce runs its plant below

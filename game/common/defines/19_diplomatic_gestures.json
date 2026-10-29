@@ -1,0 +1,35 @@
+// Deal or Force - the gestures between governments that are not treaties (DiplomaticGestures.cs).
+//
+// A state visit, a show of force on a shared border, mediation in somebody else's war, a
+// development loan, joint exercises with a partner, the expulsion of a country's diplomats -
+// each with a price, a visible result and a chronicle line, the same for every government.
+{
+  // A state visit: political credit, cash, and the years before the same two meet again.
+  "StateVisitPoliticalCost": 10,
+  "StateVisitCash": 0.05,
+  "StateVisitCooldownDays": 365,
+  // A show of force: cash, the grievance it leaves, the war support it stirs, the cooldown.
+  "ShowOfForceCash": 0.1,
+  "ShowOfForceGrievance": 6,
+  "ShowOfForceWarSupport": 0.03,
+  "ShowOfForceCooldownDays": 180,
+  // Mediation: political credit, how ready both sides must be (peace acceptance 0-100), cooldown.
+  "MediationPoliticalCost": 15,
+  "MediationAcceptance": 45,
+  "MediationCooldownDays": 180,
+  // A development loan: share of the lender's GDP, interest, term in weeks, missed weeks to default.
+  "LoanShareOfGdp": 0.004,
+  "LoanInterest": 0.12,
+  "LoanWeeks": 104,
+  "LoanDefaultWeeks": 8,
+  // Expelling their diplomats: tension added, grievance left, war support at home, cooldown.
+  "ExpelTension": 8,
+  "ExpelGrievance": 4,
+  "ExpelWarSupport": 0.02,
+  "ExpelCooldownDays": 365,
+  // Joint exercises: cash, political credit, the tension added with every rival both share, cooldown.
+  "ExercisesCash": 0.15,
+  "ExercisesPoliticalCost": 5,
+  "ExercisesRivalTension": 5,
+  "ExercisesCooldownDays": 365
+}

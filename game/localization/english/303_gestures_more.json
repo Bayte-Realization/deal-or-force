@@ -1,0 +1,13 @@
+// Joint exercises and expelled diplomats (DiplomaticGestures.cs).
+{
+  "chronicle.diplomats_expelled": "{0} expels the diplomats of {1}.",
+  "chronicle.joint_exercises": "{0} and {1} hold joint military exercises - a message to {2}.",
+  "Joint exercises": "Joint exercises",
+  "Expel their diplomats": "Expel their diplomats",
+  "Only with an ally or a friend who thinks well of us.": "Only with an ally or a friend who thinks well of us.",
+  "Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.": "Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.",
+  "Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud.": "Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud.",
+  "Expelled our diplomats": "Expelled our diplomats",
+  "Held exercises with us": "Held exercises with us",
+  "Rehearsed a war against us with others": "Rehearsed a war against us with others"
+}
