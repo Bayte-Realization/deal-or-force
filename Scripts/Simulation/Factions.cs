@@ -386,6 +386,25 @@ public static class Factions
     /// consolidate its state identity if it completely replaced its parent, or shed its temporary
     /// "rising:..." front label and provisional status so it becomes a regular state.
     /// </summary>
+    /// <summary>
+    /// Whether a side that rose against a state rose on that state's own homeland - a civil war,
+    /// whose winner becomes the state - rather than on its own, whose winner stays itself and
+    /// only takes the ground. A faction of the state - the Houthis of Yemen - is the state's own
+    /// civil war wherever it stands. With no homeland on record, the old answer: yes.
+    /// </summary>
+    internal static bool RoseOnHomelandOf(Campaign campaign, Nation participant, Nation parent)
+    {
+        if (participant.FactionId.Length > 0) return true;
+        if (!campaign.Homelands.TryGetValue(participant.Id, out var home) || home is not { Count: > 0 }) return true;
+        // Most of it, not any of it: a region the front cut in two is the homeland of both sides,
+        // and one such piece of Donetsk would make all of Ukraine Russia's.
+        var shared = 0;
+        foreach (var index in home)
+            if (campaign.States.Find(s => s.MapIndex == index) is { } region &&
+                TerritorialClaims.TitleOf(campaign, parent, region) == TerritorialTitle.Homeland) shared++;
+        return shared * 2 > home.Count;
+    }
+
     public static void SettleCivilWarSurvivors(Campaign campaign, StrategicWar war)
     {
         if (campaign is null || war is null) return;
@@ -408,7 +427,8 @@ public static class Factions
                 var parts = participant.Name.Split(':', 4);
                 var parentTag = parts.Length >= 3 ? parts[2] : "";
                 var parent = campaign.NationByTag(parentTag) ?? campaign.NationById(participant.SecededFromId);
-                if (war.WinnerId == participant.Id && parent is not null && !campaign.HasOwnedLand(parent))
+                if (war.WinnerId == participant.Id && parent is not null && !campaign.HasOwnedLand(parent) &&
+                    RoseOnHomelandOf(campaign, participant, parent))
                 {
                     var formerName = parts.Length >= 4 ? parts[3] : participant.Name;
                     participant.Name = parent.Name;
@@ -447,7 +467,7 @@ public static class Factions
             }
             else if (participant.SecededFromId >= 0 && war.WinnerId == participant.Id &&
                      campaign.NationById(participant.SecededFromId) is { } parent &&
-                     !campaign.HasOwnedLand(parent))
+                     !campaign.HasOwnedLand(parent) && RoseOnHomelandOf(campaign, participant, parent))
             {
                 var formerName = participant.Name;
                 participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);

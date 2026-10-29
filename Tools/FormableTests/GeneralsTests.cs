@@ -419,5 +419,18 @@ static class SovereignRemnantTests
         Factions.SettleDefenselessRebelRemnants(c);
         Check(c.HasOwnedLand(liechtenstein) && c.StatesOf(liechtenstein).All(s => s.NationId == "LIE"),
             "Liechtenstein, free of Austria and with no army, keeps its own ground");
+
+        // Who becomes the state it beat: a side that rose on that state's homeland, or a faction of it.
+        var russia = c.NationByTag("RUS"); var ukraine = c.NationByTag("UKR");
+        c.Homelands[russia.Id] = c.StatesOf(russia).Select(s => s.MapIndex).ToList();
+        c.Homelands[ukraine.Id] = c.StatesOf(ukraine).Select(s => s.MapIndex).ToList();
+        Check(!Factions.RoseOnHomelandOf(c, ukraine, russia),
+            "Ukraine rising on its own ground and winning stays Ukraine - it does not become Russia");
+        var rising = new Nation { Id = 9999, Tag = "R99", Name = "rising" };
+        c.Homelands[rising.Id] = new List<int> { c.StatesOf(russia)[0].MapIndex };
+        Check(Factions.RoseOnHomelandOf(c, rising, russia), "a rising on Russia's own homeland is Russia's civil war");
+        ukraine.FactionId = "UKR";
+        Check(Factions.RoseOnHomelandOf(c, ukraine, russia), "and a faction of the state always is");
+        ukraine.FactionId = "";
     }
 }

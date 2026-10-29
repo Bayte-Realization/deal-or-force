@@ -672,7 +672,10 @@ public static class SecessionEvents
             homeland = earlier.Concat(homeland).Distinct().ToList();
         campaign.Homelands[born.Id] = homeland;
         var coreRegions = homeland.ToHashSet();
-        shape?.Invoke(born);
+        // A people taking back its own ground under its own exiled government is that country
+        // restored, not the parent's opposition: Ukraine's government rose in occupied Chernihiv,
+        // was renamed Russia's "transitional council", won, and became Russia.
+        if (matchingMovement is null) shape?.Invoke(born);
 
         // Partition productive capacity BEFORE changing the parent's resident count:
         // ProductionCapacity already scales its reference by the population still present.
