@@ -18,5 +18,8 @@
   "AiBuildShortage": 0.9,
   "AiBuildShortagesConsidered": 3,
   "AiMineDeposit": 0.5,
-  "AiBuildWorldGlut": 1.4
+  "AiBuildWorldGlut": 1.4,
+  // Short of hands - filling less than this share of its jobs - a country builds for its
+  // shortages and puts up no factory just to have one.
+  "AiBuildLabourFloor": 0.95
 }

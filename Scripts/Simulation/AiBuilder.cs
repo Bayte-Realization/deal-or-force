@@ -22,6 +22,13 @@ public sealed partial class Defines
     /// buys rather than builds for: its shortage is a trade route, not a missing factory.
     /// </summary>
     public float AiBuildWorldGlut { get; set; } = 1.4f;
+
+    /// <summary>
+    /// A country whose buildings already ask for more hands than it has - it fills less than
+    /// this share of its jobs - builds for its shortages but puts up no factory just to have
+    /// one. 0: civilian industry whatever the labour, as before.
+    /// </summary>
+    public float AiBuildLabourFloor { get; set; } = 0f;
 }
 
 /// <summary>

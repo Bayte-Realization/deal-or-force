@@ -162,6 +162,12 @@ public static partial class AiStatecraft
         // water access. Let a peaceful economy actually use it.
         if (!congested && !armsTurn && (mature || !needsTurn))
             AiBuilder.Choose(campaign, nation, states, out wanted, out target);
+        // A factory with nobody to work it makes nothing but a thinner spread of the workers the
+        // others had: France tripled its civilian industry with 45 million jobs for 38 million
+        // workers, and its output per head rose two thirds in ten years by moving them from the
+        // fields. Short of hands, a country builds for what it lacks and otherwise waits.
+        if (target is null && wanted == BuildingKind.CivilianIndustry && nation.EmployedShare < defines.AiBuildLabourFloor)
+        { Count("construction_labour_short"); return false; }
 
         // Put a generic priority where there is most to gain. A specialized market
         // investment keeps the region selected by the production/deposit planner.
