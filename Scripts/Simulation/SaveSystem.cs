@@ -238,6 +238,10 @@ public static class SaveSystem
         // The format is the campaign's own define, so every caller - the save screen, the
         // console, the autosave - writes the same way without each having to be told.
         var text = campaign.Defines.SaveTextFormat;
+        // Every country on its shelves before it is written, as the load will put it: a country
+        // born during the campaign whose doctrine nobody had read yet was saved with the flag
+        // unset and loaded with it set, so a save did not load as the campaign it was.
+        foreach (var n in campaign.Nations) TacticalDoctrines.EnsureShelves(n);
         CampaignSave payload;
         using (SimProfiler.Measure("  save:capture"))
             payload = CampaignSave.Capture(campaign, modFingerprint);
