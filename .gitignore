@@ -32,3 +32,9 @@ desktop.ini
 perf.log
 /Deal or Force Launcher.exe
 /Tools/TerrainCompiler/cache/
+# Local plans and assistant harnesses are deliberately not published.
+/PLAN.md
+/ПЛАН_CLAUDE.md
+/.cursor/
+/.devin/
+
