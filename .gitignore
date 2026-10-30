@@ -29,6 +29,11 @@ addons/
 .idea/
 # Local assistant instructions and generated agent state are not game content.
 /.agents/
+# Local planning and assistant harnesses stay on disk, never in public branches.
+/PLAN.md
+/ПЛАН_CLAUDE.md
+/.cursor/
+/.devin/
 /.mimosa/
 **/.mimosa/
 # Interrupted Godot safe-save files are editor scratch, not project assets.
