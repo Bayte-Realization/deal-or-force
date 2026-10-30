@@ -518,6 +518,8 @@ public partial class DealOrForceGame : Control
         if (key.Keycode == Key.F1 && _campaign is not null && _hudLayer is { Visible: true })
         { ToggleHandbook(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
+        if (key.Keycode == Key.Home && _campaign is not null && _hudLayer is { Visible: true })
+        { FocusOwnCapital(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F6 && _campaign is not null && _hudLayer is { Visible: true })
         {
             ToggleShowcasePan();

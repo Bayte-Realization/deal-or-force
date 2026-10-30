@@ -95,7 +95,7 @@ public partial class DealOrForceGame
         var close = ActionButton("×", CloseNavigator, 36, 32);
         close.Name = "NavigatorClose";
         close.TooltipText = Ui.Tip(Tr("Close the index (Esc)."));
-        ScreenHeader(rows, "Where to", "Every screen in the campaign. Type to narrow it down.",
+        ScreenHeader(rows, "Where to", "Every screen in the campaign, every country and every city. Type to narrow it down.",
             false, close);
 
         var searchRow = new HBoxContainer();
@@ -104,7 +104,7 @@ public partial class DealOrForceGame
         _navigatorSearch = new LineEdit
         {
             Name = "NavigatorSearch",
-            PlaceholderText = Tr("Search a screen, a tab or an action"),
+            PlaceholderText = Tr("Search a screen, a country or a city"),
             ClearButtonEnabled = true,
             SizeFlagsHorizontal = SizeFlags.ExpandFill,
             CustomMinimumSize = new Vector2(0, 36)
@@ -177,6 +177,7 @@ public partial class DealOrForceGame
                             entry.Group.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
                             entry.Purpose.Contains(needle, StringComparison.OrdinalIgnoreCase))
             .ToList();
+        matches.AddRange(NavigatorPlaces(needle));
         _navigatorCount!.Text = matches.Count.ToString();
 
         var group = "";
@@ -218,6 +219,59 @@ public partial class DealOrForceGame
         if (_navigatorButtons.Count == 0) return;
         _navigatorButtons[Math.Clamp(_navigatorIndex, 0, _navigatorButtons.Count - 1)]
             .EmitSignal(Button.SignalName.Pressed);
+    }
+
+    /// <summary>
+    /// The map's places, for a search of two letters or more: countries by name or tag, which
+    /// frame their capital and select them, and cities, which frame the city. "Where is Kyiv"
+    /// had no answer anywhere in the game but a hunt across the map.
+    /// </summary>
+    private IEnumerable<NavigatorEntry> NavigatorPlaces(string needle)
+    {
+        if (_campaign is null || needle.Length < 2) yield break;
+        var countries = 0;
+        foreach (var nation in _campaign.Nations
+                     .Where(n => n.Population > 0 && _campaign.StatesOf(n).Length > 0)
+                     .Where(n => n.DisplayName.Contains(needle, StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(n.Tag, needle, StringComparison.OrdinalIgnoreCase))
+                     .OrderByDescending(n => n.DisplayName.StartsWith(needle, StringComparison.OrdinalIgnoreCase))
+                     .ThenBy(n => n.DisplayName, StringComparer.CurrentCulture))
+        {
+            if (++countries > 12) break;
+            var captured = nation;
+            yield return new NavigatorEntry("Countries", nation.DisplayName,
+                Loc.Format("{0} · capital {1}", nation.Tag, string.IsNullOrWhiteSpace(nation.CapitalName) ? "—" : nation.CapitalName.Replace("|", " ")),
+                () => FocusNation(captured));
+        }
+        var cities = 0;
+        foreach (var city in CityCatalog.All
+                     .Where(c => c.DisplayName.Contains(needle, StringComparison.OrdinalIgnoreCase))
+                     .OrderByDescending(c => c.DisplayName.StartsWith(needle, StringComparison.OrdinalIgnoreCase))
+                     .ThenBy(c => c.DisplayName, StringComparer.CurrentCulture))
+        {
+            if (++cities > 12) break;
+            var captured = city;
+            var country = _campaign.NationByTag(city.Country)?.DisplayName ?? city.Country;
+            yield return new NavigatorEntry("Cities", city.DisplayName, country,
+                () => _globe?.FocusOn(captured.Latitude, captured.Longitude, 7f));
+        }
+    }
+
+    /// <summary>Frame a country's capital and select it, as a click on it would.</summary>
+    private void FocusNation(Nation nation)
+    {
+        if (_campaign is null || nation is null || _globe is null) return;
+        if (CapitalCore.HasSeat(_campaign, nation))
+            _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, nation), CapitalCore.EffectiveLongitude(_campaign, nation), 11f);
+        _selectedNation = nation;
+        Refresh();
+    }
+
+    /// <summary>Home: the player's own capital, framed close enough to read the front.</summary>
+    private void FocusOwnCapital()
+    {
+        if (_campaign?.Player is not { } player || _globe is null || !CapitalCore.HasSeat(_campaign, player)) return;
+        _globe.FocusOn(CapitalCore.EffectiveLatitude(_campaign, player), CapitalCore.EffectiveLongitude(_campaign, player), 11f);
     }
 
     /// <summary>Open the thing the row stands for, and get out of the way.</summary>

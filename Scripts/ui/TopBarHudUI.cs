@@ -102,6 +102,18 @@ public partial class DealOrForceGame
 
         // Whose war this is, said in the one way that needs no reading.
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
+        // The flag takes the map home: the capital, framed - what a player reaches for after
+        // a long look at the other side of the world (also the Home key).
+        _identityFlag.MouseFilter = MouseFilterEnum.Stop;
+        _identityFlag.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _identityFlag.TooltipText = Ui.Tip(Tr("Show my capital on the map (Home)."));
+        _identityFlag.GuiInput += input =>
+        {
+            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) return;
+            PlayStrategicCue("ui_select");
+            FocusOwnCapital();
+            _identityFlag.AcceptEvent();
+        };
         row.AddChild(_identityFlag);
 
         _identityPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
