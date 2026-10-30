@@ -218,10 +218,17 @@ every pack on disk as owned, which is for testing and should stay `false` anywhe
 
 ## Size
 
-Sizes change between versions; the build script prints current measurements. Part of the size
-is the double packing of the rasters: Godot imports pngs into the `.pck`, and the same files sit beside it as ordinary
-files because some of the code reads them directly. Among friends, for a test, that is
-tolerable; for wider distribution it is worth separating them — but carefully, and with a
-working build in hand, because some of the images are read through `res://` and some through
-the filesystem, and confusing the two produces exactly the breakage that stopped the first
-build from starting.
+Sizes change between versions; the build script prints current measurements. The map rasters
+ship as loose files, not a second time in the `.pck`; the packaging gate checks both halves.
+Other images loaded through `res://` still need Godot import remaps. Do not remove them just
+because a similarly named raw image exists beside the executable.
+
+## Recovering an interrupted export
+
+`-FinalizeExistingExport -OutputDirectory <raw-export>` finishes packaging and runs the normal
+content, notices, pack and executable gates without copying/importing the source again. Use
+it only after the matching Godot export process has completed successfully from the same
+frozen source/staging copy. It rejects a missing executable, a different Windows product
+version and `-ReplaceExistingOutput`. A matching version alone does **not** establish source
+identity: retain the source snapshot and export logs. Never run it against an export that
+is still being written. Ordinary builds do not enable this recovery path.
