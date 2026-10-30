@@ -81,3 +81,9 @@ perf.log
 
 # GD-Sync API keys. Never commit these.
 addons/GD-Sync/keys.cfg
+# Local plans and assistant harnesses are deliberately not published.
+/PLAN.md
+/ПЛАН_CLAUDE.md
+/.cursor/
+/.devin/
+
