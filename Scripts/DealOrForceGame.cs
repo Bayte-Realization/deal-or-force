@@ -818,6 +818,30 @@ public partial class DealOrForceGame : Control
         if (_builtScreens.Add(key)) build();
     }
 
+    /// <summary>
+    /// The heavy screens, built while the loading screen still covers the map. Built on first
+    /// open, each froze the running game the first time a player reached for it - state affairs
+    /// 0.7 s, production 0.4 s, the situation room 0.25 s, measured in the game. Under the
+    /// loading screen the same second and a half is part of a wait nobody is playing through.
+    /// </summary>
+    private void PrebuildScreens()
+    {
+        if (_campaign?.Player is null || _hudLayer is null) return;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            EnsureScreen("state_affairs", BuildStateAffairsInterface);
+            EnsureScreen("production", BuildProductionScreen);
+            if (_situationLayer is null) BuildSituationRoom();
+        }
+        catch (Exception exception)
+        {
+            // Reported here; EnsureScreen does not retry a screen that failed, opened or not.
+            Simulation.DiagnosticLogs.Write("errors", "PREBUILD " + exception.Message);
+        }
+        Simulation.DiagnosticLogs.Write("performance", $"PREBUILD_SCREENS ms={clock.Elapsed.TotalMilliseconds:F1}");
+    }
+
     private void BuildHud()
     {
         _hudLayer = FullLayer("GameHud");

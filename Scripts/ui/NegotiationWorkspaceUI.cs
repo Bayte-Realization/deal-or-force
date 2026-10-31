@@ -158,10 +158,21 @@ public partial class DealOrForceGame
 
     // A 1080-unit canvas must not reduce small document text to eight physical pixels.
     // Re-run only after rebuild/resize, never traverse every UI tree each frame.
-    private void FitNegotiationTypography(Control root)
+    private readonly System.Collections.Generic.Dictionary<ulong, bool> _negotiationFitCompact = new();
+
+    private void FitNegotiationTypography(Control root, bool full = true)
     {
         if (root is null) return;
         var compact = GetWindow().Size.Y < 900 || GetWindow().Size.X < 1600;
+        // The walk of every control is for new controls or a changed window, not for a list that
+        // only repainted its rows: opening diplomacy spent 40-60 ms on it every time.
+        if (!full && _negotiationFitCompact.TryGetValue(root.GetInstanceId(), out var was) && was == compact)
+        {
+            if (root == _diplomacyLayer)
+                foreach (var row in _diplomacyRows) FitDiplomacyName(row);
+            return;
+        }
+        _negotiationFitCompact[root.GetInstanceId()] = compact;
         if (root == _diplomacyLayer && _diplomacyCountryColumn is not null)
         {
             _diplomacyCountryColumn.CustomMinimumSize = new Vector2(compact ? 400 : 360, 0);

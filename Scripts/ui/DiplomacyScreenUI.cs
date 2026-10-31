@@ -488,9 +488,10 @@ public partial class DealOrForceGame
             _diplomacyRows.RemoveAt(_diplomacyRows.Count - 1);
             if (GodotObject.IsInstanceValid(spare.Select)) spare.Select.QueueFree();
         }
+        var added = false;
         for (var index = 0; index < matches.Length; index++)
         {
-            if (index >= _diplomacyRows.Count) _diplomacyRows.Add(BuildDiplomacyRow());
+            if (index >= _diplomacyRows.Count) { _diplomacyRows.Add(BuildDiplomacyRow()); added = true; }
             // A stable name per place in the list, for tests and tours to press.
             _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
             RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
@@ -500,7 +501,7 @@ public partial class DealOrForceGame
         _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
                                  (query.Length > 0 ? " · " + Tr("found by name") : "");
         _diplomacyCountryEmpty.Visible = matches.Length == 0;
-        FitNegotiationTypography(_diplomacyLayer);
+        FitNegotiationTypography(_diplomacyLayer, full: added);
     }
 
     private DiplomacyRow BuildDiplomacyRow()

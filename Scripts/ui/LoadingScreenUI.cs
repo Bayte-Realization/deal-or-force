@@ -41,6 +41,7 @@ public partial class DealOrForceGame
             await operation();
             EnsureLoadingAlive();
             LogLoadingStage();
+            PrebuildScreens();
             _loadingScreen.SetStage(_loadingHeading, "Ready", 100, "Loading advances as each stage is completed.");
             DiagnosticLogs.Write("performance", $"LOADING_COMPLETE operation={heading} elapsed_ms={_loadingClock.Elapsed.TotalMilliseconds:F1}");
             // Present the completed map once before uncovering it. No timer/minimum duration.
