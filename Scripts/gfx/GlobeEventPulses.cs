@@ -70,6 +70,7 @@ public sealed partial class GlobePresentation
         // The nuclear alert (NuclearPosture): a weapon used stays news for a year.
         ["nuclear_strike"] = new("war", new Color(1f, 0.92f, 0.7f), 365),
         ["nuclear_retaliation"] = new("war", new Color(1f, 0.92f, 0.7f), 365),
+        ["nuclear_devastation"] = new("war", new Color(1f, 0.85f, 0.6f), 730),
         ["nuclear_test"] = new("alert_battle", new Color(0.95f, 0.78f, 0.35f), 45),
         ["nuclear_incident"] = new("alert_battle", new Color(0.95f, 0.5f, 0.25f), 30),
     };

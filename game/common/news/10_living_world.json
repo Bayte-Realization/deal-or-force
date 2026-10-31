@@ -1,6 +1,12 @@
 {
   "importance": {
     "world_war_began": 3,
+    "nuclear_strike": 3,
+    "nuclear_retaliation": 3,
+    "nuclear_devastation": 3,
+    "nuclear_test": 2,
+    "nuclear_incident": 2,
+    "volunteers_sent": 2,
     "world_incident": 2,
     "political_scandal": 2,
     "institutional_crisis_warning": 2,

@@ -151,12 +151,23 @@ public partial class DealOrForceGame
             // The last resort, behind a question: one click must never end a world.
             var strikeWhy = NuclearPosture.Refusal(_campaign, player, "strike");
             var answering = NuclearPosture.Avenging(_campaign, player) is not null;
-            var strike = ActionButton(Tr(answering ? "Answer the strike" : "Use a nuclear weapon"), ConfirmNuclearStrike, 0, 32);
+            var strike = ActionButton(Tr(answering ? "Answer the strike" : "Use a nuclear weapon"), () => ConfirmNuclearStrike(false), 0, 32);
             strike.Name = "Posture_strike";
             strike.Disabled = strikeWhy.Length > 0;
             strike.Modulate = strikeWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
             strike.TooltipText = Ui.Tip(strikeWhy.Length > 0 ? strikeWhy : Tr(answering ? AnswerHelp : StrikeHelp));
             acts.AddChild(strike);
+
+            // The strategic use: not the enemy's army but the enemy's country.
+            var citiesWhy = NuclearPosture.Refusal(_campaign, player, "devastate");
+            NuclearPosture.CityTarget(_campaign, player, out var victim);
+            var cities = ActionButton(victim is null ? Tr("Strike their cities") : string.Format(Tr("Strike the cities of {0}"), victim.DisplayName),
+                () => ConfirmNuclearStrike(true), 0, 32);
+            cities.Name = "Posture_devastate";
+            cities.Disabled = citiesWhy.Length > 0;
+            cities.Modulate = citiesWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
+            cities.TooltipText = Ui.Tip(citiesWhy.Length > 0 ? citiesWhy : Tr(CitiesHelp));
+            acts.AddChild(cities);
         }
 
         // Every holder, its alert, and for the player the red telephone to it.
@@ -191,20 +202,23 @@ public partial class DealOrForceGame
     }
 
     private const string StrikeHelp =
-        "The strongest enemy force on our own soil loses most of its men and all its order, the region is left in ruins, and the country it belongs to loses the stomach for the war. Every government on earth remembers it, allies included, and the world spends a year at the brink.";
+        "The strongest enemy force within reach - on our soil first, then on theirs - loses most of its men and all its order, the region is left in ruins, and the country it belongs to loses the stomach for the war. Every government on earth remembers it, allies included, and the world spends a year at the brink.";
+
+    private const string CitiesHelp =
+        "Not an army but a country: the weapon falls on the enemy's capital. A sixth of the region's people die, the region is ruined for a generation, and the enemy loses stability and the will to fight. No first use is condemned like this one, and a holder struck this way will answer on our cities.";
 
     private const string AnswerHelp =
         "Our forces were struck. The answer falls on the strongest force of the country that struck them, wherever it stands. The world condemns an answer less than a first use, but the brink comes no further away.";
 
-    private void ConfirmNuclearStrike()
+    private void ConfirmNuclearStrike(bool cities)
     {
         if (_campaign?.Player is not { } player) return;
         var answering = NuclearPosture.Avenging(_campaign, player) is not null;
         if (GetChildren().OfType<ConfirmationDialog>().Any(dialog => dialog.Visible)) return;
         var campaign = _campaign;
         var confirm = new ConfirmationDialog { Name = "ConfirmNuclearStrike",
-            Title = Tr("Use a nuclear weapon?"),
-            DialogText = Tr(answering ? AnswerHelp : StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
+            Title = Tr(cities ? "Strike their cities?" : "Use a nuclear weapon?"),
+            DialogText = Tr(cities ? CitiesHelp : answering ? AnswerHelp : StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
             Exclusive = true };
         var theme = ScenarioEditorTheme.Create();
         theme.SetStylebox("panel", "AcceptDialog", ScenarioEditorTheme.Surface("shell.background", "shell.border", 16));
@@ -218,7 +232,7 @@ public partial class DealOrForceGame
         confirm.Confirmed += () =>
         {
             confirm.QueueFree();
-            if (ReferenceEquals(_campaign, campaign) && _campaign.Player?.Id == issuer) PostureOrder("strike", -1);
+            if (ReferenceEquals(_campaign, campaign) && _campaign.Player?.Id == issuer) PostureOrder(cities ? "devastate" : "strike", -1);
         };
         confirm.Canceled += () => confirm.QueueFree();
         confirm.PopupCentered(new Vector2I(540, 240));

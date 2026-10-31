@@ -134,6 +134,7 @@ public partial class DealOrForceGame : Control
         // The country card's facts panel is sized to its own contents, and that height is only
         // knowable after the layout pass rather than when the card is built. See the method.
         SyncCountryFactsHeight();
+        TickNuclearAlert(delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // The lens and the roll move while a key is held, so the line that reports them
@@ -2077,6 +2078,7 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.NavTile(primary, 0));
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.NavTile(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.NavTile(primary, 2));
+            button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.NavTile(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.NavTile(primary, 3));
         }
         else if (tabPill)
@@ -2084,6 +2086,10 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.TabPill(primary, 0));
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.TabPill(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.TabPill(primary, 2));
+            // A pressed toggle under the pointer is drawn in hover_pressed; left to the theme it had
+            // other margins, so the active map layer changed width under the mouse and the whole
+            // two-column drawer jumped with it.
+            button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.TabPill(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.TabPill(primary, 3));
             // A button with a picture of its own (the layer list's flag) keeps it.
             if (button.ToggleMode && (button.Icon is null || button.HasMeta("toggle_lamp")))

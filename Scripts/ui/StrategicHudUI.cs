@@ -124,6 +124,7 @@ public partial class DealOrForceGame
         // The chronicle's newest sequence is in the fingerprint, so a stop-press entry is
         // always news by the time this runs.
         RefreshTeletype();
+        RefreshNuclearAlert();
         if (_outliner.FindChild("OutlinerToggle", true, false) is Button toggle)
             toggle.Text = Tr("Situation report") + (_outlinerCollapsed ? "  +" : "  −");
 

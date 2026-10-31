@@ -80,6 +80,8 @@
   "Employed {0:P0} · wealth {1:P0} · standard of living {2:P0}": "Employed {0:P0} · wealth {1:P0} · standard of living {2:P0}",
   "{0:0.0} div · {1:P0}": "{0:0.0} div · {1:P0}",
   "{0} added to the {1} queue.": "{0} added to the {1} queue.",
+  "{0} × {1} added to the {2} queue.": "{0} × {1} added to the {2} queue.",
+  "Queue up to {0} at once; the national limit leaves room for {1}.": "Queue up to {0} at once; the national limit leaves room for {1}.",
   "Could not queue the project: check treasury or the national construction limit.": "Could not queue the project: check treasury or the national construction limit.",
   "{0} peoples": "{0} peoples",
   "Wealth {0:P0} · employed {1:P0}": "Wealth {0:P0} · employed {1:P0}",

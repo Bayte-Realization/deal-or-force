@@ -722,9 +722,9 @@ public partial class DealOrForceGame
                 _selectedState.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, _campaign.Player))));
     }
 
-    private void RegionCardBuild(BuildingKind kind)
+    private void RegionCardBuild(BuildingKind kind, int count = 1)
     {
-        QueueRegionalBuilding(kind);
+        QueueRegionalBuilding(kind, count);
         _regionCardFeedback.Text = _regionActionFeedback.Text;
     }
 

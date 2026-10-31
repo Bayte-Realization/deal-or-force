@@ -181,6 +181,13 @@ public partial class DealOrForceGame
             var build = ActionButton("+", () => RegionCardBuild(captured), 26, 21);
             build.Disabled = refusal.Length > 0;
             row.AddChild(build);
+            // Several at once: a programme, not a click per factory. Stops where money or the
+            // national limit runs out, so it never queues what cannot start.
+            var room = Math.Max(0, limit - running);
+            var batch = ActionButton("+5", () => RegionCardBuild(captured, 5), 34, 21);
+            batch.Disabled = refusal.Length > 0 || room < 2;
+            batch.TooltipText = Ui.Tip(Simulation.Loc.Format("Queue up to {0} at once; the national limit leaves room for {1}.", 5, room));
+            row.AddChild(batch);
 
             var tip = Tr(definition.Name) + "\n" + Simulation.Loc.Get(definition.Description) + "\n\n" +
                       Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days) +

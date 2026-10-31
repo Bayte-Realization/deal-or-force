@@ -11,6 +11,7 @@
     "coup": "news_coup",
     "nuclear_strike": "news_nuclear_detonation",
     "nuclear_retaliation": "news_nuclear_detonation",
+    "nuclear_devastation": "news_nuclear_detonation",
     "mass_protests": "news_strike",
     "coup_counter": "news_coup",
     "institutional_coup": "news_coup",

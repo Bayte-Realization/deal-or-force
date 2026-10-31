@@ -90,6 +90,20 @@ public sealed partial class Defines
     public float AiNuclearRetaliationChance { get; set; } = 0f;
 }
 
+public sealed partial class Defines
+{
+    /// <summary>Whether a weapon may fall on the enemy's own forces and ground, not only on an invader at home.</summary>
+    public bool NuclearCounterforce { get; set; } = true;
+    /// <summary>A strike on a country's cities (countervalue): what it costs to order, the share of
+    /// the struck region's people it kills, the stability and war support its country loses, and the
+    /// notoriety it brings on top of first use. 0 casualties turns the order off.</summary>
+    public float NuclearDevastateCost { get; set; } = 40f;
+    public float NuclearCityCasualties { get; set; } = 0.15f;
+    public float NuclearCityStability { get; set; } = 0.12f;
+    public float NuclearCityWarSupport { get; set; } = 0.10f;
+    public float NuclearDevastationNotoriety { get; set; } = 30f;
+}
+
 /// <summary>
 /// Nuclear posture: what a deterrent holder does with its weapons short of using them.
 ///
@@ -159,6 +173,17 @@ public static class NuclearPosture
                 if (n.PoliticalPoints < d.NuclearTestCost)
                     return Loc.Format("A test costs {0:0} political credit; there is {1:0.#}.", d.NuclearTestCost, n.PoliticalPoints);
                 return "";
+            case "devastate":
+                if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
+                if (d.NuclearCityCasualties <= 0f) return Loc.Get("No government in this world can order a strike on cities.");
+                if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
+                if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
+                    return Loc.Format("A weapon was used {0} days ago; the next order after {1}.",
+                        c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
+                if (n.PoliticalPoints < d.NuclearDevastateCost)
+                    return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", d.NuclearDevastateCost, n.PoliticalPoints);
+                if (CityTarget(c, n, out _) <= 0) return Loc.Get("No enemy country is at war with us.");
+                return "";
             case "strike":
                 if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
@@ -168,7 +193,7 @@ public static class NuclearPosture
                 if (n.PoliticalPoints < d.NuclearStrikeCost)
                     return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", d.NuclearStrikeCost, n.PoliticalPoints);
                 if (StrikeTarget(c, n, out _) <= 0)
-                    return Loc.Get("No enemy force stands on our own soil: there is nothing a weapon would defend.");
+                    return Loc.Get("No enemy force is within reach of a weapon.");
                 return "";
             case "hotline":
                 if (target is null || target.Id == n.Id || !IsHolder(c, target)) return Loc.Get("The red telephone connects two nuclear powers.");
@@ -220,7 +245,10 @@ public static class NuclearPosture
                 }
                 break;
             case "strike":
-                Strike(c, n);
+                Strike(c, n, cities: false);
+                break;
+            case "devastate":
+                Strike(c, n, cities: true);
                 break;
             case "hotline":
                 n.LastHotlineDay = target.LastHotlineDay = c.ElapsedDays;
@@ -239,10 +267,13 @@ public static class NuclearPosture
     }
 
     /// <summary>
-    /// Where a strike would fall: the province of this country's own soil where the enemy stands
-    /// strongest, in a war that is not a civil one. Zero when no enemy stands on its ground - the
-    /// weapon is a defence of the homeland in every doctrine that admits to one, never a way to
-    /// take somebody else's.
+    /// Where a strike would fall, in a war that is not a civil one. First an answer: the striker's
+    /// strongest force wherever it stands. Then the homeland: the enemy's strongest force on this
+    /// country's own soil. Then counterforce: the enemy's strongest concentration anywhere - its
+    /// own ground or the front. The user asked why a weapon could only be used on one's own land;
+    /// no strategic doctrine aims it there first, and a country losing a war abroad has nothing
+    /// of its own to defend with it. When the AI orders it at all is still Existential (defeat or
+    /// the capital lost); NuclearCounterforce false keeps the old homeland-only rule.
     /// </summary>
     public static int StrikeTarget(Campaign c, Nation n, out HashSet<int> enemies)
     {
@@ -257,14 +288,15 @@ public static class NuclearPosture
         // that, and always otherwise, the weapon defends our own soil.
         var avenged = Avenging(c, n);
         var weight = new Dictionary<int, float>();
-        for (var pass = avenged is null ? 1 : 0; pass < 2; pass++)
+        var passes = c.Defines.NuclearCounterforce ? 3 : 2;
+        for (var pass = avenged is null ? 1 : 0; pass < passes; pass++)
         {
             weight.Clear();
             foreach (var army in c.Armies)
             {
                 if (!enemies.Contains(army.NationId) || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
                     army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f) continue;
-                if (pass == 0 ? army.NationId != avenged.Id : topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
+                if (pass == 0 ? army.NationId != avenged.Id : pass == 1 && topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
                 weight[army.ProvinceId] = weight.GetValueOrDefault(army.ProvinceId) + army.Personnel * army.Strength;
             }
             var best = 0;
@@ -294,21 +326,54 @@ public static class NuclearPosture
     /// government on earth remembers it, allies included; everybody not allied is the more tense
     /// for it; and the world goes to DEFCON 1 and stays at 2 or worse for a year.
     /// </summary>
-    private static void Strike(Campaign c, Nation n)
+    /// <summary>
+    /// Where a strike on a country's cities would fall: the seat of the country it is answering, or
+    /// else of its most populous enemy in a war that is not a civil one - the capital's province.
+    /// </summary>
+    public static int CityTarget(Campaign c, Nation n, out Nation victim)
+    {
+        victim = null;
+        if (c?.ProvinceMap is null || n is null) return 0;
+        victim = Avenging(c, n);
+        if (victim is null)
+            foreach (var war in c.Wars)
+            {
+                if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
+                foreach (var id in war.EnemiesOf(n.Id))
+                    if (c.NationById(id) is { Population: > 0, Movement: null } enemy && (victim is null || enemy.Population > victim.Population))
+                        victim = enemy;
+            }
+        if (victim is null) return 0;
+        var map = c.ProvinceMap;
+        if (victim.CapitalProvinceId > 0 && victim.CapitalProvinceId <= map.ProvinceCount &&
+            map.ProvinceToNation[victim.CapitalProvinceId] == victim.MapIndex) return victim.CapitalProvinceId;
+        var largest = c.StatesOf(victim).OrderByDescending(r => r.Population).FirstOrDefault();
+        if (largest is null) return 0;
+        for (var p = 1; p <= map.ProvinceCount; p++)
+            if (map.ProvinceToState[p] == largest.MapIndex && !map.IsWater(p)) return p;
+        return 0;
+    }
+
+    private static void Strike(Campaign c, Nation n, bool cities)
     {
         var d = c.Defines;
         var answer = Avenging(c, n);
-        var province = StrikeTarget(c, n, out var enemies);
+        var enemies = new HashSet<int>();
+        Nation victim = null;
+        var province = cities ? CityTarget(c, n, out victim) : StrikeTarget(c, n, out enemies);
         if (province <= 0) return;
-        n.PoliticalPoints -= d.NuclearStrikeCost;
+        if (cities) enemies.Add(victim.Id);
+        n.PoliticalPoints -= cities ? d.NuclearDevastateCost : d.NuclearStrikeCost;
         n.LastNuclearStrikeDay = c.ElapsedDays;
         // The first to use one is the outlaw; the one that answers is understood, if not forgiven.
+        // A city struck is a crime of its own, first or not.
         if (answer is null)
         {
             n.NuclearFirstUseDay = c.ElapsedDays;
             n.Notoriety += d.NuclearFirstUseNotoriety;
         }
         else n.NuclearStruckBy = -1;
+        if (cities) n.Notoriety += d.NuclearDevastationNotoriety;
         var struck = new HashSet<int>();
         foreach (var army in c.Armies)
         {
@@ -324,8 +389,16 @@ public static class NuclearPosture
         var region = c.States.Find(state => state.MapIndex == map);
         if (region is not null)
         {
-            region.WarDamage = M.Clamp01(region.WarDamage + d.NuclearStrikeRuin);
+            region.WarDamage = M.Clamp01(region.WarDamage + d.NuclearStrikeRuin * (cities ? 2f : 1f));
             region.LastFoughtDay = c.ElapsedDays;
+            if (cities)
+            {
+                // The city itself: its people, and the country that loses them.
+                region.Population = System.Math.Max(0, region.Population - (long)(region.Population * M.Clamp01(d.NuclearCityCasualties)));
+                victim.Stability = M.Clamp01(victim.Stability - d.NuclearCityStability);
+                victim.WarSupport = M.Clamp01(victim.WarSupport - d.NuclearCityWarSupport);
+                struck.Add(victim.Id);
+            }
         }
         foreach (var id in struck.OrderBy(id => id))
         {
@@ -352,8 +425,8 @@ public static class NuclearPosture
         c.DefconDaysInStage = 0;
         c.DefconPeakLevel = 1;
         NuclearDetonations.Announce(province, c.ElapsedDays, answer is not null);
-        c.Chronicle.Record(c, answer is null ? "nuclear_strike" : "nuclear_retaliation", n.Id,
-            struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
+        c.Chronicle.Record(c, cities ? "nuclear_devastation" : answer is null ? "nuclear_strike" : "nuclear_retaliation", n.Id,
+            cities ? victim.Id : struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
     }
 
     /// <summary>The most recent nuclear strike still casting its shadow over the world, or null.</summary>
@@ -488,9 +561,11 @@ public static class NuclearPosture
                 Apply(c, n, "strike");
             // And the answer: a holder whose forces were struck answers in kind, or its deterrent
             // was never one.
+            // A holder answering another holder answers in kind on its cities: that is what makes a
+            // deterrent a deterrent (mutual assured destruction). Anybody else answers the forces.
             else if (avenging && n.NuclearPosture <= 1 && d.AiNuclearRetaliationChance > 0f &&
                 MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x2D5E) < d.AiNuclearRetaliationChance)
-                Apply(c, n, "strike");
+                Apply(c, n, IsHolder(c, Avenging(c, n)) && Refusal(c, n, "devastate").Length == 0 ? "devastate" : "strike");
         }
         for (var i = 0; i < holders.Count; i++)
         for (var j = i + 1; j < holders.Count; j++)

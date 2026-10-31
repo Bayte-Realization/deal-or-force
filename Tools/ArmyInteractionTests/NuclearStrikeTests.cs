@@ -31,7 +31,13 @@ static class NuclearStrikeTests
         var war = new StrategicWar { Id = 91002, AttackerId = ind.Id, DefenderId = pk.Id, StartedDay = 200 };
         c.Wars.Add(war); c.MarkWarsChanged();
 
-        Check(NuclearPosture.StrikeTarget(c, pk, out _) == 0, "with no enemy on its soil there is nothing to strike");
+        // Counterforce: with no enemy on its soil, the enemy's strongest force wherever it stands.
+        var counterforce = NuclearPosture.StrikeTarget(c, pk, out _);
+        Check(counterforce > 0 && c.ProvinceMap.ProvinceToNation[counterforce] != pk.MapIndex,
+            "with no enemy on its soil the weapon falls on the enemy's own strongest force (counterforce)");
+        c.Defines.NuclearCounterforce = false;
+        Check(NuclearPosture.StrikeTarget(c, pk, out _) == 0, "homeland-only doctrine: with no enemy on its soil there is nothing to strike");
+        c.Defines.NuclearCounterforce = true;
         // An Indian army standing in a Pakistani province.
         var topology = c.ProvinceMap;
         var ground = Enumerable.Range(1, topology.ProvinceCount).First(p => topology.ProvinceToNation[p] == pk.MapIndex);
@@ -73,11 +79,23 @@ static class NuclearStrikeTests
             "and the first user, struck back, still waits its year: the exchange ends there");
         SetDay(c, 300 + c.Defines.NuclearRetaliationDays + 1);
         Check(NuclearPosture.Avenging(c, ind) is null && NuclearPosture.Avenging(c, pk) is null, "the right to answer lapses");
+        // The strategic use: once the year has passed, the cities of the enemy country itself.
+        SetDay(c, 300 + c.Defines.NuclearStrikeCooldownDays + 1);
+        var city = NuclearPosture.CityTarget(c, pk, out var victim);
+        Check(city > 0 && victim == ind && c.ProvinceMap.ProvinceToNation[city] == ind.MapIndex, "a strike on cities falls on the enemy country itself");
+        pk.PoliticalPoints = 100f; pk.NuclearPosture = 1;
+        var people = c.StatesOf(ind).Sum(r => r.Population);
+        var stability = ind.Stability; var outlaw = pk.Notoriety;
+        c.Commands.Enqueue(new NuclearPostureCommand { IssuerId = pk.Id, Action = "devastate" });
+        c.Commands.ApplyAll(c);
+        Check(c.Chronicle.Entries.Any(e => e.Kind == "nuclear_devastation" && e.ActorId == pk.Id && e.TargetId == ind.Id), "the world hears the cities struck");
+        Check(c.StatesOf(ind).Sum(r => r.Population) < people && ind.Stability < stability, "its people die and its country shakes");
+        Check(pk.Notoriety >= outlaw + c.Defines.NuclearDevastationNotoriety - 0.01f, "no use is condemned like this one");
         SetDay(c, 300);
         war.Ended = true; c.Wars.Remove(war); c.MarkWarsChanged();
         SetDay(c, 400);
         Check(DefconSystem.EvaluateTarget(c, out var why) <= 2 && why.Length > 0, "and the world stays at the brink for a year");
-        SetDay(c, 300 + c.Defines.NuclearShadowDays + 1);
+        SetDay(c, pk.LastNuclearStrikeDay + c.Defines.NuclearShadowDays + 1);
         pk.NuclearPosture = 5; ind.NuclearPosture = 5;
         Check(DefconSystem.EvaluateTarget(c, out _) > 2, "until the shadow passes");
         if (failures > 0) throw new Exception($"{failures} nuclear strike checks failed");

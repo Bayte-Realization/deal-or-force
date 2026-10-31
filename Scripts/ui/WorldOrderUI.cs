@@ -17,7 +17,7 @@ public partial class DealOrForceGame
     {
         "world_incident", "world_war_began", "organization_founded", "organization_left", "organization_split",
         "organization_expelled", "organization_dissolved", "spy_network_exposed", "alliance_ended",
-        "nuclear_strike", "nuclear_retaliation", "nuclear_test", "nuclear_incident", "red_telephone"
+        "nuclear_strike", "nuclear_retaliation", "nuclear_devastation", "nuclear_test", "nuclear_incident", "red_telephone"
     };
 
     /// <summary>The great powers' rivalries, the worst first: each opens the standoff on the right.</summary>
