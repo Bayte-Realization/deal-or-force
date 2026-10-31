@@ -130,6 +130,10 @@ public partial class DealOrForceGame
         _deskRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _deskRows.AddThemeConstantOverride("separation", Ui.Gap(6));
         scroll.AddChild(_deskRows);
+        // The rows learn their height only once they know their width - a wrapped line measured at
+        // no width is a word to a line. Fit the desk again whenever that settles, or it keeps the
+        // height of the first guess (655 pixels for two rows) until the next day.
+        _deskRows.MinimumSizeChanged += () => Callable.From(FitSituationDesk).CallDeferred();
         _deskEmpty = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body_soft"));
         _deskEmpty.Name = "DeskEmpty";
         _deskEmpty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
