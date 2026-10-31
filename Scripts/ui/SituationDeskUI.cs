@@ -279,6 +279,7 @@ public partial class DealOrForceGame
         // Reset from the authored dock so closing a card restores the full height. Never
         // subtract from yesterday's clamped rectangle (which would progressively shrink it).
         ShiftHudDock(_deskPanel);
+        ClampAboveMapBar(_deskPanel);
         if (_regionCard is not { Visible: true }) return;
         var desk = _deskPanel.GetGlobalRect();
         var card = _regionCard.GetGlobalRect();
@@ -293,6 +294,21 @@ public partial class DealOrForceGame
         }
         _deskPanel.AnchorBottom = 0;
         _deskPanel.OffsetBottom = bottom - _deskPanel.GetParent<Control>().GlobalPosition.Y;
+    }
+
+    /// <summary>
+    /// A dock never comes down onto the map bar. The desk's authored rectangle ran to the foot
+    /// of the screen and sat on top of FOG, EVENTS and TRADE; it now stops a gap above the bar
+    /// wherever the two share a column.
+    /// </summary>
+    private void ClampAboveMapBar(Control dock)
+    {
+        if (dock is null || _mapControlsPanel is not { Visible: true } bar || dock.GetParent() is not Control parent) return;
+        var area = dock.GetGlobalRect();
+        var strip = bar.GetGlobalRect();
+        if (area.End.X <= strip.Position.X || area.Position.X >= strip.End.X || area.End.Y <= strip.Position.Y) return;
+        dock.AnchorBottom = 0;
+        dock.OffsetBottom = strip.Position.Y - Ui.Metric("hud.dock_gap", 8) - parent.GlobalPosition.Y;
     }
 
     private void RebuildDeskRows(Nation player)

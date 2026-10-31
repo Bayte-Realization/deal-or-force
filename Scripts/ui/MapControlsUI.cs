@@ -60,6 +60,9 @@ public partial class DealOrForceGame
         row.AddChild(MapVisualToggle("region_names", "NAMES", "Draw each country's name across its territory.", 68));
 
         _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, 54, 34);
+        _showcasePanButton.SetMeta("atlas_tab_button", true);
+        _showcasePanButton.ToggleMode = true;
+        StyleButton(_showcasePanButton, false);
         _showcasePanButton.Name = "ShowcasePan";
         _showcasePanButton.ClipText = true;
         _showcasePanButton.TooltipText = Ui.Tip(Tr("Automatic horizontal camera pan for showcases and time-lapses (F6). Press again to stop."));

@@ -2057,8 +2057,10 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.TabPill(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.TabPill(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.TabPill(primary, 3));
-            if (button.ToggleMode)
+            // A button with a picture of its own (the layer list's flag) keeps it.
+            if (button.ToggleMode && (button.Icon is null || button.HasMeta("toggle_lamp")))
             {
+                button.SetMeta("toggle_lamp", true);
                 // A switch: a pressed toggle hovers in Godot's own hover_pressed style unless told
                 // otherwise, and its state wears a lamp beside the word.
                 button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.TabPill(primary, 1));
