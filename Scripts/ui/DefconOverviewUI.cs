@@ -158,7 +158,7 @@ public partial class DealOrForceGame
             var line = new HBoxContainer();
             line.AddThemeConstantOverride("separation", 10);
             // A fixed box: flags differ in width, and the alert column should not wander with them.
-            var flagBox = new CenterContainer { CustomMinimumSize = new Vector2(44, 24) };
+            var flagBox = new CenterContainer { CustomMinimumSize = new Vector2(52, 24) };
             flagBox.AddChild(FlagBadge(other.Tag, 22, other.DisplayName));
             line.AddChild(flagBox);
             var name = Title(other.DisplayName, 13, Ui.Colour(other.Id == player?.Id ? "text.accent" : "text.body"));
