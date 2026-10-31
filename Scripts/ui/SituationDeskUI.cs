@@ -27,6 +27,7 @@ public partial class DealOrForceGame
     private DeskLens _deskLens = DeskLens.Security;
     private bool _deskOnLeft;
     private bool _deskOpen = true;
+    private bool _deskRefreshing;
     private int _deskDay = -1;
     private int _deskNation = -1;
     private string _deskSignature = "";
@@ -72,6 +73,7 @@ public partial class DealOrForceGame
         _deskPanel.Name = "SituationDesk";
         _deskPanel.GrowHorizontal = GrowDirection.Begin;
         _deskPanel.Visible = false;
+        _deskPanel.VisibilityChanged += SyncDeskDock;
         Ui.Place(_deskPanel, _deskOnLeft ? "hud.desk_left" : "hud.desk_right");
         ShiftHudDock(_deskPanel);
         var body = PanelRows(_deskPanel, 10, 8, 6);
@@ -146,6 +148,48 @@ public partial class DealOrForceGame
             Ui.Place(_deskTab, _deskOnLeft ? "hud.desk_tab_left" : "hud.desk_tab_right");
     }
 
+    /// <summary>
+    /// Whether another dock stands where the desk would. It steps aside for whatever was opened
+    /// over its ground, on either side: docked right it used to sit on top of the army, fleet and
+    /// dossier panels that open there. Measured, not assumed, because the skin moves the docks.
+    /// </summary>
+    private bool DeskCovered()
+    {
+        if (_deskPanel is null) return false;
+        var area = _deskPanel.GetGlobalRect();
+        foreach (var dock in new Control[] { _sidePanel, _armyPanel, _fleetPanel, _movementPanel, _resourceAtlasPanel })
+        {
+            if (dock is null || !GodotObject.IsInstanceValid(dock)) continue;
+            // Every dock that can cover the desk brings it back the moment it closes.
+            if (!dock.HasMeta("desk_watch"))
+            {
+                dock.SetMeta("desk_watch", true);
+                dock.VisibilityChanged += () => Callable.From(RefreshSituationDesk).CallDeferred();
+            }
+            if (dock.IsVisibleInTree() && dock.GetGlobalRect().Intersects(area)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The right-hand report and the desk share one dock, and the button that opens the desk
+    /// lives in the report's header. Both followed the desk only when the desk refreshed itself,
+    /// so when anything else hid the desk - a closing window, a layout pass - on a paused day
+    /// the report, the desk and the button to bring it back were all gone at once. They follow
+    /// the desk's own visibility now, and a desk hidden from outside counts as closed.
+    /// </summary>
+    private void SyncDeskDock()
+    {
+        if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) return;
+        if (!_deskPanel.Visible && _deskOpen && !_deskRefreshing && !_observerMode && !DeskCovered())
+        {
+            _deskOpen = false;
+            if (_campaign is not null) _campaign.Settings["desk.open"] = "0";
+        }
+        if (_outliner is not null) _outliner.Visible = !_observerMode && (!_deskPanel.Visible || _deskOnLeft);
+        if (_deskTab is not null) _deskTab.Visible = !_deskOpen && !_observerMode;
+    }
+
     private void SetDeskSide(bool left)
     {
         _deskOnLeft = left;
@@ -191,11 +235,9 @@ public partial class DealOrForceGame
             Enum.TryParse<DeskLens>(lens, true, out var parsed) && Enum.IsDefined(parsed)) _deskLens = parsed;
         if (_campaign.Settings.TryGetValue("desk.open", out var open)) _deskOpen = open != "0";
 
-        // A desk docked on the left shares its ground with the army panel; while that panel is
-        // open the desk steps aside rather than covering it.
-        var covered = _deskOnLeft && (_sidePanel is { Visible: true } || _armyPanel is { Visible: true } ||
-            _fleetPanel is { Visible: true } || _movementPanel is { Visible: true });
-        _deskPanel.Visible = _deskOpen && !covered && !_observerMode;
+        _deskRefreshing = true;
+        _deskPanel.Visible = _deskOpen && !DeskCovered() && !_observerMode;
+        _deskRefreshing = false;
         _deskTab.Visible = !_deskOpen && !_observerMode;
         // One right-hand dock, not two independent floating panels. The folded command is
         // part of the report's real header layout; the open desk replaces the report.
