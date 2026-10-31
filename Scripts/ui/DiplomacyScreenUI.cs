@@ -504,6 +504,22 @@ public partial class DealOrForceGame
         FitNegotiationTypography(_diplomacyLayer, full: added);
     }
 
+    /// <summary>
+    /// The country list's rows, made before the screen is first opened (PrebuildScreens): the
+    /// list keeps and repaints its rows, and building the first two hundred was half of the
+    /// 0.65 s the first open of diplomacy froze the game for. The layer is hidden until then, and
+    /// the first open repaints every row it shows and frees the rest.
+    /// </summary>
+    private void WarmDiplomacyRows()
+    {
+        if (_diplomacyListRows is null || _campaign is null) return;
+        var wanted = _campaign.Nations.Count(nation => DiplomacyListShows(nation, null));
+        while (_diplomacyRows.Count < wanted)
+        {
+            _diplomacyRows.Add(BuildDiplomacyRow());
+        }
+    }
+
     private DiplomacyRow BuildDiplomacyRow()
     {
         var row = new DiplomacyRow();

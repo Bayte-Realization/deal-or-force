@@ -554,7 +554,7 @@ public static class EventSystem
         // the mode on in the middle of a campaign does not leave a window behind it.
         // A union or a merger is the one question the first answer must not settle: it is
         // "yes". Those are answered the way a government nobody plays would answer them.
-        if (campaign.ObserverMode)
+        if (campaign.NobodyPlays)
             foreach (var item in campaign.PendingEvents.ToArray())
                 Resolve(campaign, item, ObserverAnswer(campaign, item));
 

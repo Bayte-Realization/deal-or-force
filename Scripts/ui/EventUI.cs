@@ -80,7 +80,8 @@ public partial class DealOrForceGame
     private void RefreshEventInterface()
     {
         if (_campaign?.Player is null || !_hudLayer.Visible) return;
-        var pending = _campaign.PendingEvents.FirstOrDefault(item => item.NationId == _campaign.Player.Id);
+        // Nobody playing, nobody asked: the simulation answers what is on the table (EventSystem).
+        var pending = _campaign.NobodyPlays ? null : _campaign.PendingEvents.FirstOrDefault(item => item.NationId == _campaign.Player.Id);
         if (pending is null)
         {
             _eventLayer.Visible = false;

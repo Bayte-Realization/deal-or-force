@@ -515,6 +515,23 @@ public sealed partial class Campaign
     /// the player questions. This is the seat that is not asked.
     /// </summary>
     public bool ObserverMode;
+
+    /// <summary>
+    /// Nobody is at the wheel: the watching mode, or a campaign with no human seat and no human
+    /// country at all (the top bar's "Observer mode"). The two used to be separate questions, so a
+    /// world watched through Jordan's eyes was asked to sign Jordan into a Levant federation: the
+    /// country being looked at is not a country being played.
+    /// </summary>
+    public bool NobodyPlays
+    {
+        get
+        {
+            if (ObserverMode) return true;
+            if (HumanSeats.Count > 0) return false;
+            foreach (var nation in Nations) if (nation.IsHuman) return false;
+            return true;
+        }
+    }
     public readonly Dictionary<long, DiplomaticRelation> Relations = new();
     public readonly List<int> HumanSeats = new();
     public readonly CampaignCommandQueue Commands;

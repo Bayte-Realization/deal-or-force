@@ -37,7 +37,7 @@ public static class PeacefulFormation
     // window it could not see - and observer mode then took the first option, which signed
     // Spain into a Mexican union nobody had chosen.
     private static bool HumanControlled(Campaign campaign, Nation nation) =>
-        !campaign.ObserverMode && (nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id));
+        !campaign.NobodyPlays && (nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id));
 
     public static bool Consented(Campaign campaign, Nation founder, Nation partner, FormableNation definition) =>
         definition.PeacefulAccession && partner.DecisionAvailableDay.TryGetValue(ConsentKey(founder.Id, definition.Id), out var until)

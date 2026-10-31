@@ -833,6 +833,7 @@ public partial class DealOrForceGame : Control
             EnsureScreen("state_affairs", BuildStateAffairsInterface);
             EnsureScreen("production", BuildProductionScreen);
             if (_situationLayer is null) BuildSituationRoom();
+            WarmDiplomacyRows();
         }
         catch (Exception exception)
         {
