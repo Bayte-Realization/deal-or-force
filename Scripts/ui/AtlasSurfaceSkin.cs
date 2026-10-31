@@ -169,8 +169,10 @@ internal static class AtlasSurfaceSkin
         var key = $"tab|{active}|{state}";
         if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
         var accent = Ui.Colour("text.accent");
+        // An active tab is filled, not only outlined: a gold hairline on the same dark ground as
+        // its neighbours could not be told from them at a glance (CLOUDS on beside FOG off).
         var fill = active
-            ? Ui.Colour("surface.raised").Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.38f : 0.25f)
+            ? Ui.Colour("surface.raised").Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.72f : 0.58f)
             : state == 1
                 ? Ui.Colour("button.fill_hover")
                 : Ui.Colour("surface.inset").Lightened(0.015f);
@@ -272,6 +274,43 @@ internal static class AtlasSurfaceSkin
         focus.SetContentMarginAll(0);
         if (rounded) _roundFocus = focus; else _focus = focus;
         return focus;
+    }
+
+    private static readonly Texture2D[] _lamps = new Texture2D[2];
+
+    /// <summary>
+    /// The lamp of a switch: a lit gold dot when on, an empty ring when off. Worn by every
+    /// toggle-mode tab, so on and off read the same way on the map bar, in settings and in
+    /// any screen - the state is in the shape, not only in a shade of gold.
+    /// </summary>
+    internal static Texture2D ToggleLamp(bool on)
+    {
+        if (_lamps[on ? 1 : 0] is { } cached) return cached;
+        const int size = 28;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        image.Fill(Colors.Transparent);
+        var lit = Ui.Colour("text.accent");
+        var dim = Ui.Colour("text.muted");
+        var c = (size - 1) * 0.5f;
+        for (var y = 0; y < size; y++)
+        for (var x = 0; x < size; x++)
+        {
+            var d = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
+            Color pixel;
+            if (on)
+            {
+                var core = Mathf.Clamp(7.5f - d, 0f, 1f);
+                var glow = Mathf.Clamp(1f - (d - 7f) / 6f, 0f, 1f) * 0.35f;
+                pixel = new Color(lit.R, lit.G, lit.B, MathF.Max(core, glow * glow));
+            }
+            else
+            {
+                var ring = Mathf.Clamp(1.2f - MathF.Abs(d - 6.5f), 0f, 1f);
+                pixel = new Color(dim.R, dim.G, dim.B, ring * 0.9f);
+            }
+            image.SetPixel(x, y, pixel);
+        }
+        return _lamps[on ? 1 : 0] = ImageTexture.CreateFromImage(image);
     }
 
     internal static Texture2D MusicGlyph()

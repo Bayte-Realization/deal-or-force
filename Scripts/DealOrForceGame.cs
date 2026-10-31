@@ -2057,6 +2057,23 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.TabPill(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.TabPill(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.TabPill(primary, 3));
+            if (button.ToggleMode)
+            {
+                // A switch: a pressed toggle hovers in Godot's own hover_pressed style unless told
+                // otherwise, and its state wears a lamp beside the word.
+                button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.TabPill(primary, 1));
+                button.Icon = AtlasSurfaceSkin.ToggleLamp(primary);
+                button.AddThemeConstantOverride("icon_max_width", 14);
+                button.AddThemeConstantOverride("h_separation", 6);
+                // Room for the lamp, once: a caption sized to its width would otherwise be clipped.
+                if (!button.HasMeta("lamp_room") && button.CustomMinimumSize.X > 0f)
+                {
+                    button.SetMeta("lamp_room", true);
+                    button.CustomMinimumSize += new Vector2(20f, 0f);
+                }
+                foreach (var key in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color" })
+                    button.AddThemeColorOverride(key, Colors.White);
+            }
         }
         else if (outlinerGroup)
         {
