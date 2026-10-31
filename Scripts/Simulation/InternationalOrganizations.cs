@@ -542,6 +542,24 @@ public static class InternationalOrganizations
         AiInitiatives(c);
     }
 
+    /// <summary>
+    /// Whether most of the assembly does not yet hold an embargo on <paramref name="target"/>. Not
+    /// "every member": a member friendly to the target lifts its own embargo the week after a vote,
+    /// and an assembly that re-voted until it had none was voting the same sanctions every month.
+    /// </summary>
+    private static bool Unsanctioned(Campaign c, InternationalOrganization org, Nation target)
+    {
+        var members = 0;
+        var holding = 0;
+        foreach (var id in org.Members)
+        {
+            if (id == target.Id) continue;
+            members++;
+            if (CampaignDiplomacy.Peek(c, id, target.Id)?.EmbargoBy(id) == true) holding++;
+        }
+        return members > 0 && holding * 2 < members;
+    }
+
     private static void AiInitiatives(Campaign c)
     {
         var organic = c.Defines.OrganicOrganizationReachEnabled;
@@ -565,11 +583,11 @@ public static class InternationalOrganizations
             var aggressor = c.Nations.Where(n => c.ElapsedDays - n.NuclearFirstUseDay < c.Defines.NuclearShadowDays)
                 .OrderBy(n => n.Id)
                 .FirstOrDefault(a => Eligible(c, a) && !org.Members.Contains(a.Id) &&
-                    !org.Members.All(id => CampaignDiplomacy.Peek(c, id, a.Id)?.EmbargoBy(id) == true))
+                    Unsanctioned(c, org, a))
                 ?? c.Wars.Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
                 .Select(w => c.NationById(w.AttackerId))
                 .FirstOrDefault(a => a is not null && Eligible(c, a) && !org.Members.Contains(a.Id) &&
-                    !org.Members.All(id => CampaignDiplomacy.Peek(c, id, a.Id)?.EmbargoBy(id) == true));
+                    Unsanctioned(c, org, a));
             if (aggressor is not null)
             {
                 new OrganizationCommand { IssuerId = proposer.Id, OrganizationId = org.Id, Action = "propose", Kind = "sanction", TargetId = aggressor.Id }.Apply(c);
