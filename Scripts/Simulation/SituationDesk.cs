@@ -329,7 +329,7 @@ public static class SituationDesk
                  "talks_opened" or "denunciation" or "spy_network_exposed" or "proxy_started" or
                  "peace_signed" or "country_released" or "deal_signed" or "organization_founded":
                 lens = DeskLens.Diplomacy; severity = DeskSeverity.Could; return true;
-            case "general_strike" or "political_scandal" or "anti_war_protests" or
+            case "general_strike" or "political_scandal" or "anti_war_protests" or "mass_protests" or
                  "civil_war_escalated" or "coup_plot" or "regime_change":
                 lens = DeskLens.Society; severity = DeskSeverity.Watch; return true;
             case "sovereign_default" or "sovereign_insolvency" or "debt_restructured":
@@ -367,6 +367,7 @@ public static class SituationDesk
         "general_strike" => "A general strike in {0}",
         "political_scandal" => "A political scandal in {0}",
         "anti_war_protests" => "Anti-war protests in {0}",
+        "mass_protests" => "Mass protests in {0}",
         "civil_war_escalated" => "A civil war is escalating in {0}",
         "coup_plot" => "A coup plot in {0}",
         "regime_change" => "The regime has changed in {0}",

@@ -511,6 +511,12 @@ public static class CampaignFingerprint
             MixText(crisis.ResponseId); Mix(crisis.ResponseUntilDay); Mix(crisis.ResponseCooldownUntilDay);
             if (crisis.ConciliationUntilDay >= 0)
             { MixText("conciliation"); Mix(crisis.ConciliationRegion); Mix(crisis.ConciliationUntilDay); }
+            if (crisis.SpendingMemory >= 0f)
+            {
+                MixText("street"); MixFloat(crisis.ProtestGrievance); MixFloat(crisis.ProtestIntensity);
+                MixFloat(crisis.SpendingMemory); MixFloat(crisis.MilitaryMemory);
+                Mix(crisis.LastProtestNewsDay); Mix(crisis.LastConcessionDay);
+            }
             Mix(nation.CoupPlotDay); Mix(nation.LastCoupDay);
             if (nation.LastPoliticalScandalDay >= 0)
             { MixText("political_scandal"); Mix(nation.LastPoliticalScandalDay); }
@@ -582,6 +588,12 @@ public static class CampaignFingerprint
             if (nation.Movement is { } movement)
             {
                 MixFloat(movement.Militancy);
+                if (movement.GainedTraits.Count + movement.LostTraits.Count > 0)
+                {
+                    MixText("traits_became");
+                    foreach (var trait in movement.GainedTraits.OrderBy(t => t, StringComparer.Ordinal)) MixText("+" + trait);
+                    foreach (var trait in movement.LostTraits.OrderBy(t => t, StringComparer.Ordinal)) MixText("-" + trait);
+                }
                 // Panel history is not authority. These inputs and cooldowns are: they
                 // can change the next strike/march before any headline total changes.
                 // Keep empty legacy state at its old hash, and exclude LastReport,

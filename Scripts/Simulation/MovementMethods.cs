@@ -178,6 +178,7 @@ public static class MovementMethods
             if (state is null || state.Dissolved) continue;
             var definition = Movements.DefinitionOf(movement);
             if (definition is null || definition.Has("for_hire") || definition.Has("humanitarian")) continue;
+            MovementTraits.Review(c, movement);
             var before = StageOf(c, movement);
             state.Militancy = M.Clamp01(Of(movement) + (Target(c, movement, definition) - Of(movement)) * c.Defines.MovementMilitancyDrift);
             var after = StageOf(c, movement);

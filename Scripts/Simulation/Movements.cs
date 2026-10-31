@@ -11,7 +11,7 @@ namespace DealOrForce.Simulation;
 /// an order or a company that is a country in every way the game knows except that it holds no
 /// ground. See <see cref="Movements"/>.
 /// </summary>
-public sealed class MovementDefinition
+public sealed partial class MovementDefinition
 {
     public string Id = "";
     public string Tag = "";
@@ -59,7 +59,7 @@ public sealed class MovementDefinition
     public string Headquarters = "";
     /// <summary>Territorial homeland. Offices, sponsorship and diaspora presence do not extend it.</summary>
     public readonly List<string> Homeland = new();
-    public readonly List<string> Traits = new();
+    public List<string> Traits { get; private set; } = new();
     /// <summary>Countries that fund it, in billions a year, while they think well enough of it.</summary>
     public readonly Dictionary<string, float> Sponsors = new(StringComparer.OrdinalIgnoreCase);
     /// <summary>Support among its peoples in a region on the first day, by region id.</summary>
@@ -217,7 +217,7 @@ public sealed class Infiltration
 }
 
 /// <summary>What makes a country a movement, kept on the country and saved with it.</summary>
-public sealed class MovementState
+public sealed partial class MovementState
 {
     /// <summary>The id in common/movements.</summary>
     public string Id = "";
@@ -476,10 +476,29 @@ public static partial class Movements
 
     public static MovementDefinition DefinitionOf(Nation nation)
     {
+        var basic = BaseDefinitionOf(nation);
+        var state = nation?.Movement;
+        if (basic is null || state.GainedTraits.Count == 0 && state.LostTraits.Count == 0) return basic;
+        // What it has become (MovementTraits): the catalogue's traits, less those shed, plus those
+        // taken on. Kept until either list or the catalogue changes.
+        var key = state.TraitsVersion;
+        if (Become.TryGetValue(state, out var cached) && ReferenceEquals(cached.Item1, basic) && cached.Item2 == key)
+            return cached.Item3;
+        var traits = basic.Traits.Where(t => !state.LostTraits.Contains(t)).Concat(state.GainedTraits.Where(t => !MovementDefinition.Listed(basic.Traits, t)));
+        var become = basic.WithTraits(traits);
+        Become.AddOrUpdate(state, Tuple.Create(basic, key, become));
+        return become;
+    }
+
+    /// <summary>The movement as the catalogue (or its exile template) wrote it, before play changed it.</summary>
+    public static MovementDefinition BaseDefinitionOf(Nation nation)
+    {
         var state = nation?.Movement;
         if (state is null) return null;
         return state.Exile ? ExileDefinition(nation) : MovementCatalog.Of(state.Id);
     }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MovementState, Tuple<MovementDefinition, int, MovementDefinition>> Become = new();
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MovementState, Tuple<int, MovementDefinition>> Exiles = new();
 
