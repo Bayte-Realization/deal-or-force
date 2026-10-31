@@ -824,6 +824,8 @@ public partial class DealOrForceGame : Control
         _hudLayer.Visible = false;
         AddChild(_hudLayer);
         BuildMapVignette();
+        // Every interface picture, from loader threads, before a screen asks for it (TextureWarmup).
+        TextureWarmup.Start(this);
 
         BuildTopBar();
         BuildCampaignNavigation();
