@@ -248,6 +248,7 @@ public static class WarInterventions
         var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
         if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
+        willingness = AiTemper.Willing(c, willingness);
         var aiWouldGrant = !donor.IsHuman && willingness >= c.Defines.AiInterventionWillingness;
 
         return new(true, pretext, willingness, aiWouldGrant, "A valid pretext exists for requesting military intervention.");

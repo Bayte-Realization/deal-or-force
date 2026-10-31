@@ -172,10 +172,12 @@ public static class PeaceNegotiation
         }
         // And the weariness of a long war, on both sides of it (WarWeariness) - less, for a state
         // winning back its own breakaway, whatever it is offered short of the ground (Reintegration).
-        return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
+        var score = M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
                        exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
                        Reintegration.CompromisePenalty(campaign, war, proposerId, terms) -
                        Escalation.SunkCost(campaign, war) - WarAimResolve(campaign, war, proposerId, terms), 0f, 100f);
+        // A government nobody plays answers through the agreeableness game option.
+        return campaign.NationById(war.EnemyLeaderOf(proposerId)) is { IsHuman: false } ? AiTemper.Accepting(campaign, score) : score;
     }
 
     private static float WarAimResolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
@@ -381,6 +383,8 @@ public static class PeaceNegotiation
                 war.AnnexedProvinces += kept.Count;
                 war.CreatedStates += created.Count;
             }
+            if (terms == PeaceTerms.Capitulate && !war.CivilConflict)
+                AiStatecraft.ImposeAfterCapitulation(campaign, winner, beaten);
         }
 
         // A deadlock: each side keeps the enemy ground it controls. Security used to be the

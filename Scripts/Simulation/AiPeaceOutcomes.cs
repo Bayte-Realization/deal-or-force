@@ -23,6 +23,14 @@ public sealed partial class Defines
     /// lower because a repelled invasion is a verdict the whole world has already watched.
     /// </summary>
     public float AiPeaceRepelledScore { get; set; } = 35f;
+
+    /// <summary>
+    /// Below this share of the beaten country's people being the victor's own (by people, or
+    /// living in regions it holds title to), a decisive victory ends in a partition rather than
+    /// an annexation: the victor takes what it claims and leaves the rest a dependent state.
+    /// 0 turns it off.
+    /// </summary>
+    public float AiPartitionKinShare { get; set; } = 0.35f;
 }
 
 public static partial class AiStatecraft
@@ -47,6 +55,81 @@ public static partial class AiStatecraft
             if (!map.IsWater(p) && enemies.Contains(map.ProvinceToNation[p]) && map.ProvinceToNation[p] != subject &&
                 unresolved.Contains(map.ProvinceToState[p]) && !demand.Provinces.Contains(p)) return false;
         return true;
+    }
+
+    /// <summary>
+    /// A decisive victory over a country that is not the victor's own ends the way such wars end
+    /// in the world this game draws: the victor takes what it holds title to or whose people are
+    /// its own, and the rest stays a state - under a government that answers to it.
+    ///
+    /// The old settlement annexed the whole country whenever the score could pay for it, so a
+    /// won war swallowed a foreign people of thirty million into the map like a province; the
+    /// overstretch and the risings came after. Nothing here names a country: the line is the
+    /// share of the beaten people who are the victor's (AiPartitionKinShare). A beaten country of
+    /// another ideology becomes a satellite (its regime is changed); one of the same, a
+    /// protectorate. Returns false where annexation is the plausible end.
+    /// </summary>
+    private static bool Partition(Campaign campaign, Nation winner, Nation loser, int[] territory, PeaceDemand demand)
+    {
+        var threshold = campaign.Defines.AiPartitionKinShare;
+        if (threshold <= 0f || loser.IsSubject) return false;
+        var map = campaign.ProvinceMap;
+        long people = 0, ours = 0;
+        var claimed = new System.Collections.Generic.HashSet<int>();
+        foreach (var region in campaign.StatesOf(loser))
+        {
+            var title = TerritorialClaims.TitleOf(campaign, winner, region) != TerritorialTitle.None;
+            var kin = 1f - EconomySystem.ForeignShare(region, winner.Tag);
+            people += region.Population;
+            if (title || kin >= 0.5f)
+            {
+                ours += region.Population;
+                claimed.Add(region.MapIndex);
+            }
+            else ours += (long)(region.Population * kin);
+        }
+        if (people <= 0 || ours / (double)people >= threshold) return false;
+        var kind = SubjectCatalog.Imposable.FirstOrDefault(k => k.Id == (loser.Ideology == winner.Ideology ? "protectorate" : "satellite"))
+                   ?? SubjectCatalog.Imposable.OrderByDescending(k => k.DemandCost).ThenBy(k => k.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (kind is null) return false;
+        demand.Provinces.Clear();
+        foreach (var province in territory)
+            if (claimed.Contains(map.ProvinceToState[province])) demand.Provinces.Add(province);
+        demand.Unconditional = false;
+        demand.Subjugate = kind.Id;
+        return true;
+    }
+
+    /// <summary>
+    /// Unconditional surrender is not a ceasefire. Forty-seven of eighty-six wars in a ten-year
+    /// world ended in a capitulation, and every capitulated country walked away independent, its
+    /// government untouched, with nothing on it but the land the victor's army stood on. The
+    /// victor of a surrender dictates: a beaten country that is not its own people (the same line
+    /// as Partition) and is not too large for the victor to hold (its economy at most twice the
+    /// victor's) becomes a dependent state - a satellite where the regimes differ, a protectorate
+    /// where they agree. The same for a player as for anybody. Off with AiPartitionKinShare 0.
+    /// </summary>
+    internal static void ImposeAfterCapitulation(Campaign campaign, Nation winner, Nation beaten)
+    {
+        if (campaign is null || winner is null || beaten is null || winner.Id == beaten.Id) return;
+        if (campaign.Defines.AiPartitionKinShare <= 0f || winner.IsSubject || beaten.IsSubject) return;
+        if (beaten.Movement is not null || beaten.Population <= 0 || campaign.StatesOf(beaten).Length == 0) return;
+        if (winner.Gdp < beaten.Gdp * 0.5f) return;
+        long people = 0, ours = 0;
+        foreach (var region in campaign.StatesOf(beaten))
+        {
+            people += region.Population;
+            var kin = 1f - EconomySystem.ForeignShare(region, winner.Tag);
+            ours += TerritorialClaims.TitleOf(campaign, winner, region) != TerritorialTitle.None
+                ? region.Population : (long)(region.Population * kin);
+        }
+        if (people <= 0 || ours / (double)people >= campaign.Defines.AiPartitionKinShare) return;
+        var kind = SubjectCatalog.Imposable.FirstOrDefault(k => k.Id == (beaten.Ideology == winner.Ideology ? "protectorate" : "satellite"))
+                   ?? SubjectCatalog.Imposable.OrderByDescending(k => k.DemandCost).ThenBy(k => k.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (kind is null) return;
+        if (SubjectSystem.Subjugate(campaign, winner, beaten, kind.Id, out _))
+            PeaceConference.Tally["capitulation:subject_" + kind.Id] =
+                PeaceConference.Tally.TryGetValue("capitulation:subject_" + kind.Id, out var n) ? n + 1 : 1;
     }
 
     /// <summary>Compare a complete settlement before spending its budget on a partial border and extras.</summary>
@@ -193,6 +276,12 @@ public static partial class AiStatecraft
         // must not make an affordable victory impossible. No free territory is created:
         // the ground is already held or the enemy is overrun.
         foreach (var province in territory) demand.Provinces.Add(province);
+        // A war declared to take the country (annexation, conquest, hegemony, empire) ends as declared.
+        if (!absorbing && !annexationWar && Partition(campaign, winner, loser, territory, demand))
+        {
+            WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
+            return true;
+        }
         if (fullConquest)
         {
             demand.Unconditional = true;

@@ -305,7 +305,7 @@ public static partial class ForeignAssistance
         if (!float.IsFinite(payment) || payment <= 0 || debit <= 0 || credit <= 0 ||
             debit > payable || Math.Abs(debit - credit) > roundingLimit)
             return new(false, 0, 0, false, "The payment is too small for the current ledger precision.");
-        var willingness = Willingness(c, requester, donor, war, relationship);
+        var willingness = AiTemper.Willing(c, Willingness(c, requester, donor, war, relationship));
         return new(true, payment, willingness,
             !donor.IsHuman && willingness >= (float.IsFinite(c.Defines.AiAidRequestWillingness) ?
                 Math.Clamp(c.Defines.AiAidRequestWillingness, 0, 3) : .45f), "An affordable financial package is available.");

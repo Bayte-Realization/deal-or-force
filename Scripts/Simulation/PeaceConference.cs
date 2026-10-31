@@ -300,6 +300,25 @@ public static class PeaceConference
     /// standing on, and a demand priced before that is a demand that gets the difference
     /// free. Tidied first, then priced, then refused if the war was not worth it.
     /// </summary>
+    /// <summary>What signed settlements contained, by who wrote them: the --peace bench reads it.</summary>
+    public static readonly Dictionary<string, int> Tally = new();
+
+    private static void Count(string who, PeaceDemand demand, StrategicWar war)
+    {
+        void Add(string key) => Tally[who + ":" + key] = Tally.TryGetValue(who + ":" + key, out var n) ? n + 1 : 1;
+        Add("signed");
+        if (demand.Provinces.Count > 0) Add(demand.ReleaseRegions ? "release" : "land");
+        if (demand.Subjugate.Length > 0) Add("subject_" + demand.Subjugate);
+        if (demand.Reparations) Add("reparations");
+        if (demand.TradeConcessions) Add("trade");
+        if (demand.Demilitarise) Add("demilitarise");
+        if (demand.Humiliate) Add("humiliate");
+        if (demand.LongTruce) Add("long_truce");
+        if (demand.Unconditional) Add("unconditional");
+        if (war.CivilConflict) Add("civil");
+        if (demand.IsEmpty) Add("empty");
+    }
+
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
         // A forged or stale recipient must not change even negotiation metadata, let alone a border.
@@ -322,6 +341,7 @@ public static class PeaceConference
         var beneficiary = Beneficiary(campaign, demand);
         var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
         if (winner is null || beneficiary is null || loser is null) return false;
+        Count(winner.IsHuman ? "human" : "ai", demand, war);
 
         // Anything not being kept goes back to whoever held it when the war began.
         if (campaign.ProvinceController is not null)

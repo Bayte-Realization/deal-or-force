@@ -40,6 +40,19 @@
     "labels": ["Never", "Rarely", "Normally", "Often"],
     "default": "125"
   },
+  // Two dials on the computer's governments, per campaign (AiTemper). 100% is the game as tuned.
+  "ai_aggression": {
+    "category": "game", "scope": "campaign", "order": 102, "kind": "slider",
+    "name": "Aggressiveness of other governments",
+    "description": "How readily the governments you do not play go to war. Lower makes cautious cabinets that need a strong reason; higher makes adventurers who take their chances. Every reason behind a war still counts - only the appetite moves.",
+    "minimum": 0.25, "maximum": 2.0, "step": 0.05, "default": 1.0, "unit": "percent"
+  },
+  "ai_agreeableness": {
+    "category": "game", "scope": "campaign", "order": 103, "kind": "slider",
+    "name": "Agreeableness of other governments",
+    "description": "How readily the governments you do not play say yes - to treaties, peace offers, aid and pleas to join a war. Lower makes them stubborn bargainers; higher makes them easy to persuade.",
+    "minimum": 0.25, "maximum": 2.0, "step": 0.05, "default": 1.0, "unit": "percent"
+  },
   "civil_wars_players": {
     "category": "game", "scope": "campaign", "order": 104, "kind": "toggle",
     "name": "Civil-war outbreaks in player countries",

@@ -102,6 +102,16 @@ public partial class DealOrForceGame
                     _campaign.Defines.EventIntervalDays = Whole("event_interval");
                 break;
 
+            case "ai_aggression":
+                if (_campaign is not null)
+                    _campaign.Defines.AiAggression = Math.Clamp(SettingsCatalog.Number("ai_aggression"), 0.1f, 4f);
+                break;
+
+            case "ai_agreeableness":
+                if (_campaign is not null)
+                    _campaign.Defines.AiAgreeableness = Math.Clamp(SettingsCatalog.Number("ai_agreeableness"), 0.1f, 4f);
+                break;
+
             case "peace_by_provinces":
                 if (_campaign is not null)
                     _campaign.Defines.PeaceWholeRegions = !SettingsCatalog.Flag("peace_by_provinces");

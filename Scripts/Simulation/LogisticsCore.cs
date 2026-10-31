@@ -124,6 +124,7 @@ public static class LogisticsSystem
         // hold a depot, which is a different question from which ground it owns - see
         // CollectRoots and TraceNetwork.
         var reach = _reach;
+        CollectCorridors(campaign, nation);
         CollectRoots(campaign, nation, territory);
         TraceNetwork(nation, topology, controllers, generation);
 
@@ -169,7 +170,7 @@ public static class LogisticsSystem
             var from = source[province];
             foreach (var neighbor in topology.Neighbors[province])
             {
-                if (stamp[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
+                if (stamp[neighbor] == generation || !Passable(nation, controllers[neighbor])) continue;
                 stamp[neighbor] = generation;
                 // Water is transparent to a supply line and impassable to a column. An
                 // army cannot march across a lake; the lorries that feed it go round by
@@ -343,6 +344,38 @@ public static class LogisticsSystem
     /// still a source of its own. Supply begins at a root and travels over ground the country
     /// controls, which is what makes a corridor worth taking.
     /// </summary>
+    /// <summary>
+    /// Ground a country's supply may cross without owning it: a co-belligerent's, or a host's
+    /// that has granted it military access. A column fighting beyond an ally used to be cut off
+    /// the day it crossed the ally's border, however open the road behind it - a stack on the
+    /// far side of Saudi Arabia starved with the Saudi roads open to it. Crossing is all it is:
+    /// no depot stands on someone else's ground (only the country's own provinces become hubs),
+    /// and the trace's distance still counts every province of the way. Built only for a
+    /// country at war; at peace supply never needs to leave home.
+    /// </summary>
+    private static void CollectCorridors(Campaign campaign, Nation nation)
+    {
+        Corridors.Clear();
+        var atWar = false;
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended || !war.Involves(nation.Id)) continue;
+            atWar = true;
+            foreach (var id in war.Side(war.IsAttacking(nation.Id)))
+                if (id != nation.Id && campaign.NationById(id) is { } friend) Corridors.Add((ushort)friend.MapIndex);
+        }
+        if (!atWar) return;
+        foreach (var host in campaign.Nations)
+            if (host.Id != nation.Id && host.Population > 0 && MilitaryAccess.Granted(campaign, nation.Id, host.Id) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+                Corridors.Add((ushort)host.MapIndex);
+    }
+
+    private static readonly HashSet<ushort> Corridors = new();
+
+    private static bool Passable(Nation nation, ushort controller) =>
+        controller == nation.MapIndex || controller != 0 && Corridors.Contains(controller);
+
     private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory)
     {
         Roots.Clear();
@@ -412,7 +445,7 @@ public static class LogisticsSystem
             var province = Frontier.Dequeue();
             foreach (var neighbor in topology.Neighbors[province])
             {
-                if (reach[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
+                if (reach[neighbor] == generation || !Passable(nation, controllers[neighbor])) continue;
                 reach[neighbor] = generation;
                 Frontier.Enqueue(neighbor);
             }
@@ -444,7 +477,7 @@ public static class LogisticsSystem
             var province = Frontier.Dequeue();
             foreach (var neighbor in topology.Neighbors[province])
             {
-                if (reach[neighbor] == generation || controllers[neighbor] != nation.MapIndex) continue;
+                if (reach[neighbor] == generation || !Passable(nation, controllers[neighbor])) continue;
                 reach[neighbor] = generation;
                 Frontier.Enqueue(neighbor);
             }

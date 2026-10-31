@@ -254,6 +254,13 @@ public static partial class AiStatecraft
             }
         }
 
+        // The game option on the computer's appetite: gains weigh more, restraint less (or the reverse).
+        var aggression = AiTemper.Aggression(campaign);
+        if (aggression != 1f)
+        {
+            var dialled = value > 0f ? value * aggression : value / aggression;
+            value += Part(parts, "aggressiveness setting", dialled - value);
+        }
         return value;
     }
 

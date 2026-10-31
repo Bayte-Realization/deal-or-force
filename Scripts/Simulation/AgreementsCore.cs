@@ -184,6 +184,12 @@ public static class AgreementSystem
                 break;
             }
         }
+        if (!asked.IsHuman && AiTemper.Agreeableness(campaign) != 1f)
+        {
+            var dialled = AiTemper.Willing(campaign, willingness);
+            why?.Add("Agreeableness setting", dialled - willingness);
+            willingness = dialled;
+        }
         return willingness;
     }
 

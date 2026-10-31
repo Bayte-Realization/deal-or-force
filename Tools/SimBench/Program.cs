@@ -271,6 +271,8 @@ public static class Program
         if (Array.IndexOf(args, "--survival") >= 0) return SurvivalReport.Run(campaign, days);
         if (Array.IndexOf(args, "--protests") >= 0) return ProtestReport.Run(campaign, days);
         if (Array.IndexOf(args, "--traits") >= 0) return ProtestReport.Traits(campaign, days);
+        if (Array.IndexOf(args, "--peace") >= 0) return PeaceReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--navy") >= 0) return PeaceReport.Navy(campaign, days);
         // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
         // added up across every neighbouring pair in the world, term by term (AiAppetiteReport).
         if (Array.IndexOf(args, "--ai-appetite") >= 0) return AiAppetiteReport.Run(campaign, days);
