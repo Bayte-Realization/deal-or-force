@@ -423,6 +423,16 @@ public static partial class FrontPlanner
 
         var result = new HashSet<int>();
         var front = war.FriendlyFront(nationId);
+        // The seat of government on the front itself: the reserve stands in it. A country that
+        // sent every brigade forward and left its capital to the local guards lost the war in the
+        // afternoon the capital fell - the whole of a small country can be one province.
+        var seat = nation.CapitalProvinceId;
+        if (seat > 0 && seat < controllers.Length && controllers[seat] == nation.MapIndex && front.Contains(seat))
+        {
+            result.Add(seat);
+            lines[key] = (stamp, result);
+            return result;
+        }
         foreach (var province in front)
         foreach (var neighbor in topology.Neighbors[province])
             if (!front.Contains(neighbor) && controllers[neighbor] == nation.MapIndex)

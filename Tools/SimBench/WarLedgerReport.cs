@@ -44,10 +44,29 @@ internal static class WarLedgerReport
             return $"{n.Tag} {formations} formations {strength:0} division-strengths reserve {n.ManpowerReserve:0}";
         }
         var forcesBefore = $"{Forces(russia)} | {Forces(ukraine)}";
+        // With a tag, that country's formations every five days: where, how many, supplied or cut off.
+        // A side that loses a hundred thousand men in a month shows here how it lost them.
+        var watched = string.IsNullOrEmpty(tag) ? null : c.NationByTag(tag);
+        void Armies(int day)
+        {
+            foreach (var a in c.Armies.Where(a => a.NationId == watched.Id))
+                Console.WriteLine($" ARMY day {day} {a.Name} prov={a.ProvinceId} men={a.Personnel}/{a.MaxPersonnel} div={a.Divisions:0.0} " +
+                                  $"str={a.Strength:0.00} org={a.Organisation:0.00} eq={a.Equipment:0.00} supply={a.SupplyLevel:0.00} " +
+                                  $"cut={a.CutOff} order={a.OrderKind} war={a.AssignedWarId}");
+            if (c.Armies.All(a => a.NationId != watched.Id)) Console.WriteLine($" ARMY day {day} none");
+            var map = c.ProvinceMap;
+            for (var p = 1; p <= map.ProvinceCount; p++)
+            {
+                if (c.ProvinceController[p] != watched.MapIndex && map.ProvinceToNation[p] != watched.MapIndex) continue;
+                var near = string.Join(",", map.Neighbors[p].Select(n => c.Nations.FirstOrDefault(x => x.MapIndex == c.ProvinceController[n])?.Tag ?? "-").Distinct());
+                Console.WriteLine($" GROUND day {day} prov={p} owner={c.Nations.FirstOrDefault(x => x.MapIndex == map.ProvinceToNation[p])?.Tag} held={c.Nations.FirstOrDefault(x => x.MapIndex == c.ProvinceController[p])?.Tag} near={near}");
+            }
+        }
         for (var day = 1; day <= days; day++)
         {
             c.TickDay();
             foreach (var nation in c.Nations) tags.TryAdd(nation.Id, nation.Tag);
+            if (watched is not null && (day == 1 || day % 5 == 0)) Armies(day);
         }
         var groundAfter = Ground();
         Console.WriteLine($"FRONT RUS holds {groundBefore.RusInUkr} -> {groundAfter.RusInUkr} Ukrainian provinces, " +

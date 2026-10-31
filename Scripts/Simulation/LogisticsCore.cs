@@ -124,7 +124,7 @@ public static class LogisticsSystem
         // hold a depot, which is a different question from which ground it owns - see
         // CollectRoots and TraceNetwork.
         var reach = _reach;
-        CollectRoots(campaign, nation);
+        CollectRoots(campaign, nation, territory);
         TraceNetwork(nation, topology, controllers, generation);
 
         HubByState.Clear();
@@ -343,12 +343,46 @@ public static class LogisticsSystem
     /// still a source of its own. Supply begins at a root and travels over ground the country
     /// controls, which is what makes a corridor worth taking.
     /// </summary>
-    private static void CollectRoots(Campaign campaign, Nation nation)
+    private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory)
     {
         Roots.Clear();
         var origin = CapitalCore.SupplyOriginProvinceId(campaign, nation);
         if (origin > 0) Roots.Add(origin);
+        PatronBorders(campaign, nation, territory);
     }
+
+    /// <summary>
+    /// A patron that ships weapons ships them over its own border. Ground the client holds
+    /// against the land of a backer at level two or more is a root of its own: the pocket
+    /// is fed from the far side of the frontier, as Idlib was through Turkey for five years
+    /// and Ukraine through Poland. Without it a besieged client with a patron next door
+    /// starved as fast as one alone on an island, and surrendered with the arms still waiting
+    /// at the crossing. The same for any country - nobody is named here.
+    /// </summary>
+    private static void PatronBorders(Campaign campaign, Nation nation, List<int> territory)
+    {
+        var topology = campaign.ProvinceMap;
+        var controllers = campaign.ProvinceController;
+        Patrons.Clear();
+        foreach (var backing in campaign.Sponsorships)
+            if (backing.ClientId == nation.Id && backing.Level >= 2 &&
+                campaign.NationById(backing.SponsorId) is { Population: > 0 } sponsor &&
+                !CampaignDiplomacy.AtWar(campaign, sponsor.Id, nation.Id))
+                Patrons.Add((ushort)sponsor.MapIndex);
+        if (Patrons.Count == 0) return;
+        foreach (var province in territory)
+        {
+            if (controllers[province] != nation.MapIndex || topology.IsWater(province)) continue;
+            foreach (var neighbor in topology.Neighbors[province])
+                if (Patrons.Contains(controllers[neighbor]) && !topology.IsWater(neighbor))
+                {
+                    Roots.Add(province);
+                    break;
+                }
+        }
+    }
+
+    private static readonly HashSet<ushort> Patrons = new();
 
     /// <summary>
     /// The ground the network reaches from its roots: over land the country controls, and then,
