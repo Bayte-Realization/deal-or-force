@@ -12,12 +12,12 @@
     "name": "Mass protests",
     "description": "Students, unions and families are in the streets every week. Schools close, trains stop, and every minister who speaks is booed.",
     "days": 14, "positive": false,
-    "modifiers": { "stability_weekly": -0.003, "output": -0.015, "tax_efficiency": -0.03 }
+    "modifiers": { "stability_weekly": -0.0015, "output": -0.015, "tax_efficiency": -0.03 }
   },
   "mass_unrest": {
     "name": "Mass unrest",
     "description": "Curfews, burning town halls, thousands detained. The government governs from behind police lines.",
     "days": 14, "positive": false,
-    "modifiers": { "stability_weekly": -0.008, "output": -0.04, "tax_efficiency": -0.08, "war_support_weekly": -0.005 }
+    "modifiers": { "stability_weekly": -0.004, "output": -0.04, "tax_efficiency": -0.08, "war_support_weekly": -0.005 }
   }
 }

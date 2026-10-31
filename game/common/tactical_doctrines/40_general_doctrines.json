@@ -68,7 +68,7 @@
       { "id": "mob_war_economy", "name": "The war economy", "requires": ["mob_call_up"],
         "description": "A country that has accepted the cost stops arguing about it.",
         "cost": 18, "days": 220, "rush_cost": 55,
-        "modifiers": { "output": 0.03, "war_support_weekly": 0.05 } },
+        "modifiers": { "output": 0.03, "war_support_weekly": 0.005 } },
       { "id": "mob_transport", "name": "The transport plan", "requires": ["mob_supply"],
         "description": "Trains, roads and ports are one system, and the system has a priority list.",
         "cost": 18, "days": 220, "rush_cost": 55,
@@ -76,7 +76,7 @@
       { "id": "mob_nation", "name": "The nation at war", "requires": ["mob_war_economy", "mob_transport"],
         "description": "Everything the country has, in one hand, for as long as it takes.",
         "cost": 24, "days": 280, "rush_cost": 75,
-        "modifiers": { "reinforcement_rate": 0.05, "output": 0.03, "stability_weekly": 0.05 } }
+        "modifiers": { "reinforcement_rate": 0.05, "output": 0.03, "stability_weekly": 0.003 } }
     ]
   }
 }

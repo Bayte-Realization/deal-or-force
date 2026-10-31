@@ -14,11 +14,18 @@ public sealed partial class Defines
     public float ProtestInflationWeight { get; set; } = 4f;
     public float ProtestStabilityFloor { get; set; } = 0.45f;
     public float ProtestStabilityWeight { get; set; } = 0.8f;
-    public float ProtestRadicalismWeight { get; set; } = 0.4f;
+    /// <summary>Radical regions count above this floor only: every country has its fringe.</summary>
+    public float ProtestRadicalismFloor { get; set; } = 0.30f;
+    public float ProtestRadicalismWeight { get; set; } = 0.6f;
+    /// <summary>A budget moving by less than this is the year's noise, not a cut anyone marches over.</summary>
+    public float ProtestCutNoise { get; set; } = 0.03f;
     /// <summary>The strongest neighbouring wave, carried over the border at this share.</summary>
     public float ProtestContagion { get; set; } = 0.35f;
     /// <summary>Grievance below which nobody goes out.</summary>
-    public float ProtestThreshold { get; set; } = 0.30f;
+    public float ProtestThreshold { get; set; } = 0.40f;
+    /// <summary>Days the budgets settle before anyone marches: every cabinet redraws its budget in the
+    /// first months, and counted as cuts that filled the streets of ninety countries in year one.</summary>
+    public int ProtestGraceDays { get; set; } = 180;
     public float ProtestGrievancePerDay { get; set; } = 0.01f;
     public float ProtestRisePerDay { get; set; } = 0.03f;
     public float ProtestFallPerDay { get; set; } = 0.015f;
@@ -64,10 +71,11 @@ public static class MassProtests
         if (!d.ProtestsEnabled || nation.Movement is not null || nation.Population <= 0 || days <= 0) return;
         var memory = nation.DomesticCrisis;
         var spending = nation.WelfareSpending + nation.EducationSpending;
-        if (memory.SpendingMemory < 0f) memory.SpendingMemory = spending;
-        if (memory.MilitaryMemory < 0f) memory.MilitaryMemory = nation.MilitarySpending;
+        // Until the budgets settle, last year's budget is this one: the first months' redraw is not a cut.
+        if (memory.SpendingMemory < 0f || c.ElapsedDays < d.ProtestGraceDays) memory.SpendingMemory = spending;
+        if (memory.MilitaryMemory < 0f || c.ElapsedDays < d.ProtestGraceDays) memory.MilitaryMemory = nation.MilitarySpending;
 
-        var cut = MathF.Max(0f, memory.SpendingMemory - spending) / MathF.Max(0.01f, memory.SpendingMemory);
+        var cut = MathF.Max(0f, MathF.Max(0f, memory.SpendingMemory - spending) / MathF.Max(0.01f, memory.SpendingMemory) - d.ProtestCutNoise);
         var guns = cut > 0f
             ? MathF.Min(0.2f, MathF.Max(0f, nation.MilitarySpending - memory.MilitaryMemory) /
                               MathF.Max(0.005f, memory.MilitaryMemory) * d.ProtestGunsWeight)
@@ -79,11 +87,11 @@ public static class MassProtests
         var own = cut * d.ProtestCutWeight + guns +
                   MathF.Max(0f, nation.Inflation - d.ProtestInflationFloor) * d.ProtestInflationWeight +
                   MathF.Max(0f, d.ProtestStabilityFloor - nation.Stability) * d.ProtestStabilityWeight +
-                  snapshot.Radicalism * d.ProtestRadicalismWeight;
+                  MathF.Max(0f, snapshot.Radicalism - d.ProtestRadicalismFloor) * d.ProtestRadicalismWeight;
         // A wave next door carries over only what people here are already angry about: added
         // without that, two neighbours kept each other's streets full and 162 countries marched
         // in the first year.
-        var target = M.Clamp01(own + neighbours * d.ProtestContagion *
+        var target = c.ElapsedDays < d.ProtestGraceDays ? 0f : M.Clamp01(own + neighbours * d.ProtestContagion *
                                M.Clamp01(own / MathF.Max(0.05f, d.ProtestThreshold)));
         memory.ProtestGrievance = Move(memory.ProtestGrievance, target, d.ProtestGrievancePerDay * days);
 

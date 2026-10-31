@@ -61,8 +61,8 @@ internal static class ProtestReport
             Console.WriteLine($"YEAR {day / 365} streets={c.Nations.Count(n => n.DomesticCrisis.ProtestIntensity >= 0.25f)} " +
                               string.Join(" ", hot));
             Console.WriteLine("  RICH " + string.Join(" ", Watched.Select(c.NationByTag).Where(n => n is not null).Select(n =>
-                $"{n.Tag}:stab={n.Stability:0.00},inf={n.Inflation:0.00},wel={n.WelfareSpending + n.EducationSpending:0.000}," +
-                $"mem={n.DomesticCrisis.SpendingMemory:0.000},g={n.DomesticCrisis.ProtestGrievance:0.00},gov={n.Government}")));
+                $"{n.Tag}:stab={n.Stability:0.00},tgt={StabilityCore.Target(c, n):0.00},sol={n.StandardOfLiving:0.00},exp={n.ExpectedLivingStandard:0.00},bias={n.StabilityBias:0.00},gov={n.StabilityGovernance:0.00},inf={n.Inflation:0.00},wel={n.WelfareSpending + n.EducationSpending:0.000}," +
+                $"mem={n.DomesticCrisis.SpendingMemory:0.000},g={n.DomesticCrisis.ProtestGrievance:0.00},gov={n.Government},mods={string.Join('+', n.Modifiers.Select(m => m.Id))}")));
         }
         Console.WriteLine("WAVES " + string.Join(" ", waves.OrderByDescending(p => p.Value).Select(p => $"{p.Key}={p.Value}")));
         Console.WriteLine("TALLY " + string.Join(" ", MassProtests.Tally.Select(p => $"{p.Key}={p.Value}")));

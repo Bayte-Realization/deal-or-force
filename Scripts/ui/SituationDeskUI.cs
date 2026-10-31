@@ -42,6 +42,15 @@ public partial class DealOrForceGame
     };
 
     /// <summary>What the lens watches, in the words a player needs once.</summary>
+    /// <summary>A purpose line shown as a sentence: capital first, full stop last, in any language.</summary>
+    private static string Sentence(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text ?? "";
+        text = text.Trim();
+        text = char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..];
+        return text.EndsWith('.') ? text : text + ".";
+    }
+
     private static string DeskLensPurpose(DeskLens lens) => lens switch
     {
         DeskLens.Security => "the front, the pockets, and whether anything stands in the way",
@@ -93,9 +102,10 @@ public partial class DealOrForceGame
         fold.TooltipText = Ui.Tip(Tr("Fold the desk away."));
         head.AddChild(fold);
 
-        // Five forced equal columns silently cut translated captions and counts. Let
-        // whole buttons wrap, so narrow docks keep every lens readable and reachable.
-        var lenses = new HFlowContainer { Name = "DeskLenses" };
+        // Five forced equal columns silently cut translated captions and counts, and a free flow
+        // left the fifth lens alone on a second line, which read as a mistake. Three columns:
+        // two even rows, every caption whole in any language.
+        var lenses = new GridContainer { Name = "DeskLenses", Columns = 3 };
         lenses.AddThemeConstantOverride("h_separation", 4);
         lenses.AddThemeConstantOverride("v_separation", 4);
         body.AddChild(lenses);
@@ -115,6 +125,7 @@ public partial class DealOrForceGame
         }
 
         _deskPurpose = Title(DeskLensPurpose(_deskLens), (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.muted"));
+        _deskPurpose.Text = Sentence(Tr(DeskLensPurpose(_deskLens)));
         _deskPurpose.Name = "DeskPurpose";
         _deskPurpose.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         body.AddChild(_deskPurpose);
@@ -264,7 +275,7 @@ public partial class DealOrForceGame
 
         var urgent = SituationDesk.Count(_campaign, player, _deskLens);
         _deskHeading.Text = Tr("SITUATION DESK") + (urgent > 0 ? "  ·  " + urgent : "");
-        _deskPurpose.Text = Tr(DeskLensPurpose(_deskLens));
+        _deskPurpose.Text = Sentence(Tr(DeskLensPurpose(_deskLens)));
 
         foreach (var (lensId, chip) in _deskLenses)
         {

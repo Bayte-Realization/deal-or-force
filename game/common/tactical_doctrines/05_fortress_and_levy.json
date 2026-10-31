@@ -75,7 +75,7 @@
       { "id": "levy_nation", "name": "The nation in arms", "requires": ["levy_mass", "levy_land"],
         "description": "Every household has a place in the order of battle, and knows it.",
         "cost": 85, "days": 320, "rush_cost": 230,
-        "modifiers": { "recruitment_speed": 0.08, "reinforcement_rate": 0.06, "war_support_weekly": 0.05 } }
+        "modifiers": { "recruitment_speed": 0.08, "reinforcement_rate": 0.06, "war_support_weekly": 0.005 } }
     ]
   }
 }
