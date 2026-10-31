@@ -39,4 +39,24 @@ void fragment() {
         _hudLayer.AddChild(veil);
         _hudLayer.MoveChild(veil, 0);
     }
+
+    /// <summary>
+    /// The white of a detonation across the whole screen for a moment, over every panel - the
+    /// globe's fireball is the event, this is the room lighting up. Built on the first flash.
+    /// </summary>
+    private void FlashScreen()
+    {
+        if (_hudLayer is null || Ui.Metric("ui.motion", 1f) <= 0f) return;
+        var flash = _hudLayer.GetNodeOrNull<ColorRect>("NuclearFlash");
+        if (flash is null)
+        {
+            flash = new ColorRect { Name = "NuclearFlash", MouseFilter = Control.MouseFilterEnum.Ignore, Color = new Color(1f, 0.96f, 0.88f, 0f) };
+            flash.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            _hudLayer.AddChild(flash);
+        }
+        _hudLayer.MoveChild(flash, _hudLayer.GetChildCount() - 1);
+        flash.Color = new Color(flash.Color, 0.62f);
+        var tween = flash.CreateTween().SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Expo);
+        tween.TweenProperty(flash, "color:a", 0f, 1.1f);
+    }
 }

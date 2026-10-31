@@ -764,6 +764,7 @@ public partial class DealOrForceGame : Control
             _globe.UnclaimedPicked += OnUnclaimedPicked;
             _globe.ArmyPicked += OnArmyPicked;
             _globe.FleetPicked += OnFleetPicked;
+            _globe.NuclearFlashed += FlashScreen;
             _globe.SupportPicked += OnSupportPicked;
             _globe.SupportBoxPicked += OnSupportBoxPicked;
             _globe.BattlePicked += ShowBattleDetails;

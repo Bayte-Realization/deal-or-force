@@ -351,6 +351,7 @@ public static class NuclearPosture
         c.DefconLevel = 1;
         c.DefconDaysInStage = 0;
         c.DefconPeakLevel = 1;
+        NuclearDetonations.Announce(province, c.ElapsedDays, answer is not null);
         c.Chronicle.Record(c, answer is null ? "nuclear_strike" : "nuclear_retaliation", n.Id,
             struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
     }
