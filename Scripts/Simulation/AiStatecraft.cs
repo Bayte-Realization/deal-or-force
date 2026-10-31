@@ -1052,7 +1052,10 @@ public static partial class AiStatecraft
                 // A government tired of its civil war cannot ask the side that is winning it to
                 // hand the ground back: it concedes the line, and the line is the de facto border.
                 PeaceOffers.Put(campaign, war, nation, opponent,
-                    war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
+                    // Any tired government, not only a civil war's: the line is the border. A white
+                    // peace handed back everything the war had changed - Russia, worn down after three
+                    // years, gave Ukraine back the Donbas it had held since 2014.
+                    WarWeariness.StalemateTerms(campaign, war));
             else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim ||
                 (nation.Parliament is { PeaceMandateActive: true } && campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));

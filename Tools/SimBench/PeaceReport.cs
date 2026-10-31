@@ -47,6 +47,29 @@ internal static class PeaceReport
         return 0;
     }
 
+    /// <summary>`--why TAG`: every half year, a country's stability, its target and each part of it.</summary>
+    public static int Why(Campaign c, int days, string tag)
+    {
+        c.IsPaused = false;
+        var nation = c.NationByTag(tag);
+        if (nation is null) { Console.WriteLine("no such country " + tag); return 2; }
+        var drivers = new Breakdown();
+        for (var day = 1; day <= days; day++)
+        {
+            c.TickDay();
+            if (day % 182 != 0) continue;
+            var target = StabilityCore.Target(c, nation, drivers);
+            var weekly = NationalModifiers.Sources(nation)
+                .Where(p => p.Modifiers.TryGetValue("stability_weekly", out var v) && v != 0f)
+                .Select(p => $"{p.Source}={p.Modifiers["stability_weekly"]:+0.000;-0.000}");
+            Console.WriteLine($"WHY {tag} day {day} stability={nation.Stability:0.00} target={target:0.00} war_support={nation.WarSupport:0.00} " +
+                              $"overstretch={nation.ImperialOverstretch:0.00} wars={c.Wars.Count(w => !w.Ended && w.Involves(nation.Id))} regions={c.StatesOf(nation).Length}");
+            Console.WriteLine("   " + string.Join(" | ", drivers.Entries.Select(e => $"{e.Source} {e.Value:+0.00;-0.00}")));
+            Console.WriteLine("   weekly: " + string.Join(" ", weekly));
+        }
+        return 0;
+    }
+
     private static string Kind(string summary)
     {
         summary ??= "";

@@ -7,6 +7,7 @@
 {
   "cues": {
     "news_coup": { "file": "audio/news/news_coup.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
+    "news_nuclear_detonation": { "file": "audio/news/news_nuclear_detonation.ogg", "channel": "strategic", "cooldown_ms": 4000 },
     "news_regime_change": { "file": "audio/news/news_regime_change.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
     "news_election": { "file": "audio/news/news_election.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
     "news_strike": { "file": "audio/news/news_strike.ogg", "channel": "strategic", "cooldown_ms": 9000, "yields_to_anything_playing": true },
