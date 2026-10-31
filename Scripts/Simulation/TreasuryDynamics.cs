@@ -172,6 +172,9 @@ public static class TreasuryDynamics
             if (nation.Movement is not null || nation.Population <= 0 || nation.Gdp <= 0f) continue;
             Erode(c, nation);
             SpendDown(c, nation);
+            // Forces on alert are paid for round the clock (DefconSystem).
+            var upkeep = DefconSystem.UpkeepMultiplier(c, nation);
+            if (upkeep > 1f) nation.Treasury = MathF.Max(0f, nation.Treasury - nation.Gdp * (upkeep - 1f) * 0.002f);
             if (nation.RecessionDepth > 0f && c.ElapsedDays >= nation.RecessionUntilDay) nation.RecessionDepth = 0f;
         }
         CreditCycle(c);

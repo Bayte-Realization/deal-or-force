@@ -113,6 +113,13 @@ public static partial class AiStatecraft
         // cities) is doing the pushing: the decisive bar comes down by the brink, and the
         // settlement is liberation and money, never the aggressor's homeland on the map.
         var brink = global::DealOrForce.Simulation.Deterrence.Brinkmanship(campaign, war);
+        // At DEFCON 2 and 1 a war a nuclear power is fighting is settled in the shadow too, not
+        // only one between two of them. Not every war on earth: applied to all of them, one
+        // standoff between India and Pakistan ended the Sahel's wars as well, and a ten-year world
+        // had half the wars and a third of the new states.
+        if (campaign.DefconLevel <= 2 && !absorbing && !war.CivilConflict &&
+            war.Side(true).Concat(war.Side(false)).Any(id => NuclearPosture.IsHolder(campaign, campaign.NationById(id))))
+            brink = MathF.Max(brink, (3 - campaign.DefconLevel) * 1.5f);
         if (!absorbing && brink > 0f)
         {
             var bar = MathF.Max(campaign.Defines.AiPeaceRepelledScore,

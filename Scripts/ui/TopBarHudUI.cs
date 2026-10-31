@@ -8,6 +8,7 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly List<StatReadout> _hudStats = new();
+    private Button _defconBadge;
     private VBoxContainer _identityPortraitSlot;
     private string _identityPortraitLeaderKey = "";
 
@@ -149,6 +150,14 @@ public partial class DealOrForceGame
         _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
         _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
+
+        // The world's nuclear alert, and the door to its screen (DefconOverviewUI).
+        _defconBadge = ActionButton("DEFCON 5", OpenDefconOverview, 84, 28);
+        _defconBadge.Name = "HudDefconBadge";
+        _defconBadge.ClipText = true;
+        _defconBadge.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        StyleHudButton(_defconBadge, false);
+        row.AddChild(_defconBadge);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
@@ -326,6 +335,15 @@ public partial class DealOrForceGame
             ? "The calendar. Seasons are switched off, so the roads do not care what month it is."
             : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
         _date.MouseFilter = MouseFilterEnum.Stop;
+
+        if (_defconBadge is not null)
+        {
+            var defcon = DefconSystem.CurrentLevel(_campaign);
+            _defconBadge.Text = $"DEFCON {defcon}";
+            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign) + "\n\n" +
+                Tr("Click for the ladder, the nuclear powers and our posture."));
+            _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
+        }
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);

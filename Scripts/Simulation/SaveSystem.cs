@@ -932,6 +932,9 @@ public static class SaveSystem
         public int NextLeaseOfferId = 1;
         public float WorldLeverage = -1f;
         public int LastFinancialCrisisDay = -100000;
+        public int DefconLevel = 5;
+        public int DefconDaysInStage;
+        public int DefconPeakLevel = 5;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -1067,6 +1070,9 @@ public static class SaveSystem
             NextLeaseOfferId = campaign.NextLeaseOfferId,
             WorldLeverage = campaign.WorldLeverage,
             LastFinancialCrisisDay = campaign.LastFinancialCrisisDay,
+            DefconLevel = campaign.DefconLevel,
+            DefconDaysInStage = campaign.DefconDaysInStage,
+            DefconPeakLevel = campaign.DefconPeakLevel,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -1148,6 +1154,9 @@ public static class SaveSystem
                 campaign.LeaseOffers.Count == 0 ? 1 : campaign.LeaseOffers.Max(o => o.Id) + 1);
             campaign.WorldLeverage = WorldLeverage;
             campaign.LastFinancialCrisisDay = LastFinancialCrisisDay;
+            campaign.DefconLevel = DefconLevel > 0 ? DefconLevel : 5;
+            campaign.DefconDaysInStage = DefconDaysInStage;
+            campaign.DefconPeakLevel = DefconPeakLevel > 0 ? DefconPeakLevel : 5;
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();

@@ -62,6 +62,16 @@ public static class CampaignFingerprint
         {
             MixText("world_curse"); MixText(campaign.Curse); Mix(campaign.CurseDay); Mix(campaign.CurseDrowned);
         }
+        if (campaign.DefconLevel != 5 || campaign.DefconDaysInStage > 0 || campaign.DefconPeakLevel != 5)
+        {
+            MixText("defcon"); Mix(campaign.DefconLevel); Mix(campaign.DefconDaysInStage); Mix(campaign.DefconPeakLevel);
+        }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.NuclearPosture != 5 || n.NuclearPostureDay != -100000 || n.LastNuclearTestDay != -100000 || n.LastHotlineDay != -100000)
+            {
+                MixText("nuclear_posture"); Mix(n.Id); Mix(n.NuclearPosture); Mix(n.NuclearPostureDay);
+                Mix(n.LastNuclearTestDay); Mix(n.LastHotlineDay);
+            }
         if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
             campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
         {

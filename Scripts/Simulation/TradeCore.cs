@@ -351,6 +351,7 @@ public static class TradeNetwork
                 var blockedShare = blockedCapacity / MathF.Max(0.0001f, availableCapacity + blockedCapacity);
                 deficit *= 1f - 0.35f * M.Clamp01(blockedShare);
             }
+            deficit *= DefconSystem.GlobalTradeMultiplier(campaign);
 
             for (var rank = 0; rank < SellerOrder.Count && deficit > 0.0001f; rank++)
             {

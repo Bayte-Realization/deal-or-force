@@ -1,0 +1,30 @@
+{
+  "DefconEnabled": true,
+  "DefconDeescalationDays": 21,
+  "DefconUpkeepMultiplier4": 1.05,
+  "DefconUpkeepMultiplier3": 1.15,
+  "DefconUpkeepMultiplier2": 1.35,
+  "DefconUpkeepMultiplier1": 1.75,
+  // World trade at DEFCON 2 and 1. 0.85 at 2 cut a tenth of the world's trade for as long as
+  // any two holders glared at each other; markets price the brink, not every standoff.
+  "DefconTradeConfidence2": 0.95,
+  "DefconTradeConfidence1": 0.80,
+  // Nuclear posture (NuclearPosture.cs): a holder's own alert, the same acts for every government.
+  // Changing it waits a month; raising it costs political credit.
+  "NuclearPostureCooldownDays": 30,
+  "NuclearPostureRaiseCost": 5,
+  // War support an enemy loses each week for each step of a holder's posture below 3.
+  "NuclearCoercionWarSupport": 0.004,
+  // A test: credit, a year between tests, and the tension it adds with every rival.
+  "NuclearTestCost": 15,
+  "NuclearTestCooldownDays": 365,
+  "NuclearTestTension": 15,
+  // The red telephone: tension removed, and the days before the next call.
+  "HotlineTension": 20,
+  "HotlineCooldownDays": 90,
+  // At DEFCON 2 and 1, the weekly chance of an incident nobody chose (Petrov, 1983).
+  "NuclearIncidentChance": 0.03,
+  "AiNuclearPosture": true,
+  "AiNuclearTestChance": 0.02,
+  "AiHotlineChance": 0.1
+}

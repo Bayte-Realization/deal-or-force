@@ -667,7 +667,8 @@ public static class MilitaryOperations
                 var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
                     MilitaryDoctrine.Recovery(army.Stance) *
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
-                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery");
+                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery") *
+                    DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId);
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 // A closed pocket is living on what it carried. Rest would put the day's
                 // organisation straight back, and the dry-out would never arrive.

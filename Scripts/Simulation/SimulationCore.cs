@@ -950,6 +950,8 @@ public sealed partial class Campaign
             yield return 0;
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("crisis ladder")) CrisisLadder.Tick(this);
+            // The world's nuclear alert and the holders' own postures (DefconSystem, NuclearPosture).
+            using (SimProfiler.Measure("defcon system")) DefconSystem.Tick(this);
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
             yield return 0;
             // A formation that has been cut off or is standing among its own people can
