@@ -454,10 +454,12 @@ public partial class DealOrForceGame
         foreach (var definition in SettingsCatalog.All)
             if (definition.Campaign) ApplySetting(definition.Id);
         ResetStrategicAudioState();
-        _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
-        _pauseMenuLayer.Visible = false;
-        _saveLoadLayer.Visible = false;
+        // Any of these may not exist yet: a save continued from the front door never built the
+        // country picker, and "Continue" ended on a NullReferenceException at the loading screen.
+        if (_menuLayer is not null) _menuLayer.Visible = false;
+        if (_pickerLayer is not null) _pickerLayer.Visible = false;
+        if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
+        if (_saveLoadLayer is not null) _saveLoadLayer.Visible = false;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;
         if (_researchLayer is not null) _researchLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
