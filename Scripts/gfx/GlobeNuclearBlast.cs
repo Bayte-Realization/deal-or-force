@@ -66,6 +66,40 @@ void fragment() {
     ALPHA = fade * body * (1.0 - smoothstep(0.55, 0.95, rim));
 }";
 
+    // The cloud seen from above, which is how a map sees it: a spreading billow with a hot core
+    // and ragged rim, turning as it spreads, eaten into rags as it ages. Flat on purpose - from
+    // orbit a mushroom is its cap, and a sphere read as a planet.
+    private const string CloudDiskShaderCode = @"shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+uniform vec4 lit : source_color = vec4(1.0, 0.62, 0.22, 1.0);
+uniform vec4 smoke : source_color = vec4(0.42, 0.39, 0.37, 1.0);
+uniform float glow = 1.0;
+uniform float fade = 1.0;
+uniform float erode = 0.0;
+uniform float seed = 0.0;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed) * 43758.5453); }
+float noise(vec2 x) {
+    vec2 i = floor(x); vec2 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
+}
+float fbm(vec2 p) { float v = 0.0; float a = 0.5; for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + 7.1; a *= 0.5; } return v; }
+void fragment() {
+    vec2 c = UV - vec2(0.5);
+    float d = length(c) * 2.0;
+    float ang = atan(c.y, c.x);
+    // Billows that roll outward and turn slowly.
+    vec2 q = vec2(cos(ang + d * 1.6 - TIME * 0.18), sin(ang + d * 1.6 - TIME * 0.18)) * d * 3.2;
+    float n = fbm(q + vec2(seed, -TIME * 0.25));
+    float rim = 0.62 + 0.30 * n - erode * 0.35;
+    float body = 1.0 - smoothstep(rim - 0.22, rim, d);
+    float rags = smoothstep(erode * 0.75, erode * 0.75 + 0.25, n + 0.15 - d * 0.2);
+    float core = (1.0 - smoothstep(0.0, 0.45, d)) * glow;
+    vec3 col = mix(smoke.rgb * (0.7 + 0.6 * n), lit.rgb * (1.2 + 0.8 * n), clamp(core * 1.4, 0.0, 1.0));
+    col += vec3(1.0, 0.85, 0.6) * pow(core, 3.0) * 0.8;
+    ALBEDO = col;
+    ALPHA = fade * body * rags * (0.55 + 0.45 * n);
+}";
+
     private const string RingShaderCode = @"shader_type spatial;
 render_mode unshaded, blend_add, depth_draw_never, cull_disabled;
 uniform vec4 tint : source_color = vec4(1.0, 0.85, 0.6, 1.0);
@@ -86,16 +120,16 @@ void fragment() {
         public float Latitude, Longitude;
         public ulong Start;
         public Node3D Root;
-        public MeshInstance3D Fireball, Stem, Cap, Ring;
-        public ShaderMaterial FireMaterial, StemMaterial, CapMaterial, RingMaterial;
+        public MeshInstance3D Fireball, Stem, Cap, Ring, Cloud;
+        public ShaderMaterial FireMaterial, StemMaterial, CapMaterial, RingMaterial, CloudMaterial;
         public OmniLight3D Flash;
     }
 
     private readonly List<Blast> _blasts = new();
-    private Shader _blastShader, _smokeShader, _ringShader;
+    private Shader _blastShader, _smokeShader, _ringShader, _cloudShader;
 
     /// <summary>Seconds the whole sequence runs: flash, fireball, cloud, scar.</summary>
-    private const float BlastSeconds = 14f;
+    private const float BlastSeconds = 20f;
 
     private void UpdateNuclearBlasts()
     {
@@ -140,8 +174,8 @@ void fragment() {
             var ball = unit * (0.35f + 0.9f * Mathf.Clamp(t / 1.1f, 0f, 1f));
             blast.Fireball.Scale = new Vector3(ball, ball * 0.92f, ball);
             blast.Fireball.Position = new Vector3(0, ball * 0.5f + unit * 1.6f * Mathf.SmoothStep(1f, 6f, t), 0);
-            blast.FireMaterial.SetShaderParameter("heat", Mathf.Clamp(1.3f - t * 0.32f, 0f, 1.3f));
-            blast.FireMaterial.SetShaderParameter("fade", 1f - Mathf.SmoothStep(4f, 8f, t));
+            blast.FireMaterial.SetShaderParameter("heat", Mathf.Clamp(1.3f - t * 0.45f, 0f, 1.3f));
+            blast.FireMaterial.SetShaderParameter("fade", 1f - Mathf.SmoothStep(1.6f, 3.4f, t));
 
             // The cloud: a stem that climbs and a cap that spreads, glowing from below, greying, drifting apart.
             var rise = Mathf.SmoothStep(0.6f, 6.5f, t);
@@ -159,6 +193,15 @@ void fragment() {
                 material.SetShaderParameter("fade", smokeFade);
                 material.SetShaderParameter("erode", Mathf.SmoothStep(3f, BlastSeconds, t));
             }
+
+            // The cap from above: a billow that spreads from the fireball's place and lingers.
+            var spread = unit * (1.2f + 4.2f * Mathf.SmoothStep(0.8f, 9f, t));
+            blast.Cloud.Scale = new Vector3(spread, spread, 1f);
+            blast.Cloud.Position = new Vector3(0, stemHeight * 0.9f, 0);
+            blast.CloudMaterial.SetShaderParameter("glow", Mathf.Clamp(1.1f - t * 0.13f, 0f, 1f));
+            blast.CloudMaterial.SetShaderParameter("fade", Mathf.SmoothStep(0.9f, 2.2f, t) * (1f - Mathf.SmoothStep(14f, BlastSeconds, t)));
+            blast.CloudMaterial.SetShaderParameter("erode", Mathf.SmoothStep(8f, BlastSeconds, t));
+            blast.CapMaterial.SetShaderParameter("fade", smokeFade * 0.35f);
 
             // The shock ring races out over the first three seconds; the ember scar lingers.
             var ringSize = unit * 7f;
@@ -201,6 +244,11 @@ void fragment() {
         blast.Stem = Piece("Stem", new CylinderMesh { TopRadius = 0.45f, BottomRadius = 0.8f, Height = 1f, RadialSegments = 18, Rings = 3 }, blast.StemMaterial);
         blast.CapMaterial = Material(_smokeShader, 9);
         blast.Cap = Piece("Cap", new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 24, Rings = 12 }, blast.CapMaterial);
+        _cloudShader ??= new Shader { Code = CloudDiskShaderCode };
+        blast.CloudMaterial = Material(_cloudShader, 11);
+        var cloud = Piece("Cloud", new QuadMesh { Size = Vector2.One }, blast.CloudMaterial);
+        cloud.RotationDegrees = new Vector3(-90, 0, 0);
+        blast.Cloud = cloud;
         blast.FireMaterial = Material(_blastShader, 10);
         blast.Fireball = Piece("Fireball", new SphereMesh { Radius = 0.5f, Height = 1f, RadialSegments = 24, Rings = 12 }, blast.FireMaterial);
         blast.Flash = new OmniLight3D { Name = "Flash", LightColor = new Color(1f, 0.92f, 0.78f), ShadowEnabled = false, Position = new Vector3(0, 0.05f, 0) };
