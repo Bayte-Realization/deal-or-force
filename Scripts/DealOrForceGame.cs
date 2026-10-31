@@ -75,6 +75,7 @@ public partial class DealOrForceGame : Control
         Input.MouseMode = Input.MouseModeEnum.Visible;
         WrapGuard.Install(GetTree());
         InterfaceInteractionGuard.Install(GetTree());
+        ButtonMotion.Install(GetTree());
         ControlSkin.Apply();
         ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
