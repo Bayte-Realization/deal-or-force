@@ -16,6 +16,8 @@ public sealed partial class Nation
     public int LastNuclearTestDay = -100000;
     /// <summary>The last red-telephone call this country made or took.</summary>
     public int LastHotlineDay = -100000;
+    /// <summary>The last day this country used a nuclear weapon (NuclearPosture.Strike).</summary>
+    public int LastNuclearStrikeDay = -100000;
 }
 
 public sealed partial class Defines
@@ -46,6 +48,31 @@ public sealed partial class Defines
     public float AiNuclearTestChance { get; set; } = 0.02f;
     /// <summary>The weekly chance two alarmed computer-run holders pick up the red telephone.</summary>
     public float AiHotlineChance { get; set; } = 0.25f;
+
+    /// <summary>
+    /// The last resort: the political credit a nuclear strike costs, the years before another,
+    /// the share of the men in the struck province it kills, the ruin it leaves in the region,
+    /// the war support it takes from the country whose forces it struck, the tension it adds
+    /// with everybody not allied, and how long the world stays at DEFCON 2 or worse afterwards.
+    /// </summary>
+    public float NuclearStrikeCost { get; set; } = 25f;
+    public int NuclearStrikeCooldownDays { get; set; } = 365;
+    public float NuclearStrikeLoss { get; set; } = 0.6f;
+    public float NuclearStrikeRuin { get; set; } = 0.5f;
+    public float NuclearStrikeWarSupport { get; set; } = 0.3f;
+    public float NuclearStrikeTension { get; set; } = 30f;
+    public int NuclearShadowDays { get; set; } = 365;
+    /// <summary>
+    /// The weekly chance a computer-run holder at DEFCON 1, facing defeat on its own soil, gives
+    /// the order. Zero keeps the weapons a threat only.
+    /// </summary>
+    public float AiNuclearStrikeChance { get; set; } = 0f;
+
+    /// <summary>
+    /// The nuclear umbrella: what attacking a country costs the attacker for each step an allied
+    /// holder's own alert stands below 4. An alert raised is a guarantee made visible.
+    /// </summary>
+    public float AiNuclearUmbrellaPrice { get; set; } = 0f;
 }
 
 /// <summary>
@@ -117,6 +144,16 @@ public static class NuclearPosture
                 if (n.PoliticalPoints < d.NuclearTestCost)
                     return Loc.Format("A test costs {0:0} political credit; there is {1:0.#}.", d.NuclearTestCost, n.PoliticalPoints);
                 return "";
+            case "strike":
+                if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
+                if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
+                    return Loc.Format("A weapon was used {0} days ago; the next order after {1}.",
+                        c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
+                if (n.PoliticalPoints < d.NuclearStrikeCost)
+                    return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", d.NuclearStrikeCost, n.PoliticalPoints);
+                if (StrikeTarget(c, n, out _) <= 0)
+                    return Loc.Get("No enemy force stands on our own soil: there is nothing a weapon would defend.");
+                return "";
             case "hotline":
                 if (target is null || target.Id == n.Id || !IsHolder(c, target)) return Loc.Get("The red telephone connects two nuclear powers.");
                 if (n.NuclearPosture >= 4 && target.NuclearPosture >= 4) return Loc.Get("Neither side is on alert: there is nothing to talk down.");
@@ -166,6 +203,9 @@ public static class NuclearPosture
                         relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearTestTension);
                 }
                 break;
+            case "strike":
+                Strike(c, n);
+                break;
             case "hotline":
                 n.LastHotlineDay = target.LastHotlineDay = c.ElapsedDays;
                 n.NuclearPosture = Math.Min(5, n.NuclearPosture + 1);
@@ -180,6 +220,131 @@ public static class NuclearPosture
         }
         c.MarkStrategicChange();
         return true;
+    }
+
+    /// <summary>
+    /// Where a strike would fall: the province of this country's own soil where the enemy stands
+    /// strongest, in a war that is not a civil one. Zero when no enemy stands on its ground - the
+    /// weapon is a defence of the homeland in every doctrine that admits to one, never a way to
+    /// take somebody else's.
+    /// </summary>
+    public static int StrikeTarget(Campaign c, Nation n, out HashSet<int> enemies)
+    {
+        enemies = new HashSet<int>();
+        var topology = c.ProvinceMap;
+        if (topology is null || n is null) return 0;
+        foreach (var war in c.Wars)
+            if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
+                foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
+        if (enemies.Count == 0) return 0;
+        var weight = new Dictionary<int, float>();
+        foreach (var army in c.Armies)
+        {
+            if (!enemies.Contains(army.NationId) || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
+                army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f) continue;
+            if (topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
+            weight[army.ProvinceId] = weight.GetValueOrDefault(army.ProvinceId) + army.Personnel * army.Strength;
+        }
+        var best = 0;
+        var bestWeight = 0f;
+        foreach (var (province, value) in weight)
+            if (value > bestWeight || value == bestWeight && province < best) { best = province; bestWeight = value; }
+        return best;
+    }
+
+    /// <summary>
+    /// The weapon used. The enemy's forces in the province lose most of their men and all their
+    /// order - and so does anybody of ours standing beside them; the region is left in ruins; the
+    /// country whose army was struck loses the stomach for the war. Then the price: every
+    /// government on earth remembers it, allies included; everybody not allied is the more tense
+    /// for it; and the world goes to DEFCON 1 and stays at 2 or worse for a year.
+    /// </summary>
+    private static void Strike(Campaign c, Nation n)
+    {
+        var d = c.Defines;
+        var province = StrikeTarget(c, n, out var enemies);
+        if (province <= 0) return;
+        n.PoliticalPoints -= d.NuclearStrikeCost;
+        n.LastNuclearStrikeDay = c.ElapsedDays;
+        var struck = new HashSet<int>();
+        foreach (var army in c.Armies)
+        {
+            if (army.ProvinceId != province || army.EmbarkedFleetId >= 0) continue;
+            var men = (int)MathF.Floor(army.Personnel * M.Clamp01(d.NuclearStrikeLoss));
+            var complement = army.Divisions * MilitaryBootstrap.DivisionSize;
+            army.Personnel -= men;
+            if (complement > 1f) army.Strength = M.Clamp01(army.Strength - men / complement);
+            army.Organisation = 0f;
+            if (enemies.Contains(army.NationId)) struck.Add(army.NationId);
+        }
+        var map = c.ProvinceMap.ProvinceToState[province];
+        var region = c.States.Find(state => state.MapIndex == map);
+        if (region is not null)
+        {
+            region.WarDamage = M.Clamp01(region.WarDamage + d.NuclearStrikeRuin);
+            region.LastFoughtDay = c.ElapsedDays;
+        }
+        foreach (var id in struck.OrderBy(id => id))
+            if (c.NationById(id) is { } enemy) enemy.WarSupport = M.Clamp01(enemy.WarSupport - d.NuclearStrikeWarSupport);
+        foreach (var other in c.Nations)
+        {
+            if (other.Id == n.Id || other.Population <= 0) continue;
+            if (CampaignDiplomacy.Get(c, other.Id, n.Id) is { } seen) OpinionSystem.Remember(c, seen, "nuclear_strike");
+            if (!Allied(c, n.Id, other.Id) && CampaignDiplomacy.Get(c, n.Id, other.Id) is { } relation)
+                relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearStrikeTension);
+        }
+        c.DefconLevel = 1;
+        c.DefconDaysInStage = 0;
+        c.DefconPeakLevel = 1;
+        c.Chronicle.Record(c, "nuclear_strike", n.Id, struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
+    }
+
+    /// <summary>The most recent nuclear strike still casting its shadow over the world, or null.</summary>
+    public static Nation Shadow(Campaign c)
+    {
+        Nation latest = null;
+        foreach (var n in c.Nations)
+            if (c.ElapsedDays - n.LastNuclearStrikeDay < c.Defines.NuclearShadowDays &&
+                (latest is null || n.LastNuclearStrikeDay > latest.LastNuclearStrikeDay)) latest = n;
+        return latest;
+    }
+
+    /// <summary>
+    /// Defeat on its own soil: a war (not a civil one) this country is losing past -60, or one in
+    /// which the enemy holds its capital - and an enemy force standing on its ground to strike.
+    /// </summary>
+    private static bool Existential(Campaign c, Nation n)
+    {
+        var controllers = c.ProvinceController;
+        var capitalLost = controllers is not null && n.CapitalProvinceId > 0 && n.CapitalProvinceId < controllers.Length &&
+                          controllers[n.CapitalProvinceId] != n.MapIndex;
+        foreach (var war in c.Wars)
+        {
+            if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
+            if (capitalLost || (war.IsAttacking(n.Id) ? war.WarScore : -war.WarScore) < -60f)
+                return StrikeTarget(c, n, out _) > 0;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The umbrella over <paramref name="target"/>: the most alarmed holder allied to it (or that it
+    /// answers to), neither the attacker nor on the attacker's side, prices a war against it by
+    /// how far its alert stands below 4. A holder at routine readiness protects nobody this way -
+    /// raising the alert is how a guarantee becomes believable.
+    /// </summary>
+    public static float UmbrellaPrice(Campaign c, Nation attacker, Nation target, out Nation patron)
+    {
+        patron = null;
+        if (!Active(c) || attacker is null || target is null || c.Defines.AiNuclearUmbrellaPrice <= 0f) return 0f;
+        var steps = 0;
+        foreach (var holder in c.Nations)
+        {
+            if (holder.NuclearPosture >= 4 || holder.Id == attacker.Id || holder.Id == target.Id || holder.Population <= 0) continue;
+            if (!Allied(c, holder.Id, target.Id) || Allied(c, holder.Id, attacker.Id) || !IsHolder(c, holder)) continue;
+            if (4 - holder.NuclearPosture > steps) { steps = 4 - holder.NuclearPosture; patron = holder; }
+        }
+        return steps * c.Defines.AiNuclearUmbrellaPrice;
     }
 
     private static bool Allied(Campaign c, int a, int b) =>
@@ -242,6 +407,8 @@ public static class NuclearPosture
                 var againstHolder = war.EnemiesOf(n.Id).Any(id => IsHolder(c, c.NationById(id)));
                 wanted = Math.Min(wanted, againstHolder ? 2 : losing ? 3 : 4);
             }
+            var existential = Existential(c, n);
+            if (existential) wanted = 1;
             foreach (var other in holders)
             {
                 if (other.Id == n.Id || CampaignDiplomacy.Peek(c, n.Id, other.Id) is not { } relation) continue;
@@ -256,6 +423,11 @@ public static class NuclearPosture
             if (n.NuclearPosture > wanted && c.ElapsedDays - n.LastHotlineDay > d.HotlineCooldownDays) Apply(c, n, "raise");
             else if (n.NuclearPosture < wanted && c.ElapsedDays - n.NuclearPostureDay >= Math.Max(90, d.NuclearPostureCooldownDays))
                 Apply(c, n, "stand_down");
+            // The order nobody wants to give, by the same rule as the player's: at DEFCON 1, with
+            // the war lost on its own ground and the enemy standing on it.
+            if (existential && n.NuclearPosture <= 1 && d.AiNuclearStrikeChance > 0f &&
+                MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x5741) < d.AiNuclearStrikeChance)
+                Apply(c, n, "strike");
         }
         for (var i = 0; i < holders.Count; i++)
         for (var j = i + 1; j < holders.Count; j++)

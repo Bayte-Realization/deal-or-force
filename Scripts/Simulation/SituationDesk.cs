@@ -319,8 +319,10 @@ public static class SituationDesk
     {
         switch (kind)
         {
-            case "war_started" or "world_war_began" or "border_war":
+            case "war_started" or "world_war_began" or "border_war" or "nuclear_strike":
                 lens = DeskLens.Security; severity = DeskSeverity.Should; return true;
+            case "nuclear_test" or "nuclear_incident" or "red_telephone":
+                lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
             case "great_power_intervened" or "military_exercises_conducted":
                 lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
             case "alliance_ended" or "alliance_strained" or "crisis_opened" or "crisis_compromise" or
@@ -343,6 +345,10 @@ public static class SituationDesk
         "war_started" => "War: {0} against {1}",
         "world_war_began" => "The world war has begun: {0} against {1}",
         "border_war" => "Shots on a border: {0} and {1}",
+        "nuclear_strike" => "A nuclear weapon has been used: {0} against {1}",
+        "nuclear_test" => "A nuclear test: {0}",
+        "nuclear_incident" => "A nuclear incident: {0} and {1}",
+        "red_telephone" => "The red telephone: {0} and {1}",
         "great_power_intervened" => "A great power has intervened: {0} over {1}",
         "military_exercises_conducted" => "Exercises near our interests: {0}",
         "alliance_ended" => "{0} has left its alliance with {1}",

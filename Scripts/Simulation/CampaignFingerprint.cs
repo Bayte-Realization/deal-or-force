@@ -72,6 +72,8 @@ public static class CampaignFingerprint
                 MixText("nuclear_posture"); Mix(n.Id); Mix(n.NuclearPosture); Mix(n.NuclearPostureDay);
                 Mix(n.LastNuclearTestDay); Mix(n.LastHotlineDay);
             }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.LastNuclearStrikeDay != -100000) { MixText("nuclear_strike"); Mix(n.Id); Mix(n.LastNuclearStrikeDay); }
         if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
             campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
         {

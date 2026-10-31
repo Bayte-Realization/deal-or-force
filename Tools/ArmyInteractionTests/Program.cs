@@ -145,6 +145,7 @@ static class Program
         if (args.Contains("--peace-real-only")) { PeaceCoalitionTests.RunReal(c); return; }
         if (args.Contains("--movement82-only")) { Movement82Tests.Run(c); return; }
         if (args.Contains("--ai-war-only")) { AiWarTests.Run(map); return; }
+        if (args.Contains("--nuclear-strike-only")) { NuclearStrikeTests.Run(map); return; }
         if (args.Contains("--backlog69-only")) { Backlog69Tests.Run(c); return; }
         if (args.Contains("--defence-only")) { DefensivePlanTests.Run(c); return; }
         if (args.Contains("--radicalism-only")) { RadicalismTests.Run(c); return; }

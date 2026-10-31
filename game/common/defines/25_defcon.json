@@ -26,5 +26,20 @@
   "NuclearIncidentChance": 0.03,
   "AiNuclearPosture": true,
   "AiNuclearTestChance": 0.02,
-  "AiHotlineChance": 0.1
+  "AiHotlineChance": 0.1,
+  // The last resort (NuclearPosture.Strike): only at DEFCON 1, only on the holder's own soil
+  // where the enemy stands strongest. Credit, a year between orders, the share of the men in the
+  // province it kills, the ruin it leaves, the war support it takes from the struck, the tension
+  // it adds with everybody not allied, and the year the world spends at the brink afterwards.
+  "NuclearStrikeCost": 25,
+  "NuclearStrikeCooldownDays": 365,
+  "NuclearStrikeLoss": 0.6,
+  "NuclearStrikeRuin": 0.5,
+  "NuclearStrikeWarSupport": 0.3,
+  "NuclearStrikeTension": 30,
+  "NuclearShadowDays": 365,
+  // A computer-run holder at DEFCON 1, losing on its own soil: the weekly chance it gives the order.
+  "AiNuclearStrikeChance": 0.1,
+  // The umbrella: attacking an ally of an alarmed holder costs this per step of its alert below 4.
+  "AiNuclearUmbrellaPrice": 1.0
 }

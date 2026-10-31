@@ -381,6 +381,9 @@ public static partial class AiStatecraft
         // between holders, so a holder's war against anybody else stays an ordinary war.
         var deterrent = Simulation.Deterrence.MutualPrice(campaign, nation, other);
         if (deterrent > 0f) price += Part(parts, "mutual deterrence", deterrent);
+        // And a country under an alarmed holder's umbrella borrows a share of that wall.
+        var umbrella = NuclearPosture.UmbrellaPrice(campaign, nation, other, out _);
+        if (umbrella > 0f) price += Part(parts, "nuclear umbrella", umbrella);
 
         // The state of the country itself. A tired, poor, unstable government has other
         // problems, and the old rule folded this into a multiplier where it could never

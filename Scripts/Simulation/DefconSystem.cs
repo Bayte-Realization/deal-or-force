@@ -170,14 +170,14 @@ public static class DefconSystem
                 if (prolonged || intense)
                 {
                     target = 1;
-                    primaryHotspot = $"{nameA} vs {nameB} (direct nuclear-power warfare)";
+                    primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in open war", nameA, nameB);
                     return target; // Lowest possible
                 }
 
                 if (target > 2)
                 {
                     target = 2;
-                    primaryHotspot = $"{nameA} vs {nameB} (inter-power armed conflict)";
+                    primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in armed conflict", nameA, nameB);
                 }
             }
             else if (attackerHolder || defenderHolder)
@@ -191,17 +191,17 @@ public static class DefconSystem
                 if (war.WorldWarDay >= 0 && target > 2)
                 {
                     target = 2;
-                    primaryHotspot = $"{holder?.DisplayName ?? "Power"} engaged in World War";
+                    primaryHotspot = Loc.Format("{0}: in a world war", holder?.DisplayName ?? "");
                 }
                 else if (enemy is not null && AllianceSystem.GreatPowers(campaign).Contains(enemy.Id) && target > 3)
                 {
                     target = 3;
-                    primaryHotspot = $"{holder?.DisplayName ?? "Power"} at war with Great Power {enemy.DisplayName}";
+                    primaryHotspot = Loc.Format("{0} — {1}: war with a leading military power", holder?.DisplayName ?? "", enemy.DisplayName);
                 }
                 else if (target > 4)
                 {
                     target = 4;
-                    primaryHotspot = $"{holder?.DisplayName ?? "Power"} at war with {enemy?.DisplayName ?? "State"}";
+                    primaryHotspot = Loc.Format("{0} — {1}: war", holder?.DisplayName ?? "", enemy?.DisplayName ?? "");
                 }
             }
         }
@@ -216,21 +216,21 @@ public static class DefconSystem
                 var a = campaign.NationById(relation.A);
                 var b = campaign.NationById(relation.B);
                 target = 2;
-                primaryHotspot = $"{a?.DisplayName ?? "Power"} and {b?.DisplayName ?? "Power"} at war";
+                primaryHotspot = Loc.Format("{0} — {1}: war", a?.DisplayName ?? "", b?.DisplayName ?? "");
             }
             else if (relation.TensionStage == (int)TensionStage.Clashes && target > 3)
             {
                 var a = campaign.NationById(relation.A);
                 var b = campaign.NationById(relation.B);
                 target = 3;
-                primaryHotspot = $"{a?.DisplayName ?? "Power"} and {b?.DisplayName ?? "Power"} border clashes";
+                primaryHotspot = Loc.Format("{0} — {1}: border clashes", a?.DisplayName ?? "", b?.DisplayName ?? "");
             }
             else if ((relation.TensionStage == (int)TensionStage.Crisis || relation.CrisisOpenedDay >= 0) && target > 4)
             {
                 var a = campaign.NationById(relation.A);
                 var b = campaign.NationById(relation.B);
                 target = 4;
-                primaryHotspot = $"{a?.DisplayName ?? "Power"} and {b?.DisplayName ?? "Power"} diplomatic crisis";
+                primaryHotspot = Loc.Format("{0} — {1}: diplomatic crisis", a?.DisplayName ?? "", b?.DisplayName ?? "");
             }
         }
 
@@ -241,6 +241,13 @@ public static class DefconSystem
         {
             target = lowest;
             primaryHotspot = Loc.Format("{0} has raised its nuclear alert", alarmed.DisplayName);
+        }
+
+        // A weapon used is a year at the brink, whatever the arithmetic of the wars says.
+        if (NuclearPosture.Shadow(campaign) is { } user && target > 1)
+        {
+            target = Math.Min(target, 2);
+            primaryHotspot = Loc.Format("{0} has used a nuclear weapon", user.DisplayName);
         }
 
         return target;

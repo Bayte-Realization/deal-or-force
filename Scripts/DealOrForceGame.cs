@@ -634,6 +634,8 @@ public partial class DealOrForceGame : Control
             CloseHandbook();
         else if (_peaceLayer is { Visible: true })
             ClosePeaceConference();
+        else if (_defconLayer is { Visible: true })
+            CloseDefconOverview();
         else if (_pauseMenuLayer is { Visible: true })
             HidePauseMenu();
         else if (_stateAffairsLayer is { Visible: true })

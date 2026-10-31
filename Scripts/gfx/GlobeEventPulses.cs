@@ -67,6 +67,10 @@ public sealed partial class GlobePresentation
         ["peaceful_independence"] = new("nation", new Color(0.7f, 0.82f, 0.5f), 60),
         ["accession_signed"] = new("treaty", new Color(0.82f, 0.76f, 0.5f), 30),
         ["peace_signed"] = new("treaty", new Color(0.62f, 0.82f, 0.58f), 45),
+        // The nuclear alert (NuclearPosture): a weapon used stays news for a year.
+        ["nuclear_strike"] = new("war", new Color(1f, 0.92f, 0.7f), 365),
+        ["nuclear_test"] = new("alert_battle", new Color(0.95f, 0.78f, 0.35f), 45),
+        ["nuclear_incident"] = new("alert_battle", new Color(0.95f, 0.5f, 0.25f), 30),
     };
 
     private const int PulseLimit = 48;

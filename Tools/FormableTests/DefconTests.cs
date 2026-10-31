@@ -211,5 +211,16 @@ static class DefconTests
         SetDay(c, 420);
         NuclearPosture.Week(c);
         Check(ru.NuclearPosture == 4, "and stands down once the danger has passed");
+
+        // The umbrella: an alarmed holder's ally is the dearer to attack.
+        c.Defines.AiNuclearUmbrellaPrice = 1f;
+        var pl = c.NationByTag("POL");
+        CampaignDiplomacy.Get(c, us.Id, pl.Id).Stance = DiplomaticStance.Allied;
+        CampaignDiplomacy.Get(c, pl.Id, us.Id).Stance = DiplomaticStance.Allied;
+        us.NuclearPosture = 5;
+        Check(NuclearPosture.UmbrellaPrice(c, ru, pl, out _) == 0f, "a holder at routine readiness shields nobody");
+        us.NuclearPosture = 2;
+        Check(NuclearPosture.UmbrellaPrice(c, ru, pl, out var patron) == 2f && patron == us,
+            "an alarmed holder's ally costs an attacker a step for every step below DEFCON 4");
     }
 }

@@ -126,7 +126,7 @@ public partial class DealOrForceGame
             _defconRows.AddChild(acts);
             foreach (var (action, label, help) in new[]
                      {
-                         ("raise", "Raise the alert", "One step towards launch on warning: our forces recover faster and every country at war with us feels it in its war support. The upkeep rises, the world is never calmer than us, and at DEFCON 2 everybody not on our side remembers it."),
+                         ("raise", "Raise the alert", "One step towards launch on warning: our forces recover faster and every country at war with us feels it in its war support. The upkeep rises, the world is never calmer than us, and at DEFCON 2 everybody not on our side remembers it. Below DEFCON 4 every ally is the dearer to attack."),
                          ("stand_down", "Stand down", "One step back towards routine: cheaper, and the world calms with us."),
                          ("test", "Test a weapon", "Credibility bought with every rival's tension and most of the world's opinion. Once a year at most.")
                      })
@@ -139,6 +139,15 @@ public partial class DealOrForceGame
                 button.TooltipText = Ui.Tip(why.Length > 0 ? why : Tr(help));
                 acts.AddChild(button);
             }
+
+            // The last resort, behind a question: one click must never end a world.
+            var strikeWhy = NuclearPosture.Refusal(_campaign, player, "strike");
+            var strike = ActionButton(Tr("Use a nuclear weapon"), ConfirmNuclearStrike, 0, 32);
+            strike.Name = "Posture_strike";
+            strike.Disabled = strikeWhy.Length > 0;
+            strike.Modulate = strikeWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
+            strike.TooltipText = Ui.Tip(strikeWhy.Length > 0 ? strikeWhy : Tr(StrikeHelp));
+            acts.AddChild(strike);
         }
 
         // Every holder, its alert, and for the player the red telephone to it.
@@ -148,7 +157,10 @@ public partial class DealOrForceGame
         {
             var line = new HBoxContainer();
             line.AddThemeConstantOverride("separation", 10);
-            line.AddChild(FlagBadge(other.Tag, 22));
+            // A fixed box: flags differ in width, and the alert column should not wander with them.
+            var flagBox = new CenterContainer { CustomMinimumSize = new Vector2(44, 24) };
+            flagBox.AddChild(FlagBadge(other.Tag, 22, other.DisplayName));
+            line.AddChild(flagBox);
             var name = Title(other.DisplayName, 13, Ui.Colour(other.Id == player?.Id ? "text.accent" : "text.body"));
             name.CustomMinimumSize = new Vector2(260, 0);
             line.AddChild(name);
@@ -167,6 +179,36 @@ public partial class DealOrForceGame
             }
             _defconRows.AddChild(line);
         }
+    }
+
+    private const string StrikeHelp =
+        "The strongest enemy force on our own soil loses most of its men and all its order, the region is left in ruins, and the country it belongs to loses the stomach for the war. Every government on earth remembers it, allies included, and the world spends a year at the brink.";
+
+    private void ConfirmNuclearStrike()
+    {
+        if (_campaign?.Player is not { } player) return;
+        if (GetChildren().OfType<ConfirmationDialog>().Any(dialog => dialog.Visible)) return;
+        var campaign = _campaign;
+        var confirm = new ConfirmationDialog { Name = "ConfirmNuclearStrike",
+            Title = Tr("Use a nuclear weapon?"),
+            DialogText = Tr(StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
+            Exclusive = true };
+        var theme = ScenarioEditorTheme.Create();
+        theme.SetStylebox("panel", "AcceptDialog", ScenarioEditorTheme.Surface("shell.background", "shell.border", 16));
+        confirm.Theme = theme;
+        confirm.GetLabel().AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        confirm.GetLabel().CustomMinimumSize = new Vector2(480, 120);
+        confirm.GetOkButton().Text = Tr("Give the order");
+        confirm.GetCancelButton().Text = Tr("Cancel");
+        AddChild(confirm);
+        var issuer = player.Id;
+        confirm.Confirmed += () =>
+        {
+            confirm.QueueFree();
+            if (ReferenceEquals(_campaign, campaign) && _campaign.Player?.Id == issuer) PostureOrder("strike", -1);
+        };
+        confirm.Canceled += () => confirm.QueueFree();
+        confirm.PopupCentered(new Vector2I(540, 240));
     }
 
     private void PostureOrder(string action, int targetId)
