@@ -44,6 +44,7 @@ uniform vec4 lit : source_color = vec4(1.0, 0.55, 0.18, 1.0);
 uniform vec4 smoke : source_color = vec4(0.36, 0.33, 0.31, 1.0);
 uniform float glow = 1.0;
 uniform float fade = 1.0;
+uniform float erode = 0.0;
 uniform float seed = 0.0;
 float hash(vec3 p) { p = fract(p * 0.3183099 + seed); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float noise(vec3 x) {
@@ -53,11 +54,16 @@ float noise(vec3 x) {
 }
 void fragment() {
     vec3 p = (inverse(VIEW_MATRIX) * vec4(VERTEX, 1.0)).xyz;
-    float n = noise(p * 30.0 + vec3(0.0, -TIME * 0.8, 0.0)) * 0.55 + noise(p * 75.0 + TIME * 0.4) * 0.45;
+    // Billows at three scales, rolling outward; the rim thins to nothing so the cloud has no edge
+    // line, and erosion eats it into rags as it ages.
+    float n = noise(p * 22.0 + vec3(0.0, -TIME * 0.9, 0.0)) * 0.5 + noise(p * 61.0 + TIME * 0.5) * 0.32 + noise(p * 150.0 - TIME) * 0.18;
+    float rim = 1.0 - abs(dot(NORMAL, VIEW));
     float under = clamp(-NORMAL.y * 0.5 + 0.5, 0.0, 1.0);
-    vec3 c = mix(smoke.rgb * (0.7 + 0.5 * n), lit.rgb * (0.8 + 0.6 * n), clamp(glow * (0.4 + under * 0.8), 0.0, 1.0));
+    float shade = 0.55 + 0.75 * n;
+    vec3 c = mix(smoke.rgb * shade, lit.rgb * (1.0 + 1.2 * n), clamp(glow * (0.35 + under * 0.9) * (1.2 - rim), 0.0, 1.0));
     ALBEDO = c;
-    ALPHA = fade * smoothstep(0.18, 0.55, n + 0.25);
+    float body = smoothstep(0.32 + erode * 0.45, 0.62 + erode * 0.3, n + 0.18);
+    ALPHA = fade * body * (1.0 - smoothstep(0.55, 0.95, rim));
 }";
 
     private const string RingShaderCode = @"shader_type spatial;
@@ -71,8 +77,8 @@ void fragment() {
     float d = length(UV - vec2(0.5)) * 2.0;
     float ring = smoothstep(radius - width, radius, d) * (1.0 - smoothstep(radius, radius + width * 0.4, d));
     float ember = scar * (1.0 - smoothstep(0.0, 0.28, d));
-    ALBEDO = mix(tint.rgb, vec3(1.0, 0.35, 0.08), scar);
-    ALPHA = clamp(ring * fade + ember, 0.0, 1.0);
+    ALBEDO = mix(tint.rgb * 1.6, vec3(1.0, 0.35, 0.08) * 1.4, scar);
+    ALPHA = clamp(ring * fade * 1.2 + ember, 0.0, 1.0);
 }";
 
     private sealed class Blast
@@ -123,12 +129,12 @@ void fragment() {
             if (east.LengthSquared() < 1e-6f) east = Vector3.Right;
             east = east.Normalized();
             var north = east.Cross(up).Normalized();
-            var unit = 0.07f * zoom;
+            var unit = 0.21f * zoom;
             blast.Root.Transform = new Transform3D(new Basis(east, up, -north), position);
 
             // The flash: a light that whitens the hemisphere for a heartbeat.
-            blast.Flash.LightEnergy = 40f * Mathf.Exp(-t * 4.5f);
-            blast.Flash.OmniRange = unit * 30f;
+            blast.Flash.LightEnergy = 60f * Mathf.Exp(-t * 3.5f);
+            blast.Flash.OmniRange = unit * 18f;
 
             // The fireball: grows in the first second, cools from white to soot, sinks into the cloud.
             var ball = unit * (0.35f + 0.9f * Mathf.Clamp(t / 1.1f, 0f, 1f));
@@ -151,13 +157,14 @@ void fragment() {
             {
                 material.SetShaderParameter("glow", glow);
                 material.SetShaderParameter("fade", smokeFade);
+                material.SetShaderParameter("erode", Mathf.SmoothStep(3f, BlastSeconds, t));
             }
 
             // The shock ring races out over the first three seconds; the ember scar lingers.
-            var ringSize = unit * 9f;
+            var ringSize = unit * 7f;
             blast.Ring.Scale = new Vector3(ringSize, ringSize, 1f);
             blast.RingMaterial.SetShaderParameter("radius", Mathf.Clamp(t / 3f, 0.02f, 1f));
-            blast.RingMaterial.SetShaderParameter("width", 0.12f * (1f - Mathf.Clamp(t / 3f, 0f, 0.8f)));
+            blast.RingMaterial.SetShaderParameter("width", 0.2f * (1f - Mathf.Clamp(t / 3f, 0f, 0.7f)));
             blast.RingMaterial.SetShaderParameter("fade", 1f - Mathf.SmoothStep(1.5f, 3.2f, t));
             blast.RingMaterial.SetShaderParameter("scar", 0.85f * Mathf.SmoothStep(0.3f, 1.5f, t) * (1f - Mathf.SmoothStep(8f, BlastSeconds, t)));
         }

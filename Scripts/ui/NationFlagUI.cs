@@ -196,6 +196,31 @@ public partial class DealOrForceGame
     /// pattern comes from the tag, so a country keeps the same flag from one session to the
     /// next, and any file a mod names after it still wins.
     /// </summary>
+    /// <summary>The flat flag colours the world's flags are drawn in (vexillological standards).</summary>
+    private static readonly Color[] FlagPalette =
+    {
+        Colors.White, Colors.Black, Color.FromHtml("#CE1126"), Color.FromHtml("#8D1B3D"), Color.FromHtml("#FF8200"),
+        Color.FromHtml("#FCD116"), Color.FromHtml("#009A44"), Color.FromHtml("#006233"), Color.FromHtml("#75AADB"),
+        Color.FromHtml("#0038A8"), Color.FromHtml("#002868"), Color.FromHtml("#00A3DD"), Color.FromHtml("#5B2C83")
+    };
+
+    /// <summary>The standard flag colour nearest to this one, by hue first and lightness after.</summary>
+    private static Color FlagGrade(Color colour)
+    {
+        var best = FlagPalette[0];
+        var bestScore = float.MaxValue;
+        foreach (var candidate in FlagPalette)
+        {
+            var hue = Mathf.Abs(colour.H - candidate.H);
+            hue = Mathf.Min(hue, 1f - hue);
+            // Greys and near-whites have no hue worth matching: lightness decides them.
+            var chroma = Mathf.Min(colour.S, candidate.S);
+            var score = hue * 3f * chroma + Mathf.Abs(colour.S - candidate.S) * 0.8f + Mathf.Abs(colour.V - candidate.V) * 1.2f;
+            if (score < bestScore) { bestScore = score; best = candidate; }
+        }
+        return best;
+    }
+
     private static Texture2D ProvisionalFlag(Nation nation)
     {
         var religion = nation.DeclaredReligion?.ToLowerInvariant() ?? "";
@@ -214,14 +239,18 @@ public partial class DealOrForceGame
 
         const int width = 300;
         const int height = 200;
-        var baseColour = Color.FromString(nation.Color ?? "#888888", new Color(0.45f, 0.48f, 0.52f));
-        var light = new Color(0.96f, 0.95f, 0.92f);
-        var gold = new Color(0.95f, 0.76f, 0.16f);
-        var dark = baseColour.Darkened(0.52f);
-        var navy = new Color(0.10f, 0.27f, 0.52f);
-        var crimson = new Color(0.74f, 0.13f, 0.18f);
-        var emerald = new Color(0.11f, 0.44f, 0.24f);
-        var charcoal = new Color(0.11f, 0.13f, 0.16f);
+        // Flag colours, not map colours: the country's map colour is muted on purpose so borders
+        // read, and a flag built from it - with a beige "white" - looked printed on old paper beside
+        // the real flags. Every colour here is a flat vexillological standard, and the map colour is
+        // only a choice among them.
+        var baseColour = FlagGrade(Color.FromString(nation.Color ?? "#888888", new Color(0.45f, 0.48f, 0.52f)));
+        var light = Colors.White;
+        var gold = Color.FromHtml("#FCD116");
+        var dark = FlagGrade(baseColour.Darkened(0.5f));
+        var navy = Color.FromHtml("#002868");
+        var crimson = Color.FromHtml("#CE1126");
+        var emerald = Color.FromHtml("#009A44");
+        var charcoal = Colors.Black;
 
         var isMuslim = religion is "sunni" or "shia" or "ibadi" or "sufi";
         var isCommunist = ideology is "communism" or "socialism";
