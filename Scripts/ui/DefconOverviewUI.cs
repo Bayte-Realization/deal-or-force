@@ -84,13 +84,17 @@ public partial class DealOrForceGame
                 lit ? Ui.Colour(DefconSystem.LevelColourToken(level)) : Ui.Colour("text.muted"));
             badge.CustomMinimumSize = new Vector2(330, 0);
             line.AddChild(badge);
+            // Where the world and our own forces stand on the ladder, said next to the rung - a bare
+            // "the world" at the far end of the row read as a caption nobody could place.
+            var marks = (lit ? Tr("◀ the world stands here") : "") +
+                        (holder && player!.NuclearPosture == level ? (lit ? " · " : "◀ ") + Tr("our forces stand here") : "");
+            var mark = Title(marks, 12, Ui.Colour("text.accent"));
+            mark.CustomMinimumSize = new Vector2(220, 0);
+            line.AddChild(mark);
             var text = Title(Tr(DefconSystem.LevelDescription(level)), 12, lit ? Ui.Colour("text.body") : Ui.Colour("text.faint"));
             text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             line.AddChild(text);
-            var marks = (lit ? Tr("the world") : "") +
-                        (holder && player!.NuclearPosture == level ? (lit ? " · " : "") + Tr("your forces") : "");
-            line.AddChild(Title(marks, 12, Ui.Colour("text.accent")));
             _defconRows.AddChild(line);
         }
 

@@ -2166,7 +2166,10 @@ uniform float terrain_detail = 0.35;
 uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
-uniform float political_opacity = 0.68;
+uniform float political_opacity = 0.62;
+// The nation palette a little short of full strength, so the paint reads as ink over ground
+// rather than as a poster: the relief under China is a country, not a yellow sheet.
+uniform float political_saturation = 0.86;
 // 1 on the flat map: an atlas sheet read straight on, without the globe's light and curvature
 // to soften it. The terrain tiles showing through the country colours read there as blotches
 // and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
@@ -2693,6 +2696,7 @@ void fragment() {
         ? mix(nation_paint(other_nation), nation_paint(near_nation), nation_share)
         : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
+    political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, political_saturation);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
@@ -3037,7 +3041,9 @@ void fragment() {
     base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
-    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.35) * political.a * 0.86);
+    // Full weight on the world map too: at 0.35 the frontier between two states was a hairline
+    // under the province grid, and the strategic view lost the one line it is for.
+    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.62) * political.a * 0.86);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -3106,9 +3112,10 @@ void fragment() {
         plan_color * plan_on * 0.16 +
         vec3(0.095, 0.024, 0.006) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    ROUGHNESS = mix(0.36, mix(0.84, 0.40, inland_coverage), political.a);
+    // Sea glint as a soft sheen rather than a white disc: the open Pacific read as fog at 0.48/0.36.
+    ROUGHNESS = mix(0.56, mix(0.84, 0.40, inland_coverage), political.a);
     METALLIC = 0.0;
-    SPECULAR = mix(0.48, mix(0.12, 0.40, inland_coverage), political.a);
+    SPECULAR = mix(0.26, mix(0.12, 0.40, inland_coverage), political.a);
     // A flat map is a map: under the orthographic camera the sun's glint on the water landed as
     // a white haze across whole seas (the Sea of Japan, the open Pacific). The globe keeps it.
     SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);

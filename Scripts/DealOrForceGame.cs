@@ -822,6 +822,7 @@ public partial class DealOrForceGame : Control
         _hudLayer = FullLayer("GameHud");
         _hudLayer.Visible = false;
         AddChild(_hudLayer);
+        BuildMapVignette();
 
         BuildTopBar();
         BuildCampaignNavigation();
@@ -1559,10 +1560,39 @@ public partial class DealOrForceGame : Control
         {
             if (panel.Size.X <= 8f) return;
             var modal = surface == PanelSurface.Modal;
+            // Depth rather than a flat fill: a faint light falling from the top edge and fading out
+            // by mid-panel, the way every engine's default window reads as a lit surface. One quad,
+            // drawn only when the panel is resized or restyled.
+            var top = Ui.Colour("text.body", modal ? 0.055f : 0.035f);
+            var clear = new Color(top, 0f);
+            var fall = MathF.Min(panel.Size.Y * 0.45f, 260f);
+            panel.DrawPolygon(
+                new[] { new Vector2(1f, 1f), new Vector2(panel.Size.X - 1f, 1f), new Vector2(panel.Size.X - 1f, fall), new Vector2(1f, fall) },
+                new[] { top, top, clear, clear });
             var light = Ui.Colour(modal ? "button.primary_border" : "text.body", modal ? 0.16f : 0.08f);
             panel.DrawLine(new Vector2(4f, 1.5f), new Vector2(panel.Size.X - 4f, 1.5f), light, 1f, true);
         };
+        // Windows arrive rather than appear: a short fade and a few pixels of lift whenever the
+        // panel becomes visible, whichever layer or button showed it.
+        if (surface is PanelSurface.Modal or PanelSurface.Dossier)
+            panel.VisibilityChanged += () => AnimateArrival(panel);
         return panel;
+    }
+
+    /// <summary>The arrival of a window: 140 ms of fade and lift, skipped when motion is turned down.</summary>
+    private static void AnimateArrival(Control panel)
+    {
+        if (!panel.IsVisibleInTree() || !panel.IsInsideTree()) return;
+        if (Ui.Metric("ui.motion", 1f) <= 0f) return;
+        if (panel.HasMeta("arrival_tween") && panel.GetMeta("arrival_tween").AsGodotObject() is Tween running && running.IsValid())
+            running.Kill();
+        panel.Modulate = new Color(1f, 1f, 1f, 0f);
+        panel.PivotOffset = panel.Size * 0.5f;
+        panel.Scale = new Vector2(0.985f, 0.985f);
+        var tween = panel.CreateTween().SetParallel().SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
+        tween.TweenProperty(panel, "modulate:a", 1f, 0.14f);
+        tween.TweenProperty(panel, "scale", Vector2.One, 0.16f);
+        panel.SetMeta("arrival_tween", tween);
     }
 
     private VBoxContainer PanelRows(PanelContainer panel, int horizontal, int vertical, int separation)
