@@ -2091,7 +2091,8 @@ public partial class DealOrForceGame : Control
                 button.SetMeta("toggle_lamp", true);
                 // A switch: a pressed toggle hovers in Godot's own hover_pressed style unless told
                 // otherwise, and its state wears a lamp beside the word.
-                button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.TabPill(primary, 1));
+                foreach (var (state, index) in new[] { ("normal", 0), ("hover", 1), ("pressed", 2), ("hover_pressed", 1), ("disabled", 0) })
+                    button.AddThemeStyleboxOverride(state, AtlasSurfaceSkin.ToggleFace(primary, index));
                 button.Icon = AtlasSurfaceSkin.ToggleLamp(primary);
                 button.AddThemeConstantOverride("icon_max_width", 14);
                 button.AddThemeConstantOverride("h_separation", 6);
@@ -2165,6 +2166,13 @@ public partial class DealOrForceGame : Control
             button.AddThemeColorOverride("icon_normal_color", Ui.Colour("text.accent_dim"));
             button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
             button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("button.text_pressed"));
+        }
+        // A switch's lettering last, over the general colours above: dark on a lit key, muted on an unlit one.
+        if (tabPill && button.ToggleMode && button.HasMeta("toggle_lamp"))
+        {
+            var lettering = primary ? Ui.Colour("surface.background") : Ui.Colour("text.muted");
+            foreach (var key in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color" })
+                button.AddThemeColorOverride(key, key == "font_hover_color" && !primary ? Ui.Colour("button.text_hover") : lettering);
         }
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }

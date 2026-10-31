@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DealOrForce.Simulation;
 using Godot;
@@ -59,7 +60,7 @@ public partial class DealOrForceGame
         row.AddChild(MapVisualToggle("city_names", "CITIES", "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer.", 68));
         row.AddChild(MapVisualToggle("region_names", "NAMES", "Draw each country's name across its territory.", 68));
 
-        _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, 54, 34);
+        _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, ToggleWidth, 34);
         _showcasePanButton.SetMeta("atlas_tab_button", true);
         _showcasePanButton.ToggleMode = true;
         StyleButton(_showcasePanButton, false);
@@ -208,12 +209,15 @@ public partial class DealOrForceGame
 
     // No dependency on a particular weather implementation: data declares availability,
     // the normal settings application owns its effect, and missing mod settings stay absent.
+    /// <summary>One width for every switch on the map bar, so the bar reads as a row of equal keys.</summary>
+    private const float ToggleWidth = 86f;
+
     private Button MapVisualToggle(string setting, string caption, string help, float width)
     {
         var button = ActionButton(caption, () =>
         {
             SettingsCatalog.Store(setting, !SettingsCatalog.Flag(setting)); ApplySetting(setting); RefreshMapVisualToggles();
-        }, width, 34);
+        }, MathF.Max(width, ToggleWidth), 34);
         button.Name = "MapVisualToggle_" + setting;
         button.SetMeta("atlas_tab_button", true);
         button.ClipText = true;

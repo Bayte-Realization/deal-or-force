@@ -2892,8 +2892,11 @@ void fragment() {
     // Rivers of low importance no longer disappear at a hard intensity threshold.
     vec3 hydrography = texture(hydrology_map, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).rgb;
     float lake_distance = (hydrography.r * 255.0 - 128.0) / 16.0;
+    // A river is as wide as it is great: a headwater a thread, the Danube a ribbon. One inset
+    // for every river drew brooks as wide as the Rhine and both as pale bands of paint.
+    float river_size = smoothstep(0.55, 0.98, hydrography.b);
     float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
-        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset;
+        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset + mix(0.42, -0.04, river_size);
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
     float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
@@ -2908,7 +2911,9 @@ void fragment() {
     vec2 water_motion = vec2(TIME * water_animation_speed, 0.0);
     float water_detail = max(detail_mix, province_detail) * water_texture_strength;
     vec3 inland_water = mix(vec3(0.028, 0.145, 0.185), vec3(0.014, 0.080, 0.125), lake_depth);
-    vec3 river_color = mix(vec3(0.025, 0.130, 0.170), vec3(0.035, 0.205, 0.265), prominent_river);
+    // Deep river water, a touch lighter in the great channels - never the pale band it was.
+    vec3 river_color = mix(vec3(0.020, 0.095, 0.130), vec3(0.028, 0.140, 0.190), prominent_river);
+    float river_bank = (1.0 - smoothstep(0.0, river_edge * 2.5, abs(river_distance))) * (1.0 - river_water);
     if (inland_coverage > 0.001 && water_detail > 0.001) {
         vec3 lake_tile = texture(lake_surface, water_uv + water_motion * 0.30).rgb;
         vec3 river_tile = texture(river_surface, water_uv + water_motion).rgb;
@@ -2928,6 +2933,8 @@ void fragment() {
     float river_opacity = mix(river_far_opacity, river_near_opacity, max(detail_mix, province_detail));
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
+    // A thin darker bank, so the water sits in a channel rather than lying on the land like paint.
+    base = mix(base, base * 0.72, river_bank * river_opacity * 0.55 * (1.0 - lake_water));
     // Land relief must not turn a lake into a mountain ridge.
     NORMAL_MAP = mix(NORMAL_MAP, vec3(0.5, 0.5, 1.0), inland_coverage);
     // The region line, the last one still drawn by asking four neighbours whether they

@@ -276,6 +276,33 @@ internal static class AtlasSurfaceSkin
         return focus;
     }
 
+    /// <summary>
+    /// The face of a switch. On is a lit key - solid gold, dark lettering - and off is a dark key
+    /// with a hairline: the two can be told apart across the room, not only by a shade of brown.
+    /// </summary>
+    internal static StyleBox ToggleFace(bool on, int state)
+    {
+        var key = $"toggle|{on}|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var accent = Ui.Colour("text.accent");
+        var fill = on
+            ? (state == 1 ? accent.Lightened(0.12f) : state == 2 ? accent.Darkened(0.1f) : accent)
+            : state == 1 ? Ui.Colour("button.fill_hover") : Ui.Colour("surface.inset");
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = on ? accent.Lightened(0.25f) : Ui.Colour(state == 1 ? "button.border_hover" : "surface.line_faint"),
+            ShadowColor = new Color(0, 0, 0, on ? 0.4f : 0f),
+            ShadowSize = on ? 4 : 0,
+            ShadowOffset = new Vector2(0, 1),
+            ContentMarginLeft = 10, ContentMarginRight = 10, ContentMarginTop = 5, ContentMarginBottom = 5
+        };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(3);
+        SpecialButtons[key] = style;
+        return style;
+    }
+
     private static readonly Texture2D[] _lamps = new Texture2D[2];
 
     /// <summary>
@@ -289,7 +316,8 @@ internal static class AtlasSurfaceSkin
         const int size = 28;
         var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         image.Fill(Colors.Transparent);
-        var lit = Ui.Colour("text.accent");
+        // On sits on a gold face, so its lamp is dark; off sits on a dark face, so its ring is pale.
+        var lit = Ui.Colour("surface.background");
         var dim = Ui.Colour("text.muted");
         var c = (size - 1) * 0.5f;
         for (var y = 0; y < size; y++)
