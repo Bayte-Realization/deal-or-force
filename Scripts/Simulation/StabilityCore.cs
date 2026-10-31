@@ -259,7 +259,11 @@ public static class StabilityCore
             if (state is null || state.Unclaimed) continue;
             var isHomeland = TerritorialClaims.TitleOf(campaign, nation, state) == TerritorialTitle.Homeland;
             if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
-                strainedStates += 1f;
+                // A conquered people strains an empire by its anger, not by being there: a calm
+                // annexed region weighs 0.4, a seething one the full 1. Measured: Russia, after
+                // taking a dozen Ukrainian regions, sat at the overstretch cap for good - nothing
+                // it could do would ever digest them.
+                strainedStates += 0.4f + 0.6f * M.Clamp01(state.Radicalism / 0.4f);
             else if (campaign.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex &&
                      state.PoliticalDivergence >= 0.50f)
                 strainedStates += 0.5f;
