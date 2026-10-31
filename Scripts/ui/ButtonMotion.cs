@@ -20,12 +20,18 @@ internal static class ButtonMotion
     private const float Ease = 0.09f;
 
     private static SceneTree _installed;
+    private static bool _still;
+
+    /// <summary>The last button pressed and when (Time ticks, µs): the frame-stall log names what a
+    /// freeze followed, so "the game hangs when I open X" can be read off the log.</summary>
+    public static string LastPressed { get; private set; } = "-";
+    public static ulong LastPressedUsec { get; private set; }
 
     public static void Install(SceneTree tree)
     {
         if (tree is null || ReferenceEquals(tree, _installed)) return;
-        if (Ui.Metric("ui.motion", 1f) <= 0f) return;
         _installed = tree;
+        _still = Ui.Metric("ui.motion", 1f) <= 0f;
         tree.NodeAdded += OnAdded;
     }
 
@@ -34,13 +40,18 @@ internal static class ButtonMotion
         if (node is not BaseButton button || button is CheckBox or CheckButton) return;
         button.MouseEntered += () => To(button, Lift, Ease);
         button.MouseExited += () => To(button, 1f, Ease * 1.6f);
-        button.ButtonDown += () => To(button, Dip, Ease * 0.5f);
+        button.ButtonDown += () =>
+        {
+            LastPressed = button is Button { Text.Length: > 0 } labelled ? labelled.Text.Replace(" ", "_") : button.Name.ToString();
+            LastPressedUsec = Time.GetTicksUsec();
+            To(button, Dip, Ease * 0.5f);
+        };
         button.ButtonUp += () => To(button, button.IsHovered() ? Lift : 1f, Ease);
     }
 
     private static void To(BaseButton button, float level, float seconds)
     {
-        if (!GodotObject.IsInstanceValid(button) || !button.IsInsideTree() || button.Disabled && level > 1f) return;
+        if (_still || !GodotObject.IsInstanceValid(button) || !button.IsInsideTree() || button.Disabled && level > 1f) return;
         var now = button.SelfModulate;
         // A tint the screen chose, not ours: never brightened, never reset to white.
         if (!button.HasMeta(Tween) && (now.R != 1f || now.G != 1f || now.B != 1f)) return;
