@@ -207,6 +207,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Length == 0) OrganizationCrisisTests.Run();
         if (args.Contains("--defcon-only")) { DefconTests.Run(); return; }
         if (args.Length == 0) DefconTests.Run();
+        if (args.Contains("--rescue-only")) { RescueTests.Run(); return; }
+        if (args.Length == 0) RescueTests.Run();
         if (args.Contains("--sovereign-only")) { SovereignRemnantTests.Run(); return; }
         if (args.Length == 0) SovereignRemnantTests.Run();
         if (args.Contains("--world-layers-only")) { WorldLayersTests.Run(); return; }

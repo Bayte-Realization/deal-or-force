@@ -681,7 +681,13 @@ public static partial class AiStatecraft
         StrategicWar ownWar = null;
         foreach (var candidate in campaign.Wars)
             if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
-        if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
+        if (ownWar is not null)
+        {
+            // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
+            SeekRescue(campaign, nation, ownWar);
+            Negotiate(campaign, nation, ownWar);
+            return;
+        }
         if (!campaign.Defines.AiMayDeclareWar) return;
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
