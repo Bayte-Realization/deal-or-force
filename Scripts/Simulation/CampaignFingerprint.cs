@@ -74,6 +74,11 @@ public static class CampaignFingerprint
             }
         foreach (var n in campaign.Nations.OrderBy(n => n.Id))
             if (n.LastNuclearStrikeDay != -100000) { MixText("nuclear_strike"); Mix(n.Id); Mix(n.LastNuclearStrikeDay); }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.NuclearStruckDay != -100000 || n.NuclearStruckBy != -1 || n.NuclearFirstUseDay != -100000)
+            {
+                MixText("nuclear_struck"); Mix(n.Id); Mix(n.NuclearStruckDay); Mix(n.NuclearStruckBy); Mix(n.NuclearFirstUseDay);
+            }
         if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
             campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
         {
@@ -324,11 +329,19 @@ public static class CampaignFingerprint
         foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)
                      .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
         {
+            // A switch added after the table was frozen speaks only when it is not simply on.
+            if (MechanicFeatures.LateBuiltIns.Contains(id) && campaign.FeatureEnabled(id) &&
+                !campaign.FeatureOverrides.ContainsKey(id)) continue;
             foreach (var character in id.ToLowerInvariant()) Mix(character);
             Mix(-2); Mix(campaign.FeatureEnabled(id) ? 1 : 0);
         }
+        // The define bindings count only when a scenario changed them: the shipped table adds no bytes.
+        var defineBindings = campaign.Defines.FeatureDefines;
+        var shippedBindings = MechanicFeatures.DefineDefaults();
+        var boundDefines = defineBindings.Count == shippedBindings.Count &&
+            defineBindings.All(p => shippedBindings.TryGetValue(p.Key, out var v) && v == p.Value) ? null : defineBindings;
         foreach (var table in new[] { campaign.Defines.FeatureUnlocks, campaign.Defines.FeatureCommands,
-                     campaign.Defines.FeatureScreens, campaign.Defines.FeatureSystems })
+                     campaign.Defines.FeatureScreens, campaign.Defines.FeatureSystems, boundDefines }.Where(t => t is not null))
         {
             Mix(-3);
             foreach (var entry in table.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))

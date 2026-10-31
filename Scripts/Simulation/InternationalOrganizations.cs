@@ -560,7 +560,13 @@ public static class InternationalOrganizations
                     if (org.Motion is not null) continue;
                 }
             }
-            var aggressor = c.Wars.Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
+            // The first government to use a nuclear weapon is everybody's business, not only its
+            // enemies': every assembly it does not sit in moves to sanction it while the shadow lasts.
+            var aggressor = c.Nations.Where(n => c.ElapsedDays - n.NuclearFirstUseDay < c.Defines.NuclearShadowDays)
+                .OrderBy(n => n.Id)
+                .FirstOrDefault(a => Eligible(c, a) && !org.Members.Contains(a.Id) &&
+                    !org.Members.All(id => CampaignDiplomacy.Peek(c, id, a.Id)?.EmbargoBy(id) == true))
+                ?? c.Wars.Where(w => !w.Ended && !w.CivilConflict && org.Members.Any(w.IsDefending))
                 .Select(w => c.NationById(w.AttackerId))
                 .FirstOrDefault(a => a is not null && Eligible(c, a) && !org.Members.Contains(a.Id) &&
                     !org.Members.All(id => CampaignDiplomacy.Peek(c, id, a.Id)?.EmbargoBy(id) == true));

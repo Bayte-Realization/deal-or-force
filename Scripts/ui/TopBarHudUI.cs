@@ -338,6 +338,8 @@ public partial class DealOrForceGame
 
         if (_defconBadge is not null)
         {
+            // A scenario without the nuclear age shows no ladder at all, not a DEFCON 5 nobody can change.
+            _defconBadge.Visible = DefconSystem.Enabled(_campaign);
             var defcon = DefconSystem.CurrentLevel(_campaign);
             _defconBadge.Text = $"DEFCON {defcon}";
             _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign) + "\n\n" +

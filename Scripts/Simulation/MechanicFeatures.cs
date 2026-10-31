@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace DealOrForce.Simulation;
 
@@ -34,7 +35,11 @@ public sealed partial class Defines
         // and the traits feed the same modifier totals a national spirit does.
         ["rulers"] = true,
         // Leases and troops in without a war (LandArrangements).
-        ["land_arrangements"] = true
+        ["land_arrangements"] = true,
+        // The nuclear age, in three layers a scenario can open one at a time: the world's alert
+        // ladder (DefconSystem), what a holder does with its weapons short of using them
+        // (NuclearPosture: alert, tests, the red telephone, the umbrella), and the use itself.
+        ["defcon"] = true, ["nuclear_posture"] = true, ["nuclear_strikes"] = true
     };
 
     // Feature -> named common/scripted_triggers condition. Empty string removes a rule.
@@ -59,6 +64,13 @@ public sealed partial class Defines
         ["ForeignAssistance"] = "foreign_assistance", ["Rulers"] = "rulers",
         ["LandArrangementSystem"] = "land_arrangements", ["KinStatecraft"] = "movements"
     };
+    // Feature -> a true/false define it drives. Many systems answer to one switch in their own
+    // defines file (ElectionsEnabled, ParliamentEnabled...), which a scenario could set once and
+    // never again. Bound here, the define follows the feature: an event's "feature.elections_set",
+    // a FeatureUnlocks rule (a technology, a year) or the console moves it in play. A binding is
+    // silent until the scenario declares the feature in Features or changes it - so shipping one
+    // changes nothing on its own. A mod may bind any boolean define; empty string removes one.
+    public Dictionary<string, string> FeatureDefines { get; set; } = MechanicFeatures.DefineDefaults();
     public Dictionary<string, string> FeatureScreens { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Research"] = "research", ["Navy"] = "navy", ["Decisions"] = "decisions",
@@ -86,6 +98,7 @@ public sealed partial class Campaign
         if (!MechanicFeatures.ValidId(id)) return false;
         var before = FeatureEnabled(id);
         FeatureOverrides[id] = enabled;
+        MechanicFeatures.SyncDefine(this, id);
         if (id.Equals("public_debt", StringComparison.OrdinalIgnoreCase))
             SovereignFinance.NormalizeAccounts(this);
         if (id.Equals("national_courses", StringComparison.OrdinalIgnoreCase))
@@ -113,6 +126,8 @@ public sealed partial class Campaign
     {
         if (_featureEvaluationDay == ElapsedDays) return;
         _featureEvaluationDay = ElapsedDays;
+        // A loaded save or a fresh scenario: bound defines catch up with their features first.
+        MechanicFeatures.SyncDefines(this);
         if (Defines.FeatureUnlocks is null || Defines.FeatureUnlocks.Count == 0) return;
         // Snapshot first: one unlock cannot make another rule pass merely due to key order.
         var unlock = new List<string>();
@@ -135,8 +150,13 @@ public static class MechanicFeatures
         "laws", "political_agendas", "national_courses", "deals", "resident_awareness", "domestic_crises", "political_cohorts", "federal_fracture",
         "escalation", "proxy_wars", "de_facto_factions", "coups", "organizations", "foreign_assistance",
         "government_promises", "strategic_goals", "state_identity", "rulers", "intelligence", "world_order_emergency", "tactical_doctrines",
-        "strategic_doctrines", "union_cohesion", "demographic_cycle", "land_arrangements"
+        "strategic_doctrines", "union_cohesion", "demographic_cycle", "land_arrangements",
+        "defcon", "nuclear_posture", "nuclear_strikes"
     };
+
+    /// <summary>Built-in switches added after saves were fingerprinted; on by default, they add no bytes.</summary>
+    public static readonly HashSet<string> LateBuiltIns = new(StringComparer.OrdinalIgnoreCase)
+        { "defcon", "nuclear_posture", "nuclear_strikes" };
 
     public static Dictionary<string, string> CommandDefaults()
     {
@@ -171,6 +191,46 @@ public static class MechanicFeatures
         Bind("land_arrangements", "LandArrangementCommand");
         // Cancel/refund and pending-event response commands remain available by default.
         return result;
+    }
+
+    public static Dictionary<string, string> DefineDefaults() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["elections"] = nameof(Defines.ElectionsEnabled), ["parliament"] = nameof(Defines.ParliamentEnabled),
+        ["dynastic_claims"] = nameof(Defines.DynasticClaimsEnabled), ["diplomatic_missions"] = nameof(Defines.DiplomaticMissionsEnabled),
+        ["belief_conversion"] = nameof(Defines.BeliefConversionEnabled), ["brain_drain"] = nameof(Defines.BrainDrainEnabled),
+        ["internal_migration"] = nameof(Defines.InternalMigrationEnabled), ["occupation_resistance"] = nameof(Defines.OccupationResistanceEnabled),
+        ["mutual_deterrence"] = nameof(Defines.MutualDeterrenceEnabled), ["strategic_stockpiles"] = nameof(Defines.StrategicStockpilesEnabled),
+        ["war_emergency"] = nameof(Defines.WarEmergencyEnabled), ["secular_cycle"] = nameof(Defines.SecularCycleEnabled),
+        ["combat_tactics"] = nameof(Defines.CombatTacticsEnabled), ["regional_administration"] = nameof(Defines.RegionalAdministrationEnabled),
+        ["household_dynamics"] = nameof(Defines.HouseholdDynamicsEnabled), ["demographic_extinction"] = nameof(Defines.DemographicExtinctionEnabled)
+    };
+
+    // Every boolean define a binding may drive, by name. Our own Defines class only: nothing a
+    // mod ships is executed, a mod only names one of these.
+    private static readonly Dictionary<string, PropertyInfo> BoolDefines = typeof(Defines)
+        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        .Where(p => p.PropertyType == typeof(bool) && p.CanRead && p.CanWrite && p.GetIndexParameters().Length == 0)
+        .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsBoolDefine(string name) => name is not null && BoolDefines.ContainsKey(name);
+
+    public static void SyncDefines(Campaign c)
+    {
+        if (c?.Defines.FeatureDefines is not { Count: > 0 } bindings) return;
+        foreach (var id in bindings.Keys) SyncDefine(c, id);
+    }
+
+    /// <summary>
+    /// Sets the define bound to <paramref name="id"/> to the feature's state - only for a feature
+    /// the scenario declared or changed; an undeclared binding leaves the define to its file.
+    /// </summary>
+    public static void SyncDefine(Campaign c, string id)
+    {
+        if (c?.Defines.FeatureDefines is null || !c.Defines.FeatureDefines.TryGetValue(id, out var name) ||
+            string.IsNullOrWhiteSpace(name) || !BoolDefines.TryGetValue(name, out var property)) return;
+        if (!c.FeatureOverrides.ContainsKey(id) && !(c.Defines.Features?.ContainsKey(id) ?? false)) return;
+        var enabled = c.FeatureEnabled(id);
+        if ((bool)property.GetValue(c.Defines)! != enabled) property.SetValue(c.Defines, enabled);
     }
 
     public static bool ScreenEnabled(Campaign c, string screen) => c is not null &&

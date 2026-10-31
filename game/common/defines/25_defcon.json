@@ -41,5 +41,11 @@
   // A computer-run holder at DEFCON 1, losing on its own soil: the weekly chance it gives the order.
   "AiNuclearStrikeChance": 0.1,
   // The umbrella: attacking an ally of an alarmed holder costs this per step of its alert below 4.
-  "AiNuclearUmbrellaPrice": 1.0
+  "AiNuclearUmbrellaPrice": 1.0,
+  // The second strike: a holder whose forces were struck may answer, for this many days, on the
+  // striker's strongest force wherever it stands; the first user alone earns the notoriety that
+  // carries the world's sanctions votes; a computer-run holder answers by this weekly chance.
+  "NuclearRetaliationDays": 60,
+  "NuclearFirstUseNotoriety": 40,
+  "AiNuclearRetaliationChance": 0.5
 }

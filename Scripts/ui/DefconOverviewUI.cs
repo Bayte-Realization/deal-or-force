@@ -142,11 +142,12 @@ public partial class DealOrForceGame
 
             // The last resort, behind a question: one click must never end a world.
             var strikeWhy = NuclearPosture.Refusal(_campaign, player, "strike");
-            var strike = ActionButton(Tr("Use a nuclear weapon"), ConfirmNuclearStrike, 0, 32);
+            var answering = NuclearPosture.Avenging(_campaign, player) is not null;
+            var strike = ActionButton(Tr(answering ? "Answer the strike" : "Use a nuclear weapon"), ConfirmNuclearStrike, 0, 32);
             strike.Name = "Posture_strike";
             strike.Disabled = strikeWhy.Length > 0;
             strike.Modulate = strikeWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
-            strike.TooltipText = Ui.Tip(strikeWhy.Length > 0 ? strikeWhy : Tr(StrikeHelp));
+            strike.TooltipText = Ui.Tip(strikeWhy.Length > 0 ? strikeWhy : Tr(answering ? AnswerHelp : StrikeHelp));
             acts.AddChild(strike);
         }
 
@@ -184,14 +185,18 @@ public partial class DealOrForceGame
     private const string StrikeHelp =
         "The strongest enemy force on our own soil loses most of its men and all its order, the region is left in ruins, and the country it belongs to loses the stomach for the war. Every government on earth remembers it, allies included, and the world spends a year at the brink.";
 
+    private const string AnswerHelp =
+        "Our forces were struck. The answer falls on the strongest force of the country that struck them, wherever it stands. The world condemns an answer less than a first use, but the brink comes no further away.";
+
     private void ConfirmNuclearStrike()
     {
         if (_campaign?.Player is not { } player) return;
+        var answering = NuclearPosture.Avenging(_campaign, player) is not null;
         if (GetChildren().OfType<ConfirmationDialog>().Any(dialog => dialog.Visible)) return;
         var campaign = _campaign;
         var confirm = new ConfirmationDialog { Name = "ConfirmNuclearStrike",
             Title = Tr("Use a nuclear weapon?"),
-            DialogText = Tr(StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
+            DialogText = Tr(answering ? AnswerHelp : StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
             Exclusive = true };
         var theme = ScenarioEditorTheme.Create();
         theme.SetStylebox("panel", "AcceptDialog", ScenarioEditorTheme.Surface("shell.background", "shell.border", 16));

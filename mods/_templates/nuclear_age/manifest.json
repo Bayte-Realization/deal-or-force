@@ -1,0 +1,11 @@
+{
+  "id": "example_nuclear_age",
+  "name": "Example: the nuclear age, opened step by step",
+  "version": "1.0.0",
+  "supported_game_version": "0.1.*",
+  "enabled": false,
+  "load_order": 131,
+  "dependencies": [],
+  "gdscript_entry": "",
+  "csharp_assembly": ""
+}

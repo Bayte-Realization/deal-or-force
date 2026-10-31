@@ -1,0 +1,11 @@
+{
+  // A country holding a deterrent - authored in common/deterrence or researched
+  // (common/technologies/70_deterrence.json gives "deterrence": 1).
+  "first_bomb": { "min_nuclear_tier": 1 },
+  // A trigger is tested one country at a time, so "two holders" is written as: a holder, once
+  // the ladder is open, after the year the second bomb came in our own world.
+  "second_bomb": { "min_nuclear_tier": 1, "min_feature.defcon": 1, "min_year": 1949 },
+  // For an automatic rule on use: a holder at war, at its highest alert, whose people have
+  // given up on the war.
+  "doctrine_of_first_use": { "min_nuclear_tier": 1, "at_war": true, "max_nuclear_posture": 1, "max_war_support": 0.3 }
+}

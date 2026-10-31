@@ -3,5 +3,6 @@
   "nuclear_threats": { "name": "Put its nuclear forces on alert against the world", "opinion": -15, "days": 730, "decays": true, "max_stacks": 2 },
   "nuclear_test": { "name": "Tested a nuclear weapon", "opinion": -20, "days": 1095, "decays": true, "max_stacks": 2 },
   "nuclear_strike": { "name": "Used a nuclear weapon", "opinion": -60, "days": 3650, "decays": true, "max_stacks": 2 },
+  "nuclear_retaliation": { "name": "Answered a nuclear strike in kind", "opinion": -20, "days": 1825, "decays": true, "max_stacks": 2 },
   "red_telephone": { "name": "Talked us down on the red telephone", "opinion": 15, "days": 730, "decays": true, "max_stacks": 1 }
 }

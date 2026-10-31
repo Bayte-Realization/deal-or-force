@@ -724,6 +724,8 @@ public static class Program
                     year[entry.Kind] = year.GetValueOrDefault(entry.Kind) + 1;
                     total[entry.Kind] = total.GetValueOrDefault(entry.Kind) + 1;
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
+                    if (entry.Kind is "nuclear_strike" or "nuclear_retaliation" or "organization_sanction" or "sanctions_imposed")
+                        Console.WriteLine($"   NUCLEAR day {entry.Day}: {entry.Kind} {entry.ActorName} -> {entry.TargetName} ({entry.Subject}{entry.Place})");
                 }
                 if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
                 // Covert operations are mostly private: counted from the whole chronicle.

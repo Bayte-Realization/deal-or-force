@@ -111,7 +111,7 @@ public partial class DealOrForceGame
     {
         CampaignAlertRoute.Event => "alert_event", CampaignAlertRoute.Elections => "elections", CampaignAlertRoute.Personnel => "personnel",
         CampaignAlertRoute.Research => "research", CampaignAlertRoute.Decisions => "decision",
-        CampaignAlertRoute.Battle => "alert_battle", CampaignAlertRoute.War => "wars",
+        CampaignAlertRoute.Battle => "alert_battle", CampaignAlertRoute.War => "wars", CampaignAlertRoute.Defcon => "alert_battle",
         CampaignAlertRoute.Doctrine or CampaignAlertRoute.Army => "wars",
         _ => a.Situation?.Route switch
         {
@@ -268,6 +268,7 @@ public partial class DealOrForceGame
             case CampaignAlertRoute.Decisions: OpenScreen("Decisions"); break;
             case CampaignAlertRoute.Battle: OpenFirstPlayerBattle(); break;
             case CampaignAlertRoute.War: OpenWarLedger(); ShowWarLedgerDetail(alert.TargetId); break;
+            case CampaignAlertRoute.Defcon: OpenDefconOverview(); break;
         }
         UpdateScreenButtons();
     }

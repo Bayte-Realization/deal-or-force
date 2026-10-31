@@ -878,6 +878,7 @@ public static class SaveSystem
         public Dictionary<string, string> FeatureCommands;
         public Dictionary<string, string> FeatureScreens;
         public Dictionary<string, string> FeatureSystems;
+        public Dictionary<string, string> FeatureDefines;
         public Dictionary<string, bool> FeatureOverrides = new();
         public Dictionary<string, int[]> ScenarioTerritories = new();
         public GameDate Date;
@@ -1037,6 +1038,7 @@ public static class SaveSystem
             FeatureCommands = new Dictionary<string, string>(campaign.Defines.FeatureCommands),
             FeatureScreens = new Dictionary<string, string>(campaign.Defines.FeatureScreens),
             FeatureSystems = new Dictionary<string, string>(campaign.Defines.FeatureSystems),
+            FeatureDefines = new Dictionary<string, string>(campaign.Defines.FeatureDefines),
             FeatureOverrides = new Dictionary<string, bool>(campaign.FeatureOverrides),
             IsPaused = campaign.IsPaused,
             RandomState = campaign.Random.State,
@@ -1123,8 +1125,10 @@ public static class SaveSystem
             if (FeatureCommands is not null) campaign.Defines.FeatureCommands = new(FeatureCommands, StringComparer.OrdinalIgnoreCase);
             if (FeatureScreens is not null) campaign.Defines.FeatureScreens = new(FeatureScreens, StringComparer.OrdinalIgnoreCase);
             if (FeatureSystems is not null) campaign.Defines.FeatureSystems = new(FeatureSystems, StringComparer.OrdinalIgnoreCase);
+            if (FeatureDefines is not null) campaign.Defines.FeatureDefines = new(FeatureDefines, StringComparer.OrdinalIgnoreCase);
             foreach (var (id, enabled) in FeatureOverrides ?? new())
                 if (MechanicFeatures.ValidId(id)) campaign.FeatureOverrides[id] = enabled;
+            MechanicFeatures.SyncDefines(campaign);
             Replace(campaign.States, States);
             Replace(campaign.Armies, Armies);
             Replace(campaign.Recruitment, Recruitment);

@@ -925,7 +925,10 @@ public static class ScriptedValues
     /// kept: the worst-hit region's war damage is a question about every region at once.
     /// </summary>
     private static readonly HashSet<string> ReadOnly = new(StringComparer.OrdinalIgnoreCase)
-        { "worst_war_damage", "available_air_formations", "available_fleet_hulls" };
+        { "worst_war_damage", "available_air_formations", "available_fleet_hulls",
+          // The nuclear age: the deterrent a country holds (0 none), its own alert (5 routine
+          // to 1), and the world's DEFCON - so an event can wait for the brink or a second bomb.
+          "nuclear_tier", "nuclear_posture", "defcon" };
 
     public static bool IsReadOnly(string key) => key is not null &&
         (ReadOnly.Contains(key.Trim().Replace('-', '_')) || key.Equals("year", StringComparison.OrdinalIgnoreCase) ||
@@ -979,6 +982,9 @@ public static class ScriptedValues
             case "state.literacy": value = Average(campaign, nation, state => state.Literacy); return true;
             case "state.war_damage": value = Average(campaign, nation, state => state.WarDamage); return true;
             case "worst_war_damage": value = WarDamage.Worst(campaign, nation); return true;
+            case "nuclear_tier": value = Deterrence.TierOf(campaign, nation); return true;
+            case "nuclear_posture": value = nation.NuclearPosture; return true;
+            case "defcon": value = DefconSystem.CurrentLevel(campaign); return true;
             case "state.urbanization": value = Average(campaign, nation, state => state.Urbanization); return true;
             case "state.population":
                 value = campaign.StatesOf(nation)

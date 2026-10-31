@@ -18,6 +18,11 @@ public sealed partial class Nation
     public int LastHotlineDay = -100000;
     /// <summary>The last day this country used a nuclear weapon (NuclearPosture.Strike).</summary>
     public int LastNuclearStrikeDay = -100000;
+    /// <summary>The last day a nuclear weapon struck this country's forces, and whose (-1 for nobody's).</summary>
+    public int NuclearStruckDay = -100000;
+    public int NuclearStruckBy = -1;
+    /// <summary>The last day this country used a nuclear weapon first - not in answer to one.</summary>
+    public int NuclearFirstUseDay = -100000;
 }
 
 public sealed partial class Defines
@@ -73,6 +78,16 @@ public sealed partial class Defines
     /// holder's own alert stands below 4. An alert raised is a guarantee made visible.
     /// </summary>
     public float AiNuclearUmbrellaPrice { get; set; } = 0f;
+
+    /// <summary>
+    /// The second strike: the days a holder whose forces were struck may answer wherever the
+    /// striker's forces stand; the notoriety a first use earns (an answer earns none); and the
+    /// weekly chance a computer-run holder gives the answer. A deterrent is as good as the
+    /// certainty of the answer.
+    /// </summary>
+    public int NuclearRetaliationDays { get; set; } = 60;
+    public float NuclearFirstUseNotoriety { get; set; } = 0f;
+    public float AiNuclearRetaliationChance { get; set; } = 0f;
 }
 
 /// <summary>
@@ -97,7 +112,7 @@ public static class NuclearPosture
 {
     public static bool IsHolder(Campaign c, Nation n) => n is not null && Deterrence.TierOf(c, n) >= 1;
 
-    public static bool Active(Campaign c) => c is not null && c.Defines.DefconEnabled;
+    public static bool Active(Campaign c) => DefconSystem.Enabled(c) && c.FeatureEnabled("nuclear_posture");
 
     /// <summary>The most alarmed holder's posture, 5 when none has raised its alert.</summary>
     public static int Lowest(Campaign c, out Nation holder)
@@ -145,6 +160,7 @@ public static class NuclearPosture
                     return Loc.Format("A test costs {0:0} political credit; there is {1:0.#}.", d.NuclearTestCost, n.PoliticalPoints);
                 return "";
             case "strike":
+                if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
                 if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
                     return Loc.Format("A weapon was used {0} days ago; the next order after {1}.",
@@ -237,19 +253,38 @@ public static class NuclearPosture
             if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
                 foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
         if (enemies.Count == 0) return 0;
+        // An answer to a strike falls on the striker's strongest force wherever it stands; failing
+        // that, and always otherwise, the weapon defends our own soil.
+        var avenged = Avenging(c, n);
         var weight = new Dictionary<int, float>();
-        foreach (var army in c.Armies)
+        for (var pass = avenged is null ? 1 : 0; pass < 2; pass++)
         {
-            if (!enemies.Contains(army.NationId) || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
-                army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f) continue;
-            if (topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
-            weight[army.ProvinceId] = weight.GetValueOrDefault(army.ProvinceId) + army.Personnel * army.Strength;
+            weight.Clear();
+            foreach (var army in c.Armies)
+            {
+                if (!enemies.Contains(army.NationId) || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 ||
+                    army.ProvinceId > topology.ProvinceCount || army.Divisions < 0.1f) continue;
+                if (pass == 0 ? army.NationId != avenged.Id : topology.ProvinceToNation[army.ProvinceId] != n.MapIndex) continue;
+                weight[army.ProvinceId] = weight.GetValueOrDefault(army.ProvinceId) + army.Personnel * army.Strength;
+            }
+            var best = 0;
+            var bestWeight = 0f;
+            foreach (var (province, value) in weight)
+                if (value > bestWeight || value == bestWeight && province < best) { best = province; bestWeight = value; }
+            if (best > 0) return best;
         }
-        var best = 0;
-        var bestWeight = 0f;
-        foreach (var (province, value) in weight)
-            if (value > bestWeight || value == bestWeight && province < best) { best = province; bestWeight = value; }
-        return best;
+        return 0;
+    }
+
+    /// <summary>
+    /// The holder whose strike this country may still answer: one that struck its forces in the
+    /// last NuclearRetaliationDays and that it is still at war with. Null otherwise.
+    /// </summary>
+    public static Nation Avenging(Campaign c, Nation n)
+    {
+        if (n is null || n.NuclearStruckBy < 0 || c.ElapsedDays - n.NuclearStruckDay >= c.Defines.NuclearRetaliationDays) return null;
+        var striker = c.NationById(n.NuclearStruckBy);
+        return striker is { Population: > 0 } && striker.Id != n.Id && AtWarWith(c, n.Id, striker.Id) ? striker : null;
     }
 
     /// <summary>
@@ -262,10 +297,18 @@ public static class NuclearPosture
     private static void Strike(Campaign c, Nation n)
     {
         var d = c.Defines;
+        var answer = Avenging(c, n);
         var province = StrikeTarget(c, n, out var enemies);
         if (province <= 0) return;
         n.PoliticalPoints -= d.NuclearStrikeCost;
         n.LastNuclearStrikeDay = c.ElapsedDays;
+        // The first to use one is the outlaw; the one that answers is understood, if not forgiven.
+        if (answer is null)
+        {
+            n.NuclearFirstUseDay = c.ElapsedDays;
+            n.Notoriety += d.NuclearFirstUseNotoriety;
+        }
+        else n.NuclearStruckBy = -1;
         var struck = new HashSet<int>();
         foreach (var army in c.Armies)
         {
@@ -285,18 +328,31 @@ public static class NuclearPosture
             region.LastFoughtDay = c.ElapsedDays;
         }
         foreach (var id in struck.OrderBy(id => id))
-            if (c.NationById(id) is { } enemy) enemy.WarSupport = M.Clamp01(enemy.WarSupport - d.NuclearStrikeWarSupport);
+        {
+            if (c.NationById(id) is not { } enemy) continue;
+            enemy.WarSupport = M.Clamp01(enemy.WarSupport - d.NuclearStrikeWarSupport);
+            enemy.NuclearStruckDay = c.ElapsedDays;
+            enemy.NuclearStruckBy = n.Id;
+            // A holder whose forces are struck goes to launch on warning at once: nobody waits a
+            // month of committee meetings after that.
+            if (IsHolder(c, enemy) && enemy.NuclearPosture > 1)
+            {
+                enemy.NuclearPosture = 1;
+                enemy.NuclearPostureDay = c.ElapsedDays;
+            }
+        }
         foreach (var other in c.Nations)
         {
             if (other.Id == n.Id || other.Population <= 0) continue;
-            if (CampaignDiplomacy.Get(c, other.Id, n.Id) is { } seen) OpinionSystem.Remember(c, seen, "nuclear_strike");
+            if (CampaignDiplomacy.Get(c, other.Id, n.Id) is { } seen) OpinionSystem.Remember(c, seen, answer is null ? "nuclear_strike" : "nuclear_retaliation");
             if (!Allied(c, n.Id, other.Id) && CampaignDiplomacy.Get(c, n.Id, other.Id) is { } relation)
                 relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearStrikeTension);
         }
         c.DefconLevel = 1;
         c.DefconDaysInStage = 0;
         c.DefconPeakLevel = 1;
-        c.Chronicle.Record(c, "nuclear_strike", n.Id, struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
+        c.Chronicle.Record(c, answer is null ? "nuclear_strike" : "nuclear_retaliation", n.Id,
+            struck.Count > 0 ? struck.Min() : -1, "", region?.DisplayName ?? "");
     }
 
     /// <summary>The most recent nuclear strike still casting its shadow over the world, or null.</summary>
@@ -408,7 +464,8 @@ public static class NuclearPosture
                 wanted = Math.Min(wanted, againstHolder ? 2 : losing ? 3 : 4);
             }
             var existential = Existential(c, n);
-            if (existential) wanted = 1;
+            var avenging = Avenging(c, n) is not null;
+            if (existential || avenging) wanted = 1;
             foreach (var other in holders)
             {
                 if (other.Id == n.Id || CampaignDiplomacy.Peek(c, n.Id, other.Id) is not { } relation) continue;
@@ -427,6 +484,11 @@ public static class NuclearPosture
             // the war lost on its own ground and the enemy standing on it.
             if (existential && n.NuclearPosture <= 1 && d.AiNuclearStrikeChance > 0f &&
                 MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x5741) < d.AiNuclearStrikeChance)
+                Apply(c, n, "strike");
+            // And the answer: a holder whose forces were struck answers in kind, or its deterrent
+            // was never one.
+            else if (avenging && n.NuclearPosture <= 1 && d.AiNuclearRetaliationChance > 0f &&
+                MovementRules.Roll(c.Seed, n.Id, c.ElapsedDays, 0x2D5E) < d.AiNuclearRetaliationChance)
                 Apply(c, n, "strike");
         }
         for (var i = 0; i < holders.Count; i++)

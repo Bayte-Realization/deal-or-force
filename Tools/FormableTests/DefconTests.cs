@@ -152,6 +152,7 @@ static class DefconTests
         Check(c.DefconLevel == 3, "de-escalates step by step (2 -> 3)");
 
         Posture();
+        Switches();
     }
 
     /// <summary>A holder's own alert and its four acts (NuclearPosture), for the player and the computer alike.</summary>
@@ -222,5 +223,40 @@ static class DefconTests
         us.NuclearPosture = 2;
         Check(NuclearPosture.UmbrellaPrice(c, ru, pl, out var patron) == 2f && patron == us,
             "an alarmed holder's ally costs an attacker a step for every step below DEFCON 4");
+    }
+    /// <summary>The nuclear age as three switches a scenario opens one at a time, and the values a trigger reads.</summary>
+    static void Switches()
+    {
+        var c = Campaign.CreateBootstrap(947986505);
+        c.Defines.AiNuclearPosture = false;
+        var us = c.NationByTag("USA");
+        var errors = new System.Collections.Generic.List<string>();
+        var holder = ScriptedTrigger.Parse(System.Text.Json.JsonDocument.Parse(
+            "{ \"min_nuclear_tier\": 1, \"max_nuclear_posture\": 5, \"min_defcon\": 1 }").RootElement, "test", errors);
+        Check(errors.Count == 0 && holder.Matches(c, us), "a trigger can ask who holds a deterrent, its alert and the world's DEFCON");
+        Check(!holder.Matches(c, c.Nations.First(n => Deterrence.TierOf(c, n) == 0)), "and tells a country without one apart");
+
+        c.SetFeature("nuclear_strikes", false);
+        us.NuclearPosture = 1; us.PoliticalPoints = 100f;
+        Check(NuclearPosture.Active(c) && NuclearPosture.Refusal(c, us, "strike").Length > 0 &&
+              NuclearPosture.Refusal(c, us, "test").Length == 0, "closing use leaves the alert and the tests");
+        c.SetFeature("defcon", false);
+        Check(!DefconSystem.Enabled(c) && !NuclearPosture.Active(c) && DefconSystem.CurrentLevel(c) == 5,
+            "closing the ladder closes the posture with it");
+        c.Commands.Enqueue(new NuclearPostureCommand { IssuerId = us.Id, Action = "stand_down" });
+        c.Commands.ApplyAll(c);
+        Check(us.NuclearPosture == 1, "and no order reaches a closed age; the saved alert waits");
+        c.SetFeature("defcon", true);
+        Check(DefconSystem.Enabled(c) && NuclearPosture.Active(c) && DefconSystem.CurrentLevel(c) >= 1, "reopened, it resumes where it stood");
+
+        // Any true/false define can follow a feature: declared, it is driven; undeclared, left alone.
+        var d = Campaign.CreateBootstrap(947986505);
+        d.Defines.Features["elections"] = false;
+        d.EvaluateFeatureUnlocks();
+        Check(!d.Defines.ElectionsEnabled && d.Defines.ParliamentEnabled, "a declared switch drives its define, an undeclared one is left alone");
+        d.SetFeature("elections", true);
+        Check(d.Defines.ElectionsEnabled, "and an event that opens the feature opens the define");
+        Check(MechanicFeatures.IsBoolDefine("OccupationResistanceEnabled") && !MechanicFeatures.IsBoolDefine("NuclearStrikeCost"),
+            "only true/false defines can be bound");
     }
 }

@@ -127,12 +127,15 @@ public sealed partial class Defines
 /// </summary>
 public static class DefconSystem
 {
+    /// <summary>The world's alert ladder runs: the define is the master switch, the "defcon" feature the scenario's.</summary>
+    public static bool Enabled(Campaign campaign) => campaign is not null && campaign.Defines.DefconEnabled && campaign.FeatureEnabled("defcon");
+
     /// <summary>
     /// Returns the current clamped DEFCON level (5 peacetime down to 1 maximum alert).
     /// Returns 5 if campaign is null or the DEFCON subsystem is disabled in defines.
     /// </summary>
     public static int CurrentLevel(Campaign campaign) =>
-        campaign is null || !campaign.Defines.DefconEnabled ? 5 : Math.Clamp(campaign.DefconLevel, 1, 5);
+        campaign is null || !Enabled(campaign) ? 5 : Math.Clamp(campaign.DefconLevel, 1, 5);
 
     /// <summary>
     /// Evaluate the target DEFCON readiness required by the current world geopolitical state.
@@ -140,7 +143,7 @@ public static class DefconSystem
     public static int EvaluateTarget(Campaign campaign, out string primaryHotspot)
     {
         primaryHotspot = "";
-        if (campaign is null || !campaign.Defines.DefconEnabled) return 5;
+        if (campaign is null || !Enabled(campaign)) return 5;
 
         var target = 5;
         var holders = new HashSet<int>();
@@ -259,7 +262,7 @@ public static class DefconSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.Defines.DefconEnabled) return;
+        if (campaign is null || !Enabled(campaign)) return;
 
         campaign.DefconDaysInStage++;
 
@@ -315,7 +318,7 @@ public static class DefconSystem
     /// </summary>
     public static float ReadinessRecoveryMultiplier(Campaign campaign, int nationId)
     {
-        if (campaign is null || !campaign.Defines.DefconEnabled) return 1f;
+        if (campaign is null || !Enabled(campaign)) return 1f;
         var nation = campaign.NationById(nationId);
         var isHolder = nation is not null && Deterrence.TierOf(campaign, nation) >= 1;
         // A holder's forces stand at its own alert when that is higher than the world's.
@@ -336,7 +339,7 @@ public static class DefconSystem
     /// </summary>
     public static float UpkeepMultiplier(Campaign campaign, Nation nation)
     {
-        if (campaign is null || nation is null || !campaign.Defines.DefconEnabled) return 1f;
+        if (campaign is null || nation is null || !Enabled(campaign)) return 1f;
         var level = NuclearPosture.Effective(campaign, nation);
         if (level >= 5) return 1f;
 
@@ -370,7 +373,7 @@ public static class DefconSystem
     /// </summary>
     public static float GlobalTradeMultiplier(Campaign campaign)
     {
-        if (campaign is null || !campaign.Defines.DefconEnabled) return 1f;
+        if (campaign is null || !Enabled(campaign)) return 1f;
         return campaign.DefconLevel switch
         {
             2 => campaign.Defines.DefconTradeConfidence2,
