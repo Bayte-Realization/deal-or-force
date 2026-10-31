@@ -84,13 +84,17 @@ public partial class DealOrForceGame
                 lit ? Ui.Colour(DefconSystem.LevelColourToken(level)) : Ui.Colour("text.muted"));
             badge.CustomMinimumSize = new Vector2(330, 0);
             line.AddChild(badge);
-            // Where the world and our own forces stand on the ladder, said next to the rung - a bare
-            // "the world" at the far end of the row read as a caption nobody could place.
-            var marks = (lit ? Tr("◀ the world stands here") : "") +
-                        (holder && player!.NuclearPosture == level ? (lit ? " · " : "◀ ") + Tr("our forces stand here") : "");
-            var mark = Title(marks, 12, Ui.Colour("text.accent"));
-            mark.CustomMinimumSize = new Vector2(220, 0);
-            line.AddChild(mark);
+            // Where the world and our own forces stand, as labelled tags in a column of their own on
+            // the rung itself. A yellow sentence with an arrow, wrapping in the middle, read as a
+            // caption nobody could place (the user asked twice what it meant).
+            var tags = new HBoxContainer { CustomMinimumSize = new Vector2(240, 0) };
+            tags.AddThemeConstantOverride("separation", 6);
+            if (lit) tags.AddChild(DefconTag(Tr("WORLD NOW"), Ui.Colour(DefconSystem.LevelColourToken(level)),
+                Tr("The level the whole world stands at: the most alarmed of the nuclear powers, or a crisis hotspot.")));
+            if (holder && player!.NuclearPosture == level)
+                tags.AddChild(DefconTag(Tr("OUR FORCES"), Ui.Colour("text.accent"),
+                    Tr("The alert our own nuclear forces are kept at. Raise or stand it down below.")));
+            line.AddChild(tags);
             var text = Title(Tr(DefconSystem.LevelDescription(level)), 12, lit ? Ui.Colour("text.body") : Ui.Colour("text.faint"));
             text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -228,5 +232,19 @@ public partial class DealOrForceGame
         PlayStrategicCue("ui_select");
         RefreshDefconOverview();
         Refresh();
+    }
+
+    /// <summary>A small framed tag on a rung of the ladder: a word in the tag's colour, its meaning on hover.</summary>
+    private Control DefconTag(string text, Color colour, string tip)
+    {
+        var panel = new PanelContainer { MouseFilter = MouseFilterEnum.Stop, TooltipText = Ui.Tip(tip), SizeFlagsVertical = SizeFlags.ShrinkCenter };
+        var style = new StyleBoxFlat { BgColor = new Color(colour, 0.16f), BorderColor = colour, ContentMarginLeft = 7, ContentMarginRight = 7, ContentMarginTop = 2, ContentMarginBottom = 2 };
+        style.SetBorderWidthAll(1);
+        style.SetCornerRadiusAll(3);
+        panel.AddThemeStyleboxOverride("panel", style);
+        var label = Title(text, 10, colour, upper: true);
+        label.AutowrapMode = TextServer.AutowrapMode.Off;
+        panel.AddChild(label);
+        return panel;
     }
 }
