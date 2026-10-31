@@ -282,22 +282,21 @@ internal static class AtlasSurfaceSkin
     /// </summary>
     internal static StyleBox ToggleFace(bool on, int state)
     {
-        var key = $"toggle|{on}|{state}";
+        // One dark face for on and off - a fill read as "selected" or "hovered" as easily as "on",
+        // and the player could not tell. The state is the check box beside the word; on also sits
+        // pressed in, behind a gold rim, with bright lettering.
+        var key = $"toggle2|{on}|{state}";
         if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
         var accent = Ui.Colour("text.accent");
-        var fill = on
-            ? (state == 1 ? accent.Lightened(0.12f) : state == 2 ? accent.Darkened(0.1f) : accent)
-            : state == 1 ? Ui.Colour("button.fill_hover") : Ui.Colour("surface.inset");
+        var fill = state == 1 ? Ui.Colour("button.fill_hover") : on ? Ui.Colour("surface.inset").Darkened(0.25f) : Ui.Colour("surface.inset");
         var style = new StyleBoxFlat
         {
             BgColor = fill,
-            BorderColor = on ? accent.Lightened(0.25f) : Ui.Colour(state == 1 ? "button.border_hover" : "surface.line_faint"),
-            ShadowColor = new Color(0, 0, 0, on ? 0.4f : 0f),
-            ShadowSize = on ? 4 : 0,
-            ShadowOffset = new Vector2(0, 1),
-            ContentMarginLeft = 10, ContentMarginRight = 10, ContentMarginTop = 5, ContentMarginBottom = 5
+            BorderColor = on ? accent : Ui.Colour(state == 1 ? "button.border_hover" : "surface.line_faint"),
+            ContentMarginLeft = 9, ContentMarginRight = 10, ContentMarginTop = 5, ContentMarginBottom = 5
         };
         style.SetBorderWidthAll(1);
+        if (on) style.BorderWidthBottom = 2;
         style.SetCornerRadiusAll(3);
         SpecialButtons[key] = style;
         return style;
@@ -312,33 +311,43 @@ internal static class AtlasSurfaceSkin
     /// </summary>
     internal static Texture2D ToggleLamp(bool on)
     {
+        // A check box, the one sign of on and off everybody already reads: a gold box with a tick,
+        // or an empty one.
         if (_lamps[on ? 1 : 0] is { } cached) return cached;
         const int size = 28;
         var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
         image.Fill(Colors.Transparent);
-        // On sits on a gold face, so its lamp is dark; off sits on a dark face, so its ring is pale.
-        var lit = Ui.Colour("surface.background");
+        var gold = Ui.Colour("text.accent");
         var dim = Ui.Colour("text.muted");
-        var c = (size - 1) * 0.5f;
+        var ink = Ui.Colour("surface.background");
+        const float lo = 4.5f, hi = 23.5f;
         for (var y = 0; y < size; y++)
         for (var x = 0; x < size; x++)
         {
-            var d = MathF.Sqrt((x - c) * (x - c) + (y - c) * (y - c));
-            Color pixel;
-            if (on)
+            var px = x + 0.5f; var py = y + 0.5f;
+            var inside = px >= lo && px <= hi && py >= lo && py <= hi;
+            var edge = inside && (px < lo + 2f || px > hi - 2f || py < lo + 2f || py > hi - 2f);
+            Color pixel = Colors.Transparent;
+            if (on && inside)
             {
-                var core = Mathf.Clamp(7.5f - d, 0f, 1f);
-                var glow = Mathf.Clamp(1f - (d - 7f) / 6f, 0f, 1f) * 0.35f;
-                pixel = new Color(lit.R, lit.G, lit.B, MathF.Max(core, glow * glow));
+                pixel = gold;
+                // The tick: two strokes, short down-right then long up-right.
+                var d1 = Segment(new Vector2(px, py), new Vector2(8.5f, 14.5f), new Vector2(12.5f, 19f));
+                var d2 = Segment(new Vector2(px, py), new Vector2(12.5f, 19f), new Vector2(20f, 9f));
+                var tick = Mathf.Clamp(2.3f - Mathf.Min(d1, d2), 0f, 1f);
+                pixel = pixel.Lerp(ink, tick);
             }
-            else
-            {
-                var ring = Mathf.Clamp(1.2f - MathF.Abs(d - 6.5f), 0f, 1f);
-                pixel = new Color(dim.R, dim.G, dim.B, ring * 0.9f);
-            }
+            else if (!on && edge) pixel = new Color(dim, 0.95f);
             image.SetPixel(x, y, pixel);
         }
         return _lamps[on ? 1 : 0] = ImageTexture.CreateFromImage(image);
+    }
+
+    private static float Segment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        var t = Mathf.Clamp((p - a).Dot(ab) / ab.LengthSquared(), 0f, 1f);
+        return (p - (a + ab * t)).Length();
     }
 
     internal static Texture2D MusicGlyph()

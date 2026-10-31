@@ -2094,7 +2094,7 @@ public partial class DealOrForceGame : Control
                 foreach (var (state, index) in new[] { ("normal", 0), ("hover", 1), ("pressed", 2), ("hover_pressed", 1), ("disabled", 0) })
                     button.AddThemeStyleboxOverride(state, AtlasSurfaceSkin.ToggleFace(primary, index));
                 button.Icon = AtlasSurfaceSkin.ToggleLamp(primary);
-                button.AddThemeConstantOverride("icon_max_width", 14);
+                button.AddThemeConstantOverride("icon_max_width", 16);
                 button.AddThemeConstantOverride("h_separation", 6);
                 // Room for the lamp, once: a caption sized to its width would otherwise be clipped.
                 if (!button.HasMeta("lamp_room") && button.CustomMinimumSize.X > 0f)
@@ -2170,7 +2170,7 @@ public partial class DealOrForceGame : Control
         // A switch's lettering last, over the general colours above: dark on a lit key, muted on an unlit one.
         if (tabPill && button.ToggleMode && button.HasMeta("toggle_lamp"))
         {
-            var lettering = primary ? Ui.Colour("surface.background") : Ui.Colour("text.muted");
+            var lettering = primary ? Ui.Colour("button.text_hover") : Ui.Colour("text.muted");
             foreach (var key in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color" })
                 button.AddThemeColorOverride(key, key == "font_hover_color" && !primary ? Ui.Colour("button.text_hover") : lettering);
         }
