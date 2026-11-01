@@ -167,6 +167,9 @@ public static partial class AiStatecraft
         // every map the country prints; while the other side holds it, that is a reason.
         value += Part(parts, "revanche", LostLands.Weight(campaign, nation, other) * defines.AiRevancheAppetite);
 
+        // And a border nobody can live with: their land inside ours, ours cut off by theirs.
+        value += Part(parts, "borders", BorderShape.Grievance(campaign, nation, other) * defines.AiBorderAppetite);
+
         // And a member of the union we are bringing together, holding out - counted only by a
         // government that wants the union badly enough (Consolidation). It still needs a cause.
         value += Part(parts, "union", Consolidation.WarValue(campaign, nation, other));

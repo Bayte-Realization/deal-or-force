@@ -74,6 +74,8 @@ public static class CampaignFingerprint
             }
         foreach (var n in campaign.Nations.OrderBy(n => n.Id))
             if (n.LastNuclearStrikeDay != -100000) { MixText("nuclear_strike"); Mix(n.Id); Mix(n.LastNuclearStrikeDay); }
+        foreach (var army in campaign.Armies.OrderBy(a => a.Id))
+            if (army.LentById >= 0) { MixText("volunteers"); Mix(army.Id); Mix(army.LentById); Mix(army.LentDay); }
         foreach (var n in campaign.Nations.OrderBy(n => n.Id))
             if (n.NuclearStruckDay != -100000 || n.NuclearStruckBy != -1 || n.NuclearFirstUseDay != -100000)
             {

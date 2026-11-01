@@ -40,7 +40,7 @@ internal static class PeaceReport
         {
             c.TickDay();
             if (day % 365 != 0) continue;
-            Console.WriteLine($"YEAR {day / 365} fleets={c.Fleets.Count} hulls={c.Fleets.Sum(f => f.Hulls)} at_sea={c.Fleets.Count(f => !f.InPort)} " +
+            Console.WriteLine($"YEAR {day / 365} navies={c.Fleets.Select(f => f.NationId).Distinct().Count()} fleets={c.Fleets.Count} hulls={c.Fleets.Sum(f => f.Hulls)} at_sea={c.Fleets.Count(f => !f.InPort)} " +
                               $"carrying={c.Fleets.Count(f => f.Carried.Count > 0)} " + string.Join(" ", NavalInvasion.Tally.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")));
         }
         Console.WriteLine($"START fleets={startFleets} hulls={startHulls}");

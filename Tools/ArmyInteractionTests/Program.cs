@@ -26,6 +26,7 @@ static class Program
         if (args.Length == 0) PostBattleOrderTests.Run();
         if (args.Contains("--battle-reinforcement-only")) { BattleReinforcementTests.RunFixture(); return; }
         if (args.Contains("--military-access-only")) { MilitaryAccessTests.Run(); return; }
+        if (args.Contains("--insurgent-supply-only")) { InsurgentSupplyTests.Run(); return; }
         if (args.Length == 0) MilitaryAccessTests.Run();
         if (args.Contains("--capital-loss-only")) { CapitalLossTests.Run(); return; }
         if (args.Length == 0) CapitalLossTests.Run();
@@ -146,6 +147,7 @@ static class Program
         if (args.Contains("--movement82-only")) { Movement82Tests.Run(c); return; }
         if (args.Contains("--ai-war-only")) { AiWarTests.Run(map); return; }
         if (args.Contains("--nuclear-strike-only")) { NuclearStrikeTests.Run(map); return; }
+        if (args.Contains("--expeditions-only")) { ExpeditionTests.Run(map); return; }
         if (args.Contains("--backlog69-only")) { Backlog69Tests.Run(c); return; }
         if (args.Contains("--defence-only")) { DefensivePlanTests.Run(c); return; }
         if (args.Contains("--radicalism-only")) { RadicalismTests.Run(c); return; }

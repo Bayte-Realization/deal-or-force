@@ -62,7 +62,7 @@ public partial class DealOrForceGame
         _frameDurations.Sort();
         var p95 = _frameDurations[(int)Math.Floor((_frameDurations.Count-1)*.95)];
         var maximum = _frameDurations[^1];
-        DiagnosticLogs.Write("performance", $"FRAME_WINDOW seconds={DiagnosticLogs.N(seconds)} frames={_frameReportFrames} fps={DiagnosticLogs.N(_frameReportFrames/seconds)} p95_ms={DiagnosticLogs.N(p95)} max_ms={DiagnosticLogs.N(maximum)} speed={_speed} paused={_campaign.IsPaused} network_client={IsNetworkClient} days_per_second={DiagnosticLogs.N(days/seconds)} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} managed_heap_bytes={GC.GetTotalMemory(false)} engine_bytes={OS.GetStaticMemoryUsage()} gc_counts={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} borders_rebuilt={CampaignDiplomacy.Rebuilds-_frameReportRebuilds} map_revisions={_campaign.MapRevision-_frameReportRevision}");
+        DiagnosticLogs.Write("performance", $"FRAME_WINDOW seconds={DiagnosticLogs.N(seconds)} frames={_frameReportFrames} fps={DiagnosticLogs.N(_frameReportFrames/seconds)} p95_ms={DiagnosticLogs.N(p95)} max_ms={DiagnosticLogs.N(maximum)} speed={_speed} paused={_campaign.IsPaused} network_client={IsNetworkClient} days_per_second={DiagnosticLogs.N(days/seconds)} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} managed_heap_bytes={GC.GetTotalMemory(false)} engine_bytes={OS.GetStaticMemoryUsage()} video_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed)} texture_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed)} buffer_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed)} objects={(long)Performance.GetMonitor(Performance.Monitor.ObjectCount)} resources={(long)Performance.GetMonitor(Performance.Monitor.ObjectResourceCount)} nodes={(long)Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)} orphans={(long)Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount)} process_bytes={PrivateBytes()} gc_counts={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} borders_rebuilt={CampaignDiplomacy.Rebuilds-_frameReportRebuilds} map_revisions={_campaign.MapRevision-_frameReportRevision}");
         _frameReportRebuilds = CampaignDiplomacy.Rebuilds;
         _frameReportRevision = _campaign.MapRevision;
         foreach (var sample in SimProfiler.All.OrderBy(s => s.Name))
@@ -76,5 +76,16 @@ public partial class DealOrForceGame
         _frameReportAccumulator = 0;
         _frameReportFrames = 0;
         _frameDurations.Clear();
+    }
+
+    /// <summary>
+    /// The whole process's private memory - what the player sees in the task manager. The heap
+    /// and the engine's own allocator were a tenth of it in a long 2046 campaign; the rest is the
+    /// renderer and the driver, so the log carries their counters beside it to show which grows.
+    /// </summary>
+    private static long PrivateBytes()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 }

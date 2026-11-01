@@ -236,8 +236,11 @@ public partial class DealOrForceGame
             button.Visible = SettingsCatalog.Of(setting) is not null
                 && (!atmosphere || Simulation.WeatherReadability.LayersAllowed(_campaign));
             var enabled = SettingsCatalog.Flag(setting);
-            if (button.ButtonPressed == enabled && button.HasMeta("map_visual_styled")) continue;
-            button.SetPressedNoSignal(enabled); StyleButton(button, enabled); button.SetMeta("map_visual_styled", true);
+            // Compared with what was last drawn, not with ButtonPressed: a toggle button flips its
+            // own pressed state before the click handler runs, so "already pressed" was always
+            // true after a click and the check box never redrew - it stayed ticked when off.
+            if (button.HasMeta("map_visual_state") && button.GetMeta("map_visual_state").AsBool() == enabled) continue;
+            button.SetPressedNoSignal(enabled); StyleButton(button, enabled); button.SetMeta("map_visual_state", enabled);
         }
     }
 

@@ -83,7 +83,12 @@ public sealed partial class MovementDefinition
     public bool Template;
     /// <summary>Some organisations appear only once conditions justify them.</summary>
     public bool StartActive = true;
-    public bool CanEmerge;
+    /// <summary>
+    /// Whether it can rise again once it has ended, or appear when its people's grievance calls
+    /// for it (MovementLifecycle). On unless a file says otherwise: no definition ever set it, so
+    /// a movement that dissolved was gone for good and the world's cast of movements only shrank.
+    /// </summary>
+    public bool CanEmerge = true;
     public float EmergenceThreshold = .35f;
     public float EmergenceChance = .25f;
     /// <summary>Operational reach from headquarters or a homeland, not a radius of automatic popularity.</summary>
@@ -438,6 +443,13 @@ public static partial class Movements
             if (movement is null || !movement.Landless) continue;
             var region = campaign.States.Find(state => state.MapIndex == movement.HeadquartersStateMapIndex);
             if (region is null) continue;
+            // Already placed in this region: a loaded game keeps the headquarters where the saved
+            // one had it. Recomputed on load it could land on another city of the same region,
+            // and a save and its reload no longer described the same world.
+            var placed = movement.HeadquartersProvinceId;
+            if (placed > 0 && placed <= campaign.ProvinceMap.ProvinceCount &&
+                campaign.ProvinceMap.ProvinceToState[placed] == region.MapIndex &&
+                (movement.HeadquartersLatitude != 0f || movement.HeadquartersLongitude != 0f)) continue;
             // On a province, not on the region's average: the middle of a coastline or an
             // archipelago is the sea, and a government in exile in London was drawn in the
             // North Sea. The host's capital when it stands in this region - that is where

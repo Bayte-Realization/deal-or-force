@@ -711,6 +711,49 @@ public static class Program
                                   $"{CivilWarOutbreak.EligibilityReason(campaign, nation)}");
             return 0;
         }
+        // `--migration <days>`: who has settled where across borders - every region's peoples
+        // that were not there at the start and now count a million or a tenth of it, and the
+        // countries that gained and lost the most.
+        // `--memory`: where the managed memory of this world goes - the heap after a full
+        // collection, and the counts of the collections that grow with a campaign's age.
+        if (args.Contains("--memory"))
+        {
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            var heap = GC.GetTotalMemory(true);
+            var groups = campaign.States.Sum(s => (long)s.PopulationGroups.Count);
+            Console.WriteLine($"MEMORY heap {heap / 1048576.0:0} MB; process {Environment.WorkingSet / 1048576.0:0} MB");
+            Console.WriteLine($"MEMORY states {campaign.States.Count}, population groups {groups:N0} (largest region {campaign.States.Max(s => s.PopulationGroups.Count):N0}), " +
+                              $"distinct cultures {campaign.States.SelectMany(s => s.PopulationGroups).Select(g => g.Culture).Distinct().Count()}");
+            Console.WriteLine($"MEMORY nations {campaign.Nations.Count}, relations {campaign.Relations.Count:N0}, armies {campaign.Armies.Count}, wars {campaign.Wars.Count} " +
+                              $"(ended {campaign.Wars.Count(w => w.Ended)}), battles {campaign.Battles.Count}, chronicle {campaign.Chronicle.Entries.Count}");
+            foreach (var s in campaign.States.OrderByDescending(s => s.PopulationGroups.Count).Take(5))
+                Console.WriteLine($"MEMORY   {s.DisplayName}: {s.PopulationGroups.Count:N0} groups, {s.PopulationGroups.Select(g => g.Culture).Distinct().Count()} cultures");
+            return 0;
+        }
+        var migrationAt = Array.IndexOf(args, "--migration");
+        if (migrationAt >= 0)
+        {
+            var migrationDays = migrationAt + 1 < args.Length && int.TryParse(args[migrationAt + 1], out var md) ? md : 3650;
+            var before = campaign.States.ToDictionary(s => s.MapIndex, s => s.PopulationGroups
+                .GroupBy(g => g.Culture ?? "").ToDictionary(g => g.Key, g => g.Sum(x => x.Size)));
+            campaign.IsPaused = false;
+            for (var day = 1; day <= migrationDays; day++) campaign.TickDay();
+            foreach (var state in campaign.States.OrderByDescending(s => s.Population))
+            {
+                var was = before.GetValueOrDefault(state.MapIndex) ?? new Dictionary<string, long>();
+                foreach (var group in state.PopulationGroups.GroupBy(g => g.Culture ?? ""))
+                {
+                    var now = group.Sum(g => g.Size);
+                    var gained = now - was.GetValueOrDefault(group.Key);
+                    if (gained >= 1_000_000 || gained >= 100_000 && gained >= state.Population / 10)
+                        Console.WriteLine($"MIGRATION {state.DisplayName} ({campaign.NationsByMapIndex().GetValueOrDefault((ushort)state.NationMapIndex)?.Tag}): " +
+                                          $"{group.Key} {was.GetValueOrDefault(group.Key):N0} -> {now:N0} of {state.Population:N0}");
+                }
+            }
+            foreach (var n in campaign.Nations.Where(n => n.CumulativeNetMigration != 0).OrderByDescending(n => Math.Abs(n.CumulativeNetMigration)).Take(15))
+                Console.WriteLine($"MIGRATION net {n.Tag}: {n.CumulativeNetMigration:N0} of {n.Population:N0}");
+            return 0;
+        }
         var pulseAt = Array.IndexOf(args, "--pulse");
         if (pulseAt >= 0)
         {
@@ -732,6 +775,9 @@ public static class Program
                     year[entry.Kind] = year.GetValueOrDefault(entry.Kind) + 1;
                     total[entry.Kind] = total.GetValueOrDefault(entry.Kind) + 1;
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
+                    if (entry.Kind is "civil_war_third_front" or "movement_merged" or "movement_absorbed" or "movement_dissolved" or "movement_emerged" or "coup")
+                        Console.WriteLine($"   {entry.Kind.ToUpperInvariant()} day {entry.Day}: {entry.ActorName} -> {entry.TargetName} {entry.Subject}");
+                    if (entry.Kind == "volunteers_sent") Console.WriteLine($"   VOLUNTEERS day {entry.Day}: {entry.ActorName} -> {entry.TargetName} ({entry.Place})");
                     if (entry.Kind is "nuclear_strike" or "nuclear_retaliation" or "organization_sanction" or "sanctions_imposed")
                         Console.WriteLine($"   NUCLEAR day {entry.Day}: {entry.Kind} {entry.ActorName} -> {entry.TargetName} ({entry.Subject}{entry.Place})");
                 }

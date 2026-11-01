@@ -130,7 +130,7 @@ public sealed class CovertOperationDefinition
 /// </summary>
 public static class CovertOperations
 {
-    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft", "separatism", "arm_insurgents", "cyber_blackout" };
+    public static readonly string[] Effects = { "sabotage", "unrest", "opposition", "theft", "separatism", "arm_insurgents", "cyber_blackout", "coup" };
     private static readonly Dictionary<string, CovertOperationDefinition> Entries = new(StringComparer.Ordinal);
 
     static CovertOperations() => ResetCatalog();
@@ -242,6 +242,12 @@ public static class CovertOperations
                 return Loc.Get("Nothing has been read about that region's politics yet.");
         }
         if (definition.Effect == "theft" && !c.FeatureEnabled("research")) return Loc.Get("There is no research in this world.");
+        // Officers move against a government only when it is already falling: a coup needs a
+        // country that would have had one anyway, and the money only chooses which officers.
+        if (definition.Effect == "coup" && target.Stability >= c.Defines.CoupStabilityThreshold * 1.25f)
+            return Loc.Format("Their government is too steady: no officer would risk it above {0} stability.", Fmt.Percent(c.Defines.CoupStabilityThreshold * 1.25f));
+        if (definition.Effect == "coup" && (target.IsSubject || c.ElapsedDays - target.LastCoupDay < c.Defines.CoupGraceDays))
+            return Loc.Get("The army there is in no state to move against anyone now.");
         if (definition.Effect == "theft" && TheftTarget(owner, target) is null) return Loc.Get("They know nothing we could use.");
         var cost = Cost(c, owner, definition);
         if (owner.Treasury < cost) return Loc.Format("It costs {0}.", Fmt.Money(cost));
@@ -303,6 +309,9 @@ public static class CovertOperations
         ("cyber_blackout", "done") => "covert_cyber_blackout",
         ("cyber_blackout", "suspected") => "covert_cyber_blackout_suspected",
         ("cyber_blackout", "exposed") => "covert_cyber_blackout_exposed",
+        ("coup", "done") => "covert_coup_done",
+        ("coup", "suspected") => "covert_coup_suspected",
+        ("coup", "exposed") => "covert_coup_exposed",
         _ => "covert_operation_failed"
     };
 
@@ -428,6 +437,18 @@ public static class CovertOperations
                     movement.Treasury += MathF.Min(spent * M.Clamp01(d.CovertOppositionFunding), MathF.Max(0f, target.Gdp) * MathF.Max(0f, d.CovertOppositionFundingCap));
                 return definition.Name;
             }
+            case "coup":
+            {
+                // The officers we paid take power, and the new government looks to the ones who
+                // paid them: our creed, if it is not already theirs, and a debt of gratitude.
+                if (target.Stability >= d.CoupStabilityThreshold * 1.25f || target.IsSubject) return null;
+                Coups.Seize(c, target);
+                var creed = PoliticsCore.IdeologyOf(owner);
+                if (creed is not null && !string.IsNullOrEmpty(creed.Id)) target.Ideology = creed.Id;
+                if (CampaignDiplomacy.Get(c, target.Id, owner.Id) is { } grateful)
+                    grateful.Opinion = MathF.Min(100f, grateful.Opinion + 40f * power);
+                return definition.Name;
+            }
             case "theft":
             {
                 var technology = TheftTarget(owner, target);
@@ -545,7 +566,10 @@ public static class CovertOperations
                 var atWar = CampaignDiplomacy.AtWar(c, owner.Id, targetId);
                 var rival = relation?.Stance == DiplomaticStance.Rival;
                 var hostile = relation is not null && relation.Opinion <= -50f;
-                if (!atWar && !rival && !hostile) continue;
+                // Our own people, or our faith, as a minority under a government that does not like
+                // us: the oldest reason to pay for somebody else's separatists and partisans.
+                var kin = (relation?.Opinion ?? 0f) < 10f ? KinShare(c, owner, target) : 0f;
+                if (!atWar && !rival && !hostile && kin < 0.03f) continue;
                 foreach (var kind in All)
                 {
                     var want = kind.Effect switch
@@ -554,13 +578,15 @@ public static class CovertOperations
                         "theft" => rival || hostile ? 2f : 1f,
                         "unrest" => atWar || rival ? 1f : 0.6f,
                         "opposition" => authoritarian && target.Stability < 0.55f ? 1.6f : 0f,
-                        "separatism" => rival ? (atWar ? 0.5f : 1.2f) : 0f,
-                        "arm_insurgents" => atWar ? 2.5f : rival ? 1.4f : 0f,
+                        "separatism" => (rival ? (atWar ? 0.5f : 1.2f) : 0f) + kin * 6f,
+                        "arm_insurgents" => (atWar ? 2.5f : rival ? 1.4f : 0f) + kin * 4f,
                         "cyber_blackout" => atWar ? 2.8f : rival ? 1.0f : 0f,
+                        // A rival's government on the edge of falling: push it, and choose who catches it.
+                        "coup" => !atWar && (rival || hostile) && target.Stability < defines.CoupStabilityThreshold * 1.25f ? 2.2f : 0f,
                         _ => 0f
                     };
                     if (want <= 0f) continue;
-                    var region = kind.Regional ? AiRegion(c, target, kind) : null;
+                    var region = kind.Regional ? AiRegion(c, target, kind, kin >= 0.03f ? owner : null) : null;
                     if (kind.Regional && region is null) continue;
                     if (Refusal(c, owner, target, kind, region).Length > 0) continue;
                     if (owner.Treasury < Cost(c, owner, kind) * 5f) continue;
@@ -579,13 +605,50 @@ public static class CovertOperations
 
     /// <summary>Where a government nobody plays aims: the busiest region left standing for sabotage,
     /// the angriest for unrest, the one furthest from its centre for a separatist cause.</summary>
-    private static ScenarioState AiRegion(Campaign c, Nation target, CovertOperationDefinition kind)
+    /// <summary>The share of a country's people who are the other's own people or of its declared faith.</summary>
+    public static float KinShare(Campaign c, Nation owner, Nation target)
+    {
+        var culture = DemographyCatalog.PrimaryCulture(owner.Tag);
+        var faith = StateIdentity.IsSecular(owner.DeclaredReligion) ? "" : owner.DeclaredReligion;
+        if (string.IsNullOrEmpty(culture) && string.IsNullOrEmpty(faith) || target.Population <= 0) return 0f;
+        // The target's own majority is not a minority of ours: kin across a border only.
+        if (!string.IsNullOrEmpty(culture) && DemographyCatalog.IsPrimary(target.Tag, culture)) culture = null;
+        if (!string.IsNullOrEmpty(faith) && string.Equals(target.DeclaredReligion, faith, StringComparison.OrdinalIgnoreCase)) faith = null;
+        long kin = 0;
+        foreach (var region in c.StatesOf(target)) kin += KinIn(region, culture, faith);
+        return M.Clamp01(kin / (float)Math.Max(1L, target.Population));
+    }
+
+    private static long KinIn(ScenarioState region, string culture, string faith)
+    {
+        long kin = 0;
+        foreach (var group in region.PopulationGroups)
+            if (!string.IsNullOrEmpty(culture) && string.Equals(group.Culture, culture, StringComparison.OrdinalIgnoreCase) ||
+                !string.IsNullOrEmpty(faith) && string.Equals(group.Religion, faith, StringComparison.OrdinalIgnoreCase))
+                kin += Math.Max(0, group.Size);
+        return kin;
+    }
+
+    private static ScenarioState AiRegion(Campaign c, Nation target, CovertOperationDefinition kind, Nation kinOf = null)
     {
         ScenarioState best = null;
         var bestScore = 0f;
+        string culture = null, faith = null;
+        if (kinOf is not null)
+        {
+            culture = DemographyCatalog.PrimaryCulture(kinOf.Tag);
+            faith = StateIdentity.IsSecular(kinOf.DeclaredReligion) ? "" : kinOf.DeclaredReligion;
+        }
         foreach (var region in c.StatesOf(target))
         {
             if (region.Population <= 0) continue;
+            // A sponsor of its own kin aims where they live.
+            if (kinOf is not null && kind.Effect is "separatism" or "arm_insurgents")
+            {
+                var share = KinIn(region, culture, faith) / (float)region.Population;
+                if (share >= 0.2f && share > bestScore) { bestScore = share; best = region; }
+                continue;
+            }
             if (kind.Effect == "separatism")
             {
                 // Money does not create a movement, it feeds one that exists: a region that has

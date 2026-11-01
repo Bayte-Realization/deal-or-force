@@ -125,14 +125,22 @@ public static class LogisticsSystem
         // CollectRoots and TraceNetwork.
         var reach = _reach;
         CollectCorridors(campaign, nation);
+        // A rising holds ground it does not own: the map still says whose the provinces are,
+        // and a rebel army that looked only at owned ground found no depot anywhere and starved
+        // in its own heartland (Sakha, 2034). For a side with no land of its own, the ground it
+        // holds is where its depots stand.
+        var insurgent = true;
+        foreach (var province in territory)
+            if (topology.ProvinceToNation[province] == nation.MapIndex) { insurgent = false; break; }
         CollectRoots(campaign, nation, territory);
+        if (insurgent && Roots.Count == 0 && InsurgentSeat(campaign, nation, territory) is var seat and > 0) Roots.Add(seat);
         TraceNetwork(nation, topology, controllers, generation);
 
         HubByState.Clear();
         IsIsolatedHub.Clear();
         foreach (var province in territory)
         {
-            if (topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            if (!insurgent && topology.ProvinceToNation[province] != nation.MapIndex) continue;
             // A lake keeps no depot, however much of it a country owns.
             if (topology.IsWater(province)) continue;
             var isConnected = reach[province] == generation;
@@ -375,6 +383,30 @@ public static class LogisticsSystem
 
     private static bool Passable(Nation nation, ushort controller) =>
         controller == nation.MapIndex || controller != 0 && Corridors.Contains(controller);
+
+    /// <summary>
+    /// Where a side with no land of its own keeps its stores: its movement's headquarters when it
+    /// holds them, otherwise the held province in the most populous region it holds.
+    /// </summary>
+    private static int InsurgentSeat(Campaign campaign, Nation nation, List<int> territory)
+    {
+        var topology = campaign.ProvinceMap;
+        var hq = nation.Movement?.HeadquartersProvinceId ?? 0;
+        if (hq > 0 && territory.Contains(hq) && !topology.IsWater(hq)) return hq;
+        var regions = new Dictionary<int, long>();
+        foreach (var state in campaign.States) regions[state.MapIndex] = state.Population;
+        var best = 0;
+        long most = -1;
+        foreach (var province in territory)
+        {
+            if (topology.IsWater(province) || campaign.DestroyedProvinces.Contains(province)) continue;
+            var people = regions.GetValueOrDefault(topology.ProvinceToState[province]);
+            if (people <= most) continue;
+            most = people;
+            best = province;
+        }
+        return best;
+    }
 
     private static void CollectRoots(Campaign campaign, Nation nation, List<int> territory)
     {

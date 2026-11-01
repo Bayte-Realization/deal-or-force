@@ -863,6 +863,10 @@ public sealed partial class Campaign
         // step is, which is what lets a six-hour tick move an army a quarter of the way
         // instead of not at all.
         using (SimProfiler.Measure("military access")) MilitaryAccess.Tick(this);
+        using (SimProfiler.Measure("expeditions")) Expeditions.Tick(this);
+        using (SimProfiler.Measure("border shape")) BorderShape.Tick(this);
+        using (SimProfiler.Measure("civil war fronts")) CivilWarFronts.Tick(this);
+        using (SimProfiler.Measure("movement mergers")) MovementMergers.Tick(this);
         using (SimProfiler.Measure("diplomatic acts")) DiplomaticActs.Tick(this);
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
         // A frame may stop here and between the fleets and the fighting: the same passes in the
@@ -1456,6 +1460,15 @@ public sealed partial class Campaign
             if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && string.IsNullOrWhiteSpace(nation.CapitalName))
             {
                 nation.CapitalName = state.Name;
+            }
+            // A name inherited with a fallen state's title (a faction proclaimed as Syria keeps
+            // "Damascus") while the city itself is somebody else's: the seat is where it rules.
+            else if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && CapitalCore.SeatNameLost(this, nation))
+            {
+                nation.CapitalName = state.Name;
+                var centre = topology.CenterOf(best);
+                nation.CapitalLatitude = centre.Latitude;
+                nation.CapitalLongitude = centre.Longitude;
             }
         }
         // A landless headquarters stands at its host's capital or its region's main city

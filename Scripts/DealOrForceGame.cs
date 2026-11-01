@@ -2100,6 +2100,13 @@ public partial class DealOrForceGame : Control
                 foreach (var (state, index) in new[] { ("normal", 0), ("hover", 1), ("pressed", 2), ("hover_pressed", 1), ("disabled", 0) })
                     button.AddThemeStyleboxOverride(state, AtlasSurfaceSkin.ToggleFace(primary, index));
                 button.Icon = AtlasSurfaceSkin.ToggleLamp(primary);
+                // Every switch redraws its box when it flips, whoever flipped it, so no screen can
+                // forget to (the map bar's check boxes stayed ticked after being turned off).
+                if (!button.HasMeta("lamp_wired"))
+                {
+                    button.SetMeta("lamp_wired", true);
+                    button.Toggled += on => { if (IsInstanceValid(button)) StyleButton(button, on); };
+                }
                 button.AddThemeConstantOverride("icon_max_width", 16);
                 button.AddThemeConstantOverride("h_separation", 6);
                 // Room for the lamp, once: a caption sized to its width would otherwise be clipped.

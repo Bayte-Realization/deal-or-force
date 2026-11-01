@@ -319,7 +319,7 @@ public static class SituationDesk
     {
         switch (kind)
         {
-            case "war_started" or "world_war_began" or "border_war" or "nuclear_strike" or "nuclear_retaliation" or "nuclear_devastation":
+            case "war_started" or "world_war_began" or "border_war" or "civil_war_third_front" or "nuclear_strike" or "nuclear_retaliation" or "nuclear_devastation":
                 lens = DeskLens.Security; severity = DeskSeverity.Should; return true;
             case "nuclear_test" or "nuclear_incident" or "red_telephone":
                 lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
@@ -327,7 +327,7 @@ public static class SituationDesk
                 lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
             case "alliance_ended" or "alliance_strained" or "crisis_opened" or "crisis_compromise" or
                  "talks_opened" or "denunciation" or "spy_network_exposed" or "proxy_started" or
-                 "peace_signed" or "country_released" or "deal_signed" or "organization_founded":
+                 "peace_signed" or "country_released" or "deal_signed" or "organization_founded" or "volunteers_sent":
                 lens = DeskLens.Diplomacy; severity = DeskSeverity.Could; return true;
             case "general_strike" or "political_scandal" or "anti_war_protests" or "mass_protests" or
                  "civil_war_escalated" or "coup_plot" or "regime_change":
@@ -348,6 +348,8 @@ public static class SituationDesk
         "nuclear_strike" => "A nuclear weapon has been used: {0} against {1}",
         "nuclear_retaliation" => "A nuclear strike answered: {0} against {1}",
         "nuclear_devastation" => "Cities in ruins: {0} has struck {1}",
+        "volunteers_sent" => "Volunteers: {0} fights for {1}",
+        "civil_war_third_front" => "A war inside the war: {0} against {1}",
         "nuclear_test" => "A nuclear test: {0}",
         "nuclear_incident" => "A nuclear incident: {0} and {1}",
         "red_telephone" => "The red telephone: {0} and {1}",
