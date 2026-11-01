@@ -593,7 +593,9 @@ public static class LandArrangementSystem
             if (other.Id == holder.Id || other.Id == owner.Id || other.Movement is not null || c.StatesOf(other).Length == 0) continue;
             var tie = CampaignDiplomacy.Get(c, other.Id, owner.Id);
             if (tie is null || (tie.Stance != DiplomaticStance.Allied && tie.Opinion < 50f && !tie.GuaranteedBy(other.Id))) continue;
-            OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, other.Id, holder.Id), "troops_on_friends_land");
+            // A friend of the owner's, so a witness rather than the victim: as much as it
+            // concerns it, which for an ally next door is all of it (OpinionWitnesses).
+            OpinionWitnesses.Witness(c, other, holder, owner, "troops_on_friends_land");
         }
     }
 
@@ -709,6 +711,8 @@ public static class LandArrangementSystem
         born.StartGovernment = born.Government;
         born.StartIdeology = born.Ideology;
         born.SecededFromId = owner.Id;
+        // Recorded at birth, as every other founding path does, so a save/load does not add it later.
+        if (born.RevoltParentId < 0) born.RevoltParentId = owner.Id;
         born.IdentityChangedDay = c.ElapsedDays;
         RegionalResourcePartition.Transfer(owner, born, M.Clamp(people / (float)ownerPeople, 0.01f, 0.9f));
         StatePartition.Annex(c, provinces, born, asConquest: false);

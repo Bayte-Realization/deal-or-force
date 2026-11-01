@@ -82,7 +82,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
         if (args.Length == 0) OrganicBlocTests.Run();
         if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }
-        if (args.Length == 0) DiplomaticMissionTests.Run();
+        if (args.Contains("--opinion-witnesses-only")) { OpinionWitnessTests.Run(); return; }
+        if (args.Length == 0) { DiplomaticMissionTests.Run(); OpinionWitnessTests.Run(); }
         if (args.Contains("--campaign-alerts-only")) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); return; }
         if (args.Length == 0) { CampaignAlertTests.Run(); StaffPortfolioTests.Run(); }
         if (args.Contains("--elections-only")) { ElectionTests.Run(); return; }

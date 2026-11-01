@@ -1,0 +1,56 @@
+// Deal or Force - entries in the country table that are not countries.
+//
+// The country table comes from Natural Earth, which draws every patch of ground with a status
+// of its own as a "country": a disputed reef, a glacier, a UN buffer zone, a lease, a strip of
+// desert nobody wants. Nobody governs any of them as a state. Shown as countries they filled
+// the diplomacy list with Scarborough Reef and Bajo Nuevo Bank, and the ones with a province of
+// their own sat on the map as countries with no government, no army and nobody to talk to.
+//
+// Each line names such an entry and where its ground goes:
+//
+//   "into": "TAG"   the state that administers it on 1 January 2024 - its provinces are that
+//                   state's from the first day, whoever else claims them
+//   "into": "none"  nobody's: unclaimed land, settled like any other (ColonisationCore)
+//
+// The entry itself is never a country in the game: with no ground it has no diplomacy entry,
+// and its fall is decided in the first weekly review like any country found with no ground
+// (MovementFall) - it never held any, so it simply ends. A province line in
+// history/provinces still wins over this table if a mod names the province explicitly by point
+// or by id with another owner; this table only renames the owner the file gives.
+//
+// Every file in this folder is read in name order and a later file naming the same tag wins,
+// so a mod that wants the Siachen Glacier to be Pakistan's writes one line, and a mod that wants
+// one of these to be a country after all writes "into": "" to take it off the list.
+{
+  // Disputed in law, administered in fact. The table says who holds the ground, not who is right.
+  "SCR": { "into": "CHN" },  // Scarborough Shoal: Chinese coast guard control since the 2012 stand-off; the Philippines claims it.
+  "KAS": { "into": "IND" },  // Siachen Glacier: held by India since 1984 (Operation Meghdoot); Pakistan claims it.
+  "SPI": { "into": "ARG" },  // Southern Patagonian Ice Field: the undemarcated stretch the map draws lies in Santa Cruz.
+  "BJN": { "into": "COL" },  // Bajo Nuevo Bank: Colombian administration; Jamaica, Nicaragua and the US claim it.
+  "SER": { "into": "COL" },  // Serranilla Bank: Colombian naval post; Honduras, Nicaragua and the US claim it.
+  "BRI": { "into": "BRA" },  // Brazilian Island (Ilha Brasileira): Brazilian; Uruguay claims it.
+  "CNM": { "into": "CYP" },  // The Cyprus buffer zone: patrolled by the UN, the Republic's in law; farmed and lived in by Cypriots.
+
+  // Ground no government holds as a whole: several occupy pieces, or nobody wants it.
+  "PGA": { "into": "none" }, // Spratly Islands: reefs held piecemeal by China, Vietnam, the Philippines, Malaysia and Taiwan.
+  "BRT": { "into": "none" }, // Bir Tawil: claimed by neither Egypt nor Sudan, each of which claims the Hala'ib Triangle instead.
+  "ATA": { "into": "none" }, // Antarctica: claims frozen by the Antarctic Treaty since 1961.
+
+  // Uninhabited or garrison-only territories of a state, run from its capital rather than by a
+  // government of their own. Inhabited dependencies with their own administration (Norfolk
+  // Island, Pitcairn, the Falklands, Christmas Island) stay countries.
+  "CLP": { "into": "FRA" },  // Clipperton Island: French state property, administered from Paris.
+  "ATF": { "into": "FRA" },  // French Southern and Antarctic Lands: research stations, no permanent population.
+  "CSI": { "into": "AUS" },  // Coral Sea Islands: an Australian external territory, a weather station.
+  "ATC": { "into": "AUS" },  // Ashmore and Cartier Islands: Australian, a nature reserve.
+  "HMD": { "into": "AUS" },  // Heard Island and McDonald Islands: Australian, uninhabited.
+  "UMI": { "into": "USA" },  // US Minor Outlying Islands: Wake, Midway, Johnston and the rest - bases and refuges.
+  "SGS": { "into": "GBR" },  // South Georgia and the South Sandwich Islands: British, a few dozen staff; Argentina claims them.
+  "IOT": { "into": "GBR" },  // British Indian Ocean Territory: Diego Garcia's base, no permanent population; Mauritius claims it.
+  "ESB": { "into": "GBR" },  // Dhekelia Sovereign Base Area: British sovereign territory on Cyprus.
+  "WSB": { "into": "GBR" },  // Akrotiri Sovereign Base Area: British sovereign territory on Cyprus.
+
+  // Leases. The ground is the owner's; who holds it by arrangement is history/diplomacy/2024/40_arrangements.json.
+  "KAB": { "into": "KAZ" },  // Baikonur: Kazakh ground leased to Russia until 2050.
+  "USG": { "into": "CUB" }   // Guantanamo Bay: Cuban ground leased to the United States since 1903.
+}

@@ -268,8 +268,10 @@ public static class Coups
         {
             if (other.Id == nation.Id || other.Movement is not null || other.Population <= 0) continue;
             if (!_disapproving.Contains(other.Ideology)) continue;
-            if (CampaignDiplomacy.Get(c, other.Id, nation.Id) is { } relation)
-                OpinionSystem.Remember(c, relation, "seized_power_by_coup");
+            // Disapproved of by the governments whose politics a coup offends - each as much as
+            // the new junta concerns it (OpinionWitnesses): its neighbours and partners in full,
+            // a democracy on another continent with nothing at stake only a little.
+            OpinionWitnesses.Witness(c, other, nation, null, "seized_power_by_coup");
         }
         c.Chronicle.Record(c, before == nation.Government ? "coup_counter" : "coup", nation.Id);
         c.MarkStrategicChange();

@@ -1,0 +1,15 @@
+{
+  "Other countries' quarrels, beyond what concerns us": "Чужие ссоры сверх того, что касается нас",
+  "Stood up to our rival": "Дали отпор нашему сопернику",
+  "Apologised and made amends": "Извинились и возместили ущерб",
+  "Sent us humanitarian aid": "Прислали нам гуманитарную помощь",
+  "There is nothing between us to apologise for.": "Между нами нет ничего, за что стоило бы извиняться.",
+  "They are not in need of help.": "Они не нуждаются в помощи.",
+  "Apologise and make amends": "Извиниться и возместить ущерб",
+  "Send humanitarian aid": "Отправить гуманитарную помощь",
+  "A formal apology with {0} in compensation and {1:0.##} political credit. Every fading grievance between us is halved, those over other countries' quarrels cut to a quarter; opinion +10 for three years. Standing conditions - an embargo, a border, fear of our strength - are untouched.": "Официальное извинение: {0} компенсации и {1:0.##} политического капитала. Все угасающие обиды между нами уменьшаются вдвое, а обиды из-за чужих ссор - до четверти; мнение +10 на три года. Постоянные условия - эмбарго, общая граница, страх перед нашей силой - не затрагиваются.",
+  "Send {0} of help to a country in need - unstable, at war, or much poorer than us. Opinion +12 for three years whatever they think of us now, and their grudges over other countries' quarrels ease.": "Отправить {0} помощи стране в беде - нестабильной, воюющей или намного беднее нас. Мнение +12 на три года, что бы они о нас сейчас ни думали, а их обиды из-за чужих ссор ослабевают.",
+  "Every week it also wears down old grievances between us, most of all those held over other countries' quarrels.": "Каждую неделю миссия также сглаживает старые обиды между нами, прежде всего обиды из-за чужих ссор.",
+  "chronicle.apology": "{0} официально приносит извинения {1} и выплачивает {2} компенсации.",
+  "chronicle.humanitarian_aid": "{0} отправляет {1} гуманитарную помощь на сумму {2}."
+}

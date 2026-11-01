@@ -8,6 +8,8 @@ using DealOrForce.Simulation;
 
 static class WorkerBackendTests
 {
+    private const int HealthyLimitMs = 15000;
+
     static void Check(bool ok, string label)
     { if (!ok) throw new Exception(label); Console.WriteLine("PASS worker: " + label); }
     public static void Fixture(string kind)
@@ -37,7 +39,10 @@ static class WorkerBackendTests
         string[] Args(string kind) => Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase)
             ? new[] { typeof(WorkerBackendTests).Assembly.Location, "--worker-fixture", kind }
             : new[] { "--worker-fixture", kind };
-        var good = new WorkerModBackend(path, Args("ok"), 2500, 7, logs.Add);
+        // A healthy worker answers in under a second alone, but the full suite runs beside other
+        // test processes and missed a 2.5 s limit on a loaded machine: the limit here proves the
+        // round trip, not a speed, so it is generous. The hang case below keeps its short limit.
+        var good = new WorkerModBackend(path, Args("ok"), HealthyLimitMs, 7, logs.Add);
         good.Hook(c, "campaign_created");
         Check(!good.Disabled && logs.Contains("fixture"), "real process receives a snapshot and responds: " +
             string.Join(" | ", logs));
@@ -113,7 +118,7 @@ static class WorkerBackendTests
         {
             if (!File.Exists(exe)) { Console.WriteLine("SKIP compiled " + language + " fixture: " + exe); continue; }
             c.SetFeature("aviation", false);
-            var worker = new WorkerModBackend(exe, arguments, 2500, 1, logs.Add);
+            var worker = new WorkerModBackend(exe, arguments, HealthyLimitMs, 1, logs.Add);
             worker.Hook(c, "day_advanced"); c.Commands.ApplyAll(c);
             Check(!worker.Disabled && c.FeatureEnabled("aviation"), language + " example runs through the real backend");
         }

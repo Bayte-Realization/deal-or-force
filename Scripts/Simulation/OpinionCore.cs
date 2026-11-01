@@ -19,7 +19,7 @@ namespace DealOrForce.Simulation;
 /// its world holds grudges longer.
 /// </summary>
 public readonly record struct OpinionModifierDefinition(
-    string Id, string Name, float Opinion, int Days, bool Decays, int MaxStacks);
+    string Id, string Name, float Opinion, int Days, bool Decays, int MaxStacks, bool ThirdParty = false);
 
 public static class OpinionCatalog
 {
@@ -84,7 +84,11 @@ public static class OpinionCatalog
                     : known?.Decays ?? true,
                 value.TryGetProperty("max_stacks", out var stacks) && stacks.TryGetInt32(out var limit)
                     ? Math.Max(1, limit)
-                    : known?.MaxStacks ?? 1);
+                    : known?.MaxStacks ?? 1,
+                value.TryGetProperty("third_party", out var watched) &&
+                watched.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? watched.GetBoolean()
+                    : known?.ThirdParty ?? false);
         }
     }
 }
@@ -217,14 +221,40 @@ public static class OpinionSystem
         if (relation is null) return;
         relation.OpinionDrivers.Begin("Opinion", "share");
         var total = 0f;
+        var witnessedAgainst = 0f;
+        var witnessedFor = 0f;
         foreach (var reason in relation.Reasons)
         {
             var weight = Weight(campaign, reason);
             if (Math.Abs(weight) < 0.05f) continue;
             total += weight;
             var definition = OpinionCatalog.Find(reason.Id);
+            if (definition is { ThirdParty: true })
+            {
+                if (weight < 0f) witnessedAgainst += weight; else witnessedFor += weight;
+            }
             var name = definition?.Name ?? reason.Id;
             relation.OpinionDrivers.Add(reason.Stacks > 1 ? $"{name} (x{reason.Stacks})" : name, weight);
+        }
+
+        // What the two of them hold against each other as bystanders - a test, a coup, a bad
+        // name, an attack on somebody else (modifiers declared `third_party`, OpinionWitnesses) -
+        // adds up to so much and no further, either way. Each is already weighed by how much it
+        // concerned the country that saw it; this is the ceiling over all of them together, so a
+        // decade of watching somebody misbehave elsewhere ends in distrust, not in the hatred the
+        // countries it actually wronged are entitled to. The correction is a line of its own on
+        // the panel, so the player can see both what was remembered and what it came to.
+        var floor = MathF.Min(0f, campaign.Defines.ThirdPartyOpinionFloor);
+        if (witnessedAgainst < floor)
+        {
+            total += floor - witnessedAgainst;
+            relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), floor - witnessedAgainst);
+        }
+        var ceiling = MathF.Max(0f, campaign.Defines.ThirdPartyOpinionCeiling);
+        if (witnessedFor > ceiling)
+        {
+            total -= witnessedFor - ceiling;
+            relation.OpinionDrivers.Add(Loc.Get("Other countries' quarrels, beyond what concerns us"), ceiling - witnessedFor);
         }
 
         // What the two of them make of each other's politics.

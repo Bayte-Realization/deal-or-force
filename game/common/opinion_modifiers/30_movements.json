@@ -34,8 +34,8 @@
   },
   "recognised_our_rebels": {
     "name": "Recognised the movement that claims our ground",
-    "opinion": -15,
-    "days": 3650,
+    "opinion": -10,
+    "days": 1825,
     "decays": true,
     "max_stacks": 1
   },

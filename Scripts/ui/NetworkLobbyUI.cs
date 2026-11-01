@@ -61,7 +61,7 @@ public partial class DealOrForceGame
         foreach (var child in _networkCountries.GetChildren()) { _networkCountries.RemoveChild(child); child.QueueFree(); }
         var query = _networkSearch.Text.Trim();
         var localPeer = NetworkLocalPeer;
-        foreach (var nation in _campaign.Nations.Where(n => query.Length == 0 ||
+        foreach (var nation in _campaign.Nations.Where(n => !Simulation.CountryMerges.IsArtefact(_campaign, n)).Where(n => query.Length == 0 ||
                      n.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                      n.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                      n.Tag.Contains(query, StringComparison.OrdinalIgnoreCase)).OrderBy(n => n.DisplayName))

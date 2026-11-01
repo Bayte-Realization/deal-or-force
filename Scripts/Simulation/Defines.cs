@@ -1293,6 +1293,29 @@ public sealed partial class Defines
 	/// </summary>
 	public int ScenarioWarNegotiationLockDays { get; set; } = 1095;
 	public int AiPeaceProposalInterval { get; set; } = 45;
+
+	/// <summary>
+	/// The fewest days between two settlements a computer government puts to a player in the
+	/// same war, counted from the last offer and from the last refusal. Between computer
+	/// governments AiPeaceProposalInterval alone applies, because there an offer is answered
+	/// the moment it is made; a player has to stop and read each one.
+	/// </summary>
+	public int AiPeaceOfferToPlayerIntervalDays { get; set; } = 60;
+
+	/// <summary>
+	/// After a player refuses a settlement (or lets it lapse), how long the same terms may
+	/// not be put to them again. A materially different offer may come as soon as the
+	/// interval above allows; the same paper only after this many days, when the war may
+	/// have changed enough that asking again is not nagging. 0 or less: never again.
+	/// </summary>
+	public int AiPeaceOfferRepeatRefusedDays { get; set; } = 365;
+
+	/// <summary>
+	/// How much of a written settlement's ground has to change before it counts as a new
+	/// offer rather than the refused one again: the share of the larger province list that
+	/// the two lists do not have in common. At least one province always.
+	/// </summary>
+	public float AiPeaceOfferMaterialProvinceShare { get; set; } = 0.2f;
 	public float AiPeaceMinimumBudget { get; set; } = 35f;
 
 	/// <summary>War score a country needs before an indemnity is worth ending a war for.</summary>

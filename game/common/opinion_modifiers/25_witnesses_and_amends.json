@@ -1,0 +1,38 @@
+// What bystanders make of other countries' quarrels, and what making amends leaves behind
+// (OpinionWitnesses.cs, DiplomaticGestures.cs).
+//
+// `third_party: true` marks a reason a country holds as a witness rather than as the one wronged.
+// Those are weighed by how much the act concerned it, and all of them together in one relation
+// count only so far (ThirdPartyOpinionFloor and ThirdPartyOpinionCeiling in the defines).
+{
+  // The other side of a polarised world: a blow against a country we are hostile to is welcome.
+  // Scaled by how hostile; small, because approving of something is not the same as being thanked.
+  "acted_against_our_rival": {
+    "name": "Stood up to our rival",
+    "opinion": 8,
+    "days": 730,
+    "decays": true,
+    "max_stacks": 2,
+    "third_party": true
+  },
+
+  // A formal apology with compensation paid, accepted. It also shortens every grievance the two
+  // of them still hold (DiplomaticGestures "apology"); this is the goodwill on top.
+  "apology_accepted": {
+    "name": "Apologised and made amends",
+    "opinion": 10,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 1
+  },
+
+  // Help sent when it was needed, asked for nothing. Works whatever the two of them think of
+  // each other, which is what makes it the way back from a bad relationship.
+  "humanitarian_aid": {
+    "name": "Sent us humanitarian aid",
+    "opinion": 12,
+    "days": 1095,
+    "decays": true,
+    "max_stacks": 2
+  }
+}

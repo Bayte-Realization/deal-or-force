@@ -1006,6 +1006,18 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
+            // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
+            if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)
+            {
+                MixText("peace_offer_to_player"); Mix(war.LastOfferToPlayerDay); Mix(war.RefusedOfferDay);
+                Mix(war.RefusedOfferWasWritten ? 1 : 0); Mix((int)war.RefusedOfferTerms);
+                if (war.RefusedOffer is { } refused)
+                {
+                    Mix(refused.Provinces.Count);
+                    foreach (var province in refused.Provinces.OrderBy(id => id)) Mix(province);
+                }
+            }
             // Coalition membership changes combat and access before any province moves.
             // Keep the historical bilateral golden when there are no allied members.
             if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)

@@ -432,6 +432,9 @@ public partial class DealOrForceGame
     {
         var player = _campaign.Player;
         if (nation.Id == player.Id) return false;
+        // A reef, a glacier or a base area the map source drew as a country is not one, and
+        // nobody can be written to there (common/country_merges).
+        if (Simulation.CountryMerges.IsArtefact(_campaign, nation)) return false;
         if (_diplomacyFilter == DiplomacyFilter.All) return true;
         var relation = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
         return _diplomacyFilter switch

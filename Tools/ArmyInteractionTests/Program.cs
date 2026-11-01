@@ -66,6 +66,7 @@ static class Program
         BattleReinforcementTests.RunFixture();
         if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
+        if (args.Contains("--peace-offer-throttle-only")) { PeaceOfferThrottleTests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
         OpenAdvanceTests.Run();
         FrontCacheIsolationTests.Run();
@@ -118,6 +119,7 @@ static class Program
             DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
+        if (args.Contains("--country-merges-map-only")) { CountryMergeTests.Run(c); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
         if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }

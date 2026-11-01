@@ -374,7 +374,7 @@ public static class OrganizationDynamics
         org.UnpaidWeeks.Remove(aggressor.Id);
         org.Motion?.Votes.Remove(aggressor.Id);
         org.Cohesion = MathF.Max(0f, org.Cohesion - 0.08f);
-        Remember(c, org, aggressor, "attacked_a_fellow_member");
+        Remember(c, org, aggressor, "attacked_a_fellow_member", c.NationById(victimId));
         c.Chronicle.Record(c, "organization_expelled", aggressor.Id, victimId, name);
         if (org.Members.Count == 0) Dissolve(c, org);
         c.MarkStrategicChange();
@@ -414,11 +414,20 @@ public static class OrganizationDynamics
         c.MarkStrategicChange();
     }
 
-    private static void Remember(Campaign c, InternationalOrganization org, Nation subject, string reason)
+    /// <summary>
+    /// What the rest of an organisation remembers of a member that walked out or attacked one of
+    /// them. The members are witnesses, not victims: each minds as much as it concerns it
+    /// (OpinionWitnesses), with the membership they shared counted as a tie of its own. A member
+    /// that was the victim's rival is not sorry to see it attacked; one next door to the victim,
+    /// or bound to it, minds in full; the member at the far end of a world-wide assembly notes it.
+    /// </summary>
+    private static void Remember(Campaign c, InternationalOrganization org, Nation subject, string reason, Nation victim = null)
     {
         foreach (var id in org.Members)
-            if (id != subject.Id && CampaignDiplomacy.Get(c, id, subject.Id) is { } relation)
-                OpinionSystem.Remember(c, relation, reason);
+        {
+            if (id == subject.Id || c.NationById(id) is not { } member) continue;
+            OpinionWitnesses.Witness(c, member, subject, victim, reason, tie: c.Defines.WitnessOrganizationTie);
+        }
     }
 
     /// <summary>

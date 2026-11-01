@@ -405,7 +405,16 @@ public static partial class AiStatecraft
             else OpinionSystem.Forget(campaign, relation, "shared_state_faith");
 
             var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / M.Max(0.01f, Strength(campaign, nation));
-            var fear = M.Clamp(strength - 1f, 0f, 2f);
+            // And only as far as the stronger one can reach. Fear of strength was the same at
+            // every distance, so the strongest country in the world was feared at full weight
+            // by every government in its circle - France and Brazil held minus thirty-two
+            // against China for being large - and that one line was most of everything the
+            // world held against anybody. A neighbour fears it in full, a region less, the far
+            // side of the world hardly at all; an ally a quarter as much, because a strong
+            // friend is a worry and not a threat.
+            var reach = OpinionWitnesses.FearReach(campaign, nation, other);
+            if (relation.Stance == DiplomaticStance.Allied) reach *= 0.25f;
+            var fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
             // The pair shares one relation, and only the weaker of the two is afraid. The
             // stronger one leaves the entry alone: when each wrote its own view in turn, the
             // weaker remembered the fear and the stronger forgot it, every week, and the

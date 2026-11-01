@@ -1,0 +1,15 @@
+{
+  "Other countries' quarrels, beyond what concerns us": "Other countries' quarrels, beyond what concerns us",
+  "Stood up to our rival": "Stood up to our rival",
+  "Apologised and made amends": "Apologised and made amends",
+  "Sent us humanitarian aid": "Sent us humanitarian aid",
+  "There is nothing between us to apologise for.": "There is nothing between us to apologise for.",
+  "They are not in need of help.": "They are not in need of help.",
+  "Apologise and make amends": "Apologise and make amends",
+  "Send humanitarian aid": "Send humanitarian aid",
+  "A formal apology with {0} in compensation and {1:0.##} political credit. Every fading grievance between us is halved, those over other countries' quarrels cut to a quarter; opinion +10 for three years. Standing conditions - an embargo, a border, fear of our strength - are untouched.": "A formal apology with {0} in compensation and {1:0.##} political credit. Every fading grievance between us is halved, those over other countries' quarrels cut to a quarter; opinion +10 for three years. Standing conditions - an embargo, a border, fear of our strength - are untouched.",
+  "Send {0} of help to a country in need - unstable, at war, or much poorer than us. Opinion +12 for three years whatever they think of us now, and their grudges over other countries' quarrels ease.": "Send {0} of help to a country in need - unstable, at war, or much poorer than us. Opinion +12 for three years whatever they think of us now, and their grudges over other countries' quarrels ease.",
+  "Every week it also wears down old grievances between us, most of all those held over other countries' quarrels.": "Every week it also wears down old grievances between us, most of all those held over other countries' quarrels.",
+  "chronicle.apology": "{0} formally apologises to {1} and pays {2} in compensation.",
+  "chronicle.humanitarian_aid": "{0} sends {1} humanitarian aid worth {2}."
+}

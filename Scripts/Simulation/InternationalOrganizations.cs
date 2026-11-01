@@ -530,6 +530,10 @@ public static class InternationalOrganizations
                         var rel = CampaignDiplomacy.Peek(c, id, m.TargetId);
                         if (rel is null) continue;
                         if (id == rel.A) rel.EmbargoByA = false; else rel.EmbargoByB = false;
+                        // The grievance goes with the sanction. Lifting one used to leave
+                        // "Refuses to trade with us" on the relation for good - a standing
+                        // condition nobody was holding any more and nothing would ever forget.
+                        if (!rel.EmbargoByA && !rel.EmbargoByB) OpinionSystem.Forget(c, rel, "embargoed_us");
                     }
                 }
                 else passed = false;

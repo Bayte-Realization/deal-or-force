@@ -190,6 +190,7 @@ public sealed class ModLoader
         TechnologyCatalog.ResetCatalog();
         SeaPassageCatalog.ResetCatalog();
         ProvinceOwnership.ResetCatalog();
+        CountryMerges.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         ProductionChains.ResetCatalog();

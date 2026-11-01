@@ -218,12 +218,12 @@ public static class NuclearPosture
                 // DEFCON 4 is a watch, not news: the chronicle hears of an alert from 3 on.
                 if (n.NuclearPosture <= 3) c.Chronicle.Record(c, "nuclear_alert_raised", n.Id, -1, n.NuclearPosture.ToString());
                 // A government that puts its weapons on alert is remembered for it by everybody
-                // who is not on its side.
+                // who is not on its side - as much as it concerns them (OpinionWitnesses): its
+                // rivals and neighbours in full, the far side of the world hardly at all.
                 if (n.NuclearPosture <= 2)
                     foreach (var other in c.Nations)
-                        if (other.Id != n.Id && other.Population > 0 && !Allied(c, n.Id, other.Id) &&
-                            CampaignDiplomacy.Get(c, other.Id, n.Id) is { } relation)
-                            OpinionSystem.Remember(c, relation, "nuclear_threats");
+                        if (other.Id != n.Id && other.Population > 0 && !Allied(c, n.Id, other.Id))
+                            OpinionWitnesses.Witness(c, other, n, null, "nuclear_threats");
                 break;
             case "stand_down":
                 n.NuclearPosture++;
@@ -234,12 +234,15 @@ public static class NuclearPosture
                 n.PoliticalPoints -= d.NuclearTestCost;
                 n.LastNuclearTestDay = c.ElapsedDays;
                 c.Chronicle.Record(c, "nuclear_test", n.Id);
+                // Everybody not on its side notes a test, by as much as it concerns them. It used
+                // to be the same minus twenty, twice over, for every government on earth - and
+                // it created a relation with every one of them to say so.
                 foreach (var other in c.Nations)
                 {
                     if (other.Id == n.Id || other.Population <= 0) continue;
-                    var relation = CampaignDiplomacy.Get(c, n.Id, other.Id);
+                    if (!Allied(c, n.Id, other.Id)) OpinionWitnesses.Witness(c, other, n, null, "nuclear_test");
+                    var relation = CampaignDiplomacy.Peek(c, n.Id, other.Id);
                     if (relation is null) continue;
-                    if (!Allied(c, n.Id, other.Id)) OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, other.Id, n.Id), "nuclear_test");
                     if (relation.Stance == DiplomaticStance.Rival || relation.TensionStage >= (int)TensionStage.Crisis)
                         relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearTestTension);
                 }
@@ -417,7 +420,14 @@ public static class NuclearPosture
         foreach (var other in c.Nations)
         {
             if (other.Id == n.Id || other.Population <= 0) continue;
-            if (CampaignDiplomacy.Get(c, other.Id, n.Id) is { } seen) OpinionSystem.Remember(c, seen, answer is null ? "nuclear_strike" : "nuclear_retaliation");
+            // The countries struck remember it in full. Everybody else is a witness, and a
+            // nuclear weapon used is everybody's business: never less than half, whatever the
+            // ties and the distance (OpinionWitnesses).
+            var atWarWith = enemies.Contains(other.Id);
+            if (atWarWith && CampaignDiplomacy.Get(c, other.Id, n.Id) is { } seen)
+                OpinionSystem.Remember(c, seen, answer is null ? "nuclear_strike" : "nuclear_retaliation");
+            else if (!atWarWith)
+                OpinionWitnesses.Witness(c, other, n, null, answer is null ? "nuclear_strike" : "nuclear_retaliation", floor: 0.5f);
             if (!Allied(c, n.Id, other.Id) && CampaignDiplomacy.Get(c, n.Id, other.Id) is { } relation)
                 relation.Tension = MathF.Min(100f, relation.Tension + d.NuclearStrikeTension);
         }

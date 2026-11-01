@@ -53,12 +53,16 @@ public static class PeaceOffers
 
         // Store the same whole-region border that validation priced and acceptance will
         // transfer. The recipient's map and written summary read this saved offer.
-        war.PendingOffer = PeaceConference.Round(campaign, war, demand);
+        var rounded = PeaceConference.Round(campaign, war, demand);
+        if (!proposer.IsHuman && ToPlayerBlockReason(campaign, war, true, rounded, PeaceTerms.WhitePeace).Length > 0)
+            return false;
+        war.PendingOffer = rounded;
         war.PendingOfferIsWritten = true;
         war.PendingOfferFromId = proposer.Id;
         war.PendingOfferDay = campaign.ElapsedDays;
         war.PendingOfferExpiresDay = campaign.ElapsedDays + OfferStandsForDays;
         war.LastPeaceProposalDay = campaign.ElapsedDays;
+        if (!proposer.IsHuman) war.LastOfferToPlayerDay = campaign.ElapsedDays;
         war.LastNegotiation = $"{proposer.Name} has put a settlement to you";
         campaign.MarkStrategicChange();
         return true;
@@ -75,6 +79,7 @@ public static class PeaceOffers
             PeaceNegotiation.Resolve(campaign, war, proposer.Id, terms);
             return war.Ended;
         }
+        if (!proposer.IsHuman && ToPlayerBlockReason(campaign, war, false, null, terms).Length > 0) return false;
         war.PendingOffer = null;
         war.PendingOfferIsWritten = false;
         war.PendingOfferTerms = terms;
@@ -82,9 +87,95 @@ public static class PeaceOffers
         war.PendingOfferDay = campaign.ElapsedDays;
         war.PendingOfferExpiresDay = campaign.ElapsedDays + OfferStandsForDays;
         war.LastPeaceProposalDay = campaign.ElapsedDays;
+        if (!proposer.IsHuman) war.LastOfferToPlayerDay = campaign.ElapsedDays;
         war.LastNegotiation = $"{proposer.Name} has asked to end the war";
         campaign.MarkStrategicChange();
         return true;
+    }
+
+    /// <summary>
+    /// Why a computer government may not put this settlement to a player in this war today,
+    /// or "" when it may.
+    ///
+    /// Players complained, rightly, of being pestered: a war against a weaker neighbour
+    /// produced a letter every few weeks, each one the same terms on a new sheet of paper,
+    /// because the proposer's own interval (AiPeaceProposalInterval) restarts at every
+    /// refusal and its war score sends it back to the table the moment that runs out. Two
+    /// computer governments never notice, because their offers are answered in the same
+    /// step; a person has to stop and read every one. So, for a player and only for a
+    /// player, two rules on top of the proposer's own:
+    ///
+    /// - one offer per AiPeaceOfferToPlayerIntervalDays per war, counted from the last offer
+    ///   delivered and from the last one refused or left to lapse, whichever is later;
+    /// - after a refusal, the next offer has to be materially different from the refused one
+    ///   (MateriallyDifferent) - other terms, or a border that has moved - unless
+    ///   AiPeaceOfferRepeatRefusedDays have passed, by which time the war may have changed
+    ///   enough that asking the same thing again is a fair question.
+    ///
+    /// Nothing here touches what an offer says, only whether it is sent; the same rules hold
+    /// for every country, and a war between two computer governments never reaches here.
+    /// </summary>
+    public static string ToPlayerBlockReason(Campaign campaign, StrategicWar war, bool written,
+        PeaceDemand demand, PeaceTerms terms)
+    {
+        if (campaign is null || war is null) return Loc.Get("There is no war to end");
+        var defines = campaign.Defines;
+        var today = campaign.ElapsedDays;
+        var lastAsked = System.Math.Max(war.LastOfferToPlayerDay, war.RefusedOfferDay);
+        if (lastAsked >= 0 && today - lastAsked < System.Math.Max(0, defines.AiPeaceOfferToPlayerIntervalDays))
+            return "interval";
+        if (war.RefusedOfferDay >= 0 &&
+            !MateriallyDifferent(war.RefusedOfferWasWritten, war.RefusedOffer, war.RefusedOfferTerms,
+                written, demand, terms, defines.AiPeaceOfferMaterialProvinceShare) &&
+            (defines.AiPeaceOfferRepeatRefusedDays <= 0 || today - war.RefusedOfferDay < defines.AiPeaceOfferRepeatRefusedDays))
+            return "already refused";
+        return "";
+    }
+
+    /// <summary>
+    /// Whether a new offer is a different offer from a refused one, as the person reading it
+    /// would judge it. A standing term against a written settlement, or one standing term
+    /// against another, is always different. Two written settlements are the same paper
+    /// unless something in the package changed - the beneficiary, a released country instead
+    /// of an annexation, an indemnity, a trade treaty, disarmament, the humiliation, the long
+    /// truce, the subject arrangement - or the ground changed by at least the given share of
+    /// the larger of the two province lists (and by one province at the very least).
+    /// </summary>
+    public static bool MateriallyDifferent(bool refusedWritten, PeaceDemand refused, PeaceTerms refusedTerms,
+        bool written, PeaceDemand offer, PeaceTerms terms, float provinceShare)
+    {
+        if (refusedWritten != written) return true;
+        if (!written) return refusedTerms != terms;
+        if (refused is null || offer is null) return (refused is null) != (offer is null);
+        if (refused.BeneficiaryId != offer.BeneficiaryId || refused.ReleaseRegions != offer.ReleaseRegions ||
+            refused.Reparations != offer.Reparations || refused.TradeConcessions != offer.TradeConcessions ||
+            refused.Demilitarise != offer.Demilitarise || refused.Humiliate != offer.Humiliate ||
+            refused.LongTruce != offer.LongTruce || (refused.Subjugate ?? "") != (offer.Subjugate ?? ""))
+            return true;
+        var changed = 0;
+        foreach (var province in offer.Provinces)
+            if (!refused.Provinces.Contains(province)) changed++;
+        foreach (var province in refused.Provinces)
+            if (!offer.Provinces.Contains(province)) changed++;
+        if (changed == 0) return false;
+        var larger = System.Math.Max(refused.Provinces.Count, offer.Provinces.Count);
+        var needed = System.Math.Max(1, (int)System.Math.Ceiling(System.Math.Max(0f, provinceShare) * larger));
+        return changed >= needed;
+    }
+
+    /// <summary>
+    /// Keep the offer a player has just refused or let lapse, so that the next one must be a
+    /// different offer (ToPlayerBlockReason). Only an offer a computer government made is
+    /// remembered: what one player says to another is between them.
+    /// </summary>
+    private static void RememberRefusal(Campaign campaign, StrategicWar war, int proposerId, bool written,
+        PeaceDemand demand, PeaceTerms terms)
+    {
+        if (campaign?.NationById(proposerId) is not { IsHuman: false }) return;
+        war.RefusedOfferDay = campaign.ElapsedDays;
+        war.RefusedOfferWasWritten = written;
+        war.RefusedOfferTerms = written ? PeaceTerms.WhitePeace : terms;
+        war.RefusedOffer = written ? demand : null;
     }
 
     /// <summary>Whether this war is waiting on an answer from this country.</summary>
@@ -197,6 +288,7 @@ public static class PeaceOffers
             // Refusing costs nothing but time. The proposer waits out its own interval
             // before asking again, which is what LastPeaceProposalDay already does.
             war.LastPeaceProposalDay = campaign.ElapsedDays;
+            RememberRefusal(campaign, war, proposerId, written, demand, terms);
             war.LastNegotiation = "The offer was refused";
             campaign.MarkStrategicChange();
             return true;
@@ -216,6 +308,11 @@ public static class PeaceOffers
             if (war.PendingOfferFromId < 0) continue;
             if (!war.Ended && campaign.ElapsedDays < war.PendingOfferExpiresDay) continue;
             var lapsed = !war.Ended;
+            // Ignoring a letter is an answer too: the lapsed terms are remembered exactly as
+            // refused ones are, so silence is not met with the same letter again.
+            if (lapsed)
+                RememberRefusal(campaign, war, war.PendingOfferFromId, war.PendingOfferIsWritten,
+                    war.PendingOffer, war.PendingOfferTerms);
             Clear(war);
             if (!lapsed) continue;
             war.LastNegotiation = "The offer lapsed unanswered";

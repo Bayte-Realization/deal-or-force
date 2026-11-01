@@ -11,6 +11,8 @@ public sealed partial class Defines
     /// a pocket wants a way through, the one around it wants the pocket.
     /// </summary>
     public float AiBorderAppetite { get; set; } = 0.35f;
+    /// <summary>What a rump of a country we took ground from is worth to the AI's war judgement (AiJudgement "finish the rump").</summary>
+    public float AiRumpAppetite { get; set; } = 0.45f;
     /// <summary>Tension a week between two countries per unit of their border grievance, up to the cap.</summary>
     public float BorderGrievanceTension { get; set; } = 0.6f;
     public float BorderGrievanceTensionCap { get; set; } = 45f;

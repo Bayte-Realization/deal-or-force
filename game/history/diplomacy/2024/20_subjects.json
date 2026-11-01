@@ -16,12 +16,14 @@
     { "overlord": "NZL", "subject": "NIU", "type": "associated_state" },
 
     // United States territories, and the Guantanamo base on land leased from Cuba.
+    // The uninhabited ones - the Minor Outlying Islands; Britain's Indian Ocean Territory,
+    // South Georgia and the Cyprus base areas; the French Southern Lands - are not subjects:
+    // they are the overlord's own ground (common/country_merges).
     { "overlord": "USA", "subject": "ASM", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "GUM", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "MNP", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "PRI", "type": "dependent_territory" },
     { "overlord": "USA", "subject": "VIR", "type": "dependent_territory" },
-    { "overlord": "USA", "subject": "UMI", "type": "dependent_territory" },
 
     // British Overseas Territories, Crown Dependencies and the Sovereign Base Areas on Cyprus.
     { "overlord": "GBR", "subject": "AIA", "type": "dependent_territory" },
@@ -29,18 +31,14 @@
     { "overlord": "GBR", "subject": "CYM", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "FLK", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "GIB", "type": "dependent_territory" },
-    { "overlord": "GBR", "subject": "IOT", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "MSR", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "PCN", "type": "dependent_territory" },
-    { "overlord": "GBR", "subject": "SGS", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "SHN", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "TCA", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "VGB", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "GGY", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "JEY", "type": "dependent_territory" },
     { "overlord": "GBR", "subject": "IMN", "type": "dependent_territory" },
-    { "overlord": "GBR", "subject": "ESB", "type": "dependent_territory" },
-    { "overlord": "GBR", "subject": "WSB", "type": "dependent_territory" },
 
     // French overseas collectivities and territories.
     { "overlord": "FRA", "subject": "NCL", "type": "dependent_territory" },
@@ -49,7 +47,6 @@
     { "overlord": "FRA", "subject": "WLF", "type": "dependent_territory" },
     { "overlord": "FRA", "subject": "BLM", "type": "dependent_territory" },
     { "overlord": "FRA", "subject": "MAF", "type": "dependent_territory" },
-    { "overlord": "FRA", "subject": "ATF", "type": "dependent_territory" },
 
     // Constituent countries of the Kingdom of the Netherlands in the Caribbean.
     { "overlord": "NLD", "subject": "ABW", "type": "dependent_territory" },

@@ -267,6 +267,12 @@ public static class Program
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--opinion [days] [--provoke TAG]`: how negative the world gets, and which reasons carry it.
+        if (Array.IndexOf(args, "--opinion") >= 0)
+        {
+            var provokeAt = Array.IndexOf(args, "--provoke");
+            return OpinionReport.Run(campaign, days, provokeAt >= 0 && provokeAt + 1 < args.Length ? args[provokeAt + 1] : "");
+        }
         // `--survival`: what a country losing a war does about it (SurvivalReport).
         if (Array.IndexOf(args, "--survival") >= 0) return SurvivalReport.Run(campaign, days);
         if (Array.IndexOf(args, "--protests") >= 0) return ProtestReport.Run(campaign, days);

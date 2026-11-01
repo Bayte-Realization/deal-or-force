@@ -10,7 +10,7 @@ To try it, copy this folder to `mods/my_yaml_mod`, change `id` in `manifest.json
 ## What it does
 
 `common/opinion_modifiers/50_longer_grudges.yaml` makes a public denunciation linger for
-1825 days instead of the base game's 1100. Nothing else about the reason changes: its
+1825 days instead of the base game's 730. Nothing else about the reason changes: its
 name, its size, whether it fades and how often it stacks all come from the base game.
 
 ## The format
@@ -21,12 +21,12 @@ the other, and an error message names the same field either way. These two say t
 
 ```yaml
 denounced:
-  opinion: -18
+  opinion: -15
   days: 1825
 ```
 
 ```json
-{ "denounced": { "opinion": -18, "days": 1825 } }
+{ "denounced": { "opinion": -15, "days": 1825 } }
 ```
 
 What to know when writing it:

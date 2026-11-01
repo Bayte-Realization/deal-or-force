@@ -618,7 +618,9 @@ public sealed class SetEmbargoCommand : ICampaignCommand
         else relation.EmbargoByB = Embargo;
         relation.LastActionDay = campaign.ElapsedDays;
         if (Embargo) OpinionSystem.Remember(campaign, relation, "embargoed_us");
-        else OpinionSystem.Forget(campaign, relation, "embargoed_us");
+        // Only when nobody is refusing any more: the pair shares one reason, and one side
+        // lifting its embargo used to wipe the grievance of the other side's, still in force.
+        else if (!relation.EmbargoByA && !relation.EmbargoByB) OpinionSystem.Forget(campaign, relation, "embargoed_us");
         campaign.Chronicle.Record(campaign, Embargo ? "embargo_started" : "embargo_ended", IssuerId, TargetId);
         campaign.MarkStrategicChange();
     }

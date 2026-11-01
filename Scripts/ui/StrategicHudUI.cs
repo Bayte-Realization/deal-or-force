@@ -154,7 +154,7 @@ public partial class DealOrForceGame
         var peaceOffers = PeaceOffers.AwaitingAnswer(_campaign, player.Id).Count;
         if (peaceOffers > 0)
             AddAlert(AlertLevel.Critical, "alert_peace",
-                Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => RefreshPeaceOfferInterface(),
+                Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => OpenPeaceOffer(),
                 Tr("Another government has put a settlement to you and is waiting on an answer."));
 
         // The army is the one opponent a player cannot see on the map.
@@ -796,7 +796,7 @@ public partial class DealOrForceGame
             OpenConflictsScreen();
             return;
         }
-        if (line.Id == "peace") { RefreshPeaceOfferInterface(); return; }
+        if (line.Id == "peace") { OpenPeaceOffer(); return; }
         if (line.Id == "event") { RefreshEventInterface(); return; }
         if (line.ArmyId >= 0)
         {

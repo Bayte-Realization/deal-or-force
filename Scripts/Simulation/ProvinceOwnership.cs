@@ -261,6 +261,21 @@ public static class ProvinceOwnership
         // will have it. It is settled like any other unclaimed land (ColonisationCore).
         byTag["none"] = 0;
 
+        // Entries in the country table that are not countries - a reef, a glacier, a buffer
+        // zone, a base area (common/country_merges) - hand their ground to whoever administers
+        // it, or to nobody. Their tag is read as that owner's wherever the file names it, and
+        // any province the raster still paints in their colour is repainted below.
+        var mergedIndex = new Dictionary<ushort, ushort>();
+        foreach (var tag in CountryMerges.All.Keys)
+        {
+            if (!byTag.TryGetValue(tag, out var from) || from == 0) continue;
+            if (!byTag.TryGetValue(CountryMerges.OwnerOf(tag), out var to) || to == from) continue;
+            mergedIndex[from] = to;
+        }
+        foreach (var (from, to) in mergedIndex)
+            foreach (var nation in campaign.Nations)
+                if (nation.MapIndex == from) byTag[nation.Tag] = to;
+
         var applied = 0;
         foreach (var entry in Entries.Values)
         {
@@ -288,6 +303,18 @@ public static class ProvinceOwnership
                 controllers[province] = byTag.TryGetValue(controllerTag, out var held) ? held : owner;
             applied++;
         }
+        if (mergedIndex.Count > 0)
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+            {
+                if (mergedIndex.TryGetValue(topology.ProvinceToNation[province], out var owner))
+                {
+                    topology.ProvinceToNation[province] = owner;
+                    applied++;
+                }
+                if (controllers is not null && province < controllers.Length &&
+                    mergedIndex.TryGetValue(controllers[province], out var holder))
+                    controllers[province] = holder;
+            }
         return applied;
     }
 

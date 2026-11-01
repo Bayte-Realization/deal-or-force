@@ -528,6 +528,12 @@ public static class NavalOperations
     {
         if (fleet.Mission != FleetMission.Anchored) return;
         fleet.BerthProvinceId = FindBerth(campaign, fleet);
+        // Lying off its own home harbour it is in port, whatever the search found: the same rule
+        // a loaded game applies (FleetHistory), or a save and its reload disagreed about it.
+        if (fleet.BerthProvinceId <= 0 && fleet.HomeProvinceId > 0 &&
+            Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) <=
+            campaign.Defines.FleetBerthRangeDegrees + 1.5f)
+            fleet.BerthProvinceId = fleet.HomeProvinceId;
         // A fleet ordered into port while loaded lands its passengers there - in the port it
         // is lying in, not in whichever one it happens to call home.
         if (fleet.IsLoaded && fleet.BerthProvinceId > 0)

@@ -1142,12 +1142,9 @@ public sealed partial class Campaign
         if (HumanSeats.Count == 0) return false;
         foreach (var pending in PendingEvents)
             if (HumanSeats.Contains(pending.NationId)) return true;
-        foreach (var war in Wars)
-        {
-            if (war.Ended || war.PendingOfferFromId < 0) continue;
-            foreach (var seat in HumanSeats)
-                if (PeaceOffers.AwaitingAnswer(war, seat)) return true;
-        }
+        // A peace offer no longer stops the clock: it arrives as a notification the player
+        // opens when they choose (PeaceOfferUI), so it waits for the frame like anything else.
+        // Counting it here redrew the whole interface every step for the sixty days it stood.
         return false;
     }
 

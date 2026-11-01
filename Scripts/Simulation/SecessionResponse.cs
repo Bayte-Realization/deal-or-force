@@ -14,6 +14,11 @@ public static class SecessionResponse
     internal static void Begin(Campaign c, Nation parent, Nation rebel)
     {
         rebel.SecededFromId = parent.Id;
+        // The permanent record of whom it rose against, written at the rising. Without it a
+        // movement that took ground carried a SecededFromId and no RevoltParentId, and loading
+        // the save wrote one (Reintegration.AdoptLegacyLineage) - the loaded world then
+        // fingerprinted differently from the one that was saved, which in multiplayer is a desync.
+        if (rebel.RevoltParentId < 0) rebel.RevoltParentId = parent.Id;
         rebel.LastSecessionDay = c.ElapsedDays;
         parent.DecisionAvailableDay[Key(rebel)] = c.ElapsedDays + Math.Max(1, c.Defines.SecessionResponseDays);
     }

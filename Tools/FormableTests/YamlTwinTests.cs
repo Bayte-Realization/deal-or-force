@@ -70,7 +70,7 @@ static class YamlTwinTests
             File.WriteAllText(jsonPath, """
                 // The JSON twin of mods/_templates/yaml_example.
                 {
-                  "denounced": { "opinion": -18, "days": 1825, },
+                  "denounced": { "opinion": -15, "days": 1825, },
                 }
                 """);
 
@@ -84,8 +84,8 @@ static class YamlTwinTests
 
             OpinionCatalog.ResetCatalog();
             var shipped = OpinionCatalog.Find("denounced");
-            Check(shipped is not null && shipped.Value.Days == 1100,
-                "base game: a denunciation is remembered for 1100 days");
+            Check(shipped is not null && shipped.Value.Days == 730,
+                "base game: a denunciation is remembered for 730 days");
 
             var errors = new List<string>();
             OpinionCatalog.Merge(fromYaml.RootElement, errors);
@@ -95,7 +95,7 @@ static class YamlTwinTests
             var viaJson = OpinionCatalog.Find("denounced").Value;
             Check(errors.Count == 0, "neither twin is refused by the opinion catalogue: " + string.Join(" | ", errors));
             Check(viaYaml == viaJson, $"both twins leave the same reason in the catalogue: {viaYaml}");
-            Check(viaYaml.Days == 1825 && viaYaml.Opinion == -18f, "the override changes the lifetime and keeps the size");
+            Check(viaYaml.Days == 1825 && viaYaml.Opinion == -15f, "the override changes the lifetime and keeps the size");
             Check(viaYaml.Name == shipped.Value.Name && viaYaml.Decays == shipped.Value.Decays &&
                   viaYaml.MaxStacks == shipped.Value.MaxStacks,
                 "fields the override leaves out are inherited from the base game");
@@ -105,7 +105,7 @@ static class YamlTwinTests
             Directory.Delete(directory, true);
             OpinionCatalog.ResetCatalog();
         }
-        Check(OpinionCatalog.Find("denounced")?.Days == 1100, "reloading the base game restores 1100 days");
+        Check(OpinionCatalog.Find("denounced")?.Days == 730, "reloading the base game restores 730 days");
     }
 
     /// <summary>
