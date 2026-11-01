@@ -27,6 +27,12 @@
   "EventMemoryDays": 1460,
   "EventExpiryDays": 182,
   "MaxConstructionProjects": 12,
+  // Construction capacity is the speed a country's sites work at (ConstructionCost.Pace): a day
+  // of work a day at capacity 1, slower below it, faster above it with diminishing returns -
+  // the first point above one buys half the way to the ceiling. 1.0 for the ceiling turns the
+  // bonus off (capacity above one then does nothing, as before 1 November 2026).
+  "ConstructionPaceCeiling": 1.5,
+  "ConstructionPaceHalfway": 1.0,
   "SeedPeoplePerFarm": 3200000,
   "SeedUrbanPeoplePerIndustry": 10500000,
   "SeedInfrastructurePerUrbanisation": 4,

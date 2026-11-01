@@ -280,6 +280,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
         if (args.Contains("--restoration-only")) { RestorationTests.Run(); return; }
         if (args.Contains("--civil-war-budget-only")) { CivilWarBudgetTests.Run(); return; }
+        if (args.Contains("--state-failure-only")) { StateFailureTests.Run(); return; }
         if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
         if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
         if (args.Contains("--snapshot-delivery-only")) { NetworkSnapshotDeliveryTests.Run(); return; }

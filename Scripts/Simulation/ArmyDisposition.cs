@@ -81,9 +81,7 @@ public static class ArmyDisposition
         Load.Clear();
         Capacity.Clear();
         foreach (var state in campaign.StatesOf(nation))
-            Capacity[state.MapIndex] = d.BaseStateSupplyThroughput +
-                state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * d.SupplyPerInfrastructure +
-                state.Buildings.GetValueOrDefault(BuildingKind.Barracks) * d.SupplyPerBarracks;
+            Capacity[state.MapIndex] = d.BaseStateSupplyThroughput + LogisticsSystem.BuildingThroughput(d, state);
         foreach (var army in campaign.Armies)
             if (army.NationId == nation.Id && army.SupplySourceStateMapIndex > 0)
                 Load[army.SupplySourceStateMapIndex] = Load.GetValueOrDefault(army.SupplySourceStateMapIndex) + Demand(campaign, army);

@@ -191,7 +191,7 @@ public partial class DealOrForceGame
             row.AddChild(batch);
 
             var tip = Tr(definition.Name) + "\n" + Simulation.Loc.Get(definition.Description) + "\n\n" +
-                      Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days) +
+                      Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionCost.ExpectedDays(_campaign, player, kind)) +
                       "\n" + Simulation.Loc.Format("In this region: {0} built, {1} under way.", built, underway);
             var effects = BuildingEffects(state, kind, outputFactor).Text;
             if (effects.Length > 0) tip += "\n\n" + effects;
@@ -226,9 +226,9 @@ public partial class DealOrForceGame
     ///   - what its output is worth a year at this country's GDP scale, against its inputs;
     ///   - its special effect - supply, recruitment, research, deaths, trade reach, slipways -
     ///     from the same constants and helpers the systems that apply them read;
-    ///   - and the two catalogue numbers, said for what they are: the GDP step is a one-off the
-    ///     market's measure of output replaces within weeks, and construction capacity only
-    ///     speeds building while it is below one.
+    ///   - and construction capacity, said for what it is: the speed every site of the country
+    ///     works at (ConstructionCost.Pace), with diminishing returns. There is no GDP line of its
+    ///     own: GDP is what the country sells, so the output line is the building's GDP.
     /// </summary>
     private BuildingOutlookText BuildingEffects(ScenarioState state, BuildingKind kind, float? outputFactor = null)
     {
@@ -280,8 +280,11 @@ public partial class DealOrForceGame
         var cost = 0f;
         foreach (var (good, amount) in _buildingUses)
             if (player.Market.TryGetValue(good, out var quote)) cost += amount * MathF.Max(0f, quote.Price);
+        // GDP is the market value of what the country sells (MarketSystem's gross output), so
+        // this is the building's lasting share of GDP while its goods find buyers - there is no
+        // separate GDP step on completion any more.
         if (worth > 0f)
-            Add("Output a year", cost > 0f
+            Add("Output a year, counted in GDP", cost > 0f
                 ? Simulation.Loc.Format("{0}, inputs {1}", Fmt.Money(worth * 52f * scale), Fmt.Money(cost * 52f * scale))
                 : Fmt.Money(worth * 52f * scale));
 
@@ -352,18 +355,20 @@ public partial class DealOrForceGame
                 break;
             case BuildingKind.RailNetwork:
                 AddReach(TradeNetwork.ReachPerRail);
+                // LogisticsSystem.BuildingThroughput: the trunk line to the hub, less than roads.
+                Add("Army supply here, divisions", defines.SupplyPerRailNetwork.ToString("+0.#;-0.#", culture));
                 summary.Add(Simulation.Loc.Get("trade reach"));
+                summary.Add(Simulation.Loc.Get("army supply"));
                 break;
         }
 
-        // ---- the two catalogue numbers, for what they are ---------------------------------
-        if (definition.GdpGain > 0f)
-            Add("GDP on completion, one-off", "+" + Fmt.Money(definition.GdpGain * yield));
-        // Sites are paid at their rate times this capacity and still take their full build
-        // time (EconomySystem), so past one it only pays the bill sooner.
-        var pace = M.Clamp(player.ConstructionCapacity, 0.25f, 1f);
-        var paceNext = M.Clamp(player.ConstructionCapacity + definition.CapacityGain * yield, 0.25f, 1f);
-        if (paceNext > pace + 0.0005f) Add("Construction pace", Points(paceNext - pace));
+        // ---- construction capacity, for what it is --------------------------------------
+        // The speed every one of the country's sites works at (ConstructionCost.Pace): a day of
+        // work a day at capacity one, faster above it with diminishing returns up to a ceiling.
+        // The share is of the pace itself, so "+2%" means every site finishes about 2% sooner.
+        var pace = ConstructionCost.Pace(defines, player.ConstructionCapacity);
+        var paceNext = ConstructionCost.Pace(defines, player.ConstructionCapacity + definition.CapacityGain * yield);
+        if (paceNext > pace + 0.0005f) Add("Construction speed, every site", Points(paceNext / pace - 1f));
 
         var text = lines.Count > 0 ? Simulation.Loc.Get("Each one, once built:") + "\n" + string.Join("\n", lines) : "";
         return new BuildingOutlookText(text, string.Join(" · ", summary));

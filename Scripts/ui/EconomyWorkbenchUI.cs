@@ -242,7 +242,7 @@ public partial class DealOrForceGame
 
             var line = new HBoxContainer();
             rows.AddChild(line);
-            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days), 12, Ui.Colour("text.caption"));
+            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionCost.ExpectedDays(_campaign, player, kind)), 12, Ui.Colour("text.caption"));
             cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             cost.AutowrapMode = TextServer.AutowrapMode.Off;
             cost.ClipText = true;

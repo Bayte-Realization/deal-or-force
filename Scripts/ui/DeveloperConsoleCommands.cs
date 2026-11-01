@@ -1201,7 +1201,7 @@ public partial class DealOrForceGame
         var projects = _campaign.Construction
             .Where(project => project.StateMapIndex == state.MapIndex)
             .Select(project => $"    building {project.Building} · {project.Progress:P0} · " +
-                               $"{project.ProgressDays}/{project.DurationDays} day(s)")
+                               $"{project.ProgressDays:0.#}/{project.DurationDays} day(s)")
             .ToArray();
         var standing = state.Buildings.Count == 0
             ? "    nothing built"

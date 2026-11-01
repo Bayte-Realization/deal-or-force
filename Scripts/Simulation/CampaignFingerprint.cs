@@ -645,6 +645,16 @@ public static class CampaignFingerprint
             if (nation.RecessionDepth != 0f || nation.RecessionUntilDay != 0)
             { MixText("recession"); MixFloat(nation.RecessionDepth); Mix(nation.RecessionStartDay); Mix(nation.RecessionUntilDay); }
             Mix(nation.LastCivilWarDay);
+            // A collapse under way and the dates of the last collapse and revolution: they decide
+            // the next wave and the next outbreak before any border moves (StateFailure). A
+            // country that never failed emits nothing, keeping untouched worlds' fingerprints.
+            if (nation.CollapseStartDay != -1 || nation.CollapseWaves != 0 || nation.CollapseStartPopulation != 0 ||
+                nation.LastCollapseDay != -99999 || nation.LastRevolutionDay != -99999)
+            {
+                MixText("state_failure"); Mix(nation.CollapseStartDay); Mix(nation.CollapseWaves);
+                Mix(nation.CollapseStartPopulation);
+                Mix(nation.LastCollapseDay); Mix(nation.LastRevolutionDay);
+            }
             Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);
             Mix(nation.LastInstitutionReviewDay); Mix(nation.LastSocialReviewDay);

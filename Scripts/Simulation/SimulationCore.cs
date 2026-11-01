@@ -1060,6 +1060,10 @@ public sealed partial class Campaign
             yield return 0;
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
+            // And whether a state failing on several fronts at once is coming apart, its capital
+            // overthrowing its government, or a piece of a state that came apart going home
+            // (StateFailure). After the single outbreak, so the two read the same day's world.
+            using (SimProfiler.Measure("state failure")) StateFailure.Tick(this);
             yield return 0;
             CountryNames.Remember(this);
 

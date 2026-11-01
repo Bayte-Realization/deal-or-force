@@ -278,7 +278,7 @@ public sealed class ModLoader
                 // building, provided it says what it costs and how long it takes. Without
                 // those it is a typo, and refusing typos is most of what a catalog is for.
                 if (!BuildingCatalog.Declare(entry.Name, Text("name"), Number("cost"), Integer("days"),
-                        Number("gdp_gain"), Number("capacity_gain"), Text("description"), jobs: Number("jobs")))
+                        Number("capacity_gain"), Text("description"), jobs: Number("jobs")))
                     package.Errors.Add($"Building '{entry.Name}' in {Path.GetFileName(path)} is neither a " +
                                        "valid change to an existing one nor a complete new one " +
                                        "(a new building needs name, cost and days)");

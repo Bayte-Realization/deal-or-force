@@ -17,7 +17,7 @@
   "Jobs": "Jobs",
   "{0} jobs": "{0} jobs",
   "Jobs the country can fill": "Jobs the country can fill",
-  "Output a year": "Output a year",
+  "Output a year, counted in GDP": "Output a year, counted in GDP",
   "{0}, inputs {1}": "{0}, inputs {1}",
   "Army supply here, divisions": "Army supply here, divisions",
   "War damage rebuilt here": "War damage rebuilt here",
@@ -38,7 +38,6 @@
   "research": "research",
   "slipways": "slipways",
   "trade reach": "trade reach",
-  "GDP on completion, one-off": "GDP on completion, one-off",
-  "Construction pace": "Construction pace",
+  "Construction speed, every site": "Construction speed, every site",
   "In {0}, the capital:": "In {0}, the capital:"
 }

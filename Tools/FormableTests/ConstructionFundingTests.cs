@@ -28,20 +28,38 @@ static class ConstructionFundingTests
     public static void Run()
     {
         failures = 0;
+        // Construction capacity is the speed of the work (ConstructionCost.Pace): capacity 2 works
+        // a site 1.25 days a day and pays it 1.25 days of its price a day. Until 1 November 2026 it
+        // paid early and finished on the same date, which is what the old checks here pinned.
         var (c, n, project) = Fixture(2, 10);
         for (var day = 0; day < 10; day++) ConstructionSystem.Tick(c);
-        Check(c.Construction.Count == 1 && project.ProgressDays == 10 && MathF.Abs(project.Paid - 4) < .00001f,
-            "high capacity funds the agreed price before the construction time is complete");
-        var cash = n.Treasury;
-        for (var day = 0; day < 10; day++) ConstructionSystem.Tick(c);
-        Check(c.Construction.Count == 0 && project.ProgressDays == 20,
-            "funding early does not skip the remaining construction time");
-        Check(MathF.Abs(n.Treasury - 6) < .00001f && MathF.Abs(n.Treasury - cash) < .00001f && project.Paid <= 4,
-            "remaining work never charges the full project price a second time");
+        Check(c.Construction.Count == 1 && MathF.Abs(project.ProgressDays - 12.5f) < .0001f && MathF.Abs(project.Paid - 2.5f) < .0001f,
+            $"high capacity works and pays a site 1.25 days a day (work {project.ProgressDays:0.###}, paid {project.Paid:0.###})");
+        for (var day = 0; day < 6; day++) ConstructionSystem.Tick(c);
+        Check(c.Construction.Count == 0,
+            "high capacity finishes a 20-day site in 16 days");
+        Check(MathF.Abs(n.Treasury - 6) < .0001f && project.Paid <= 4.0001f,
+            "building faster costs exactly the contract price, no more");
         Check(c.States[0].Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) == 1,
             "one fully paid completed site delivers exactly one real building");
 
-        (c, n, project) = Fixture(2, 0); project.Paid = project.Cost; project.ProgressDays = 4;
+        (c, n, project) = Fixture(1, 10);
+        for (var day = 0; day < 19; day++) ConstructionSystem.Tick(c);
+        Check(c.Construction.Count == 1, "capacity one still needs the catalogue's full build time");
+        ConstructionSystem.Tick(c);
+        Check(c.Construction.Count == 0 && MathF.Abs(n.Treasury - 6) < .0001f, "capacity one finishes on the catalogue's day");
+
+        var d = new Defines();
+        Check(ConstructionCost.Pace(d, 0.1f) == 0.25f && ConstructionCost.Pace(d, 0.6f) == 0.6f && ConstructionCost.Pace(d, 1f) == 1f,
+            "below one, capacity slows the work as it always did, never under a quarter");
+        Check(ConstructionCost.Pace(d, 3f) > ConstructionCost.Pace(d, 2f) &&
+              ConstructionCost.Pace(d, 3f) - ConstructionCost.Pace(d, 2f) < ConstructionCost.Pace(d, 2f) - ConstructionCost.Pace(d, 1f) &&
+              ConstructionCost.Pace(d, 1000f) <= d.ConstructionPaceCeiling,
+            "above one, every point of capacity is worth less than the last, up to the ceiling");
+        d.ConstructionPaceCeiling = 1f;
+        Check(ConstructionCost.Pace(d, 5f) == 1f, "a ceiling of one turns the capacity bonus off");
+
+        (c, n, project) = Fixture(1, 0); project.Paid = project.Cost; project.ProgressDays = 4;
         ConstructionSystem.Tick(c);
         Check(project.ProgressDays == 5 && n.Treasury == 0 && project.Paid == project.Cost,
             "a fully funded site continues working when the national cash account later reaches zero");

@@ -17,7 +17,7 @@
   "Jobs": "Рабочие места",
   "{0} jobs": "{0} рабочих мест",
   "Jobs the country can fill": "Заполненность рабочих мест в стране",
-  "Output a year": "Выпуск за год",
+  "Output a year, counted in GDP": "Выпуск за год, входит в ВВП",
   "{0}, inputs {1}": "{0}, сырьё {1}",
   "Army supply here, divisions": "Снабжение армии в регионе, дивизий",
   "War damage rebuilt here": "Восстановление разрушений в регионе",
@@ -38,7 +38,6 @@
   "research": "исследования",
   "slipways": "стапели",
   "trade reach": "дальность торговли",
-  "GDP on completion, one-off": "ВВП при завершении, разово",
-  "Construction pace": "Темп строительства",
+  "Construction speed, every site": "Скорость строительства, на всех стройках",
   "In {0}, the capital:": "Для столицы, {0}:"
 }

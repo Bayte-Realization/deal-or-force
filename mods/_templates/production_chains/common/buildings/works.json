@@ -1,7 +1,8 @@
 // What the works cost, how long they take, and what they give back.
 //
-// gdp_gain is output; capacity_gain is construction capacity, which is what lets a country
-// build the next thing faster.
+// capacity_gain is construction capacity, the speed every site of the country works at
+// (diminishing returns above 1). A building's GDP is what it makes and sells; there is no
+// GDP field.
 {
   // Cheap docks and railways make the world trade freely, because reach is the ceiling on
   // how much of its shortfall a country can physically bring in.

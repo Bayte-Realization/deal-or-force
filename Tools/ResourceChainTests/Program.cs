@@ -65,8 +65,28 @@ static class Program
         float Of(List<(Commodity Good, float Amount)> list, string id) => list.Where(e => e.Good == Good(id)).Sum(e => e.Amount);
         Check(Near(Of(made, "Steel"), 2f) && Near(Of(made, "Aluminium"), 1.9f) && Near(Of(made, "IndustrialMaterials"), 1.15f) &&
               smelterValue > 0f, "a smelter's marginal output is its recipe weights at full staffing and supply");
-        Check(Near(Of(burned, "Bauxite"), 2.542f) && Near(Of(burned, "IronOre"), .605f) && needed.Contains(Good("Energy")) &&
-              !needed.Contains(Good("IronOre")), "a smelter's bill names what it buys, and energy as a need it does not buy");
+        // Since 1 November 2026 a smelter buys its power (energy_household's Smelter term) rather
+        // than only slowing without it, so energy is on the bill and not repeated as a bare need.
+        Check(Near(Of(burned, "Bauxite"), 2.542f) && Near(Of(burned, "IronOre"), .605f) && Near(Of(burned, "Energy"), 1.6f) &&
+              !needed.Contains(Good("Energy")) && !needed.Contains(Good("IronOre")),
+              $"a smelter's bill names what it buys, energy included (energy {Of(burned, "Energy"):0.###})");
+        ProductionChains.Marginal(n, s, BuildingKind.Refinery, 1f, made, burned, needed);
+        Check(Near(Of(burned, "Oil"), 1f) && Near(Of(burned, "NaturalGas"), .2f) && Near(Of(made, "Energy"), 2.3f) &&
+              Near(Of(made, "Chemicals"), .8f) && Near(Of(made, "Sulfur"), .3f),
+              $"a refinery burns crude and some gas for its energy, chemicals and sulphur (oil {Of(burned, "Oil"):0.###}, gas {Of(burned, "NaturalGas"):0.###})");
+        ProductionChains.Marginal(n, s, BuildingKind.ElectronicsPlant, 1f, made, burned, needed);
+        Check(Near(Of(burned, "RareEarths"), .75f) && Near(Of(burned, "Energy"), .6f),
+              $"an electronics plant buys the rare earths and energy it cannot work without (rare earths {Of(burned, "RareEarths"):0.###})");
+        var fullRefinery = 0f;
+        Clear(n); ProductionChains.RunRegion(n, s, 1); fullRefinery = n.Market[Good("Energy")].Production;
+        s.Buildings[BuildingKind.Refinery] = 2;
+        Clear(n); ProductionChains.RunRegion(n, s, 1); var withRefinery = n.Market[Good("Energy")].Production;
+        Clear(n); n.Market[Good("Oil")].Satisfaction = 0; ProductionChains.RunRegion(n, s, 1);
+        var starved = n.Market[Good("Energy")].Production;
+        s.Buildings.Remove(BuildingKind.Refinery);
+        Check(Near(withRefinery - fullRefinery, 4.6f) && Near(starved - fullRefinery, 4.6f * .4f),
+              $"a refinery without crude keeps only its floor of output ({(starved - fullRefinery):0.###} of {(withRefinery - fullRefinery):0.###})");
+        Clear(n);
         ProductionChains.Marginal(n, s, BuildingKind.ExtractionIndustry, 1f, made, burned, needed);
         Check(Near(Of(made, "Copper"), 7.2f) && Of(made, "Bauxite") == 0f, "one more mine digs only what lies under the region");
         ProductionChains.Marginal(n, s, BuildingKind.Smelter, .5f, made, burned, needed);

@@ -650,6 +650,7 @@ public static class Program
                 Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                Console.WriteLine("   " + WorldMarketLine(campaign));
                 // How much of its workforce each country's buildings ask for (MarketSystem.CapitalReturns).
                 var intensities = alive.Select(n => (n.Tag, Jobs: campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded),
                         Workers: campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)))
@@ -803,8 +804,13 @@ public static class Program
                 year.Clear();
                 largest = 0;
             }
+            Console.WriteLine($"PULSE world GDP {campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp):N0} bn; " + WorldMarketLine(campaign));
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            // State failure: collapses and their sides, revolutions, and pieces gone home (StateFailure).
+            Console.WriteLine("PULSE failure: " + string.Join(", ", StateFailure.Tally.OrderBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => $"{entry.Key} {entry.Value}")) +
+                              $"; born in play alive {campaign.Nations.Skip(bornFrom).Count(n => !campaign.Fallen.Contains(n.Id) && n.Population > 0 && n.Movement is null)} of {campaign.Nations.Count - bornFrom}");
+            foreach (var line in StateFailure.Log) Console.WriteLine("PULSE failure " + line);
             // Leases and troops in without a war: what stands now and what happened on the way.
             Console.WriteLine($"PULSE land: leased={LandArrangementSystem.Leased} entered={LandArrangementSystem.Entered} " +
                               $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
@@ -5223,6 +5229,35 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// One line on the goods the building audit of 1 November 2026 touched: for each, what the
+    /// world makes against what it asks for, how many countries are short of it, and its price
+    /// against the base price, weighted by how much each country asks for. Printed by --growth
+    /// every report and by --pulse at the end, so a before/after pair can be read side by side.
+    /// </summary>
+    internal static string WorldMarketLine(Campaign campaign)
+    {
+        var parts = new List<string>();
+        foreach (var id in new[] { "Oil", "NaturalGas", "RareEarths", "Energy", "Coal", "Steel", "Aluminium", "Electronics", "Chemicals" })
+        {
+            if (!CommodityCatalog.TryParse(id, out var good)) continue;
+            double made = 0, wanted = 0, weightedPrice = 0;
+            var shortOf = 0;
+            var basePrice = Math.Max(0.0001f, CommodityCatalog.Get(good).BasePrice);
+            foreach (var nation in campaign.Nations)
+            {
+                if (nation.Population <= 0 || !nation.Market.TryGetValue(good, out var quote)) continue;
+                made += quote.Production;
+                wanted += quote.Demand;
+                weightedPrice += quote.Demand * (quote.Price / basePrice);
+                if (quote.Demand > 0.001f && quote.IsShortage) shortOf++;
+            }
+            var price = wanted > 0 ? weightedPrice / wanted : 1;
+            parts.Add($"{id} {made:0.0}/{wanted:0.0} ({(wanted > 0 ? made / wanted : 0):0.00}x, {shortOf} short, price x{price:0.00})");
+        }
+        return "MARKET " + string.Join("; ", parts);
+    }
+
     private static string TheWorldMakesWhatItNeeds(Campaign campaign)
     {
         var worst = "";
@@ -8565,7 +8600,7 @@ public static class Program
                 return "the catalog refused a complete new good";
             if (!CommodityCatalog.TryParse(GoodId, out var alloy))
                 return "the catalog accepted a new good and then could not find it by name";
-            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 1.0f, 0.1f, "A building no enum names."))
+            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 0.1f, "A building no enum names."))
                 return "the catalog refused a complete new building";
             if (!BuildingCatalog.TryParse(BuildingId, out var works))
                 return "the catalog accepted a new building and then could not find it by name";
@@ -8708,7 +8743,7 @@ public static class Program
             float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
             int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
             BuildingCatalog.Declare(name, Text("name"), Number("cost"), Integer("days"),
-                Number("gdp_gain"), Number("capacity_gain"), Text("description"), jobs: Number("jobs"));
+                Number("capacity_gain"), Text("description"), jobs: Number("jobs"));
         });
 
         void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)
@@ -12519,7 +12554,9 @@ public static class Program
         // Now the round trip. One building placed by hand, then pulled down, and everything
         // back where it started bar the scrap value.
         state.Buildings[BuildingKind.CivilianIndustry] = standing + 1;
-        nation.Gdp = gdp + definition.GdpGain * yield;
+        // No GDP step on completion any more (the market counts a building's output), so GDP
+        // must come back to exactly where it was.
+        nation.Gdp = gdp;
         nation.ConstructionCapacity = capacity + definition.CapacityGain * yield;
         nation.Treasury = treasury;
 

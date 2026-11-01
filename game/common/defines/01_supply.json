@@ -23,6 +23,9 @@
   "SupplyThroughputPerDivision": 0.12,
   "SupplyPerInfrastructure": 2.2,
   "SupplyPerBarracks": 0.9,
+  // A rail network carries supply to its region's hubs too, a little over half what a level of
+  // infrastructure does (LogisticsSystem.BuildingThroughput).
+  "SupplyPerRailNetwork": 1.2,
 
   // Occupation and war score
   "OccupationDailyProgress": 0.012,

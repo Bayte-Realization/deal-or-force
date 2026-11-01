@@ -26,6 +26,18 @@ public static class LogisticsSystem
     /// <summary>Men a day each barracks adds to the country's reinforcement capacity, before the military budget scales it.</summary>
     public const float ReinforcementPerBarracks = 120f;
 
+    /// <summary>
+    /// The supply throughput a home region's buildings add to Defines.BaseStateSupplyThroughput:
+    /// infrastructure most, then the rail network, then barracks. One sum, read by this pass and
+    /// by the army disposition staff (ArmyDisposition.Measure), so the two never disagree about
+    /// what a hub can carry and a build list can quote the same constants.
+    /// </summary>
+    public static float BuildingThroughput(Defines defines, ScenarioState state) =>
+        state is null || defines is null ? 0f :
+            state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * defines.SupplyPerInfrastructure +
+            state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork) * defines.SupplyPerRailNetwork +
+            state.Buildings.GetValueOrDefault(BuildingKind.Barracks) * defines.SupplyPerBarracks;
+
     /// <summary>What the military budget, against the baseline, makes of that capacity (before the reinforcement_rate modifier).</summary>
     public static float ReinforcementBudget(Campaign campaign, Nation nation) =>
         M.Clamp(nation.MilitarySpending / MathF.Max(0.01f, campaign.Defines.BaselineMilitarySpending), 0.25f, 2.5f);
@@ -234,18 +246,15 @@ public static class LogisticsSystem
             }
             var sourceState = source[province];
             StateById.TryGetValue(sourceState, out var state);
-            var infrastructure = state?.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) ?? 0;
-            var barracks = state?.Buildings.GetValueOrDefault(BuildingKind.Barracks) ?? 0;
             // A modern state moves its army on railways and roads, not on the three
             // divisions' worth of throughput a bare province used to allow. Infrastructure
-            // is what a player builds to widen this, so it carries the most weight.
+            // is what a player builds to widen this, so it carries the most weight; a rail
+            // network adds a little over half as much, barracks less (BuildingThroughput).
             // Winter narrows the same road. It does not invent a second supply network.
             var centre = topology.CenterOf(province);
             var damageFactor = state is not null ? (1f - MathF.Min(0.85f, state.WarDamage * 0.9f)) : 1f;
             var enclaveFactor = IsIsolatedHub.GetValueOrDefault(sourceState) ? 0.35f : 1f;
-            var capacity = (campaign.Defines.BaseStateSupplyThroughput +
-                           infrastructure * campaign.Defines.SupplyPerInfrastructure +
-                           barracks * campaign.Defines.SupplyPerBarracks) *
+            var capacity = (campaign.Defines.BaseStateSupplyThroughput + BuildingThroughput(campaign.Defines, state)) *
                           damageFactor * enclaveFactor *
                           WaterConditions.RoadThroughput(campaign, centre.Latitude);
             var demand = MathF.Max(0.01f, DemandBySource.GetValueOrDefault(sourceState));

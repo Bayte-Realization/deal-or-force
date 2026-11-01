@@ -1045,6 +1045,13 @@ public sealed partial class Defines
 	/// <summary>Supply throughput each barracks adds.</summary>
 	public float SupplyPerBarracks { get; set; } = 0.9f;
 
+	/// <summary>
+	/// Supply throughput each rail network adds. Less than a level of infrastructure, which is
+	/// the roads, depots and power an army draws on everywhere; a railway is the trunk line that
+	/// moves the bulk of it to the hub, and until 1 November 2026 it carried none of it.
+	/// </summary>
+	public float SupplyPerRailNetwork { get; set; } = 1.2f;
+
 	/// <summary>Maximum number of friendly provinces a land supply network can trace from home.</summary>
 	public int SupplyTraceRange { get; set; } = 20;
 

@@ -21,6 +21,9 @@
     "organization_dissolved": 3,
     "general_strike": 2,
     "march_concessions": 2,
-    "march_toppled": 3
+    "march_toppled": 3,
+    "state_collapse": 3,
+    "revolution": 3,
+    "collapse_reunion": 2
   }
 }

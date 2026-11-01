@@ -33,8 +33,13 @@
     "demand": { "CivilianIndustry": 0.105, "ArmsIndustry": 0.12 }
   },
   "sulfur_chain": {
-    "good": "Sulfur", "output": { "deposit:Sulfur*extraction_efficiency": 1.0, "Refinery": 0.30 },
+    "good": "Sulfur", "output": { "deposit:Sulfur*extraction_efficiency": 1.0 },
     "demand": { "ChemicalPlant": 0.279, "ArmsIndustry": 0.116 }
+  },
+  // Sulphur recovered at refineries comes out of the crude they buy (00_chains oil_extraction).
+  "sulfur_from_refining": {
+    "good": "Sulfur", "output": { "Refinery": 0.30 },
+    "needs": { "Oil": 0.40 }
   },
   "steel_chain": {
     "good": "Steel", "output": { "Smelter": 2.0, "CivilianIndustry": 0.50 },
