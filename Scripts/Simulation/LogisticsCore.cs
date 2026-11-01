@@ -23,6 +23,13 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class LogisticsSystem
 {
+    /// <summary>Men a day each barracks adds to the country's reinforcement capacity, before the military budget scales it.</summary>
+    public const float ReinforcementPerBarracks = 120f;
+
+    /// <summary>What the military budget, against the baseline, makes of that capacity (before the reinforcement_rate modifier).</summary>
+    public static float ReinforcementBudget(Campaign campaign, Nation nation) =>
+        M.Clamp(nation.MilitarySpending / MathF.Max(0.01f, campaign.Defines.BaselineMilitarySpending), 0.25f, 2.5f);
+
     // Scratch, reused across nations and across days. The simulation is single-threaded by
     // construction - it has to be, to stay replayable - so one set is enough.
     private static int[] _distance = Array.Empty<int>();
@@ -272,11 +279,9 @@ public static class LogisticsSystem
         var barracksTotal = 0;
         foreach (var state in StateById.Values)
             barracksTotal += state.Buildings.GetValueOrDefault(BuildingKind.Barracks);
-        var spendingFactor = M.Clamp(nation.MilitarySpending /
-            MathF.Max(0.01f, campaign.Defines.BaselineMilitarySpending), 0.25f, 2.5f);
         nation.ReinforcementCapacity = (MathF.Max(80f, MilitaryBootstrap.Personnel(nation.Tag, nation.Population) *
                                             campaign.Defines.ReinforcementCapacityShare) +
-                                        barracksTotal * 120f) * spendingFactor *
+                                        barracksTotal * ReinforcementPerBarracks) * ReinforcementBudget(campaign, nation) *
                                        NationalModifiers.Factor(nation, "reinforcement_rate");
         if (campaign.ElapsedDays % 7 == 0) nation.ReinforcedLastWeek = 0f;
     }

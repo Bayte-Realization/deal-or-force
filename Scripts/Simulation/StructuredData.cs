@@ -63,7 +63,14 @@ public static class StructuredData
                 throw new InvalidDataException($"YAML exceeds {MaxYamlBytes} bytes.");
             return YamlToJson(File.ReadAllText(path));
         }
-        catch (Exception exception) when (exception is YamlException or InvalidDataException)
+        catch (YamlException exception)
+        {
+            // YamlDotNet keeps where the mistake is in Start and leaves it out of Message, so
+            // without this a typo in a mod read "did not find expected ',' or ']'" with no line
+            // to look at. Written the same way as the rejections below, which carry their place.
+            throw new InvalidDataException($"{path}: {exception.Message} At {exception.Start}.", exception);
+        }
+        catch (InvalidDataException exception)
         {
             throw new InvalidDataException($"{path}: {exception.Message}", exception);
         }

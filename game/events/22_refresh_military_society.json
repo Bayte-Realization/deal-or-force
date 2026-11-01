@@ -46,7 +46,7 @@
         "effects": { "war_support": 0.018, "stability": 0.006, "market_access": -0.02 } },
       { "title": "Diversify the route",
         "consequence": "Expensive now, impossible to cut twice.",
-        "effects": { "treasury_percent": -0.04, "construction_capacity": -0.03, "construction_capacity": 0.04 },
+        "effects": { "treasury_percent": -0.04, "construction_capacity": 0.04 },
         "modifiers": [ { "id": "infrastructure_drive", "days": 270 } ] }
     ]
   },

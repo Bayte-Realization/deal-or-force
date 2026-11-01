@@ -414,26 +414,41 @@ public static class MarketSystem
     /// Jobs a state's buildings ask for, in millions of workers. Deliberately coarse: the
     /// point is that industry has to be staffed by someone, not that every profession is
     /// tracked separately.
+    ///
+    /// How many each building asks for is its `jobs` in common/buildings (BuildingDefinition.Jobs),
+    /// read here and by the build list, so the tooltip's "jobs" is the number that staffs the
+    /// plant. The second tier needs hands too: refineries, smelters, chemical and electronics
+    /// plants, yards, ports and railways once employed nobody, so a rich country that built
+    /// them grew without ever running short of people - the United States doubled its real
+    /// output in two years at 86 % employment and reached two fifths of the world economy.
+    /// Universities, hospitals and barracks still ask for none.
+    ///
+    /// Summed in the order the hand-written sum used, then anything a mod declared, so the
+    /// shipped buildings add up to the same float they always did.
     /// </summary>
-    internal static float JobsDemanded(ScenarioState state) =>
-        state.Buildings.GetValueOrDefault(BuildingKind.Agriculture) * 0.42f +
-        state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) * 0.85f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry) * 0.55f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry) * 0.60f +
-        state.Buildings.GetValueOrDefault(BuildingKind.PowerPlant) * 0.22f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * 0.30f +
-        // The second tier needs hands too. It did not: refineries, smelters, chemical and
-        // electronics plants, yards, ports and railways employed nobody, so a rich country that
-        // built them grew without ever running short of people - the United States doubled its
-        // real output in two years at 86 % employment and reached two fifths of the world economy.
-        state.Buildings.GetValueOrDefault(BuildingKind.Refinery) * 0.35f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ChemicalPlant) * 0.45f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Smelter) * 0.50f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ElectronicsPlant) * 0.60f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) * 0.55f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Port) * 0.20f +
-        state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork) * 0.25f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.15f;
+    internal static float JobsDemanded(ScenarioState state)
+    {
+        var jobs = 0f;
+        foreach (var kind in JobOrder)
+            jobs += state.Buildings.GetValueOrDefault(kind) * BuildingCatalog.Get(kind).Jobs;
+        foreach (var (kind, count) in state.Buildings)
+        {
+            if ((int)kind <= (int)BuildingKind.ResearchLab || count == 0) continue;
+            jobs += count * BuildingCatalog.Get(kind).Jobs;
+        }
+        return jobs;
+    }
+
+    private static readonly BuildingKind[] JobOrder =
+    {
+        BuildingKind.Agriculture, BuildingKind.CivilianIndustry, BuildingKind.ExtractionIndustry,
+        BuildingKind.ArmsIndustry, BuildingKind.PowerPlant, BuildingKind.Infrastructure,
+        BuildingKind.Refinery, BuildingKind.ChemicalPlant, BuildingKind.Smelter,
+        BuildingKind.ElectronicsPlant, BuildingKind.Shipyard, BuildingKind.Port,
+        BuildingKind.RailNetwork, BuildingKind.ResearchLab,
+        // Never staffed in the shipped data; listed so a mod that gives them jobs is counted once.
+        BuildingKind.University, BuildingKind.Hospital, BuildingKind.Barracks
+    };
 
     /// <summary>
     /// Workers a state can actually put in those jobs, in millions. Not everyone alive is
@@ -556,11 +571,7 @@ public static class MarketSystem
         // to GDP after the fact.
         // And what its technologies, spirits and government add (NationalModifiers): a share
         // on top, not a new input.
-        var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
-                           NationalModifiers.Factor(nation, "output") *
-                           CapitalReturns(campaign, nation, demandedJobs, availableWorkers) *
-                           // A recession from a financial crisis or a pandemic (TreasuryDynamics).
-                           TreasuryDynamics.OutputFactor(campaign, nation);
+        var outputFactor = NationalOutputFactor(campaign, nation, demandedJobs, availableWorkers);
 
         var allocation = ProductionProgramme.Allocate(states, nation);
         ProductionProgramme.MigrateLegacy(nation, allocation);
@@ -595,6 +606,38 @@ public static class MarketSystem
     /// because the jobs a region's buildings ask for are a coarse count - the median country
     /// asks for 0.95 workers per worker it has and Greenland for 130 - not a census.
     /// </summary>
+    /// <summary>
+    /// How much of its rated output a country's plant gives this week: the share of the jobs it
+    /// can staff, times how productive the staff are, its modifiers, the diminishing return on
+    /// capital past its headroom, and any recession.
+    /// </summary>
+    private static float NationalOutputFactor(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers) =>
+        nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
+        NationalModifiers.Factor(nation, "output") *
+        CapitalReturns(campaign, nation, demandedJobs, availableWorkers) *
+        // A recession from a financial crisis or a pandemic (TreasuryDynamics).
+        TreasuryDynamics.OutputFactor(campaign, nation);
+
+    /// <summary>
+    /// The output factor the market pass hands ProductionChains.RunRegion for this region, worked
+    /// out again from the country as it stands - for the build list, which wants to say what one
+    /// more plant here would make. Uses the staffing share the last market week measured rather
+    /// than measuring it again, so it reads the same number the economy ran on.
+    /// </summary>
+    public static float RegionOutputFactor(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (campaign is null || nation is null || state is null) return 1f;
+        var demandedJobs = 0f;
+        var availableWorkers = 0f;
+        foreach (var region in HeldRegions.EconomyOf(campaign, nation))
+        {
+            demandedJobs += JobsDemanded(region);
+            availableWorkers += WorkersAvailable(region);
+        }
+        return NationalOutputFactor(campaign, nation, demandedJobs, availableWorkers) *
+               WarDamage.OutputFactor(campaign, nation, state) * HeldRegions.WorkedAt(campaign, nation, state);
+    }
+
     internal static float CapitalReturns(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers)
     {
         var headroom = campaign.Defines.CapitalDeepeningHeadroom;

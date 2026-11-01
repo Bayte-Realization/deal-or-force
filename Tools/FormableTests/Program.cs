@@ -327,6 +327,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--movement-representation-only")) { MovementRepresentationTests.Run(); return; }
         if (args.Contains("--war-stalemate-only")) { WarStalemateTests.Run(); return; }
         if (args.Contains("--yaml-only")) { StructuredDataTests.Run(); return; }
+        if (args.Contains("--yaml-twin-only")) { YamlTwinTests.Run(); return; }
         if (args.Contains("--army-localization-only")) { ArmyCommandLocalizationTests.Run(); return; }
         if (args.Contains("--fleet-localization-only")) { FleetNameLocalizationTests.Run(); return; }
         if (args.Contains("--icons-only")) { InterfaceIconTests.Run(); return; }
@@ -401,6 +402,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         UnionCohesionTests.RunOnMap();
         DemographyTests.Run();
         StructuredDataTests.Run();
+        YamlTwinTests.Run();
         EventCadenceTests.Run();
         PresentationReloadTests.Run();
         UltimatumTests.Run();

@@ -317,11 +317,14 @@ public static class SupportCore
     public static int BuildDaysOf(Nation nation, SupportTypeDefinition type) =>
         Math.Max(1, (int)MathF.Round(type.BuildDays / NationalModifiers.Factor(nation, "recruitment_speed")));
 
+    /// <summary>Support formations each barracks lets its region host.</summary>
+    public const int PostsPerBarracks = 2;
+
     /// <summary>How many formations a region can host: two of anything, and two more per barracks.</summary>
     public static int CapacityOf(Campaign campaign, ScenarioState state)
     {
         if (state is null) return 0;
-        return 2 + 2 * state.Buildings.GetValueOrDefault(BuildingKind.Barracks);
+        return 2 + PostsPerBarracks * state.Buildings.GetValueOrDefault(BuildingKind.Barracks);
     }
 
     /// <summary>Formations already based in a region, against what the region can host.</summary>

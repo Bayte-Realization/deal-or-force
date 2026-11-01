@@ -144,6 +144,7 @@ public partial class DealOrForceGame
         var player = _campaign.Player;
         var running = _campaign.Construction.Count(project => project.NationId == player.Id);
         var limit = ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects);
+        var outputFactor = MarketSystem.RegionOutputFactor(_campaign, player, state);
         foreach (var kind in BuildingCatalog.All.OrderBy(kind => Tr(BuildingCatalog.Get(kind).Name), StringComparer.CurrentCulture))
         {
             var definition = BuildingCatalog.Get(kind);
@@ -192,7 +193,7 @@ public partial class DealOrForceGame
             var tip = Tr(definition.Name) + "\n" + Simulation.Loc.Get(definition.Description) + "\n\n" +
                       Simulation.Loc.Format("Costs {0} and takes {1} days.", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days) +
                       "\n" + Simulation.Loc.Format("In this region: {0} built, {1} under way.", built, underway);
-            var effects = BuildingEffects(state, kind, definition);
+            var effects = BuildingEffects(state, kind, outputFactor).Text;
             if (effects.Length > 0) tip += "\n\n" + effects;
             if (Waterfront.NeedsWater(kind))
                 tip += "\n" + Tr("Needs a coast, a lake or a navigable river. On inland water it is worth less.");
@@ -202,85 +203,183 @@ public partial class DealOrForceGame
         }
     }
 
-    private readonly List<Commodity> _buildingMakes = new();
-    private readonly List<Commodity> _buildingUses = new();
+    private readonly List<(Commodity Good, float Amount)> _buildingMakes = new();
+    private readonly List<(Commodity Good, float Amount)> _buildingUses = new();
+    private readonly List<Commodity> _buildingNeeds = new();
+
+    /// <summary>What one more of a building does: the tooltip's lines, and a one-line summary for a card.</summary>
+    private readonly record struct BuildingOutlookText(string Text, string Summary);
 
     /// <summary>
-    /// What one more of this building does in this region, in the lines events and decisions
-    /// use (item 67): the numbers the simulation adds when it is finished, scaled by the water
-    /// it stands on, then what it makes and what it burns, read out of the production chains.
-    /// A mine names only what lies under this region, because that is all it will dig.
+    /// What one more of this building does in this region, in short lines a player can act on.
+    ///
+    /// The player's complaint was fair: the list said "GDP +1.65" and "construction capacity
+    /// +0.25" and named the goods a building touches, and none of it said how much, whether it
+    /// would make money, or why a refinery and a smelter were different things. Now every line
+    /// is a number the simulation itself uses, asked of the code that uses it rather than copied:
+    ///
+    ///   - goods made and burned a week, from ProductionChains.Marginal - every recipe worked out
+    ///     with and without the building, at this week's staffing, prices and supply, so a mine
+    ///     names what lies under this region and a smelter with no power makes less;
+    ///   - the goods it cannot work without but does not buy (a recipe's needs);
+    ///   - the jobs it asks for (BuildingDefinition.Jobs, which MarketSystem staffs the plant from);
+    ///   - what its output is worth a year at this country's GDP scale, against its inputs;
+    ///   - its special effect - supply, recruitment, research, deaths, trade reach, slipways -
+    ///     from the same constants and helpers the systems that apply them read;
+    ///   - and the two catalogue numbers, said for what they are: the GDP step is a one-off the
+    ///     market's measure of output replaces within weeks, and construction capacity only
+    ///     speeds building while it is below one.
     /// </summary>
-    private string BuildingEffects(ScenarioState state, BuildingKind kind, BuildingDefinition definition)
+    private BuildingOutlookText BuildingEffects(ScenarioState state, BuildingKind kind, float? outputFactor = null)
     {
+        var player = _campaign?.Player;
+        if (player is null || state is null) return new BuildingOutlookText("", "");
+        var definition = BuildingCatalog.Get(kind);
         var defines = _campaign.Defines;
         var culture = CultureInfo.CurrentCulture;
         var yield = Waterfront.Yield(_campaign, state.MapIndex, kind);
+        var factor = outputFactor ?? MarketSystem.RegionOutputFactor(_campaign, player, state);
         var lines = new List<string>();
+        var summary = new List<string>();
         void Add(string label, string value) =>
             lines.Add("  " + Simulation.Loc.Format("{0}: {1}", Simulation.Loc.Get(label), value));
-        string Points(float share) => (share * 100f).ToString("+0.#;-0.#", culture) + "%";
+        void Say(string sentence) => lines.Add("  " + Simulation.Loc.Get(sentence));
+        string Points(float share) => (share * 100f).ToString("+0.#;-0.#;0", culture) + "%";
+        string Amount(float value) => Fmt.Number(value, value >= 10f ? "0" : value >= 1f ? "0.#" : "0.##");
+        string Goods(IEnumerable<(Commodity Good, float Amount)> goods, int most) =>
+            string.Join(", ", goods.Take(most).Select(entry => Tr(CommodityCatalog.Get(entry.Good).Name) + " " + Amount(entry.Amount)));
 
-        if (definition.GdpGain > 0f) Add("GDP", "+" + Fmt.Money(definition.GdpGain * yield));
-        if (definition.CapacityGain > 0f) Add("Construction capacity", (definition.CapacityGain * yield).ToString("+0.##;-0.##", culture));
+        // ---- goods ------------------------------------------------------------------------
+        ProductionChains.Marginal(player, state, kind, factor, _buildingMakes, _buildingUses, _buildingNeeds);
+        if (_buildingMakes.Count > 0)
+        {
+            Add("Makes a week", Goods(_buildingMakes, 6));
+            summary.Add(string.Join(", ", _buildingMakes.Take(3).Select(entry => Tr(CommodityCatalog.Get(entry.Good).Name))));
+        }
+        else if (kind == BuildingKind.ExtractionIndustry)
+            Say("Nothing lies under this region to dig up.");
+        if (_buildingUses.Count > 0) Add("Uses a week", Goods(_buildingUses, 6));
+        if (_buildingNeeds.Count > 0)
+            Add("Slows without", string.Join(", ", _buildingNeeds.Select(good => Tr(CommodityCatalog.Get(good).Name))));
+
+        // ---- people and money -------------------------------------------------------------
+        if (definition.Jobs > 0f)
+        {
+            Add("Jobs", Fmt.People(definition.Jobs * 1_000_000f));
+            summary.Add(Simulation.Loc.Format("{0} jobs", Fmt.People(definition.Jobs * 1_000_000f)));
+        }
+        else Add("Jobs", Simulation.Loc.Get("none"));
+        if (player.EmployedShare < 0.995f && definition.Jobs > 0f)
+            Add("Jobs the country can fill", Fmt.Percent(player.EmployedShare));
+        // At this country's GDP scale: the market value of a week's output, annualised and
+        // calibrated the way EconomySystem turns the market into GDP.
+        var scale = player.OutputScale > 0f ? player.OutputScale : 1f;
+        var worth = 0f;
+        foreach (var (good, amount) in _buildingMakes)
+            if (player.Market.TryGetValue(good, out var quote)) worth += amount * MathF.Max(0f, quote.Price);
+        var cost = 0f;
+        foreach (var (good, amount) in _buildingUses)
+            if (player.Market.TryGetValue(good, out var quote)) cost += amount * MathF.Max(0f, quote.Price);
+        if (worth > 0f)
+            Add("Output a year", cost > 0f
+                ? Simulation.Loc.Format("{0}, inputs {1}", Fmt.Money(worth * 52f * scale), Fmt.Money(cost * 52f * scale))
+                : Fmt.Money(worth * 52f * scale));
+
+        // ---- what it does besides goods --------------------------------------------------
         switch (kind)
         {
             case BuildingKind.Infrastructure:
             {
-                Add("Supply throughput, divisions", defines.SupplyPerInfrastructure.ToString("+0.#;-0.#", culture));
+                Add("Army supply here, divisions", defines.SupplyPerInfrastructure.ToString("+0.#;-0.#", culture));
                 // Roads stop helping at a cap, so the next one may add less than the last.
                 var level = state.Buildings.GetValueOrDefault(kind);
                 var cap = MathF.Max(0f, defines.RoadSpeedCap);
                 var now = M.Clamp(level * defines.RoadSpeedPerInfrastructure, 0f, cap);
                 var next = M.Clamp((level + 1) * defines.RoadSpeedPerInfrastructure, 0f, cap);
                 Add("March pace in this region", Points(next - now));
+                Add("War damage rebuilt here", Points(defines.WarDamageRecoveryPerInfrastructure));
+                var regions = Math.Max(1, _campaign.StatesOf(player).Length);
+                AddReach(TradeNetwork.ReachPerInfrastructure / regions);
+                summary.Add(Simulation.Loc.Get("army supply"));
                 break;
             }
             case BuildingKind.Barracks:
-                Add("Supply throughput, divisions", defines.SupplyPerBarracks.ToString("+0.#;-0.#", culture));
+                Add("Army supply here, divisions", defines.SupplyPerBarracks.ToString("+0.#;-0.#", culture));
+                Add("Reinforcements a day", "+" + Fmt.People(LogisticsSystem.ReinforcementPerBarracks *
+                    LogisticsSystem.ReinforcementBudget(_campaign, player) * NationalModifiers.Factor(player, "reinforcement_rate")));
+                Add("Divisions per recruitment order", Simulation.Loc.Format("+{0} here, +{1} elsewhere",
+                    RecruitmentSystem.BatchPerLocalBarracks, RecruitmentSystem.BatchPerBarracks.ToString("0.#", culture)));
+                Add("Recruitment queue", Simulation.Loc.Format("+{0}, +{1} at war",
+                    RecruitmentSystem.QueuePerBarracks, RecruitmentSystem.QueuePerBarracksAtWar));
+                Add("Support formations here", "+" + SupportCore.PostsPerBarracks);
+                summary.Add(Simulation.Loc.Get("reinforcements"));
                 break;
             case BuildingKind.University:
-                Add("Literacy in this region", Points(0.025f));
-                Add("Literacy", Points(0.003f));
-                Add("Productivity", Points(0.006f));
+                Add("Literacy in this region", Points(BuildingCatalog.UniversityRegionalLiteracy));
+                Add("Literacy", Points(BuildingCatalog.UniversityNationalLiteracy));
+                Add("Productivity", Points(BuildingCatalog.UniversityProductivity));
+                AddResearch();
+                Say("Keeps educated people from emigrating.");
+                summary.Add(Simulation.Loc.Get("literacy, research"));
                 break;
             case BuildingKind.Hospital:
-                Add("Standard of living in this region", Points(0.018f));
+            {
+                // The lasting part: the share of this region's deaths it prevents, while there is
+                // medicine to give - the same cover HouseholdEconomy.VitalRates reads.
+                var medicine = HouseholdEconomy.MedicineSupply(player);
+                var hospitals = state.Buildings.GetValueOrDefault(kind);
+                var saved = (HouseholdEconomy.HospitalCover(state, hospitals + 1, medicine) -
+                             HouseholdEconomy.HospitalCover(state, hospitals, medicine)) * HouseholdEconomy.HospitalDeathRelief;
+                Add("Deaths in this region", Points(-saved));
+                if (medicine < 0.9f) Add("Medicine on hand", Fmt.Percent(medicine));
+                Add("Standard of living here, fading", Points(BuildingCatalog.HospitalLiving));
+                summary.Add(Simulation.Loc.Get("fewer deaths"));
+                break;
+            }
+            case BuildingKind.ResearchLab:
+                AddResearch();
+                Say("Keeps educated people from emigrating.");
+                summary.Add(Simulation.Loc.Get("research"));
                 break;
             case BuildingKind.Shipyard:
                 Add("Slipways", (defines.SlipwaysPerShipyard * yield).ToString("+0.#;-0.#", culture));
+                summary.Add(Simulation.Loc.Get("slipways"));
                 break;
             case BuildingKind.Port:
-            case BuildingKind.RailNetwork:
-            {
-                // How far the country's goods travel, which stops rising at half as far again.
-                var reach = TradeNetwork.ReachOf(_campaign, _campaign.Player);
-                var step = kind == BuildingKind.Port ? 0.05f * yield : 0.035f;
-                Add("Trade reach", Points(MathF.Min(1.5f, reach + step) - reach));
+                AddReach(TradeNetwork.ReachPerPort * yield);
+                Add("Slipways", (Shipbuilding.SlipwaysPerPort * yield).ToString("+0.##;-0.##", culture));
+                summary.Add(Simulation.Loc.Get("trade reach"));
                 break;
-            }
+            case BuildingKind.RailNetwork:
+                AddReach(TradeNetwork.ReachPerRail);
+                summary.Add(Simulation.Loc.Get("trade reach"));
+                break;
         }
 
-        ProductionChains.RolesOf(kind, _buildingMakes, _buildingUses);
-        var mine = kind == BuildingKind.ExtractionIndustry;
-        if (mine)
-        {
-            // Almost every region holds a trace of almost everything - a twentieth of its country's
-            // average, so a find is still possible; name what is worth digging, richest first, so
-            // the order itself says what this mine would be for.
-            _buildingMakes.RemoveAll(good => state.ResourceDeposits.GetValueOrDefault(good) < 0.5f);
-            _buildingMakes.Sort((a, b) => state.ResourceDeposits.GetValueOrDefault(b).CompareTo(state.ResourceDeposits.GetValueOrDefault(a)));
-        }
+        // ---- the two catalogue numbers, for what they are ---------------------------------
+        if (definition.GdpGain > 0f)
+            Add("GDP on completion, one-off", "+" + Fmt.Money(definition.GdpGain * yield));
+        // Sites are paid at their rate times this capacity and still take their full build
+        // time (EconomySystem), so past one it only pays the bill sooner.
+        var pace = M.Clamp(player.ConstructionCapacity, 0.25f, 1f);
+        var paceNext = M.Clamp(player.ConstructionCapacity + definition.CapacityGain * yield, 0.25f, 1f);
+        if (paceNext > pace + 0.0005f) Add("Construction pace", Points(paceNext - pace));
 
         var text = lines.Count > 0 ? Simulation.Loc.Get("Each one, once built:") + "\n" + string.Join("\n", lines) : "";
-        string Goods(List<Commodity> goods) =>
-            string.Join(", ", goods.Select(good => Tr(CommodityCatalog.Get(good).Name)));
-        if (_buildingMakes.Count > 0)
-            text += (text.Length > 0 ? "\n" : "") + Simulation.Loc.Format("Makes: {0}", Goods(_buildingMakes));
-        else if (mine)
-            text += (text.Length > 0 ? "\n" : "") + Simulation.Loc.Get("Nothing lies under this region to dig up.");
-        if (_buildingUses.Count > 0)
-            text += (text.Length > 0 ? "\n" : "") + Simulation.Loc.Format("Uses: {0}", Goods(_buildingUses));
-        return text;
+        return new BuildingOutlookText(text, string.Join(" · ", summary));
+
+        void AddReach(float step)
+        {
+            // How far the country's goods travel, which stops rising at the ceiling.
+            var reach = TradeNetwork.ReachOf(_campaign, player);
+            Add("Trade reach", Points(MathF.Min(TradeNetwork.ReachCeiling, reach + step) - MathF.Min(TradeNetwork.ReachCeiling, reach)));
+        }
+
+        void AddResearch()
+        {
+            var now = ResearchSystem.InstitutionFactor(_campaign, player, null);
+            var next = ResearchSystem.InstitutionFactor(_campaign, player, kind);
+            Add("Research speed", now > 0f ? Points(next / now - 1f) : "0%");
+        }
     }
 }

@@ -292,6 +292,25 @@ public static class ResearchSystem
     public static IEnumerable<TechnologyDefinition> AvailableTo(Nation nation) =>
         TechnologyCatalog.All.Where(technology => Available(nation, technology));
 
+    /// <summary>
+    /// What a country's universities and laboratories multiply its research by: one, plus each
+    /// one's bonus per million residents, to a cap. <paramref name="plusOne"/> counts one more of
+    /// that building, so the build list can say what the next campus is worth - which, past the
+    /// cap, is nothing.
+    /// </summary>
+    public static float InstitutionFactor(Campaign campaign, Nation nation, BuildingKind? plusOne)
+    {
+        var defines = campaign.Defines;
+        var residents = MathF.Max(0.1f, nation.Population / 1_000_000f);
+        var institutions = 0f;
+        foreach (var state in campaign.StatesOf(nation))
+            institutions += state.Buildings.GetValueOrDefault(BuildingKind.University) * MathF.Max(0f, defines.ResearchUniversityBonus)
+                + state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * MathF.Max(0f, defines.ResearchLaboratoryBonus);
+        if (plusOne == BuildingKind.University) institutions += MathF.Max(0f, defines.ResearchUniversityBonus);
+        if (plusOne == BuildingKind.ResearchLab) institutions += MathF.Max(0f, defines.ResearchLaboratoryBonus);
+        return 1f + MathF.Min(MathF.Max(0f, defines.ResearchInstitutionBonusCap), institutions / residents);
+    }
+
     /// <summary>A week of research for this country, in points.</summary>
     public static float WeeklyPoints(Campaign campaign, Nation nation)
     {
@@ -299,12 +318,7 @@ public static class ResearchSystem
         var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.HumanCapital);
         var schools = MathF.Pow(M.Clamp(nation.EducationSpending / MathF.Max(0.0001f, defines.ResearchEducationBaseline),
             0.1f, 4f), defines.ResearchEducationExponent);
-        var residents = MathF.Max(0.1f, nation.Population / 1_000_000f);
-        var institutions = 0f;
-        foreach (var state in campaign.StatesOf(nation))
-            institutions += state.Buildings.GetValueOrDefault(BuildingKind.University) * MathF.Max(0f, defines.ResearchUniversityBonus)
-                + state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * MathF.Max(0f, defines.ResearchLaboratoryBonus);
-        var institutionFactor = 1f + MathF.Min(MathF.Max(0f, defines.ResearchInstitutionBonusCap), institutions / residents);
+        var institutionFactor = InstitutionFactor(campaign, nation, null);
         var stabilityFactor = 1f - M.Clamp01(defines.ResearchInstabilityPenalty) * (1f - M.Clamp01(nation.Stability));
         return (defines.ResearchBasePerWeek + economy * schools) * institutionFactor * stabilityFactor *
             NationalModifiers.Factor(nation, "research_speed");

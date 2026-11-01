@@ -68,6 +68,9 @@ public sealed partial class Defines
 /// </summary>
 public static class Shipbuilding
 {
+    /// <summary>Slipways a port adds, against Defines.SlipwaysPerShipyard for a yard: a quay can fit out a hull, not lay one down.</summary>
+    public const float SlipwaysPerPort = 0.35f;
+
     /// <summary>Days a hull takes for this country: the define, over its shipbuilding speed.</summary>
     public static float BuildDays(Campaign campaign, Nation nation) =>
         MathF.Max(1f, campaign.Defines.HullBuildDays) / NationalModifiers.Factor(nation, "shipbuilding_speed");
@@ -191,7 +194,7 @@ public static class Shipbuilding
                 var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
                 SlipwaysByNation[owner.Id] = SlipwaysByNation.GetValueOrDefault(owner.Id) +
                                              yards * yield * defines.SlipwaysPerShipyard +
-                                             ports * yield * 0.35f;
+                                             ports * yield * SlipwaysPerPort;
             }
         }
         var baseSlips = SlipwaysByNation.GetValueOrDefault(nation.Id);

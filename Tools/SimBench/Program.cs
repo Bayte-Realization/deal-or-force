@@ -8694,7 +8694,7 @@ public static class Program
             float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
             int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
             BuildingCatalog.Declare(name, Text("name"), Number("cost"), Integer("days"),
-                Number("gdp_gain"), Number("capacity_gain"), Text("description"));
+                Number("gdp_gain"), Number("capacity_gain"), Text("description"), jobs: Number("jobs"));
         });
 
         void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)

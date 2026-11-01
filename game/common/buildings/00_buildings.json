@@ -1,3 +1,9 @@
+// Every building a region can have. `cost` is billions, `days` the build time, `gdp_gain`
+// the one-off step GDP takes when it is finished (the market's measure of output replaces it
+// within weeks), `capacity_gain` what it adds to construction capacity (which only speeds
+// building while it is below one), and `jobs` the millions of workers one of them asks for -
+// the labour MarketSystem staffs the country's plant from. What a building makes and burns is
+// not here: it is its place in common/production, and the build list reads it from there.
 {
   "Agriculture": {
     "name": "Agricultural complex",
@@ -5,7 +11,8 @@
     "days": 120,
     "gdp_gain": 0.22,
     "capacity_gain": 0.05,
-    "description": "Food output and rural employment."
+    "jobs": 0.42,
+    "description": "Farms. Grow food and some fertiliser (and rubber where it grows) and employ country people. Without fertiliser part of the harvest is lost."
   },
   "CivilianIndustry": {
     "name": "Civilian industry",
@@ -13,7 +20,8 @@
     "days": 240,
     "gdp_gain": 1.65,
     "capacity_gain": 0.25,
-    "description": "Manufacturing output, tax base and construction capacity."
+    "jobs": 0.85,
+    "description": "General factories. Make a little of almost every manufactured good out of coal, ore, energy and rare earths. The largest employer."
   },
   "Infrastructure": {
     "name": "Infrastructure",
@@ -21,7 +29,8 @@
     "days": 180,
     "gdp_gain": 0.45,
     "capacity_gain": 0.45,
-    "description": "Movement, market access and supply throughput."
+    "jobs": 0.30,
+    "description": "Roads, power lines and depots. More army supply and faster marching here, better mining, some energy and materials, wider trade reach."
   },
   "University": {
     "name": "University",
@@ -29,7 +38,8 @@
     "days": 300,
     "gdp_gain": 0.30,
     "capacity_gain": 0.05,
-    "description": "Literacy and long-term productivity."
+    "jobs": 0,
+    "description": "Raises literacy here and productivity nationwide, speeds research and keeps the educated from emigrating. Makes no goods."
   },
   "Hospital": {
     "name": "Hospital",
@@ -37,7 +47,8 @@
     "days": 260,
     "gdp_gain": 0.18,
     "capacity_gain": 0.05,
-    "description": "Population growth and standard of living."
+    "jobs": 0,
+    "description": "Lowers the death rate here while there is medicine to give, and lifts local living standards for a while. Uses pharmaceuticals."
   },
   "Barracks": {
     "name": "Barracks",
@@ -45,7 +56,8 @@
     "days": 150,
     "gdp_gain": 0.12,
     "capacity_gain": 0.05,
-    "description": "Military readiness and reinforcement capacity."
+    "jobs": 0,
+    "description": "Army supply and reinforcements, larger recruitment orders, room for support formations, and a few arms from local workshops."
   },
   "ExtractionIndustry": {
     "name": "Extraction industry",
@@ -53,7 +65,8 @@
     "days": 210,
     "gdp_gain": 0.85,
     "capacity_gain": 0.12,
-    "description": "Mines, wells and processing sites that exploit regional deposits."
+    "jobs": 0.55,
+    "description": "Mines and wells. Dig up whatever lies under this region: the richer the deposits, the more each one yields. Uses machinery and iron ore."
   },
   "PowerPlant": {
     "name": "Power plant",
@@ -61,7 +74,8 @@
     "days": 230,
     "gdp_gain": 1.10,
     "capacity_gain": 0.16,
-    "description": "Reliable energy for households, mines and manufacturing."
+    "jobs": 0.22,
+    "description": "Makes energy, which households and every factory need. Burns coal, natural gas and a little uranium."
   },
   "ArmsIndustry": {
     "name": "Arms industry",
@@ -69,7 +83,8 @@
     "days": 280,
     "gdp_gain": 1.45,
     "capacity_gain": 0.10,
-    "description": "Dedicated weapons and ammunition production for field forces."
+    "jobs": 0.60,
+    "description": "Makes arms, ammunition, tanks, drones, aircraft, missiles and artillery. Needs steel, chemicals, electronics and components."
   },
 
   // The second tier. Four of these refine one good into another, which is what gives the
@@ -81,7 +96,8 @@
     "days": 250,
     "gdp_gain": 1.05,
     "capacity_gain": 0.08,
-    "description": "Turns crude oil and gas into fuel, energy and chemical feedstock."
+    "jobs": 0.35,
+    "description": "Makes energy, chemicals and sulphur."
   },
   "ChemicalPlant": {
     "name": "Chemical plant",
@@ -89,7 +105,8 @@
     "days": 265,
     "gdp_gain": 1.20,
     "capacity_gain": 0.09,
-    "description": "Chemicals, fertiliser and medicine out of oil, gas and coal."
+    "jobs": 0.45,
+    "description": "Makes chemicals, fertiliser and some medicine out of natural gas, sulphur and phosphates. Slows when energy runs short."
   },
   "Smelter": {
     "name": "Smelter",
@@ -97,7 +114,8 @@
     "days": 235,
     "gdp_gain": 0.95,
     "capacity_gain": 0.11,
-    "description": "Ore and bauxite into industrial materials and aluminium. Drinks electricity."
+    "jobs": 0.50,
+    "description": "Makes steel, aluminium and industrial materials out of bauxite, iron ore, coal and nickel. Slows when energy runs short."
   },
   "ElectronicsPlant": {
     "name": "Electronics plant",
@@ -105,7 +123,8 @@
     "days": 300,
     "gdp_gain": 1.75,
     "capacity_gain": 0.08,
-    "description": "Chips and control systems from rare earths, chemicals and aluminium."
+    "jobs": 0.60,
+    "description": "Makes electronics, chips, batteries and precision components out of silica, metals, chemicals and aluminium. Needs rare earths and energy."
   },
   "Shipyard": {
     "name": "Shipyard",
@@ -117,7 +136,8 @@
     "days": 290,
     "gdp_gain": 0.90,
     "capacity_gain": 0.10,
-    "description": "Hull capacity for the navy and the merchant marine that carries its trade."
+    "jobs": 0.55,
+    "description": "Slipways for warships and merchant hulls, and some machinery. Uses steel, aluminium and components."
   },
   "Port": {
     "name": "Port",
@@ -126,7 +146,8 @@
     "days": 200,
     "gdp_gain": 0.55,
     "capacity_gain": 0.18,
-    "description": "How much of the world this country can trade with across water."
+    "jobs": 0.20,
+    "description": "Widens how far across the sea this country trades, and adds a few slipways and depot space. Makes no goods."
   },
   "RailNetwork": {
     "name": "Rail network",
@@ -134,7 +155,8 @@
     "days": 215,
     "gdp_gain": 0.60,
     "capacity_gain": 0.30,
-    "description": "Overland throughput: supply to the front, and goods to the neighbours."
+    "jobs": 0.25,
+    "description": "Widens how far overland this country trades. Army supply runs on infrastructure and barracks, not on this."
   },
   "ResearchLab": {
     "name": "Research laboratory",
@@ -142,6 +164,7 @@
     "days": 320,
     "gdp_gain": 0.65,
     "capacity_gain": 0.06,
-    "description": "Productivity, literacy and the medicine a modern population expects."
+    "jobs": 0.15,
+    "description": "Speeds research, makes medicine and keeps scientists from emigrating. Uses electronics, chips and components."
   }
 }

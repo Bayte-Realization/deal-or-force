@@ -203,6 +203,12 @@ public partial class DealOrForceGame
         var count = _campaign.Construction.Count(project => project.NationId == player.Id);
         var hasRegion = _selectedState is not null && _selectedState.NationMapIndex == player.MapIndex
             && !LakeRegions.IsWaterState(_selectedState);
+        // What a building would do is a question about a place - what lies under it, whether it
+        // is on the water - so with no region of one's own selected the cards answer for the
+        // capital, and say so.
+        var where = hasRegion ? _selectedState : _campaign.States.FirstOrDefault(state =>
+            state.MapIndex == player.CapitalStateMapIndex && state.NationMapIndex == player.MapIndex);
+        var outputFactor = where is null ? 1f : MarketSystem.RegionOutputFactor(_campaign, player, where);
         foreach (var kind in BuildingCatalog.All)
         {
             var definition = BuildingCatalog.Get(kind);
@@ -243,6 +249,21 @@ public partial class DealOrForceGame
             line.AddChild(cost);
             var captured = kind;
 
+            // What it is for, in one line under the price, and in full under the cursor: the
+            // goods it makes and the jobs it asks for, or its special effect when it makes none.
+            var outlook = where is null ? default : BuildingEffects(where, kind, outputFactor);
+            var outlookTip = Tr(definition.Description) +
+                             (string.IsNullOrEmpty(outlook.Text) ? "" : "\n\n" +
+                              (hasRegion ? "" : Simulation.Loc.Format("In {0}, the capital:", where.DisplayName) + "\n") + outlook.Text);
+            var gist = Title(string.IsNullOrEmpty(outlook.Summary) ? Tr(definition.Description) : outlook.Summary, 12,
+                Ui.Colour("text.body_soft"));
+            gist.AutowrapMode = TextServer.AutowrapMode.Off;
+            gist.ClipText = true;
+            gist.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            gist.MouseFilter = MouseFilterEnum.Pass;
+            Tip(gist, outlookTip);
+            rows.AddChild(gist);
+
             var remove = ActionButton("−", () => DemolishBuilding(captured), 36, 32);
             remove.Name = "Demolish" + kind;
             remove.Disabled = standing <= 0;
@@ -267,8 +288,7 @@ public partial class DealOrForceGame
                 : dry.Length > 0 ? dry
                 : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)
                 : add.Disabled ? Tr("Insufficient treasury to start construction.")
-                : Tr(definition.Description) + "\n" +
-                  Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName));
+                : Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip);
             line.AddChild(add);
         }
         if (_buildingCatalogRows.GetChildCount() == 0)

@@ -120,51 +120,74 @@ public sealed class ConstructionProject
 /// useless away from water, and which buildings those are used to be a line of C# naming
 /// two of them. A mod that adds a fishing harbour can now say so, and a mod that decides
 /// its rail terminal is a river terminal can say that.
+///
+/// <paramref name="Jobs"/> is the labour one of them asks for, in millions of workers - the
+/// number MarketSystem.JobsDemanded sums to decide how much of a country's plant it can
+/// staff. It was a line of C# per building in the market pass, which meant the build list
+/// could not say how many people a refinery employs without keeping a second copy of the
+/// table, and a mod's new works employed nobody at all.
 /// </summary>
 public readonly record struct BuildingDefinition(
     string Name, float Cost, int Days, float GdpGain, float CapacityGain, string Description,
-    bool NeedsWater = false);
+    bool NeedsWater = false, float Jobs = 0f);
 
 public static class BuildingCatalog
 {
     private static readonly Dictionary<BuildingKind, BuildingDefinition> Defaults = new()
     {
+        // The fallback when common/buildings is missing. The descriptions say what the
+        // building does in the simulation, not what such a place does in life; the build list
+        // works the amounts out of the production chains, so these only have to name things.
         [BuildingKind.Agriculture] = new("Agricultural complex", 0.45f, 120, 0.22f, 0.05f,
-            "Food output and rural employment."),
+            "Farms. Grow food and some fertiliser (and rubber where it grows) and employ country people. Without fertiliser part of the harvest is lost.",
+            Jobs: 0.42f),
         [BuildingKind.CivilianIndustry] = new("Civilian industry", 2.40f, 240, 1.65f, 0.25f,
-            "Manufacturing output, tax base and construction capacity."),
+            "General factories. Make a little of almost every manufactured good out of coal, ore, energy and rare earths. The largest employer.",
+            Jobs: 0.85f),
         [BuildingKind.Infrastructure] = new("Infrastructure", 1.35f, 180, 0.45f, 0.45f,
-            "Movement, market access and supply throughput."),
+            "Roads, power lines and depots. More army supply and faster marching here, better mining, some energy and materials, wider trade reach.",
+            Jobs: 0.30f),
         [BuildingKind.University] = new("University", 1.80f, 300, 0.30f, 0.05f,
-            "Literacy and long-term productivity."),
+            "Raises literacy here and productivity nationwide, speeds research and keeps the educated from emigrating. Makes no goods."),
         [BuildingKind.Hospital] = new("Hospital", 1.55f, 260, 0.18f, 0.05f,
-            "Population growth and standard of living."),
+            "Lowers the death rate here while there is medicine to give, and lifts local living standards for a while. Uses pharmaceuticals."),
         [BuildingKind.Barracks] = new("Barracks", 1.10f, 150, 0.12f, 0.05f,
-            "Military readiness and reinforcement capacity."),
+            "Army supply and reinforcements, larger recruitment orders, room for support formations, and a few arms from local workshops."),
         [BuildingKind.ExtractionIndustry] = new("Extraction industry", 1.65f, 210, 0.85f, 0.12f,
-            "Mines, wells and processing sites that exploit regional deposits."),
+            "Mines and wells. Dig up whatever lies under this region: the richer the deposits, the more each one yields. Uses machinery and iron ore.",
+            Jobs: 0.55f),
         [BuildingKind.PowerPlant] = new("Power plant", 2.05f, 230, 1.10f, 0.16f,
-            "Reliable energy for households, mines and manufacturing."),
+            "Makes energy, which households and every factory need. Burns coal, natural gas and a little uranium.",
+            Jobs: 0.22f),
         [BuildingKind.ArmsIndustry] = new("Arms industry", 2.85f, 280, 1.45f, 0.10f,
-            "Dedicated weapons and ammunition production for field forces."),
+            "Makes arms, ammunition, tanks, drones, aircraft, missiles and artillery. Needs steel, chemicals, electronics and components.",
+            Jobs: 0.60f),
         [BuildingKind.Refinery] = new("Refinery", 2.20f, 250, 1.05f, 0.08f,
-            "Turns crude oil and gas into fuel, energy and chemical feedstock."),
+            "Makes energy, chemicals and sulphur.",
+            Jobs: 0.35f),
         [BuildingKind.ChemicalPlant] = new("Chemical plant", 2.55f, 265, 1.20f, 0.09f,
-            "Chemicals, fertiliser and medicine out of oil, gas and coal."),
+            "Makes chemicals, fertiliser and some medicine out of natural gas, sulphur and phosphates. Slows when energy runs short.",
+            Jobs: 0.45f),
         [BuildingKind.Smelter] = new("Smelter", 2.10f, 235, 0.95f, 0.11f,
-            "Ore and bauxite into industrial materials and aluminium. Drinks electricity."),
+            "Makes steel, aluminium and industrial materials out of bauxite, iron ore, coal and nickel. Slows when energy runs short.",
+            Jobs: 0.50f),
         [BuildingKind.ElectronicsPlant] = new("Electronics plant", 3.15f, 300, 1.75f, 0.08f,
-            "Chips and control systems from rare earths, chemicals and aluminium."),
+            "Makes electronics, chips, batteries and precision components out of silica, metals, chemicals and aluminium. Needs rare earths and energy.",
+            Jobs: 0.60f),
         [BuildingKind.Shipyard] = new("Shipyard", 2.75f, 290, 0.90f, 0.10f, NeedsWater: true,
             Description:
-            "Hull capacity for the navy and the merchant marine that carries its trade."),
+            "Slipways for warships and merchant hulls, and some machinery. Uses steel, aluminium and components.",
+            Jobs: 0.55f),
         [BuildingKind.Port] = new("Port", 1.70f, 200, 0.55f, 0.18f, NeedsWater: true,
             Description:
-            "How much of the world this country can trade with across water."),
+            "Widens how far across the sea this country trades, and adds a few slipways and depot space. Makes no goods.",
+            Jobs: 0.20f),
         [BuildingKind.RailNetwork] = new("Rail network", 1.95f, 215, 0.60f, 0.30f,
-            "Overland throughput: supply to the front, and goods to the neighbours."),
+            "Widens how far overland this country trades. Army supply runs on infrastructure and barracks, not on this.",
+            Jobs: 0.25f),
         [BuildingKind.ResearchLab] = new("Research laboratory", 2.30f, 320, 0.65f, 0.06f,
-            "Productivity, literacy and the medicine a modern population expects.")
+            "Speeds research, makes medicine and keeps scientists from emigrating. Uses electronics, chips and components.",
+            Jobs: 0.15f)
     };
     private static readonly Dictionary<BuildingKind, BuildingDefinition> Definitions = new();
 
@@ -178,6 +201,23 @@ public static class BuildingCatalog
 
     private static readonly Dictionary<BuildingKind, string> Ids = new();
     private static int _nextId;
+
+    /// <summary>
+    /// What a finished university adds at once: literacy in its own region, a little across
+    /// the country, and the country's productivity. One-offs - taken back when it is pulled
+    /// down - and read by the build list, so the tooltip and the completion cannot disagree.
+    /// </summary>
+    public const float UniversityRegionalLiteracy = 0.025f;
+    public const float UniversityNationalLiteracy = 0.003f;
+    public const float UniversityProductivity = 0.006f;
+
+    /// <summary>
+    /// What a finished hospital adds at once to its region's standard of living. A one-off,
+    /// and a short one: a region's living standard drifts back towards the country's by
+    /// EconomySystem's weekly pull, so the lasting part of a hospital is the lives it saves
+    /// (HouseholdEconomy.HospitalCover), not this.
+    /// </summary>
+    public const float HospitalLiving = 0.018f;
 
     private static readonly BuildingDefinition Unknown =
         new("Unknown building", 1f, 180, 0f, 0f, "Declared by content that is no longer loaded.");
@@ -232,7 +272,8 @@ public static class BuildingCatalog
                 Number(value, "gdp_gain", out var gdp);
                 Number(value, "capacity_gain", out var capacity);
                 Flag(value, "needs_water", out var needsWater);
-                Declare(entry.Name, name, cost, days, gdp, capacity, description, needsWater);
+                Number(value, "jobs", out var jobs);
+                Declare(entry.Name, name, cost, days, gdp, capacity, description, needsWater, jobs);
             }
     }
 
@@ -246,24 +287,25 @@ public static class BuildingCatalog
     /// Give it output in `common/production`.
     /// </summary>
     public static bool Declare(string id, string name, float? cost, int? days,
-        float? gdpGain, float? capacityGain, string description, bool? needsWater = null)
+        float? gdpGain, float? capacityGain, string description, bool? needsWater = null, float? jobs = null)
     {
         if (string.IsNullOrWhiteSpace(id)) return false;
         if (TryParse(id, out var existing))
-            return Override(existing, name, cost, days, gdpGain, capacityGain, description, needsWater);
+            return Override(existing, name, cost, days, gdpGain, capacityGain, description, needsWater, jobs);
         if (string.IsNullOrWhiteSpace(name) || cost is not > 0f || days is not > 0) return false;
         var kind = (BuildingKind)_nextId;
         Register(kind, id);
         Definitions[kind] = new BuildingDefinition(name, cost.Value, days.Value,
-            gdpGain ?? 0f, capacityGain ?? 0f, description ?? "", needsWater ?? false);
+            gdpGain ?? 0f, capacityGain ?? 0f, description ?? "", needsWater ?? false,
+            jobs is >= 0f and < float.PositiveInfinity ? jobs.Value : 0f);
         return true;
     }
 
     public static bool Override(BuildingKind kind, string name, float? cost, int? days,
-        float? gdpGain, float? capacityGain, string description, bool? needsWater = null)
+        float? gdpGain, float? capacityGain, string description, bool? needsWater = null, float? jobs = null)
     {
         if (!Definitions.TryGetValue(kind, out var current) || cost is <= 0f || days is <= 0 ||
-            gdpGain is < 0f || capacityGain is < 0f) return false;
+            gdpGain is < 0f || capacityGain is < 0f || jobs is < 0f || (jobs is { } j && !float.IsFinite(j))) return false;
         Definitions[kind] = current with
         {
             Name = string.IsNullOrWhiteSpace(name) ? current.Name : name,
@@ -272,7 +314,8 @@ public static class BuildingCatalog
             GdpGain = gdpGain ?? current.GdpGain,
             CapacityGain = capacityGain ?? current.CapacityGain,
             Description = string.IsNullOrWhiteSpace(description) ? current.Description : description,
-            NeedsWater = needsWater ?? current.NeedsWater
+            NeedsWater = needsWater ?? current.NeedsWater,
+            Jobs = jobs ?? current.Jobs
         };
         return true;
     }
@@ -405,12 +448,12 @@ public sealed class DemolishBuildingCommand : ICampaignCommand
 
         if (Building == BuildingKind.University)
         {
-            state.Literacy = M.Clamp01(state.Literacy - 0.025f);
-            nation.Literacy = M.Clamp01(nation.Literacy - 0.003f);
-            nation.Productivity = MathF.Max(0.1f, nation.Productivity - 0.006f);
+            state.Literacy = M.Clamp01(state.Literacy - BuildingCatalog.UniversityRegionalLiteracy);
+            nation.Literacy = M.Clamp01(nation.Literacy - BuildingCatalog.UniversityNationalLiteracy);
+            nation.Productivity = MathF.Max(0.1f, nation.Productivity - BuildingCatalog.UniversityProductivity);
         }
         if (Building == BuildingKind.Hospital)
-            state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - 0.018f);
+            state.StandardOfLiving = M.Clamp01(state.StandardOfLiving - BuildingCatalog.HospitalLiving);
 
         campaign.MarkStrategicChange();
     }
@@ -1582,12 +1625,12 @@ public static class ConstructionSystem
         nation.ConstructionCapacity += definition.CapacityGain * yield;
         if (project.Building == BuildingKind.University)
         {
-            state.Literacy = M.Clamp01(state.Literacy + 0.025f);
-            nation.Literacy = M.Clamp01(nation.Literacy + 0.003f);
-            nation.Productivity += 0.006f;
+            state.Literacy = M.Clamp01(state.Literacy + BuildingCatalog.UniversityRegionalLiteracy);
+            nation.Literacy = M.Clamp01(nation.Literacy + BuildingCatalog.UniversityNationalLiteracy);
+            nation.Productivity += BuildingCatalog.UniversityProductivity;
         }
         if (project.Building == BuildingKind.Hospital)
-            state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + 0.018f);
+            state.StandardOfLiving = M.Clamp01(state.StandardOfLiving + BuildingCatalog.HospitalLiving);
     }
 }
 

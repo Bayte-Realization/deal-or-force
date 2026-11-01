@@ -57,15 +57,34 @@ static class Program
         ProductionChains.RunRegion(n, s, 1);
         Check(n.Market[Good("Batteries")].Production > 0 && n.Market[Good("Batteries")].Production < full,
             "lithium shortage reduces battery output without poisoning the economy");
+        // What the build list says one more building does, worked out by the market's own arithmetic.
+        Clear(n);
+        var made = new List<(Commodity Good, float Amount)>(); var burned = new List<(Commodity Good, float Amount)>();
+        var needed = new List<Commodity>();
+        var smelterValue = ProductionChains.Marginal(n, s, BuildingKind.Smelter, 1f, made, burned, needed);
+        float Of(List<(Commodity Good, float Amount)> list, string id) => list.Where(e => e.Good == Good(id)).Sum(e => e.Amount);
+        Check(Near(Of(made, "Steel"), 2f) && Near(Of(made, "Aluminium"), 1.9f) && Near(Of(made, "IndustrialMaterials"), 1.15f) &&
+              smelterValue > 0f, "a smelter's marginal output is its recipe weights at full staffing and supply");
+        Check(Near(Of(burned, "Bauxite"), 2.542f) && Near(Of(burned, "IronOre"), .605f) && needed.Contains(Good("Energy")) &&
+              !needed.Contains(Good("IronOre")), "a smelter's bill names what it buys, and energy as a need it does not buy");
+        ProductionChains.Marginal(n, s, BuildingKind.ExtractionIndustry, 1f, made, burned, needed);
+        Check(Near(Of(made, "Copper"), 7.2f) && Of(made, "Bauxite") == 0f, "one more mine digs only what lies under the region");
+        ProductionChains.Marginal(n, s, BuildingKind.Smelter, .5f, made, burned, needed);
+        Check(Near(Of(made, "Steel"), 1f), "half-staffed plant makes half as much");
+        Check(Near(MarketSystem.JobsDemanded(s), 2 * .85f + .55f + .60f + .60f), "jobs come from the buildings catalogue");
+        Check(BuildingCatalog.Get(BuildingKind.Refinery).Jobs > 0f && BuildingCatalog.Get(BuildingKind.University).Jobs == 0f,
+              "common/buildings declares the jobs every building asks for");
         Clear(n);
         new SetProductionProgrammeCommand { IssuerId = n.Id, ConvertedCivilianUnits = 0,
             Lines = new() { new() { Good = Good("MotorVehicles"), Units = 10 }, new() { Good = Good("Ammunition"), Units = 5 } } }.Apply(c);
         ProductionChains.RunRegion(n, s, 1, ProductionProgramme.Allocate(c, n));
-        Check(Near(n.Market[Good("MotorVehicles")].Production, .65f) && Near(n.Market[Good("Ammunition")].Production, .75f),
-            "ten civilian units and five military units make the proportional line output");
+        // Ammunition: five military units are half an arms plant, at 2.75 a plant (20_military_industry overrides the base 1.5).
+        Check(Near(n.Market[Good("MotorVehicles")].Production, .65f) && Near(n.Market[Good("Ammunition")].Production, 1.375f),
+            $"ten civilian units and five military units make the proportional line output (vehicles {n.Market[Good("MotorVehicles")].Production:0.###}, ammunition {n.Market[Good("Ammunition")].Production:0.###})");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, false);
         var peace = n.Market[Good("Ammunition")].Demand;
-        Check(Near(n.Market[Good("Steel")].Demand, .58f), "construction projects demand steel");
+        // Two projects at 0.342 steel each (10_strategic_industry construction_steel_bill).
+        Check(Near(n.Market[Good("Steel")].Demand, .684f), $"construction projects demand steel ({n.Market[Good("Steel")].Demand:0.###})");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, true);
         Check(n.Market[Good("Ammunition")].Demand > peace * 3, "war increases army ammunition demand");
         var makes = new List<Commodity>(); var uses = new List<Commodity>();

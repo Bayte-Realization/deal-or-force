@@ -116,6 +116,8 @@ public static class MovementMergers
                 var ground = c.States.Find(s => s.MapIndex == region);
                 if (ground is not null) arena.Add(ground.NationMapIndex);
             }
+            // A movement with no following anywhere has no cause to hand over.
+            if (arena.Count == 0) continue;
             Nation home = null;
             foreach (var state2 in c.Nations)
             {
