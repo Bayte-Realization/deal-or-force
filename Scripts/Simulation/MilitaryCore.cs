@@ -1187,6 +1187,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                     : heldPost > 0
                         ? PostNear(campaign, army, Order, orderedFront, war.Id, heldPost)
                         : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
+        // A post on the whole front belongs to the war against whoever it faces, not to the
+        // war nearest where the division happened to be standing when it was told: so the
+        // division is counted, supported and - when that war alone ends - stood down with the
+        // right war. Every other line keeps the war worked out above.
+        if (drawn is { AllEnemies: true } && target > 0 &&
+            BorderFronts.WarAt(campaign, IssuerId, target) is { } facing) war = facing;
         var targetIsHostile = target > 0 && WarCoalition.HostileController(campaign, war, army.NationId, controllers[target]);
         var plannedRoute = target < 0
             ? Array.Empty<int>()

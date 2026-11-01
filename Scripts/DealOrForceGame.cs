@@ -452,7 +452,7 @@ public partial class DealOrForceGame : Control
         // Escape takes back a rebase that is waiting for its region first, then the panel.
         if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
         {
-            if (_supportRebaseArmed) CancelSupportRebase(); else CloseSupportScreen();
+            if (_supportRebaseArmed || _supportTargetArmed) CancelSupportRebase(); else CloseSupportScreen();
             GetViewport().SetInputAsHandled();
             return;
         }

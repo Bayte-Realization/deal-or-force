@@ -120,6 +120,7 @@ static class Program
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
+        if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ally-ground-only")) { AllyGroundTests.Run(c); return; }
@@ -166,6 +167,7 @@ static class Program
         if (args.Contains("--front-staff-only")) { FrontStaffTests.Run(map); return; }
         if (args.Contains("--modifiers-only")) { ModifierTests.Run(map); return; }
         if (args.Contains("--conflicts-only")) { ConflictTests.Run(map); return; }
+        if (args.Contains("--whole-front-only")) { WholeFrontTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);

@@ -59,6 +59,23 @@ public sealed class SupportFormation
     public float Experience;
     /// <summary>One of the type's missions - standby when the player has not said anything.</summary>
     public string Mission = "standby";
+
+    /// <summary>
+    /// What a formation on the "strike" mission aims at (LongRangeStrikes): "front" for the enemy's
+    /// formations in the line, "logistics" for the depots and railheads that feed them, "industry"
+    /// for the plants that make their shells, "energy" for the grid their cities run on. Empty
+    /// leaves the choice to the formation's own staff, which picks by what it fires - glide bombs
+    /// and rockets at the line, missiles at the depots, long-range drones at the grid. Empty in
+    /// every save written before strikes existed, which is exactly the automatic choice.
+    /// </summary>
+    public string StrikeTarget = "";
+
+    /// <summary>
+    /// The region the player named as the target, or -1 to let the staff find the best one of
+    /// the chosen kind inside the reach. A region that has fallen out of reach or out of enemy
+    /// hands is not struck; the staff picks again and the report says why.
+    /// </summary>
+    public int TargetStateMapIndex = -1;
 }
 
 /// <summary>One order in training: what was asked for, where it will stand, how far along it is.</summary>
@@ -111,6 +128,24 @@ public sealed record SupportTypeDefinition(
 {
     public List<string> Missions { get; init; } = new();
     public string RequiredFeature { get; init; } = "";
+
+    /// <summary>Deep-strike power of one weekly salvo at full strength (LongRangeStrikes). Zero: cannot strike.</summary>
+    public float Strike { get; init; }
+
+    /// <summary>
+    /// The depot good one salvo is fired from - "Missiles", "Drones" or "Ammunition" - and how
+    /// much of it a full-strength salvo takes. A formation whose depot is empty does not fire:
+    /// the strike war is a war of factories as much as of launchers.
+    /// </summary>
+    public string Munition { get; init; } = "";
+    public float MunitionPerSalvo { get; init; }
+
+    /// <summary>
+    /// 0 to 1: the share of the enemy's interception the weapon shrugs off. A ballistic missile
+    /// is hard to stop, a cruise missile less so, a slow one-way drone is the easiest of all -
+    /// which is why it is thrown in swarms, and why a swarm saturates a screen a few cannot.
+    /// </summary>
+    public float Evasion { get; init; }
 }
 
 /// <summary>Paradox-style common/support catalogue, consumed by simulation and rendering.</summary>
@@ -192,8 +227,16 @@ public static class SupportTypeCatalog
             MathF.Max(0.05f, Number("recruitment_cost", earlier?.RecruitmentCost ?? 0.5f)),
             Math.Max(7, Whole("build_days", earlier?.BuildDays ?? 45)),
             Math.Max(100, Whole("personnel", earlier?.Personnel ?? 4500)))
-        { Missions = missions, RequiredFeature = value.TryGetProperty("required_feature", out var feature) &&
-            feature.ValueKind == JsonValueKind.String ? feature.GetString() : earlier?.RequiredFeature ?? "" };
+        {
+            Missions = missions,
+            RequiredFeature = value.TryGetProperty("required_feature", out var feature) &&
+                feature.ValueKind == JsonValueKind.String ? feature.GetString() : earlier?.RequiredFeature ?? "",
+            Strike = MathF.Max(0f, Number("strike", earlier?.Strike ?? 0f)),
+            Munition = value.TryGetProperty("munition", out var munition) && munition.ValueKind == JsonValueKind.String
+                ? munition.GetString() ?? "" : earlier?.Munition ?? "",
+            MunitionPerSalvo = MathF.Max(0f, Number("munition_per_salvo", earlier?.MunitionPerSalvo ?? 0f)),
+            Evasion = M.Clamp01(Number("evasion", earlier?.Evasion ?? 0f))
+        };
         return definition;
     }
 }
@@ -212,6 +255,8 @@ public static class SupportCore
     public const string MissionCloseAirSupport = "close_air_support";
     public const string MissionAirSuperiority = "air_superiority";
     public const string MissionInterdiction = "interdiction";
+    /// <summary>Deep strike: a weekly salvo at a chosen target behind the line (LongRangeStrikes).</summary>
+    public const string MissionStrike = "strike";
 
     public static bool Enabled(Campaign campaign, SupportTypeDefinition type) => type is not null &&
         campaign is not null && campaign.FeatureEnabled("long_range_forces") &&
@@ -249,9 +294,13 @@ public static class SupportCore
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) return;
         Train(campaign);
         AirReconnaissance.Expose(campaign);
+        // The salvos go before the day's losses are counted: an aircraft that flew into a
+        // defended sky to launch is charged for it the same evening.
+        LongRangeStrikes.Fire(campaign);
         Attrition(campaign);
         Recover(campaign);
         CommandByAir(campaign);
+        LongRangeStrikes.Procure(campaign);
     }
 
     // ------------------------------------------------------------------ the air war
@@ -487,10 +536,38 @@ public static class SupportCore
             var fit = formation.Strength >= (resting ? 0.75f : 0.45f);
             formation.Mission = !atWar || !fit || type.Kind == SupportKind.AirDefence || formation.BaseProvinceId <= 0
                 ? MissionStandby
-                : type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport
-                : type.Missions.Contains(MissionInterdiction) ? MissionInterdiction
-                : MissionStandby;
+                : RoleOf(campaign, nation, type);
         }
+    }
+
+    /// <summary>
+    /// What a staff nobody plays does with a formation at war, by what the formation is FOR rather
+    /// than by the first mission on its card - the old rule sent fighters to bomb trenches and the
+    /// reconnaissance drones to shoot at them, and never fired a missile at anything.
+    ///
+    ///   - the eyes look: a formation built for reconnaissance flies it, because it is what makes
+    ///     every strike behind it land;
+    ///   - fighters sweep the sky when the enemy has anything in it, and support the battles when not;
+    ///   - a weapon built to strike deep (its strike outweighs its fire) strikes, as long as the
+    ///     depot holds two salvos of what it fires - an empty depot is a reason to wait, not to
+    ///     fire nothing; the target is the staff's automatic choice (LongRangeStrikes.AutoTarget);
+    ///   - everything else supports the battles in reach, or interdicts when it cannot.
+    /// The same rule a player's "Auto" target follows, so neither side is given a better staff.
+    /// </summary>
+    internal static string RoleOf(Campaign campaign, Nation nation, SupportTypeDefinition type)
+    {
+        if (type.Missions.Contains(AirReconnaissance.Mission) &&
+            type.Recon >= campaign.Defines.ReconFullSight * 0.66f)
+            return AirReconnaissance.Mission;
+        if (type.Kind == SupportKind.Air && type.Missions.Contains(MissionAirSuperiority) &&
+            type.AirSuperiority >= 2f * type.SupportFire)
+            return LongRangeStrikes.EnemyFlies(campaign, nation.Id) ? MissionAirSuperiority
+                : type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport : MissionAirSuperiority;
+        if (type.Missions.Contains(MissionStrike) && type.Strike > type.SupportFire)
+            return LongRangeStrikes.DepotHolds(campaign, nation, type, 2f) ? MissionStrike : MissionStandby;
+        return type.Missions.Contains(MissionCloseAirSupport) ? MissionCloseAirSupport
+            : type.Missions.Contains(MissionInterdiction) ? MissionInterdiction
+            : MissionStandby;
     }
 
     // ------------------------------------------------------------------ reach
@@ -657,6 +734,9 @@ public static class SupportCore
                 if (Displaced(campaign, formation)) continue;
                 var passive = type.Kind == SupportKind.AirDefence;
                 if (!passive && formation.Mission == MissionStandby) continue;
+                // A formation on deep strike is aiming at something else this week: it neither
+                // helps the battle nor is charged for its sky (LongRangeStrikes charges its own).
+                if (!passive && formation.Mission == MissionStrike) continue;
                 if (!InRange(campaign, formation, type, province)) continue;
                 var weight = formation.Strength * (1f + formation.Experience * 0.35f);
                 var side = forAttacker ? attacker : defender;
@@ -737,11 +817,14 @@ public static class SupportCore
                 .ThenBy(candidate => candidate.MapIndex)
                 .ToArray();
             if (states.Length == 0) continue;
+            // The deep-strike arm of 2024 is part of the opening world too: every large military
+            // fielded cruise or ballistic missiles, and the middle powers one-way drones.
             IEnumerable<string> types = nation.Gdp >= 1000f
                 ? new[] { "fighter_wing", "fighter_wing", "attack_aircraft_wing", "strike_drone_group",
-                    "artillery_brigade", "artillery_brigade", "mlrs_battalion", "sam_brigade" }
+                    "artillery_brigade", "artillery_brigade", "mlrs_battalion", "sam_brigade", "strike_missile_brigade" }
                 : nation.Gdp >= 200f
-                ? new[] { "fighter_wing", "strike_drone_group", "artillery_brigade", "mlrs_battalion", "sam_brigade" }
+                ? new[] { "fighter_wing", "strike_drone_group", "artillery_brigade", "mlrs_battalion", "sam_brigade",
+                    "long_range_drone_group" }
                 : nation.Gdp >= 50f
                 ? new[] { "artillery_brigade", "recon_drone_group" }
                 : nation.Gdp >= 10f

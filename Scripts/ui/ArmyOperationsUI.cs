@@ -738,8 +738,21 @@ public partial class DealOrForceGame
         var armies = (selected.Length > 0 ? selected : _campaign.Armies.Where(army => army.NationId == _campaign.Player.Id))
             .OrderByDescending(army => army.Power).ThenBy(army => army.Id).ToArray();
         if (armies.Length == 0) return;
-        var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Involves(_campaign.Player.Id));
-        var front = war?.FriendlyFront(_campaign.Player.Id).OrderBy(value => value).ToArray() ?? System.Array.Empty<int>();
+        // Every war's stretch of our own front, not only the first war's: a country fighting an
+        // alliance in two wars spreads the selection over both, and each division is told which
+        // war its sector belongs to so the order does not snap it back to the nearest one.
+        var player = _campaign.Player;
+        var controllers = _campaign.ProvinceController;
+        var sectorWar = new Dictionary<int, StrategicWar>();
+        foreach (var candidate in _campaign.Wars)
+        {
+            if (candidate.Ended || !candidate.Involves(player.Id)) continue;
+            foreach (var province in candidate.FriendlyFront(player.Id))
+                if (controllers is not null && province < controllers.Length &&
+                    controllers[province] == player.MapIndex) sectorWar.TryAdd(province, candidate);
+        }
+        var front = sectorWar.Keys.OrderBy(value => value).ToArray();
+        var war = front.Length > 0 ? sectorWar[front[0]] : null;
         if (war is null || front.Length == 0)
         {
             ShowSelectedArmies();
@@ -756,6 +769,7 @@ public partial class DealOrForceGame
         {
             var targetIndex = System.Math.Min(front.Length - 1,
                 (int)System.MathF.Floor((index + 0.5f) / armies.Length * front.Length));
+            var sector = sectorWar[front[targetIndex]];
             var order = index < spearheads ? ArmyOrder.Spearhead :
                 index < advances ? ArmyOrder.AdvanceFront :
                 index < defenders ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
@@ -763,7 +777,8 @@ public partial class DealOrForceGame
             {
                 IssuerId = _campaign.Player.Id,
                 ArmyId = armies[index].Id,
-                ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
+                WarId = sector.Id,
+                ObjectiveStateMapIndex = sector.ClaimedStateMapIndex,
                 PreferredProvinceId = front[targetIndex],
                 Order = order
             });

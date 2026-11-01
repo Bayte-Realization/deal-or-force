@@ -1468,8 +1468,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
+                // The whole front faces several countries; each post marks the border with
+                // the enemy actually next to it.
                 if (line.Kind == Simulation.FrontLineKind.Defence)
-                    PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
+                    PutBorderTarget(borderTargets, province, line.NationId, line.AllEnemies
+                        ? Simulation.BorderFronts.EnemyAt(_campaign, line.NationId, province) : line.BorderNationId);
             }
         }
         _drawingPlanId = -1;

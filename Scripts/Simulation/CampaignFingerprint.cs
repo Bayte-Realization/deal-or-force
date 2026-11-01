@@ -903,6 +903,9 @@ public static class CampaignFingerprint
         }
         foreach (var line in Ordered(campaign.FrontLines, line => line.Id))
         {
+            // The whole front against every enemy (DrawnFrontLine.AllEnemies). Mixed only when
+            // set, so a campaign without one hashes exactly as it did before the flag existed.
+            if (line.AllEnemies) { MixText("whole_front"); Mix(line.Id); Mix(line.NationId); }
             if (line.Kind != FrontLineKind.Offensive || line.OffensivePhases.Count <= 1 &&
                 line.ActiveOffensivePhase == 0 && line.OffensiveRegroupDay < 0) continue;
             MixText("offensive_phases"); Mix(line.Id); Mix(line.OffensivePhases.Count);
@@ -1026,6 +1029,20 @@ public static class CampaignFingerprint
                 Mix(route.SellerId); Mix(route.BuyerId); Mix((int)route.Commodity);
                 MixFloat(route.Volume); MixFloat(route.Value);
             }
+        }
+        // The deep-strike war (LongRangeStrikes): its rules when they differ from the shipped
+        // ones, and each formation's chosen target when one was chosen. A world that never
+        // names a target and keeps the defaults mixes nothing here.
+        var strikeRules = LongRangeStrikes.Rules(campaign.Defines);
+        if (!strikeRules.SequenceEqual(LongRangeStrikes.DefaultRules))
+        {
+            MixText("long_range_strike_rules");
+            foreach (var rule in strikeRules) MixFloat(rule);
+        }
+        foreach (var formation in campaign.SupportFormations
+                     .Where(f => !string.IsNullOrEmpty(f.StrikeTarget) || f.TargetStateMapIndex >= 0).OrderBy(f => f.Id))
+        {
+            MixText("strike_target"); Mix(formation.Id); MixText(formation.StrikeTarget); Mix(formation.TargetStateMapIndex);
         }
         var controllers = campaign.ProvinceController ?? campaign.PendingProvinceController;
         if (controllers is null) return hash;

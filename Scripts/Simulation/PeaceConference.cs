@@ -456,7 +456,8 @@ public static class PeaceConference
                     OpinionSystem.Remember(campaign, relation, "unfinished_war_claim");
             }
 
-        foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))
+        var released = campaign.Armies.Where(army => army.AssignedWarId == war.Id).ToList();
+        foreach (var army in released)
         {
             army.AssignedWarId = -1;
             army.OrderKind = ArmyOrder.Manual;
@@ -468,6 +469,8 @@ public static class PeaceConference
         {
             Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
+        // A division on the whole front goes back to holding it if another war still has one.
+        BorderFronts.ReturnToWholeFronts(campaign, released);
 
         CapitalCore.Tick(campaign);
         campaign.MarkMapChanged();

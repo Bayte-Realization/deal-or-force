@@ -812,6 +812,14 @@ public static class Program
                               $"top-20 treasury/GDP min {treasuries.FirstOrDefault():0.00} median {treasuries.ElementAtOrDefault(treasuries.Count / 2):0.00} max {treasuries.LastOrDefault():0.00}; " +
                               string.Join(", ", campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f).OrderByDescending(n => n.Gdp).Take(8)
                                   .Select(n => $"{n.Tag} {n.Treasury:0}/{n.Gdp:0}")));
+            // The deep-strike war (LongRangeStrikes): salvos, what the screens stopped, what landed and where.
+            Console.WriteLine($"PULSE long-range: salvos={LongRangeStrikes.Salvos} dry={LongRangeStrikes.DryLaunches} " +
+                              $"launched={LongRangeStrikes.LaunchedPoints:0} intercepted={LongRangeStrikes.InterceptedPoints:0} " +
+                              $"landed={LongRangeStrikes.LandedPoints:0} procured={LongRangeStrikes.Procured}; targets " +
+                              string.Join(" ", LongRangeStrikes.ByTarget.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) +
+                              "; on strike now " + campaign.SupportFormations.Count(f => f.Mission == SupportCore.MissionStrike) +
+                              " of " + campaign.SupportFormations.Count + " formations; missions " +
+                              string.Join(" ", campaign.SupportFormations.GroupBy(f => f.Mission).OrderBy(g => g.Key).Select(g => $"{g.Key}={g.Count()}")));
             Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
                 .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
             foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
