@@ -614,6 +614,11 @@ public sealed class SplitArmyCommand : ICampaignCommand
             SupplyCongestion = army.SupplyCongestion,
             CutOff = army.CutOff,
             DaysCutOff = army.DaysCutOff,
+            // A detachment is still in the same pocket, on the same stores.
+            PocketStores = army.PocketStores,
+            PocketSinceDay = army.PocketSinceDay,
+            HoldoutSinceDay = army.HoldoutSinceDay,
+            ReliefDistance = army.ReliefDistance,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -835,9 +840,11 @@ public static class MilitaryOperations
     /// <summary>
     /// Whether a formation is in a state to receive replacements at all. The weighting and
     /// the payout have to agree on this, or capacity is allotted where it cannot be spent.
+    /// A formation in a pocket takes none: it may be fed from the stores where it stands
+    /// (StrandedGarrisons), which keeps its supply up, but no draft reaches it through the ring.
     /// </summary>
     private static bool CanTakeReplacements(Army army) =>
-        !army.InBattle && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
+        !army.InBattle && !army.CutOff && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
 
     private static void Reinforce(Campaign campaign, Army army, float totalWeight)
     {

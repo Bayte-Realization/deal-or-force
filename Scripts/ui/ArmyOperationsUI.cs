@@ -802,6 +802,30 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
     }
 
+    /// <summary>
+    /// Ctrl+X: halve what is selected. Several formations: the first half by strength stays
+    /// selected and takes the next order, the rest stay where they are. One formation of two
+    /// or more divisions is cut in two. A fleet is split by its own panel's rule.
+    /// </summary>
+    private void SplitSelectionInHalf()
+    {
+        var mine = SelectedPlayerDivisions();
+        if (mine.Length >= 2)
+        {
+            var kept = mine.OrderByDescending(army => army.Divisions * army.Strength).ThenBy(army => army.Id)
+                .Where((_, index) => index % 2 == 0).ToList();
+            _selectedArmies.Clear();
+            _selectedArmies.AddRange(kept);
+            _selectedArmy = kept[0];
+            _globe.SelectArmies(kept.Select(army => army.Id));
+            ShowSelectedArmies();
+            SetArmyFeedback(Simulation.Loc.Format("Split in half: {0:N0} formations selected, {1:N0} left where they stand.",
+                kept.Count, mine.Length - kept.Count));
+            return;
+        }
+        if (mine.Length == 1) { _selectedArmy = mine[0]; SplitSelectedArmy(); }
+    }
+
     private void SplitSelectedArmy()
     {
         if (_selectedArmy is null || _selectedArmy.NationId != _campaign.Player.Id) return;

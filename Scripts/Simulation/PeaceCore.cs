@@ -51,10 +51,10 @@ public static class PeaceTermCatalog
     {
         [PeaceTerms.Ceasefire] = new(
             "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
-            0f, 62f, -0.45f, 30, 50f),
+            0f, 62f, 0.45f, 30, 50f),
         [PeaceTerms.WhitePeace] = new(
             "Pre-war borders and a five-year truce, with no victor or indemnity.",
-            5f, 50f, -0.65f, 120, 50f),
+            5f, 50f, 0.65f, 120, 50f),
         [PeaceTerms.WarReparations] = new(
             "Pre-war borders plus an immediate economy-scaled indemnity.",
             24f, 14f, 0.90f, 60, 50f),
@@ -75,7 +75,7 @@ public static class PeaceTermCatalog
             100f, 100f, 0f, 0, 0f),
         [PeaceTerms.StatusQuo] = new(
             "Each side keeps the enemy ground it holds, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
-            12f, 50f, -0.35f, 365, 50f)
+            12f, 50f, 0.35f, 365, 50f)
     };
 
     static PeaceTermCatalog() => ResetCatalog();

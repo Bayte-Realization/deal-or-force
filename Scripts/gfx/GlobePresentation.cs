@@ -245,6 +245,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action<Simulation.SupportFormation> SupportPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
+    /// <summary>A box drawn over fleets and no divisions: the player's own fleets inside it.</summary>
+    public event Action<IReadOnlyList<Simulation.Fleet>> FleetsBoxPicked;
     public event Action<GlobePick> ProvinceCommanded;
 
     /// <summary>
@@ -1714,6 +1716,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         {
                             var selected = ArmiesInScreenRect(rect);
                             if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                                FleetsBoxPicked?.Invoke(fleets);
                         }
                     }
                     QueueRedraw();
@@ -2003,7 +2007,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            if (!IsInstanceValid(node) || !node.IsVisibleInTree() || !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            // A counter standing behind another country's in the same province is hidden, not
+            // gone: a box drawn over the province takes its divisions too (CoverSharedProvinces).
+            if (!IsInstanceValid(node) || (!node.IsVisibleInTree() && !_coveredCounters.Contains(node)) ||
+                !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
                 selected.AddRange((marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack)
                     .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
@@ -4176,7 +4183,7 @@ void fragment() {
             };
             marker.AddChild(plate);
             var fleetGlow = AttachSelectionGlow(plate, 160, 96, 3);
-            fleetGlow.Visible = fleet.Id == _selectedFleetId;
+            fleetGlow.Visible = FleetChosen(fleet.Id);
             var strength = new Label3D
             {
                 Name = "FleetHullCount",
@@ -4217,7 +4224,7 @@ void fragment() {
             _fleetUpdateStateKey = int.MinValue;
             BuildFleetMarkers(_campaign);
         }
-        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _flatMap);
+        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _fleetSelectionStamp, _flatMap);
         if (stateKey == _fleetUpdateStateKey) return;
         _fleetUpdateStateKey = stateKey;
 
@@ -4238,7 +4245,7 @@ void fragment() {
             if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
             if (IsInstanceValid(parts.Plate) && parts.Plate.GetChildOrNull<Sprite3D>(0) is { } fleetGlow)
             {
-                var chosen = fleet.Id == _selectedFleetId;
+                var chosen = FleetChosen(fleet.Id);
                 if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
                 // Selection changes the frame, never the geometry or click footprint.
                 var lift = Vector3.One;
@@ -4252,7 +4259,7 @@ void fragment() {
                     parts.Count.Text = hulls.ToString();
                 var tint = fleet.InAction
                     ? Ui.Colour("military.battle")
-                    : fleet.Id == _selectedFleetId
+                    : FleetChosen(fleet.Id)
                         ? Ui.Colour("globe.selection")
                         : Ui.Colour("globe.label_province");
                 if (parts.Count.Modulate != tint) parts.Count.Modulate = tint;
@@ -4277,7 +4284,40 @@ void fragment() {
         return fleet is not null;
     }
 
-    public void SelectFleet(int fleetId) => _selectedFleetId = fleetId;
+    public void SelectFleet(int fleetId)
+    {
+        _selectedFleetId = fleetId;
+        _selectedFleetIds.Clear();
+        _fleetSelectionStamp++;
+    }
+
+    /// <summary>Several fleets at once: the first is the one the panel describes.</summary>
+    public void SelectFleets(IEnumerable<int> fleetIds)
+    {
+        _selectedFleetIds.Clear();
+        foreach (var id in fleetIds) _selectedFleetIds.Add(id);
+        _selectedFleetId = _selectedFleetIds.Count > 0 ? _selectedFleetIds.Min() : -1;
+        _fleetSelectionStamp++;
+    }
+
+    private readonly HashSet<int> _selectedFleetIds = new();
+    private int _fleetSelectionStamp;
+
+    private bool FleetChosen(int fleetId) => fleetId == _selectedFleetId || _selectedFleetIds.Contains(fleetId);
+
+    /// <summary>The player's own fleets whose counters lie inside a screen rectangle.</summary>
+    private List<Simulation.Fleet> FleetsInScreenRect(Rect2 rect)
+    {
+        var found = new List<Simulation.Fleet>();
+        if (!IsInstanceValid(_camera) || (!_flatMap && ViewDistance > 13.5f) || _campaign?.Player is null) return found;
+        foreach (var (node, candidate) in _fleetByMarker)
+        {
+            if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            if (candidate.NationId != _campaign.Player.Id) continue;
+            if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition))) found.Add(candidate);
+        }
+        return found;
+    }
 
     private static Texture2D CreateFleetMarkerTexture()
     {

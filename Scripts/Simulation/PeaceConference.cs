@@ -139,6 +139,41 @@ public static class PeaceConference
     }
 
     /// <summary>
+    /// How much fight the other side still has, from 0 (broken) to 1 (holding its own).
+    ///
+    /// War score says who is ahead; it does not say whether the side behind could go on.
+    /// A country whose front has stopped moving, whose army is still about the size of the
+    /// enemy's, most of whose land nobody has taken and whose people still back the war gives
+    /// up the line it lost and not much more - it does not sign away its provinces because a
+    /// score says it is behind. A country whose army is gone signs what it is handed.
+    /// The same reading prices a player's demand and a computer's.
+    /// </summary>
+    public static float Resistance(Campaign campaign, StrategicWar war, int proposerId)
+    {
+        if (campaign is null || war is null || war.Ended || !war.Involves(proposerId)) return 0f;
+        var attacking = war.IsAttacking(proposerId);
+        var theirs = new HashSet<int>(war.Side(!attacking));
+        var ours = new HashSet<int>(war.Side(attacking));
+        float their = 0f, our = 0f;
+        foreach (var army in campaign.Armies)
+        {
+            var power = army.Divisions * army.Strength * army.Organisation;
+            if (!float.IsFinite(power) || power <= 0f) continue;
+            if (theirs.Contains(army.NationId)) their += power;
+            else if (ours.Contains(army.NationId)) our += power;
+        }
+        var field = their <= 0f ? 0f : M.Clamp01(their / M.Max(0.01f, our));
+        var occupied = attacking ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
+        var support = attacking ? war.DefenderWarSupport : war.AttackerWarSupport;
+        // Without an army in the field there is nothing to resist with, whatever the map and the
+        // mood say; with one, the land still its own and a people behind it decide how much.
+        var resistance = field * (0.6f * (1f - M.Clamp01(occupied * 2f)) + 0.4f * M.Clamp01(support));
+        // A front that has stopped moving is a front the other side is holding.
+        if (!war.Stalled) resistance *= 0.8f;
+        return M.Clamp01(resistance);
+    }
+
+    /// <summary>
     /// What making them answer to you is worth, in war score.
     ///
     /// The kind sets the base and their size against yours moves it, because the thing
@@ -680,6 +715,11 @@ public sealed class PeaceLedger
     private readonly Dictionary<int, Nation> _enemies = new();
     private readonly HashSet<int> _capitalStates = new();
     private bool _surveyed;
+    private float _resistance = -1f;
+
+    /// <summary>How much fight the loser still has (PeaceConference.Resistance), read once per ledger.</summary>
+    public float Resistance => _resistance >= 0f ? _resistance
+        : _resistance = PeaceConference.Resistance(_campaign, _war, _proposer?.Id ?? -1);
 
     public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId, int beneficiaryId = -1)
     {
@@ -770,7 +810,12 @@ public sealed class PeaceLedger
                       _campaign.ProvinceOccupation[province] >= defines.OccupationSecureThreshold;
         if (held && secured) { cost *= defines.PeaceCostSecuredFactor; reason = "occupied and secure"; }
         else if (held) { cost *= defines.PeaceCostHeldFactor; reason = "occupied but not secure"; }
-        else { cost *= defines.PeaceCostUnheldFactor; reason = "never taken"; }
+        else
+        {
+            var resistance = Resistance;
+            cost *= defines.PeaceCostUnheldFactor * (1f + M.Max(0f, defines.PeaceResistanceUnheld) * resistance);
+            reason = resistance >= 0.5f ? "never taken, and they can still fight for it" : "never taken";
+        }
 
         // Its own ground, held by a breakaway or by the rival government in a civil war:
         // the state is reuniting itself, and a peace that writes it back is cheap.
@@ -836,6 +881,17 @@ public sealed class PeaceLedger
             if (heldConquest.Contains(province)) heldBill += price;
             else otherBill += price;
         }
+        // A country that can still fight gives up a quarter of itself grudgingly and half of
+        // itself not at all for ground nobody took from it: past PeaceResistanceShare of its
+        // people the price of what was not taken climbs with its resistance. What its enemy
+        // already stands on is the line and is not marked up.
+        if (otherBill > 0f && Resistance > 0f)
+        {
+            var taken = PeopleShare(demand);
+            var over = taken - M.Clamp01(defines.PeaceResistanceShare);
+            if (over > 0f)
+                otherBill *= 1f + Resistance * M.Max(0f, defines.PeaceResistanceShareWeight) * over * 4f;
+        }
         // Ground the army already holds, joined to the country, has been paid for by the
         // war. Its list price must not be what sends the rest of a finished occupation
         // home. What the army has not taken is still priced in full.
@@ -861,6 +917,27 @@ public sealed class PeaceLedger
         if (demand.Subjugate.Length > 0)
             total += PeaceConference.SubjugationCost(_campaign, beneficiary, _loser, demand.Subjugate);
         return total;
+    }
+
+    /// <summary>The share of the losing side's people the demand would take, by region population.</summary>
+    public float PeopleShare(PeaceDemand demand)
+    {
+        EnsureSurveyed();
+        var topology = _campaign.ProvinceMap;
+        if (demand is null || topology is null || _statePopulation.Count == 0) return 0f;
+        var total = 0f;
+        foreach (var population in _statePopulation.Values) total += population;
+        if (total <= 0f) return 0f;
+        var taken = 0f;
+        foreach (var province in demand.Provinces)
+        {
+            if (province <= 0 || province > topology.ProvinceCount) continue;
+            var state = topology.ProvinceToState[province];
+            if (_provincesPerState.TryGetValue(state, out var count) && count > 0 &&
+                _statePopulation.TryGetValue(state, out var population))
+                taken += population / (float)count;
+        }
+        return M.Clamp01(taken / total);
     }
 
     /// <summary>

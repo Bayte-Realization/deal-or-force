@@ -1086,6 +1086,38 @@ public sealed partial class Defines
 	/// <summary>Multiplier on the region holding the loser's seat of government.</summary>
 	public float PeaceCostCapitalFactor { get; set; } = 2.6f;
 
+	/// <summary>
+	/// Extra price of ground the winner never took, at full resistance (PeaceConference.Resistance):
+	/// a country that still holds its front and has an army does not sign away what nobody took
+	/// from it at the list price a broken one would.
+	/// </summary>
+	public float PeaceResistanceUnheld { get; set; } = 1.5f;
+
+	/// <summary>Share of the loser's people a treaty may take before a country that can still fight charges more.</summary>
+	public float PeaceResistanceShare { get; set; } = 0.25f;
+
+	/// <summary>How steeply the price of ground nobody took rises past PeaceResistanceShare, at full resistance.</summary>
+	public float PeaceResistanceShareWeight { get; set; } = 3f;
+
+	/// <summary>
+	/// Whether a computer government writes regions it does not stand on into a treaty, one ring
+	/// past its line, when its war score pays for them - as a player can.
+	/// </summary>
+	public bool PeaceShapeReachUnheld { get; set; } = true;
+
+	/// <summary>Share of its foundation territory a formable needs held, unless it names its own required_share.</summary>
+	public float FormableRequiredShare { get; set; } = 0.75f;
+
+	/// <summary>
+	/// Whether the fog of war hides a foreign region's public statistics (stability, peoples,
+	/// economy, buildings) as well as the troops in it. Off: only military intelligence is
+	/// hidden, as in the Paradox games.
+	/// </summary>
+	public bool FogHidesRegionStatistics { get; set; } = false;
+
+	/// <summary>The same for a restoration of a vanished country (FormableRestorations).</summary>
+	public float FormableRestorationShare { get; set; } = 0.5f;
+
 	/// <summary>People per province at which the population surcharge reaches one.</summary>
 	public float PeaceCostPopulationScale { get; set; } = 400_000f;
 

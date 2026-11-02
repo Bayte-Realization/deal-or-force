@@ -928,6 +928,12 @@ public static class Program
             }
             Console.WriteLine($"PULSE world GDP {campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp):N0} bn; " + WorldMarketLine(campaign));
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            Console.WriteLine($"PULSE army: formations lost {campaign.Nations.Sum(n => n.FormationsLost)}, surrendered {WarLosses.SurrenderedFormations}, " +
+                              $"starved in pockets {Attrition.StarvedInPockets}; outcomes " +
+                              string.Join(", ", Warfare.OutcomeTally.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(8).Select(p => $"{p.Key} {p.Value}")));
+            Console.WriteLine("PULSE garrisons: " + string.Join(", ", StrandedGarrisons.Tally.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key} {p.Value}")) +
+                              $"; in pockets now {campaign.Armies.Count(a => a.CutOff)} (holding out {campaign.Armies.Count(a => a.HoldoutSinceDay >= 0)}), " +
+                              $"below 75% strength {campaign.Armies.Count(a => a.Strength < 0.75f)} of {campaign.Armies.Count}");
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             // State failure: collapses and their sides, revolutions, and pieces gone home (StateFailure).
             Console.WriteLine("PULSE failure: " + string.Join(", ", StateFailure.Tally.OrderBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => $"{entry.Key} {entry.Value}")) +

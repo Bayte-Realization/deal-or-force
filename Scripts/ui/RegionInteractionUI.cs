@@ -239,12 +239,13 @@ public partial class DealOrForceGame
         var provinces = _campaign.ProvinceMap is null
             ? 0
             : PeaceConference.ProvincesOfState(_campaign.ProvinceMap, _selectedState.MapIndex).Count;
-        var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex);
+        var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex &&
+                                                      CampaignIntel.PlayerCanSeeArmy(_campaign, army));
         DetailHeading("GROUND");
         DetailRow("Provinces", provinces.ToString("N0"),
             "Tactical provinces this region is made of. A border drawn through them splits the region in two.");
         DetailRow("Divisions here", garrison.ToString("N0"),
-            "Formations currently standing inside the region.");
+            "Formations you can see standing inside the region. Foreign forces are hidden by fog of war.");
 
         SetRegionalActionsEnabled(owned);
     }

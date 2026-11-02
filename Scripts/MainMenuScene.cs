@@ -76,6 +76,7 @@ public partial class MainMenuScene : Control
         ApplicationExit.Ensure(this);
         WrapGuard.Install(GetTree());
         ButtonMotion.Install(GetTree());
+        TooltipKeeper.Install(GetTree());
         ControlSkin.Apply();
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // No campaign here: a campaign option set from this screen is where new ones start.

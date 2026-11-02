@@ -794,6 +794,9 @@ public static class SecessionEvents
                     FrontPlanner.ReassignAi(campaign, war);
                     DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
                 }
+                // The loyal rest do not simply stand on the new state's ground and starve: each
+                // goes home or digs in as a pocket of resistance (StrandedGarrisons).
+                StrandedGarrisons.AtRising(campaign, parent, born, provinces);
             }
         }
         if (outcome == SecessionOutcome.Accepted)

@@ -49,6 +49,9 @@ public static class GovernmentSupplyTests
             c.States[4].Buildings[BuildingKind.Barracks] = 1;
         }
         c.AttachProvinceTopology(map);
+        // The emergency-store rule on the bare hunger clock; pocket stores are tested in
+        // StrandedGarrisonTests and SupplyDaysTests.
+        c.Defines.StrandedGarrisonsEnabled = false;
         c.ProvinceController[1] = c.ProvinceController[3] = 101;
         c.Armies.Clear();
         foreach (var p in new[] { 2, 6 })

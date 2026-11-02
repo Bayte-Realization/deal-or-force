@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace DealOrForce.Simulation;
 
@@ -68,6 +69,7 @@ public static class AiAdmiralty
         // that is not the start of one.
         if (!campaign.StepOpensNewDay) return;
         ForgetGround();
+        if (campaign.ElapsedDays % 7 == 0) Concentrate(campaign);
 
         foreach (var fleet in campaign.Fleets)
         {
@@ -128,6 +130,33 @@ public static class AiAdmiralty
             }
 
             Deploy(campaign, fleet, nation, enemy);
+        }
+    }
+
+    /// <summary>
+    /// At war, squadrons lying in the same port sail as one. Fifteen small squadrons each
+    /// sent out on its own were fifteen chances to be beaten in detail; an admiralty
+    /// concentrates before it gives battle (FleetGroups). Once a week, ports only, never a
+    /// convoy or a fleet under orders.
+    /// </summary>
+    private static void Concentrate(Campaign campaign)
+    {
+        var groups = new Dictionary<(int Nation, int Berth), List<Fleet>>();
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0) continue;
+            var key = (fleet.NationId, fleet.BerthProvinceId);
+            if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<Fleet>();
+            list.Add(fleet);
+        }
+        foreach (var ((nationId, _), fleets) in groups)
+        {
+            if (fleets.Count < 2) continue;
+            var nation = campaign.NationById(nationId);
+            if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Navy))) continue;
+            if (FindWar(campaign, nation) is null) continue;
+            var into = fleets.OrderByDescending(fleet => fleet.Hulls).ThenBy(fleet => fleet.Id).First();
+            FleetGroups.Merge(campaign, into, fleets);
         }
     }
 

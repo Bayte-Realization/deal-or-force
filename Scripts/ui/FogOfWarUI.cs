@@ -17,6 +17,12 @@ public partial class DealOrForceGame
     /// </summary>
     private bool HideForeignRegionDetails()
     {
+        // A region's people, economy, stability and buildings are public - statistics offices,
+        // newspapers and embassies publish them - and Paradox shows them for every province on
+        // the map. Only military intelligence stays in the fog: whose divisions stand where is
+        // counted from what the player can see (CampaignIntel.PlayerCanSeeArmy), and the
+        // regional actions stay the owner's.
+        if (_campaign.Defines.FogHidesRegionStatistics == false) return false;
         var owner = _campaign.Nations.Find(n => n.MapIndex == _selectedState?.NationMapIndex);
         if (owner is null || CanInspectNation(owner.Id)) return false;
         if (PlayerHoldsMostOf(_selectedState)) return false;

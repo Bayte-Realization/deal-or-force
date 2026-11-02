@@ -886,6 +886,8 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
         // A pocket the computer is in is a pocket it tries to leave.
         using (SimProfiler.Measure("pocket breakout")) PocketBreakout.Tick(this);
+        // And a pocket whose stores are gone, with nobody coming, gives up (StrandedGarrisons).
+        using (SimProfiler.Measure("pocket surrender")) StrandedGarrisons.Tick(this);
         // The ordinary staff is conservative by design. A war for existence is the one
         // exception: mend a hole with a reserve, take an empty enemy province, or queue an
         // emergency formation - all through the same commands and the same manpower/debt
@@ -1292,6 +1294,11 @@ public sealed partial class Campaign
         // A fleet's home port is a province, and provinces only exist once the map is
         // attached. Until then a fleet knows where it is but not what it belongs to.
         FleetHistory.AssignHomePorts(this);
+        // And every state's church and people from the first look: the State Affairs screen of
+        // 1 January showed nothing declared until the first day had ticked, as if each
+        // country made its mind up on the morning of the 2nd. A new campaign only - a save
+        // carries its own declarations, and an empty one there is what was saved.
+        if (_pendingProvinceController is null) StateIdentity.EnsureDeclared(this, strain: false);
         var savedTopologyMatches = _pendingProvinceController is not null &&
             _pendingProvinceOccupation is not null &&
             _pendingProvinceController.Length == ProvinceController.Length &&

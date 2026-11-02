@@ -290,17 +290,30 @@ public static class PeaceShape
         var landlocked = !winnerRegions.Any(graph.Coastal.Contains);
         var nearCapital = Touching(graph, winner.CapitalStateMapIndex).ToHashSet();
         var candidates = new Dictionary<int, float>();
+        // Regions the winner's army mostly stands on. Ground one region past them - or past the
+        // winner's own border - may be bought with war score like a player buys it: at the price
+        // of ground never taken, which a country still able to fight marks up (PeaceConference.
+        // Resistance). Without this a war won on points and not on the map bought only the line,
+        // and +42 ended as a status quo.
+        var standing = new HashSet<int>();
+        if (defines.PeaceShapeReachUnheld)
+            foreach (var state in campaign.States)
+                if (loserIndices.Contains(state.NationMapIndex) && graph.Provinces.TryGetValue(state.MapIndex, out var stood) &&
+                    stood.Count(province => controllers[province] == (ushort)winner.MapIndex) >= stood.Count * defines.PeaceShapeOccupiedShare)
+                    standing.Add(state.MapIndex);
         foreach (var state in campaign.States)
         {
             if (!loserIndices.Contains(state.NationMapIndex) || !graph.Provinces.TryGetValue(state.MapIndex, out var provinces)) continue;
             var held = provinces.Count(province => controllers[province] == (ushort)winner.MapIndex) / (float)provinces.Count;
+            var reach = defines.PeaceShapeReachUnheld &&
+                        (anchors.Contains(state.MapIndex) || Touching(graph, state.MapIndex).Any(standing.Contains));
             var goal = state.MapIndex == war.ClaimedStateMapIndex;
             var ours = CultureShare(state, winnerCultures);
             var wasOurs = TerritorialClaims.TitleOf(campaign, winner, state) == TerritorialTitle.Homeland;
             var rebelWeight = WarAims.ClaimWeight(campaign, war, winner, state);
             var rebelClaim = rebelWeight > 0f;
             if (!goal && held < defines.PeaceShapeOccupiedShare && !(wasOurs && held > 0f) &&
-                !(ours > 0.5f && held > 0.1f) && !rebelClaim) continue;
+                !(ours > 0.5f && held > 0.1f) && !rebelClaim && !reach) continue;
 
             var perProvince = state.Population / MathF.Max(1f, provinces.Count);
             var value = (state.Population / 1_000_000f + 0.05f) * (0.20f + perProvince / 100_000f) * (0.35f + held);

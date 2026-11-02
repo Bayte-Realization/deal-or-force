@@ -156,6 +156,8 @@ static class Program
         if (args.Contains("--radicalism-only")) { RadicalismTests.Run(c); return; }
         if (args.Contains("--offensive-only")) { OffensivePlanTests.Run(c); return; }
         if (args.Contains("--pocket-only")) { PocketTests.Run(map); return; }
+        if (args.Contains("--stranded-garrison-only")) { StrandedGarrisonTests.RunRising(map); return; }
+        if (args.Contains("--pocket-stores-only")) { StrandedGarrisonTests.RunPocket(map); return; }
         if (args.Contains("--loss-only")) { LossTests.Run(map); return; }
         if (args.Contains("--capital-only")) { CapitalTests.Run(map); return; }
         if (args.Contains("--options-only")) { CampaignOptionsTests.Run(map); return; }

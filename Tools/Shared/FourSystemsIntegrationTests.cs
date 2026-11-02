@@ -58,6 +58,9 @@ public static class FourSystemsIntegrationTests
                 NationMapIndex = 100, NationId = "N0", Population = 100000
             });
         c.AttachProvinceTopology(map);
+        // The barracks rule on the bare hunger clock: a pocket's own stores (StrandedGarrisons)
+        // would hold the clock at zero for weeks, which is tested where they are.
+        c.Defines.StrandedGarrisonsEnabled = false;
         // Cut off province 4 and 5 by putting province 3 under enemy control
         c.ProvinceController[3] = 101;
 

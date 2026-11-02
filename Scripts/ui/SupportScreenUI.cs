@@ -712,6 +712,19 @@ public partial class DealOrForceGame
         SupportSelectionChanged();
     }
 
+    /// <summary>Ctrl+X on the long-range screen: keep every other selected formation, by id.</summary>
+    private bool SplitSupportSelection()
+    {
+        if (_supportLayer is not { Visible: true } || _supportSelected.Count < 2) return false;
+        var ordered = _supportSelected.OrderBy(id => id).ToList();
+        var left = ordered.Count / 2;
+        for (var index = 1; index < ordered.Count; index += 2) _supportSelected.Remove(ordered[index]);
+        _supportRebaseArmed = false;
+        SupportSelectionChanged();
+        _supportFeedback.Text = Loc.Format("Split in half: {0} selected, {1} left as they were.", _supportSelected.Count, left);
+        return true;
+    }
+
     private void ClearSupportSelection()
     {
         _supportSelected.Clear();

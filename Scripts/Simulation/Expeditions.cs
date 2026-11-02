@@ -168,6 +168,35 @@ public static class Expeditions
         return true;
     }
 
+    /// <summary>
+    /// Take a garrison out of ground that has just risen, by sea or by air, to the province named
+    /// (StrandedGarrisons.AtRising). Unlike an airlift it is not refused for being cut off - the
+    /// ring is closing as it leaves, which is the whole reason it leaves - and it pays for the
+    /// haste: a share of the men lost on the way, a larger share of the heavy equipment left on
+    /// the quay. The caller has already paid the journey (<see cref="Quote"/>).
+    /// </summary>
+    internal static void Evacuate(Campaign c, Army army, int province, float strengthLoss, float equipmentLoss)
+    {
+        if (c?.ProvinceMap is null || army is null || province <= 0 || province > c.ProvinceMap.ProvinceCount) return;
+        var before = army.Strength;
+        army.Strength = M.Clamp01(army.Strength * (1f - M.Clamp01(strengthLoss)));
+        army.Equipment = M.Clamp01(army.Equipment * (1f - M.Clamp01(equipmentLoss)));
+        var men = (before - army.Strength) * army.Divisions * MilitaryBootstrap.DivisionSize;
+        if (men > 0f)
+        {
+            army.Personnel = Math.Max(0, army.Personnel - (int)MathF.Round(men));
+            WarLosses.Record(WarLosses.WarOf(c, army), army.NationId, men * 0.5f, men * 0.5f, 0f);
+        }
+        var (days, _) = Quote(c, army, province);
+        Place(c, army, province, days);
+        army.BreakingOut = false;
+        army.HoldoutSinceDay = -1;
+        army.PocketStores = -1f;
+        army.PocketSinceDay = -1;
+        army.ReliefDistance = -1;
+        DiagnosticLogs.Write("orders", $"EVACUATED army={army.Id} province={province} days={days}");
+    }
+
     /// <summary>Put a formation down somewhere new, out of action for the time the journey took.</summary>
     private static void Place(Campaign c, Army army, int province, int days)
     {
@@ -252,9 +281,26 @@ public static class Expeditions
                     var neighbour = CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, host.MapIndex);
                     var kindred = creed.Length > 0 && (PoliticsCore.IdeologyOf(host)?.Id ?? "") == creed &&
                                   string.Equals(sponsor.Continent, host.Continent, StringComparison.OrdinalIgnoreCase);
-                    if (!great && !neighbour && !kindred) continue;
+                    // What the war is worth to the sender, not only to the friend: an enemy it
+                    // hates, an enemy on its own border it would rather see bled by somebody
+                    // else, a host that is its ally or answers to it. A country sends its sons
+                    // where the war serves it - Spain in 1936 was a rehearsal and a rival's
+                    // defeat as much as a friendship.
+                    var hatred = 0f;
+                    var rivalNextDoor = false;
+                    foreach (var enemyId in war.EnemiesOf(hostId).Distinct())
+                    {
+                        var enemy = c.NationById(enemyId);
+                        if (enemy is null) continue;
+                        var feeling = CampaignDiplomacy.Peek(c, sponsor.Id, enemyId)?.Opinion ?? 0f;
+                        hatred = MathF.Max(hatred, -feeling);
+                        if (feeling < -25f && CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex)) rivalNextDoor = true;
+                    }
+                    // An ally has the alliance and its own war to join; a client has only its patron.
+                    var bound = host.AnswersTo(sponsor.Id);
+                    if (!great && !neighbour && !kindred && !rivalNextDoor && !bound) continue;
                     var opinion = CampaignDiplomacy.Peek(c, sponsor.Id, host.Id)?.Opinion ?? 0f;
-                    if (opinion < c.Defines.AiVolunteerOpinion) continue;
+                    if (opinion < c.Defines.AiVolunteerOpinion - MathF.Min(40f, hatred * 0.5f) - (bound ? 30f : 0f)) continue;
                     var ours = c.Armies.Where(a => a.NationId == hostId).Sum(a => a.Divisions);
                     var theirs = 0f;
                     var feared = false;
@@ -267,7 +313,8 @@ public static class Expeditions
                         if (power > strength * 1.5f && CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex)) feared = true;
                     }
                     if (feared || theirs <= ours) continue;
-                    var score = opinion * (theirs / MathF.Max(1f, ours));
+                    var strategic = 1f + MathF.Min(2f, hatred / 50f) + (rivalNextDoor ? 1f : 0f) + (bound ? 1.5f : 0f);
+                    var score = MathF.Max(5f, opinion + hatred * 0.5f) * strategic * (theirs / MathF.Max(1f, ours));
                     if (score <= bestScore) continue;
                     bestScore = score;
                     best = host;

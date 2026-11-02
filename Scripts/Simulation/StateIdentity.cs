@@ -232,13 +232,13 @@ public static class StateIdentity
     /// First sight of a country: what it declares is what it already is, the plurality of
     /// its own people - silently, and at nobody's cost, because nobody chose it.
     /// </summary>
-    public static void EnsureDeclared(Campaign campaign)
+    public static void EnsureDeclared(Campaign campaign, bool strain = true)
     {
         if (campaign is null) return;
         if (campaign.FeatureOverrides.TryGetValue("state_identity", out var over) ? !over
             : campaign.Defines.Features is not null && campaign.Defines.Features.TryGetValue("state_identity", out var def) && !def)
             return;
-        var strain = campaign.Defines.StateIdentityStrainWeekly / 7f;
+        var weekly = strain ? campaign.Defines.StateIdentityStrainWeekly / 7f : 0f;
         foreach (var nation in campaign.Nations)
         {
             if (nation.Population <= 0 || nation.DeclaredReligion.Length > 0 || nation.DeclaredCulture.Length > 0)
@@ -247,12 +247,12 @@ public static class StateIdentity
                 // speaks for a creed or a people short of half the country, the gap pays
                 // every week in stability, scaled by how far short it falls. A secular
                 // answer never strains - declining a church costs nothing to keep declined.
-                if (strain > 0f && !IsSecular(nation.DeclaredReligion))
+                if (weekly > 0f && !IsSecular(nation.DeclaredReligion))
                 {
                     var faithShare = ReligionShare(campaign, nation, nation.DeclaredReligion);
                     if (faithShare < 0.5f)
                         nation.Stability = M.Clamp01(nation.Stability -
-                            strain * (0.5f - faithShare) / 0.5f);
+                            weekly * (0.5f - faithShare) / 0.5f);
                 }
                 continue;
             }

@@ -599,7 +599,8 @@ public partial class DealOrForceGame
             RegionOfCaption(state, owner) + (isCapital ? " · " + Tr("the capital") : "");
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
-        var visible = state is not null && (owner is null || CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
+        var visible = state is not null && (!_campaign.Defines.FogHidesRegionStatistics || owner is null ||
+                                            CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));

@@ -1,0 +1,13 @@
+// Pockets and the garrisons a rising strands (StrandedGarrisons): stores, relief, holding out and breaking out.
+{
+  "In a pocket: {0} days of stores left": "В котле: запасов на {0} дн.",
+  "In a pocket: the stores are gone, {0} days hungry": "В котле: запасы кончились, голодает {0} дн.",
+  "In a pocket: its stores are being counted": "В котле: запасы ещё подсчитываются",
+  ", relief {0} province(s) away.": ", до своих: {0} пров.",
+  ", no friendly ground within reach.": ", своей земли в пределах досягаемости нет.",
+  "Holding out behind the rising's lines.": "Держит оборону в тылу восставших.",
+  "Breaking out toward friendly ground.": "Прорывается к своим.",
+  "An air bridge carries {0:P0} of its needs.": "Воздушный мост покрывает {0:P0} потребностей.",
+  ", cut off together with a large part of the country.": ", отрезана вместе с большой частью страны.",
+  "A held port or town covers {0:P0}.": "Удерживаемый порт или город покрывает {0:P0}."
+}

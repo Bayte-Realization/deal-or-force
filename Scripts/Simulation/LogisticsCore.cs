@@ -59,6 +59,54 @@ public static class LogisticsSystem
     private static readonly Dictionary<ushort, List<int>> Controlled = new();
     private static readonly Dictionary<int, List<Army>> ArmiesByNation = new();
     private static readonly Dictionary<int, bool> IsIsolatedHub = new();
+    private static readonly Dictionary<int, bool> IsForwardHub = new();
+    private static readonly Dictionary<int, int> HeldInState = new();
+    private static readonly Dictionary<int, int> LandInState = new();
+    private static ProvinceTopology _landCounted;
+
+    /// <summary>How many land provinces of each region the country holds now, and (once per map) how many each region has.</summary>
+    private static void CountHeld(Campaign campaign, List<int> territory)
+    {
+        var topology = campaign.ProvinceMap;
+        if (!ReferenceEquals(_landCounted, topology))
+        {
+            LandInState.Clear();
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+                if (!topology.IsWater(province))
+                {
+                    var state = topology.ProvinceToState[province];
+                    LandInState[state] = LandInState.GetValueOrDefault(state) + 1;
+                }
+            _landCounted = topology;
+        }
+        HeldInState.Clear();
+        foreach (var province in territory)
+            if (!topology.IsWater(province))
+            {
+                var state = topology.ProvinceToState[province];
+                HeldInState[state] = HeldInState.GetValueOrDefault(state) + 1;
+            }
+    }
+
+    /// <summary>
+    /// An improvised depot on ground the country holds but does not own. Once it holds most of an
+    /// enemy region and the road behind it is open, the army repairs a railhead there: a forward
+    /// depot carrying a share of what a home depot would (<see cref="Defines.ForwardDepotThroughputShare"/>).
+    /// Without it an offensive that took a region two dozen provinces from home fed every
+    /// formation in it from the far side of the old border, and the front there sat
+    /// under-supplied - unreinforced, worn out - for as long as the war lasted.
+    /// </summary>
+    private static void ForwardDepot(Campaign campaign, int province, bool connected)
+    {
+        if (!connected || campaign.Defines.ForwardDepotHeldShare > 1f) return;
+        var topology = campaign.ProvinceMap;
+        var state = topology.ProvinceToState[province];
+        if (HubByState.ContainsKey(state)) return;
+        var land = LandInState.GetValueOrDefault(state);
+        if (land <= 0 || HeldInState.GetValueOrDefault(state) < land * campaign.Defines.ForwardDepotHeldShare) return;
+        HubByState[state] = province;
+        IsForwardHub[state] = true;
+    }
 
     public static void Tick(Campaign campaign)
     {
@@ -157,20 +205,28 @@ public static class LogisticsSystem
 
         HubByState.Clear();
         IsIsolatedHub.Clear();
+        IsForwardHub.Clear();
+        CountHeld(campaign, territory);
         foreach (var province in territory)
         {
-            if (!insurgent && topology.ProvinceToNation[province] != nation.MapIndex) continue;
             // A lake keeps no depot, however much of it a country owns.
             if (topology.IsWater(province)) continue;
+            if (!insurgent && topology.ProvinceToNation[province] != nation.MapIndex)
+            {
+                ForwardDepot(campaign, province, reach[province] == generation);
+                continue;
+            }
             var isConnected = reach[province] == generation;
             var state = topology.ProvinceToState[province];
             if (isConnected)
             {
                 // A region may straddle a pocket. Prefer its connected depot regardless
                 // of province order; an isolated fragment must not cut off the whole region.
-                if (!HubByState.ContainsKey(state) || IsIsolatedHub.GetValueOrDefault(state))
+                if (!HubByState.ContainsKey(state) || IsIsolatedHub.GetValueOrDefault(state) ||
+                    IsForwardHub.GetValueOrDefault(state))
                     HubByState[state] = province;
                 IsIsolatedHub[state] = false;
+                IsForwardHub[state] = false;
                 continue;
             }
             if (HubByState.ContainsKey(state)) continue;
@@ -188,11 +244,15 @@ public static class LogisticsSystem
             source[province] = state;
             Frontier.Enqueue(province);
         }
-        var range = campaign.Defines.SupplyTraceRange;
+        // No hop budget on the walk itself any more. A province past the trace range is at the
+        // end of a long road, not inside a ring: it is charged for the distance (the distance
+        // factor below bottoms out at a fifth of the supply) but it is not cut off. Cutting it off
+        // marooned whole fronts on their own connected ground - the far north of Russia, two
+        // dozen provinces from the nearest depot - where no breakout could help, because there was
+        // nothing to break out of, and the formations sat worn out and unreinforced for years.
         while (Frontier.Count > 0)
         {
             var province = Frontier.Dequeue();
-            if (distance[province] >= range) continue;
             var next = distance[province] + 1;
             var from = source[province];
             foreach (var neighbor in topology.Neighbors[province])
@@ -253,7 +313,8 @@ public static class LogisticsSystem
             // Winter narrows the same road. It does not invent a second supply network.
             var centre = topology.CenterOf(province);
             var damageFactor = state is not null ? (1f - MathF.Min(0.85f, state.WarDamage * 0.9f)) : 1f;
-            var enclaveFactor = IsIsolatedHub.GetValueOrDefault(sourceState) ? 0.35f : 1f;
+            var enclaveFactor = IsIsolatedHub.GetValueOrDefault(sourceState) ? 0.35f :
+                IsForwardHub.GetValueOrDefault(sourceState) ? campaign.Defines.ForwardDepotThroughputShare : 1f;
             var capacity = (campaign.Defines.BaseStateSupplyThroughput + BuildingThroughput(campaign.Defines, state)) *
                           damageFactor * enclaveFactor *
                           WaterConditions.RoadThroughput(campaign, centre.Latitude);
@@ -320,7 +381,11 @@ public static class LogisticsSystem
         {
             if (army.EmbarkedFleetId >= 0) continue;
             var province = army.ProvinceId;
-            if (province <= 0 || province >= stamp.Length || stamp[province] == generation) continue;
+            if (province <= 0 || province >= stamp.Length) continue;
+            // Reached over land within the trace range: the road is the answer. Reached only past
+            // it, a ship from a port of its own may still be the shorter way (below).
+            var byLand = stamp[province] == generation;
+            if (byLand && _distance[province] <= campaign.Defines.SupplyTraceRange) continue;
             if (controllers[province] != nation.MapIndex) continue;
             if (!SeaLanes.TryHarbourPoint(topology, province, out var latitude, out var longitude)) continue;
             var basin = SeaLanes.HarbourBasin(topology, province);
@@ -348,6 +413,8 @@ public static class LogisticsSystem
                 best = port;
             }
             if (best < 0) continue;
+            var bySea = _distance[best] + Math.Max(0, campaign.Defines.SeaSupplyHops);
+            if (byLand && bySea >= _distance[province]) continue;
             stamp[province] = generation;
             _distance[province] = _distance[best] + Math.Max(0, campaign.Defines.SeaSupplyHops);
             _source[province] = _source[best];
@@ -557,16 +624,49 @@ public static class LogisticsSystem
     /// <summary>
     /// One campaign day inside a closed pocket. Supply and organisation close on the floor
     /// across <see cref="Defines.SupplyCutoffDays"/>; the formation is not removed.
+    ///
+    /// Not from the first morning. A pocket lives first off what was stockpiled where it stands
+    /// (StrandedGarrisons.AssessStores): the day the ring closes its stores are counted, each day
+    /// takes its share of them - less where an air bridge or a held port or town brings something
+    /// in - and only when they are gone does the hunger clock, <see cref="Army.DaysCutOff"/>,
+    /// start. A pocket that was a death sentence from the first hour gave nobody time to relieve
+    /// it and made every rising's garrison starve where it stood.
     /// </summary>
     private static void AgeCutOff(Campaign campaign)
     {
         var span = Math.Max(1, campaign.Defines.SupplyCutoffDays);
         var add = Math.Max(1, campaign.TickHours / 24);
         var orgFloor = campaign.Defines.BattleBreakOrganisation;
+        var storesOn = campaign.Defines.StrandedGarrisonsEnabled;
+        Dictionary<int, float> cutOffDivisions = null;
         foreach (var army in campaign.Armies)
         {
-            if (!army.CutOff || army.Divisions <= 0f || army.EmbarkedFleetId >= 0) continue;
+            if (!army.CutOff)
+            {
+                // The road is open: the next pocket counts its stores afresh.
+                army.PocketStores = -1f;
+                army.PocketSinceDay = -1;
+                continue;
+            }
+            if (army.Divisions <= 0f || army.EmbarkedFleetId >= 0) continue;
             if (MilitaryAccess.MustReturn(campaign, army)) continue;
+            if (storesOn)
+            {
+                if (army.PocketStores < 0f)
+                {
+                    army.PocketStores = StrandedGarrisons.AssessStores(campaign, army);
+                    army.PocketSinceDay = campaign.ElapsedDays;
+                }
+                if (army.PocketStores > 0f)
+                {
+                    cutOffDivisions ??= StrandedGarrisons.CutOffDivisions(campaign);
+                    var draw = add * StrandedGarrisons.DailyDraw(campaign, army, cutOffDivisions);
+                    army.PocketStores = MathF.Max(0f, army.PocketStores - draw);
+                    // Rationed, not starving: the stores keep it near a fixed level of supply.
+                    army.SupplyLevel = M.Lerp(army.SupplyLevel, campaign.Defines.PocketStoresSupplyLevel, 0.25f);
+                    continue;
+                }
+            }
             var before = army.DaysCutOff;
             army.DaysCutOff = before + add;
             if (before >= span)
@@ -614,10 +714,19 @@ public static class LogisticsSystem
         var span = Math.Max(1, campaign?.Defines.SupplyCutoffDays ?? 14);
         if (army.CutOff)
         {
-            var days = Loc.Format("Days in the cauldron: {0}.", army.DaysCutOff);
+            var inPocket = army.PocketSinceDay >= 0 && campaign is not null
+                ? Math.Max(0, campaign.ElapsedDays - army.PocketSinceDay)
+                : army.DaysCutOff;
+            var days = Loc.Format("Days in the cauldron: {0}.", inPocket);
             var head = Loc.Get("Cut off.") + " " + Loc.Get("No path to a supply hub.") + " " + days;
+            var pocket = StrandedGarrisons.PocketLine(campaign, army);
+            if (pocket.Length > 0) head += " " + pocket;
+            var relief = StrandedGarrisons.ReliefLine(campaign, army);
+            if (relief.Length > 0) head += " " + relief;
             var stores = DepotDays(campaign, army);
             if (stores.Length > 0) head += " " + stores;
+            // Living off local stores: the hunger clock has not started.
+            if (army.PocketStores > 0f) return Finish(campaign, army, head);
             if (army.DaysCutOff >= span)
                 return Finish(campaign, army, head + " " + Loc.Get("Organisation is spent and it cannot keep attacking."));
             return Finish(campaign, army, head + " " + Loc.Format("{0} days until supply and organisation are spent.",

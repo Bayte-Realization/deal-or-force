@@ -76,6 +76,7 @@ public partial class DealOrForceGame : Control
         WrapGuard.Install(GetTree());
         InterfaceInteractionGuard.Install(GetTree());
         ButtonMotion.Install(GetTree());
+        TooltipKeeper.Install(GetTree());
         ControlSkin.Apply();
         ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
@@ -576,6 +577,19 @@ public partial class DealOrForceGame : Control
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
 
+        // Halving and joining for what is not a division: the fleets of a box selection and the
+        // long-range formations. Divisions take the same keys below.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } splitKey &&
+            _hudLayer is { Visible: true } && _selectedArmies.Count == 0 && Input.IsKeyPressed(Key.Ctrl))
+        {
+            var letter = Letter(splitKey);
+            if (letter == Key.X && _selectedFleet is not null && _fleetPanel is { Visible: true })
+            { SplitSelectedFleet(); GetViewport().SetInputAsHandled(); return; }
+            if (letter == Key.K && _selectedFleet is not null && _fleetPanel is { Visible: true })
+            { MergeSelectedFleets(); GetViewport().SetInputAsHandled(); return; }
+            if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
+        }
+
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
         // and only in the campaign, so H stays a letter everywhere else.
@@ -601,6 +615,13 @@ public partial class DealOrForceGame : Control
 
                 case Key.K when Input.IsKeyPressed(Key.Ctrl):
                     ConsolidateSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                // Halve the selection: half the formations stay selected and take the next
+                // order, the other half stay where they are. One formation is cut in two.
+                case Key.X when Input.IsKeyPressed(Key.Ctrl):
+                    SplitSelectionInHalf();
                     GetViewport().SetInputAsHandled();
                     return;
 
@@ -773,6 +794,7 @@ public partial class DealOrForceGame : Control
             _globe.SupportBoxPicked += OnSupportBoxPicked;
             _globe.BattlePicked += ShowBattleDetails;
             _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
+            _globe.FleetsBoxPicked += OnFleetsBoxPicked;
             _globe.ProvinceCommanded += OnProvinceCommanded;
             AddChild(_globe);
         });

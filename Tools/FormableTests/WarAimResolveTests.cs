@@ -42,11 +42,22 @@ static class WarAimResolveTests
         Check(AiStatecraft.ShouldPressWarAim(c,a,war,draft),
             "a healthy winning army beside the unfinished capital does not cash out for an incidental border region");
         Check(CampaignFingerprint.Of(c) == before, "reading pursuit intent changes no campaign state");
-        var refusal = PeaceNegotiation.Acceptance(c,war,b.Id,PeaceTerms.WhitePeace);
+        // A ceasefire rather than a white peace: since the war score works for the winner, a white
+        // peace from a side 60 behind is refused outright with or without the aim, and the
+        // comparison would read 0 against 0.
+        // The reclaiming winner's own refusal of compromise (Reintegration) is switched off for the
+        // comparison, so the war aim alone is what moves the answer; at a lead the aim is pressed at,
+        // that refusal would close the door by itself and both readings would be 0.
+        var reclaimPenalty = c.Defines.ReclaimCompromisePenalty;
+        c.Defines.ReclaimCompromisePenalty = 0f;
+        war.WarScore = 40;
+        var refusal = PeaceNegotiation.Acceptance(c,war,b.Id,PeaceTerms.Ceasefire);
         c.Defines.AiPursueUnfinishedWarAims = false;
         Check(!AiStatecraft.ShouldPressWarAim(c,a,war,draft) &&
-            PeaceNegotiation.Acceptance(c,war,b.Id,PeaceTerms.WhitePeace) > refusal,
-            "the same intent affects compromise acceptance and is moddable");
+            PeaceNegotiation.Acceptance(c,war,b.Id,PeaceTerms.Ceasefire) > refusal,
+            $"the same intent affects compromise acceptance and is moddable ({refusal:0.0} -> {PeaceNegotiation.Acceptance(c,war,b.Id,PeaceTerms.Ceasefire):0.0})");
+        war.WarScore = 60;
+        c.Defines.ReclaimCompromisePenalty = reclaimPenalty;
         c.Defines.AiPursueUnfinishedWarAims = true;
         draft.Provinces.Add(capital);
         Check(!AiStatecraft.ShouldPressWarAim(c,a,war,draft), "a draft delivering the nearby objective may be signed");

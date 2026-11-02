@@ -1080,13 +1080,13 @@ public static class MovementRules
         // The garrison changes flags once for the whole transfer, not once per region
         // (DefectGarrison): the share must be a share of the army that stood on the ground
         // given up, not a slice of what the previous region left behind.
+        var ground = new HashSet<int>();
         if (owner is not null && owner.Id != nation.Id)
         {
             var topology = campaign.ProvinceMap;
             var regions = new HashSet<ushort>();
             foreach (var region in gained)
                 if (region is not null) regions.Add((ushort)region.MapIndex);
-            var ground = new HashSet<int>();
             if (topology is not null)
                 for (var province = 1; province <= topology.ProvinceCount; province++)
                     if (regions.Contains(topology.ProvinceToState[province])) ground.Add(province);
@@ -1134,8 +1134,9 @@ public static class MovementRules
             if (owner.IsHuman && !campaign.ObserverMode)
                 SecessionResponse.Ask(campaign, owner, nation,
                     string.Join(", ", gained.Take(4).Select(r => r.DisplayName)), gained.Sum(r => r.Population), owner.Population + nation.Population);
-            else
-                CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
+            else if (CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false) is not null)
+                // The garrison that did not go over goes home or holds (StrandedGarrisons).
+                StrandedGarrisons.AtRising(campaign, owner, nation, ground);
         }
         // Remember the newly liberated regions as the nation's homeland so restorations and title checks recognize them.
         if (!campaign.Homelands.TryGetValue(nation.Id, out var homes))

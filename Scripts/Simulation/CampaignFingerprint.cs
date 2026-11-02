@@ -1006,6 +1006,11 @@ public static class CampaignFingerprint
             if (army.CutOff) { MixText("cut_off"); Mix(army.Id); }
             if (army.DaysCutOff > 0) { MixText("days_cut_off"); Mix(army.Id); Mix(army.DaysCutOff); }
             if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
+            // Pockets and their stores (StrandedGarrisons): each only off its default, so a world
+            // without a pocket fingerprints as it did before these existed.
+            if (army.PocketStores >= 0f) { MixText("pocket_stores"); Mix(army.Id); MixFloat(army.PocketStores); Mix(army.PocketSinceDay); }
+            if (army.HoldoutSinceDay >= 0) { MixText("holdout"); Mix(army.Id); Mix(army.HoldoutSinceDay); }
+            if (army.ReliefDistance != -1) { MixText("relief_distance"); Mix(army.Id); Mix(army.ReliefDistance); }
         }
         foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
             if (item.Options.Any(o => o.SecessionTargetId >= 0))

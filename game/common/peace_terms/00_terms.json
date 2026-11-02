@@ -9,9 +9,12 @@
 //   cost                 war score the proposer spends on it
 //   acceptance_base      how willing the other side is before anything else is weighed
 //   war_score_weight     how much the proposer's war score moves that willingness.
-//                        Negative for the terms a winner offers out of generosity: the
-//                        better a ceasefire's proposer is doing, the less the other side
-//                        needs one.
+//                        Positive for every term: a side that is winning finds the other
+//                        side readier to sign anything, and a side that is losing finds a
+//                        winner unwilling to stop for a white peace or the line. (It was
+//                        negative for the compromises, which made a beaten country's offer
+//                        of the status quo EASIER to sell the further it was behind - Russia
+//                        at +42 signed the line it stood on and nothing else.)
 //   minimum_days         how long the war must have lasted before it may be proposed
 //   minimum_acceptance   the percentage below which the other side will not sit down
 //
@@ -27,7 +30,7 @@
       "description": "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
       "cost": 0,
       "acceptance_base": 62,
-      "war_score_weight": -0.45,
+      "war_score_weight": 0.45,
       "minimum_days": 30,
       "minimum_acceptance": 50
     },
@@ -36,7 +39,7 @@
       "description": "Pre-war borders and a five-year truce, with no victor or indemnity.",
       "cost": 5,
       "acceptance_base": 50,
-      "war_score_weight": -0.65,
+      "war_score_weight": 0.65,
       "minimum_days": 120,
       "minimum_acceptance": 50
     },
@@ -102,7 +105,7 @@
       "description": "Each side keeps the enemy ground it holds, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
       "cost": 12,
       "acceptance_base": 50,
-      "war_score_weight": -0.35,
+      "war_score_weight": 0.35,
       "minimum_days": 365,
       "minimum_acceptance": 50
     }

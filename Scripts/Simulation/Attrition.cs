@@ -85,6 +85,9 @@ public sealed partial class Nation
 public static class Attrition
 {
     private static readonly List<Army> Broken = new();
+
+    /// <summary>Formations buried while cut off, this process: a bench counter, not campaign state.</summary>
+    public static int StarvedInPockets;
     private static readonly Dictionary<int, float> Standing = new();
 
     public static void Tick(Campaign campaign)
@@ -124,6 +127,11 @@ public static class Attrition
     /// And the men it cost were never counted - they came off the formation and out of the
     /// world, so the war that closed the pocket showed none of it. Now they are killed or
     /// taken, on the books of the war that is starving them (see WarLosses).
+    ///
+    /// The six weeks start when the pocket's own stores are gone, not when the ring closes.
+    /// What was stockpiled where it stands feeds it first (StrandedGarrisons.AssessStores), and a
+    /// pocket with stores and nobody coming gives up before it starves to the last man
+    /// (StrandedGarrisons.Tick).
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
@@ -138,6 +146,9 @@ public static class Attrition
                 continue;
             }
             if (MilitaryAccess.MustReturn(campaign, army)) { MilitaryAccess.Provision(army); army.DaysCutOff = 0; continue; }
+            // A pocket still living off its stores is fed: it starves when they are gone
+            // (LogisticsSystem.AgeCutOff, StrandedGarrisons).
+            if (army.PocketStores > 0f) continue;
             // The day count is advanced once, by the supply pass, earlier on this step.
             // Counting it again made every retraced day two days older than the calendar.
 
@@ -177,7 +188,7 @@ public static class Attrition
         {
             // A pocket that has starved down to nothing did not dissolve: what was left of it
             // surrendered, and those men are the other side's prisoners now.
-            if (army.CutOff) WarLosses.Surrender(campaign, army);
+            if (army.CutOff) { StarvedInPockets++; WarLosses.Surrender(campaign, army); }
             Destroy(campaign, army, "destroyed: broken in the field");
         }
         campaign.MarkStrategicChange();
