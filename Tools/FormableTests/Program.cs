@@ -312,7 +312,9 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--policy-goal-rules-only")) { PolicyGoalRulesTests.Run(); return; }
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
         if (args.Contains("--courses-only")) { NationalCourseTests.Run(); return; }
-        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); FlagArtworkTests.Run(); return; }
+        if (args.Contains("--flags-only")) { FlagModdingTests.Run(); FlagArtworkTests.Run(); FlagDesignTests.Run(); return; }
+        if (args.Contains("--flag-designs-only")) { FlagDesignTests.Run(); return; }
+        if (args.Contains("--country-editor-only")) { CountryEditorTests.Run(); return; }
         if (args.Contains("--names-only")) { CountryNameTests.Run(); return; }
         if (args.Contains("--union-mutation-only")) { UnionCohesionMutationTests.Run(); return; }
         if (args.Contains("--union-only")) { UnionCohesionTests.Run(); return; }
@@ -396,6 +398,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         FleetNameLocalizationTests.Run();
         FlagModdingTests.Run();
         FlagArtworkTests.Run();
+        FlagDesignTests.Run();
+        CountryEditorTests.Run();
         CountryNameTests.Run();
         UnionCohesionTests.Run();
         UnionCohesionMutationTests.Run();

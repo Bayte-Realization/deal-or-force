@@ -117,6 +117,8 @@ public partial class DealOrForceGame
             }
         }
         _countryFactsScroll.Visible = _countryDossierTab != "Actions" || nation == _campaign.Player;
+        if (_countryCardFlagEdit is not null)
+            _countryCardFlagEdit.Visible = nation == _campaign.Player && !_networkConnected;
         _countryOrdersScroll.Visible = _countryDossierTab == "Actions" && nation != _campaign.Player;
         // Opening actions does not execute them. This is still the one shared action block.
         _countryCardCaption.TooltipText = Ui.Tip(nation.DisplayName + "\n" +

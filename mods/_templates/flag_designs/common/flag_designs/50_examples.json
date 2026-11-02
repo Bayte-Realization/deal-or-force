@@ -1,0 +1,59 @@
+// Flags written as data instead of painted as pictures.
+//
+// The id of a design IS a sprite name, so it takes part in the flag search exactly as a PNG of
+// the same name would (see common/flags/00_flags.json):
+//
+//     flag_lux                     Luxembourg's flag, always
+//     flag_lux_communism           Luxembourg's flag while it is communist
+//     flag_lux_absolute_monarchy   ... while it is an absolute monarchy
+//
+// Where a design and a picture share a name, the design wins.
+//
+// ratio       width / height (1.5 is 2:3). 0.5 to 3.
+// background  pattern + colours (exact "#rrggbb"):
+//     solid           1 colour
+//     horizontal      2-5 colours, top to bottom; optional "weights" (Spain: 1, 2, 1)
+//     vertical        2-5 colours, hoist to fly
+//     nordic_cross    field, cross[, inner cross] - the inner one makes Norway's bordered cross
+//     cross           field, cross[, inner cross] - centred, as England's and Switzerland's
+//     saltire         field, saltire[, inner saltire]
+//     diagonal        upper-hoist, lower-fly[, band along the diagonal]
+//     canton          stripes 1-5, with "accent" the colour of the upper-hoist rectangle
+//     hoist_triangle  stripes 1-5, with "accent" the colour of the triangle at the hoist
+// emblems     drawn in order, later on top. Either "shape" - star, star_ring, crescent,
+//             crescent_star, disc, ring, sun, diamond, triangle, cross, eight_point_star - or
+//             "sprite": the name of any picture in gfx/ (icon_ideology_socialism, icon_faith,
+//             or an icon your mod ships). A sprite with a "colour" is drawn as a mask of that
+//             colour; without one it keeps its own colours.
+//             x, y are 0..1 across and down the flag; size is a share of the flag's height;
+//             rotation is in degrees clockwise; count is how many stars a star_ring holds.
+//
+// The in-game flag editor (Scenarios & workshop -> Flag editor, or "Flag…" on your own country)
+// writes exactly this format into the Editor workspace mod.
+{
+  "flag_designs": {
+    // A made-up republic, for a country a mod adds (a design for a tag nobody flies is harmless).
+    "flag_xmp": {
+      "ratio": 1.5,
+      "background": { "pattern": "horizontal", "colours": ["#0038a8", "#ffffff", "#0038a8"], "weights": [1, 2, 1] },
+      "emblems": [
+        { "shape": "star_ring", "colour": "#fcd116", "x": 0.5, "y": 0.5, "size": 0.42, "count": 9 },
+        { "shape": "disc", "colour": "#ce1126", "x": 0.5, "y": 0.5, "size": 0.14 }
+      ]
+    },
+    // A real country's variant: Luxembourg's flag while it is socialist (the base game has no
+    // picture for that case). The base ideology emblem drawn as a gold mask in a red canton.
+    "flag_lux_socialism": {
+      "ratio": 1.5,
+      "background": { "pattern": "canton", "colours": ["#ce1126", "#8d1b3d"], "accent": "#ce1126" },
+      "emblems": [
+        { "sprite": "icon_ideology_socialism", "colour": "#fcd116", "x": 0.15, "y": 0.25, "size": 0.32 }
+      ]
+    },
+    // A Nordic cross with a bordered inner cross, Norway's construction in other colours.
+    "flag_xmp_absolute_monarchy": {
+      "ratio": 1.375,
+      "background": { "pattern": "nordic_cross", "colours": ["#006233", "#ffffff", "#d4af37"] }
+    }
+  }
+}

@@ -368,6 +368,9 @@ public sealed class ModLoader
         ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
         ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),
         ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge),
+        // Flags written as data (background, stripes, emblems) rather than painted - the
+        // in-game flag editor writes these, and a modder can type one by hand.
+        ("flag_designs", () => FlagDesignCatalog.ResetCatalog(), FlagDesignCatalog.Merge),
         ("editor", () => ScenarioInspectorCatalog.ResetCatalog(), ScenarioInspectorCatalog.Merge),
         ("governance", () => GovernanceEvents.ResetCatalog(), GovernanceEvents.Merge),
         ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge),
@@ -907,6 +910,13 @@ public sealed class ModLoader
             case "name" when value.ValueKind == JsonValueKind.String: nation.Name = value.GetString() ?? nation.Name; return true;
             case "color" when value.ValueKind == JsonValueKind.String: nation.Color = value.GetString() ?? nation.Color; return true;
             case "capitalname" when value.ValueKind == JsonValueKind.String: nation.CapitalName = value.GetString() ?? nation.CapitalName; return true;
+            // The base game's common/countries reads these two (CountryDefinitions); a mod's copy
+            // of the same folder reported them as unknown fields and dropped them, so a mod could
+            // rename a capital but never move one.
+            case "capitallatitude" when value.TryGetSingle(out var latitude) && float.IsFinite(latitude):
+                nation.CapitalLatitude = Math.Clamp(latitude, -90f, 90f); return true;
+            case "capitallongitude" when value.TryGetSingle(out var longitude) && float.IsFinite(longitude):
+                nation.CapitalLongitude = Math.Clamp(longitude, -180f, 180f); return true;
             case "population" when value.TryGetInt64(out var population): nation.Population = Math.Max(0, population); return true;
             case "treasury" when value.TryGetSingle(out var treasury): nation.Treasury = treasury; return true;
             case "publicdebt" when value.TryGetSingle(out var debt) && float.IsFinite(debt): nation.PublicDebt = Math.Max(0, debt); return true;

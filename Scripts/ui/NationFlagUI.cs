@@ -809,6 +809,9 @@ public partial class DealOrForceGame
         if (FlagsLoading.Remove(sprite, out var loading) &&
             ResourceLoader.LoadThreadedGet(loading) is Texture2D warmed)
             return FlagCache[sprite] = warmed;
+        // A flag described in common/flag_designs is drawn, not loaded: there is no file.
+        if (FlagDesignCatalog.Find(sprite) is { } design)
+            return FlagCache[sprite] = FlagDesignTexture(design, FlagDesignHeight);
         var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
             ? GD.Load<Texture2D>(path)

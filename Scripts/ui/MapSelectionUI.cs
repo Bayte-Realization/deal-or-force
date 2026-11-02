@@ -32,6 +32,9 @@ public partial class DealOrForceGame
     private VBoxContainer _countryCardRows;
     private VBoxContainer _countryCardActionsHost;
     private ScrollContainer _countryFactsScroll;
+
+    /// <summary>The flag editor's door on the player's own card; hidden on everybody else's.</summary>
+    private Button _countryCardFlagEdit;
     private ScrollContainer _countryOrdersScroll;
     private HBoxContainer _countryCardLinks;
 
@@ -88,6 +91,15 @@ public partial class DealOrForceGame
         _countryCardCaption = Title("", 12, Ui.Colour("text.caption"));
         _countryCardCaption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         names.AddChild(_countryCardCaption);
+        // The player's own country may redesign its flag: a cosmetic choice, saved as a flag
+        // description in the Editor workspace mod like any other (FlagEditorUI).
+        _countryCardFlagEdit = ActionButton("Flag…", () =>
+        {
+            if (_campaign?.Player is { } player) OpenFlagEditor(player.Tag);
+        }, 0, 32);
+        _countryCardFlagEdit.TooltipText = Ui.Tip(Tr("Design your country's flag"));
+        _countryCardFlagEdit.Visible = false;
+        header.AddChild(_countryCardFlagEdit);
         header.AddChild(ActionButton("×", CloseMapSelection, 34, 32));
 
         _countryCardStanding = Title("", 14, Ui.Colour("text.accent"));

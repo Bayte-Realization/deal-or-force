@@ -724,6 +724,9 @@ public partial class DealOrForceGame : Control
         ApplyAllSettings();
         BindFlags(_campaign);
         Simulation.SpriteCatalog.Changed += ForgetFlags;
+        // A flag design saved in the editor, or a mod's designs re-read, changes which flag a
+        // country flies exactly as a new picture would.
+        Simulation.FlagDesignCatalog.Changed += ForgetFlags;
         _campaign.Changed += Refresh;
         _campaign.IsPaused = true;
         _selectedNation = _campaign.Player;

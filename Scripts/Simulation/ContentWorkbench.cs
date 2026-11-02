@@ -11,9 +11,65 @@ namespace DealOrForce.Simulation;
 public static class ContentWorkbench
 {
     public static readonly string[] Roots = { "common", "gui", "interface", "localization", "fonts", "sound", "music", "scenarios", "history", "map_data", "gfx" };
+    /// <summary>
+    /// Whether the editor may write this file: a structured document (JSON, or the YAML the
+    /// loaders read just the same) in a declared content folder, or a province-ownership table in
+    /// history/provinces. The workbench used to accept only .json, so a mod written in YAML -
+    /// which every loader reads - could be neither listed, opened, validated nor saved by it.
+    /// </summary>
+    public static bool IsEditable(string relative)
+    {
+        var path = (relative ?? "").Replace('\\', '/');
+        var parts = path.Split('/');
+        if (parts.Length < 2 || Array.IndexOf(Roots, parts[0]) < 0) return false;
+        if (StructuredData.IsDocument(path)) return true;
+        return IsOwnershipTable(path);
+    }
+
+    /// <summary>True for a .yaml or .yml file, which is edited as text and validated through the YAML reader.</summary>
+    public static bool IsYaml(string relative) =>
+        Path.GetExtension(relative ?? "").ToLowerInvariant() is ".yaml" or ".yml";
+
+    private static bool IsOwnershipTable(string path) =>
+        path.StartsWith("history/provinces/", StringComparison.OrdinalIgnoreCase) &&
+        path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase);
+
+    private static void RequireEditable(string relative)
+    {
+        if (!IsEditable(relative))
+            throw new InvalidDataException("Only JSON or YAML content in declared game folders (or history/provinces/*.csv) can be edited.");
+    }
+
     public static string Validate(string relative, string json)
     {
+        var editedPath = (relative ?? "").Replace('\\', '/');
+        if (IsOwnershipTable(editedPath))
+        {
+            var problems = new List<string>();
+            var line = 0;
+            foreach (var raw in json.Split('\n'))
+            {
+                line++;
+                var row = raw.Trim();
+                if (row.Length == 0 || row[0] == '#' || row.StartsWith("province;", StringComparison.OrdinalIgnoreCase)) continue;
+                var parts = row.Split(';');
+                if (parts.Length < 2 || !int.TryParse(parts[0].Trim(), out var province) || province <= 0 || parts[1].Trim().Length == 0)
+                    problems.Add($"line {line}: expected province;owner[;controller]");
+            }
+            if (problems.Count > 0) throw new InvalidDataException(string.Join("\n", problems.Take(20)));
+            return "Province table valid. Provinces are checked against the map when the game loads it.";
+        }
+        // YAML is checked as the loaders read it: converted to JSON first, so a YAML file
+        // that passes here is one the game will accept.
+        if (IsYaml(editedPath)) json = StructuredData.YamlToJson(json);
         using var doc = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
+        if (editedPath.StartsWith("common/flag_designs/", StringComparison.OrdinalIgnoreCase))
+        {
+            var errors = new List<string>();
+            var designs = FlagDesignCatalog.Read(doc.RootElement, errors);
+            if (errors.Count > 0) throw new InvalidDataException(string.Join("\n", errors));
+            return $"Flag designs valid ({designs.Count}).";
+        }
         if (doc.RootElement.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
             throw new InvalidDataException("A content document must be an object or array.");
         if (relative.Replace('\\', '/').StartsWith("common/formable_nations/", StringComparison.OrdinalIgnoreCase))
@@ -54,9 +110,7 @@ public static class ContentWorkbench
 
     public static string Write(string modRoot, string relative, string json)
     {
-        var parts = relative.Replace('\\', '/').Split('/');
-        if (parts.Length < 2 || Array.IndexOf(Roots, parts[0]) < 0 || !relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("Only JSON content in declared game folders can be edited.");
+        RequireEditable(relative);
         Validate(relative, json);
         var target = ScenarioLibrary.SafePath(modRoot, relative);
         RejectLinks(target);
@@ -84,9 +138,7 @@ public static class ContentWorkbench
         {
             foreach (var (relative, json) in documents)
             {
-                var parts = relative.Replace('\\', '/').Split('/');
-                if (parts.Length < 2 || Array.IndexOf(Roots, parts[0]) < 0 || !relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Only JSON content in declared game folders can be edited.");
+                RequireEditable(relative);
                 Validate(relative, json);
                 if (!expected.TryGetValue(relative, out var baseline)) throw new InvalidDataException("Missing document baseline.");
                 var target = ScenarioLibrary.SafePath(modRoot, relative);

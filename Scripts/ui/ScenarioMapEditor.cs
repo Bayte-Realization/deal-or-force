@@ -15,6 +15,11 @@ public partial class ScenarioMapEditor : Control
     public ProvinceTopology Topology;
     public string ModRoot;
     public Action ExitRequested;
+    /// <summary>
+    /// Opens the flag editor for a country tag over this editor, without leaving it. Set by the
+    /// game that mounts the editor; null hides the button.
+    /// </summary>
+    public Action<string> OpenFlagEditor;
     private ScenarioMapCanvas _map;
     private ItemList _countries;
     private OptionButton _regions;
@@ -134,6 +139,13 @@ public partial class ScenarioMapEditor : Control
             flag = new TextureRect { Name = "ScenarioFlagPreview", CustomMinimumSize = new Vector2(64, 42), ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered }; flagRow.AddChild(flag);
             var flagCaption = Caption("Flag in this scenario"); flagCaption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             flagRow.AddChild(flagCaption);
+            if (OpenFlagEditor is not null)
+            {
+                var tag = Draft.Countries.FirstOrDefault(c => c.MapIndex == id)?.Tag ?? "";
+                flagRow.AddChild(ActionButton("EditScenarioFlag", "Edit flag…", () => OpenFlagEditor(tag)));
+                // The flag editor saves a design that is flown at once; show it here on return.
+                window.FocusEntered += () => refreshFlag?.Invoke();
+            }
             previewWorld = SaveSystem.ImportScenarioJson(Draft.Export(), Draft.Id, Draft.ProvinceCount);
             previewNation = previewWorld.Nations.First(n => n.MapIndex == id);
             void RefreshFlag()

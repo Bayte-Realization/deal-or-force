@@ -1,0 +1,14 @@
+// Flags written as data: a background pattern, exact colours and emblems, drawn by the game at
+// whatever size it needs (Scripts/Simulation/FlagDesign.cs).
+//
+// The base game's real flags are pictures in gfx/flags and stay that way. This folder is for
+// flags somebody designs: a mod's new countries, a regime variant nobody painted, a player's own
+// banner from the in-game flag editor (which saves into the Editor workspace mod, never here).
+//
+// A design's id is a sprite name - flag_<tag>, flag_<tag>_<ideology>, flag_<tag>_<government> -
+// so it joins the flag search in common/flags exactly as a PNG of that name would, and a design
+// outranks a picture of the same name. Every field is explained, with working examples, in
+// mods/_templates/flag_designs/common/flag_designs/50_examples.json.
+{
+  "flag_designs": {}
+}

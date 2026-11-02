@@ -1,0 +1,10 @@
+// What LUX had on the bookmark's first morning. Ids come from common/governments, common/ideologies and common/cultures; money is in billions.
+{
+  "LUX": {
+    "government": "constitutional_monarchy",
+    "ideology": "liberalism",
+    "head_of_state": "Henri",
+    "head_of_government": "Luc Frieden",
+    "primary_cultures": ["luxembourgish"]
+  }
+}

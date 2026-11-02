@@ -288,6 +288,11 @@ public partial class DealOrForceGame
         rows.AddChild(actions);
         actions.AddChild(ActionButton("Content editor", OpenContentEditor, 220, 42));
         actions.AddChild(ActionButton("UI layout editor", OpenVisualLayoutEditor, 220, 42));
+        // The two whole-thing editors: a country as one screen, and its flag as layers. Both
+        // open on the country being looked at and come back here.
+        var editedTag = (_selectedNation ?? _campaign.Player)?.Tag ?? "";
+        actions.AddChild(ActionButton("Country editor", () => OpenCountryEditor(editedTag, OpenScenarioLibrary), 220, 42));
+        actions.AddChild(ActionButton("Flag editor", () => OpenFlagEditor(editedTag, OpenScenarioLibrary), 200, 42));
         var snapshot = ActionButton("Create scenario from this world", CreateScenarioCopy, 320, 42);
         snapshot.Disabled = _campaign.ProvinceMap is null;
         actions.AddChild(snapshot);
@@ -385,8 +390,13 @@ public partial class DealOrForceGame
                 {
                     var dir = Path.Combine(root, category);
                     if (!Directory.Exists(dir)) continue;
-                    foreach (var f in Directory.EnumerateFiles(dir, "*.json", SearchOption.AllDirectories))
-                        paths[Path.GetRelativePath(root, f).Replace('\\', '/')] = f;
+                    // Everything the loaders read, not only JSON: a YAML twin or a mod written
+                    // in YAML used to be invisible here although the game loads it.
+                    foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
+                    {
+                        var relative = Path.GetRelativePath(root, f).Replace('\\', '/');
+                        if (ContentWorkbench.IsEditable(relative)) paths[relative] = f;
+                    }
                 }
             }
         }
@@ -430,6 +440,7 @@ public partial class DealOrForceGame
         {
             try
             {
+                if (AuthorTextOnly()) return;
                 var selected = _authorTree.GetSelected();
                 if (selected is null) { _authorStatus.Text = Tr("Select a property first."); return; }
                 var updated = ContentWorkbench.SetValue(_authorCode.Text, selected.GetMetadata(0).AsString(), value.Text);
@@ -446,6 +457,7 @@ public partial class DealOrForceGame
         {
             try
             {
+                if (AuthorTextOnly()) return;
                 var pointer = _authorTree.GetSelected()?.GetMetadata(0).AsString() ?? "";
                 ReplaceAuthorDocument(ContentWorkbench.AddValue(_authorCode.Text, pointer, propertyName.Text, value.Text)); RebuildAuthorTree();
             }
@@ -453,6 +465,7 @@ public partial class DealOrForceGame
         }, 200, 36));
         addRow.AddChild(ActionButton("Delete selected property", () =>
         {
+            if (AuthorTextOnly()) return;
             var pointer = _authorTree.GetSelected()?.GetMetadata(0).AsString();
             if (string.IsNullOrEmpty(pointer)) return;
             var document = _authorCode.Text;
@@ -473,6 +486,8 @@ public partial class DealOrForceGame
         }, 200, 36));
         _authorCode = new CodeEdit { Name = "JSON", GuttersDrawLineNumbers = true, SizeFlagsVertical = SizeFlags.ExpandFill };
         tabs.AddChild(_authorCode);
+        // The raw document, which is JSON or YAML (or a province table) depending on the file.
+        tabs.SetTabTitle(1, Tr("Text"));
         _authorCode.TextChanged += () => { _authorDirty = _authorCode.Text != _authorSaved; };
         _authorLayout = new VisualLayoutEditor
         {
@@ -495,6 +510,18 @@ public partial class DealOrForceGame
         _authorStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_authorStatus);
         _authorSaved = _authorRelative = "";
+    }
+
+    /// <summary>
+    /// YAML and province tables are edited as text. The property editor rewrites a document as
+    /// JSON, and doing that to a YAML file would throw away its comments and its format, so it
+    /// says where to edit instead.
+    /// </summary>
+    private bool AuthorTextOnly()
+    {
+        if (!ContentWorkbench.IsYaml(_authorRelative) && !_authorRelative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) return false;
+        _authorStatus.Text = Tr("This file is edited as text: use the Text tab. The property list shows what the game reads from it.");
+        return true;
     }
 
     private void ReplaceAuthorDocument(string json)
@@ -527,7 +554,7 @@ public partial class DealOrForceGame
     {
         ConfirmAuthorExit(() =>
         {
-            var dialog = new ConfirmationDialog { Title = Tr("New document"), DialogText = Tr("Relative path inside the mod, ending in .json"), MinSize = new Vector2I(500, 150) };
+            var dialog = new ConfirmationDialog { Title = Tr("New document"), DialogText = Tr("Relative path inside the mod, ending in .json, .yaml or .yml"), MinSize = new Vector2I(500, 150) };
             var path = new LineEdit { Text = "localization/russian/99_my_names.json", OffsetTop = 55, OffsetRight = 470, OffsetBottom = 90 };
             dialog.AddChild(path);
             _authorCanvas.AddChild(dialog);
@@ -537,11 +564,12 @@ public partial class DealOrForceGame
                 {
                     var relative = path.Text.Replace('\\', '/');
                     ScenarioLibrary.SafePath(AuthorRoot, relative);
-                    if (!ContentWorkbench.Roots.Contains(relative.Split('/')[0]) || !relative.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException(Tr("Use a content folder and the .json extension."));
+                    if (!ContentWorkbench.IsEditable(relative))
+                        throw new InvalidDataException(Tr("Use a content folder and the .json, .yaml or .yml extension."));
                     if (File.Exists(ScenarioLibrary.SafePath(AuthorRoot, relative)))
                         throw new InvalidDataException(Tr("This document already exists. Open it in the file list."));
-                    _authorRelative = relative; _authorSaved = ""; _authorCode.Text = "{\n}\n"; _authorCode.ClearUndoHistory(); _authorDirty = true;
+                    _authorRelative = relative; _authorSaved = "";
+                    _authorCode.Text = ContentWorkbench.IsYaml(relative) ? "# " + relative + "\n" : "{\n}\n"; _authorCode.ClearUndoHistory(); _authorDirty = true;
                     _authorStatus.Text = relative; RebuildAuthorTree(); _authorLayout.RefreshDocument();
                 }
                 catch (Exception e) { _authorStatus.Text = e.Message; }
@@ -585,7 +613,11 @@ public partial class DealOrForceGame
         if (_authorCode.Text.Length == 0) return;
         try
         {
-            using var doc = JsonDocument.Parse(_authorCode.Text, GameDataLoader.ForgivingJson);
+            // A YAML document is shown through the same converter the loaders use, so the tree
+            // is what the game will read; a province table has no tree at all.
+            if (_authorRelative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) return;
+            var text = ContentWorkbench.IsYaml(_authorRelative) ? StructuredData.YamlToJson(_authorCode.Text) : _authorCode.Text;
+            using var doc = JsonDocument.Parse(text, GameDataLoader.ForgivingJson);
             var root = _authorTree.CreateItem();
             var count = 0;
             void Add(JsonElement element, TreeItem parent, string key, string pointer, int depth)
