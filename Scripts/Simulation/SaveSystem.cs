@@ -595,6 +595,9 @@ public static class SaveSystem
             // must keep the colours that host actually sent, not run its own migration.
             SecessionColours.MigrateLegacy(campaign);
             NationNaming.MigrateLegacy(campaign);
+            // A save written before the world's resources (grain, fabs, potash...) has none of
+            // their deposits; seed them from the 2024 overlay so it does not open in a famine.
+            WorldResourceMigration.Apply(campaign);
             // A save written before the shelves existed carries one book of war; it moves onto
             // the shelf its own service belongs to before anything reads it.
             foreach (var n in campaign.Nations) TacticalDoctrines.EnsureShelves(n);

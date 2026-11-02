@@ -17,6 +17,10 @@ public partial class DealOrForceGame
     {
         "world_incident", "world_war_began", "organization_founded", "organization_left", "organization_split",
         "organization_expelled", "organization_dissolved", "spy_network_exposed", "alliance_ended",
+        "organization_suspended_aggression", "organization_suspended_coup", "organization_suspended_sanctions",
+        "organization_suspended_nuclear", "organization_suspended_pariah", "organization_expelled_vote",
+        "organization_readmitted", "organization_withdrew", "organization_protest_exit", "organization_rival_bloc",
+        "organization_rift", "border_swap", "border_purchase", "border_sale", "border_pressure", "border_dispute",
         "nuclear_strike", "nuclear_retaliation", "nuclear_devastation", "nuclear_test", "nuclear_incident", "red_telephone"
     };
 

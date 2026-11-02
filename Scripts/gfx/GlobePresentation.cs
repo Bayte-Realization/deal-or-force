@@ -554,6 +554,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         UpdateSky(delta);
         UpdateCrossoverProjection();
+        PollPlateRepaint();
         if (!LoadingInputBlocked && !MediaLibraryInputBlocked && !MapLayerDrawerInputBlocked)
         {
             if (_freeCamera) UpdateFreeCamera(delta);
@@ -704,7 +705,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 using var plate = Image.CreateFromData(MapWidth / PoliticalScale, MapHeight / PoliticalScale,
                     false, Image.Format.Rgba8, result.PoliticalPixels);
                 plate.GenerateMipmaps();
-                _globeMaterial.SetShaderParameter("political_map", ImageTexture.CreateFromImage(plate));
+                _plateTexture = ImageTexture.CreateFromImage(plate);
+                _globeMaterial.SetShaderParameter("political_map", _plateTexture);
+                _platePixels = result.PoliticalPixels;
+                _plateProvinces = result.PlateProvinces;
+                _plateShade = result.PlateShade;
+                _platePainted = null;
                 result.PoliticalPixels = null;
                 break;
             }
@@ -3702,7 +3708,7 @@ void fragment() {
         foreach (var marker in markers)
             if (IsInstanceValid(marker.Node))
             {
-                var visible = marker.Normal.Dot(viewNormal) > horizon;
+                var visible = marker.Normal.Dot(viewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
                 if (marker.Node.Visible != visible) marker.Node.Visible = visible;
             }
     }
@@ -3921,8 +3927,61 @@ void fragment() {
         }
 
         PruneArmyCounterTextureCaches();
+        CoverSharedProvinces(campaign);
 
         _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
+    }
+
+    private readonly HashSet<Node3D> _coveredCounters = new();
+    private readonly Dictionary<int, ArmyStackMarker> _provinceLeader = new();
+
+    /// <summary>
+    /// One counter per province on the globe, the way Hearts of Iron draws it.
+    ///
+    /// Counters are bucketed by country and province, so two countries in one province - allies
+    /// side by side, a garrison and a rising - made two counters on the same point. Both are
+    /// billboards drawn without a depth test, and which one came out on top changed from frame
+    /// to frame: two flags flickering through each other. Now the country with the most
+    /// divisions there is drawn and the others stand behind it, hidden; the province, the
+    /// roster and a box selection still reach every division. The flat map fans its counters
+    /// out instead and is left as it is.
+    /// </summary>
+    private void CoverSharedProvinces(Simulation.Campaign campaign)
+    {
+        _coveredCounters.Clear();
+        _provinceLeader.Clear();
+        var playerId = campaign.Player?.Id ?? -1;
+        foreach (var (bucket, marker) in _armyStacks)
+        {
+            if (bucket.Item2 <= 0 || marker.Node is null || marker.Stack.Count == 0) continue;
+            if (!_provinceLeader.TryGetValue(bucket.Item2, out var leader))
+            {
+                _provinceLeader[bucket.Item2] = marker;
+                continue;
+            }
+            var mine = Strength(marker);
+            var theirs = Strength(leader);
+            var wins = mine > theirs + 0.01f ||
+                       (MathF.Abs(mine - theirs) <= 0.01f &&
+                        (marker.Stack[0].NationId == playerId ||
+                         (leader.Stack[0].NationId != playerId && marker.Stack[0].NationId < leader.Stack[0].NationId)));
+            if (wins)
+            {
+                _coveredCounters.Add(leader.Node);
+                _provinceLeader[bucket.Item2] = marker;
+            }
+            else _coveredCounters.Add(marker.Node);
+        }
+        if (_flatMap) _coveredCounters.Clear();
+        foreach (var node in _coveredCounters)
+            if (IsInstanceValid(node) && node.Visible) node.Visible = false;
+
+        static float Strength(ArmyStackMarker stack)
+        {
+            var divisions = 0f;
+            foreach (var army in stack.Stack) divisions += army.Divisions;
+            return divisions;
+        }
     }
 
     private void CreateArmyStackMarker(ArmyStackMarker marker, Simulation.Nation nation,
@@ -4563,6 +4622,7 @@ void fragment() {
             _ownerIdTexture.Update(_ownerIdImage);
         }
         _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
+        if (ownersMoved) RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();
         _frontRevision = _controlRevision;
@@ -5016,6 +5076,7 @@ void fragment() {
         var politicalHeight = MapHeight / PoliticalScale;
         var political = new byte[politicalWidth * politicalHeight * 4];
         var politicalShade = new byte[politicalWidth * politicalHeight];
+        var plateProvinces = new ushort[politicalWidth * politicalHeight];
         var regionIds = new byte[MapWidth * MapHeight * 2];
         var provinceIds = new byte[MapWidth * MapHeight * 2];
         var nationIds = new byte[MapWidth * MapHeight * 2];
@@ -5090,6 +5151,7 @@ void fragment() {
                 // The darkest land in the block is the one a player reads as a border.
                 if (political[cell * 4 + 3] != 0 && shadeByte >= politicalShade[cell]) continue;
                 politicalShade[cell] = shadeByte;
+                plateProvinces[cell] = (ushort)provinceId;
                 var write = cell * 4;
                 political[write] = (byte)(((packed >> 24) & 0xFF) * shade);
                 political[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
@@ -5110,6 +5172,8 @@ void fragment() {
         return new MapBuildResult
         {
             PoliticalPixels = political,
+            PlateProvinces = plateProvinces,
+            PlateShade = politicalShade,
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
@@ -5275,6 +5339,8 @@ void fragment() {
     private sealed class MapBuildResult
     {
         public byte[] PoliticalPixels;
+        public ushort[] PlateProvinces;
+        public byte[] PlateShade;
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;

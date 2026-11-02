@@ -288,6 +288,7 @@ public static class InternationalOrganizations
         if (cmd.Action == "request_membership")
         {
             if (member || org.Invitations.Contains(n.Id)) return Loc.Get("That country is already a member or invited.");
+            if (org.Suspended.ContainsKey(n.Id)) return Loc.Get("Your country's seat is suspended; only the assembly can give it back.");
             if (ownCount >= Math.Clamp(c.Defines.OrganizationMembershipLimit, 1, 30)) return Loc.Get("This country's organization membership limit is reached.");
             if (org.Members.Any(id => CampaignDiplomacy.AtWar(c, n.Id, id))) return Loc.Get("A country cannot join while fighting a member.");
             if (org.Motion is not null) return Loc.Get("Finish the current assembly vote first.");
@@ -310,6 +311,8 @@ public static class InternationalOrganizations
             if (org.Members.Any(id => CampaignDiplomacy.AtWar(c, n.Id, id))) return Loc.Get("A country cannot join while fighting a member.");
             return "";
         }
+        // A suspended member keeps one right: to give up its seat (OrganizationDiscipline).
+        if (!member && cmd.Action == "leave" && org.Suspended.ContainsKey(n.Id)) return "";
         if (!member) return Loc.Get("Only members can decide the organization's affairs.");
         if (cmd.Action == "leave") return "";
         // A membership crisis: demanding better terms, or buying a member back (OrganizationCrises).
@@ -336,9 +339,20 @@ public static class InternationalOrganizations
         }
         var target = c.NationById(cmd.TargetId);
         if (!Eligible(c, target)) return Loc.Get("Choose a living country.");
+        if (cmd.Kind is "suspend" or "expel" or "readmit")
+        {
+            if (target.Id == n.Id) return Loc.Get("A member cannot table a motion on its own seat.");
+            if (cmd.Kind == "suspend" && !org.Members.Contains(target.Id)) return Loc.Get("Only a seated member can be suspended.");
+            if (cmd.Kind == "suspend" && org.Members.Count < 3) return Loc.Get("Too few members to sit in judgement of one of them.");
+            if (cmd.Kind == "expel" && !org.Members.Contains(target.Id) && !org.Suspended.ContainsKey(target.Id))
+                return Loc.Get("Only a member can be expelled.");
+            if (cmd.Kind == "readmit" && !org.Suspended.ContainsKey(target.Id)) return Loc.Get("That country's seat is not suspended.");
+            return "";
+        }
         if (cmd.Kind == "admission")
         {
             if (org.Members.Contains(target.Id) || org.Invitations.Contains(target.Id)) return Loc.Get("That country is already a member or invited.");
+            if (org.Suspended.ContainsKey(target.Id)) return Loc.Get("That country's seat is suspended; vote to give it back instead.");
             if (org.Members.Any(id => CampaignDiplomacy.AtWar(c, target.Id, id))) return Loc.Get("A country cannot join while fighting a member.");
             return "";
         }
@@ -390,6 +404,9 @@ public static class InternationalOrganizations
                 case "withdraw_application": org.Motion = null; break;
                 case "join": org.Invitations.Remove(n.Id); org.Members.Add(n.Id); org.Members.Sort(); break;
                 case "decline": org.Invitations.Remove(n.Id); break;
+                case "leave" when org.Suspended.ContainsKey(n.Id) && !org.Members.Contains(n.Id):
+                    OrganizationDiscipline.Withdraw(c, org, n, "organization_left");
+                    break;
                 case "leave":
                     foreach (var id in org.Members.Where(id => id != n.Id))
                     {
@@ -426,6 +443,7 @@ public static class InternationalOrganizations
 
     private static bool AiVote(Campaign c, InternationalOrganization org, Nation voter, OrganizationMotion m)
     {
+        if (m.Kind is "suspend" or "expel" or "readmit") return OrganizationDiscipline.Vote(c, org, voter, m);
         if (m.Kind == "doctrine")
         {
             if (Doctrine(m.Subject) is null) return false;
@@ -491,7 +509,13 @@ public static class InternationalOrganizations
             var yes = org.Members.Count(id => m.Votes.GetValueOrDefault(id));
             var passed = Charter(org.CharterId).Unanimity ? yes == org.Members.Count : yes > org.Members.Count / 2;
             var targetNation = c.NationById(m.TargetId);
-            if (passed && m.Kind == "doctrine")
+            var voters = org.Members.Count;
+            if (m.Kind is "suspend" or "expel" or "readmit")
+            {
+                // A seat motion: the accused has no vote, an expulsion needs two thirds.
+                passed = OrganizationDiscipline.Carried(c, org, m, out yes, out voters) && OrganizationDiscipline.Carry(c, org, m);
+            }
+            else if (passed && m.Kind == "doctrine")
             {
                 if (Doctrine(m.Subject) is { } doc)
                 {
@@ -540,7 +564,7 @@ public static class InternationalOrganizations
             }
             else passed = false;
             org.LastOutcome = m.Kind + (passed ? "_passed" : "_rejected");
-            org.LastYes = yes; org.LastVoters = org.Members.Count;
+            org.LastYes = yes; org.LastVoters = voters;
             org.Motion = null; c.MarkStrategicChange();
         }
         AiInitiatives(c);
@@ -607,7 +631,7 @@ public static class InternationalOrganizations
                 continue;
             }
             if (c.ElapsedDays < org.FoundedDay + 180 || org.Cohesion < .5f) continue;
-            var partner = c.Nations.Where(n => Eligible(c, n) && !n.IsSubject && !org.Members.Contains(n.Id) &&
+            var partner = c.Nations.Where(n => Eligible(c, n) && !n.IsSubject && !org.Members.Contains(n.Id) && !org.Suspended.ContainsKey(n.Id) &&
                     OrganizationDynamics.ExpansionRelevant(c, org, proposer, n) &&
                     (CampaignDiplomacy.Peek(c, proposer.Id, n.Id)?.Opinion ?? 0) >= 40 && WouldJoin(c, org, n))
                 .OrderBy(n => n.Id).FirstOrDefault();

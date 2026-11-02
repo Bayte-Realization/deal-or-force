@@ -348,8 +348,9 @@ public static class Factions
         faction.CustomName = NationNaming.TakeoverName(campaign, faction, parent);
         faction.Name = parent.Name;
         faction.NameProclaimed = true;
-        faction.FoundNameKind = "";
-        faction.FoundNameId = "";
+        // It is that country now: its name, and its flag in whatever form its politics give it.
+        faction.FoundNameKind = "tag";
+        faction.FoundNameId = parent.Tag;
         faction.FoundNameBase = "";
         faction.NameSettledDay = campaign.ElapsedDays;
         faction.Color = parent.Color;
@@ -434,8 +435,9 @@ public static class Factions
                     participant.Name = parent.Name;
                     participant.NameProclaimed = true;
                     participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
-                    participant.FoundNameKind = "";
-                    participant.FoundNameId = "";
+                    // It is that country now: its name, and its flag in whatever form its politics give it.
+                    participant.FoundNameKind = "tag";
+                    participant.FoundNameId = parent.Tag;
                     participant.FoundNameBase = "";
                     participant.NameSettledDay = campaign.ElapsedDays;
                     participant.Color = parent.Color;
@@ -473,8 +475,9 @@ public static class Factions
                 participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
                 participant.Name = parent.Name;
                 participant.NameProclaimed = true;
-                participant.FoundNameKind = "";
-                participant.FoundNameId = "";
+                // It is that country now: its name, and its flag in whatever form its politics give it.
+                participant.FoundNameKind = "tag";
+                participant.FoundNameId = parent.Tag;
                 participant.FoundNameBase = "";
                 participant.NameSettledDay = campaign.ElapsedDays;
                 participant.Color = parent.Color;

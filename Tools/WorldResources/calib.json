@@ -1,0 +1,102 @@
+{
+  "Grain": {
+    "out": 0.87518,
+    "dem": 0.24625
+  },
+  "Oilseeds": {
+    "out": 0.94193,
+    "dem": 0.043
+  },
+  "Sugar": {
+    "out": 0.80611,
+    "dem": 0.031
+  },
+  "CashCrops": {
+    "out": 0.6048,
+    "dem": 0.0104
+  },
+  "Fish": {
+    "out": 3.472,
+    "dem": 0.026
+  },
+  "Cotton": {
+    "out": 2.21502,
+    "dem": 0.183
+  },
+  "Gold": {
+    "out": 0.29232,
+    "dem": 0.00284
+  },
+  "Diamonds": {
+    "out": 0.13888,
+    "dem": 0.00107
+  },
+  "ZincLead": {
+    "out": 0.5376,
+    "dem": 0.0261
+  },
+  "Tin": {
+    "out": 0.15568,
+    "dem": 0.0308
+  },
+  "Tungsten": {
+    "out": 0.09744,
+    "dem": 0.0253
+  },
+  "Gallium": {
+    "out": 0.04704,
+    "dem": 0.0316
+  },
+  "Manganese": {
+    "out": 0.58688,
+    "dem": 0.1
+  },
+  "Chromium": {
+    "out": 0.3416,
+    "dem": 0.082
+  },
+  "PlatinumMetals": {
+    "out": 0.10528,
+    "dem": 0.00281
+  },
+  "Potash": {
+    "out": 0.7616,
+    "dem": 0.0156
+  },
+  "Graphite": {
+    "out": 0.196,
+    "dem": 0.113
+  },
+  "NobleGases": {
+    "out": 0.07905,
+    "dem": 0.099
+  },
+  "Titanium": {
+    "out": 0.07616,
+    "dem": 0.0277
+  },
+  "AdvancedChips": {
+    "out": 0.21757,
+    "dem": 0.043
+  },
+  "ChipTools": {
+    "out": 0.0672,
+    "dem": 0.031
+  },
+  "NuclearFuel": {
+    "out": 0.384,
+    "dem": 0.131
+  },
+  "Fuel": {
+    "out": 0.67945,
+    "dem": 0.138
+  },
+  "Plastics": {
+    "out": 0.9744,
+    "dem": 0.087
+  },
+  "Semiconductors": {
+    "out": 1.53,
+    "dem": 1.0
+  }
+}

@@ -183,7 +183,13 @@ public static class FleetHistory
                 fleet.HomeLongitude = longitude;
                 if (wasHome && !fleet.HasOrder) { fleet.Latitude = latitude; fleet.Longitude = longitude; }
             }
-            if (fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0 &&
+            // Only on the first day. This runs whenever a map is attached - a loaded save too, before
+            // the save's own borders are laid back over the 2024 ones - and berthed at home a
+            // squadron the live game had refused a berth (its port lost or hostile), so loading a
+            // save changed the fleet it had saved. Later on, the daily pass (NavalOperations)
+            // decides berths by who holds the port now.
+            if (campaign.ElapsedDays == 0 &&
+                fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0 &&
                 NavalOperations.Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) <=
                 campaign.Defines.FleetBerthRangeDegrees + 1.5f)
                 fleet.BerthProvinceId = best;

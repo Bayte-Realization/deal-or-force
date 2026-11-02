@@ -1,0 +1,8 @@
+// Border swaps, purchases, sales and disputes (BorderDiplomacy.cs).
+{
+  "chronicle.border_swap": "{0} and {1} exchange land to straighten their border: {2}.",
+  "chronicle.border_purchase": "{0} buys land from {1} to straighten their border: {2}.",
+  "chronicle.border_sale": "{0} sells {1} a piece of land it could not hold: {2}.",
+  "chronicle.border_dispute": "{0} lodges a border dispute with {1}: the line between them is one neither can live with.",
+  "Refused to settle our border": "Refused to settle our border"
+}

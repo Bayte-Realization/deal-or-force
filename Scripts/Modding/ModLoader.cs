@@ -829,6 +829,7 @@ public sealed class ModLoader
                     float? Number(string key) => value.TryGetProperty(key, out var element) && element.TryGetSingle(out var number) ? number : null;
                     if (!CommodityCatalog.Override(good.Name, Text("name"), Text("icon"), Number("base_price"), Number("essential_weight"), Text("description")))
                         package.Errors.Add($"Unknown good '{good.Name}' in {Path.GetFileName(path)}");
+                    else { CommodityCatalog.ReadLeverage(good.Name, value); CommodityCatalog.ReadWorldPrice(good.Name, value); }
                 }
             }
             catch (Exception exception)

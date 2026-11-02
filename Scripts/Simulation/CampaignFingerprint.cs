@@ -428,6 +428,14 @@ public static class CampaignFingerprint
             MixText(o.Name); MixText(o.GeneratedCountryTag); MixText(o.CharterId); MixFloat(o.Budget); MixFloat(o.Cohesion); Mix(o.Dissolved ? 1 : 0);
             if (!string.IsNullOrEmpty(o.DoctrineId)) { MixText("org_doctrine"); MixText(o.DoctrineId); }
             if (o.CrisisMemberId >= 0) { MixText("org_crisis"); Mix(o.CrisisMemberId); Mix(o.CrisisSinceDay); }
+            // Suspended seats (OrganizationDiscipline): mixed only when there are any, so a world
+            // without a suspension hashes exactly as before.
+            if (o.Suspended.Count > 0 || o.SuspendedFor.Count > 0)
+            {
+                MixText("org_suspended");
+                foreach (var seat in o.Suspended.OrderBy(entry => entry.Key)) { Mix(seat.Key); Mix(seat.Value); MixText(o.SuspendedFor.GetValueOrDefault(seat.Key, "")); }
+                Mix(-24);
+            }
             MixText(o.LastOutcome); Mix(o.LastYes); Mix(o.LastVoters);
             foreach (var member in o.Members.OrderBy(id => id)) Mix(member); Mix(-20);
             foreach (var invitation in o.Invitations.OrderBy(id => id)) Mix(invitation); Mix(-21);

@@ -183,6 +183,13 @@ public partial class DealOrForceGame
         _conflictsPage.AddChild(Caption(Loc.Format("MEMBERS ({0})", o.Members.Count)));
         _conflictsPage.AddChild(DiplomacyChips(o.Members.Select(m => _campaign.NationById(m)).Where(n => n is not null)
             .OrderByDescending(n => n.Gdp), Tr("Nobody.")));
+        // Suspended seats (OrganizationDiscipline): out of the vote and every benefit until given back.
+        if (o.Suspended.Count > 0)
+        {
+            _conflictsPage.AddChild(Caption(Loc.Format("SUSPENDED ({0})", o.Suspended.Count)));
+            _conflictsPage.AddChild(DiplomacyChips(o.Suspended.Keys.Select(m => _campaign.NationById(m)).Where(n => n is not null)
+                .OrderByDescending(n => n.Gdp), Tr("Nobody.")));
+        }
         var members = new VBoxContainer { Name = "OrganizationMembers", Visible = _organizationMembersExpanded };
         _conflictsPage.AddChild(ActionButton(Loc.Format("Weekly dues and arrears ({0})", o.Members.Count), () =>
         {
@@ -215,6 +222,13 @@ public partial class DealOrForceGame
         }
         if (o.LastOutcome.Length > 0) _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("Last vote: {0} of {1} yes · {2}", o.LastYes, o.LastVoters,
             Tr(o.LastOutcome.EndsWith("_passed", StringComparison.Ordinal) ? "Motion passed." : "Motion did not pass.")), 13));
+        if (o.Suspended.ContainsKey(player.Id))
+        {
+            _conflictsPage.AddChild(WrappedUltimatumText("Your country's seat is suspended: no vote, no customs union, no common defence, no grants. The assembly may give it back once the cause is gone, or vote to expel it while the cause stands.", 14));
+            _conflictsPage.AddChild(ActionButton("Give up the seat", () => OrganizationAction(new OrganizationCommand {
+                IssuerId = player.Id, OrganizationId = o.Id, Action = "leave" }, "leave" + o.Id), 0, 34));
+            return;
+        }
         if (!o.Members.Contains(player.Id))
         {
             if (!o.Invitations.Contains(player.Id))
@@ -253,7 +267,9 @@ public partial class DealOrForceGame
                 : target?.DisplayName ?? "?";
             _conflictsPage.AddChild(WrappedUltimatumText(Loc.Format("{0} · {1}\nVoting closes in {2} days. {3} of {4} have voted yes.",
                 Tr(m.Kind == "admission" ? "Admission vote" : m.Kind == "sanction" ? "Sanctions vote" :
-                   m.Kind == "lift_sanction" ? "Vote to lift sanctions" : m.Kind == "doctrine" ? "Doctrine vote" : "Common-fund grant"), subjectText,
+                   m.Kind == "lift_sanction" ? "Vote to lift sanctions" : m.Kind == "doctrine" ? "Doctrine vote" :
+                   m.Kind == "suspend" ? "Suspension vote" : m.Kind == "expel" ? "Expulsion vote" :
+                   m.Kind == "readmit" ? "Vote to restore a seat" : "Common-fund grant"), subjectText,
                 Math.Max(0, m.EndsDay - _campaign.ElapsedDays), m.Votes.Count(v => v.Value), o.Members.Count), 15));
             if (m.Kind == "grant") _conflictsPage.AddChild(Title(Fmt.Money(m.Amount), 16, Ui.Colour("text.accent")));
             foreach (var yes in new[] { true, false })
@@ -266,6 +282,7 @@ public partial class DealOrForceGame
         else
         {
             _conflictsPage.AddChild(WrappedUltimatumText(charter.Unanimity ? "Every member must vote yes; abstention is not consent." : "A majority of all members must vote yes; abstention is not consent.", 14));
+            _conflictsPage.AddChild(WrappedUltimatumText("Suspension and expulsion: the accused has no vote; suspension and restoring a seat need a majority of the rest, expulsion two thirds (a unanimity charter needs all of them).", 13));
             var countries = _campaign.Nations.Where(n => InternationalOrganizations.Eligible(_campaign, n)).OrderBy(n => n.DisplayName).ToArray();
             var targets = new OptionButton { Name = "OrganizationMotionTarget", CustomMinimumSize = new(0, 36) };
             foreach (var n in countries) targets.AddItem(n.DisplayName); _conflictsPage.AddChild(targets);
@@ -273,11 +290,13 @@ public partial class DealOrForceGame
             var amount = new SpinBox { Name = "OrganizationGrantAmount", MinValue = 0, MaxValue = o.Budget, Step = .01, CustomMinimumSize = new(0, 36),
                 TooltipText = Ui.Tip(Tr("Grant in billions of dollars. It can only be paid from the existing common fund after the vote.")) };
             _conflictsPage.AddChild(amount);
-            foreach (var kind in new[] { "admission", "grant", "sanction", "lift_sanction" })
+            foreach (var kind in new[] { "admission", "grant", "sanction", "lift_sanction", "suspend", "expel", "readmit" })
             {
                 var captured = kind;
                 _conflictsPage.AddChild(ActionButton(kind == "admission" ? "Propose admission" :
-                    kind == "grant" ? "Propose funded grant" : kind == "sanction" ? "Propose sanctions" : "Propose lifting sanctions", () => {
+                    kind == "grant" ? "Propose funded grant" : kind == "sanction" ? "Propose sanctions" :
+                    kind == "suspend" ? "Propose suspension" : kind == "expel" ? "Propose expulsion" :
+                    kind == "readmit" ? "Propose restoring the seat" : "Propose lifting sanctions", () => {
                     if (countries.Length == 0) return;
                     OrganizationAction(new OrganizationCommand { IssuerId = player.Id, OrganizationId = o.Id, Action = "propose", Kind = captured,
                         TargetId = countries[targets.Selected].Id, Amount = (float)amount.Value }, captured + o.Id + countries[targets.Selected].Id + ":" + amount.Value);

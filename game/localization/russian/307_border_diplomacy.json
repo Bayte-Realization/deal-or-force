@@ -1,0 +1,8 @@
+// Border swaps, purchases, sales and disputes (BorderDiplomacy.cs).
+{
+  "chronicle.border_swap": "{0} и {1} обмениваются землями, чтобы выпрямить границу: {2}.",
+  "chronicle.border_purchase": "{0} покупает у {1} землю, чтобы выпрямить границу: {2}.",
+  "chronicle.border_sale": "{0} продаёт {1} землю, которую не может удержать: {2}.",
+  "chronicle.border_dispute": "{0} заявляет {1} пограничный спор: с такой линией границы не может жить ни одна из сторон.",
+  "Refused to settle our border": "Отказались урегулировать нашу границу"
+}

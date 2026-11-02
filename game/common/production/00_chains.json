@@ -133,7 +133,10 @@
   "machinery_manufacture": {
     "good": "Machinery",
     "output": { "CivilianIndustry": 1.45, "urbanization": 0.25 },
-    "demand": { "raw:ExtractionIndustry": 0.408, "Agriculture": 0.109 }
+    "demand": { "raw:ExtractionIndustry": 0.408, "Agriculture": 0.109 },
+    // Cutting tools are tungsten carbide and industrial diamond: short of either, the
+    // machine shops slow rather than stop.
+    "needs": { "Tungsten": 0.90, "Diamonds": 0.95 }
   },
 
   "energy_generation": {
@@ -212,7 +215,7 @@
       "CivilianIndustry": 0.62, "ChemicalPlant": 3.10,
       "deposit:Oil*extraction_efficiency": 0.14, "deposit:NaturalGas*extraction_efficiency": 0.16
     },
-    "needs": { "Energy": 0.70 },
+    "needs": { "Energy": 0.70, "PlatinumMetals": 0.95 },
     "demand": {
       "CivilianIndustry": 0.425, "ArmsIndustry": 0.68, "ElectronicsPlant": 0.822, "Agriculture": 0.142
     }
@@ -223,7 +226,8 @@
     "output": {
       "Agriculture": 0.86, "ChemicalPlant": 1.25, "deposit:NaturalGas*extraction_efficiency": 0.14
     },
-    "needs": { "Chemicals": 0.68 },
+    // Potash is the third of nitrogen, phosphate and potassium: Canada, Russia and Belarus.
+    "needs": { "Chemicals": 0.68, "Potash": 0.70 },
     "demand": { "Agriculture": 0.78 }
   },
 
@@ -232,7 +236,7 @@
   "electronics_manufacture": {
     "good": "Electronics",
     "output": { "CivilianIndustry": 4.05, "ElectronicsPlant": 3.30 },
-    "needs": { "Energy": 0.70, "Chemicals": 0.68, "RareEarths": 0.62 },
+    "needs": { "Energy": 0.70, "Chemicals": 0.68, "RareEarths": 0.62, "Tin": 0.90, "Gold": 0.95 },
     "demand": {
       "population": 0.06, "population*urbanization": 0.17, "CivilianIndustry": 0.24,
       "ArmsIndustry": 0.36, "ResearchLab": 0.50
@@ -244,6 +248,8 @@
     "output": {
       "CivilianIndustry": 1.95, "population": 0.26, "deposit:Timber*timber_yield": 0.08
     },
+    // Woven from cotton: Xinjiang, Gujarat, Mato Grosso and Texas.
+    "needs": { "Cotton": 0.70 },
     "demand": { "population*income": 0.26, "population*standard_of_living*income": 0.22 }
   },
 

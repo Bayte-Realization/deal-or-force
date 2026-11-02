@@ -1016,6 +1016,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("culture union")) CultureUnion.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("corridors")) Corridors.Tick(this);
+            using (SimProfiler.Measure("border diplomacy")) BorderDiplomacy.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
             yield return 0;

@@ -22,9 +22,13 @@ static class Program
         ProductionChains.ResetCatalog(errors); ProductionProgramme.ResetCatalog(errors);
         Check(errors.Count == 0, "shipped recipes and production pools validate: " + string.Join("; ", errors));
         Check(ids.All(id => CommodityCatalog.TryParse(id, out _)), "14 strategic goods registered with stable data IDs");
+        // Semiconductors are the one manufactured good with a map of their own: the foundries of
+        // Taiwan, Korea and the rest are written as clusters in the 2024 deposits
+        // (zz_world_resources.json), so the atlas shows where the fabs stand.
         Check(ids.Take(8).All(id => ProductionChains.ResourceGoods.Contains(Good(id))) &&
-            ids.Skip(8).All(id => !ProductionChains.ResourceGoods.Contains(Good(id))),
-            "resource selector discovers all raw materials from recipes, excluding finished goods");
+            ids.Skip(8).Where(id => id != "Semiconductors").All(id => !ProductionChains.ResourceGoods.Contains(Good(id))) &&
+            ProductionChains.ResourceGoods.Contains(Good("Semiconductors")),
+            "resource selector discovers all raw materials and industrial clusters from recipes, excluding other finished goods");
         SurveyTests();
         var copperPrice = CommodityCatalog.Get(Good("Copper")).BasePrice;
         Check(!CommodityCatalog.Override("Copper", "corrupted", null, float.PositiveInfinity, null, null) &&
@@ -183,6 +187,100 @@ static class Program
         for (var day = 0; day < 14; day++) { MarketSystem.Tick(world); }
         Check(world.Nations.All(country => country.Market.Values.All(q => float.IsFinite(q.Price) && float.IsFinite(q.Production) && float.IsFinite(q.Demand))),
             "repeated market clearing stays finite across all countries and goods");
+        WorldResourceMigrationTests();
+    }
+
+    /// <summary>
+    /// A save made before history/states/2024/zz_world_resources.json existed has none of its
+    /// deposits. Loading one must seed them (WorldResourceMigration) so the world's grain, fabs
+    /// and mines are where a new game has them, and a month later it must be feeding itself
+    /// about as well as a new game does.
+    /// </summary>
+    static void WorldResourceMigrationTests()
+    {
+        var overlay = WorldResourceMigration.ReadOverlay();
+        var goods = overlay.Values.SelectMany(table => table.Keys).ToHashSet();
+        Check(overlay.Count > 900 && goods.Contains(Good("Grain")) && goods.Contains(Good("AdvancedChips")),
+            "world resource overlay reads back (" + overlay.Count + " regions, " + goods.Count + " goods)");
+
+        const int seed = 20241111;
+        // A save needs the tactical map and a player; both worlds get the same, so the month
+        // after is compared like with like.
+        static Campaign World()
+        {
+            var world = Campaign.CreateBootstrap(seed);
+            HydrologyCatalog.ResetCatalog();
+            if (MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+                    WorldMapSource.Width, WorldMapSource.Height, out var topology, out var problem))
+                world.AttachProvinceTopology(topology);
+            else throw new Exception("province map unavailable: " + problem);
+            world.ConfigureSinglePlayer(world.NationByTag("EGY").Id);
+            return world;
+        }
+        var fresh = World();
+        Check(WorldResourceMigration.Apply(fresh, overlay) == 0, "a new campaign is never migrated");
+        var expected = fresh.States.ToDictionary(state => state.MapIndex,
+            state => state.ResourceDeposits.Where(pair => goods.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value));
+        fresh.IsPaused = false;
+        for (var day = 0; day < 30; day++) fresh.TickDay();
+        var freshGrain = fresh.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Market[Good("Grain")].Production);
+
+        // What an old save holds: the same world, without any of the new deposits.
+        var old = World();
+        foreach (var state in old.States)
+            foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        var folder = Path.Combine(Path.GetTempPath(), "dof_world_resource_migration_" + Environment.ProcessId);
+        Directory.CreateDirectory(folder);
+        try
+        {
+            SaveSystem.Save(folder, "pre_resources", old, "");
+            var loaded = SaveSystem.Load(folder, "pre_resources", "");
+            Check(loaded.Success, "a save without the world's resources loads: " + loaded.Warning);
+            var restored = loaded.Campaign;
+            var differing = restored.States.Where(state => expected.TryGetValue(state.MapIndex, out var want) &&
+                (want.Count != state.ResourceDeposits.Count(pair => goods.Contains(pair.Key)) ||
+                 want.Any(pair => Math.Abs(state.ResourceDeposits.GetValueOrDefault(pair.Key) - pair.Value) > 0.001f)))
+                .Select(state => $"{state.Id} (parent {state.ParentMapIndex}): " +
+                    string.Join(" ", expected[state.MapIndex].Select(pair => $"{CommodityCatalog.IdOf(pair.Key)} {pair.Value:0.###}->{state.ResourceDeposits.GetValueOrDefault(pair.Key):0.###}")))
+                .ToList();
+            Check(differing.Count == 0, $"every region gets back the deposits a new game gives it ({differing.Count} differ: {string.Join("; ", differing)})");
+            Check(WorldResourceMigration.Apply(restored, overlay) == 0, "a migrated campaign is not migrated twice");
+            restored.IsPaused = false;
+            for (var day = 0; day < 30; day++) restored.TickDay();
+            var loadedGrain = restored.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Market[Good("Grain")].Production);
+            Check(freshGrain > 0 && Math.Abs(loadedGrain / freshGrain - 1) < 0.05,
+                $"30 days on, the migrated world grows as much grain as a new one ({loadedGrain:0.0} against {freshGrain:0.0})");
+        }
+        finally
+        {
+            try { Directory.Delete(folder, true); } catch (IOException) { }
+        }
+
+        // A region cut out of another in play shares its original's deposits with the rest of
+        // the family, by the people in each piece.
+        var cut = Campaign.CreateBootstrap(seed);
+        foreach (var state in cut.States)
+            foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        var original = cut.States.First(state => state.Id == "ua_65");
+        var piece = new ScenarioState
+        {
+            MapIndex = cut.States.Max(state => state.MapIndex) + 1, NationMapIndex = original.NationMapIndex,
+            Id = original.Id + "_9001", Iso = original.Iso + "-9001", ParentMapIndex = original.MapIndex,
+            Population = original.Population / 3
+        };
+        original.Population -= piece.Population;
+        cut.States.Add(piece);
+        WorldResourceMigration.Apply(cut, overlay);
+        var whole = overlay["ua_65"][Good("Grain")];
+        Check(piece.ResourceDeposits.GetValueOrDefault(Good("Grain")) > 0 &&
+              Math.Abs(piece.ResourceDeposits[Good("Grain")] + original.ResourceDeposits[Good("Grain")] - whole) < 0.001f &&
+              piece.ResourceDeposits[Good("Grain")] < original.ResourceDeposits[Good("Grain")],
+            "a region cut from another shares its original's grain by population");
+
+        // An authored scenario is not the 2024 bookmark and keeps its own ground.
+        cut.ScenarioId = "authored";
+        foreach (var state in cut.States) foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        Check(WorldResourceMigration.Apply(cut, overlay) == 0, "authored scenarios are never seeded from the 2024 overlay");
     }
 
     static void SurveyTests()

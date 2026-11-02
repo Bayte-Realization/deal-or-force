@@ -167,6 +167,78 @@
                                            },
                     "icon_good_artillery":  {
                                                 "source_colour":  "#b48732"
-                                            }
+                                            },
+                    "icon_good_grain":  {
+                                            "source_colour":  "#b48732"
+                                        },
+                    "icon_good_oilseeds":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_sugar":  {
+                                            "source_colour":  "#b48732"
+                                        },
+                    "icon_good_cashcrops":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_fish":  {
+                                           "source_colour":  "#b48732"
+                                       },
+                    "icon_good_cotton":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_good_gold":  {
+                                           "source_colour":  "#b48732"
+                                       },
+                    "icon_good_diamonds":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_zinclead":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_tin":  {
+                                          "source_colour":  "#b48732"
+                                      },
+                    "icon_good_tungsten":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_gallium":  {
+                                              "source_colour":  "#b48732"
+                                          },
+                    "icon_good_manganese":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_chromium":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_platinummetals":  {
+                                                     "source_colour":  "#b48732"
+                                                 },
+                    "icon_good_potash":  {
+                                             "source_colour":  "#b48732"
+                                         },
+                    "icon_good_graphite":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_noblegases":  {
+                                                 "source_colour":  "#b48732"
+                                             },
+                    "icon_good_titanium":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_fuel":  {
+                                           "source_colour":  "#b48732"
+                                       },
+                    "icon_good_plastics":  {
+                                               "source_colour":  "#b48732"
+                                           },
+                    "icon_good_advancedchips":  {
+                                                    "source_colour":  "#b48732"
+                                                },
+                    "icon_good_chiptools":  {
+                                                "source_colour":  "#b48732"
+                                            },
+                    "icon_good_nuclearfuel":  {
+                                                  "source_colour":  "#b48732"
+                                              }
                 }
 }

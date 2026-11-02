@@ -15,14 +15,14 @@ vec3 occupation_ribbons(vec3 owner, vec3 controller, vec2 at, float detail, floa
     // Held ground wears the colour of whoever holds it, striped with the owner's (as every
     // grand strategy draws it): a conquered country left in its own colour read as a highlight
     // pasted over the conqueror's map. From far away, where the ribbons cannot be resolved, it is
-    // mostly the holder's colour still tinted by the owner's - held, not yet signed away.
+    // the holder's colour: held ground reads as the holder's from orbit, as on every strategy map.
     float visible = 1.0 - smoothstep(0.18, 0.42, footprint);
     float aa = min(footprint * 0.6, 0.055);
     float key = 1.0 - smoothstep(0.135 - aa, 0.135 + aa, distance_to_band);
     float ribbon = 1.0 - smoothstep(0.085 - aa, 0.085 + aa, distance_to_band);
     vec3 inked = mix(controller, vec3(0.055, 0.075, 0.085), key * 0.55);
     inked = mix(inked, owner, ribbon * 0.94);
-    vec3 far_away = mix(controller, owner, 0.3);
+    vec3 far_away = controller;
     return mix(owner, mix(far_away, inked, visible), active);
 }
 float lease_mask(vec4 control) {

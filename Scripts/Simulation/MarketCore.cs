@@ -69,9 +69,33 @@ public sealed class CommodityDefinition
     public float EssentialWeight { get; set; }
     public string Description { get; set; }
 
+    /// <summary>
+    /// How much being cut off from this good is worth to whoever sells it (CommodityLeverage):
+    /// none, a strategic good - grain, fuel, potash, tungsten, the things a country can be
+    /// squeezed with - or a high-technology one, which counts twice, because what is made in
+    /// three places on Earth cannot be bought from a fourth. Written in the good's own file
+    /// (`"leverage": "strategic"` or `"high_tech"`) rather than in a compiled list, so the
+    /// semiconductor that a mod adds is a lever the moment it is declared.
+    /// </summary>
+    public CommodityLeverageTier Leverage { get; set; }
+
+    /// <summary>
+    /// Whether the world price follows the trade in this good rather than the whole harvest
+    /// (`"world_price": "traded"` in its file). Most of the world's grain is eaten where it
+    /// grows; what the price answers to is the part that crosses a border - how much the
+    /// importers want against how much the exporters can spare. Priced on the whole harvest,
+    /// losing the Black Sea's exports moved world output by a few per cent and the price by as
+    /// much, while the countries that live on those exports went without. Off for every good
+    /// that does not ask for it, so nothing else is priced differently.
+    /// </summary>
+    public bool TradedWorldPrice { get; set; }
+
     public CommodityDefinition(string name, string icon, float basePrice, float essentialWeight, string description) =>
         (Name, Icon, BasePrice, EssentialWeight, Description) = (name, icon, basePrice, essentialWeight, description);
 }
+
+/// <summary>What a good is to the country that cannot make it (CommodityDefinition.Leverage).</summary>
+public enum CommodityLeverageTier { None = 0, Strategic = 1, HighTech = 2 }
 
 public sealed partial class Defines
 {
@@ -175,7 +199,10 @@ public static class CommodityCatalog
         foreach (var entry in Defaults)
         {
             Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
-                entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description);
+                entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description)
+            {
+                Leverage = DefaultLeverage(entry.Key)
+            };
             Register(entry.Key, entry.Key.ToString());
         }
         foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
@@ -194,8 +221,59 @@ public static class CommodityCatalog
                         entry.Value.TryGetProperty("base_price", out var price) && price.ValueKind == JsonValueKind.Number && price.TryGetSingle(out var basePrice) ? basePrice : null,
                         entry.Value.TryGetProperty("essential_weight", out var weight) && weight.ValueKind == JsonValueKind.Number && weight.TryGetSingle(out var essential) ? essential : null,
                         description.ValueKind == JsonValueKind.String ? description.GetString() : null);
+                    ReadLeverage(entry.Name, entry.Value);
+                    ReadWorldPrice(entry.Name, entry.Value);
                 }
             }
+    }
+
+    /// <summary>
+    /// The levers the first twenty goods always were, before the tier was data: rare earths,
+    /// electronics, machinery and uranium are high technology; chemicals, oil, gas and arms are
+    /// strategic. A file can change any of them.
+    /// </summary>
+    private static CommodityLeverageTier DefaultLeverage(Commodity commodity) => commodity switch
+    {
+        Commodity.RareEarths or Commodity.Electronics or Commodity.Machinery or Commodity.Uranium => CommodityLeverageTier.HighTech,
+        Commodity.Chemicals or Commodity.Oil or Commodity.NaturalGas or Commodity.Arms => CommodityLeverageTier.Strategic,
+        _ => CommodityLeverageTier.None
+    };
+
+    /// <summary>
+    /// A good's `"world_price"` field, if it has one: "traded" prices it on what crosses borders
+    /// (CommodityDefinition.TradedWorldPrice), "harvest" on the whole of world output, as every
+    /// good was. Read by the base loader and by a mod's alike. Returns whether it was set.
+    /// </summary>
+    public static bool ReadWorldPrice(string id, JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("world_price", out var pricing) ||
+            pricing.ValueKind != JsonValueKind.String || !TryParse(id, out var commodity) ||
+            !Definitions.TryGetValue(commodity, out var definition)) return false;
+        switch (pricing.GetString()?.Trim().ToLowerInvariant())
+        {
+            case "traded": definition.TradedWorldPrice = true; return true;
+            case "harvest": definition.TradedWorldPrice = false; return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>
+    /// A good's `"leverage"` field, if it has one: "none", "strategic" or "high_tech". Read by
+    /// the base game's loader and by a mod's (ModLoader.ApplyGoods) alike; anything else is
+    /// ignored and the good keeps the tier it had. Returns whether a tier was set.
+    /// </summary>
+    public static bool ReadLeverage(string id, JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("leverage", out var leverage) ||
+            leverage.ValueKind != JsonValueKind.String || !TryParse(id, out var commodity) ||
+            !Definitions.TryGetValue(commodity, out var definition)) return false;
+        switch (Squash(leverage.GetString()).ToLowerInvariant())
+        {
+            case "none": definition.Leverage = CommodityLeverageTier.None; return true;
+            case "strategic": definition.Leverage = CommodityLeverageTier.Strategic; return true;
+            case "hightech": definition.Leverage = CommodityLeverageTier.HighTech; return true;
+            default: return false;
+        }
     }
 
     private static string Squash(string id) => id is null
@@ -333,17 +411,25 @@ public static class MarketSystem
         {
             var totalDemand = 0f;
             var totalProduction = 0f;
+            var wantedImports = 0f;
+            var spareExports = 0f;
             foreach (var nation in campaign.Nations)
             {
                 if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
                 totalDemand += quote.Demand;
                 totalProduction += quote.Production;
+                if (quote.Demand > quote.Production) wantedImports += quote.Demand - quote.Production;
+                else spareExports += quote.Production - quote.Demand;
             }
             totalDemand = MathF.Max(0.01f, totalDemand);
             totalProduction = MathF.Max(0.01f, totalProduction);
 
             var definition = CommodityCatalog.Get(commodity);
-            var worldScarcity = M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
+            // A good priced on its trade: what the importers want against what the exporters can
+            // spare (CommodityDefinition.TradedWorldPrice). Everything else: the whole harvest.
+            var worldScarcity = definition.TradedWorldPrice
+                ? M.Clamp(MathF.Max(0.01f, wantedImports) / MathF.Max(0.01f, spareExports), 0.55f, 2.75f)
+                : M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
             foreach (var nation in campaign.Nations)
             {
                 if (!nation.Market.TryGetValue(commodity, out var quote)) continue;

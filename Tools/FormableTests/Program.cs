@@ -205,6 +205,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--customs-only")) { CustomsUnionTests.Run(); return; }
         if (args.Length == 0) CustomsUnionTests.Run();
         if (args.Contains("--org-crisis-only")) { OrganizationCrisisTests.Run(); return; }
+        if (args.Contains("--org-discipline-only")) { OrganizationDisciplineTests.Run(); return; }
+        if (args.Contains("--border-deals-only")) { BorderDiplomacyTests.Run(); return; }
         if (args.Length == 0) OrganizationCrisisTests.Run();
         if (args.Contains("--defcon-only")) { DefconTests.Run(); return; }
         if (args.Length == 0) DefconTests.Run();
