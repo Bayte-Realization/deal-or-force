@@ -160,7 +160,9 @@ public partial class DealOrForceGame
             var track = TacticalDoctrines.TrackFor(n, branch);
             var written = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal)
                 ? track.Known.Count : 0;
-            var inForce = string.Equals(TacticalDoctrines.BookOn(n, branch.Slot)?.Id, id, StringComparison.Ordinal);
+            var shelf = n.TacticalDoctrine.Track(branch.Slot);
+            var inForce = string.Equals(TacticalDoctrines.BookOn(n, branch.Slot)?.Id, id, StringComparison.Ordinal)
+                || string.Equals(shelf.Companion?.Branch, id, StringComparison.Ordinal);
             _doctrineBookSelect.SetItemText(bookIndex, Loc.Format("{0}: {1} · {2}/{3}{4}",
                 Tr(DoctrineSlots.Name(branch.Slot)), Tr(branch.Name), written, branch.Nodes.Count,
                 inForce ? " ✓" : ""));

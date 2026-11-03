@@ -1,0 +1,11 @@
+# Demonstration: borrow a delivered recording without shipping a duplicate audio file.
+# Replace file with audio/my_recording.ogg to resolve it inside this mod's music/ folder.
+tracks:
+  example_modder_track:
+    file: res://game/music/audio/quiet_current.ogg
+    label: soundtrack.example_modder_track
+    when: campaign
+    moods: [calm, recovery]
+    weight: 1
+    volume_db: -3
+    loop: false

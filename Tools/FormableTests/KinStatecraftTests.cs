@@ -260,6 +260,40 @@ static class KinStatecraftTests
                 "with nothing left to close");
         }
 
+        // ---- an office is a foothold for years, not a countdown for months -------------
+        // Ten years of the bench opened sixteen offices and had sixteen of them found, because
+        // the weekly chance was one constant. It now moves with two things a player can see:
+        // how closely the host can watch, and how well our own people cover the paperwork.
+        {
+            var c = Fixture(out var ours, out var host, out var abroad, out _, ourShareAbroad: 0.5f,
+                oursTreasury: 20f, ourPoliticalPoints: 40f);
+            var (_, _, share) = KinStatecraft.Kin(c, ours, abroad);
+            host.Stability = 0.9f;
+            var watchful = ParallelAdministration.Watchfulness(c, host, share);
+            host.Stability = 0.15f;
+            var distracted = ParallelAdministration.Watchfulness(c, host, share);
+            Check(watchful > distracted,
+                "a stable host watches our offices more closely than one coming apart");
+            Check(ParallelAdministration.Watchfulness(c, host, 0.85f) < ParallelAdministration.Watchfulness(c, host, 0.26f),
+                "our offices hide better where our people are the region");
+
+            host.Stability = 0.6f;
+            var typical = ParallelAdministration.Watchfulness(c, host, 0.35f);
+            Check(typical > 0f && 1f / typical > 80f,
+                $"a typical office is expected to last years ({1f / typical / 52f:0.0} of them), not months");
+
+            host.Stability = 0.2f;
+            var durable = ParallelAdministration.Watchfulness(c, host, 0.8f);
+            Check(durable > 0f && 1f / durable > 150f,
+                $"and among our own majority under a collapsing host it lasts {(1f / durable) / 52f:0.0} years");
+
+            var before = ParallelAdministration.Watchfulness(c, host, 0.3f);
+            c.Defines.KinAdminDiscovery *= 2f;
+            Check(Math.Abs(ParallelAdministration.Watchfulness(c, host, 0.3f) - before * 2f) < 1e-6f,
+                "the configured base rate is the risk: doubling it in the defines doubles the chance");
+            c.Defines.KinAdminDiscovery /= 2f;
+        }
+
         // ---- being caught, and being shut ---------------------------------------------
         {
             var c = Fixture(out var ours, out var host, out var abroad, out _, ourShareAbroad: 0.5f,

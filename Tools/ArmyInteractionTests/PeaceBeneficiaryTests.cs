@@ -255,6 +255,10 @@ static class PeaceBeneficiaryTests
         }
         {
             var c = Fixture(); var war = c.Wars[0]; var self = Demand(c, 0, 7); var ally = Demand(c, 2, 7);
+            // Isolate culture/occupation pricing here. Different recipients can now
+            // have different enclave surcharges; BorderCoherenceTests covers that
+            // independent rule with its real factor and border geometry.
+            c.Defines.PeaceCostDetachedFactor = 1f;
             var region = c.States.Single(s => s.MapIndex == 2007);
             Check(Reintegration.IsKindredRegion(c, c.Nations[2], region) && !Reintegration.IsKindredRegion(c, c.Nations[0], region),
                 "pricing fixture has actual kindred inhabitants for ally and a different proposing culture");

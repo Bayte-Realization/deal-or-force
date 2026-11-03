@@ -99,6 +99,59 @@ public sealed class EconomicShockDefinition
 ///   once in a long while a pandemic that reaches everybody.
 ///
 /// The same rules for every government, played or not.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// МАКРОЭКОНОМИЧЕСКИЙ ЦИКЛ И КАНАЛЫ ЗАРАЖЕНИЯ (MACROECONOMIC CYCLE FLOW):
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+///    [ Казна / Доходы ]
+///           │
+///           ├─► Эрозия инфляцией: (Inflation - Yield) / 52
+///           ├─► Слив излишков > 12% ВВП: блага (демократия) / коррупция (автократия)
+///           ├─► Нагрузка DEFCON: налог готовности (alertDrain)
+///           │
+///    [ Спокойные годы: WorldLeverage += 0.11 / 52 ]
+///           │
+///           ▼
+///    [ Финансовый шок: P ~ Leverage² * 0.35 / 52 ]
+///           │
+///           ├─► Эпицентр (Bailout 6% ВВП, рецессия 8% выпуска, падение стабильности)
+///           │
+///           ▼
+///    [ Распространение по торговым артериям: Spread() ]
+///    Партнёр 1 (вес торговли) ──► Партнёр 2 (затухание 0.6) ──► Партнёр 3
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ДЛЯ МОДДЕРОВ (FOR MODDERS) — Архитектура макроэкономики и шоков:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// 1. ЕДИНИЦЫ ИЗМЕРЕНИЯ (UNITS):
+///    • Treasury, Gdp: миллиарды условных единиц игры (1.0 = 1 млрд).
+///    • Inflation, ReserveYield: годовые коэффициенты (0.02 = 2% годовых).
+///    • Stability: диапазон от 0.0 до 1.0.
+///    • WorldLeverage: кредитное плечо мировой экономики от 0.0 (разгружена) до 1.0 (перегрета).
+///
+/// 2. МЕХАНИЗМЫ РАСХОДОВАНИЯ И ДИНАМИКИ (DYNAMICS):
+///    • Инфляционная эрозия (Erode): еженедельно казна теряет потерю покупательной способности
+///      на сумму excess inflation = (Inflation - ReserveYield) / 52.
+///    • Политический слив излишков (SpendDown): казна свыше TreasuryComfortShare * GDP (12%)
+///      тратится на общественные блага (давая бонус стабильности) при подотчётной власти
+///      (AiStatecraft.Restraint) или расхищается при низкой подотчётности.
+///    • Мобилизационная нагрузка DEFCON: при тревоге DEFCON 4..1 войска требуют круглосуточного
+///      снабжения, списывая еженедельно alertDrain = Gdp * (upkeepMult - 1f) * 0.002f.
+///
+/// 3. КРЕДИТНЫЙ ЦИКЛ И КРИЗИСЫ (CreditCycle & Spread):
+///    • В мирные годы WorldLeverage прирастает на LeverageGrowthPerYear / 52.
+///    • Вероятность кризиса пропорциональна квадрату плеча: FinancialCrisisChance * Leverage^2 / 52.
+///    • Эпицентр (CrisisOrigin) выбирается среди крупных экономик взвешенно по Gdp^0.7.
+///    • Распространение (Spread) передаётся по торговым путям (TradeRoutes) на глубину
+///      ContagionHops (по умолчанию 3 звена).
+///
+/// 4. ЭКОНОМИЧЕСКИЕ КАТАСТРОФЫ (UnexpectedBills):
+///    • Катастрофы считываются из common/economic_shocks/*.json (землетрясения, наводнения,
+///      засухи, тайфуны). Каждая катастрофа имеет годовую вероятность annual_chance, диапазон
+///      стоимости cost [min, max] (доля ВВП), урон инфраструктуре damage, смертность deaths
+///      и падение стабильности stability.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class TreasuryDynamics
 {
@@ -172,9 +225,14 @@ public static class TreasuryDynamics
             if (nation.Movement is not null || nation.Population <= 0 || nation.Gdp <= 0f) continue;
             Erode(c, nation);
             SpendDown(c, nation);
-            // Forces on alert are paid for round the clock (DefconSystem).
+            // National alert can exceed the world's alert: do not gate this cost on
+            // DefconLevel alone. UpkeepMultiplier reads the country's effective posture.
             var upkeep = DefconSystem.UpkeepMultiplier(c, nation);
-            if (upkeep > 1f) nation.Treasury = MathF.Max(0f, nation.Treasury - nation.Gdp * (upkeep - 1f) * 0.002f);
+            if (upkeep > 1f)
+            {
+                var alertDrain = nation.Gdp * (upkeep - 1f) * 0.002f;
+                nation.Treasury = MathF.Max(0f, nation.Treasury - alertDrain);
+            }
             if (nation.RecessionDepth > 0f && c.ElapsedDays >= nation.RecessionUntilDay) nation.RecessionDepth = 0f;
         }
         CreditCycle(c);

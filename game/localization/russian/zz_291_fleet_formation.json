@@ -1,6 +1,6 @@
 // Fleet formation (FleetGroups): joining and splitting fleets, and halving a selection (Ctrl+X).
 {
-  "FORMATION": "СОСТАВ",
+  "FLEET FORMATION": "СОСТАВ ФЛОТА",
   "Join fleets": "Объединить флоты",
   "Split in half": "Разделить пополам",
   "Join fleets (Ctrl+K)\nFold every selected fleet lying in the same port or within a day's sail into the largest. Condition is averaged over the hulls. Draw a box over several fleets to select them.": "Объединить флоты (Ctrl+K)\nВсе выделенные флоты, стоящие в одном порту или в дне пути друг от друга, вливаются в самый крупный. Состояние усредняется по кораблям. Чтобы выделить несколько флотов, обведите их рамкой.",

@@ -1,0 +1,16 @@
+# Disabled with the template. No effect on a normal campaign.
+# A real event, not an unused field: all outcomes use existing effect hooks.
+yaml_workshop_bottleneck:
+  title: yaml.workshop.title
+  description: yaml.workshop.description
+  weight: 0.3
+  options:
+    - title: yaml.workshop.invest
+      consequence: yaml.workshop.invest_result
+      effects:
+        treasury_percent: -0.01
+        construction_capacity: 0.04
+    - title: yaml.workshop.wait
+      consequence: yaml.workshop.wait_result
+      effects:
+        stability: -0.003

@@ -156,6 +156,7 @@ public partial class DealOrForceGame
         _defconBadge.Name = "HudDefconBadge";
         _defconBadge.ClipText = true;
         _defconBadge.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _defconBadge.TooltipText = Ui.Tip(Tr("Global Defense Readiness Condition (DEFCON). Click to inspect nuclear posture, active hotspots and readiness effects."));
         StyleHudButton(_defconBadge, false);
         row.AddChild(_defconBadge);
 
@@ -336,7 +337,7 @@ public partial class DealOrForceGame
             : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
         _date.MouseFilter = MouseFilterEnum.Stop;
 
-        if (_defconBadge is not null)
+        if (_defconBadge is not null && _campaign is not null)
         {
             // A scenario without the nuclear age shows no ladder at all, not a DEFCON 5 nobody can change.
             _defconBadge.Visible = DefconSystem.Enabled(_campaign);

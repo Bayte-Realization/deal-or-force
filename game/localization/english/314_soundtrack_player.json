@@ -1,0 +1,23 @@
+{
+  "Choose music for the campaign or audition individual materials. Volume follows your audio settings.": "Choose music for the campaign or audition individual materials. Volume follows your audio settings.",
+  "Choose any declared soundtrack recording, including mod tracks.": "Choose any declared soundtrack recording, including mod tracks.",
+  "Choose soundtrack recording": "Choose soundtrack recording",
+  "Prev.": "Prev.",
+  "Hold track": "Hold",
+  "Next.": "Next.",
+  "Auto track": "Auto",
+  "Previous track": "Previous track",
+  "Next track": "Next track",
+  "Pause soundtrack": "Pause soundtrack",
+  "Resume soundtrack": "Resume soundtrack",
+  "Automatic soundtrack": "Automatic soundtrack",
+  "Use as soundtrack": "Use as soundtrack",
+  "Now playing: {0}": "Now playing: {0}",
+  "No recording": "No recording",
+  "Soundtrack paused. The campaign clock is unchanged.": "Soundtrack paused. The campaign clock is unchanged.",
+  "Manual playlist. Keeps playing when this window closes.": "Manual playlist. Keeps playing when this window closes.",
+  "Automatic soundtrack follows the campaign.": "Automatic soundtrack follows the campaign.",
+  "This recording cannot be used as the soundtrack right now.": "This recording cannot be used as the soundtrack right now.",
+  "Declare this recording in music/tracks to make it available in the soundtrack.": "Declare this recording in music/tracks to make it available in the soundtrack.",
+  "Play during the campaign. Unlike preview, this continues after closing the library.": "Play during the campaign. Unlike preview, this continues after closing the library."
+}

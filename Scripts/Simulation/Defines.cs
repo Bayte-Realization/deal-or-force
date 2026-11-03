@@ -7,6 +7,38 @@ namespace DealOrForce.Simulation;
 /// Every tunable constant the simulation reads, in one place, so balance is a data
 /// change rather than a code change. Mods override individual fields; anything they
 /// do not mention keeps the value below.
+///
+/// =====================================================================================
+/// FOR MODDERS - how to change a number without reading the code
+///
+/// Where they live. `game/common/defines/*.json`, read in file-name order, later files winning.
+/// That is why the game's own files are numbered: a mod drops `50_my_balance.json` beside them,
+/// lists the three numbers it wants different, and inherits the rest. It never forks a file.
+///
+/// The key is the property name. `KinAdminDiscovery` here is `"KinAdminDiscovery"` there, spelled
+/// the same, including capitals.
+///
+/// What the units are, because they are the game's own and nobody writes them down twice:
+///   - money is billions, and a week is the natural beat for anything with "Weekly" in the name;
+///   - a share or a chance is 0..1, never a percent - 0.035 is three and a half percent;
+///   - days are days, and a "days" constant is not scaled by the player's tick rate;
+///   - anything called "Score" or "Budget" is in war score, where 100 is a total victory;
+///   - anything called "PerMillion" is per million of the relevant people, and usually has a
+///     "Floor" beside it so a village does not cost nothing.
+///
+/// Defaults are the balance, not a suggestion. Each value here is the one the game was tuned
+/// against, and each one has a comment above it saying what happens if it moves. Read that before
+/// changing it: several of them exist because of a specific defect, and the comment names the
+/// defect so the same fix is not undone by accident.
+///
+/// SimBench checks that what ships in that folder still agrees with the values compiled here. A
+/// stale data file once silently undid an entire combat rebalance, because data wins over code by
+/// design and nothing was watching. If you change a default here, change the shipped file too.
+///
+/// What is *not* here: per-country and per-region numbers (those are content), and anything that
+/// is a rule rather than a quantity. Rules live in the file that owns them, with the reasoning
+/// beside the rule, because a rule without its reason gets "fixed" in a year.
+/// =====================================================================================
 /// </summary>
 public sealed partial class Defines
 {
@@ -1079,6 +1111,14 @@ public sealed partial class Defines
 
 	/// <summary>Multiplier for ground never taken. A conference is not a land grab.</summary>
 	public float PeaceCostUnheldFactor { get; set; } = 4.5f;
+
+	/// <summary>
+	/// Multiplier for a province the beneficiary cannot walk to from what it already owns - the
+	/// confetti a map collects when wars are won on points. Priced, not banned: historical islands
+	/// and exclaves exist, and a state reuniting its own territory is never charged this
+	/// (see PeaceLedger.Price and Deals, which already value borders the same way).
+	/// </summary>
+	public float PeaceCostDetachedFactor { get; set; } = 2.2f;
 
 	/// <summary>Discount inside the war goal that was actually declared.</summary>
 	public float PeaceCostWarGoalFactor { get; set; } = 0.65f;

@@ -47,17 +47,22 @@ public static class FormableRestorations
     private static Campaign _cachedFor;
     private static int _cachedDay = int.MinValue;
     private static int _cachedRevision = int.MinValue;
+    private static int _cachedMovementRevision = int.MinValue;
+    private static int _cachedNationCount = -1;
     private static readonly List<FormableNation> Cached = new();
 
     /// <summary>Every restoration open in this campaign today.</summary>
     public static IReadOnlyList<FormableNation> In(Campaign campaign)
     {
         if (campaign is null) return Array.Empty<FormableNation>();
-        if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays && _cachedRevision == campaign.MapRevision)
+        if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays && _cachedRevision == campaign.MapRevision &&
+            _cachedMovementRevision == campaign.MovementRevision && _cachedNationCount == campaign.Nations.Count)
             return Cached;
         _cachedFor = campaign;
         _cachedDay = campaign.ElapsedDays;
         _cachedRevision = campaign.MapRevision;
+        _cachedMovementRevision = campaign.MovementRevision;
+        _cachedNationCount = campaign.Nations.Count;
         Cached.Clear();
         foreach (var gone in campaign.Nations)
         {
@@ -83,17 +88,33 @@ public static class FormableRestorations
     }
 
     /// <summary>
-    /// Whether a country of the starting world has gone: a state (not a movement), with ground
-    /// written for it in the bookmark, that holds none of anything now and has not already
-    /// been brought back by somebody.
+    /// Whether a starting-world identity has gone: it has authored ground but no land,
+    /// no surviving government in exile and no living successor bearing that identity.
+    /// A historical proclamation or a dissolved exile is not an eternal lock.
     /// </summary>
     public static bool Vanished(Campaign campaign, Nation nation)
     {
-        if (nation is null || nation.Movement is not null || string.IsNullOrEmpty(nation.Tag)) return false;
+        if (campaign is null || nation is null || string.IsNullOrEmpty(nation.Tag)) return false;
+        // A surviving exile is still this country's government. Once that government has
+        // actually dissolved, however, its abandoned rolls must not veto every later return.
+        if (nation.Movement is { } movement && (!movement.Exile || !movement.Dissolved)) return false;
         if (campaign.HasOwnedLand(nation)) return false;
         if (Authored(campaign, nation.Tag).Length == 0) return false;
-        var id = Prefix + nation.Tag.ToLowerInvariant();
-        return !campaign.Nations.Any(other => string.Equals(other.FormedNationId, id, StringComparison.OrdinalIgnoreCase));
+        return !HasLivingIdentity(campaign, nation.Tag);
+    }
+
+    /// <summary>Historical proclamations stay in the ledger, not as an eternal veto.
+    /// Land or a surviving government in exile keeps the identity alive. Check the restored
+    /// tag too, so authored restoration ids cannot create a duplicate of a dynamic one.</summary>
+    public static bool HasLivingIdentity(Campaign campaign, string tag) =>
+        campaign is not null && !string.IsNullOrEmpty(tag) && campaign.Nations.Any(other =>
+            (string.Equals(other.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(RestoredTag(other.FormedNationId), tag, StringComparison.OrdinalIgnoreCase)) &&
+            (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false }));
+
+    internal static void Invalidate(Campaign campaign)
+    {
+        if (ReferenceEquals(_cachedFor, campaign)) _cachedFor = null;
     }
 
     /// <summary>

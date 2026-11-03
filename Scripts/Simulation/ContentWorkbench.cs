@@ -10,7 +10,7 @@ namespace DealOrForce.Simulation;
 /// <summary>Copy-on-write data authoring. Never writes into the source game or runs mod code.</summary>
 public static class ContentWorkbench
 {
-    public static readonly string[] Roots = { "common", "gui", "interface", "localization", "fonts", "sound", "music", "scenarios", "history", "map_data", "gfx" };
+    public static readonly string[] Roots = { "common", "events", "gui", "interface", "localization", "fonts", "sound", "music", "scenarios", "history", "map_data", "gfx" };
     /// <summary>
     /// Whether the editor may write this file: a structured document (JSON, or the YAML the
     /// loaders read just the same) in a declared content folder, or a province-ownership table in
@@ -21,14 +21,16 @@ public static class ContentWorkbench
     {
         var path = (relative ?? "").Replace('\\', '/');
         var parts = path.Split('/');
-        if (parts.Length < 2 || Array.IndexOf(Roots, parts[0]) < 0) return false;
+        if (parts.Length < 2 || Array.IndexOf(Roots, parts[0]) < 0 ||
+            parts.Any(part => part.Length == 0 || part is "." or "..")) return false;
+        // Scenario interchange remains JSON. Data overlays and event catalogues may use YAML.
+        if (parts[0] == "scenarios" && StructuredData.IsYaml(path)) return false;
         if (StructuredData.IsDocument(path)) return true;
         return IsOwnershipTable(path);
     }
 
     /// <summary>True for a .yaml or .yml file, which is edited as text and validated through the YAML reader.</summary>
-    public static bool IsYaml(string relative) =>
-        Path.GetExtension(relative ?? "").ToLowerInvariant() is ".yaml" or ".yml";
+    public static bool IsYaml(string relative) => StructuredData.IsYaml(relative ?? "");
 
     private static bool IsOwnershipTable(string path) =>
         path.StartsWith("history/provinces/", StringComparison.OrdinalIgnoreCase) &&
@@ -40,14 +42,16 @@ public static class ContentWorkbench
             throw new InvalidDataException("Only JSON or YAML content in declared game folders (or history/provinces/*.csv) can be edited.");
     }
 
-    public static string Validate(string relative, string json)
+    public static string Validate(string relative, string text)
     {
+        // Validate only the draft, never Load/Merge a live catalogue while inspecting it.
+        RequireEditable(relative);
         var editedPath = (relative ?? "").Replace('\\', '/');
         if (IsOwnershipTable(editedPath))
         {
             var problems = new List<string>();
             var line = 0;
-            foreach (var raw in json.Split('\n'))
+            foreach (var raw in text.Split('\n'))
             {
                 line++;
                 var row = raw.Trim();
@@ -59,10 +63,8 @@ public static class ContentWorkbench
             if (problems.Count > 0) throw new InvalidDataException(string.Join("\n", problems.Take(20)));
             return "Province table valid. Provinces are checked against the map when the game loads it.";
         }
-        // YAML is checked as the loaders read it: converted to JSON first, so a YAML file
-        // that passes here is one the game will accept.
-        if (IsYaml(editedPath)) json = StructuredData.YamlToJson(json);
-        using var doc = JsonDocument.Parse(json, GameDataLoader.ForgivingJson);
+        // Shared draft/file parsing retains path and line diagnostics for malformed YAML.
+        using var doc = StructuredData.ParseDocument(relative, text);
         if (editedPath.StartsWith("common/flag_designs/", StringComparison.OrdinalIgnoreCase))
         {
             var errors = new List<string>();
@@ -97,7 +99,7 @@ public static class ContentWorkbench
             return "Production rules valid. The live catalogue has not been changed.";
         }
         if (relative.Replace('\\', '/').EndsWith("/world.json", StringComparison.OrdinalIgnoreCase))
-            SaveSystem.ImportScenarioJson(json, "validation");
+            SaveSystem.ImportScenarioJson(text, "validation");
         if (relative.Replace('\\', '/').EndsWith("/scenario.json", StringComparison.OrdinalIgnoreCase))
         {
             var r = doc.RootElement;
@@ -105,24 +107,27 @@ public static class ContentWorkbench
                 !r.TryGetProperty("name", out var name) || string.IsNullOrWhiteSpace(name.GetString()))
                 throw new InvalidDataException("Scenario requires id and name.");
         }
-        return "JSON valid. Domain rules are also checked when the game loads this content.";
+        return StructuredData.IsYaml(relative)
+            ? "YAML valid. Domain rules are also checked when the game loads this content."
+            : "JSON valid. Domain rules are also checked when the game loads this content.";
     }
 
-    public static string Write(string modRoot, string relative, string json)
+    public static string Write(string modRoot, string relative, string text)
     {
         RequireEditable(relative);
-        Validate(relative, json);
         var target = ScenarioLibrary.SafePath(modRoot, relative);
         RejectLinks(target);
-        Directory.CreateDirectory(Path.GetDirectoryName(target));
-        var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            File.WriteAllText(temporary, json);
-            if (File.Exists(target)) File.Replace(temporary, target, target + ".bak");
-            else File.Move(temporary, target);
-        }
-        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+        return Write(modRoot, relative, text, File.Exists(target) ? File.ReadAllText(target) : null);
+    }
+
+    /// <summary>Null expects a new file; otherwise refuse an edit made since the draft opened.</summary>
+    public static string Write(string modRoot, string relative, string text, string expected)
+    {
+        // expected — точный текст на момент открытия. null значит «файла ещё нет»,
+        // а не «перезаписывать без проверки». Это защищает работу соседнего редактора.
+        WriteBatch(modRoot, new Dictionary<string, string> { [relative] = text },
+            new Dictionary<string, string> { [relative] = expected });
+        var target = ScenarioLibrary.SafePath(modRoot, relative);
         return target;
     }
 
@@ -131,15 +136,18 @@ public static class ContentWorkbench
     public static void WriteBatch(string modRoot, IReadOnlyDictionary<string, string> documents,
         IReadOnlyDictionary<string, string> expected)
     {
+        // Сначала подготовка/проверка всех файлов, затем публикация. Не сокращать до
+        // цикла File.WriteAllText: при ошибке второго файла первый уже станет новым,
+        // и связанный набор документов распадётся на несовместимые версии.
         var staged = new List<(string Target, string Temp, byte[] Previous, byte[] Backup, string Expected)>();
         var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var committed = 0;
         try
         {
-            foreach (var (relative, json) in documents)
+            foreach (var (relative, text) in documents)
             {
                 RequireEditable(relative);
-                Validate(relative, json);
+                Validate(relative, text);
                 if (!expected.TryGetValue(relative, out var baseline)) throw new InvalidDataException("Missing document baseline.");
                 var target = ScenarioLibrary.SafePath(modRoot, relative);
                 if (!targets.Add(target)) throw new InvalidDataException("A document target was declared twice.");
@@ -152,7 +160,7 @@ public static class ContentWorkbench
                 var temporary = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
                 staged.Add((target, temporary, File.Exists(target) ? File.ReadAllBytes(target) : null,
                     File.Exists(target + ".bak") ? File.ReadAllBytes(target + ".bak") : null, baseline));
-                File.WriteAllText(temporary, json);
+                File.WriteAllText(temporary, text);
             }
             // Recheck after preparing all files. No discoverable document is changed until
             // validation, path guards, write preparation and conflict checks all succeeded.
@@ -193,7 +201,7 @@ public static class ContentWorkbench
     private static void CheckBaseline(string target, string expected)
     {
         if (expected is null ? File.Exists(target) : !File.Exists(target) || File.ReadAllText(target) != expected)
-            throw new InvalidDataException("Scenario files changed outside this editor, or the scenario ID already exists. Nothing was overwritten. Reopen the scenario from the library.");
+            throw new InvalidDataException("Content changed outside this editor, or the document already exists. Nothing was overwritten. Reopen it from the file list.");
     }
     private static void RestoreFile(string target, byte[] bytes)
     {
@@ -222,10 +230,10 @@ public static class ContentWorkbench
             "{\"id\":\"editor_workspace\",\"name\":\"Editor workspace\",\"version\":\"1.0.0\",\"enabled\":true,\"load_order\":10000}");
     }
 
-    public static string SetValue(string json, string pointer, string value)
+    public static string SetValue(string json, string pointer, string value, string relative = "content.json")
     {
         if (string.IsNullOrEmpty(pointer) || pointer[0] != '/') throw new InvalidDataException("Select a property, not the document root.");
-        var root = JsonNode.Parse(json, documentOptions: GameDataLoader.ForgivingJson);
+        var root = JsonNode.Parse(StructuredData.ToJson(relative, json), documentOptions: GameDataLoader.ForgivingJson);
         var parts = pointer.Split('/');
         JsonNode node = root;
         for (var i = 1; i < parts.Length - 1; i++) node = Child(node, Decode(parts[i]));
@@ -234,11 +242,11 @@ public static class ContentWorkbench
         if (node is JsonArray a) a[int.Parse(key)] = replacement;
         else if (node is JsonObject o && o.ContainsKey(key)) o[key] = replacement;
         else throw new InvalidDataException("Selected property no longer exists. Refresh the property tree.");
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return StructuredData.FormatJson(relative, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
-    public static string AddValue(string json, string pointer, string key, string value)
+    public static string AddValue(string json, string pointer, string key, string value, string relative = "content.json")
     {
-        var root = JsonNode.Parse(json, documentOptions: GameDataLoader.ForgivingJson);
+        var root = JsonNode.Parse(StructuredData.ToJson(relative, json), documentOptions: GameDataLoader.ForgivingJson);
         var node = Resolve(root, pointer);
         var replacement = JsonNode.Parse(value);
         if (node is JsonObject o)
@@ -249,19 +257,19 @@ public static class ContentWorkbench
         }
         else if (node is JsonArray a) a.Add(replacement);
         else throw new InvalidDataException("Choose an object or array to add a child.");
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return StructuredData.FormatJson(relative, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
-    public static string RemoveValue(string json, string pointer)
+    public static string RemoveValue(string json, string pointer, string relative = "content.json")
     {
         if (string.IsNullOrEmpty(pointer) || pointer[0] != '/') throw new InvalidDataException("The document root cannot be deleted.");
-        var split = pointer.LastIndexOf('/'); var node = Resolve(JsonNode.Parse(json, documentOptions: GameDataLoader.ForgivingJson), pointer[..split]);
+        var split = pointer.LastIndexOf('/'); var node = Resolve(JsonNode.Parse(StructuredData.ToJson(relative, json), documentOptions: GameDataLoader.ForgivingJson), pointer[..split]);
         var key = Decode(pointer[(split + 1)..]);
         var root = node;
         while (root.Parent is not null) root = root.Parent;
         if (node is JsonArray a) a.RemoveAt(int.Parse(key));
         else if (node is JsonObject o && o.ContainsKey(key)) o.Remove(key);
         else throw new InvalidDataException("Selected property no longer exists.");
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
+        return StructuredData.FormatJson(relative, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
     private static JsonNode Resolve(JsonNode root, string pointer)
     {

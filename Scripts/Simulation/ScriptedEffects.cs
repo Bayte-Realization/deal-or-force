@@ -12,19 +12,49 @@ namespace DealOrForce.Simulation;
 /// decisions and mod scripts all resolve to the same small effect vocabulary instead of
 /// a closed C# enum a modder cannot extend.
 ///
-/// Paradox content works this way for a reason - a modder who can only pick from six
-/// pre-written outcomes cannot express a new idea, only re-skin an existing one. Here a
-/// JSON object of key/value pairs is the whole language:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the effect grammar, the whole language in one place:
+/// ═══════════════════════════════════════════════════════════════════════════════
 ///
-///   "effects": { "treasury_percent": -0.02, "stability": 0.018, "state.radicalism": -0.01 }
+/// FORMAT:
+///   "effects": { "key": value, "key_suffix": value, ... }
 ///
-/// A bare number adds. Suffix `_percent` scales by (1 + value), `_mult` multiplies
-/// outright, `_set` assigns. A `state.` prefix applies the entry to every state the
-/// nation owns rather than to the nation itself. Unknown keys never fail silently: they
-/// are reported alongside the list of keys that would have worked.
+/// SUFFIXES (what the operation is):
+///   (none)     — ADD the value: `"stability": 0.02` adds 2 percentage points.
+///   _percent   — SCALE by (1 + value): `"stability_percent": 0.05` adds 5% of current.
+///   _mult      — MULTIPLY: `"gdp_mult": 1.1` sets GDP to 110% of what it was.
+///   _set       — ASSIGN: `"inflation_set": 0.03` sets inflation to exactly 3%.
+///
+/// PREFIXES (what the target is):
+///   (none)     — the nation itself.
+///   state.     — every region the nation owns: `"state.radicalism": -0.01`.
+///   army.      — every division: `"army.organisation": 0.05`.
+///   fleet.     — every fleet: `"fleet.readiness": 0.1`.
+///
+/// WHAT'S AVAILABLE (the most-used keys, money in billions, shares 0..1):
+///   NATION: treasury, public_debt, gdp, gdp_percent, stability, war_support,
+///           inflation, literacy, standard_of_living, productivity, population,
+///           political_points, army/naval/air_experience, manpower, notoriety
+///   STATE:  state.radicalism, state.stability, state.standard_of_living,
+///           state.literacy, state.war_damage, state.urbanization
+///   ARMY:   army.organisation, army.entrenchment, army.experience, army.equipment
+///   FLEET:  fleet.readiness, fleet.supply
+///   OTHER:  research, construction_capacity, weekly_balance, market_access
+///           (add_modifier / remove_modifier for spirits; use — a scripted trigger)
+///
+/// UNKNOWN KEYS: never fail silently. They are reported at load with the list of
+/// valid keys, so a typo says so on the first launch, not in a campaign a week in.
+///
+/// UNITS: money is in billions ($1 = one billion). Stability/literacy/support are
+/// 0..1 shares. Inflation is a rate (0.03 = 3%). Days are campaign days. These
+/// units do not change between JSON and YAML mod formats.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class ScriptedEffects
 {
+    // МОДДЕРАМ: деньги здесь в миллиардах, доли — 0..1, дни — целые дни кампании.
+    // stability: 0.02 добавляет 2 процентных пункта, stability_percent: 0.02 — 2%
+    // от текущего значения. Формат файла (JSON/YAML) эти единицы не меняет.
     internal enum Operation { Add, Percent, Mult, Set }
 
     private sealed class Field
@@ -44,6 +74,9 @@ public static class ScriptedEffects
     }
 
     private static readonly Dictionary<string, Field> Fields = new(StringComparer.OrdinalIgnoreCase);
+    // Это явный список доступных записываемых полей, не reflection по всему Nation.
+    // Для нового поля задайте единицы, Min/Max и Help; затем проверьте подпись в
+    // Labels/Fractions, preview и реальное применение. Одной новой подписи недостаточно.
 
     private static readonly (string Suffix, Operation Operation)[] Suffixes =
     {
@@ -170,7 +203,7 @@ public static class ScriptedEffects
         // The country's forces, every division and every fleet at once: an army rested, drilled
         // or re-equipped, a navy back from a refit.
         ArmyField("army.organisation", a => a.Organisation, (a, v) => a.Organisation = v, 0f, 1f,
-            "Organisation of every division the nation has, 0-1.");
+            "Morale of every division the nation has, 0-1. Legacy key: army.organisation.");
         ArmyField("army.entrenchment", a => a.Entrenchment, (a, v) => a.Entrenchment = v, 0f, 1f,
             "Entrenchment of every division the nation has, 0-1.");
         ArmyField("army.experience", a => a.Experience, (a, v) => a.Experience = v, 0f, 1f,
@@ -222,6 +255,9 @@ public static class ScriptedEffects
 
     private static bool Resolve(string rawKey, out Field field, out Operation operation)
     {
+        // Разбор effects, применение и preview используют один resolver. Не добавляйте
+        // отдельный «удобный» синтаксис только в UI: мод тогда покажет эффект, которого
+        // исполнитель не понимает. Сначала отделяем суффикс операции, затем ищем поле.
         field = null;
         operation = Operation.Add;
         if (string.IsNullOrWhiteSpace(rawKey)) return false;
@@ -291,6 +327,9 @@ public static class ScriptedEffects
         public void Apply(Campaign campaign, Nation nation)
         {
             if (nation is null) return;
+            // Три отдельные фазы, независимо от положения служебных ключей в документе:
+            // снять spirits -> выдать spirits -> выполнить числовые записи по порядку.
+            // Поэтому add_modifier — не «вставка» посреди последовательности арифметики.
             foreach (var id in _revokes) ModifierSystem.Revoke(nation, id);
             foreach (var (id, days) in _grants) ModifierSystem.Grant(campaign, nation, id, days);
             List<ScenarioState> owned = null;
@@ -341,6 +380,8 @@ public static class ScriptedEffects
                     continue;
                 }
 
+                // state.* означает все текущие собственные регионы страны, не выбранную
+                // курсором провинцию и не весь занятый армией фронт. Контроль != собственность.
                 owned ??= campaign.StatesOf(nation).ToList();
                 foreach (var state in owned)
                     field.SetState(state, Combine(field.GetState(state), entry.Value, operation, field));
@@ -353,6 +394,9 @@ public static class ScriptedEffects
 
         internal static float PreviewCombine(float current, float value, Operation operation, string fieldName, float min, float max)
         {
+            // Одна арифметика для применения и предпросмотра. Особый случай казны
+            // сохраняет направление списания/возврата даже при отрицательных остатках;
+            // общая нормализация долга выполняется после всего составного эффекта.
             var result = operation switch
             {
                 Operation.Percent when fieldName == "treasury" => current + MathF.Abs(current) * value,
@@ -449,8 +493,10 @@ public static class ScriptedEffects
 
         foreach (var property in element.EnumerateObject())
         {
-            // A named effect out of `common/scripted_effects`, folded in before this
-            // block's own entries so the block can override what it borrowed.
+            // `use` раскрывается именно в месте, где встретился при перечислении ключей.
+            // Хотите затем переопределить значение — пишите use первым, *_set после него.
+            // Операции над одним полем не коммутируют: set 5 -> mult 2 != mult 2 -> set 5.
+            // Не сортировать _entries: порядок влияет на результат и хранится в сейве.
             if (property.Name.Equals("use", StringComparison.OrdinalIgnoreCase))
             {
                 if (depth > 8)
@@ -757,6 +803,10 @@ public static class ScriptedEffects
 /// </summary>
 public sealed class ScriptedTrigger
 {
+    // Условие только читает мир: числовые min/max соединены через AND, tags — список
+    // допустимых альтернатив. Не задавайте противоречивые at_war в use и самом блоке.
+    // Добавление нового числового условия требует read-доступа в ScriptedValues;
+    // это не выдаёт такому показателю разрешение на запись через ScriptedEffects.
     private readonly List<(string Key, float Value, bool IsMinimum)> _bounds = new();
     private readonly List<string> _tags = new();
     private bool? _atWar;
@@ -773,8 +823,9 @@ public sealed class ScriptedTrigger
         {
             var name = property.Name.Trim().Replace('-', '_');
 
-            // A named condition out of `common/scripted_triggers`. Its clauses join this
-            // block's, and every clause still has to hold - a trigger is an "and".
+            // A named condition out of common/scripted_triggers. Numeric bounds accumulate
+            // (AND), tags accumulate as alternatives (OR); an explicit local at_war replaces
+            // the borrowed flag. Multiple borrowed flags keep the first one encountered.
             if (name.Equals("use", StringComparison.OrdinalIgnoreCase))
             {
                 if (depth > 8)
@@ -838,7 +889,7 @@ public sealed class ScriptedTrigger
         return trigger;
     }
 
-    /// <summary>Take another trigger's clauses into this one. Both then have to hold.</summary>
+    /// <summary>Accumulate bounds and allowed tags; keep an already specified war flag.</summary>
     internal void Absorb(ScriptedTrigger other)
     {
         if (other is null) return;

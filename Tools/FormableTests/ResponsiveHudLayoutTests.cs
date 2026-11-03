@@ -81,9 +81,9 @@ static class ResponsiveHudLayoutTests
                 foreach (var entry in entries)
                 {
                     var text = entry.Value.GetString();
-                    Check(!string.IsNullOrWhiteSpace(text) && Loc.Get(entry.Name) == text &&
+                    var got = Loc.Get(entry.Name); Check(!string.IsNullOrWhiteSpace(text) && got == text &&
                         Loc.Placeholders(englishText[entry.Name]).SetEquals(Loc.Placeholders(text)),
-                        language + " HUD text resolves with its placeholders: " + entry.Name);
+                        language + " HUD text resolves with its placeholders: " + entry.Name + " (expected: [" + text + "], got: [" + got + "])");
                 }
             }
         }

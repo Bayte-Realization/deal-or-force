@@ -23,6 +23,9 @@ param(
     [switch]$NoZip,
     [switch]$IncludeExperimentalNativeLuau,
     [switch]$SkipRuntimeVerification,
+    # The in-game probe permits 420 seconds for a cold campaign load, followed
+    # by UI/simulation checks. Its enclosing process must not be killed at 180.
+    [ValidateRange(10, 900)][int]$RuntimeVerificationTimeoutSeconds = 600,
     # Explicit recovery after an interrupted import/export. The raw export must
     # already exist; packaging, content checks and executable verification still run.
     [switch]$FinalizeExistingExport,
@@ -443,7 +446,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $out 'game\map_data\provinces.png'))
 Write-Host "  the map rasters ship once, as real files the loader can open" -ForegroundColor Green
 if (-not $SkipRuntimeVerification) {
     Write-Host '== verifying the actual exported executable ==' -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification')
+    & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification') -TimeoutSeconds $RuntimeVerificationTimeoutSeconds
 }
 
 # ---------------------------------------------------------------- something to send

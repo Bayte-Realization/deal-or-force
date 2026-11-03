@@ -158,6 +158,12 @@ public sealed class DlcLoader
             .Select(package => $"{package.Manifest.Id}@{package.Manifest.Version}")
             .OrderBy(entry => entry, StringComparer.Ordinal));
 
+    /// <summary>
+    /// Find <c>dlc.json</c> packs. A folder starting with <c>_</c> is skipped, same as mods.
+    /// Ownership comes from entitlements; the launcher can still disable an owned pack.
+    /// Active packs are later inserted in front of mods by <c>ModLoader</c>, so a mod can still correct a pack.
+    /// This is the same content pipeline as a mod, not a second one.
+    /// </summary>
     public void Discover()
     {
         _packages.Clear();

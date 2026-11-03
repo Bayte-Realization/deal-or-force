@@ -10,9 +10,15 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--country-name-settings-only")) { CountryNameSettingTests.Run(); return; }
+        if (args.Length == 0) CountryNameSettingTests.Run();
+        if (args.Contains("--field-use-only")) { FieldUseTests.Run(); return; }
+        if (args.Contains("--civil-stalemate-only")) { CivilStalemateTests.Run(); return; }
         if (args.Contains("--stage-budget-baseline")) { StageBudgetTests.Allocations(false); return; }
         if (args.Contains("--stage-budget-only")) { StageBudgetTests.Run(); return; }
         if (args.Length == 0) StageBudgetTests.Run();
+        if (args.Contains("--desk-chair-only")) { DeskChairTests.Run(); return; }
+        if (args.Contains("--desk-strain-only")) { DeskStrainTests.Run(); return; }
         if (args.Contains("--date-line-only")) { DateLineSeamTests.Run(); return; }
         if (args.Contains("--compact-hud-only")) { CompactHudTests.Run(); return; }
         if (args.Contains("--river-width-only")) { RiverWidthTests.Run(); return; }
@@ -26,6 +32,12 @@ static class Program
         if (args.Contains("--application-exit-only")) { ApplicationExitTests.Run(); return; }
         if (args.Length == 0) ApplicationExitTests.Run();
         if (args.Contains("--mod-scalars-only")) { ModScalarAccessTests.Run(); return; }
+        if (args.Contains("--modder-examples-only")) { ModderExamplesTests.Run(); return; }
+        if (args.Contains("--music-transport-only")) { MusicTransportTests.Run(); return; }
+        if (args.Length == 0) MusicTransportTests.Run();
+        if (args.Contains("--morale-terms-only")) { MoraleTermsTests.Run(); return; }
+        if (args.Length == 0) MoraleTermsTests.Run();
+        if (args.Length == 0) ModderExamplesTests.Run();
         if (args.Length == 0) ModScalarAccessTests.Run();
         if (args.Contains("--beliefs-only")) { BeliefDynamicsTests.Run(); return; }
         if (args.Length == 0) BeliefDynamicsTests.Run();
@@ -145,7 +157,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Length == 0) AgendaWorkspaceTests.Run();
         if (args.Contains("--diplomacy-preview-only")) { DiplomacyPreviewTests.Run(); return; }
         if (args.Contains("--atlas-surfaces-only")) { AtlasSurfaceTests.Run(); return; }
-        if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); return; }
+        if (args.Contains("--research-route-only")) { ResearchRouteTests.Run(); return; }
+        if (args.Contains("--research-workspace-only")) { TechnologyTreeTests.Run(); ResearchWorkspaceTests.Run(); ResearchRouteTests.Run(); return; }
         if (args.Contains("--regional-demography-only")) { RegionalDemographyTests.Run(); return; }
         if (args.Contains("--peace-intent-only")) { PeaceIntentTests.Run(); return; }
         if (args.Contains("--war-aims-only")) { WarAimsTests.Run(); CombatTempoTests.Run(); return; }
@@ -200,6 +213,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Length == 0) DesertionTests.Run();
         if (args.Contains("--coup-war-only")) { CoupCivilWarTests.Run(); return; }
         if (args.Length == 0) CoupCivilWarTests.Run();
+        if (args.Contains("--rescue-only")) { RescueTests.Run(); return; }
+        if (args.Length == 0) RescueTests.Run();
         if (args.Contains("--land-only")) { LandArrangementTests.Run(); return; }
         if (args.Length == 0) LandArrangementTests.Run();
         if (args.Contains("--treasury-only")) { TreasuryDynamicsTests.Run(); return; }
@@ -283,6 +298,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--responsive-hud-only")) { ResponsiveHudLayoutTests.Run(); return; }
         if (args.Contains("--identity-only")) { IdentityResearchTests.Run(); return; }
         if (args.Contains("--restoration-only")) { RestorationTests.Run(); return; }
+        if (args.Contains("--stability-outlook-only")) { StabilityOutlookTests.Run(); return; }
+        if (args.Length == 0) StabilityOutlookTests.Run();
         if (args.Contains("--civil-war-budget-only")) { CivilWarBudgetTests.Run(); return; }
         if (args.Contains("--state-failure-only")) { StateFailureTests.Run(); return; }
         if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
@@ -312,6 +329,10 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--kin-only")) { KinStatecraftTests.Run(); return; }
         if (args.Contains("--revolt-lineage-only")) { RevoltLineageTests.Run(); return; }
         if (args.Contains("--replay-save")) { SaveReplay.Run(args); return; }
+        if (args.Contains("--decisive-peace-only")) { DecisivePeaceTests.Run(); return; }
+        if (args.Contains("--defcon-only")) { DefconTests.Run(); return; }
+        if (args.Contains("--border-coherence-only")) { BorderCoherenceTests.Run(); return; }
+        if (args.Contains("--colour-distance-only")) { ColourDistanceTests.Run(); return; }
         if (args.Contains("--policies-only")) { PoliticalPolicyTests.Run(); return; }
         if (args.Contains("--policy-goal-rules-only")) { PolicyGoalRulesTests.Run(); return; }
         if (args.Contains("--regional-content-only")) { RegionalContentTests.Run(); return; }
@@ -429,6 +450,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         MusicTransitionTests.Run();
         WeatherReadabilityTests.Run();
         MediaLibraryTests.Run();
+        DefconTests.Run();
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
         RestorationTests.Run();
@@ -474,6 +496,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         SupplyStressTests.Run();
         TechnologyTreeTests.Run();
         ResearchWorkspaceTests.Run();
+        ResearchRouteTests.Run();
         AtlasSurfaceTests.Run();
         DiplomacyPreviewTests.Run();
         ProductionUnitsTests.Run();

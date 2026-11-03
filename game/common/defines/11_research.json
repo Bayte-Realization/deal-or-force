@@ -12,6 +12,11 @@
 // Universities and labs increase weekly points per million residents; instability reduces them.
 // A newly independent country retains its parent's discoveries according to local literacy,
 // cities, universities, laboratories, relevant facilities and the complexity of each technology.
+//
+// Field use spends ResearchUseShare of the week's points on technologies the country is
+// already using: a fight for a military technology, an export for a logistics technology,
+// and the works named by an industry technology's icon. Familiarity on one technology
+// stops at ResearchUseCeiling of its listed cost. Either number at zero turns the rule off.
 {
   "ResearchBasePerWeek": 0.5,
   "ResearchGdpWeight": 0.05,
@@ -26,5 +31,7 @@
   "ResearchInstitutionBonusCap": 0.35,
   "ResearchInstabilityPenalty": 0.20,
   "ResearchSecessionProgressShare": 0.55,
-  "ResearchSecessionComplexity": 0.45
+  "ResearchSecessionComplexity": 0.45,
+  "ResearchUseShare": 0.08,
+  "ResearchUseCeiling": 0.20
 }

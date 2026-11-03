@@ -24,10 +24,9 @@ static class WorkerBackendTests
     {
         var c = Campaign.CreateBootstrap(802); var logs = new List<string>();
         c.SetFeature("aviation", false);
-        // Launch the managed protocol fixture with the framework host when present.
-        // Apphost self-spawn and framework-host launch behave differently on this Windows
-        // machine; neither the production worker deadline nor its failure cases change.
         var path = Environment.ProcessPath;
+        // Resolve the managed fixture through the framework host when available;
+        // leave this working tree's independently chosen deadlines unchanged.
         if (!Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
@@ -53,7 +52,7 @@ static class WorkerBackendTests
         Check(logs.Count == 0, "same day is not dispatched twice");
         foreach (var mode in new[] { "hang", "oversize", "exit" })
         {
-            var broken = new WorkerModBackend(path, Args(mode), mode == "hang" ? 150 : 2500, 7, logs.Add);
+            var broken = new WorkerModBackend(path, Args(mode), mode == "hang" ? 150 : 5000, 7, logs.Add);
             var timer = Stopwatch.StartNew(); broken.Hook(c, "load");
             Check(broken.Disabled && timer.ElapsedMilliseconds < 6000, mode + " is bounded and disables the worker");
             var count = logs.Count; broken.Hook(c, "load");

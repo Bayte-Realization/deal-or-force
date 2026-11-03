@@ -1,0 +1,19 @@
+# Two real projects, not an automatic research queue. The first bridges from society;
+# the second also needs an industrial root. Prices are research points, not money.
+yaml_research_liaison:
+  name: yaml.research.liaison
+  description: yaml.research.liaison_description
+  category: society
+  cost: 180
+  requires: [digital_education]
+  effects:
+    research_speed: 0.02
+
+yaml_supply_exchange:
+  name: yaml.research.supply_exchange
+  description: yaml.research.supply_exchange_description
+  category: logistics
+  cost: 220
+  requires: [yaml_research_liaison, industrial_automation]
+  effects:
+    supply: 0.02

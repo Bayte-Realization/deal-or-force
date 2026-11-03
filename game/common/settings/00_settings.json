@@ -213,11 +213,19 @@
     "labels": ["Whatever"],
     "default": "whatever"
   },
+  "country_name_kgz": {
+    "category": "interface", "order": 262, "kind": "choice",
+    "name": "What Kyrgyzstan is called",
+    "description": "I have an acquaintance from Lipetsk Who was nearly lynched by Kyrgyz people because in one of His videos He referred to Kyrgyzstan as \"Kirgizia\", so...",
+    "values": ["kyrgyzstan"],
+    "labels": ["country.KGZ.name.kyrgyzstan"],
+    "default": "kyrgyzstan"
+  },
 
   // A movement flies a banner in its colours unless this is on, and then the flag it really
   // flies - `gfx/flags/flag_<tag>_insignia.png`, for any tag that has one, a mod's included.
   "movement_flags": {
-    "category": "interface", "order": 262, "kind": "toggle",
+    "category": "interface", "order": 263, "kind": "toggle",
     "name": "Movements fly their own flags",
     "description": "Show authored movement insignia when available. Disable to use their alternate plain banners.",
     "default": true

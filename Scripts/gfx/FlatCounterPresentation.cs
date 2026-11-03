@@ -270,9 +270,22 @@ public sealed partial class GlobePresentation
             // included, at the zoom a player reads a region at. Close in they stand apart and
             // nothing merges; at the strategic distance a near miss merges too.
             var reach = _flatStrategicCounters ? half.X * 0.35f : -half.X * 0.25f;
+            // Between the tactical close-up and the world view, a country's army reads by army
+            // group, as a staff map does: every division of one group within a few counters of
+            // another merges into it, whatever the gap. A front where two countries' counters
+            // alternate never overlapped enough to merge, and stood as a solid wall of plates from
+            // Kharkiv to Kherson. Close in, every division is its own counter again.
+            var operational = !_flatStrategicCounters && _flatZoom > Ui.Metric("map.flat_counter_group_zoom", 1.15f);
+            var groupRadius = half.X * 2f * Ui.Metric("map.flat_counter_group_radius", 4.5f);
+            var group = marker.Stack.Count > 0 ? marker.Stack[0].ArmyGroupId : -1;
             ArmyStackMarker host = null;
             foreach (var (candidate, taken) in _strategicHosts)
-                if (candidate.NationId == marker.NationId && taken.Grow(reach).Intersects(room)) { host = candidate; break; }
+            {
+                if (candidate.NationId != marker.NationId) continue;
+                if (taken.Grow(reach).Intersects(room)) { host = candidate; break; }
+                if (operational && group >= 0 && candidate.Stack.Count > 0 && candidate.Stack[0].ArmyGroupId == group &&
+                    taken.GetCenter().DistanceTo(room.GetCenter()) <= groupRadius) { host = candidate; break; }
+            }
             if (host is not null)
             {
                 if (!_strategicMerges.TryGetValue(host, out var merged)) _strategicMerges[host] = merged = new List<ArmyStackMarker>();

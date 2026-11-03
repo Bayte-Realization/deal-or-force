@@ -74,6 +74,7 @@ public partial class DealOrForceGame
         scroll.Name = "OutlinerScroll";
         _outlinerScroll = scroll;
         column.AddChild(scroll);
+        BuildCampaignSoundtrack(column);
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_group_gap", 12));
         scroll.AddChild(body);

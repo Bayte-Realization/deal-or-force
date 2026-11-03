@@ -16,13 +16,17 @@ public partial class DealOrForceGame
     private VisualLayoutEditor _authorLayout;
     private TabContainer _authorTabs;
     private Label _authorStatus;
+    private Label _authorDocumentHeading, _authorFormatBadge;
     private string _authorSaved = "", _authorRelative = "";
+    private string _authorSourcePath = "";
+    // Only the explicit development probe redirects authoring; never use a player's mod as a fixture.
+    private string _authorVerificationRoot;
     private bool _authorDirty;
     private ScenarioEntry _pickerScenarioEntry;
     private string _authorScenarioId = "";
     private Action _authorRefreshFiles;
     private ScenarioMapEditor _authorMap;
-    private string AuthorRoot => ProjectSettings.GlobalizePath("user://mods/editor_workspace");
+    private string AuthorRoot => _authorVerificationRoot ?? ProjectSettings.GlobalizePath("user://mods/editor_workspace");
     private IEnumerable<string> ScenarioRoots => _modLoader.Packages.Select(p => p.PhysicalRoot);
 
     /// <summary>
@@ -370,13 +374,16 @@ public partial class DealOrForceGame
     {
         var rows = AuthorWindow("Content editor");
         rows.AddChild(Title("Game data → your mod. The base game is never overwritten. Ctrl+Z / Ctrl+Y: undo / redo.", 14, Ui.Colour("text.muted")));
+        var formatHint = Title("Property and layout edits reformat the document and remove comments. Edit Source to preserve them.", 13, Ui.Colour("text.caption"));
+        formatHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        rows.AddChild(formatHint);
         var columns = new HSplitContainer { SizeFlagsVertical = SizeFlags.ExpandFill, SplitOffsets = new[] { 280 } };
         rows.AddChild(columns);
         var browser = new VBoxContainer { CustomMinimumSize = new Vector2(240, 0) };
         columns.AddChild(browser);
         var search = new LineEdit { PlaceholderText = Tr("Find a file…"), ClearButtonEnabled = true };
         browser.AddChild(search);
-        var files = new ItemList { SizeFlagsVertical = SizeFlags.ExpandFill };
+        var files = new ItemList { Name = "ContentFileList", SizeFlagsVertical = SizeFlags.ExpandFill };
         browser.AddChild(files);
         var paths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var baseRoot = GameDataLoader.DataFolder("");
@@ -391,7 +398,8 @@ public partial class DealOrForceGame
                     var dir = Path.Combine(root, category);
                     if (!Directory.Exists(dir)) continue;
                     // Everything the loaders read, not only JSON: a YAML twin or a mod written
-                    // in YAML used to be invisible here although the game loads it.
+                    // in YAML used to be invisible here although the game loads it. Ownership
+                    // CSV tables must also reach IsEditable rather than being filtered out early.
                     foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
                     {
                         var relative = Path.GetRelativePath(root, f).Replace('\\', '/');
@@ -420,6 +428,20 @@ public partial class DealOrForceGame
         _authorRefreshFiles = () => { ScanFiles(); Filter(); };
         var editing = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         columns.AddChild(editing);
+        var documentHeading = new HBoxContainer();
+        editing.AddChild(documentHeading);
+        _authorDocumentHeading = Title("Select a file.", 16, Ui.Colour("text.accent"));
+        _authorDocumentHeading.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _authorDocumentHeading.AutowrapMode = TextServer.AutowrapMode.Off;
+        _authorDocumentHeading.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _authorDocumentHeading.ClipText = true;
+        _authorDocumentHeading.Name = "ContentDocumentHeading";
+        documentHeading.AddChild(_authorDocumentHeading);
+        _authorFormatBadge = Title("JSON / YAML", 13, Ui.Colour("text.accent"));
+        _authorFormatBadge.AutowrapMode = TextServer.AutowrapMode.Off;
+        _authorFormatBadge.SizeFlagsHorizontal = SizeFlags.ShrinkEnd;
+        _authorFormatBadge.Name = "ContentFormatBadge";
+        documentHeading.AddChild(_authorFormatBadge);
         var tabs = _authorTabs = new TabContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         editing.AddChild(tabs);
         var inspector = new VBoxContainer { Name = "Properties" };
@@ -443,7 +465,7 @@ public partial class DealOrForceGame
                 if (AuthorTextOnly()) return;
                 var selected = _authorTree.GetSelected();
                 if (selected is null) { _authorStatus.Text = Tr("Select a property first."); return; }
-                var updated = ContentWorkbench.SetValue(_authorCode.Text, selected.GetMetadata(0).AsString(), value.Text);
+                var updated = ContentWorkbench.SetValue(_authorCode.Text, selected.GetMetadata(0).AsString(), value.Text, _authorRelative);
                 _authorCode.BeginComplexOperation();
                 _authorCode.SelectAll(); _authorCode.InsertTextAtCaret(updated);
                 _authorCode.EndComplexOperation();
@@ -459,7 +481,7 @@ public partial class DealOrForceGame
             {
                 if (AuthorTextOnly()) return;
                 var pointer = _authorTree.GetSelected()?.GetMetadata(0).AsString() ?? "";
-                ReplaceAuthorDocument(ContentWorkbench.AddValue(_authorCode.Text, pointer, propertyName.Text, value.Text)); RebuildAuthorTree();
+                ReplaceAuthorDocument(ContentWorkbench.AddValue(_authorCode.Text, pointer, propertyName.Text, value.Text, _authorRelative)); RebuildAuthorTree();
             }
             catch (Exception e) { _authorStatus.Text = e.Message; }
         }, 200, 36));
@@ -470,14 +492,14 @@ public partial class DealOrForceGame
             if (string.IsNullOrEmpty(pointer)) return;
             var document = _authorCode.Text;
             var relative = _authorRelative;
-            var confirmation = new ConfirmationDialog { Title = Tr("Delete property"), DialogText = pointer + "\n" + Tr("This removes the selected property and its children. Undo is available in the JSON tab."), Exclusive = true };
+            var confirmation = new ConfirmationDialog { Title = Tr("Delete property"), DialogText = pointer + "\n" + Tr("This removes the selected property and its children. Undo is available in the Source tab."), Exclusive = true };
             _authorCanvas.AddChild(confirmation);
             confirmation.Confirmed += () =>
             {
                 try
                 {
                     if (_authorRelative != relative || _authorCode.Text != document) throw new InvalidDataException(Tr("The document changed. Select the property again before deleting it."));
-                    ReplaceAuthorDocument(ContentWorkbench.RemoveValue(document, pointer)); RebuildAuthorTree();
+                    ReplaceAuthorDocument(ContentWorkbench.RemoveValue(document, pointer, relative)); RebuildAuthorTree();
                 }
                 catch (Exception e) { _authorStatus.Text = e.Message; }
                 confirmation.QueueFree();
@@ -487,29 +509,34 @@ public partial class DealOrForceGame
         _authorCode = new CodeEdit { Name = "JSON", GuttersDrawLineNumbers = true, SizeFlagsVertical = SizeFlags.ExpandFill };
         tabs.AddChild(_authorCode);
         // The raw document, which is JSON or YAML (or a province table) depending on the file.
-        tabs.SetTabTitle(1, Tr("Text"));
+        tabs.SetTabTitle(1, Tr("Content source"));
         _authorCode.TextChanged += () => { _authorDirty = _authorCode.Text != _authorSaved; };
         _authorLayout = new VisualLayoutEditor
         {
-            Name = "Layout", ReadDocument = () => _authorCode.Text,
+            Name = "Layout", ReadDocument = () => StructuredData.ToJson(_authorRelative, _authorCode.Text),
             IsLayoutDocument = () => _authorRelative.StartsWith("gui/", StringComparison.OrdinalIgnoreCase),
-            ReplaceDocument = ReplaceAuthorDocument, UndoDocument = () => _authorCode.Undo(), RedoDocument = () => _authorCode.Redo()
+            ReplaceDocument = json => ReplaceAuthorDocument(StructuredData.FormatJson(_authorRelative, json)),
+            UndoDocument = () => _authorCode.Undo(), RedoDocument = () => _authorCode.Redo()
         };
         tabs.AddChild(_authorLayout);
         tabs.SetTabTitle(2, Tr("Layout"));
         tabs.TabChanged += index => { if (index == 0) RebuildAuthorTree(); if (index == 2) _authorLayout.RefreshDocument(); };
         var toolbar = new HFlowContainer();
         rows.AddChild(toolbar);
-        toolbar.AddChild(ActionButton("Validate", () => AuthorOperation(false), 130, 38));
-        toolbar.AddChild(ActionButton("Save to my mod", () => AuthorOperation(true), 190, 38, true));
+        var validate = ActionButton("Validate", () => AuthorOperation(false), 130, 38);
+        validate.Name = "ContentValidate"; toolbar.AddChild(validate);
+        var save = ActionButton("Save to my mod", () => AuthorOperation(true), 190, 38, true);
+        save.Name = "ContentSave"; toolbar.AddChild(save);
         toolbar.AddChild(ActionButton("Scenarios", () => ConfirmAuthorExit(OpenScenarioLibrary), 140, 38));
-        toolbar.AddChild(ActionButton("New document", NewAuthorDocument, 160, 38));
+        var newDocument = ActionButton("New document", NewAuthorDocument, 160, 38);
+        newDocument.Name = "ContentNewDocument"; toolbar.AddChild(newDocument);
         toolbar.AddChild(ActionButton("Refresh file list", () => { ScanFiles(); Filter(); }, 160, 38));
         toolbar.AddChild(ActionButton("Open mod folder", () => { ContentWorkbench.EnsureMod(AuthorRoot); OS.ShellOpen(AuthorRoot); }, 180, 38));
         _authorStatus = Title("Select a file. Changes to rules and UI take effect after restarting with Editor workspace enabled.", 13, Ui.Colour("text.caption"));
         _authorStatus.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(_authorStatus);
         _authorSaved = _authorRelative = "";
+        _authorSourcePath = "";
     }
 
     /// <summary>
@@ -541,10 +568,11 @@ public partial class DealOrForceGame
         if (File.Exists(path)) OpenAuthorFile(relative, path);
         else
         {
-            _authorRelative = relative; _authorSaved = "";
+            _authorRelative = relative; _authorSaved = ""; _authorSourcePath = "";
             _authorCode.Text = "{\n  \"layout\": {}\n}\n";
             _authorCode.ClearUndoHistory(); _authorDirty = true;
             _authorStatus.Text = relative;
+            RefreshAuthorDocumentHeading();
         }
         _authorTabs.CurrentTab = 2;
         _authorLayout.RefreshDocument();
@@ -554,8 +582,8 @@ public partial class DealOrForceGame
     {
         ConfirmAuthorExit(() =>
         {
-            var dialog = new ConfirmationDialog { Title = Tr("New document"), DialogText = Tr("Relative path inside the mod, ending in .json, .yaml or .yml"), MinSize = new Vector2I(500, 150) };
-            var path = new LineEdit { Text = "localization/russian/99_my_names.json", OffsetTop = 55, OffsetRight = 470, OffsetBottom = 90 };
+            var dialog = new ConfirmationDialog { Name = "NewContentDocument", Title = Tr("New document"), DialogText = Tr("Relative path inside the mod, ending in .json, .yaml or .yml"), MinSize = new Vector2I(500, 150) };
+            var path = new LineEdit { Name = "NewContentPath", Text = "localization/russian/99_my_names.json", OffsetTop = 55, OffsetRight = 470, OffsetBottom = 90 };
             dialog.AddChild(path);
             _authorCanvas.AddChild(dialog);
             dialog.Confirmed += () =>
@@ -565,12 +593,16 @@ public partial class DealOrForceGame
                     var relative = path.Text.Replace('\\', '/');
                     ScenarioLibrary.SafePath(AuthorRoot, relative);
                     if (!ContentWorkbench.IsEditable(relative))
-                        throw new InvalidDataException(Tr("Use a content folder and the .json, .yaml or .yml extension."));
+                        throw new InvalidDataException(Tr("Use JSON or YAML in a declared content folder. Scenario documents remain JSON."));
                     if (File.Exists(ScenarioLibrary.SafePath(AuthorRoot, relative)))
                         throw new InvalidDataException(Tr("This document already exists. Open it in the file list."));
-                    _authorRelative = relative; _authorSaved = "";
-                    _authorCode.Text = ContentWorkbench.IsYaml(relative) ? "# " + relative + "\n" : "{\n}\n"; _authorCode.ClearUndoHistory(); _authorDirty = true;
+                    _authorRelative = relative; _authorSaved = ""; _authorSourcePath = "";
+                    _authorCode.Text = relative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)
+                        ? "province;owner;controller\n"
+                        : StructuredData.IsYaml(relative) ? "{}\n" : "{\n}\n";
+                    _authorCode.ClearUndoHistory(); _authorDirty = true;
                     _authorStatus.Text = relative; RebuildAuthorTree(); _authorLayout.RefreshDocument();
+                    RefreshAuthorDocumentHeading();
                 }
                 catch (Exception e) { _authorStatus.Text = e.Message; }
                 dialog.QueueFree();
@@ -587,11 +619,13 @@ public partial class DealOrForceGame
             // Read first: an unavailable file must not bind the previous buffer to a new save path.
             var contents = File.ReadAllText(path);
             _authorRelative = relative;
+            _authorSourcePath = Path.GetFullPath(path);
             _authorSaved = contents;
             _authorCode.Text = _authorSaved;
             _authorCode.ClearUndoHistory();
             _authorDirty = false;
             _authorStatus.Text = relative;
+            RefreshAuthorDocumentHeading();
             RebuildAuthorTree();
             _authorLayout.RefreshDocument();
         }
@@ -616,8 +650,7 @@ public partial class DealOrForceGame
             // A YAML document is shown through the same converter the loaders use, so the tree
             // is what the game will read; a province table has no tree at all.
             if (_authorRelative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) return;
-            var text = ContentWorkbench.IsYaml(_authorRelative) ? StructuredData.YamlToJson(_authorCode.Text) : _authorCode.Text;
-            using var doc = JsonDocument.Parse(text, GameDataLoader.ForgivingJson);
+            using var doc = StructuredData.ParseDocument(_authorRelative, _authorCode.Text);
             var root = _authorTree.CreateItem();
             var count = 0;
             void Add(JsonElement element, TreeItem parent, string key, string pointer, int depth)
@@ -644,9 +677,18 @@ public partial class DealOrForceGame
             if (doc.RootElement.ValueKind == JsonValueKind.Object)
                 foreach (var p in doc.RootElement.EnumerateObject()) Add(p.Value, root, p.Name, "/" + p.Name.Replace("~", "~0").Replace("/", "~1"), 0);
             else if (doc.RootElement.ValueKind == JsonValueKind.Array) Add(doc.RootElement, root, Tr("Document array"), "", 0);
-            _authorTree.TooltipText = Tr("Property preview: first 100 array entries, 6 levels. The JSON tab exposes the complete document.");
+            _authorTree.TooltipText = Tr("Property preview: first 100 array entries, 6 levels. The Source tab exposes the complete document.");
         }
         catch (Exception e) { _authorStatus.Text = e.Message; }
+    }
+
+    private void RefreshAuthorDocumentHeading()
+    {
+        if (_authorDocumentHeading is null || _authorFormatBadge is null) return;
+        _authorDocumentHeading.Text = _authorRelative;
+        _authorDocumentHeading.TooltipText = _authorSourcePath.Length > 0 ? _authorSourcePath : _authorRelative;
+        _authorFormatBadge.Text = _authorRelative.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)
+            ? "CSV" : StructuredData.IsYaml(_authorRelative) ? "YAML" : "JSON";
     }
 
     private void AuthorOperation(bool save)
@@ -654,15 +696,18 @@ public partial class DealOrForceGame
         if (string.IsNullOrEmpty(_authorRelative)) return;
         try
         {
-            _authorStatus.Text = ContentWorkbench.Validate(_authorRelative, _authorCode.Text);
+            _authorStatus.Text = Tr(ContentWorkbench.Validate(_authorRelative, _authorCode.Text));
             if (!save) return;
             ContentWorkbench.EnsureMod(AuthorRoot);
-            var path = ContentWorkbench.Write(AuthorRoot, _authorRelative, _authorCode.Text);
+            var target = ScenarioLibrary.SafePath(AuthorRoot, _authorRelative);
+            var expected = string.Equals(_authorSourcePath, target, StringComparison.OrdinalIgnoreCase) ? _authorSaved : null;
+            var path = ContentWorkbench.Write(AuthorRoot, _authorRelative, _authorCode.Text, expected);
+            _authorSourcePath = Path.GetFullPath(path);
             _authorSaved = _authorCode.Text; _authorDirty = false;
             _authorRefreshFiles?.Invoke();
             _authorStatus.Text = Tr("Saved. Previous version: .bak. Enable Editor workspace and restart for rules/UI changes.") + " " + path;
         }
-        catch (Exception e) { _authorStatus.Text = e.Message; }
+        catch (Exception e) { _authorStatus.Text = Tr(e.Message); }
     }
 
     /// <summary>A scenario's picture: its own sprite (scenario_&lt;id&gt;), else the night Earth, else none.</summary>

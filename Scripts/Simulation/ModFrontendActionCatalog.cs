@@ -12,7 +12,15 @@ public sealed class ModFrontendActionDeclaration
 
 public sealed record ModFrontendActionDescriptor(string FullId, string ModId, string Id, string Caption);
 
-/// <summary>Descriptor-only discovery and explicit, package-owned runtime dispatch.</summary>
+/// <summary>
+/// Buttons a package declared in <c>frontend_actions</c> and the handlers its code later binds.
+/// Discovery only records the declaration. <see cref="Registration.Register"/> binds a handler
+/// to an id the manifest already named. An undeclared id is refused, so a mod cannot inject
+/// a click the player never saw in the package list.
+/// The handler runs when the player picks the action. It must not take a human's land by itself,
+/// and it must not change the campaign merely because a screen was opened.
+/// Caps: <see cref="ActionsPerPackage"/> declarations per package, <see cref="TotalActions"/> in the whole session.
+/// </summary>
 public sealed class ModFrontendActionCatalog
 {
     public const int ActionsPerPackage = 32;
@@ -61,6 +69,10 @@ public sealed class ModFrontendActionCatalog
     public void BeginRuntime() { StopRuntime(); _running = true; }
     public void StopRuntime() { _running = false; _generation++; _handlers.Clear(); }
     public Registration RegisterFor(string modId) => new(this, modId, _generation);
+    /// <summary>
+    /// Run the handler bound to <c>modId:localId</c>. False when the package is not running or never registered that id.
+    /// The note is player-visible text from the handler, or a short failure line. A throw becomes "Mod action failed."
+    /// </summary>
     public bool TryRun(string fullId, out string note)
     {
         if (!_running || string.IsNullOrEmpty(fullId) || !_handlers.TryGetValue(fullId, out var loaded))
@@ -76,6 +88,7 @@ public sealed class ModFrontendActionCatalog
         private bool _disposed;
         internal Registration(ModFrontendActionCatalog catalog, string modId, long generation)
         { _catalog = catalog; _modId = modId; _generation = generation; }
+        /// <summary>Bind <paramref name="localId"/> to a handler. Returns false unless this package declared that id and is still the live registration.</summary>
         public bool Register(string localId, Func<string> handler)
         {
             if (_disposed || !_catalog._running || _generation != _catalog._generation || handler is null) return false;

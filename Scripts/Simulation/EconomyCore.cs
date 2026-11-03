@@ -497,6 +497,38 @@ public sealed class CancelConstructionCommand : ICampaignCommand
     }
 }
 
+/// <summary>
+/// The economy as a weekly pass: what each region makes, what the market clears it for,
+/// what the government collects and spends, and what all of that does to the people.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the five things you probably came here to change:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// 1. WHAT A REGION MAKES → `game/common/terrain/*.json` (what each terrain produces)
+///    and `game/common/production/*.json` (what each building adds). A mod that wants
+///    deserts to be rich in lithium adds a `"resource": "lithium"` there.
+///
+/// 2. WHAT THE GOVERNMENT CAN DO → `game/common/budget/00_budget.json`: every line
+///    of the national budget, what it is charged against, what a slider may do,
+///    and what moving it does to the country. A mod that wants a wealth tax adds
+///    a line with `"player": true`.
+///
+/// 3. HOW MUCH THINGS COST → `game/common/defines/*.json`: `BaselineMilitarySpending`,
+///    `ResearchBasePerWeek`, `SupplyPerInfrastructure`, and a hundred other tunables.
+///    These are code defaults a mod may override; the game's own numbers are in the
+///    partial classes in this file and its neighbours.
+///
+/// 4. WHO TRADED WHAT WITH WHOM → `game/common/trade/*.json` (what each country
+///    wants to buy and sell). The clearing itself is MarketSystem (MarketCore.cs):
+///    countries first satisfy demand from local production, then trade the rest.
+///
+/// 5. HOW THE PEOPLE LIVE → the two axes below: `SocialClass` (Lower / Middle /
+///    Upper, by wealth) and `Sector` (what a trade lives off). These drive everything
+///    from migration to revolution. A mod that wants a fourth class — say, a
+///    precariat below Lower — adds it here and in `common/professions/*.json`.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public static class EconomySystem
 {
     /// <summary>The living standard an economy of this size per head carries, 0.28 to 0.90.</summary>

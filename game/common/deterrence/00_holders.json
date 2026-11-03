@@ -1,15 +1,30 @@
 // Deal or Force - who holds a deterrent no neighbour can afford to test (Deterrence.cs).
 //
-// A row is a country tag and a tier. Tier 1 is mutual assured destruction: two tier-1
-// countries do not fight each other directly, because the war judgement prices such a war
-// out of the arithmetic (Defines.AiMutualDeterrencePrice). Higher tiers are reserved for
-// mods that want a second rung - a defence that survives a first strike, say - the code
-// reads "at least 1" everywhere today.
+// ─── WHAT THIS FILE IS ─────────────────────────────────────────────────────────
+// The nuclear club of the scenario's opening morning. Each row is a country tag and
+// a tier; every other country in the world is an ordinary neighbour. This file is
+// WHO ALREADY HAS ONE at the start — acquisition during play is a technology with
+// `"effects": { "deterrence": 1 }`, not a row here.
 //
-// The club of 2024, as history left it. A mod for an earlier era ships this file empty, or
-// without it, and the mechanic never speaks; a mod for a future one adds the rows its
-// history wrote. Acquisition in play is a technology with `effects: deterrence`, not a row
-// here - rows are who already holds one when the scenario opens.
+// ─── WHAT THE TIERS MEAN ──────────────────────────────────────────────────────
+// Tier 1  Mutual assured destruction: two tier-1 countries do not fight each other
+//         directly (the war judgement prices it out, AiMutualDeterrencePrice).
+// Tier 2+ Reserved for mods wanting a second rung — a defence that survives a first
+//         strike, say. The code reads "at least 1" everywhere today, so higher tiers
+//         make the brinkmanship pressure larger but don't unlock new behaviour yet.
+//
+// ─── HOW TO CHANGE THE WORLD ──────────────────────────────────────────────────
+// • Earlier era (no bomb): ship this file empty or delete it. The mechanic
+//   simply never speaks — no wall, no shadow, no proliferation race.
+// • Future era: add rows for whoever your history gave the bomb to.
+// • Proliferation in play: add a technology with `effects: deterrence` in
+//   `common/technologies/` — the AI reaches for it when a rival has one
+//   (TechnologyCore.Choose, the proliferation race).
+// • Adjust the wall's price: `AiMutualDeterrencePrice` in `common/defines/`.
+//   Default 6 — the order of a whole war's price list. Zero and the wall is gone.
+// • Switch everything off: `MutualDeterrenceEnabled` to false in defines.
+//
+// The club of 2024, as history left it.
 {
   "holders": {
     "RUS": 1,

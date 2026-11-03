@@ -81,7 +81,7 @@
   "no external mods · open {0} or res://mods": "no external mods · open {0} or res://mods",
   "no supply route reaches them": "no supply route reaches them",
   "nothing stands between the country and its borders": "nothing stands between the country and its borders",
-  "organisation below a third": "organisation below a third",
+  "organisation below a third": "morale below a third",
   "somebody": "somebody",
   "their plans are written against ours": "their plans are written against ours",
   "waiting is also a policy": "waiting is also a policy",
@@ -119,5 +119,11 @@
   "CITIES": "CITIES",
   "NAMES": "NAMES",
   "Every screen in the campaign, searchable (Ctrl+K).": "Every screen in the campaign, searchable (Ctrl+K).",
-  "Find": "Find"
+  "Find": "Find",
+  "{0} divisions in the field": "{0} divisions in the field",
+  "Balance {0} a week": "Balance {0} a week",
+  "The country is steady": "The country is steady",
+  "Nobody is at war with us": "Nobody is at war with us",
+  "{0} neighbours": "{0} neighbours",
+  "Nothing is waiting for a decision": "Nothing is waiting for a decision"
 }

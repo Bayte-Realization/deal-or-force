@@ -86,6 +86,7 @@ static class FormableProclamationAiTests
             ConsolidationLeadershipAndSwitch();
             EstablishedSuccessorPartner();
             PartialRestorationKeepsForeignLand();
+            RestorationCycleTests.Run();
         }
         finally { FormableNations.ResetCatalog(); FormableProclamationAi.ResetCatalog(); }
     }

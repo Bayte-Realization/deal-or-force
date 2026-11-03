@@ -31,8 +31,13 @@ public sealed partial class Defines
     /// </summary>
     public float KinAdminRadicalism { get; set; } = 0.004f;
 
-    /// <summary>The weekly chance the host notices, and what being noticed costs on the day.</summary>
-    public float KinAdminDiscovery { get; set; } = 0.035f;
+    /// <summary>
+    /// The weekly chance the host notices, and what being noticed costs on the day. This is the
+    /// base rate only: <see cref="ParallelAdministration.Watchfulness"/> scales it by how closely
+    /// the host can watch and by how well our people cover the offices. At 3,5 % a week an office
+    /// lived about eight months, so it never outlived the rising it was meant to survive.
+    /// </summary>
+    public float KinAdminDiscovery { get; set; } = 0.008f;
     public float KinAdminGrievance { get; set; } = 6f;
     public float KinAdminCaughtGrievance { get; set; } = 18f;
 
@@ -116,6 +121,28 @@ public static class ParallelAdministration
         var groundShare = host.Population <= 0 ? 0f : M.Clamp01(region.Population / (float)host.Population);
         var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * campaign.Defines.KinAdminLevy;
         return levy - WeeklyUpkeep(campaign, admin, region);
+    }
+
+    /// <summary>
+    /// How likely the host's service is to find these offices in a given week.
+    ///
+    /// Not a constant, because a constant turns a foothold into a countdown: with 3,5 % a week
+    /// sixteen offices were opened in ten years of the bench and sixteen were found, so the rung
+    /// that is supposed to outlive a single rising never outlived one. Two things move it, both
+    /// already in the world rather than kept aside for this mechanic:
+    ///
+    /// - A stable state with nothing else on its mind watches; one that is coming apart has other
+    ///   worries. (<see cref="Nation.Stability"/>.)
+    /// - Where our people *are* the region, foreign paperwork has somewhere to hide among its own;
+    ///   where they are a bare quarter of it, every clerk stands out. (The same share that decides
+    ///   whether the region may be worked at all.)
+    /// </summary>
+    public static float Watchfulness(Campaign campaign, Nation host, float share)
+    {
+        if (campaign?.Defines is null || host is null) return 1f;
+        var attention = 0.35f + M.Clamp01(host.Stability);
+        var cover = M.Clamp(1.6f - share, 0.4f, 1.6f);
+        return campaign.Defines.KinAdminDiscovery * attention * cover;
     }
 
     /// <summary>What the panel says about them, in one line, or an empty string when there are none.</summary>
@@ -244,7 +271,7 @@ public static class ParallelAdministration
             if (!region.AdministrationExposed)
             {
                 var roll = MovementRules.Roll(campaign.Seed, admin.Id, campaign.ElapsedDays, region.MapIndex + 7);
-                if (roll < defines.KinAdminDiscovery)
+                if (roll < Watchfulness(campaign, host, share))
                 {
                     region.AdministrationExposed = true;
                     var tie = CampaignDiplomacy.Get(campaign, admin.Id, host.Id);

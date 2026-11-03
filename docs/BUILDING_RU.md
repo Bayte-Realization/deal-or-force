@@ -4,7 +4,7 @@
 
 ## Один раз: шаблоны экспорта
 
-Актуальный выпуск игры: **EntertAlpha 0.3.0.3**. Номер должен совпадать в
+Актуальный выпуск игры: **EntertAlpha 0.5.2.2**. Номер должен совпадать в
 `GameVersion.props`, `GameBuildInfo.Version`, `project.godot`, Windows-пресете
 и обоих README/инструкциях сборки; `Tools/Test-ReleaseVersion.ps1` проверяет это до экспорта.
 Версия `SaveSystem.GameVersion` берётся из `GameBuildInfo`.
@@ -47,6 +47,9 @@ powershell -ExecutionPolicy Bypass -File Tools\build.ps1 -Godot "C:\GodotEngineN
 если тестировщик поймает падение), `-NoZip` не архивировать, `-Godot <путь>` если движок
 переедет. `-OutputDirectory` задаёт новую подпапку внутри `build/`; существующая
 не стирается без явного `-ReplaceExistingOutput`.
+`-RuntimeVerificationTimeoutSeconds` задаёт срок проверки готового процесса: по умолчанию
+600 секунд, максимум 900. Он включает внутренний лимит 420 секунд на холодную загрузку
+мира и последующие проверки; этот ключ не отключает проверку.
 
 То же самое руками, если скрипт почему-то не подходит:
 

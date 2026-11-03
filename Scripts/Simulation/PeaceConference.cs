@@ -864,7 +864,32 @@ public sealed class PeaceLedger
             reason += ", the seat of government";
         }
 
+        // A province the beneficiary cannot walk to from its own ground is an enclave: the confetti
+        // a map collects when a war is won on points. Deals already value borders this way
+        // (TerritorialCoherence.Penalty); peace demands did not, so a winner could spend its whole
+        // war score on islands of somebody else's land and call it a victory. Priced, not banned,
+        // and never charged to a state writing back its own territory in a civil war.
+        if (DetachedFromBeneficiary(_campaign, _war, beneficiary, province))
+        {
+            cost *= Math.Max(1f, defines.PeaceCostDetachedFactor);
+            reason += ", detached from our own ground";
+        }
+
         return new PeaceConference.ProvinceCost(province, cost, reason);
+    }
+
+    /// <summary>
+    /// Whether taking this province would leave the beneficiary holding a piece of ground it cannot
+    /// walk to. A country with no land of its own is not detached from it, and a civil war's map is
+    /// meant to be stitched back together patch by patch, so reclaiming is never charged for it.
+    /// </summary>
+    internal static bool DetachedFromBeneficiary(Campaign campaign, StrategicWar war, Nation beneficiary, int province)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || beneficiary is null || province <= 0 || province > topology.ProvinceCount) return false;
+        if (!campaign.HasOwnedLand(beneficiary)) return false;
+        if (war is not null && Reintegration.Reclaiming(campaign, war, beneficiary.Id)) return false;
+        return !TerritorialCoherence.TouchesOwnedGround(campaign, beneficiary, topology.ProvinceToState[province]);
     }
 
     public float Cost(PeaceDemand demand)

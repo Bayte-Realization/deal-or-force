@@ -188,6 +188,7 @@ public static class FormableNations
                     Supersedes = Ids("supersedes", old?.Supersedes),
                     RequiredShare = Number("required_share", old?.RequiredShare ?? -1f),
                     AliasOf = Text("alias_of", old?.AliasOf ?? ""),
+                    Restores = (Text("restores", old?.Restores ?? "") ?? "").ToUpperInvariant(),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
                         ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
                     SubjectIntegration = e.TryGetProperty("subject_integration", out var integration)
@@ -203,6 +204,8 @@ public static class FormableNations
                 if (d.Supersedes.Contains(d.Id, StringComparer.OrdinalIgnoreCase))
                     throw new FormatException("a state cannot supersede itself");
                 if (d.AliasOf == d.Id) throw new FormatException("a state cannot alias itself");
+                if (d.Restores.Length > 0 && !d.RequiredTags.Contains(d.Restores, StringComparer.OrdinalIgnoreCase))
+                    throw new FormatException("a restoration must require the restored country's scenario territory");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
                 if (d.RequiredReligions.Any(id => DemographyCatalog.Religion(id) is null))
@@ -404,7 +407,10 @@ public static class FormableNations
             land.Length > 0 && owned >= requiredCount));
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
-        requirements.Add(new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id)));
+        requirements.Add(string.IsNullOrEmpty(d.Restores)
+            ? new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id))
+            : new(Loc.Get("No competing state or government in exile claims this identity"),
+                !FormableRestorations.HasLivingIdentity(campaign, d.Restores)));
         requirements.Add(new(Loc.Get("The new state is not smaller than the country already is"),
             !SmallerThanCountry(campaign, nation, d)));
 
@@ -455,6 +461,7 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationHistory.Add(d.Id);
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
+        FormableRestorations.Invalidate(campaign);
         // How well the proclaimed state holds together starts here: one people is one country, and
         // every people after that is a promise to be kept (UnionCohesion).
         nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);

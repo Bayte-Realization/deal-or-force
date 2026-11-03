@@ -57,7 +57,7 @@ public enum DeskSeverity
 /// weeks" is the difference between a statistic and a government in trouble.
 /// </summary>
 public readonly record struct DeskItem(string Id, DeskLens Lens, DeskSeverity Severity,
-    string Title, string Detail, string Screen, string Trend, int NationId = -1)
+    string Title, string Detail, string Screen, string Trend, int NationId = -1, string Tooltip = "")
 {
     /// <summary>Whether this line belongs on a desk rather than in the margins of one.</summary>
     public bool Urgent => Severity is DeskSeverity.Must or DeskSeverity.Should;
@@ -101,7 +101,56 @@ public static class SituationDesk
         // Every chair also sees the world move, but only the part of it that chair would care
         // about: a war elsewhere is a soldier's news, a crisis elsewhere is a diplomat's.
         World(campaign, nation, lens, items);
+        // A desk with nothing on it is a desk that says where the country stands, not a black
+        // rectangle. The line is Watch, so the count of what is urgent stays where it was and the
+        // heading does not cry wolf over a country that is fine; it is only added when the chair
+        // has nothing louder to say, so it never pushes a real warning down the panel.
+        if (!items.Exists(item => item.Urgent) && Standing(campaign, nation, lens) is { } standing)
+            items.Add(standing);
         return Fold(items);
+    }
+
+    /// <summary>
+    /// Where the country stands in one chair, for a week in which that chair has nothing to report.
+    ///
+    /// Nothing new is measured here: the same balance, the same stability, the same divisions the
+    /// loud lines would have reported. This is the difference between a panel that is empty and a
+    /// panel that is calm, and for a player opening the game on the first of January it is the
+    /// whole of the summary they get.
+    /// </summary>
+    private static DeskItem? Standing(Campaign campaign, Nation nation, DeskLens lens)
+    {
+        switch (lens)
+        {
+            case DeskLens.Security:
+            {
+                var inField = 0;
+                foreach (var army in campaign.Armies)
+                    if (army.NationId == nation.Id) inField++;
+                return new DeskItem("standing_security", DeskLens.Security, DeskSeverity.Watch,
+                    Loc.Get("At peace"), Loc.Format("{0} divisions in the field", inField), "Military", "");
+            }
+            case DeskLens.Economy:
+                return new DeskItem("standing_economy", DeskLens.Economy, DeskSeverity.Watch,
+                    Loc.Format("Balance {0} a week", Fmt.Money(nation.WeeklyBalance)),
+                    Loc.Format("treasury {0}", Fmt.Money(nation.Treasury)), "Economy", "");
+            case DeskLens.Society:
+                return new DeskItem("standing_society", DeskLens.Society, DeskSeverity.Watch,
+                    Loc.Get("The country is steady"),
+                    Loc.Format("stability {0}", Fmt.Percent(nation.Stability)), "State Affairs", "");
+            case DeskLens.Diplomacy:
+            {
+                var neighbours = CampaignDiplomacy.Neighbours(campaign, nation.MapIndex)?.Count ?? 0;
+                return new DeskItem("standing_diplomacy", DeskLens.Diplomacy, DeskSeverity.Watch,
+                    Loc.Get("Nobody is at war with us"),
+                    Loc.Format("{0} neighbours", neighbours), "Diplomacy", "");
+            }
+            case DeskLens.Cabinet:
+                return new DeskItem("standing_cabinet", DeskLens.Cabinet, DeskSeverity.Watch,
+                    Loc.Get("Nothing is waiting for a decision"), "", "Decisions", "");
+            default:
+                return null;
+        }
     }
 
     /// <summary>Every lens at once, for a panel that shows one country rather than one chair.</summary>
@@ -236,6 +285,129 @@ public static class SituationDesk
         if (nation.WarSupport > 0.7f && campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)))
             items.Add(new DeskItem("war_mood", DeskLens.Society, DeskSeverity.Watch,
                 Loc.Get("The country is still behind the war"), Fmt.Percent(nation.WarSupport), "Wars", ""));
+
+        // The compact rail already says a war, a paper and a formation out of supply.
+        // What it does not say, and what this chair used to leave blank, is the centre
+        // and a region that no longer agree. The situation room already files that fact.
+        var strain = SituationReport.PoliticalStrain(campaign, nation);
+        if (strain is not null)
+        {
+            var line = StrainTitle(strain);
+            if (line.Length > 0)
+                items.Add(new DeskItem("political_strain", DeskLens.Society, DeskSeverity.Should,
+                    line, "", "Laws", "", Tooltip: StrainSentence(strain)));
+        }
+
+        // The same three facts the situation room already files, and only while they are
+        // on the books. A missing programme, a country in one piece, or a welcome that
+        // still has room is no line: not a zero, and not a dash.
+        var conciliation = SituationReport.Conciliation(campaign, nation);
+        if (conciliation is not null)
+        {
+            var title = NamedFact(conciliation, "Region", "Settlement under way");
+            if (title.Length > 0)
+                items.Add(new DeskItem("conciliation", DeskLens.Society, DeskSeverity.Could,
+                    title, "", "Laws", "", Tooltip: NoticeSentence(conciliation)));
+        }
+
+        var detached = SituationReport.DetachedLand(campaign, nation);
+        if (detached is not null)
+        {
+            var title = NamedFact(detached, "The way", "The way");
+            if (title.Length > 0)
+                items.Add(new DeskItem("detached_land", DeskLens.Society,
+                    detached.Priority == SituationPriority.Warning ? DeskSeverity.Should : DeskSeverity.Could,
+                    title, "", "Situation", "", Tooltip: NoticeSentence(detached)));
+        }
+
+        var welcome = SituationReport.HostWelcome(campaign, nation);
+        if (welcome is not null)
+        {
+            var title = WelcomeTitle(campaign, welcome);
+            if (title.Length > 0)
+                items.Add(new DeskItem("host_temper", DeskLens.Society,
+                    welcome.Priority == SituationPriority.Warning ? DeskSeverity.Should : DeskSeverity.Could,
+                    title, "", "Movements", "", welcome.TargetId, Tooltip: NoticeSentence(welcome)));
+        }
+    }
+
+    /// <summary>
+    /// Label and the name the report already gives, or the report's own title when that name
+    /// is missing. A dash or a zero is not a line.
+    /// </summary>
+    private static string NamedFact(SituationItem report, string factLabel, string lineLabel)
+    {
+        var wanted = Loc.Get(factLabel);
+        if (report.Facts is not null)
+        {
+            foreach (var fact in report.Facts)
+            {
+                if (fact.Label != wanted) continue;
+                if (fact.Value.Length > 0 && fact.Value != "—" && fact.Value != "0")
+                    return Loc.Get(lineLabel) + ": " + fact.Value;
+                break;
+            }
+        }
+        var title = report.Title ?? "";
+        return title.Length == 0 || title == "0" || title == "—" ? "" : title;
+    }
+
+    /// <summary>The welcome the province card already uses, beside the movement's own name.</summary>
+    private static string WelcomeTitle(Campaign campaign, SituationItem report)
+    {
+        var movement = campaign.NationById(report.TargetId);
+        if (movement?.Movement is null) return "";
+        var chip = MovementRules.PatienceChip(campaign, movement);
+        if (chip.Length == 0 || movement.DisplayName.Length == 0) return "";
+        return Loc.Get(chip) + ": " + movement.DisplayName;
+    }
+
+    /// <summary>
+    /// One fixed line for the strain report. The loudest region's own label, or the report's
+    /// title when that region has no name. Never a zero: a missing fact is no line at all.
+    /// </summary>
+    private static string StrainTitle(SituationItem report)
+    {
+        var label = Loc.Get("Loudest region");
+        if (report.Facts is not null)
+        {
+            foreach (var fact in report.Facts)
+            {
+                if (fact.Label != label) continue;
+                if (fact.Value.Length > 0 && fact.Value != "—" && fact.Value != "0")
+                    return label + ": " + fact.Value;
+                break;
+            }
+        }
+        var title = report.Title ?? "";
+        return title.Length == 0 || title == "0" ? "" : title;
+    }
+
+    /// <summary>The report's own title, then the sentence and labels, when the title is not already there.</summary>
+    private static string NoticeSentence(SituationItem report)
+    {
+        var body = StrainSentence(report);
+        var title = report.Title ?? "";
+        if (title.Length == 0 || title == "0" || body.Contains(title)) return body;
+        return body.Length == 0 ? title : title + "\n" + body;
+    }
+
+    /// <summary>The report's sentence, then the labels it already names, for the tooltip.</summary>
+    private static string StrainSentence(SituationItem report)
+    {
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(report.Summary)) lines.Add(report.Summary);
+        if (report.Causes is not null)
+            foreach (var cause in report.Causes)
+                if (!string.IsNullOrWhiteSpace(cause) && !lines.Contains(cause)) lines.Add(cause);
+        if (report.Facts is not null)
+            foreach (var fact in report.Facts)
+                if (!string.IsNullOrWhiteSpace(fact.Label))
+                    lines.Add(fact.Label + ": " + fact.Value);
+        if (report.Consequences is not null)
+            foreach (var next in report.Consequences)
+                if (!string.IsNullOrWhiteSpace(next) && !lines.Contains(next)) lines.Add(next);
+        return string.Join("\n", lines);
     }
 
     private static void Diplomacy(Campaign campaign, Nation nation, List<DeskItem> items)
@@ -320,9 +492,12 @@ public static class SituationDesk
         switch (kind)
         {
             case "war_started" or "world_war_began" or "border_war" or "civil_war_third_front" or "nuclear_strike" or "nuclear_retaliation" or "nuclear_devastation":
+            case "defcon_escalation":
                 lens = DeskLens.Security; severity = DeskSeverity.Should; return true;
             case "nuclear_test" or "nuclear_incident" or "red_telephone":
                 lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
+            case "defcon_deescalation":
+                lens = DeskLens.Security; severity = DeskSeverity.Could; return true;
             case "great_power_intervened" or "military_exercises_conducted":
                 lens = DeskLens.Security; severity = DeskSeverity.Watch; return true;
             case "alliance_ended" or "alliance_strained" or "crisis_opened" or "crisis_compromise" or
@@ -343,6 +518,8 @@ public static class SituationDesk
     private static string WorldTitle(string kind) => kind switch
     {
         "war_started" => "War: {0} against {1}",
+        "defcon_escalation" => "Strategic alert escalation: DEFCON {0}",
+        "defcon_deescalation" => "Strategic alert de-escalation: DEFCON {0}",
         "world_war_began" => "The world war has begun: {0} against {1}",
         "border_war" => "Shots on a border: {0} and {1}",
         "nuclear_strike" => "A nuclear weapon has been used: {0} against {1}",

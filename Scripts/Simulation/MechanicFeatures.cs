@@ -7,7 +7,12 @@ namespace DealOrForce.Simulation;
 
 public sealed partial class Defines
 {
-    // Initial campaign switches. Package overrides merge by key, never replace the table.
+    // Initial campaign switches. A mod overlays common/defines and merges by key.
+    // Naming "aviation": false does not clear artillery. An omitted key keeps this default.
+    // These ids gate existing systems. A new id does nothing until a command or a Tick asks for it.
+    // Do not add a second battle resolver or a second tax: combat is Warfare, and the tax the
+    // budget screen writes the same day is TaxRate. Extend those. A human's land is not taken
+    // without their click; a feature flag is not a way around that.
     public Dictionary<string, bool> Features { get; set; } = new(StringComparer.OrdinalIgnoreCase)
     {
         ["long_range_forces"] = true, ["aviation"] = true, ["drones"] = true,
@@ -83,6 +88,11 @@ public sealed partial class Campaign
     public readonly Dictionary<string, bool> FeatureOverrides = new(StringComparer.OrdinalIgnoreCase);
     private int _featureEvaluationDay = -1;
 
+    /// <summary>
+    /// Campaign-wide switch. An override set this session wins, then the define table, then
+    /// <see cref="MechanicFeatures.BuiltIns"/> so a save from before the switch still has the old mechanic.
+    /// A custom id that was never turned on is off. This does not look at one country.
+    /// </summary>
     public bool FeatureEnabled(string id)
     {
         if (!MechanicFeatures.ValidId(id)) return false;
@@ -92,7 +102,12 @@ public sealed partial class Campaign
         return MechanicFeatures.BuiltIns.Contains(id);
     }
 
-    /// <summary>Global scenario effect, not a player/network command. Never destroys dormant content.</summary>
+    /// <summary>
+    /// Global scenario effect, not a player order and not safe to call from every client as if it were one.
+    /// Turning a switch off hides and blocks new orders. It does not delete armies, buildings, or laws.
+    /// Turning it back on does not refund the days that passed, and it does not hand out free forces.
+    /// Writes the fingerprint. A screen that only reads must not call this.
+    /// </summary>
     public bool SetFeature(string id, bool enabled)
     {
         if (!MechanicFeatures.ValidId(id)) return false;
@@ -122,6 +137,11 @@ public sealed partial class Campaign
         return true;
     }
 
+    /// <summary>
+    /// Once per campaign day, turn on switches whose <c>FeatureUnlocks</c> trigger matches any one country.
+    /// The match unlocks the mechanic for the whole campaign, not for that country alone.
+    /// An empty trigger removes the rule. One unlock cannot satisfy the next unlock on the same day.
+    /// </summary>
     public void EvaluateFeatureUnlocks()
     {
         if (_featureEvaluationDay == ElapsedDays) return;
@@ -139,8 +159,28 @@ public sealed partial class Campaign
     }
 }
 
+/// <summary>
+/// The gates a mod uses instead of forking a system. Four tables, all merged by key from
+/// <c>common/defines</c>:
+/// <c>Features</c> is the on/off switch, <c>FeatureCommands</c> names an <c>ICampaignCommand</c>
+/// class, <c>FeatureSystems</c> names a tick class, <c>FeatureScreens</c> names a navigation screen.
+/// An empty string removes a binding. The keys are C# type and screen names, not translated labels.
+///
+/// A mod that wants a rule the game does not have should gate an existing command or add content
+/// the existing economy, war, or diplomacy already consumes (a good, a decision, a doctrine, a deal).
+/// A parallel treasury, a second <c>Warfare</c> battle pass, or a tax effect the player can set
+/// back the same day on the budget screen will not stay. New state is saved and mixed into
+/// <c>CampaignFingerprint</c> only when it is not the default, so untouched campaigns keep the
+/// previous hash. Opening a screen must not change that hash. <c>NationById</c> is an index into
+/// <c>Campaign.Nations</c>, not a map row and not a tag.
+/// </summary>
 public static class MechanicFeatures
 {
+    /// <summary>
+    /// Ids that stay enabled when <c>Defines.Features</c> has no row for them.
+    /// <c>world_order_emergency</c> is in this set and is set false in the shipped Features table,
+    /// which a new campaign reads first. A mod id is not listed here; it stays off until something sets it.
+    /// </summary>
     public static readonly HashSet<string> BuiltIns = new(StringComparer.OrdinalIgnoreCase)
     {
         "long_range_forces", "aviation", "drones", "artillery", "air_defence", "navy",
@@ -158,6 +198,11 @@ public static class MechanicFeatures
     public static readonly HashSet<string> LateBuiltIns = new(StringComparer.OrdinalIgnoreCase)
         { "defcon", "nuclear_posture", "nuclear_strikes" };
 
+    /// <summary>
+    /// Which existing command class asks which switch. Cancel, refund, and pending-event replies
+    /// are intentionally absent, so a player can still answer something already in flight.
+    /// A mod adds a row through <c>FeatureCommands</c> in data. It does not copy this method.
+    /// </summary>
     public static Dictionary<string, string> CommandDefaults()
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -234,12 +279,19 @@ public static class MechanicFeatures
         if ((bool)property.GetValue(c.Defines)! != enabled) property.SetValue(c.Defines, enabled);
     }
 
+    /// <summary>False only when this screen name is bound to a switch that is off. An unbound screen stays visible.</summary>
     public static bool ScreenEnabled(Campaign c, string screen) => c is not null &&
         (!c.Defines.FeatureScreens.TryGetValue(screen, out var id) || string.IsNullOrWhiteSpace(id) || c.FeatureEnabled(id));
 
+    /// <summary>False only when this tick class is bound to a switch that is off. An unbound system still ticks.</summary>
     public static bool SystemEnabled(Campaign c, string system) => c is not null &&
         (!c.Defines.FeatureSystems.TryGetValue(system, out var id) || string.IsNullOrWhiteSpace(id) || c.FeatureEnabled(id));
 
+    /// <summary>
+    /// Whether this command's class is allowed to apply. Unbound commands are allowed.
+    /// A refusal is logged under orders and the command does nothing. Call this from <c>Apply</c>,
+    /// not from a panel's paint, so reading the screen cannot change the result.
+    /// </summary>
     public static bool Allows(Campaign c, ICampaignCommand command)
     {
         if (c is null) return false;
@@ -249,6 +301,7 @@ public static class MechanicFeatures
         return false;
     }
 
+    /// <summary>Built-in ids, or a new id of at most 80 ASCII letters, digits, and underscores. Empty and punctuation are refused.</summary>
     public static bool ValidId(string id)
     {
         if (string.IsNullOrWhiteSpace(id) || id.Length > 80) return false;
@@ -267,12 +320,14 @@ public static class MechanicFeatures
         SupportKind.AirDefence => "air_defence", _ => "artillery"
     };
 
+    /// <summary>Copy a feature table by key. Invalid ids are dropped. The rest of the table is left in place.</summary>
     public static void Merge<T>(Dictionary<string, T> target, Dictionary<string, T> patch)
     {
         foreach (var (id, value) in patch)
             if (ValidId(id)) target[id.ToLowerInvariant()] = value;
     }
 
+    /// <summary>Copy command, system, or screen bindings. An empty value clears that one binding and leaves the others.</summary>
     public static void MergeBindings(Dictionary<string, string> target, Dictionary<string, string> patch)
     {
         foreach (var (key, value) in patch)

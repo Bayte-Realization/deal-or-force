@@ -28,6 +28,7 @@ public partial class DealOrForceGame
 
     public override void _ExitTree()
     {
+        Loc.LanguageChanged -= RefreshHandbookLanguage;
         if (_stepCompletionCampaign is not null)
             _stepCompletionCampaign.StepCompleted -= CampaignStepCompleted;
         _stepCompletionCampaign = null;

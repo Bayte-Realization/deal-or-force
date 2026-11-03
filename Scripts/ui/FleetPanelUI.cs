@@ -566,7 +566,7 @@ public partial class DealOrForceGame
 
         // Concentrate and detach: a box over several fleets joins them where they lie
         // together; one fleet splits in half, both halves selected (Ctrl+K, Ctrl+X).
-        rows.AddChild(Title("FORMATION", 11, Ui.Colour("text.caption")));
+        rows.AddChild(Title("FLEET FORMATION", 11, Ui.Colour("text.caption")));
         var formation = new HBoxContainer();
         formation.AddThemeConstantOverride("separation", 4);
         rows.AddChild(formation);

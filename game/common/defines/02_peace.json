@@ -17,6 +17,10 @@
   "PeaceCostSecuredFactor": 1.0,
   "PeaceCostHeldFactor": 1.8,
   "PeaceCostUnheldFactor": 4.5,
+  // A province the winner cannot walk to from what it owns - an enclave in the making. Priced,
+  // not banned: exclusive islands exist, and a state writing back its own civil-war ground is
+  // never charged this (PeaceLedger.DetachedFromBeneficiary).
+  "PeaceCostDetachedFactor": 2.2,
   "PeaceCostWarGoalFactor": 0.65,
   "PeaceCostCapitalFactor": 2.6,
   "PeaceCostPopulationScale": 400000,

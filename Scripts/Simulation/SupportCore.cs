@@ -7,30 +7,37 @@ using System.Text.Json;
 namespace DealOrForce.Simulation;
 
 /// <summary>
-/// What a long-range formation is made of, the way common/units states a division.
+/// Long-range formations and foreign assistance: artillery, aircraft, drones, SAMs,
+/// and the aid a country sends another country to keep it fighting.
 ///
-/// These formations do not stand on the map. An artillery brigade, a drone group, a
-/// fighter wing - all of them sit at a base in one of the country's regions and reach
-/// out over a radius instead. What they do when they get there is a mission, and the
-/// missions are the ones Hearts of Iron taught the genre: fire in support of the
-/// battles in reach, contest the sky over them, interdict the ground behind them, or
-/// stand by and recover.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the two halves of this file:
+/// ═══════════════════════════════════════════════════════════════════════════════
 ///
-///   range_km          how far from its base the formation projects, in real kilometres
-///   support_fire      contribution to friendly offence in battles inside the radius
-///   air_superiority   contest score: suppresses the enemy's long-range fire over them
-///   interdiction      strips enemy protection in battles inside the radius
-///   air_defence       the same suppression, but from the ground: a SAM brigade that
-///                     covers its own ground whether or not it was told anything
-///   recon             what the formation can see - shown to the player, priced in
-///   recruitment_cost   fraction of a year's GDP at peacetime spending, like a division
-///   build_days        days from the order to the formation existing
-///   personnel          people the formation takes out of the manpower reserve
-///   missions           the missions this kind of formation can be given
+/// 1. LONG-RANGE FORMATIONS → `game/common/support/*.json`
+///    What a long-range formation is made of, the way common/units states a division.
+///    These formations do not stand on the map - they sit at a base and reach out
+///    over a radius instead. Each kind states:
 ///
-/// A mod may add a kind of formation by adding a file to common/support: nothing about
-/// the catalogue is compiled in, and nothing about the effects is either - a formation
-/// with no support_fire is a pure air-defence unit, one with no air stats is artillery.
+///      range_km        how far it projects (real kilometres)
+///      support_fire    contribution to friendly offence in battles inside the radius
+///      air_superiority contest score: suppresses enemy long-range fire over them
+///      interdiction    strips enemy protection in battles inside the radius
+///      air_defence     the same suppression, but from the ground (a SAM brigade)
+///      recon           what the formation can see — shown to the player, priced in
+///      missions        which missions this kind may be given
+///
+///    Four kinds are built in: Ground (artillery), Air (aircraft), Drone, AirDefence.
+///    A mod adds a kind by adding a file — nothing is compiled in, and nothing about
+///    the effects is either. A formation with no support_fire is a pure air-defence
+///    unit; one with no air stats is artillery.
+///
+/// 2. FOREIGN ASSISTANCE → `game/common/support/*.json` (the aid section)
+///    What one country sends another: money, equipment, or the use of a corridor.
+///    Each kind of aid states its cost to the sender, its benefit to the receiver,
+///    and how visible it is to the world. A mod can add a kind of aid the same way
+///    it adds a formation kind.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public enum SupportKind
 {

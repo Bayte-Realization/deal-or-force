@@ -52,7 +52,7 @@ public partial class DealOrForceGame
         var rows = PanelRows(panel, 22, 16, 10);
         var close = ActionButton("×", CloseMediaLibrary, 38, 32); close.Name = "CloseMediaLibrary";
         ScreenHeader(rows, "SOUND AND ARTWORK",
-            "Audition without changing the campaign. Volume follows your audio settings.",
+            "Choose music for the campaign or audition individual materials. Volume follows your audio settings.",
             false, close);
         var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", 6); rows.AddChild(filters);
         foreach (var kind in new LibraryMediaKind?[] { null, LibraryMediaKind.Music, LibraryMediaKind.Sound, LibraryMediaKind.Image, LibraryMediaKind.Video })
@@ -66,6 +66,7 @@ public partial class DealOrForceGame
             filters.AddChild(button);
             _mediaFilterButtons[filterKey] = button;
         }
+        BuildSoundtrackPlayer(rows);
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
         var left = new VBoxContainer { CustomMinimumSize = new(280, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -120,6 +121,8 @@ public partial class DealOrForceGame
         _mediaLoop.SetMeta(LocAppliedMeta, _mediaLoop.Text);
         Tip(_mediaLoop, "Off by default. Repeat only the recording you selected, not the campaign.");
         actions.AddChild(_mediaPlay); actions.AddChild(_mediaPause); actions.AddChild(_mediaStop); actions.AddChild(_mediaLoop);
+        _soundtrackPlaySelected = ActionButton("Use as soundtrack", PlaySelectedSoundtrack, 0, 36, true);
+        _soundtrackPlaySelected.Name = "PlaySelectedSoundtrack"; actions.AddChild(_soundtrackPlaySelected);
         _mediaAudio = new AudioStreamPlayer { Name = "MediaAudition", ProcessMode = ProcessModeEnum.Always }; AddChild(_mediaAudio);
         _mediaAudio.Finished += FinishMediaPreview; _mediaVideo.Finished += FinishMediaPreview;
         ApplyAtlasHeading(panel);
@@ -133,9 +136,11 @@ public partial class DealOrForceGame
         if (_globe is not null) _globe.MediaLibraryInputBlocked = true;
         _mediaReturnFocus = GetViewport().GuiGetFocusOwner(); _mediaLibraryLayer.Show(); _mediaLibraryLayer.MoveToFront();
         RebuildMediaList(); _mediaLibraryLayer.FocusMode = FocusModeEnum.All; _mediaLibraryLayer.GrabFocus();
+        RefreshSoundtrackPlayer();
     }
     private void CloseMediaLibrary()
     {
+        // The audition player belongs to this window. The campaign decks do not.
         StopMediaPreview(); _mediaLibraryLayer?.Hide();
         if (_globe is not null) _globe.MediaLibraryInputBlocked = false;
         if (IsInstanceValid(_mediaReturnFocus) && _mediaReturnFocus.IsVisibleInTree()) _mediaReturnFocus.GrabFocus();
@@ -186,6 +191,7 @@ public partial class DealOrForceGame
         UpdateMediaTimeline(0);
         _mediaPreviewStatus.Text = item is null ? "" : !available ? Tr("Local file is unavailable. Check the package path.") :
             item.Kind == LibraryMediaKind.Image ? Tr("Static artwork preview; it does not represent geographic data.") : Tr("Ready for manual preview.");
+        RefreshSoundtrackPlayer();
         if (refreshButtons) foreach (var child in _mediaLibraryList.GetChildren())
             if (child is Button button) ApplyLedgerButtonState(button, button.Name == "MediaAsset_" + item?.Id);
     }

@@ -77,7 +77,7 @@ public partial class DealOrForceGame
             if (mode == StrategicMapMode.Resources) ShowResourceAtlas();
             else if (_resourceAtlasPanel is not null) _resourceAtlasPanel.Visible = false;
         };
-        _globe.MapModeSubjectChanged += _ => UpdateMapModeTooltips();
+        _globe.MapModeSubjectChanged += _ => { UpdateMapModeTooltips(); ExplainMapLayer(_explainedMapMode); };
         UpdateMapModeButtons(StrategicMapMode.Political);
         RefreshProjectionControls(_globe.FlatProjection);
     }
@@ -135,7 +135,8 @@ public partial class DealOrForceGame
         _mapModeDrawerGrid.AddThemeConstantOverride("h_separation", 6); _mapModeDrawerGrid.AddThemeConstantOverride("v_separation", 6);
         scroll.AddChild(_mapModeDrawerGrid);
         foreach (StrategicMapMode mode in System.Enum.GetValues<StrategicMapMode>()) AddMode(_mapModeDrawerGrid, mode);
-        var hint = Title("Hover a layer for its meaning. Esc returns to the map.", 11, Ui.Colour("text.muted")); rows.AddChild(hint);
+        BuildMapLayerGuide(rows);
+        var hint = Title("Enter applies the focused layer. Esc returns to the map.", 11, Ui.Colour("text.muted")); rows.AddChild(hint);
     }
 
     private void ToggleMapLayerDrawer()
@@ -143,6 +144,7 @@ public partial class DealOrForceGame
         if (_mapModeDrawerLayer.Visible) { CloseMapLayerDrawer(); return; }
         LayoutMapControls(); UpdateMapModeButtons(_activeMapMode);
         _mapModeDrawerLayer.Show(); _mapModeDrawerLayer.MoveToFront(); _globe.MapLayerDrawerInputBlocked = true;
+        ExplainMapLayer(_activeMapMode);
         _mapModeButtons.GetValueOrDefault(_activeMapMode)?.GrabFocus();
     }
 
@@ -190,7 +192,8 @@ public partial class DealOrForceGame
         if (_mapModeDrawerPanel is not null)
         {
             var drawerWidth = Mathf.Clamp(Ui.Metric("map_controls.drawer_width", 480), 200, 720);
-            var drawerHeight = Mathf.Clamp(Ui.Metric("map_controls.drawer_height", 304), 160, Mathf.Max(160, Size.Y * .5f));
+            var guideHeight = _mapLayerGuide?.GetCombinedMinimumSize().Y ?? 0;
+            var drawerHeight = Mathf.Clamp(Ui.Metric("map_controls.drawer_height", 304) + guideHeight, 200, Mathf.Max(200, Size.Y * .7f));
             var drawer = ResponsiveHudLayout.Fit(new(bounds.X + bounds.Width - drawerWidth,
                 bounds.Y - drawerHeight - 6, drawerWidth, drawerHeight), Size.X, Size.Y);
             PlaceHudBounds(_mapModeDrawerPanel, drawer);
@@ -295,9 +298,9 @@ public partial class DealOrForceGame
         StrategicMapMode.Economy => "Total GDP by country, not treasury or regional output. Brighter means a larger economy; unknown countries stay neutral.",
         StrategicMapMode.Terrain => "The ground itself, with no politics on it. Hover a province for what it does to a march and a battle.",
         StrategicMapMode.Resources => "Regional resource potential. Choose a raw material and locate its deposits.",
-        StrategicMapMode.Stability => "Every region's stability: green holds, amber wavers, red is coming apart. A capital in the red is how coups and civil wars start.",
-        StrategicMapMode.Unrest => "Radicalism, the pull to leave, and a region that has stopped accepting its government: grey is quiet, amber restless, red close to rising, breaking, or declaring independence.",
-        StrategicMapMode.Tension => "How close each country is to shooting with this one: amber is friction and crisis, red is armed clashes, dark red is war. Talks in the Conflicts screen cool it.",
+        StrategicMapMode.Stability => "Regional stability from unsettled to stable. Instability around the capital can threaten the government. The legend follows your interface palette.",
+        StrategicMapMode.Unrest => "Regional radicalism and separatist pressure, from quiet to severe. The legend follows your interface palette.",
+        StrategicMapMode.Tension => "Escalation relative to the selected country: friction, crisis, armed clashes and war. Talks in the Conflicts screen can reduce tension.",
         _ => "Height and shade, from the moddable relief layer."
     };
 
@@ -316,6 +319,8 @@ public partial class DealOrForceGame
         button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         button.CustomMinimumSize = new(0, Ui.Metric("map.controls_button_height", 34)); button.RemoveMeta("icon_caption_minimum");
         button.AccessibilityName = Tr(mode.ToString());
+        button.FocusEntered += () => ExplainMapLayer(mode);
+        button.MouseEntered += () => ExplainMapLayer(mode);
         button.TooltipText = Ui.Tip(Tr(mode.ToString()) + " \u2014 " + Tr(MapModeHelp(mode)));
         StyleButton(button, mode == StrategicMapMode.Political);
         row.AddChild(button);
@@ -344,6 +349,7 @@ public partial class DealOrForceGame
             StyleButton(_mapLayerSelector, active != StrategicMapMode.Political);
         }
         UpdateMapModeTooltips();
+        if (_mapModeDrawerLayer is { Visible: true }) ExplainMapLayer(_explainedMapMode);
     }
 
     private void ToggleProjection()

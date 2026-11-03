@@ -407,6 +407,7 @@ public partial class DealOrForceGame
                 nation.Stability < 0.35f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "text.bright");
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             AddWarSupportRow(nation, wars);
+            AddCountryStabilityOutlook(nation);
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
             }
@@ -453,6 +454,7 @@ public partial class DealOrForceGame
                 DemographicCycle.Explain(_campaign, nation),
                 forDeath > forBirth ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability));
+            AddCountryStabilityOutlook(nation);
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (TechnologyCatalog.All.Count > 0)
                 CardRow(_countryCardRows, "Technologies",

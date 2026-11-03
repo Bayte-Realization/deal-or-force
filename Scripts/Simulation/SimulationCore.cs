@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -154,6 +154,9 @@ public sealed class CampaignCommandQueue
         {
             var command = _pending.Dequeue();
             CrashEnvelope.Record(campaign, command);
+            // Несмотря на имя, TraceCommand не только пишет лог: он вызывает Apply
+            // ровно один раз и при выключенной диагностике тоже. Повторный Apply здесь
+            // удвоит цену/набор войск. Граница записи и трассировки должна остаться общей.
             DiagnosticLogs.TraceCommand(campaign, command);
         }
     }
@@ -815,6 +818,31 @@ public sealed partial class Campaign
 
     private IEnumerable<int> TickStages()
     {
+        // =====================================================================================
+        // THE RHYTHM OF THE SIMULATION - the contract every system here obeys.
+        //
+        // A step is whatever the player or a bench asks for: six hours, one hour, three days. The
+        // whole architecture is a promise that the answer does not depend on which of those it was.
+        //
+        //   PASSES PER STEP (this half of the method). Marching, supply, organisation, the fighting
+        //   itself and the building of things accumulate at a rate per day, so they are handed the
+        //   fraction of a day the step covers, and they run once per step whatever the step is. That
+        //   is why a six-hour tick moves an army a quarter of the way instead of not at all.
+        //
+        //   PASSES PER DAY (the loop further down, marked "THE DAY, IN ORDER"). A decision happens
+        //   on a day: an event either fires today or it does not, the economy clears on the week,
+        //   history takes one sample. These run once for every whole day the step crossed, which is
+        //   what stops them from running four times on an hourly clock and once on a six-hour one.
+        //
+        //   PASSES ON THEIR OWN CLOCK. Inside the day a system may gate itself: `OnItsDay` spreads
+        //   the countries of the world across a cycle so that a monthly decision does not land on
+        //   the same day for everybody, and `% 7` / `% 30` gates keep weekly and monthly work off
+        //   the daily path. A gate is not an optimisation detail, it is part of this contract: a
+        //   system that loses its gate runs thirty times more often than it was tuned for.
+        //
+        // Orders are applied at the top of the step, before anything reads the world, so a player's
+        // command and a computer's are read at exactly the same point of the clock.
+        // =====================================================================================
         if (IsPaused || SimulationFault.Length > 0) yield break;
         // A world under the ice or the static (WorldCurses): the clock goes on and nothing
         // else does - no system runs and no order is carried out, the player's included.
@@ -907,6 +935,51 @@ public sealed partial class Campaign
         // whether the campaign is stepping six hours at a time or three days.
         for (var day = 0; day < daysCrossed; day++)
         {
+            // =====================================================================================
+            // THE DAY, IN ORDER - read this before adding anything below.
+            //
+            // Sixty passes run here, every whole day the step crosses. They are grouped by what
+            // they read, and the grouping is the reason for the order:
+            //
+            //   1. A country's own numbers ..... recruitment, contractors, stockpiles, support,
+            //                                    militia, modifiers
+            //   2. What people think ........... social memory, opinion
+            //   3. Treaties and courts ......... alliances, guarantees and agreements, gestures,
+            //                                    land arrangements, treasury dynamics
+            //   4. Our hand abroad ............. parallel administration, internal migration
+            //   5. Sanity ...................... numeric integrity (reports; never repairs)
+            //   6. What the war costs .......... war damage, war weariness, civil-war reserves,
+            //                                    crisis ladder, DEFCON
+            //   7. Power inside ................ factions, defections, desertion, coups
+            //   8. The world's furniture ....... proxy wars, organizations and their life, deals,
+            //                                    ultimatums, foreign assistance
+            //   9. Movements and our kin ....... movement methods, kin statecraft
+            //  10. Long arcs ................... research, shipbuilding, statecraft, subjects,
+            //                                    consolidation, culture union, corridors, world war,
+            //                                    intel, covert operations, addresses
+            //  11. Record and story ............ historical timeline, events, history sample
+            //  12. The map changes ............. secession, union, demography, extinction, resistance,
+            //                                    civil-war outbreak, names, governance, rulers,
+            //                                    crises, mood, promises, goals, identity, naming,
+            //                                    colonisation, submission, occupations, lost lands,
+            //                                    capital
+            //
+            // Three sentences for why: numbers before opinions, opinions before treaties, treaties
+            // before the map; a war's cost is counted before anything is decided about it; and the
+            // map is redrawn last, because every pass above was worked out on the map that is still
+            // standing.
+            //
+            // ADDING SOMETHING? Put it in the group whose state it reads, and put it here only if it
+            // is a daily decision - the passes before this loop scale with the hours in the step and
+            // must not. A pass that writes anything must also reach the save (SaveSystem) and, when
+            // it changes what the world *is*, the fingerprint (CampaignFingerprint); otherwise a
+            // loaded campaign and the bench disagree and nothing says so.
+            //
+            // A phase that is heavy belongs behind a day-cycle gate (`MovementRules.OnItsDay`) or
+            // in stages (`DemographicCycle.Stages`), never dropped in raw: at the hourly step the
+            // profiler shows a single system eating the frame, and this list is where a reader looks
+            // first.
+            // =====================================================================================
             using (SimProfiler.Measure("recruitment")) RecruitmentSystem.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("contractors")) Contractors.Tick(this);

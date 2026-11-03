@@ -11,6 +11,9 @@ internal static class LauncherSelection
     private static string DefaultPath => ProjectSettings.GlobalizePath("user://content_selection.json");
     private static string EditorPath => ProjectSettings.GlobalizePath("user://editor_content_selection.json");
 
+        // Which content_selection.json this process reads. A compiled mod does not edit this file
+    // to enable itself: the player (or the launcher) does. DOF_CONTENT_SELECTION overrides both
+    // the editor copy and the installed copy, which is how a test pins one profile.
     // Explicit custom profiles stay authoritative. On the first editor run, migrate the
     // previous choice once; later launcher changes must not change editor preferences.
     public static string ReadPath => WritePath;

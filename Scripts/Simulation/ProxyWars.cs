@@ -4,6 +4,40 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Proxy warfare: great powers arming, funding and advising the sides of wars they are
+/// not themselves fighting — the Cold War's answer to the nuclear wall.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the five levels of support and how the system works:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// A SPONSORSHIP is one country backing one side of one war at a level:
+///
+///   1  Advisers    — a handful of officers and money for the client.
+///   2  Weapons     — advisers plus arms and ammunition from the sponsor's depots.
+///   3  At scale    — the sponsor ships a real share of its own depot intake.
+///   4  Volunteers  — "vacationing" citizens arrive as trained men.
+///   5  Expedition  — the sponsor's own formations, deniably.
+///
+/// WHAT ARRIVES: money (ProxyMoneyShare of the cost), equipment (weapons and
+/// ammunition from the sponsor's StrategicStockpiles — a war fought on foreign
+/// shells runs dry when the shells stop), and at higher levels, volunteers.
+///
+/// WHAT IT COSTS: ProxyCostShare of the sponsor's GDP a week, at least
+/// ProxyMinimumCost. Unpaid for ProxyUnpaidWeeks and the support lapses.
+///
+/// THE AI decides: which wars to back (ProxyAiInterest — how interested it must
+/// be in the outcome), when to stop (ProxyAiStopInterest), and how many backers
+/// one side may have (ProxyAiBackersPerSide — no world war by proxy accident).
+///
+/// TO CHANGE THE WORLD:
+///   • Make proxy wars cheaper → lower ProxyCostShare and ProxyMinimumCost.
+///   • Make sponsors more cautious → raise ProxyAiInterest and lower the rebel cap.
+///   • Let the world flood a rebellion with weapons → raise ProxyAiBackersPerSide.
+///   • Cut off all foreign backing → set ProxyAiMinimumGdp to 0 and ProxyAiInterest to 10.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>How often sponsorships deliver, in days.</summary>

@@ -89,12 +89,16 @@ public partial class DealOrForceGame
         _handbookPage.AddThemeConstantOverride("separation", 10);
         _handbookPageScroll.AddChild(_handbookPage);
 
-        Simulation.Loc.LanguageChanged += () =>
-        {
-            if (_handbookLayer is not { Visible: true }) return;
-            RebuildHandbookList();
-            ShowHandbookArticle(_handbookArticle);
-        };
+        // Loc is process-wide; the handbook belongs to this scene. A named callback
+        // can be removed on exit instead of retaining a disposed campaign and its UI.
+        Simulation.Loc.LanguageChanged -= RefreshHandbookLanguage;
+        Simulation.Loc.LanguageChanged += RefreshHandbookLanguage;
+    }
+
+    private void RefreshHandbookLanguage()
+    {
+        if (!IsInsideTree() || !IsInstanceValid(_handbookLayer) || !_handbookLayer.Visible) return;
+        RebuildHandbookList(); ShowHandbookArticle(_handbookArticle);
     }
 
     /// <summary>Open the handbook at an article, at the one for the screen in front of the player, or at the start.</summary>

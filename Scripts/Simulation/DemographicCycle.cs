@@ -3,6 +3,41 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// The demographic cycle: how a population grows old, moves and changes, and what
+/// that does to everything else.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — what the cycle does and where to bend it:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// Every region has three cohorts — young, working, old — advanced yearly:
+///
+///   YOUNG → WORKING  at MaturationAnnual (default 5.5% a year — ~18 years of childhood)
+///   WORKING → OLD    at AgeingAnnual (default 1.8% — ~55 years of working life)
+///
+/// BIRTHS scale with how the young share compares to the reference (28%): more young
+/// than that, more births; fewer, fewer. FERTILITY by the F# kernel DemographyRules.
+///
+/// DEATHS scale with how the old share compares to its reference (10%): more old
+/// than that, more deaths — and harder, at the MortalityOldWeight.
+///
+/// MIGRATION moves people between regions (and countries) by living standard,
+/// security and brain-drain factors. A flood is more than FloodShare of a
+/// population in a year; it destabilises both ends.
+///
+/// ASSIMILATION: a minority adopts the culture around it at AssimilationAnnual
+/// (default 0.6% a year — generations, not news cycles), weighed by kinship,
+/// size, schooling, a kin state, and the country's policy (see the laws).
+///
+/// WHAT TO CHANGE:
+///   • Faster ageing world → raise AgeingAnnual to 0.025 (retirement at ~40).
+///   • Population boom → lower ReferenceYoungShare to 0.22 and raise fertility weight.
+///   • Rapid assimilation → raise AssimilationAnnual to 0.02 (a generation).
+///   • Age structure off entirely → `DemographyAgeStructureEnabled` to false:
+///     old saves load with nobody young, nobody old, and the cycle stays quiet.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>Where a region's age structure starts when the scenario says nothing: young, working, old.</summary>

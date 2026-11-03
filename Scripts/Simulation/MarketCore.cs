@@ -344,6 +344,36 @@ public sealed class MarketQuote
 /// A weekly, deterministic world clearing pass. Countries first satisfy demand from
 /// local production, then trade the remaining surpluses. A shortage therefore has a
 /// real cause and propagates into prices, GDP, living standards and the treasury.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how the market works and where to change it:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// The clearing runs once a week (EconomyTickDays, default 7) and is deterministic:
+/// the same world state always clears to the same prices, in the same order, so a
+/// seed replays exactly.
+///
+/// 1. ADD A COMMODITY → `game/common/trade/*.json`. Each key is an id; the fields
+///    are `name`, `icon` (a glyph), `basePrice`, `essentialWeight` (0 to 1: how much
+///    a shortage of it hurts), and `description`. The game registers it on load.
+///
+/// 2. MAKE A COUNTRY PRODUCE OR NEED IT → `game/common/production/*.json` (what
+///    each building adds to output) and `game/common/terrain/*.json` (what each
+///    terrain type naturally produces or consumes).
+///
+/// 3. WHAT HAPPENS IN A SHORTAGE → the satisfaction share (how much of demand was
+///    met) feeds into `nation.ShortageIndex` (average across essentials), which the
+///    HUD shows as an alert, the stability system penalises, and the AI tries to fix
+///    by building, trading or conquering.
+///
+/// 4. PRICES → each commodity's price eases toward its clearing level (what the
+///    world's supply and demand say it is worth) at a rate set by the defines. A
+///    mod that wants instant prices sets that rate to 1.0.
+///
+/// 5. TRADE ROUTES ON THE MAP → GlobeTradeTraffic.cs draws them from the data the
+///    clearing produced (who is selling what to whom); a mod that adds a commodity
+///    gets its routes for free.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class MarketSystem
 {

@@ -1,0 +1,12 @@
+{
+  "Search discoveries, effects or IDs…": "Search discoveries, effects or IDs…",
+  "ROUTE TO DISCOVERY": "ROUTE TO DISCOVERY",
+  "Route estimate unavailable.": "Route estimate unavailable.",
+  "Dependencies · Alt+wheel: zoom": "Dependencies · Alt+wheel: zoom",
+  "Inspect next prerequisite": "Inspect next prerequisite",
+  "This route contains missing or cyclic prerequisites. Check the content package.": "This route contains missing or cyclic prerequisites. Check the content package.",
+  "{0} discoveries remaining · {1} points in total": "{0} discoveries remaining · {1} points in total",
+  "About {0} week(s) for the route at today's pace.": "About {0} week(s) for the route at today's pace.",
+  "Not an automatic queue. Known discoveries and invested points are deducted. Prices and research pace may change along the way.": "Not an automatic queue. Known discoveries and invested points are deducted. Prices and research pace may change along the way.",
+  "… and {0} more discoveries": "… and {0} more discoveries"
+}

@@ -11,10 +11,27 @@ using DealOrForce.Simulation;
 
 namespace DealOrForce.Modding;
 
-/// <summary>Trusted, stateless workers. This limits the protocol, not OS permissions.</summary>
+/// <summary>
+/// One external process per package (Go, Rust, or any executable that reads one JSON request
+/// from stdin and writes one JSON response). Protocol 1. The process is not a lockstep peer
+/// and is refused when more than one human is seated. A timeout, a bad exit, or a response
+/// the whitelist rejects disables this worker for the rest of the campaign so it cannot
+/// stall every following day.
+///
+/// The request is a snapshot. The response may only queue commands named in <see cref="Capabilities"/>,
+/// plus <c>study_doctrine</c> and <c>propose_diplomatic_act</c> which the parser also accepts.
+/// Unknown command types fail the whole batch. Nothing is enqueued until the whole batch is valid.
+/// This does not grant a second economy or a second battle. It queues the same commands the UI uses.
+/// </summary>
 public sealed class WorkerModBackend
 {
+    /// <summary>Bumped only when the request or response shape changes in a way old workers cannot ignore.</summary>
     public const int Protocol = 1;
+
+    /// <summary>
+    /// Advertised on the request. <see cref="AcceptResponse"/> also accepts <c>study_doctrine</c>
+    /// and <c>propose_diplomatic_act</c>. A type that neither this list nor that parser names fails the batch.
+    /// </summary>
     public static IReadOnlyList<string> Capabilities { get; } = Array.AsReadOnly(new[] {
         "set_feature", "improve_relations", "reaffirm_alliance", "enact_policy", "manage_debt", "course_shock" });
     private readonly string _executable;
@@ -29,11 +46,16 @@ public sealed class WorkerModBackend
     {
         _executable = Path.GetFullPath(executable);
         _arguments = arguments?.ToArray() ?? Array.Empty<string>();
-        _timeoutMs = Math.Clamp(timeoutMs, 50, 5000);
+        _timeoutMs = Math.Clamp(timeoutMs, 50, 15000);
         IntervalDays = Math.Clamp(intervalDays, 1, 365);
         _log = log;
     }
 
+    /// <summary>
+    /// Run the process for <c>load</c>, <c>campaign_created</c>, or <c>day_advanced</c>.
+    /// Day hooks fire only every <see cref="IntervalDays"/>, and never twice for the same day.
+    /// The response is queued, not applied, inside this call.
+    /// </summary>
     public void Hook(Campaign campaign, string hook)
     {
         if (Disabled) return;
@@ -54,7 +76,11 @@ public sealed class WorkerModBackend
         }
     }
 
-    /// <summary>Additive v1 snapshot: old templates may ignore new fields.</summary>
+    /// <summary>
+    /// One JSON object: protocol, event, day, seed, capabilities, nations ordered by id, features.
+    /// Nation <c>id</c> is not on this snapshot; workers address countries by tag.
+    /// Old workers may ignore new fields. Do not remove a field they already read.
+    /// </summary>
     public static string BuildRequest(Campaign c, string hook) => JsonSerializer.Serialize(new {
         protocol = Protocol, @event = hook, day = c.ElapsedDays, seed = c.Seed,
         capabilities = Capabilities,
@@ -118,7 +144,11 @@ public sealed class WorkerModBackend
         return result.ToString();
     }
 
-    /// <summary>Validate the complete batch before queueing anything. No arbitrary reflection/RPC.</summary>
+    /// <summary>
+    /// Validate the complete batch before queueing anything. No arbitrary reflection or RPC.
+    /// Issuer and target are tags. The command stores <c>Nation.Id</c>, the list index, only after the tag resolves.
+    /// A single bad command rejects the batch, so a worker cannot apply half a turn.
+    /// </summary>
     public static void AcceptResponse(Campaign c, string response, Action<string> log)
     {
         if (c.HumanSeats.Count > 1) throw new InvalidOperationException("Worker commands are single-player only.");
@@ -224,6 +254,10 @@ public sealed class WorkerModBackend
     }
 }
 
+/// <summary>
+/// The worker's <c>set_feature</c> command. Apply still asks <see cref="MechanicFeatures.Allows"/>
+/// and still refuses a multiplayer campaign. Turning a switch off does not delete the content it gated.
+/// </summary>
 public sealed class WorkerFeatureCommand : ICampaignCommand
 {
     public int IssuerId { get; init; } = -1;

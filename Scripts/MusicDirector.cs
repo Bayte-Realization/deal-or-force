@@ -73,7 +73,10 @@ public partial class MusicDirector : Node
             _decks[i] = new AudioStreamPlayer { Name = "MusicDeck" + i, ProcessMode = ProcessModeEnum.Always };
             AddChild(_decks[i]);
             _decks[i].Finished += () =>
-            { if (index == _transition.ActiveDeck && !_transition.IsChanging) RequestNext(advance: true); };
+            {
+                if (index != _transition.ActiveDeck || _transition.IsChanging || Paused) return;
+                if (Manual) StepTrack(1); else RequestNext(advance: true);
+            };
         }
         Follow();
     }
@@ -82,10 +85,12 @@ public partial class MusicDirector : Node
     {
         if (_shuttingDown) return;
         _cueFocus.Advance(delta);
-        var completed = _transition.Advance(delta);
+        var completed = Paused ? MusicTransitionCompletion.None : _transition.Advance(delta);
         if (completed == MusicTransitionCompletion.Track) _decks[1 - _transition.ActiveDeck].Stop();
         else if (completed == MusicTransitionCompletion.Silence)
             foreach (var deck in _decks) deck.Stop();
+        if (!_transition.IsChanging && _silencePending)
+        { _silencePending = false; if (Silenced) FadeToSilence(1.5); }
         DrainSelection();
         // Recompute gains even during a crossfade: muting never waits for it to finish.
         RefreshVolume();
@@ -107,7 +112,8 @@ public partial class MusicDirector : Node
     {
         _shuttingDown = true;
         // There is no deferred tween callback left to revive an obsolete scene's selection.
-        _transition.Reset(); _playing = ""; _asker = null; _askMoment = null; _askSituation = null; _askSilence = null;
+        _transition.Reset(); _transport.Automatic(); _requestedStream = null; _silencePending = false;
+        _playing = ""; _asker = null; _askMoment = null; _askSituation = null; _askSilence = null;
         // A removed director can remain alive until QueueFree/managed collection.
         // Release the audio-server playback and its resource now, not at process exit.
         foreach (var deck in _decks)
@@ -124,7 +130,7 @@ public partial class MusicDirector : Node
         {
             if (_decks[i] is null) continue;
             var share = _transition.Gain(i, SettingsCatalog.Number("volume_master"),
-                SettingsCatalog.Number("volume_music"), _auditionSuppressed) * _cueFocus.Gain;
+                SettingsCatalog.Number("volume_music"), _auditionSuppressed || Silenced) * _cueFocus.Gain;
             _decks[i].VolumeDb = share <= .0005f ? -80f : SoundCatalog.GetChannel("music").VolumeDb + _tracks[i].VolumeDb + Mathf.LinearToDb(share);
         }
     }
@@ -146,6 +152,9 @@ public partial class MusicDirector : Node
         _region = _readout.Region; _subRegion = _readout.SubRegion; _country = _readout.Country;
         var moodChanged = _mood.Observe(requested, Time.GetTicksMsec() / 1000d, MusicCatalog.Director, reset);
         _moment = moment; _started = true;
+        if (Manual && catalogChanged && !MusicCatalog.All.Any(t => t.Name == RequestedTrackId)) ResumeAutomatic();
+        if (Manual && !Paused && _playing.Length == 0 && !_transition.IsChanging) PlayTrack(RequestedTrackId);
+        if (Manual || Paused) return; // Scene/mood changes do not seize the player's transport.
         if (reset || catalogChanged || moodChanged || regionChanged)
         {
             RequestNext(advance: reset || catalogChanged);
@@ -167,7 +176,9 @@ public partial class MusicDirector : Node
 
     private void DrainSelection()
     {
-        if (_transition.IsChanging || !_transition.SelectionPending) return;
+        if (_decks[0] is null || _transition.IsChanging || Paused || _shuttingDown || Silenced) return;
+        if (Manual) { DrainManualSelection(); return; }
+        if (!_transition.SelectionPending) return;
         // Coalesce changes during a fade. The latest scene, region and mood decide;
         // returning to a compatible context does not restart a perfectly good track.
         var compatible = _decks[_transition.ActiveDeck].Playing &&
@@ -186,20 +197,10 @@ public partial class MusicDirector : Node
             var roll = _order.NextDouble() * total;
             var track = available[^1];
             foreach (var option in available) { roll -= option.Weight; if (roll <= 0) { track = option; break; } }
-            AudioStream stream = null;
-            if (ResourceLoader.Exists(track.File)) stream = GD.Load<AudioStream>(track.File);
-            if (stream is null)
+            if (!TryLoadTrack(track, out var stream))
             {
-                if (_unavailable.Add(track.Name)) GD.PushWarning($"[dof] music unavailable: '{track.Name}' at {track.File}");
+                GD.PushWarning($"[dof] music unavailable: '{track.Name}' at {track.File}");
                 available.RemoveAll(t => t.Name == track.Name); continue;
-            }
-            if (track.Loop)
-            {
-                stream = (AudioStream)stream.Duplicate();
-                if (stream is AudioStreamOggVorbis ogg) ogg.Loop = true;
-                else if (stream is AudioStreamMP3 mp3) mp3.Loop = true;
-                else if (stream is AudioStreamWav wav) wav.LoopMode = AudioStreamWav.LoopModeEnum.Forward;
-                else GD.PushWarning($"[dof] music loop unsupported: '{track.Name}'");
             }
             Crossfade(track, stream); return;
         }
@@ -211,6 +212,7 @@ public partial class MusicDirector : Node
         var next = _transition.BeginTrack(MusicCatalog.Director.FadeSeconds,
             _decks[_transition.ActiveDeck].Playing);
         _decks[next].Stop(); _decks[next].Stream = stream; _tracks[next] = track;
+        _decks[next].StreamPaused = Paused;
         _playing = track.Name;
         RefreshVolume(); _decks[next].Play();
     }
@@ -218,6 +220,7 @@ public partial class MusicDirector : Node
     private void FadeToSilence(double seconds = -1)
     {
         if (_playing.Length == 0) return;
+        if (_transition.IsChanging) { _silencePending = true; return; }
         _playing = "";
         _transition.BeginSilence(seconds >= 0 ? seconds : MusicCatalog.Director.FadeSeconds);
     }

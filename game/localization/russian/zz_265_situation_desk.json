@@ -23,7 +23,7 @@
   "There are no divisions in the field": "В поле нет ни одной дивизии",
   "nothing stands between the country and its borders": "между страной и её границами никого",
   "{0} of {1} divisions are spent": "{0} из {1} дивизий выдохлись",
-  "organisation below a third": "организация ниже трети",
+  "organisation below a third": "боевой дух ниже трети",
   "The treasury is overdrawn": "Казна в минусе",
   "Spending exceeds income": "Расходы больше доходов",
   "{0} a week": "{0} в неделю",
@@ -31,5 +31,11 @@
   "Lenders are stepping back": "Кредиторы отходят в сторону",
   "The debt is larger than the economy": "Долг больше экономики",
   "The budget is spending a fifth more than it raises": "Бюджет тратит на пятую часть больше, чем собирает",
-  "{0} against {1}": "{0} против {1}"
+  "{0} against {1}": "{0} против {1}",
+  "{0} divisions in the field": "{0} дивизий в поле",
+  "Balance {0} a week": "Баланс {0} в неделю",
+  "The country is steady": "Страна спокойна",
+  "Nobody is at war with us": "С нами никто не воюет",
+  "{0} neighbours": "{0} соседей",
+  "Nothing is waiting for a decision": "Ничего не ждёт решения"
 }

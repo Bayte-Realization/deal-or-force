@@ -40,6 +40,7 @@ static class PausedDoctrineTests
     public static void Run()
     {
         AllTacticalBooks();
+        CompanionStartsOnPause();
         StrategicCourses();
         RefusalsAreImmediateAndFree();
         SequentialOrdersAndTransport();
@@ -88,6 +89,9 @@ static class PausedDoctrineTests
             }
         }
 
+        // Explicit legacy/modded one-book rule. The default now opens a second book,
+        // so asking that default to destroy the first one was no longer a rewrite test.
+        c.Defines.DoctrineBooksPerShelf = 1;
         var first = TacticalDoctrineCatalog.All.First();
         var replacement = TacticalDoctrineCatalog.OnShelf(first.Slot).First(branch => branch.Id != first.Id);
         var oldRoot = first.Nodes.First(node => node.Requires.Count == 0);
@@ -100,12 +104,39 @@ static class PausedDoctrineTests
         Submit(c, new StudyDoctrineCommand
             { IssuerId = n.Id, BranchId = replacement.Id, NodeId = newRoot.Id, Rush = true });
         Check(Track(n, replacement).Branch == replacement.Id &&
-            Track(n, replacement).Known.SequenceEqual(new[] { newRoot.Id }), "rewriting replaces the old book while paused");
+            Track(n, replacement).Known.SequenceEqual(new[] { newRoot.Id }), "one-book rule rewrites the old book while paused");
         Check(Near(n.PoliticalPoints, points - c.Defines.DoctrineRewritePoliticalCost) &&
             n.Modifiers.Any(modifier => modifier.Id == TacticalDoctrines.RetrainingModifier),
             "paused rewrite pays its normal political price and keeps retraining consequences");
         Check(c.IsPaused && c.ElapsedHours == hours && c.Random.State == rng,
             "a rewrite does not manufacture a day or a random draw");
+    }
+
+    static void CompanionStartsOnPause()
+    {
+        var (c, n) = World();
+        c.Defines.DoctrineBooksPerShelf = 2;
+        var first = TacticalDoctrineCatalog.All.First();
+        var second = TacticalDoctrineCatalog.OnShelf(first.Slot).First(b => b.Id != first.Id);
+        var root = first.Nodes.First(node => node.Requires.Count == 0);
+        var otherRoot = second.Nodes.First(node => node.Requires.Count == 0);
+        var hours = c.ElapsedHours; var rng = c.Random.State; var political = n.PoliticalPoints;
+        Submit(c, new StudyDoctrineCommand { IssuerId = n.Id, BranchId = first.Id, NodeId = root.Id, Rush = true });
+        var experience = TacticalDoctrines.Experience(n, second.Experience);
+        var command = new StudyDoctrineCommand { IssuerId = n.Id, BranchId = second.Id, NodeId = otherRoot.Id };
+        Submit(c, command);
+        var primary = Track(n, first); var companion = TacticalDoctrines.TrackFor(n, second);
+        Check(command.Refusal.Length == 0 && companion is not null && companion != primary &&
+            companion.LearningBranch == second.Id && companion.LearningNode == otherRoot.Id,
+            "second doctrine begins through the authoritative paused queue");
+        Check(primary.Branch == first.Id && primary.Known.Contains(root.Id), "opening a companion preserves the first doctrine");
+        Check(Near(TacticalDoctrines.Experience(n, second.Experience), experience - otherRoot.Cost) &&
+            Near(n.PoliticalPoints, political), "second book pays research experience, not the obsolete rewrite political price");
+        Check(c.IsPaused && c.ElapsedHours == hours && c.Random.State == rng && c.Commands.Count == 0,
+            "companion study needs no unpause, day or random roll");
+        var before = CampaignFingerprint.Of(c);
+        c.Commands.ApplyAll(c);
+        Check(CampaignFingerprint.Of(c) == before, "second book cannot be charged twice by the next queue drain");
     }
 
     static void StrategicCourses()

@@ -129,6 +129,7 @@ public partial class DealOrForceGame : Control
         MaintainQuality(delta);
         BindStepCompletion();
         RefreshMediaPreview();
+        RefreshSoundtrackPlayer(delta);
         // Before any of the early returns below it: a panel is read while the game is
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
         LayoutAudit.Watch(this, delta);

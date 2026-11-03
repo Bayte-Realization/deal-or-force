@@ -5,6 +5,38 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Covert operations: sabotage, funding the opposition, stealing technology, and the
+/// intelligence networks they ride on.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how covert operations work and where to change them:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// 1. ADD AN OPERATION TYPE → `game/common/covert_operations/*.json`.
+///    Each key is an id; the fields are `name`, `description`, `days` (how long it
+///    runs), `cost` (in billions), and `effects` (what happens when it succeeds:
+///    the same scripted-effects grammar as events and decisions).
+///
+/// 2. THE ROLL → each operation succeeds with chance `CovertBaseSuccess` plus the
+///    network's strength times `CovertStrengthSuccess`, minus the target's
+///    watchfulness times `CovertCounterSuccess`. All three are defines below.
+///
+/// 3. EXPOSURE → whether the target finds out who did it. Works and fails each
+///    carry their own chance, modified by the target's counter-intelligence.
+///    An exposure creates a grievance (worsens relations) and forces the network
+///    to lie low — a different duration for a success and a failure.
+///
+/// 4. THE NETWORK → built week by week by the intelligence system (IntelNetwork).
+///    A stronger network makes operations more likely to succeed and less likely
+///    to be traced. A mod that wants easy espionage lowers the counter weights.
+///
+/// 5. WHAT SABOTAGE DOES → `CovertSabotageDamage` is the war damage added to the
+///    target region; a stronger network does proportionally more. The damage is
+///    the same kind a war leaves, so reconstruction fixes it.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
+
 /// <summary>One operation under way: what, against whom, where, and the day it comes due.</summary>
 public sealed class CovertOperation
 {

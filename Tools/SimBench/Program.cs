@@ -266,6 +266,7 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
+        if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
         // `--opinion [days] [--provoke TAG]`: how negative the world gets, and which reasons carry it.
         if (Array.IndexOf(args, "--opinion") >= 0)
@@ -10660,18 +10661,24 @@ public static class Program
         if (humanBond.Stance != DiplomaticStance.Allied) return "ITA accepted and is not allied";
         human.IsHuman = false;
 
-        // And leaving, which is remembered.
-        var before = bond.Opinion;
+        // And leaving, which is remembered. Existing ties and the artificial courtship
+        // above can leave the displayed total clamped at +100 after a real penalty.
+        // Measure the actual reasons before clamping and require both removal of the
+        // standing alliance benefit and a new, negative departure memory.
+        var before = bond.Reasons.Sum(reason => OpinionSystem.Weight(campaign, reason));
         if (!AllianceSystem.Break(campaign, small, large, out var blocked))
             return $"LUX could not leave its own alliance: {blocked}";
         if (bond.Stance == DiplomaticStance.Allied) return "LUX left and is still allied";
         OpinionSystem.Settle(campaign, bond);
-        if (bond.Opinion >= before)
-            return $"walking out cost nothing: {before:0} before and {bond.Opinion:0} after";
+        var after = bond.Reasons.Sum(reason => OpinionSystem.Weight(campaign, reason));
+        var departure = bond.Reasons.Find(reason => reason.Id == "broke_our_alliance");
+        if (OpinionSystem.Has(bond, "alliance") || departure is null ||
+            OpinionSystem.Weight(campaign, departure) >= 0f || after >= before)
+            return $"walking out cost nothing in the opinion ledger: {before:0} before and {after:0} after";
 
         Console.WriteLine($"  alliances: FRA would not sign with LUX at {cold:0.00} and did at {warm:0.00}; " +
                           $"a puppet may not sign at all; a player is asked rather than signed for; " +
-                          $"leaving cost {before - bond.Opinion:0} points of opinion.");
+                          $"leaving cost {before - after:0} points in the opinion ledger before clamping.");
         return "";
     }
 

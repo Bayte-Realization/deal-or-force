@@ -300,49 +300,11 @@ public static class SituationReport
             }
         }
 
-        var moodLine = PoliticalCohorts.StrainCaption(c, n);
-        var loud = PoliticalCohorts.Loudest(c, n);
-        var warning = moodLine is "A region of its own has stopped belonging to the centre."
-            or "The laws still hold. The government is losing the room.";
-        if (warning || (loud is not null && loud.Cause.Length > 0 && loud.Heat >= 0.45f
-                && moodLine != "Liked enough to argue in the open."))
-        {
-            var mood = PoliticalCohorts.Mood(c, n);
-            var why = loud?.Cause ?? "";
-            var facts = new List<SituationFact>
-            {
-                F("Law approval", mood.Law.ToString("P0")), F("Government approval", mood.Government.ToString("P0")),
-                F("Political divergence", mood.Divergence.ToString("P0")), F("Loudest region", loud?.Name ?? "—")
-            };
-            if (why.Length > 0) facts.Add(F("Why", T(why)));
-            items.Add(new("political_strain", SituationPriority.Warning, SituationArea.Society,
-                T("The centre and a region no longer agree"),
-                warning ? T(moodLine) : T(why),
-                new[]
-                {
-                    T("This is accumulated opinion: laws, the government, and how far a region has drifted. It is not a date for a new border."),
-                    why.Length > 0 ? T(why) : T("Nothing else on the books is pushing it today.")
-                },
-                new[] { T("A break still needs a weak centre, a region that rejects it, and an economic stress already on the books.") },
-                facts.ToArray(),
-                SituationRoute.Crises, T("Open the political pressure")));
-        }
+        if (PoliticalStrain(c, n) is { } politicalStrain)
+            items.Add(politicalStrain);
 
-        var settling = n.DomesticCrisis;
-        if (settling is { ConciliationUntilDay: >= 0 } && settling.ConciliationUntilDay > c.ElapsedDays)
-        {
-            var place = c.States.Find(state => state.MapIndex == settling.ConciliationRegion);
-            var left = settling.ConciliationUntilDay - c.ElapsedDays;
-            items.Add(new("conciliation", SituationPriority.Awaiting, SituationArea.Society,
-                T("A region is being settled"),
-                place is null
-                    ? Loc.Format("The payment has {0} days left.", left)
-                    : Loc.Format("{0} is being settled. {1} days of it are left.", place.DisplayName, left),
-                new[] { T("The pull to leave, the anger, and the political distance cool while the money lasts. A border is not redrawn.") },
-                new[] { T("When the season ends, the region's own life decides whether the quiet holds.") },
-                new[] { F("Region", place?.DisplayName ?? "—"), F("Days left", left.ToString()) },
-                SituationRoute.Crises, T("Open the political pressure")));
-        }
+        if (Conciliation(c, n) is { } conciliation)
+            items.Add(conciliation);
 
         if (c.FeatureEnabled("government_promises") && n.Promises.Count > 0)
         {
@@ -405,22 +367,8 @@ public static class SituationReport
             }
         }
 
-        if (!observer && c.ProvinceMap is not null && Corridors.TryReport(c, n, out var cutOff))
-        {
-            var summary = cutOff.CanAsk
-                ? Loc.Format("{0} provinces are cut off from the rest. {1} holds the shortest way, {2} provinces, for about {3}.",
-                    cutOff.Provinces, cutOff.Holder, cutOff.WayProvinces, Fmt.Money(cutOff.Price))
-                : Loc.Format("{0} provinces are cut off from the rest. {1}", cutOff.Provinces,
-                    cutOff.Reason.Length > 0 ? T(cutOff.Reason) : T("No short way through a neighbour can be bought."));
-            items.Add(new("detached_land", cutOff.CanAsk ? SituationPriority.Opportunity : SituationPriority.Warning,
-                SituationArea.Foreign, T("A piece of the country is cut off"), summary,
-                new[] { T("The piece is not joined to the rest by land. A purchase asks for the regions the way runs through, not a war.") },
-                new[] { cutOff.CanAsk
-                    ? T("Asking spends nothing until they accept. The detached piece itself is not offered for sale.")
-                    : T("There is nothing to send just now. The piece stays where it is.") },
-                new[] { F("Cut off", cutOff.Provinces.ToString()), F("The way", cutOff.CanAsk ? cutOff.Holder : "—") },
-                SituationRoute.Inbox, cutOff.CanAsk ? T("Ask for the way through") : T("See why it cannot be asked")));
-        }
+        if (DetachedLand(c, n, observer) is { } detached)
+            items.Add(detached);
 
         if (!observer && Corridors.TryReportSwap(c, n, out var swap))
             items.Add(new("enclave_swap", SituationPriority.Opportunity, SituationArea.Foreign,
@@ -479,20 +427,8 @@ public static class SituationReport
             }
         }
 
-        var worn = MovementRules.WornWelcome(c, n);
-        if (worn is not null)
-        {
-            var welcome = MovementRules.Patience(c, worn);
-            var left = Math.Max(0f, c.Defines.MovementExpelHeat - worn.Movement.Heat);
-            items.Add(new("host_temper", worn.Movement.Heat >= c.Defines.MovementExpelHeat * 0.75f
-                    ? SituationPriority.Warning : SituationPriority.Opportunity,
-                SituationArea.Society, T("A headquarters is wearing out its welcome"),
-                Loc.Format("{0}. {1}", worn.DisplayName, T(welcome)),
-                new[] { T(welcome) },
-                new[] { T("Throwing it out is a decision. Leaving it spends the patience until the headquarters goes on its own.") },
-                new[] { F("Patience spent", Fmt.Percent(worn.Movement.Heat)), F("Left before it goes", Fmt.Percent(left)) },
-                SituationRoute.Crises, T("Open the movement"), worn.Id));
-        }
+        if (HostWelcome(c, n) is { } welcome)
+            items.Add(welcome);
 
         var waiting = c.Armies.Where(a => a.NationId == n.Id && !a.InBattle &&
                 (a.OrderKind is ArmyOrder.AdvanceFront or ArmyOrder.Spearhead) &&
@@ -517,6 +453,116 @@ public static class SituationReport
 
         return items.OrderBy(i => i.Priority).ThenBy(i => i.DeadlineDay < 0 ? int.MaxValue : i.DeadlineDay)
             .ThenBy(i => i.Id, StringComparer.Ordinal).Take(Math.Clamp(d.SituationItemLimit, 8, 80)).ToArray();
+    }
+
+    /// <summary>
+    /// The centre and a region that no longer agree, or null when that fact is absent.
+    /// The situation room and the society chair of the desk both read this. Nothing is written.
+    /// </summary>
+    public static SituationItem PoliticalStrain(Campaign c, Nation n)
+    {
+        if (c is null || n is null) return null;
+        string T(string text) => Loc.Get(text);
+        SituationFact F(string label, string value) => new(T(label), value);
+        var moodLine = PoliticalCohorts.StrainCaption(c, n);
+        var loud = PoliticalCohorts.Loudest(c, n);
+        var warning = moodLine is "A region of its own has stopped belonging to the centre."
+            or "The laws still hold. The government is losing the room.";
+        if (!(warning || (loud is not null && loud.Cause.Length > 0 && loud.Heat >= 0.45f
+                && moodLine != "Liked enough to argue in the open.")))
+            return null;
+        var mood = PoliticalCohorts.Mood(c, n);
+        var why = loud?.Cause ?? "";
+        var facts = new List<SituationFact>
+        {
+            F("Law approval", mood.Law.ToString("P0")), F("Government approval", mood.Government.ToString("P0")),
+            F("Political divergence", mood.Divergence.ToString("P0")), F("Loudest region", loud?.Name ?? "—")
+        };
+        if (why.Length > 0) facts.Add(F("Why", T(why)));
+        return new("political_strain", SituationPriority.Warning, SituationArea.Society,
+            T("The centre and a region no longer agree"),
+            warning ? T(moodLine) : T(why),
+            new[]
+            {
+                T("This is accumulated opinion: laws, the government, and how far a region has drifted. It is not a date for a new border."),
+                why.Length > 0 ? T(why) : T("Nothing else on the books is pushing it today.")
+            },
+            new[] { T("A break still needs a weak centre, a region that rejects it, and an economic stress already on the books.") },
+            facts.ToArray(),
+            SituationRoute.Crises, T("Open the political pressure"));
+    }
+
+    /// <summary>
+    /// A conciliation programme already on the books, or null when none is running.
+    /// The situation room and the society chair both read this. Nothing is paid.
+    /// </summary>
+    public static SituationItem Conciliation(Campaign c, Nation n)
+    {
+        if (c is null || n is null) return null;
+        string T(string text) => Loc.Get(text);
+        SituationFact F(string label, string value) => new(T(label), value);
+        var settling = n.DomesticCrisis;
+        if (settling is not { ConciliationUntilDay: >= 0 } || settling.ConciliationUntilDay <= c.ElapsedDays)
+            return null;
+        var place = c.States.Find(state => state.MapIndex == settling.ConciliationRegion);
+        var left = settling.ConciliationUntilDay - c.ElapsedDays;
+        return new("conciliation", SituationPriority.Awaiting, SituationArea.Society,
+            T("A region is being settled"),
+            place is null
+                ? Loc.Format("The payment has {0} days left.", left)
+                : Loc.Format("{0} is being settled. {1} days of it are left.", place.DisplayName, left),
+            new[] { T("The pull to leave, the anger, and the political distance cool while the money lasts. A border is not redrawn.") },
+            new[] { T("When the season ends, the region's own life decides whether the quiet holds.") },
+            new[] { F("Region", place?.DisplayName ?? "—"), F("Days left", left.ToString()) },
+            SituationRoute.Crises, T("Open the political pressure"));
+    }
+
+    /// <summary>
+    /// A piece of this country cut off from the rest, or null when the country is in one piece.
+    /// Reading it does not ask for the way and does not buy a pore. An observer is not offered the paper.
+    /// </summary>
+    public static SituationItem DetachedLand(Campaign c, Nation n, bool observer = false)
+    {
+        if (observer || c is null || n is null || c.ProvinceMap is null) return null;
+        if (!Corridors.TryReport(c, n, out var cutOff)) return null;
+        string T(string text) => Loc.Get(text);
+        SituationFact F(string label, string value) => new(T(label), value);
+        var summary = cutOff.CanAsk
+            ? Loc.Format("{0} provinces are cut off from the rest. {1} holds the shortest way, {2} provinces, for about {3}.",
+                cutOff.Provinces, cutOff.Holder, cutOff.WayProvinces, Fmt.Money(cutOff.Price))
+            : Loc.Format("{0} provinces are cut off from the rest. {1}", cutOff.Provinces,
+                cutOff.Reason.Length > 0 ? T(cutOff.Reason) : T("No short way through a neighbour can be bought."));
+        return new("detached_land", cutOff.CanAsk ? SituationPriority.Opportunity : SituationPriority.Warning,
+            SituationArea.Foreign, T("A piece of the country is cut off"), summary,
+            new[] { T("The piece is not joined to the rest by land. A purchase asks for the regions the way runs through, not a war.") },
+            new[] { cutOff.CanAsk
+                ? T("Asking spends nothing until they accept. The detached piece itself is not offered for sale.")
+                : T("There is nothing to send just now. The piece stays where it is.") },
+            new[] { F("Cut off", cutOff.Provinces.ToString()), F("The way", cutOff.CanAsk ? cutOff.Holder : "—") },
+            SituationRoute.Inbox, cutOff.CanAsk ? T("Ask for the way through") : T("See why it cannot be asked"));
+    }
+
+    /// <summary>
+    /// A headquarters whose welcome on this country's ground is wearing thin, or null while patience remains.
+    /// The same fact the situation room files. Reading it does not expel anyone and spends nothing.
+    /// </summary>
+    public static SituationItem HostWelcome(Campaign c, Nation n)
+    {
+        if (c is null || n is null) return null;
+        var worn = MovementRules.WornWelcome(c, n);
+        if (worn is null) return null;
+        string T(string text) => Loc.Get(text);
+        SituationFact F(string label, string value) => new(T(label), value);
+        var welcome = MovementRules.Patience(c, worn);
+        var left = Math.Max(0f, c.Defines.MovementExpelHeat - worn.Movement.Heat);
+        return new("host_temper", worn.Movement.Heat >= c.Defines.MovementExpelHeat * 0.75f
+                ? SituationPriority.Warning : SituationPriority.Opportunity,
+            SituationArea.Society, T("A headquarters is wearing out its welcome"),
+            Loc.Format("{0}. {1}", worn.DisplayName, T(welcome)),
+            new[] { T(welcome) },
+            new[] { T("Throwing it out is a decision. Leaving it spends the patience until the headquarters goes on its own.") },
+            new[] { F("Patience spent", Fmt.Percent(worn.Movement.Heat)), F("Left before it goes", Fmt.Percent(left)) },
+            SituationRoute.Crises, T("Open the movement"), worn.Id);
     }
 
     private static float Threshold(float value, float fallback) => float.IsFinite(value) ? Math.Clamp(value, 0, 1) : fallback;

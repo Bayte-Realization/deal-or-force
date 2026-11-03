@@ -106,6 +106,18 @@ public static class CampaignFingerprint
             MixText("supply_attack_cover");
             MixFloat(campaign.Defines.SupplyAttackCoverageFloor);
         }
+        if (campaign.Defines.DoctrineBooksPerShelf != 2)
+        {
+            MixText("doctrine_books_per_shelf");
+            Mix(campaign.Defines.DoctrineBooksPerShelf);
+        }
+        if (MathF.Abs(campaign.Defines.ResearchUseShare - Defines.DefaultResearchUseShare) > 0.0001f ||
+            MathF.Abs(campaign.Defines.ResearchUseCeiling - Defines.DefaultResearchUseCeiling) > 0.0001f)
+        {
+            MixText("research_field_use");
+            MixFloat(campaign.Defines.ResearchUseShare);
+            MixFloat(campaign.Defines.ResearchUseCeiling);
+        }
         // Non-default combat-tactic rules, in the same discipline: a world fought without
         // manoeuvres must not share a fingerprint with one fought with them.
         if (!campaign.Defines.CombatTacticsEnabled ||
@@ -747,6 +759,13 @@ public static class CampaignFingerprint
                     MixText("tactical_doctrines"); MixText(slot); MixText(track.Branch); Mix(track.Known.Count);
                     foreach (var node in track.Known.OrderBy(id => id, StringComparer.Ordinal)) MixText(node);
                     MixText(track.LearningNode); Mix(track.LearningDoneDay);
+                    var companion = track.Companion;
+                    if (companion is null || (companion.Branch.Length == 0 && companion.Known.Count == 0 &&
+                                              companion.LearningNode.Length == 0)) continue;
+                    MixText("tactical_doctrine_second"); MixText(slot); MixText(companion.Branch);
+                    Mix(companion.Known.Count);
+                    foreach (var node in companion.Known.OrderBy(id => id, StringComparer.Ordinal)) MixText(node);
+                    MixText(companion.LearningNode); Mix(companion.LearningDoneDay);
                 }
             }
             // The grand strategy in force, and when the government last changed its mind.
@@ -755,6 +774,19 @@ public static class CampaignFingerprint
             {
                 MixText("strategic_doctrine"); MixText(nation.StrategicDoctrine.Id);
                 Mix(nation.StrategicDoctrine.LastChangeDay);
+            }
+            // Practice on a technology the country already has. An idle country, and an
+            // old save, store nothing here, so an untouched world keeps the hash it had.
+            if (nation.TechnologyFamiliarity.Count > 0)
+            {
+                var wroteFamiliarity = false;
+                foreach (var entry in nation.TechnologyFamiliarity.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    if (!(entry.Value > 0f) || !float.IsFinite(entry.Value)) continue;
+                    if (!wroteFamiliarity) { MixText("technology_familiarity"); wroteFamiliarity = true; }
+                    MixText(entry.Key);
+                    MixFloat(entry.Value);
+                }
             }
             if (nation.ArmyExperience != 0f || nation.AirExperience != 0f ||
                 nation.NavalExperience != 0f || nation.PoliticalPoints != 0f)

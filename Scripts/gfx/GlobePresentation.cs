@@ -211,8 +211,26 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
     public bool LoadingInputBlocked { get; set; }
-    public bool MediaLibraryInputBlocked { get; set; }
-    public bool MapLayerDrawerInputBlocked { get; set; }
+    private bool _mediaLibraryInputBlocked, _mapLayerDrawerInputBlocked;
+    public bool MediaLibraryInputBlocked
+    {
+        get => _mediaLibraryInputBlocked;
+        set { _mediaLibraryInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+    public bool MapLayerDrawerInputBlocked
+    {
+        get => _mapLayerDrawerInputBlocked;
+        set { _mapLayerDrawerInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+
+    private void DismissMapTooltips()
+    {
+        // Godot attaches its native tooltip PopupPanel directly to the owner Control.
+        // Stop already-visible map popups too: blocking new input alone leaves an old
+        // tooltip above a newly opened modal, until the physical pointer moves.
+        foreach (var child in GetChildren())
+            if (child is PopupPanel popup) popup.Hide();
+    }
     public string MapLoadingError { get; private set; } = "";
     public string MapLoadingStage => _pendingMapResult is null
         ? "Reading province and terrain maps"
@@ -1906,6 +1924,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override string _GetTooltip(Vector2 atPosition)
     {
+        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) return "";
         var supportTip = SupportMapTooltip(atPosition);
         if (supportTip.Length > 0) return supportTip;
         var eventTip = EventPulseTooltip(atPosition);

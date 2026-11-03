@@ -21,6 +21,7 @@ static class StructuredDataTests
 
     public static void Run()
     {
+        YamlWorkbenchTests.Run();
         const string yaml = """
             # Names and schemas are unchanged from JSON.
             units_per_factory: 12

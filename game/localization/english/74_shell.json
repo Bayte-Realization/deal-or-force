@@ -70,7 +70,7 @@
   "Production {0:0.0} · demand {1:0.0}": "Production {0:0.0} · demand {1:0.0}",
   "Imports {0:0.0} · exports {1:0.0}": "Imports {0:0.0} · exports {1:0.0}",
   "Living standard {0:P0} · literacy {1:P0}": "Living standard {0:P0} · literacy {1:P0}",
-  "{0:0.0} divisions · organisation {1:P0} · supply {2:P0}": "{0:0.0} divisions · organisation {1:P0} · supply {2:P0}",
+  "{0:0.0} divisions · organisation {1:P0} · supply {2:P0}": "{0:0.0} divisions · morale {1:P0} · supply {2:P0}",
   "Support {0:P0}": "Support {0:P0}",
   "{0} of {1}.": "{0} of {1}.",
   "The whole table is under Population.": "The whole table is under Population.",

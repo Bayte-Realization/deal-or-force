@@ -10,6 +10,11 @@ For specialized visual, runtime, operational, or client-specific work, use `addo
 
 # Development tooling
 
+Publication target (user instruction, 30 October 2026): publish game changes to
+`EntertAlpha`. Preserve the historical `ReimAlpha` branch; do not reset it or
+force-push without a specific user-approved historical target. An active shared
+worktree can contain newer, unverified edits beyond a published build checkpoint.
+
 Two tools exist so the daily loop is one command instead of four remembered ones. Use them
 instead of re-deriving the commands.
 
@@ -38,6 +43,28 @@ instead of re-deriving the commands.
   scripts can be sent to it; close its window when done. The switch that makes it work is
   `FENNARA_RT_SPEC`: Fennara's own `runtime_session` does not set it on this machine, which is
   why every runtime session times out at startup.
+  On 30 October 2026 it worked twice and then stalled four times running after a rebuild: the game
+  log stops right after `[MCPRegistry] runtime port 6570 registered` and never reaches the
+  `[godot_ai game_helper] registered mcp capture` line that the working runs had, so the script's
+  readiness gate waits out its 240 seconds. Killing every Godot process and every `godot-ai` daemon
+  first rescued the earlier attempts and did not rescue those four. Known flake: check for the
+  missing line before blaming the game.
+  On 31 October 2026 the same stall was reproduced through **Fennara's own MCP runtime_session**
+  (`startup_timeout`, exit 1, identical six log lines), so it is not the script: the game itself
+  does not finish starting. The cause is now known and it is Godot's own extension loading, not a
+  flake and not antivirus: from 4.4 Godot copies every GDExtension to `~lib<name>.dll` next to it
+  and loads THAT copy, so the original can be replaced later. A running editor holds those copies
+  (`~libfennara…`, `~libgodotsteam…`, `~liblimboai…`, `~libziva_agent…` — their creation time is the
+  editor's start time), so a second Godot started from the same binaries cannot refresh them: the
+  copy fails, `Can't open GDExtension dynamic library` follows, `MCPRuntimeServer` binds port 6570
+  and the process stops before any `[folders]`/`[mods]`/`[dof]` line. Every failed attempt leaves a
+  full-size `~RF*.TMP` beside the DLL — 88 of them, 401 MB, by 31 October.
+  **So: the game cannot be captured while an editor has this project open.** `Tools/game-capture.ps1`
+  now refuses in one second and names the editor's PID, and `dev.ps1 -Game` runs the same editor
+  binary, so it is in the same position. The ways out, in order of preference: ask the editor's owner
+  for a window with it closed (keep the PIDs you started and close only those, never another agent's
+  session); or export the game and photograph the exported build, which carries the template DLL
+  variants and its own copies.
 - **`Tools/game-mcp/server.mjs`** — a dependency-free MCP server exposing the same checks as
   tools: `build_game`, `run_tests`, `game_verify`, `capture_screenshots`, `list_technologies`,
   `localization_audit`. Registered as `deal-or-force-dev` in `.mcp.json`; MCP servers are read
@@ -66,6 +93,19 @@ instead of re-deriving the commands.
 - **`Tools/close-godot.ps1`** — list every Godot process by kind (`editor`, `run`, `daemon`) and
   close the ones asked for: `-Daemons` (Fennara helpers, recreated on demand), `-Runs`
   (command-line probes and tests), `-Editors` (unsaved work is lost; asks first), `-All -Yes`.
+- **Never stop a Godot process you did not start. This is a shared machine and the editor is
+  somebody's working session.** On 30 October 2026 an agent ran
+  `Get-Process *odot* | Stop-Process` repeatedly to clear file locks before game captures. That
+  pattern matches the user's editor as well as the agent's own game runs, so the editor closed
+  under them again and again — while the capture it was meant to unblock still failed, because the
+  lock was never the cause (see the `game-capture.ps1` note: the game does not finish starting at
+  all, and the log says `Error copying library: libfennara...dll`). Destructive and useless at the
+  same time. The rules that follow from it: keep the PIDs you launched and close only those;
+  `-Daemons` is the only kind an agent may close on its own initiative; everything else — the
+  editor, other agents' runs — is asked for, not taken. Long simulation runs (`SimBench`) do not
+  need the editor closed at all. For a run that must not touch the project's locks, use
+  `Tools/probe-project.ps1`, which reaches the real project through directory junctions and
+  autoloads only `BootGuard`.
 - **Bug reports** — the button `Report a problem` in Settings and the console command `report`
   both call `Scripts/SupportReportGame.cs` → `Scripts/Simulation/SupportReport.cs`, which writes
   `reports/DealOrForce-report-YYYYMMDD-HHMMSS.zip`: `report.txt` (build, machine, language,
@@ -80,6 +120,22 @@ instead of re-deriving the commands.
   `REPLAY_WORLD` (nations, movements, offices, open wars, regions, chronicle), then `REPLAY_OK` or
   `REPLAY_CRASH`. Use it before and after fixing a runtime report; it is the difference between
   "should be fixed" and "your save now runs".
+- **`Tools/SimBench <days> <seed> --soak` and `... --kin`** — ten-year measurement, not a smoke test:
+  `--soak` watches the world's health (`Soak PASS`/`FAIL`, alerts, wars, GDP, radicalism) and `--kin`
+  counts what the kin-statecraft ladder actually did in a world nobody is playing — agitations
+  quiet and caught, volunteer drafts, proxies founded, offices opened/closed/shut/exposed — then
+  judges broken invariants only (an office with no living host, a proxy with no living sponsor).
+  Flows are counted incrementally by chronicle sequence, because the chronicle is a 2048-line ring
+  buffer and reading it at the end reports the last two thousand lines as if they were ten years.
+  This is the run that showed the computer catching itself every single time
+  (`docs/KIN_AI_ALWAYS_CAUGHT_2026_10_30_RU.md`); a mechanic with one outcome looks exactly like
+  a working mechanic in a log.
+- **`Tools/SimBench <days> <seed> --wars`** — every war older than a year, every 90 days: score,
+  occupied ground, pending offer, the last line of negotiation, and the numbers the decision is
+  made of (budget against each side's floor, `TimeToStop`, acceptance of a white peace and of a
+  status quo, war support). Written because `LastNegotiation` alone misleads: an offer between two
+  computers is resolved on the spot and leaves the field empty. This is the report that found five
+  separate reasons a war could never end (`docs/WARS_THAT_NEVER_ENDED_2026_10_30_RU.md`).
 - **Moved out of `res://` on 27 October 2026**: `Tools/BtaBridge` (**45 225 files**) and
   `Tools/UniversalModder` now live in `D:\Godot Projects\deal-or-force-tools\`. Neither is used
   by Godot — BtaBridge bridges another game's mod format and UniversalModder is an upstream clone

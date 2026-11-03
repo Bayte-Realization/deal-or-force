@@ -3,6 +3,40 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// The army's lifecycle: what grows in war, what goes home in peace, and the one
+/// thing that actually starves — a pocket nobody relieved.
+///
+/// Despite the filename, this is NOT about peacetime attrition. (Yeah? NO SHIT, SHERLOCK! (addressing GLM 5.3, who wrote this)) Formations do not
+/// decay in peace. They stand, they cost money (the military spending slider),
+/// and only an UNPAID SURPLUS goes home — one division at a time, only when the
+/// treasury cannot cover it, never one that is holding a front or an order.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — what this file actually does, in order of the Tick:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// 1. STARVE THE POCKETS — the only genuine attrition here: a formation cut off
+///   from supply loses people and organisation daily until relieved or broken.
+///   This is the cauldron mechanic (LogisticsCore marks it CutOff, this bleeds it).
+///
+/// 2. BURY THE BROKEN — removes formations that have reached zero. Bookkeeping.
+///
+/// 3. REBUILD THE LOST — the recruitment pass: fills the gap between the army a
+///   country has and the one its situation calls for (bigger at war, smaller at
+///   peace). One formation at a time in peace, several at a time in war.
+///
+/// 4. STAND DOWN THE SURPLUS — only at peace, only when the treasury cannot pay:
+///   one surplus division goes home, the men return to the manpower reserve.
+///   A division holding a front, fighting, or carrying out an order is never surplus.
+///
+/// WHAT TO CHANGE:
+///   • Bigger armies in war → WarDivisionsPerPost, WarCeiling, WarCeilingOverrun.
+///   • Faster recovery → WarRaiseBatch (more formations per pass).
+///   • Peace that disarms → PeaceDisbandMargin (1.0 = any surplus goes home).
+///   • Manpower as the real limit → ManpowerRecoveryRate in defines.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>

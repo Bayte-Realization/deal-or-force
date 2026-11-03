@@ -1,6 +1,6 @@
 // Fleet formation (FleetGroups): joining and splitting fleets, and halving a selection (Ctrl+X).
 {
-  "FORMATION": "FORMATION",
+  "FLEET FORMATION": "FLEET FORMATION",
   "Join fleets": "Join fleets",
   "Split in half": "Split in half",
   "Join fleets (Ctrl+K)\nFold every selected fleet lying in the same port or within a day's sail into the largest. Condition is averaged over the hulls. Draw a box over several fleets to select them.": "Join fleets (Ctrl+K)\nFold every selected fleet lying in the same port or within a day's sail into the largest. Condition is averaged over the hulls. Draw a box over several fleets to select them.",

@@ -1,0 +1,12 @@
+{
+  "Select a file.": "Выберите файл.",
+  "Content changed outside this editor, or the document already exists. Nothing was overwritten. Reopen it from the file list.": "Содержимое изменили вне редактора или документ уже существует. Ничего не перезаписано. Откройте файл заново из списка.",
+  "Content source": "Исходник",
+  "Property and layout edits reformat the document and remove comments. Edit Source to preserve them.": "Правка свойств и макета меняет оформление и убирает комментарии. Чтобы сохранить их, редактируйте исходник.",
+  "This removes the selected property and its children. Undo is available in the Source tab.": "Выбранное свойство и его содержимое будут удалены. Отменить действие можно на вкладке «Исходник».",
+  "Relative path inside the mod, ending in .json, .yaml or .yml": "Путь внутри мода с расширением .json, .yaml или .yml",
+  "Use JSON or YAML in a declared content folder. Scenario documents remain JSON.": "Используйте JSON или YAML в папке данных мода. Документы сценариев пока остаются JSON.",
+  "Property preview: first 100 array entries, 6 levels. The Source tab exposes the complete document.": "Просмотр свойств: первые 100 элементов массива, до 6 уровней. Полный документ доступен на вкладке «Исходник».",
+  "YAML valid. Domain rules are also checked when the game loads this content.": "Синтаксис YAML корректен. Правила содержимого дополнительно проверяются при загрузке данных игрой.",
+  "JSON valid. Domain rules are also checked when the game loads this content.": "Синтаксис JSON корректен. Правила содержимого дополнительно проверяются при загрузке данных игрой."
+}

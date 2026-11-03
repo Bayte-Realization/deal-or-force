@@ -133,7 +133,7 @@
     {
       "id": "national_unity_government_of_myanmar", "tag": "NUG", "name": "National Unity Government of Myanmar",
       "description": "The parallel government formed by the lawmakers ousted in the coup of 2021 and their allies. Its People's Defence Forces hold much of the countryside of Sagaing against the junta.",
-      "parent": "MMR", "colour": "#d4af37",
+      "parent": "MMR", "colour": "#7a2f9c",
       "capital": "Kanbalu", "capital_at": [95.51, 23.2],
       "government": "federation", "ideology": "liberalism", "peoples": ["burmese", "chin"],
       "areas": [
