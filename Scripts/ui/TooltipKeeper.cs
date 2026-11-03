@@ -167,7 +167,11 @@ public sealed partial class TooltipKeeper : Node
     {
         var place = keepPlace && _panel is not null ? _panel.Position : (Vector2I?)null;
         Hide();
-        var custom = source.Call(Control.MethodName._MakeCustomTooltip, text).AsGodotObject() as Control;
+        // Only a control that makes its own tooltip is asked for one: calling the virtual on a plain
+        // Label or the globe is an engine error each time, logged every frame the mouse rests.
+        var custom = source.HasMethod(Control.MethodName._MakeCustomTooltip)
+            ? source.Call(Control.MethodName._MakeCustomTooltip, text).AsGodotObject() as Control
+            : null;
         Control content = custom ?? new Label { Text = text, ThemeTypeVariation = "TooltipLabel" };
         _panel = new PopupPanel
         {
