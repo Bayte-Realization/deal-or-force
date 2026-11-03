@@ -237,6 +237,16 @@
   ],
   "cell_transfers": [
     {
+      // The source raster drew Belarus's Hrodna region into Lithuania's south-east, so the
+      // Salcininkai district hung off the rest of the country by one diagonal cell. The real
+      // border runs south of Salcininkai at about 54.2 N between Eisiskes and the town.
+      "id": "salcininkai_to_vilnius_county",
+      "from_iso": "BY-HR", "to_iso": "LT-VL",
+      "from_nation": "BLR", "to_nation": "LTU",
+      "points": [[25.46875, 54.28125], [25.15625, 54.21875], [25.21875, 54.21875], [25.28125, 54.21875],
+                 [25.34375, 54.21875], [25.40625, 54.21875], [25.46875, 54.21875]]
+    },
+    {
       // One residual raster cell south of the Gaza contour, not part of the West Bank.
       // The user-requested eastern-region option: retain ISR bookmark ownership and
       // join Southern district. Province colour/ID and the Gaza contour stay unchanged.
@@ -247,6 +257,21 @@
     }
   ],
   "partitions": [
+    {
+      // Israel was one region from the Golan to Eilat, so the most fought-over ground of the
+      // century changed hands a whole country at a time. Its six districts, grown from their
+      // capitals; the Golan goes with the Northern District, the Negev with the Southern.
+      "nation": "ISR",
+      "carve_from_iso": "IL-D",
+      "pieces": [
+        { "map_index": 18, "name": "Southern", "iso": "IL-D", "kind": "District", "population": 1390000, "seed": [34.79, 31.0] },
+        { "map_index": 1741, "name": "Jerusalem", "iso": "IL-JM", "kind": "District", "population": 1240000, "seed": [35.12, 31.77] },
+        { "map_index": 1742, "name": "Central", "iso": "IL-M", "kind": "District", "population": 2290000, "seed": [34.9, 31.93] },
+        { "map_index": 1743, "name": "Tel Aviv", "iso": "IL-TA", "kind": "District", "population": 1470000, "seed": [34.78, 32.08] },
+        { "map_index": 1744, "name": "Haifa", "iso": "IL-HA", "kind": "District", "population": 1130000, "seed": [34.99, 32.79] },
+        { "map_index": 1745, "name": "Northern", "iso": "IL-Z", "kind": "District", "population": 1530000, "seed": [35.4, 32.95] }
+      ]
+    },
     {
       // Hebei wraps around Beijing and Tianjin, which are carved out of it in reality, so
       // it draws as a crescent. Splitting the whole province into prefectures fixed the

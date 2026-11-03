@@ -128,15 +128,21 @@ public static class FleetHistory
     /// could say which provinces have a coast, and it gave Britain's fleet a home port in
     /// Devon's interior and sent a beaten squadron to repair itself in a field.
     /// </summary>
-    public static void AssignHomePorts(Campaign campaign)
+    public static void AssignHomePorts(Campaign campaign, bool keepSaved = false)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
         var coastal = SeaLanes.CoastalProvinces(topology);
+        var coastalSet = keepSaved ? new HashSet<int>(coastal) : null;
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
+            // A loaded campaign's fleets already have homes - perhaps moved since the bookmark, when a
+            // port was lost - and the coordinates they were first placed by would hand them back.
+            if (keepSaved && fleet.HomeProvinceId > 0 && fleet.HomeProvinceId <= topology.ProvinceCount &&
+                coastalSet.Contains(fleet.HomeProvinceId) && topology.ProvinceToNation[fleet.HomeProvinceId] == nation.MapIndex)
+                continue;
             if (fleet.Establishment <= 0) fleet.Establishment = fleet.Hulls;
             var basin = SeaLanes.BasinAt(topology, fleet.HomeLatitude, fleet.HomeLongitude);
 

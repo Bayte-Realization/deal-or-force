@@ -513,7 +513,7 @@
     { "sponsor": "USA", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
     { "sponsor": "TUR", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
     { "sponsor": "RUS", "client": "MMR", "war": ["MMR", "NUG"], "level": 1 },
-    { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 2 },
+    { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 3 },
     { "sponsor": "ZAF", "client": "COD", "war": ["COD", "AFC"], "level": 1 },
     { "sponsor": "UGA", "client": "COD", "war": ["COD", "ADF"], "level": 2 },
     { "sponsor": "BDI", "client": "COD", "war": ["COD", "AFC"], "level": 2 },

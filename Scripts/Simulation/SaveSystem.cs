@@ -66,7 +66,7 @@ public static class SaveSystem
     public const int FormatVersion = 2;
     public const string GameVersion = GameBuildInfo.Version;
     // Bumped whenever provinces.png is recut: a save's province ids mean nothing on another cut.
-    public const string MapDataVersion = "2024.10.06-a";
+    public const string MapDataVersion = "2024.11.03-a";
     public const string QuickSlot = "quicksave";
     public const string AutoSlot = "autosave";
 

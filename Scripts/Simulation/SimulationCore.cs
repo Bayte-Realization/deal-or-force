@@ -1293,7 +1293,7 @@ public sealed partial class Campaign
 
         // A fleet's home port is a province, and provinces only exist once the map is
         // attached. Until then a fleet knows where it is but not what it belongs to.
-        FleetHistory.AssignHomePorts(this);
+        FleetHistory.AssignHomePorts(this, keepSaved: _pendingProvinceController is not null);
         // And every state's church and people from the first look: the State Affairs screen of
         // 1 January showed nothing declared until the first day had ticked, as if each
         // country made its mind up on the morning of the 2nd. A new campaign only - a save

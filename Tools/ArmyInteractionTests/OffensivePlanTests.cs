@@ -21,7 +21,8 @@ static class OffensivePlanTests
             foreach(var n in map.Neighbors[p]) if(!map.IsWater(n)&&distances.TryAdd(n,distances[p]+1))queue.Enqueue(n);
         }
         c.ProvinceController[origin]=(ushort)rus.MapIndex;
-        var goal=distances.First(x=>x.Value==3).Key;
+        // A goal three steps out with two ways onward, whatever shape the map's provinces take.
+        var goal=distances.First(x=>x.Value==3&&map.Neighbors[x.Key].Count(n=>distances.GetValueOrDefault(n)>3&&!map.IsWater(n))>=2).Key;
         var next=map.Neighbors[goal].First(n=>distances.GetValueOrDefault(n)>=3 && !map.IsWater(n));
         var last=map.Neighbors[goal].First(n=>distances.GetValueOrDefault(n)>3 && n!=next && !map.IsWater(n));
         var phaseGoals=new List<int>{last};

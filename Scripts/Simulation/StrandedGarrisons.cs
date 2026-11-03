@@ -50,6 +50,13 @@ public sealed partial class Defines
     public float PocketStoresPerBarracks { get; set; } = 3f;
     public float PocketStoresUrbanDays { get; set; } = 15f;
     public float PocketStoresCarriedDays { get; set; } = 5f;
+
+    /// <summary>
+    /// Days of food and fuel a garrison loads before it marches home through a rising's lines. A
+    /// column that leaves its depot takes the depot with it; counted against the ground it walks
+    /// over it had four days, and an interior region's road home starved it for a fortnight.
+    /// </summary>
+    public float GarrisonMarchStoresDays { get; set; } = 21f;
     public float PocketStoresDivisionsPerRegion { get; set; } = 4f;
     public float PocketStoresMinDays { get; set; } = 3f;
     public float PocketStoresMaxDays { get; set; } = 60f;
@@ -266,6 +273,9 @@ public static class StrandedGarrisons
         // Standing on the rising's ground it is cut off already, whatever the last trace said:
         // the release home waits for the road to be open, not for the next morning's trace.
         army.CutOff = true;
+        // It marches with the garrison's own stores on its wagons (GarrisonMarchStoresDays).
+        army.PocketStores = MathF.Max(army.PocketStores, c.Defines.GarrisonMarchStoresDays);
+        army.PocketSinceDay = c.ElapsedDays;
         return true;
     }
 

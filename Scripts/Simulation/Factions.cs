@@ -915,6 +915,31 @@ public static class Factions
             if (!inside || except.Any(ring => Inside(ring, centre.Longitude, centre.Latitude))) continue;
             result.Add(province);
         }
+        // A ring smaller than a province holds no province's centre, and which it holds changes
+        // at every recut of the map: the Wa hills and Djugu came out with nothing. Such a ring
+        // takes the parent's province nearest its middle, within a degree.
+        foreach (var ring in areas)
+        {
+            if (ring is null || ring.Length < 3) continue;
+            if (result.Any(province => Inside(ring, topology.CenterOf(province).Longitude, topology.CenterOf(province).Latitude))) continue;
+            float midLon = 0f, midLat = 0f;
+            foreach (var (lon, lat) in ring) { midLon += lon; midLat += lat; }
+            midLon /= ring.Length; midLat /= ring.Length;
+            var nearest = -1;
+            var best = 1f;
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+            {
+                if (topology.ProvinceToNation[province] != (ushort)parent.MapIndex || topology.IsWater(province)) continue;
+                var centre = topology.CenterOf(province);
+                var dLat = centre.Latitude - midLat;
+                var dLon = (centre.Longitude - midLon) * MathF.Cos(midLat * MathF.PI / 180f);
+                var distance = MathF.Sqrt(dLat * dLat + dLon * dLon);
+                if (distance >= best || except.Any(cut => Inside(cut, centre.Longitude, centre.Latitude))) continue;
+                best = distance;
+                nearest = province;
+            }
+            if (nearest > 0 && !result.Contains(nearest)) result.Add(nearest);
+        }
         return result;
     }
 
