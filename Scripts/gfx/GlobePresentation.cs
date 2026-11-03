@@ -2915,7 +2915,7 @@ void fragment() {
     // for every river drew brooks as wide as the Rhine and both as pale bands of paint.
     float river_size = smoothstep(0.55, 0.98, hydrography.b);
     float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
-        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset + mix(0.42, -0.04, river_size);
+        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset + mix(0.30, -0.16, river_size);
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
     float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
@@ -2930,8 +2930,13 @@ void fragment() {
     vec2 water_motion = vec2(TIME * water_animation_speed, 0.0);
     float water_detail = max(detail_mix, province_detail) * water_texture_strength;
     vec3 inland_water = mix(vec3(0.028, 0.145, 0.185), vec3(0.014, 0.080, 0.125), lake_depth);
-    // Deep river water, a touch lighter in the great channels - never the pale band it was.
-    vec3 river_color = mix(vec3(0.020, 0.095, 0.130), vec3(0.028, 0.140, 0.190), prominent_river);
+    // River water is water: a clear blue that reads against every political colour. The near-black
+    // teal it was drew the Han and the Dnieper exactly like the grey region lines beside them, so
+    // a player could not tell a river from a border. Great channels run lighter, and carry a
+    // brighter current down their middle.
+    vec3 river_color = mix(vec3(0.060, 0.230, 0.360), vec3(0.090, 0.320, 0.480), prominent_river);
+    float river_current = (1.0 - smoothstep(-1.10, -0.35, river_distance)) * prominent_river;
+    river_color = mix(river_color, vec3(0.200, 0.470, 0.620), river_current * 0.55);
     float river_bank = (1.0 - smoothstep(0.0, river_edge * 2.5, abs(river_distance))) * (1.0 - river_water);
     if (inland_coverage > 0.001 && water_detail > 0.001) {
         vec3 lake_tile = texture(lake_surface, water_uv + water_motion * 0.30).rgb;
@@ -2952,8 +2957,9 @@ void fragment() {
     float river_opacity = mix(river_far_opacity, river_near_opacity, max(detail_mix, province_detail));
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
-    // A thin darker bank, so the water sits in a channel rather than lying on the land like paint.
-    base = mix(base, base * 0.72, river_bank * river_opacity * 0.55 * (1.0 - lake_water));
+    // A thin green-brown bank, so the water sits in a valley rather than lying on the land like
+    // paint - and not a black outline, which is what a border is drawn with.
+    base = mix(base, base * vec3(0.78, 0.86, 0.74), river_bank * river_opacity * 0.50 * (1.0 - lake_water));
     // Land relief must not turn a lake into a mountain ridge.
     NORMAL_MAP = mix(NORMAL_MAP, vec3(0.5, 0.5, 1.0), inland_coverage);
     // The region line, the last one still drawn by asking four neighbours whether they
