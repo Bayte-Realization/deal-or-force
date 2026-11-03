@@ -206,6 +206,47 @@ public partial class DealOrForceGame
         ShowSelectedArmies();
     }
 
+    /// <summary>
+    /// Put the selection on the whole front against every enemy - the "Whole front" button.
+    ///
+    /// No stroke to draw: the line is everywhere the country touches ground held by anybody
+    /// it is at war with, and it keeps itself up to date (DrawnFrontLine.AllEnemies). A second
+    /// army group pressed onto it joins the same front instead of opening another.
+    /// </summary>
+    private void AssignWholeFront()
+    {
+        EndDrawing();
+        if (_campaign?.Player is null) return;
+        var armies = SelectedPlayerArmies().Select(army => army.Id).Distinct().ToList();
+        if (armies.Count == 0)
+        {
+            SetArmyFeedback(Tr("Select the divisions or the army group to put on the front first."));
+            return;
+        }
+        _campaign.Commands.Enqueue(new DrawFrontLineCommand
+        {
+            IssuerId = _campaign.Player.Id,
+            Kind = FrontLineKind.Defence,
+            AllEnemies = true,
+            ArmyIds = armies
+        });
+        _campaign.Commands.ApplyAll(_campaign);
+        _globe.RefreshBattlePlans();
+        var line = _campaign.FrontLines.Find(candidate => candidate.NationId == _campaign.Player.Id &&
+            candidate.AllEnemies && candidate.Kind == FrontLineKind.Defence);
+        if (line is null || !armies.Any(line.ArmyIds.Contains))
+        {
+            SetArmyFeedback(Tr("No country at war with you shares a land border with you. Existing orders were kept."));
+            return;
+        }
+        var facing = line.Provinces.Select(province => BorderFronts.EnemyAt(_campaign, _campaign.Player.Id, province))
+            .Where(id => id >= 0).Distinct().Count();
+        SetArmyFeedback(Simulation.Loc.Format(
+            "Whole front: {0:N0} divisions on {1:N0} provinces facing {2:N0} enemy countries.",
+            line.ArmyIds.Count, line.Provinces.Count, facing));
+        ShowSelectedArmies();
+    }
+
     /// <summary>Remove entire selected plans, not just the selected entries of their rosters.</summary>
     private void ClearDrawnLine()
     {

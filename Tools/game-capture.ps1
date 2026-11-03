@@ -62,6 +62,35 @@ function Find-Godot {
 $engine = Find-Godot
 if (-not (Test-Path -LiteralPath $engine)) { throw "no Godot executable at $engine" }
 
+# An open editor is not "maybe a problem" - it is the reason a second Godot cannot start the game.
+# Godot 4.4 copies each GDExtension to `~lib<name>.dll` beside it and loads THAT copy, so it can
+# replace the original later. The running editor holds those copies; a game started from the same
+# binaries then cannot refresh them, the extension fails to load, and the game stops before its own
+# startup lines - which reads like a flake and is not one. Refuse in one second with the reason,
+# rather than waiting out the readiness gate and leaving the next person to guess (or, worse, to
+# kill the editor: on 30 October 2026 that is exactly what happened, four times, and it never
+# helped).
+$editors = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessName -like 'Godot*' -and $_.MainWindowTitle -match 'Godot Engine'
+})
+if ($editors.Count -gt 0) {
+    $named = ($editors | ForEach-Object { "$($_.ProcessName) ($($_.Id))" }) -join ', '
+    throw ("an editor has a project open: $named." + [Environment]::NewLine +
+        "It holds addons/**/bin/~lib*.dll, so a second Godot cannot load the game's extensions and" + [Environment]::NewLine +
+        "the run would sit at '[MCPRegistry] runtime port ... registered' until the timeout." + [Environment]::NewLine +
+        "Close the editor (ask its owner; do not kill another agent's session) and run this again, or" + [Environment]::NewLine +
+        "export the game and photograph the exported build instead.")
+}
+# A game left running from an earlier session is not a failure - it is the previous one, still up.
+# Saying so is friendlier than a port collision three lines later.
+$running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.ProcessName -like 'Godot*' -and $_.MainWindowTitle -match 'Deal or Force' -and $_.MainWindowTitle -notmatch 'Godot Engine'
+})
+if ($running.Count -gt 0) {
+    $named = ($running | ForEach-Object { "$($_.ProcessName) ($($_.Id))" }) -join ', '
+    Write-Host "  a game is already running: $named - close it, or send scripts to that session" -ForegroundColor Yellow
+}
+
 $session = if ($Out) { $Out } else { Join-Path $Project ('tmp_playtest\captures\' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
 $commandDir = Join-Path $session 'commands'
 $artifactDir = Join-Path $session 'artifacts'

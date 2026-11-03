@@ -1,6 +1,7 @@
 {
   "A country may hold {0} tactical doctrines and {1} general doctrine at once. Ground, air and sea are learned side by side; a further tactical doctrine is refused. Articles are paid for in the experience of their own service; the staff's book is paid for in political credit. A crash course costs more and lands at once. {2} and that service relearns what it thought it knew, until the new articles are drilled in.": "Страна может держать {0} тактические доктрины и {1} общую. Сухопутная, воздушная и морская учатся рядом; ещё одна тактическая отклоняется. Статьи оплачиваются опытом своего рода войск, книга штаба — политическим кредитом. Ускоренный курс дороже и вступает сразу. {2}, и этот род войск переучивается, пока новые статьи не вбиты в людей.",
   "A country may hold {0} tactical doctrines and {1} general doctrine. Another tactical doctrine is refused.": "Страна может держать {0} тактические доктрины и {1} общую. Ещё одна тактическая отклоняется.",
+  "This shelf already holds {0} doctrines.": "Эта полка уже держит доктрин: {0}.",
   "COOPERATION": "СОТРУДНИЧЕСТВО",
   "Cultural cooperation": "Культурное сотрудничество",
   "Research cooperation": "Научное сотрудничество",

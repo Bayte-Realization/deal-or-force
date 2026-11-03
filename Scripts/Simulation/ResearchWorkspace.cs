@@ -43,7 +43,10 @@ public static class ResearchWorkspace
                 || filter == Filter.Known && state != State.Known
                 || filter == Filter.Invested && (state == State.Known || nation.ResearchProgress.GetValueOrDefault(technology.Id) <= 0)) return false;
             return query.Length == 0 || technology.Id.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || (translate(technology.Name) ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
+                || Matches(technology.Name) || Matches(technology.Description)
+                || technology.Effects.Keys.Any(effect => effect.Contains(query, StringComparison.OrdinalIgnoreCase)
+                    || Matches(NationalModifiers.Of(effect)?.Name ?? effect));
+            bool Matches(string text) => (translate(text) ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
         }).ToArray();
     }
 

@@ -266,7 +266,22 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
+        if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--opinion [days] [--provoke TAG]`: how negative the world gets, and which reasons carry it.
+        if (Array.IndexOf(args, "--opinion") >= 0)
+        {
+            var provokeAt = Array.IndexOf(args, "--provoke");
+            return OpinionReport.Run(campaign, days, provokeAt >= 0 && provokeAt + 1 < args.Length ? args[provokeAt + 1] : "");
+        }
+        // `--survival`: what a country losing a war does about it (SurvivalReport).
+        if (Array.IndexOf(args, "--survival") >= 0) return SurvivalReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--protests") >= 0) return ProtestReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--traits") >= 0) return ProtestReport.Traits(campaign, days);
+        if (Array.IndexOf(args, "--peace") >= 0) return PeaceReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--navy") >= 0) return PeaceReport.Navy(campaign, days);
+        var whyAt = Array.IndexOf(args, "--why");
+        if (whyAt >= 0 && whyAt + 1 < args.Length) return PeaceReport.Why(campaign, days, args[whyAt + 1]);
         // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
         // added up across every neighbouring pair in the world, term by term (AiAppetiteReport).
         if (Array.IndexOf(args, "--ai-appetite") >= 0) return AiAppetiteReport.Run(campaign, days);
@@ -615,6 +630,111 @@ public static class Program
         // `--growth <days> [every]`: whether the world grows richer - world output, people and output
         // per head, year by year, with the ten largest economies and the mean secular drift. Run it
         // with --define SecularFrontierGrowth=0 for the world as it was before the frontier moved.
+        // `--goods-probe [Good,Good...] [days]`: who makes each good and who sells it abroad - the
+        // world's production against its demand, the eight largest producers with their share of
+        // world output, the eight largest exporters with their share of world exports and the
+        // eight largest importers. Without a list, every good. What the deposits in
+        // history/states and the recipes in common/production add up to, read before tuning them.
+        var probeGoodsAt = Array.IndexOf(args, "--goods-probe");
+        if (probeGoodsAt >= 0)
+        {
+            var wanted = probeGoodsAt + 1 < args.Length && !args[probeGoodsAt + 1].StartsWith("--", StringComparison.Ordinal) &&
+                         !int.TryParse(args[probeGoodsAt + 1], out _)
+                ? args[probeGoodsAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                : null;
+            var probeDays = args.Skip(probeGoodsAt + 1).Take(2).Select(a => int.TryParse(a, out var d) ? d : -1).FirstOrDefault(d => d >= 0);
+            campaign.IsPaused = false;
+            for (var day = 0; day < probeDays; day++) campaign.TickDay();
+            var goods = wanted is null
+                ? CommodityCatalog.All.OrderBy(CommodityCatalog.IdOf).ToList()
+                : wanted.Select(id => CommodityCatalog.TryParse(id, out var g) ? g : (Commodity?)null).Where(g => g is not null).Select(g => g.Value).ToList();
+            var living = campaign.Nations.Where(n => n.Population > 0).ToList();
+            foreach (var good in goods)
+            {
+                double Made(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Production : 0;
+                double Asked(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Demand : 0;
+                double Sold(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Exports : 0;
+                double Bought(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Imports : 0;
+                var made = living.Sum(Made);
+                var asked = living.Sum(Asked);
+                var sold = Math.Max(1e-6, living.Sum(Sold));
+                var bought = Math.Max(1e-6, living.Sum(Bought));
+                var paid = living.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                var price = asked > 1e-6 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0;
+                var shortOf = living.Count(n => n.Market.TryGetValue(good, out var q) && q.Demand > 0.01f && q.IsShortage);
+                var importPrice = living.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports * q.Price : 0) / bought / CommodityCatalog.Get(good).BasePrice;
+                Console.WriteLine($"GOODS {CommodityCatalog.IdOf(good)} day {campaign.ElapsedDays}: made {made:0.00} asked {asked:0.00} ratio {made / Math.Max(1e-6, asked):0.00}; " +
+                                  $"price x{price:0.00}, importers pay x{importPrice:0.00}; traded {sold / Math.Max(1e-6, made):P0} of output; {shortOf} countries short");
+                // What the exporters could have sold and did not: a surplus nobody could reach, which is
+                // what lets one exporter's loss be made good by another's without a shortage anywhere.
+                var surplus = living.Sum(n => Math.Max(0, Made(n) - Asked(n)));
+                Console.WriteLine($"   surplus {surplus:0.0}, exported {sold:0.0} ({sold / Math.Max(1e-6, surplus):P0} of it), imported {bought:0.0}");
+                Console.WriteLine("   makers: " + string.Join(", ", living.OrderByDescending(Made).Take(8).Select(n => $"{n.Tag} {Made(n) / Math.Max(1e-6, made):P0}")));
+                Console.WriteLine("   exporters: " + string.Join(", ", living.OrderByDescending(Sold).Take(8).Where(n => Sold(n) > 0).Select(n => $"{n.Tag} {Sold(n) / sold:P0}")));
+                Console.WriteLine("   importers: " + string.Join(", ", living.OrderByDescending(Bought).Take(8).Where(n => Bought(n) > 0).Select(n => $"{n.Tag} {Bought(n) / bought:P0}")));
+                Console.WriteLine("   supplied (largest economies): " + string.Join(", ", living.OrderByDescending(n => n.Gdp).Take(12)
+                    .Select(n => n.Market.TryGetValue(good, out var q) ? $"{n.Tag} {q.Satisfaction:P0}" : n.Tag)));
+            }
+            return 0;
+        }
+
+        // `--goods-shock <TAG,TAG> <share> <days> [Good,Good...]`: what a war in one place does to
+        // the world's markets. The 2024 world is played four weeks to settle; then the named
+        // countries lose the given share of everything under their ground and in their clusters
+        // (fields burnt or mined, fabs shut, ports blockaded: every deposit times one minus the
+        // share) and take the same war damage, and the world is played on for the given days.
+        // Run it twice, once with a share of 0, and compare: each campaign in its own process,
+        // because two live campaigns side by side share static caches. Printed for each good: world
+        // output, the demand-weighted price against the base, countries short, and a watch list's
+        // supply and price (DOF_SHOCK_WATCH), and world GDP.
+        var shockAt = Array.IndexOf(args, "--goods-shock");
+        if (shockAt >= 0 && shockAt + 3 < args.Length)
+        {
+            var struck = args[shockAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var share = M.Clamp01(float.Parse(args[shockAt + 2], System.Globalization.CultureInfo.InvariantCulture));
+            var shockDays = int.Parse(args[shockAt + 3]);
+            var shockGoods = (shockAt + 4 < args.Length && !args[shockAt + 4].StartsWith("--", StringComparison.Ordinal)
+                    ? args[shockAt + 4].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    : new[] { "Food", "Grain", "Oilseeds", "Semiconductors", "AdvancedChips", "Electronics", "ConsumerGoods" })
+                .Select(id => CommodityCatalog.TryParse(id, out var g) ? g : (Commodity?)null).Where(g => g is not null).Select(g => g.Value).ToList();
+            var watch = (Environment.GetEnvironmentVariable("DOF_SHOCK_WATCH") ?? "EGY,TUR,IDN,CHN,USA,DEU,JPN,KOR,IND")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries);
+            campaign.IsPaused = false;
+            for (var day = 0; day < 28; day++) campaign.TickDay();
+            if (share > 0f)
+                foreach (var tag in struck)
+                {
+                    var nation = campaign.NationByTag(tag.Trim());
+                    if (nation is null) continue;
+                    foreach (var state in campaign.StatesOf(nation))
+                    {
+                        foreach (var good in state.ResourceDeposits.Keys.ToArray()) state.ResourceDeposits[good] *= 1f - share;
+                        state.WarDamage = Math.Max(state.WarDamage, share);
+                    }
+                }
+            for (var day = 0; day < shockDays; day++) campaign.TickDay();
+            var alive = campaign.Nations.Where(n => n.Population > 0).ToList();
+            Console.WriteLine($"SHOCK {string.Join("+", struck)} share {share:0.00} after {shockDays} days: world GDP {alive.Sum(n => (double)n.Gdp):N0} bn");
+            foreach (var good in shockGoods)
+            {
+                var asked = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand : 0);
+                var paid = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                var made = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Production : 0);
+                var shortOf = alive.Count(n => n.Market.TryGetValue(good, out var q) && q.Demand > 0.01f && q.IsShortage);
+                // What the world's buyers pay: the price weighted by imports rather than by demand,
+                // which the self-sufficient giants would otherwise drown.
+                var imported = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports : 0);
+                var importPrice = imported > 1e-6 ? alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports * q.Price : 0) / imported / CommodityCatalog.Get(good).BasePrice : 0;
+                var exported = Math.Max(1e-6, alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Exports : 0));
+                Console.WriteLine($"   {CommodityCatalog.IdOf(good)}: made {made:0.0}, price x{(asked > 1e-6 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0):0.00}, importers pay x{importPrice:0.00}, " +
+                                  $"world exports {exported:0.0} ({string.Join(", ", alive.OrderByDescending(n => n.Market.TryGetValue(good, out var q) ? q.Exports : 0).Take(5).Select(n => $"{n.Tag} {n.Market[good].Exports / exported:P0}"))}), {shortOf} countries short; " +
+                                  string.Join(" ", watch.Select(tag => campaign.NationByTag(tag) is { } n && n.Market.TryGetValue(good, out var q)
+                                      ? $"{tag} {q.Satisfaction:P0}/x{q.Price / CommodityCatalog.Get(good).BasePrice:0.00}" : "")));
+            }
+            Console.WriteLine($"   GDP: " + string.Join(" ", watch.Select(tag => campaign.NationByTag(tag) is { } n ? $"{tag} {n.Gdp:N0}" : "")));
+            return 0;
+        }
+
         var growthAt = Array.IndexOf(args, "--growth");
         if (growthAt >= 0)
         {
@@ -636,6 +756,7 @@ public static class Program
                 Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                Console.WriteLine("   " + WorldMarketLine(campaign));
                 // How much of its workforce each country's buildings ask for (MarketSystem.CapitalReturns).
                 var intensities = alive.Select(n => (n.Tag, Jobs: campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded),
                         Workers: campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)))
@@ -645,6 +766,23 @@ public static class Program
                                   string.Join(", ", intensities.Take(12).Select(x => $"{x.Tag} {x.Ratio:0.00}")));
                 Console.WriteLine("   top: " + string.Join(", ", alive.OrderByDescending(n => n.Gdp).Take(10)
                     .Select(n => $"{n.Tag} {n.Gdp:N0} ({n.Gdp * 1e9 / Math.Max(1, n.Population):N0}/head)")));
+                // The world market at a glance: how many country-and-good pairs are short, how many
+                // countries feel it, and for every good what the world makes against what it asks for
+                // and what it pays against the base price (demand-weighted). So a new good that the
+                // world cannot supply, or one that floods to the floor price, shows up here at once.
+                var shortPairs = alive.Sum(n => n.Market.Values.Count(q => q.Demand > 0.01f && q.IsShortage));
+                var pairs = alive.Sum(n => n.Market.Values.Count(q => q.Demand > 0.01f));
+                var alivePeople = (double)Math.Max(1L, alive.Sum(n => n.Population));
+                Console.WriteLine($"   market: {shortPairs} of {pairs} demanded pairs short; {alive.Count(n => n.ShortageIndex > 0.05f)} countries with shortage index over 5%; " +
+                                  $"population-weighted shortage index {alive.Sum(n => (double)n.ShortageIndex * n.Population) / alivePeople:0.0000}; goods {CommodityCatalog.All.Count()}");
+                Console.WriteLine("   goods (made/asked, price x base): " + string.Join(", ", CommodityCatalog.All.OrderBy(CommodityCatalog.IdOf).Select(good =>
+                {
+                    var made = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Production : 0);
+                    var asked = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand : 0);
+                    var paid = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                    var price = asked > 0.001 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0;
+                    return $"{CommodityCatalog.IdOf(good)} {made / Math.Max(0.001, asked):0.00} x{price:0.00}";
+                })));
                 // What a country's output is made of: GDP = gross output x 52 x output scale, the
                 // scale drifting with the secular cycle and the output with productivity and work.
                 foreach (var tag in (Environment.GetEnvironmentVariable("DOF_GROWTH_TAGS") ?? "USA,CHN,IND,ITA,FRA,DEU,JPN,RUS")
@@ -703,6 +841,49 @@ public static class Program
                                   $"{CivilWarOutbreak.EligibilityReason(campaign, nation)}");
             return 0;
         }
+        // `--migration <days>`: who has settled where across borders - every region's peoples
+        // that were not there at the start and now count a million or a tenth of it, and the
+        // countries that gained and lost the most.
+        // `--memory`: where the managed memory of this world goes - the heap after a full
+        // collection, and the counts of the collections that grow with a campaign's age.
+        if (args.Contains("--memory"))
+        {
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            var heap = GC.GetTotalMemory(true);
+            var groups = campaign.States.Sum(s => (long)s.PopulationGroups.Count);
+            Console.WriteLine($"MEMORY heap {heap / 1048576.0:0} MB; process {Environment.WorkingSet / 1048576.0:0} MB");
+            Console.WriteLine($"MEMORY states {campaign.States.Count}, population groups {groups:N0} (largest region {campaign.States.Max(s => s.PopulationGroups.Count):N0}), " +
+                              $"distinct cultures {campaign.States.SelectMany(s => s.PopulationGroups).Select(g => g.Culture).Distinct().Count()}");
+            Console.WriteLine($"MEMORY nations {campaign.Nations.Count}, relations {campaign.Relations.Count:N0}, armies {campaign.Armies.Count}, wars {campaign.Wars.Count} " +
+                              $"(ended {campaign.Wars.Count(w => w.Ended)}), battles {campaign.Battles.Count}, chronicle {campaign.Chronicle.Entries.Count}");
+            foreach (var s in campaign.States.OrderByDescending(s => s.PopulationGroups.Count).Take(5))
+                Console.WriteLine($"MEMORY   {s.DisplayName}: {s.PopulationGroups.Count:N0} groups, {s.PopulationGroups.Select(g => g.Culture).Distinct().Count()} cultures");
+            return 0;
+        }
+        var migrationAt = Array.IndexOf(args, "--migration");
+        if (migrationAt >= 0)
+        {
+            var migrationDays = migrationAt + 1 < args.Length && int.TryParse(args[migrationAt + 1], out var md) ? md : 3650;
+            var before = campaign.States.ToDictionary(s => s.MapIndex, s => s.PopulationGroups
+                .GroupBy(g => g.Culture ?? "").ToDictionary(g => g.Key, g => g.Sum(x => x.Size)));
+            campaign.IsPaused = false;
+            for (var day = 1; day <= migrationDays; day++) campaign.TickDay();
+            foreach (var state in campaign.States.OrderByDescending(s => s.Population))
+            {
+                var was = before.GetValueOrDefault(state.MapIndex) ?? new Dictionary<string, long>();
+                foreach (var group in state.PopulationGroups.GroupBy(g => g.Culture ?? ""))
+                {
+                    var now = group.Sum(g => g.Size);
+                    var gained = now - was.GetValueOrDefault(group.Key);
+                    if (gained >= 1_000_000 || gained >= 100_000 && gained >= state.Population / 10)
+                        Console.WriteLine($"MIGRATION {state.DisplayName} ({campaign.NationsByMapIndex().GetValueOrDefault((ushort)state.NationMapIndex)?.Tag}): " +
+                                          $"{group.Key} {was.GetValueOrDefault(group.Key):N0} -> {now:N0} of {state.Population:N0}");
+                }
+            }
+            foreach (var n in campaign.Nations.Where(n => n.CumulativeNetMigration != 0).OrderByDescending(n => Math.Abs(n.CumulativeNetMigration)).Take(15))
+                Console.WriteLine($"MIGRATION net {n.Tag}: {n.CumulativeNetMigration:N0} of {n.Population:N0}");
+            return 0;
+        }
         var pulseAt = Array.IndexOf(args, "--pulse");
         if (pulseAt >= 0)
         {
@@ -724,6 +905,11 @@ public static class Program
                     year[entry.Kind] = year.GetValueOrDefault(entry.Kind) + 1;
                     total[entry.Kind] = total.GetValueOrDefault(entry.Kind) + 1;
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
+                    if (entry.Kind is "civil_war_third_front" or "movement_merged" or "movement_absorbed" or "movement_dissolved" or "movement_emerged" or "coup")
+                        Console.WriteLine($"   {entry.Kind.ToUpperInvariant()} day {entry.Day}: {entry.ActorName} -> {entry.TargetName} {entry.Subject}");
+                    if (entry.Kind == "volunteers_sent") Console.WriteLine($"   VOLUNTEERS day {entry.Day}: {entry.ActorName} -> {entry.TargetName} ({entry.Place})");
+                    if (entry.Kind is "nuclear_strike" or "nuclear_retaliation" or "organization_sanction" or "sanctions_imposed")
+                        Console.WriteLine($"   NUCLEAR day {entry.Day}: {entry.Kind} {entry.ActorName} -> {entry.TargetName} ({entry.Subject}{entry.Place})");
                 }
                 if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
                 // Covert operations are mostly private: counted from the whole chronicle.
@@ -741,8 +927,19 @@ public static class Program
                 year.Clear();
                 largest = 0;
             }
+            Console.WriteLine($"PULSE world GDP {campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp):N0} bn; " + WorldMarketLine(campaign));
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            Console.WriteLine($"PULSE army: formations lost {campaign.Nations.Sum(n => n.FormationsLost)}, surrendered {WarLosses.SurrenderedFormations}, " +
+                              $"starved in pockets {Attrition.StarvedInPockets}; outcomes " +
+                              string.Join(", ", Warfare.OutcomeTally.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(8).Select(p => $"{p.Key} {p.Value}")));
+            Console.WriteLine("PULSE garrisons: " + string.Join(", ", StrandedGarrisons.Tally.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key} {p.Value}")) +
+                              $"; in pockets now {campaign.Armies.Count(a => a.CutOff)} (holding out {campaign.Armies.Count(a => a.HoldoutSinceDay >= 0)}), " +
+                              $"below 75% strength {campaign.Armies.Count(a => a.Strength < 0.75f)} of {campaign.Armies.Count}");
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            // State failure: collapses and their sides, revolutions, and pieces gone home (StateFailure).
+            Console.WriteLine("PULSE failure: " + string.Join(", ", StateFailure.Tally.OrderBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => $"{entry.Key} {entry.Value}")) +
+                              $"; born in play alive {campaign.Nations.Skip(bornFrom).Count(n => !campaign.Fallen.Contains(n.Id) && n.Population > 0 && n.Movement is null)} of {campaign.Nations.Count - bornFrom}");
+            foreach (var line in StateFailure.Log) Console.WriteLine("PULSE failure " + line);
             // Leases and troops in without a war: what stands now and what happened on the way.
             Console.WriteLine($"PULSE land: leased={LandArrangementSystem.Leased} entered={LandArrangementSystem.Entered} " +
                               $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
@@ -756,6 +953,14 @@ public static class Program
                               $"top-20 treasury/GDP min {treasuries.FirstOrDefault():0.00} median {treasuries.ElementAtOrDefault(treasuries.Count / 2):0.00} max {treasuries.LastOrDefault():0.00}; " +
                               string.Join(", ", campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f).OrderByDescending(n => n.Gdp).Take(8)
                                   .Select(n => $"{n.Tag} {n.Treasury:0}/{n.Gdp:0}")));
+            // The deep-strike war (LongRangeStrikes): salvos, what the screens stopped, what landed and where.
+            Console.WriteLine($"PULSE long-range: salvos={LongRangeStrikes.Salvos} dry={LongRangeStrikes.DryLaunches} " +
+                              $"launched={LongRangeStrikes.LaunchedPoints:0} intercepted={LongRangeStrikes.InterceptedPoints:0} " +
+                              $"landed={LongRangeStrikes.LandedPoints:0} procured={LongRangeStrikes.Procured}; targets " +
+                              string.Join(" ", LongRangeStrikes.ByTarget.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) +
+                              "; on strike now " + campaign.SupportFormations.Count(f => f.Mission == SupportCore.MissionStrike) +
+                              " of " + campaign.SupportFormations.Count + " formations; missions " +
+                              string.Join(" ", campaign.SupportFormations.GroupBy(f => f.Mission).OrderBy(g => g.Key).Select(g => $"{g.Key}={g.Count()}")));
             Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
                 .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
             foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
@@ -765,9 +970,65 @@ public static class Program
                 Console.WriteLine($"PULSE born {born.Tag} \"{born.DisplayName}\" from {campaign.NationById(born.SecededFromId)?.Tag ?? "-"} " +
                                   $"people {string.Join("/", born.FoundedCultures.Take(2))} regions {campaign.StatesOf(born).Length}" +
                                   (born.Movement is not null ? " movement" : ""));
+            Console.WriteLine($"PULSE borders: reviews={BorderDiplomacy.Reviews} swaps={BorderDiplomacy.Swaps} purchases={BorderDiplomacy.Purchases} " +
+                              $"sales={BorderDiplomacy.Sales} ultimatums={BorderDiplomacy.Ultimatums} (yielded {BorderDiplomacy.UltimatumsYielded}) disputes={BorderDiplomacy.Disputes}");
             Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
             foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
                 Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");
+            return 0;
+        }
+
+        // `--border-deals <days>`: ugly borders and what governments do about them (BorderDiplomacy) -
+        // the grievance pairs at the start and at the end, and each year's swaps, purchases, sales,
+        // ultimatums, disputes, and wars between countries with a border grievance between them.
+        var bordersAt = Array.IndexOf(args, "--border-deals");
+        if (bordersAt >= 0)
+        {
+            var borderDays = bordersAt + 1 < args.Length && int.TryParse(args[bordersAt + 1], out var bd) ? bd : 3650;
+            campaign.IsPaused = false;
+            BorderDiplomacy.ResetCounters();
+            string Tag(int mapIndex) => campaign.NationsByMapIndex().GetValueOrDefault((ushort)mapIndex)?.Tag ?? mapIndex.ToString();
+            void ShowPairs(string when)
+            {
+                var pairs = BorderShape.Pairs(campaign);
+                Console.WriteLine($"BORDERS {when}: {pairs.Count} grievance pairs, {pairs.Count(pair => pair.Grievance >= campaign.Defines.BorderDealMinGrievance)} at or above the review line; worst: " +
+                                  string.Join(", ", pairs.Take(16).Select(pair => $"{Tag(pair.Nation)}>{Tag(pair.Other)} {pair.Grievance:0.00}")));
+            }
+            ShowPairs("at start");
+            var counts = new Dictionary<string, int>();
+            var year = new Dictionary<string, int>();
+            long borderSeen = 0;
+            for (var day = 1; day <= borderDays; day++)
+            {
+                campaign.TickDay();
+                var entries = campaign.Chronicle.Read(-1, -1, true);
+                foreach (var entry in entries.Where(e => e.Sequence > borderSeen).OrderBy(e => e.Sequence))
+                {
+                    var kind = entry.Kind;
+                    if (kind == "war_started")
+                    {
+                        var a = campaign.NationById(entry.ActorId); var b = campaign.NationById(entry.TargetId);
+                        if (a is null || b is null || BorderShape.Grievance(campaign, a, b) <= 0f && BorderShape.Grievance(campaign, b, a) <= 0f) continue;
+                        // A rising against its own government is a civil war, not a border war.
+                        if (!campaign.Wars.Any(w => !w.Ended && !w.CivilConflict && w.AttackerId == a.Id && w.DefenderId == b.Id)) continue;
+                        kind = "border_war";
+                    }
+                    else if (!kind.StartsWith("border_", StringComparison.Ordinal) && kind is not ("ultimatum_accepted" or "ultimatum_refused")) continue;
+                    counts[kind] = counts.GetValueOrDefault(kind) + 1;
+                    year[kind] = year.GetValueOrDefault(kind) + 1;
+                    if (kind.StartsWith("border_", StringComparison.Ordinal))
+                        Console.WriteLine($"   {kind.ToUpperInvariant()} day {entry.Day}: {entry.ActorName} / {entry.TargetName} {entry.Subject}");
+                }
+                if (entries.Length > 0) borderSeen = Math.Max(borderSeen, entries.Max(e => e.Sequence));
+                if (day % 365 != 0 && day != borderDays) continue;
+                Console.WriteLine($"BORDERS year to day {campaign.ElapsedDays}: " + string.Join(", ", year.OrderBy(e => e.Key).Select(e => $"{e.Key} {e.Value}")));
+                year.Clear();
+            }
+            ShowPairs("at end");
+            Console.WriteLine($"BORDERS total: " + string.Join(", ", counts.OrderBy(e => e.Key).Select(e => $"{e.Key} {e.Value}")));
+            Console.WriteLine($"BORDERS counters: reviews={BorderDiplomacy.Reviews} swaps={BorderDiplomacy.Swaps} purchases={BorderDiplomacy.Purchases} " +
+                              $"sales={BorderDiplomacy.Sales} offered-to-players={BorderDiplomacy.Offered} ultimatums={BorderDiplomacy.Ultimatums} " +
+                              $"(yielded {BorderDiplomacy.UltimatumsYielded}) disputes={BorderDiplomacy.Disputes}");
             return 0;
         }
 
@@ -796,6 +1057,9 @@ public static class Program
                 Console.WriteLine($"ORGS day {campaign.ElapsedDays} ({campaign.Date}): {active.Count} active, {active.Sum(o => o.Members.Count)} memberships, " +
                                   $"mean cohesion {(active.Count == 0 ? 0 : active.Average(o => o.Cohesion)):0.00}; " +
                                   string.Join(", ", counts.OrderBy(entry => entry.Key).Select(entry => $"{entry.Key.Substring(13)} {entry.Value}")));
+                foreach (var org in active.Where(o => o.Suspended.Count > 0))
+                    Console.WriteLine($"   SUSPENDED in {InternationalOrganizations.DisplayName(campaign, org)}: " +
+                                      string.Join(", ", org.Suspended.Select(s => $"{campaign.NationById(s.Key)?.Tag} since day {s.Value} ({org.SuspendedFor.GetValueOrDefault(s.Key)})")));
                 foreach (var org in active.Where(o => o.Members.Count >= 3).OrderByDescending(o => o.Members.Count).Take(8))
                     Console.WriteLine($"   {InternationalOrganizations.DisplayName(campaign, org)}: {org.Members.Count} members, cohesion {org.Cohesion:0.00} (target {OrganizationDynamics.Target(campaign, org):0.00}), " +
                                       $"least belonging {org.Members.Select(campaign.NationById).Where(n => n is not null).Select(n => (n.Tag, OrganizationDynamics.Belonging(campaign, org, n))).OrderBy(x => x.Item2).Take(2).Select(x => $"{x.Tag} {x.Item2:0.00}").DefaultIfEmpty("-").Aggregate((a, b) => a + " " + b)}");
@@ -5153,6 +5417,35 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// One line on the goods the building audit of 1 November 2026 touched: for each, what the
+    /// world makes against what it asks for, how many countries are short of it, and its price
+    /// against the base price, weighted by how much each country asks for. Printed by --growth
+    /// every report and by --pulse at the end, so a before/after pair can be read side by side.
+    /// </summary>
+    internal static string WorldMarketLine(Campaign campaign)
+    {
+        var parts = new List<string>();
+        foreach (var id in new[] { "Oil", "NaturalGas", "RareEarths", "Energy", "Coal", "Steel", "Aluminium", "Electronics", "Chemicals" })
+        {
+            if (!CommodityCatalog.TryParse(id, out var good)) continue;
+            double made = 0, wanted = 0, weightedPrice = 0;
+            var shortOf = 0;
+            var basePrice = Math.Max(0.0001f, CommodityCatalog.Get(good).BasePrice);
+            foreach (var nation in campaign.Nations)
+            {
+                if (nation.Population <= 0 || !nation.Market.TryGetValue(good, out var quote)) continue;
+                made += quote.Production;
+                wanted += quote.Demand;
+                weightedPrice += quote.Demand * (quote.Price / basePrice);
+                if (quote.Demand > 0.001f && quote.IsShortage) shortOf++;
+            }
+            var price = wanted > 0 ? weightedPrice / wanted : 1;
+            parts.Add($"{id} {made:0.0}/{wanted:0.0} ({(wanted > 0 ? made / wanted : 0):0.00}x, {shortOf} short, price x{price:0.00})");
+        }
+        return "MARKET " + string.Join("; ", parts);
+    }
+
     private static string TheWorldMakesWhatItNeeds(Campaign campaign)
     {
         var worst = "";
@@ -8495,7 +8788,7 @@ public static class Program
                 return "the catalog refused a complete new good";
             if (!CommodityCatalog.TryParse(GoodId, out var alloy))
                 return "the catalog accepted a new good and then could not find it by name";
-            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 1.0f, 0.1f, "A building no enum names."))
+            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 0.1f, "A building no enum names."))
                 return "the catalog refused a complete new building";
             if (!BuildingCatalog.TryParse(BuildingId, out var works))
                 return "the catalog accepted a new building and then could not find it by name";
@@ -8638,7 +8931,7 @@ public static class Program
             float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
             int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
             BuildingCatalog.Declare(name, Text("name"), Number("cost"), Integer("days"),
-                Number("gdp_gain"), Number("capacity_gain"), Text("description"));
+                Number("capacity_gain"), Text("description"), jobs: Number("jobs"));
         });
 
         void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)
@@ -12449,7 +12742,9 @@ public static class Program
         // Now the round trip. One building placed by hand, then pulled down, and everything
         // back where it started bar the scrap value.
         state.Buildings[BuildingKind.CivilianIndustry] = standing + 1;
-        nation.Gdp = gdp + definition.GdpGain * yield;
+        // No GDP step on completion any more (the market counts a building's output), so GDP
+        // must come back to exactly where it was.
+        nation.Gdp = gdp;
         nation.ConstructionCapacity = capacity + definition.CapacityGain * yield;
         nation.Treasury = treasury;
 

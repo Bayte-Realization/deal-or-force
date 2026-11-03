@@ -1,8 +1,8 @@
 extends RefCounted
-# A full play session: menu -> country pick -> campaign -> HUD inventory -> several screens.
+# A full play session: intro -> menu -> scenarios -> country pick -> campaign -> HUD inventory -> live play.
 # One script per session (the file channel is read once at startup).
 
-const CAMPAIGN_WAIT := 14.0
+const CAMPAIGN_WAIT := 10.0
 
 var stage := "start"
 
@@ -53,55 +53,101 @@ func run(ctx: Variant) -> void:
 	ctx.log("scene=" + (root.scene_file_path if root != null else "<null>"))
 	await ctx.wait(1.0)
 
-	# --- 1. main menu inventory -------------------------------------------------------
+	# --- 1. Skip intro cards if active and inventory main menu ------------------------
 	stage = "menu"
+	ctx.log("skipping intro plaques with space key")
+	await ctx.tap_key(KEY_SPACE)
+	await ctx.wait(0.6)
+	await ctx.tap_key(KEY_SPACE)
+	await ctx.wait(1.0)
+
+	var sp: Button = null
+	for attempt in range(12):
+		sp = find_button(ctx, func(b: Button) -> bool: return b.text.to_lower().contains("singleplayer"))
+		if sp != null:
+			break
+		ctx.log("waiting for singleplayer button... attempt " + str(attempt + 1))
+		await ctx.tap_key(KEY_SPACE)
+		await ctx.wait(0.8)
+
 	log_hud(ctx, "main-menu")
 	await ctx.capture("01-main-menu", 1920)
 
-	# --- 2. singleplayer --------------------------------------------------------------
-	stage = "singleplayer"
-	var sp: Button = find_button(ctx, func(b: Button) -> bool: return b.text.to_lower().contains("singleplayer"))
 	if sp == null:
-		ctx.log("no singleplayer button; buttons were listed above")
+		ctx.log("ERROR: no singleplayer button found on main menu")
 		return
-	ctx.log("clicking singleplayer")
+
+	# --- 2. Enter singleplayer (Scenario Library) -------------------------------------
+	stage = "scenarios"
+	ctx.log("clicking singleplayer button")
 	await ctx.click_button(sp)
 	await ctx.wait(2.0)
-	root = ctx.get_scene_root()
-	ctx.log("scene now=" + (root.scene_file_path if root != null else "<null>"))
-	await ctx.capture("02-country-picker", 1920)
-	log_hud(ctx, "country-picker")
 
-	# --- 3. begin the campaign, reading the tag off the button -----------------------
-	stage = "begin"
-	var begin: Button = find_button(ctx, func(b: Button) -> bool: return b.text.begins_with("BEGIN AS"))
-	if begin == null:
-		ctx.log("no BEGIN AS button; picker layout differs")
-		await ctx.capture("03-picker-no-begin", 1920)
+	log_hud(ctx, "scenario-library")
+	await ctx.capture("02-scenario-library", 1920)
+
+	var choose_country: Button = null
+	for attempt in range(15):
+		choose_country = find_button(ctx, func(b: Button) -> bool:
+			var t: String = b.text.to_lower()
+			return t.contains("choose country") or t.contains("country on map") or t.contains("выбрать страну"))
+		if choose_country != null and not choose_country.disabled:
+			break
+		ctx.log("waiting for choose country button... attempt " + str(attempt + 1))
+		await ctx.wait(0.6)
+
+	if choose_country == null:
+		ctx.log("ERROR: no choose country button in scenario library")
 		return
+
+	ctx.log("clicking: " + choose_country.text)
+	await ctx.click_button(choose_country)
+	ctx.log("waiting for scenario loading & country picker to emerge...")
+	await ctx.wait(3.0)
+
+	# --- 3. Country Picker & map preview ----------------------------------------------
+	stage = "picker"
+	var begin: Button = null
+	for attempt in range(30):
+		begin = find_button(ctx, func(b: Button) -> bool:
+			var t: String = b.text.to_lower()
+			return t.begins_with("begin as") or t.begins_with("начать за") or t.begins_with("begin"))
+		if begin != null and not begin.disabled:
+			break
+		await ctx.wait(0.8)
+
+	log_hud(ctx, "country-picker")
+	await ctx.capture("03-country-picker", 1920)
+
+	if begin == null:
+		ctx.log("ERROR: no BEGIN AS button found on picker")
+		return
+
 	var tag: String = begin.text.replace("BEGIN AS ", "").strip_edges()
-	ctx.log("begin button text=" + begin.text + " tag=" + tag)
+	ctx.log("clicking begin: " + begin.text + " (country " + tag + ")")
 	await ctx.click_button(begin)
-	ctx.log("clicked begin; waiting " + str(CAMPAIGN_WAIT) + "s for the globe")
+	ctx.log("waiting " + str(CAMPAIGN_WAIT) + "s for campaign globe and HUD...")
 	await ctx.wait(CAMPAIGN_WAIT)
 
-	# --- 4. the campaign HUD ----------------------------------------------------------
+	# --- 4. The campaign globe HUD & DEFCON indicator ---------------------------------
 	stage = "campaign"
 	root = ctx.get_scene_root()
 	ctx.log("campaign scene=" + (root.scene_file_path if root != null else "<null>"))
 	log_hud(ctx, "campaign")
 	await ctx.capture("04-campaign-globe", 1920)
 
-	# --- 5. let time run, then look again ---------------------------------------------
+	# --- 5. Unpause time, let simulation cycles tick ----------------------------------
 	stage = "running"
-	ctx.log("resuming time with Space")
+	ctx.log("unpausing campaign with Space")
 	await ctx.tap_key(KEY_SPACE)
 	await ctx.wait(6.0)
 	await ctx.capture("05-campaign-running", 1920)
-	ctx.log("pausing again")
-	await ctx.tap_key(KEY_SPACE)
 
-	# --- 6. walk the side rails -------------------------------------------------------
+	ctx.log("pausing simulation with Space")
+	await ctx.tap_key(KEY_SPACE)
+	await ctx.wait(0.5)
+
+	# --- 6. Walk the main interface rails ---------------------------------------------
 	stage = "screens"
 	for caption in ["Economy", "Nation", "Army", "Diplomacy", "Conflicts", "Research", "Trade"]:
 		var btn: Button = find_button(ctx, func(b: Button) -> bool:
@@ -111,14 +157,14 @@ func run(ctx: Variant) -> void:
 			continue
 		ctx.log("opening " + caption)
 		await ctx.click_button(btn)
-		await ctx.wait(1.6)
+		await ctx.wait(1.5)
 		await ctx.capture("06-screen-" + caption.to_lower(), 1920)
-		# close it again with the same button
+		# toggle closed
 		var again: Button = find_button(ctx, func(b: Button) -> bool:
 			return b.text.to_upper().begins_with(caption.to_upper()))
 		if again != null:
 			await ctx.click_button(again)
-			await ctx.wait(0.6)
+			await ctx.wait(0.5)
 
-	ctx.log("probe complete at stage=" + stage)
+	ctx.log("probe complete successfully at stage=" + stage)
 	ctx.release_all_inputs()

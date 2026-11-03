@@ -128,15 +128,21 @@ public static class FleetHistory
     /// could say which provinces have a coast, and it gave Britain's fleet a home port in
     /// Devon's interior and sent a beaten squadron to repair itself in a field.
     /// </summary>
-    public static void AssignHomePorts(Campaign campaign)
+    public static void AssignHomePorts(Campaign campaign, bool keepSaved = false)
     {
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
         var coastal = SeaLanes.CoastalProvinces(topology);
+        var coastalSet = keepSaved ? new HashSet<int>(coastal) : null;
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
+            // A loaded campaign's fleets already have homes - perhaps moved since the bookmark, when a
+            // port was lost - and the coordinates they were first placed by would hand them back.
+            if (keepSaved && fleet.HomeProvinceId > 0 && fleet.HomeProvinceId <= topology.ProvinceCount &&
+                coastalSet.Contains(fleet.HomeProvinceId) && topology.ProvinceToNation[fleet.HomeProvinceId] == nation.MapIndex)
+                continue;
             if (fleet.Establishment <= 0) fleet.Establishment = fleet.Hulls;
             var basin = SeaLanes.BasinAt(topology, fleet.HomeLatitude, fleet.HomeLongitude);
 
@@ -183,7 +189,13 @@ public static class FleetHistory
                 fleet.HomeLongitude = longitude;
                 if (wasHome && !fleet.HasOrder) { fleet.Latitude = latitude; fleet.Longitude = longitude; }
             }
-            if (fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0 &&
+            // Only on the first day. This runs whenever a map is attached - a loaded save too, before
+            // the save's own borders are laid back over the 2024 ones - and berthed at home a
+            // squadron the live game had refused a berth (its port lost or hostile), so loading a
+            // save changed the fleet it had saved. Later on, the daily pass (NavalOperations)
+            // decides berths by who holds the port now.
+            if (campaign.ElapsedDays == 0 &&
+                fleet.Mission == FleetMission.Anchored && !fleet.HasOrder && fleet.BerthProvinceId <= 0 &&
                 NavalOperations.Distance(fleet.Latitude, fleet.Longitude, fleet.HomeLatitude, fleet.HomeLongitude) <=
                 campaign.Defines.FleetBerthRangeDegrees + 1.5f)
                 fleet.BerthProvinceId = best;

@@ -2,17 +2,17 @@
 // Stable string IDs keep these goods editable and save-compatible without enum changes.
 {
   "Copper": { "name": "Copper", "icon": "Cu", "base_price": 0.032, "essential_weight": 0.08, "description": "Conductors for power networks, electronics and precision components." },
-  "Lithium": { "name": "Lithium", "icon": "Li", "base_price": 0.055, "essential_weight": 0.04, "description": "Battery feedstock concentrated in a few mining regions." },
+  "Lithium": { "name": "Lithium", "icon": "Li", "base_price": 0.055, "essential_weight": 0.04, "leverage": "strategic", "description": "Battery feedstock concentrated in a few mining regions." },
   "Nickel": { "name": "Nickel", "icon": "Ni", "base_price": 0.041, "essential_weight": 0.05, "description": "Alloying metal and battery feedstock." },
-  "Cobalt": { "name": "Cobalt", "icon": "Co", "base_price": 0.062, "essential_weight": 0.03, "description": "A strategic input for high-performance batteries." },
+  "Cobalt": { "name": "Cobalt", "icon": "Co", "base_price": 0.062, "essential_weight": 0.03, "leverage": "strategic", "description": "A strategic input for high-performance batteries." },
   "Phosphates": { "name": "Phosphates", "icon": "P", "base_price": 0.023, "essential_weight": 0.08, "description": "Mineral feedstock for fertiliser production." },
   "Silica": { "name": "Silica", "icon": "Si", "base_price": 0.018, "essential_weight": 0.04, "description": "Industrial mineral feedstock for semiconductor fabrication." },
   "Rubber": { "name": "Rubber", "icon": "R", "base_price": 0.026, "essential_weight": 0.05, "description": "Plantation output for tyres, seals and vehicle manufacturing." },
   "Sulfur": { "name": "Sulfur", "icon": "S", "base_price": 0.020, "essential_weight": 0.05, "description": "Mined or recovered at refineries for industrial chemistry." },
   "Steel": { "name": "Steel", "icon": "Fe", "base_price": 0.044, "essential_weight": 0.12, "description": "Smelted metal for construction, vehicles and military supply." },
-  "Batteries": { "name": "Batteries", "icon": "BAT", "base_price": 0.076, "essential_weight": 0.06, "description": "Energy storage assembled from lithium, nickel, cobalt and copper." },
-  "Semiconductors": { "name": "Semiconductors", "icon": "IC", "base_price": 0.115, "essential_weight": 0.08, "description": "Precision chips made from silica with chemical processing and reliable power." },
+  "Batteries": { "name": "Batteries", "icon": "BAT", "base_price": 0.076, "essential_weight": 0.06, "leverage": "strategic", "description": "Energy storage assembled from lithium, nickel, cobalt and copper." },
+  "Semiconductors": { "name": "Semiconductors", "icon": "IC", "base_price": 0.115, "essential_weight": 0.08, "leverage": "high_tech", "description": "Precision chips made from silica with chemical processing and reliable power." },
   "MotorVehicles": { "name": "Motor vehicles", "icon": "CAR", "base_price": 0.090, "essential_weight": 0.08, "description": "Transport equipment requiring steel, rubber, batteries and control electronics." },
-  "Ammunition": { "name": "Ammunition", "icon": "AM", "base_price": 0.060, "essential_weight": 0.07, "description": "Military consumables whose demand increases during war." },
-  "PrecisionComponents": { "name": "Precision components", "icon": "PC", "base_price": 0.098, "essential_weight": 0.06, "description": "Sensors and precision assemblies for machinery, research and military industry." }
+  "Ammunition": { "name": "Ammunition", "icon": "AM", "base_price": 0.060, "essential_weight": 0.07, "leverage": "strategic", "description": "Military consumables whose demand increases during war." },
+  "PrecisionComponents": { "name": "Precision components", "icon": "PC", "base_price": 0.098, "essential_weight": 0.06, "leverage": "high_tech", "description": "Sensors and precision assemblies for machinery, research and military industry." }
 }

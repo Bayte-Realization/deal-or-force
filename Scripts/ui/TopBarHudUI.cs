@@ -8,6 +8,7 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly List<StatReadout> _hudStats = new();
+    private Button _defconBadge;
     private VBoxContainer _identityPortraitSlot;
     private string _identityPortraitLeaderKey = "";
 
@@ -102,6 +103,18 @@ public partial class DealOrForceGame
 
         // Whose war this is, said in the one way that needs no reading.
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
+        // The flag takes the map home: the capital, framed - what a player reaches for after
+        // a long look at the other side of the world (also the Home key).
+        _identityFlag.MouseFilter = MouseFilterEnum.Stop;
+        _identityFlag.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _identityFlag.TooltipText = Ui.Tip(Tr("Show my capital on the map (Home)."));
+        _identityFlag.GuiInput += input =>
+        {
+            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) return;
+            PlayStrategicCue("ui_select");
+            FocusOwnCapital();
+            _identityFlag.AcceptEvent();
+        };
         row.AddChild(_identityFlag);
 
         _identityPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
@@ -137,6 +150,14 @@ public partial class DealOrForceGame
         _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
         _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
+
+        _defconBadge = ActionButton("DEFCON 5", OpenDefconOverview, 84, 28);
+        _defconBadge.Name = "HudDefconBadge";
+        _defconBadge.ClipText = true;
+        _defconBadge.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _defconBadge.TooltipText = Ui.Tip(Tr("Global Defense Readiness Condition (DEFCON). Click to inspect nuclear posture, active hotspots and readiness effects."));
+        StyleHudButton(_defconBadge, false);
+        row.AddChild(_defconBadge);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
@@ -314,6 +335,16 @@ public partial class DealOrForceGame
             ? "The calendar. Seasons are switched off, so the roads do not care what month it is."
             : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
         _date.MouseFilter = MouseFilterEnum.Stop;
+
+        if (_defconBadge is not null && _campaign is not null)
+        {
+            // A scenario without the nuclear age shows no ladder at all, not a DEFCON 5 nobody can change.
+            _defconBadge.Visible = DefconSystem.Enabled(_campaign);
+            var defcon = DefconSystem.CurrentLevel(_campaign);
+            _defconBadge.Text = $"DEFCON {defcon}";
+            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign));
+            _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
+        }
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);

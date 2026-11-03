@@ -1,0 +1,6 @@
+yaml.workshop.title: A bottleneck worth fixing
+yaml.workshop.description: A congested freight terminal is delaying local construction. The cabinet can pay for a limited upgrade or leave the queue to clear itself.
+yaml.workshop.invest: Upgrade the terminal
+yaml.workshop.invest_result: Spend 1% of the treasury for additional construction capacity.
+yaml.workshop.wait: Leave it for now
+yaml.workshop.wait_result: No treasury cost; public confidence slips slightly.

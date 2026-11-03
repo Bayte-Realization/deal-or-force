@@ -21,5 +21,10 @@
   "A general strike brings {0} to a standstill.": "Всеобщая забастовка остановила страну {0}.",
   "The march on {0} was broken up.": "Марш на столицу ({0}) разогнан.",
   "The government in {0} has fallen to the street.": "Правительство пало под натиском улицы ({0}).",
-  "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts.": "Заводы, порты и конторы стоят. Страна производит меньше, налоги не собираются, а авторитет правительства падает с каждой неделей забастовки."
+  "Factories, ports and offices stand idle. The country produces less, taxes go uncollected and the government's standing slips every week it lasts.": "Заводы, порты и конторы стоят. Страна производит меньше, налоги не собираются, а авторитет правительства падает с каждой неделей забастовки.",
+  "Mass protests": "Массовые протесты",
+  "Mass unrest": "Массовые беспорядки",
+  "Students, unions and families are in the streets every week. Schools close, trains stop, and every minister who speaks is booed.": "Студенты, профсоюзы и семьи каждую неделю выходят на улицы. Школы закрыты, поезда стоят, любого выступающего министра освистывают.",
+  "Curfews, burning town halls, thousands detained. The government governs from behind police lines.": "Комендантский час, горящие мэрии, тысячи задержанных. Правительство правит из-за полицейских кордонов.",
+  "Mass protests in {0}": "Массовые протесты: {0}"
 }

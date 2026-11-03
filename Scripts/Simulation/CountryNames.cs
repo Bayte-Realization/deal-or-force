@@ -148,6 +148,16 @@ public static class CountryNames
             if (parts.Length == 4)
             {
                 var country = Loc.Has($"country.{parts[2]}.name") ? Loc.Get($"country.{parts[2]}.name") : Loc.Get(parts[3]);
+                // A side of a collapse is named for the region it holds as well as the country:
+                // "rising:military_command@sd_ds@South Darfur:SDN:Sudan" reads "South Darfur
+                // Military Command (Sudan)". Several of them rise in one state at once, and a
+                // map of five "National Salvation Fronts of Sudan" tells a player nothing.
+                var template = parts[1].Split('@', 3);
+                if (template.Length == 3)
+                {
+                    var region = Loc.Has($"region.{template[1]}.name") ? Loc.Get($"region.{template[1]}.name") : Loc.Get(template[2]);
+                    return Loc.Format("rising." + template[0], country, region);
+                }
                 return Loc.Format("rising." + parts[1], country);
             }
         }

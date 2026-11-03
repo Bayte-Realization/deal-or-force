@@ -1,0 +1,12 @@
+{
+  "Search discoveries, effects or IDs…": "Поиск открытий, эффектов или ID…",
+  "ROUTE TO DISCOVERY": "ПУТЬ К ОТКРЫТИЮ",
+  "Route estimate unavailable.": "Оценка пути недоступна.",
+  "Dependencies · Alt+wheel: zoom": "Связи · Alt+колесо: масштаб",
+  "Inspect next prerequisite": "Открыть ближайшую предпосылку",
+  "This route contains missing or cyclic prerequisites. Check the content package.": "В цепочке есть отсутствующие или циклические предпосылки. Проверьте пакет данных.",
+  "{0} discoveries remaining · {1} points in total": "Осталось открытий: {0} · всего {1} очк.",
+  "About {0} week(s) for the route at today's pace.": "Весь путь — примерно {0} нед. при нынешнем темпе.",
+  "Not an automatic queue. Known discoveries and invested points are deducted. Prices and research pace may change along the way.": "Это не автоматическая очередь. Изученные открытия и вложенные очки вычтены. Стоимость и темп исследований по ходу пути могут измениться.",
+  "… and {0} more discoveries": "… и ещё открытий: {0}"
+}

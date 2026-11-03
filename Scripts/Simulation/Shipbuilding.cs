@@ -33,6 +33,16 @@ public sealed partial class Defines
 
     /// <summary>Days between one AI country's looks at the size of its navy.</summary>
     public int AiNavalReviewDays { get; set; } = 30;
+
+    /// <summary>
+    /// The navy a country's economy can carry, in hulls per square root of its GDP (billions):
+    /// 2.5 gives the United States and China about the fleets they have, Turkey about fifty and
+    /// a country of twenty billion about ten. An AI country with a coast and no fleet founds one
+    /// towards a quarter of it; a navy below it grows by a hull a quarter. 0 turns both off.
+    /// </summary>
+    public float AiNavalAmbition { get; set; } = 2.5f;
+    /// <summary>The smallest economy (billions) that founds a navy of its own.</summary>
+    public float AiNavyFoundingGdp { get; set; } = 15f;
 }
 
 /// <summary>
@@ -58,6 +68,9 @@ public sealed partial class Defines
 /// </summary>
 public static class Shipbuilding
 {
+    /// <summary>Slipways a port adds, against Defines.SlipwaysPerShipyard for a yard: a quay can fit out a hull, not lay one down.</summary>
+    public const float SlipwaysPerPort = 0.35f;
+
     /// <summary>Days a hull takes for this country: the define, over its shipbuilding speed.</summary>
     public static float BuildDays(Campaign campaign, Nation nation) =>
         MathF.Max(1f, campaign.Defines.HullBuildDays) / NationalModifiers.Factor(nation, "shipbuilding_speed");
@@ -71,6 +84,7 @@ public static class Shipbuilding
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(Shipbuilding))) return;
         Review(campaign);
+        Ambitions(campaign);
 
         var anyOrdered = false;
         foreach (var fleet in campaign.Fleets)
@@ -180,7 +194,7 @@ public static class Shipbuilding
                 var yield = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
                 SlipwaysByNation[owner.Id] = SlipwaysByNation.GetValueOrDefault(owner.Id) +
                                              yards * yield * defines.SlipwaysPerShipyard +
-                                             ports * yield * 0.35f;
+                                             ports * yield * SlipwaysPerPort;
             }
         }
         var baseSlips = SlipwaysByNation.GetValueOrDefault(nation.Id);
@@ -232,6 +246,43 @@ public static class Shipbuilding
         return (int)MathF.Ceiling((1f - fleet.HullProgress) * BuildDays(campaign, campaign.NationById(fleet.NationId)) / slips);
     }
 
+    /// <summary>The hulls this country's economy can carry (AiNavalAmbition).</summary>
+    public static int Ambition(Campaign campaign, Nation nation) =>
+        (int)MathF.Round(MathF.Max(0f, campaign.Defines.AiNavalAmbition) * MathF.Sqrt(MathF.Max(0f, nation.Gdp)));
+
+    /// <summary>
+    /// Once a quarter for each AI country: a country with a coast and an economy but no navy
+    /// founds one in its own harbour - a country born after the campaign began starts with none,
+    /// and the old rule only ever kept the fleets of 2024 - and a navy smaller than its economy
+    /// can carry grows by a hull. The same for everyone; the budget still scales the result.
+    /// </summary>
+    private static void Ambitions(Campaign campaign)
+    {
+        var defines = campaign.Defines;
+        if (!campaign.StepOpensNewDay || defines.AiNavalAmbition <= 0f || campaign.ProvinceMap is null) return;
+        var quarter = Math.Max(1, defines.AiNavalReviewDays) * 3;
+        foreach (var nation in campaign.Nations)
+        {
+            if ((campaign.ElapsedDays + nation.Id * 11) % quarter != 0) continue;
+            if (nation.Movement is not null || nation.Population <= 0 || nation.IsHuman || nation.Gdp < defines.AiNavyFoundingGdp) continue;
+            var ambition = Ambition(campaign, nation);
+            var fleets = campaign.Fleets.Where(f => f.NationId == nation.Id).ToList();
+            if (fleets.Count == 0)
+            {
+                var hulls = Math.Clamp(ambition / 4, 2, 8);
+                if (nation.Treasury < defines.HullCost * hulls * 2f) continue;
+                var order = new CommissionNewFleetCommand { IssuerId = nation.Id, ProvinceId = -1, Hulls = hulls, Mode = MobilisationMode.Standard };
+                order.Apply(campaign);
+                if (order.Refusal.Length == 0)
+                    DiagnosticLogs.Write("simulation", $"NAVY_FOUNDED {nation.Tag} hulls={hulls} ambition={ambition}");
+                continue;
+            }
+            var establishment = fleets.Sum(f => f.Establishment);
+            if (establishment >= ambition) continue;
+            fleets.OrderByDescending(f => f.Establishment).ThenBy(f => f.Id).First().Establishment++;
+        }
+    }
+
     /// <summary>The navy an AI keeps for this fleet: what it began with, scaled by the budget.</summary>
     public static int TargetHulls(Campaign campaign, Nation nation, Fleet fleet)
     {
@@ -251,7 +302,8 @@ public static class Shipbuilding
         var interval = Math.Max(1, campaign.Defines.AiNavalReviewDays);
         foreach (var fleet in campaign.Fleets)
         {
-            if (fleet.Hulls <= 0 || fleet.Establishment <= 0) continue;
+            // A fleet sunk to the last hull is rebuilt, not given up: it keeps its establishment.
+            if (fleet.Establishment <= 0) continue;
             if ((campaign.ElapsedDays + fleet.Id * 7) % interval != 0) continue;
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null || nation.Population <= 0) continue;

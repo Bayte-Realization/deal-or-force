@@ -244,22 +244,36 @@ public static class OrganizationDynamics
     {
         var defines = c.Defines;
         var leader = InternationalOrganizations.Leader(c,org);
+        var wasCohesion = org.Cohesion;
         org.Cohesion = M.Clamp01(org.Cohesion + (Target(c, org) - org.Cohesion) * M.Clamp01(defines.OrganizationCohesionPull));
+        // An organisation sliding into open crisis is news: members at war with each other, at
+        // odds over their politics, or fallen out with their leader. Read from the crossing alone,
+        // so nothing has to be remembered to say it once.
+        if (wasCohesion >= defines.OrganizationRiftCohesion && org.Cohesion < defines.OrganizationRiftCohesion && org.Members.Count >= 3 &&
+            (leader ?? InternationalOrganizations.Leader(c, org)) is { } speaker)
+            c.Chronicle.Record(c, "organization_rift", speaker.Id, -1, InternationalOrganizations.DisplayName(c, org));
 
-        // Whoever attacks a fellow member is out.
-        foreach (var war in c.Wars)
+        if (OrganizationDiscipline.Enabled(c))
         {
-            if (war.Ended || war.CivilConflict) continue;
-            if (!org.Members.Contains(war.AttackerId) || !war.Side(false).Any(org.Members.Contains)) continue;
-            Expel(c, org, c.NationById(war.AttackerId), war.DefenderId);
-            if (org.Dissolved) return;
+            // Suspension, readmission and expulsion of single members (OrganizationDiscipline).
+            if (OrganizationDiscipline.Week(c, org)) return;
+            leader = InternationalOrganizations.Leader(c, org);
         }
+        else
+            // Whoever attacks a fellow member is out.
+            foreach (var war in c.Wars)
+            {
+                if (war.Ended || war.CivilConflict) continue;
+                if (!org.Members.Contains(war.AttackerId) || !war.Side(false).Any(org.Members.Contains)) continue;
+                ExpelForAggression(c, org, c.NationById(war.AttackerId), war.DefenderId);
+                if (org.Dissolved) return;
+            }
 
         // A council nobody believes in is wound up; one with a single member left, a year on, too.
         var lonely = org.Members.Count < 2 && org.Invitations.Count == 0 && org.Motion is null &&
                      c.ElapsedDays - org.FoundedDay > 365 && org.Members.All(id => c.NationById(id) is not { IsHuman: true });
         if (lonely || (org.Cohesion < defines.OrganizationDissolveCohesion && org.Members.All(id => c.NationById(id) is not { IsHuman: true }) &&
-                       MovementRules.Roll(c.Seed, 7000 + org.Id, c.ElapsedDays, 4603) < defines.OrganizationDissolveChance))
+                       MovementRules.Roll(c.Seed, 7000 + org.Id, c.ElapsedDays, 4603) < defines.OrganizationDissolveChance * Durability(c, org)))
         {
             Dissolve(c, org);
             return;
@@ -298,9 +312,42 @@ public static class OrganizationDynamics
         }
     }
 
+    /// <summary>
+    /// How readily a failing organisation is wound up rather than left to wither, as a factor on
+    /// the weekly chance. A council of two founded last spring folds the year it stops working; an
+    /// institution with offices, treaties and a dozen members does not - the CIS and the Arab
+    /// League have spent decades below anybody's idea of cohesion without being dissolved, and
+    /// what an old institution does instead is lose members. Wars, splits and walk-outs still
+    /// bring it down: every member gone takes some of the weight with it.
+    /// </summary>
+    public static float Durability(Campaign c, InternationalOrganization org)
+    {
+        if (!OrganizationDiscipline.Enabled(c)) return 1f;
+        // A body nobody believes in at all - every member at odds with every other - goes
+        // regardless of its age: half the dissolution line is a charter that has plainly died.
+        if (org.Cohesion < c.Defines.OrganizationDissolveCohesion * 0.5f) return 1f;
+        var old = org.FoundedDay <= 0 || c.ElapsedDays - org.FoundedDay >= 5 * 365;
+        var factor = old ? 0.12f : 1f;
+        if (org.Members.Count >= 6) factor *= 0.5f;
+        return factor;
+    }
+
+    /// <summary>Whether a member has stopped belonging: below the line it would leave by.</summary>
+    public static bool Estranged(Campaign c, InternationalOrganization org, Nation member) =>
+        member is not null && Belonging(c, org, member) < c.Defines.OrganizationDepartureBelonging;
+
     private static void Leave(Campaign c, InternationalOrganization org, Nation member)
     {
         var name = InternationalOrganizations.DisplayName(c, org);
+        // A member with nothing left to govern from - its land overrun, a government in exile -
+        // cannot table its own departure, but it has voted to go and goes all the same. Before
+        // this, Yemen and Libya voted to leave the Arab League and OPEC every few months for a
+        // decade and stayed, because the leave command refused a country without land.
+        if (InternationalOrganizations.Refusal(c, new OrganizationCommand { IssuerId = member.Id, OrganizationId = org.Id, Action = "leave" }).Length > 0)
+        {
+            if (org.Members.Contains(member.Id)) OrganizationDiscipline.Withdraw(c, org, member, "organization_left");
+            return;
+        }
         // A friend as estranged as itself leaves with it, and they found their own.
         var companion = org.Members.Where(id => id != member.Id).Select(c.NationById)
             .Where(n => n is { IsHuman: false, IsSubject: false } &&
@@ -365,7 +412,28 @@ public static class OrganizationDynamics
         }
     }
 
-    private static void Expel(Campaign c, InternationalOrganization org, Nation aggressor, int victimId)
+    /// <summary>A defence pact's alliances with a departing member lapse, unless another pact still binds them.</summary>
+    internal static void UnbindDefence(Campaign c, InternationalOrganization org, Nation member)
+    {
+        if (InternationalOrganizations.Charter(org.CharterId)?.Defence != true) return;
+        foreach (var otherId in org.Members)
+        {
+            if (otherId == member.Id) continue;
+            var rel = CampaignDiplomacy.Peek(c, member.Id, otherId);
+            if (rel is not { Stance: DiplomaticStance.Allied }) continue;
+            var shareOther = InternationalOrganizations.Active(c).Any(o => o.Id != org.Id && !o.Dissolved &&
+                InternationalOrganizations.Charter(o.CharterId)?.Defence == true &&
+                o.Members.Contains(member.Id) && o.Members.Contains(otherId));
+            if (!shareOther) rel.Stance = DiplomaticStance.Neutral;
+        }
+    }
+
+    internal static void DissolveNow(Campaign c, InternationalOrganization org) { if (!org.Dissolved) Dissolve(c, org); }
+
+    internal static InternationalOrganization FoundBloc(Campaign c, string charterId, Nation founder, IReadOnlyList<Nation> members) =>
+        Found(c, charterId, founder, members);
+
+    internal static void ExpelForAggression(Campaign c, InternationalOrganization org, Nation aggressor, int victimId)
     {
         if (aggressor is null || !org.Members.Contains(aggressor.Id)) return;
         var name = InternationalOrganizations.DisplayName(c, org);
@@ -374,7 +442,7 @@ public static class OrganizationDynamics
         org.UnpaidWeeks.Remove(aggressor.Id);
         org.Motion?.Votes.Remove(aggressor.Id);
         org.Cohesion = MathF.Max(0f, org.Cohesion - 0.08f);
-        Remember(c, org, aggressor, "attacked_a_fellow_member");
+        Remember(c, org, aggressor, "attacked_a_fellow_member", c.NationById(victimId));
         c.Chronicle.Record(c, "organization_expelled", aggressor.Id, victimId, name);
         if (org.Members.Count == 0) Dissolve(c, org);
         c.MarkStrategicChange();
@@ -392,6 +460,8 @@ public static class OrganizationDynamics
         org.Budget = 0f;
         org.Motion = null;
         org.Invitations.Clear();
+        org.Suspended.Clear();
+        org.SuspendedFor.Clear();
         org.Dissolved = true;
         InternationalOrganizations.InvalidateDefencePartners();
         var actor = members.OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).FirstOrDefault()?.Id ?? org.FounderId;
@@ -414,11 +484,20 @@ public static class OrganizationDynamics
         c.MarkStrategicChange();
     }
 
-    private static void Remember(Campaign c, InternationalOrganization org, Nation subject, string reason)
+    /// <summary>
+    /// What the rest of an organisation remembers of a member that walked out or attacked one of
+    /// them. The members are witnesses, not victims: each minds as much as it concerns it
+    /// (OpinionWitnesses), with the membership they shared counted as a tie of its own. A member
+    /// that was the victim's rival is not sorry to see it attacked; one next door to the victim,
+    /// or bound to it, minds in full; the member at the far end of a world-wide assembly notes it.
+    /// </summary>
+    private static void Remember(Campaign c, InternationalOrganization org, Nation subject, string reason, Nation victim = null)
     {
         foreach (var id in org.Members)
-            if (id != subject.Id && CampaignDiplomacy.Get(c, id, subject.Id) is { } relation)
-                OpinionSystem.Remember(c, relation, reason);
+        {
+            if (id == subject.Id || c.NationById(id) is not { } member) continue;
+            OpinionWitnesses.Witness(c, member, subject, victim, reason, tie: c.Defines.WitnessOrganizationTie);
+        }
     }
 
     /// <summary>

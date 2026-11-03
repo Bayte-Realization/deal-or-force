@@ -614,6 +614,11 @@ public sealed class SplitArmyCommand : ICampaignCommand
             SupplyCongestion = army.SupplyCongestion,
             CutOff = army.CutOff,
             DaysCutOff = army.DaysCutOff,
+            // A detachment is still in the same pocket, on the same stores.
+            PocketStores = army.PocketStores,
+            PocketSinceDay = army.PocketSinceDay,
+            HoldoutSinceDay = army.HoldoutSinceDay,
+            ReliefDistance = army.ReliefDistance,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -667,7 +672,8 @@ public static class MilitaryOperations
                 var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
                     MilitaryDoctrine.Recovery(army.Stance) *
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
-                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery");
+                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery") *
+                    DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId);
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 // A closed pocket is living on what it carried. Rest would put the day's
                 // organisation straight back, and the dry-out would never arrive.
@@ -834,9 +840,11 @@ public static class MilitaryOperations
     /// <summary>
     /// Whether a formation is in a state to receive replacements at all. The weighting and
     /// the payout have to agree on this, or capacity is allotted where it cannot be spent.
+    /// A formation in a pocket takes none: it may be fed from the stores where it stands
+    /// (StrandedGarrisons), which keeps its supply up, but no draft reaches it through the ring.
     /// </summary>
     private static bool CanTakeReplacements(Army army) =>
-        !army.InBattle && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
+        !army.InBattle && !army.CutOff && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
 
     private static void Reinforce(Campaign campaign, Army army, float totalWeight)
     {
@@ -1186,6 +1194,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                     : heldPost > 0
                         ? PostNear(campaign, army, Order, orderedFront, war.Id, heldPost)
                         : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
+        // A post on the whole front belongs to the war against whoever it faces, not to the
+        // war nearest where the division happened to be standing when it was told: so the
+        // division is counted, supported and - when that war alone ends - stood down with the
+        // right war. Every other line keeps the war worked out above.
+        if (drawn is { AllEnemies: true } && target > 0 &&
+            BorderFronts.WarAt(campaign, IssuerId, target) is { } facing) war = facing;
         var targetIsHostile = target > 0 && WarCoalition.HostileController(campaign, war, army.NationId, controllers[target]);
         var plannedRoute = target < 0
             ? Array.Empty<int>()

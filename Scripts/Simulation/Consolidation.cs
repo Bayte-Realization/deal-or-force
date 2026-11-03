@@ -348,7 +348,7 @@ public static class Consolidation
         if (willing >= c.Defines.ShardConsolidationAcceptance)
         {
             partner.DecisionAvailableDay[offerKey] = c.ElapsedDays + 60;
-            if (!partner.IsHuman || c.ObserverMode)
+            if (!partner.IsHuman || c.NobodyPlays)
             {
                 ExecuteShardConsolidation(c, founder, partner);
                 return;

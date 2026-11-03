@@ -1,5 +1,9 @@
 {
   "Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries.": "Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries.",
   "Effective cost: {0} research points.": "Effective cost: {0} research points.",
-  "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.": "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}."
+  "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.": "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
+  "Field use is off.": "Field use is off.",
+  "Field use: {0} / {1} points. The ceiling is reached.": "Field use: {0} / {1} points. The ceiling is reached.",
+  "Field use: {0} / {1} points. It is not in use, so it does not grow.": "Field use: {0} / {1} points. It is not in use, so it does not grow.",
+  "Field use: {0} / {1} points. In use; this week it takes {2} from the laboratories.": "Field use: {0} / {1} points. In use; this week it takes {2} from the laboratories."
 }

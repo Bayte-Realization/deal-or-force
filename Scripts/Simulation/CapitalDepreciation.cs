@@ -72,7 +72,7 @@ public static class CapitalDepreciation
         var yield = Waterfront.Yield(campaign, state.MapIndex, kind);
         if (standing == 1) state.Buildings.Remove(kind);
         else state.Buildings[kind] = standing - 1;
-        nation.Gdp = MathF.Max(0.01f, nation.Gdp - definition.GdpGain * yield);
+        // GDP falls on its own as the plant's output leaves the market (no one-off step to undo).
         // Never below the base it started from: a mill standing since 2024 never added to the
         // capacity, and wearing it out must not take away what it never gave.
         nation.ConstructionCapacity = MathF.Max(MathF.Min(1f, nation.ConstructionCapacity),

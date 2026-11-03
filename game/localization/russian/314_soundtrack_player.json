@@ -1,0 +1,23 @@
+{
+  "Choose music for the campaign or audition individual materials. Volume follows your audio settings.": "Выбирайте музыку для партии или прослушивайте отдельные материалы. Громкость соответствует вашим настройкам звука.",
+  "Choose any declared soundtrack recording, including mod tracks.": "Выбрать любую запись из музыкального каталога, в том числе добавленную модами.",
+  "Choose soundtrack recording": "Выбор записи для партии",
+  "Prev.": "Пред.",
+  "Hold track": "Пауза",
+  "Next.": "След.",
+  "Auto track": "Авто",
+  "Previous track": "Предыдущий трек",
+  "Next track": "Следующий трек",
+  "Pause soundtrack": "Приостановить музыку",
+  "Resume soundtrack": "Продолжить музыку",
+  "Automatic soundtrack": "Автоподбор музыки",
+  "Use as soundtrack": "Играть во время партии",
+  "Now playing: {0}": "Сейчас играет: {0}",
+  "No recording": "Нет записи",
+  "Soundtrack paused. The campaign clock is unchanged.": "Музыка на паузе. Ход времени в партии не меняется.",
+  "Manual playlist. Keeps playing when this window closes.": "Ручной плейлист. Играет и после закрытия этого окна.",
+  "Automatic soundtrack follows the campaign.": "Музыка автоматически подбирается по обстановке в партии.",
+  "This recording cannot be used as the soundtrack right now.": "Сейчас не удалось включить эту запись как саундтрек.",
+  "Declare this recording in music/tracks to make it available in the soundtrack.": "Добавьте запись в music/tracks, чтобы включать её как саундтрек.",
+  "Play during the campaign. Unlike preview, this continues after closing the library.": "Играть во время партии. В отличие от прослушивания, музыка не прервётся при закрытии окна."
+}

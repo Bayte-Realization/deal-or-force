@@ -80,7 +80,24 @@ public static class SupplyDaysTests
         Check(LogisticsSystem.DescribeSupply(open, fed).Contains("reaches a hub"),
             "a fed formation says the line reaches a hub");
 
+        // Stores first (StrandedGarrisons): the ring closes, the region's stores are counted, and
+        // the clock does not start until they are gone.
+        var (stored, storedController) = World();
+        storedController[3] = 101;
+        var fedFromStores = stored.Armies[0];
+        LogisticsSystem.Tick(stored);
+        Check(fedFromStores.CutOff && fedFromStores.DaysCutOff == 0 && fedFromStores.PocketStores > 0f,
+            "a closed road counts the pocket's stores and does not start the clock while they last " +
+            $"(days={fedFromStores.DaysCutOff} stores={fedFromStores.PocketStores:0.0})");
+        var guard = 0;
+        while (fedFromStores.PocketStores > 0f && guard++ < 200) LogisticsSystem.Tick(stored);
+        LogisticsSystem.Tick(stored);
+        Check(fedFromStores.PocketStores == 0f && fedFromStores.DaysCutOff >= 1,
+            $"when the stores are gone the clock starts (days={fedFromStores.DaysCutOff})");
+
+        // The bare clock behind the stores.
         var (cut, controller) = World();
+        cut.Defines.StrandedGarrisonsEnabled = false;
         controller[3] = 101;
         var army = cut.Armies[0];
         var supply = army.SupplyLevel;

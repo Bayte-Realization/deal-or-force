@@ -4,6 +4,45 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Ultimatums: the demand that arrives before the war does — "give us what we want,
+/// or we take it". The name of the game in one mechanic.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the full package a country can demand at gunpoint:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// An ultimatum is a PACKAGE — you can ask for several things on the same paper:
+///
+///   LAND: up to UltimatumMaxRegions (8), but never occupied land and never all of it.
+///   MONEY: up to UltimatumMaxTreasuryShare (50%) of their treasury.
+///   TREATIES: lift their embargo; sign a non-aggression pact.
+///   THE COUNTRY ITSELF: annexation (the whole thing, nothing else on the paper).
+///   VASSALISE: it keeps its flag, answers to you.
+///   DISARM: its army is cut for three years.
+///   BREAK ALLIANCES: every alliance it holds is torn up.
+///   RELEASE SUBJECTS: every country answering to it is let go.
+///   TECHNOLOGY: its current research, handed over for two years.
+///   CHANGE GOVERNMENT: its government is replaced with one of your kind.
+///   FLEET: half its fleet, struck or surrendered.
+///
+/// THE TARGET ASSESSES: what it costs to accept vs what it costs to refuse (the
+/// demander's strength, the target's stability, how angry the target is). A target
+/// that thinks it can win the war refuses.
+///
+/// THE ANSWER: accept and it happens; refuse and there's a 3-day truce before
+/// the war can begin (the demander may walk away; the target may not).
+/// Silence = refusal. A player is never auto-answered.
+///
+/// ANNEXATION is special: the demander must be 1.75× the target's strength, and
+/// nothing else can be on the paper.
+///
+/// WHAT TO CHANGE:
+///   • Easier ultimatums → lower UltimatumAnnexStrengthRatio to 1.2.
+///   • Less land per ultimatum → lower UltimatumMaxRegions to 3.
+///   • No annexation ever → set UltimatumAnnexStrengthRatio to 10.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     public int UltimatumMaxRegions { get; set; } = 8;

@@ -43,6 +43,14 @@ public partial class DealOrForceGame
     private string _supportFilter = "all";
     private string _supportRaiseType = "";
     private bool _supportRebaseArmed;
+    // The deep-strike target bar (LongRangeStrikes): shown when the selection holds anything that
+    // can strike. A kind of target is one click; a region is named by clicking it on the map.
+    private VBoxContainer _supportTargetBar = null!;
+    private HBoxContainer _supportTargetKinds = null!;
+    private Button _supportTargetPick = null!;
+    private Button _supportTargetClear = null!;
+    private Label _supportTargetReadout = null!;
+    private bool _supportTargetArmed;
     private bool _supportRaiseOpen;
     private int _supportSelectionAnchor = -1;
     private readonly HashSet<int> _supportSelected = new();
@@ -189,6 +197,7 @@ public partial class DealOrForceGame
         _supportSelectionMissions = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _supportSelectionMissions.AddThemeConstantOverride("separation", 4);
         selection.AddChild(_supportSelectionMissions);
+        BuildSupportTargetBar(selection);
         rows.MoveChild(selection, _supportScroll.GetIndex());
 
         _supportFeedback = Title("", 11, Ui.Colour("state.negative"));
@@ -311,6 +320,11 @@ public partial class DealOrForceGame
             RebaseSupportSelection(pick.State);
             return true;
         }
+        if (_supportTargetArmed)
+        {
+            AimSupportSelection(pick.State);
+            return true;
+        }
         if (_supportRaiseOpen && pick.State.NationMapIndex == player.MapIndex)
             SelectSupportRaiseRegion(pick.State.MapIndex);
         return true;
@@ -332,7 +346,8 @@ public partial class DealOrForceGame
             Loc.Format("{0} on missions", working),
             Loc.Format(Plural.Key("{0} in training", training.Count), training.Count),
             readiness) +
-            (hurt > 0 ? " · " + Loc.Format("{0} took losses yesterday", hurt) : "");
+            (hurt > 0 ? " · " + Loc.Format("{0} took losses yesterday", hurt) : "") +
+            SupportStrikeSummary(player);
 
         foreach (var (id, _, kind) in SupportFilters)
         {
@@ -614,7 +629,8 @@ public partial class DealOrForceGame
         }
         if (row.Missions.GetNodeOrNull<Label>("MissionStatus") is { } missionStatus)
         {
-            missionStatus.Text = Tr(SupportMissionShort(formation.Mission));
+            missionStatus.Text = Tr(SupportMissionShort(formation.Mission)) +
+                (formation.Mission == SupportCore.MissionStrike ? SupportStrikeStatus(formation) : "");
             missionStatus.AddThemeColorOverride("font_color", Ui.Colour(
                 formation.Mission == SupportCore.MissionStandby ? "text.caption" : "text.accent"));
         }
@@ -637,6 +653,7 @@ public partial class DealOrForceGame
         SupportCore.MissionAirSuperiority => "Air superiority",
         SupportCore.MissionInterdiction => "Interdiction",
         AirReconnaissance.Mission => "Reconnaissance",
+        SupportCore.MissionStrike => "Deep strike",
         _ => mission
     };
 
@@ -647,6 +664,7 @@ public partial class DealOrForceGame
         SupportCore.MissionAirSuperiority => "Sky: sweep the enemy's aircraft from over our battles - their support fire suffers, and our own aircraft lose less.",
         SupportCore.MissionInterdiction => "Strike: hit what is behind the enemy's line, stripping the defence of every battle inside the reach.",
         AirReconnaissance.Mission => "Look: photograph the enemy's ground inside the reach - the fog lifts there, as far as the formation's sensors see. The enemy's fighters and missiles still take their toll.",
+        SupportCore.MissionStrike => "Strike deep: one salvo a week at a target behind the line - the enemy's formations, depots, plants or power grid. Fired from the depot of missiles, drones or shells; the enemy's air defence shoots part of it down, and reconnaissance over the target makes the rest land.",
         _ => mission
     };
 
@@ -694,6 +712,19 @@ public partial class DealOrForceGame
         SupportSelectionChanged();
     }
 
+    /// <summary>Ctrl+X on the long-range screen: keep every other selected formation, by id.</summary>
+    private bool SplitSupportSelection()
+    {
+        if (_supportLayer is not { Visible: true } || _supportSelected.Count < 2) return false;
+        var ordered = _supportSelected.OrderBy(id => id).ToList();
+        var left = ordered.Count / 2;
+        for (var index = 1; index < ordered.Count; index += 2) _supportSelected.Remove(ordered[index]);
+        _supportRebaseArmed = false;
+        SupportSelectionChanged();
+        _supportFeedback.Text = Loc.Format("Split in half: {0} selected, {1} left as they were.", _supportSelected.Count, left);
+        return true;
+    }
+
     private void ClearSupportSelection()
     {
         _supportSelected.Clear();
@@ -715,13 +746,17 @@ public partial class DealOrForceGame
         // but give the roster room instead of crushing it between two command surfaces.
         _supportSelectionBar.Visible = selected.Count > 0 &&
             (!_supportRaiseOpen || Size.Y >= Ui.Metric("support.compact_height", 840));
-        if (selected.Count == 0) _supportRebaseArmed = false;
+        if (selected.Count == 0) { _supportRebaseArmed = false; _supportTargetArmed = false; }
         _supportRebaseButton.SetPressedNoSignal(_supportRebaseArmed);
-        _globe.SupportRebaseArmed = _supportRebaseArmed;
-        _supportRebaseBanner.Visible = _supportRebaseArmed;
-        _supportRebaseBanner.Text = Loc.Format(
+        // While a region is being named the map's clicks are the panel's, not the cards'.
+        _globe.SupportRebaseArmed = _supportRebaseArmed || _supportTargetArmed;
+        _supportRebaseBanner.Visible = _supportRebaseArmed || _supportTargetArmed;
+        _supportRebaseBanner.Text = _supportTargetArmed
+            ? Tr("Click a region of a country we are at war with: the selected strike formations aim there. Esc cancels.")
+            : Loc.Format(
             "Click a region of the country on the map to base the {0} selected formation(s) there. Esc cancels.",
             selected.Count);
+        RefreshSupportTargetBar(selected);
         if (selected.Count == 0) return;
         _supportSelectionCaption.Text = Loc.Format("{0} selected", selected.Count);
 
@@ -820,6 +855,7 @@ public partial class DealOrForceGame
     private void ToggleSupportRebase()
     {
         _supportRebaseArmed = !_supportRebaseArmed && _supportSelected.Count > 0;
+        if (_supportRebaseArmed) _supportTargetArmed = false;
         _supportFeedback.Text = "";
         RefreshSupportScreen();
     }
@@ -827,6 +863,7 @@ public partial class DealOrForceGame
     private void CancelSupportRebase()
     {
         _supportRebaseArmed = false;
+        _supportTargetArmed = false;
         _supportFeedback.Text = "";
         RefreshSupportScreen();
     }
@@ -1051,5 +1088,210 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         PlayStrategicCue("support_order");
         RefreshSupportScreen();
+    }
+    // ------------------------------------------------------------------ deep strike
+
+    /// <summary>The kinds of target, in the order of the bar, with their player-facing names.</summary>
+    private static readonly (string Id, string Label, string Help)[] SupportTargetKinds =
+    {
+        ("", "Auto", "The staff picks by weapon: rockets and glide bombs at the line, missiles at the depots, long-range drones at the grid."),
+        (LongRangeStrikes.TargetFront, "Front", "The enemy's formations in the line: organisation and equipment out of the strongest stack in reach."),
+        (LongRangeStrikes.TargetLogistics, "Logistics", "Depots and railheads: the enemy's ammunition, fuel and arms burn, and the region that feeds the most of their divisions carries less."),
+        (LongRangeStrikes.TargetIndustry, "Industry", "Arms plants and refineries: war damage to the enemy's most industrial region in reach, and with it what it makes."),
+        (LongRangeStrikes.TargetEnergy, "Energy", "The power grid: war damage and dark winters in the enemy's most populous region in reach, and the country's stability with them.")
+    };
+
+    private void BuildSupportTargetBar(VBoxContainer selection)
+    {
+        _supportTargetBar = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, Visible = false };
+        _supportTargetBar.AddThemeConstantOverride("separation", 4);
+        selection.AddChild(_supportTargetBar);
+
+        var header = new HBoxContainer();
+        header.AddThemeConstantOverride("separation", 6);
+        _supportTargetBar.AddChild(header);
+        var caption = Title(Tr("STRIKE TARGET"), 11, Ui.Colour("text.caption"));
+        caption.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        caption.VerticalAlignment = VerticalAlignment.Center;
+        header.AddChild(caption);
+        _supportTargetPick = ActionButton("PICK ON MAP", ToggleSupportTargetPick, 110, 24);
+        _supportTargetPick.ToggleMode = true;
+        Tip(_supportTargetPick, Tr("Then click a region of a country we are at war with: the selected strike formations aim there, if it is in reach."));
+        header.AddChild(_supportTargetPick);
+        _supportTargetClear = ActionButton("ANY REGION", ClearSupportTargetRegion, 96, 24);
+        Tip(_supportTargetClear, Tr("Forget the named region: the staff finds the best target of the chosen kind in reach."));
+        header.AddChild(_supportTargetClear);
+
+        _supportTargetKinds = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _supportTargetKinds.AddThemeConstantOverride("separation", 3);
+        _supportTargetBar.AddChild(_supportTargetKinds);
+        foreach (var (id, label, help) in SupportTargetKinds)
+        {
+            var captured = id;
+            var chip = ActionButton(label, () => SetSupportStrikeTarget(captured, null), 0, 24);
+            chip.SetMeta("target", id);
+            chip.ToggleMode = true;
+            chip.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            chip.AddThemeFontSizeOverride("font_size", (int)Ui.Metric("ui.font.button_small", 11));
+            chip.TooltipText = Ui.Tip(Tr(help));
+            _supportTargetKinds.AddChild(chip);
+        }
+
+        _supportTargetReadout = Title("", 11, Ui.Colour("text.body_soft"));
+        _supportTargetReadout.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _supportTargetReadout.CustomMinimumSize = new Vector2(1, 0);
+        _supportTargetBar.AddChild(_supportTargetReadout);
+    }
+
+    private static bool CanStrike(SupportFormation formation) =>
+        SupportTypeCatalog.TryGet(formation.TypeId, out var type) && type.Strike > 0f &&
+        type.Missions.Contains(SupportCore.MissionStrike);
+
+    /// <summary>
+    /// The bar under the missions: which kind of target the selected strike formations aim at,
+    /// the region they were told to hit, and - for the first of them - what the staff will
+    /// actually strike next and the odds over it, so the choice is made looking at the price.
+    /// </summary>
+    private void RefreshSupportTargetBar(List<SupportFormation> selected)
+    {
+        var strikers = selected.Where(CanStrike).ToList();
+        _supportTargetBar.Visible = strikers.Count > 0;
+        if (strikers.Count == 0) { _supportTargetArmed = false; return; }
+        _supportTargetPick.SetPressedNoSignal(_supportTargetArmed);
+        foreach (var chip in _supportTargetKinds.GetChildren().OfType<Button>())
+        {
+            var id = chip.GetMeta("target", "").AsString();
+            chip.SetPressedNoSignal(strikers.All(f => (f.StrikeTarget ?? "") == id));
+        }
+        var lead = strikers.FirstOrDefault(f => f.Mission == SupportCore.MissionStrike) ?? strikers[0];
+        var named = lead.TargetStateMapIndex >= 0 ? _campaign.States.Find(s => s.MapIndex == lead.TargetStateMapIndex) : null;
+        _supportTargetClear.Disabled = strikers.All(f => f.TargetStateMapIndex < 0);
+        var text = named is not null ? Loc.Format("Named region: {0}.", named.DisplayName) + " " : "";
+        var plan = LongRangeStrikes.Preview(_campaign, lead);
+        if (plan.Province <= 0)
+            text += Tr(plan.Refusal.Length > 0 ? plan.Refusal : "Nothing of the enemy's is in reach.");
+        else
+        {
+            var region = _campaign.States.Find(s => s.MapIndex == plan.StateMapIndex)?.DisplayName ?? "";
+            var sky = plan.AirControl < 0f ? Tr("nobody flies there")
+                : plan.AirControl >= 0.65f ? Tr("our sky")
+                : plan.AirControl <= 0.35f ? Tr("the enemy's sky") : Tr("contested sky");
+            text += Loc.Format("Next salvo: {0} · {1} · {2:0} km", Tr(SupportTargetName(plan.Target)), region, plan.DistanceKm) + "\n" +
+                    Loc.Format("{0} · about {1:P0} shot down · precision {2:P0}", sky, plan.InterceptShare, plan.Precision) +
+                    (plan.Spotted ? "" : " · " + Tr("no reconnaissance over the target"));
+            if (plan.Refusal.Length > 0) text += "\n" + Tr(plan.Refusal);
+        }
+        if (lead.Mission != SupportCore.MissionStrike)
+            text += "\n" + Tr("Give the Deep strike mission for the salvos to fly.");
+        _supportTargetReadout.Text = text;
+    }
+
+    private static string SupportTargetName(string target) => target switch
+    {
+        LongRangeStrikes.TargetFront => "Front",
+        LongRangeStrikes.TargetLogistics => "Logistics",
+        LongRangeStrikes.TargetIndustry => "Industry",
+        LongRangeStrikes.TargetEnergy => "Energy",
+        _ => "Auto"
+    };
+
+    /// <summary>The row's strike line: what it aims at, and what its last salvo did.</summary>
+    private string SupportStrikeStatus(SupportFormation formation)
+    {
+        var text = " · " + Tr(SupportTargetName(formation.StrikeTarget ?? ""));
+        if (formation.TargetStateMapIndex >= 0 &&
+            _campaign.States.Find(s => s.MapIndex == formation.TargetStateMapIndex) is { } named)
+            text += " → " + named.DisplayName;
+        if (_campaign.SupportStrikeReports.TryGetValue(formation.Id, out var report))
+            text += report.Launched > 0f
+                ? " · " + Loc.Format("last: {0:0.0} landed, {1:P0} shot down", report.Landed,
+                    report.Intercepted / MathF.Max(0.01f, report.Launched))
+                : report.Note.Length > 0 ? " · " + Tr(report.Note) : "";
+        return text;
+    }
+
+    /// <summary>The summary's strike half: the munitions in the depots and the week's salvos both ways.</summary>
+    private string SupportStrikeSummary(Nation player)
+    {
+        if (!_campaign.SupportFormations.Any(f => f.NationId == player.Id && CanStrike(f)) &&
+            !_campaign.SupportStrikeReports.Values.Any(r => r.TargetNationId == player.Id)) return "";
+        var text = "\n" + Loc.Format("Depots: missiles {0:0.#} · drones {1:0.#} · shells {2:0.#}",
+            StrategicStockpiles.Get(_campaign, player, "Missiles"), StrategicStockpiles.Get(_campaign, player, "Drones"),
+            StrategicStockpiles.Get(_campaign, player, "Ammunition"));
+        var week = _campaign.ElapsedDays - Math.Max(1, _campaign.Defines.StrikeIntervalDays);
+        var ours = _campaign.SupportFormations.Where(f => f.NationId == player.Id)
+            .Select(f => _campaign.SupportStrikeReports.GetValueOrDefault(f.Id))
+            .Where(r => r is not null && r.Day > week && r.Launched > 0f).ToList();
+        var theirs = _campaign.SupportStrikeReports.Values.Where(r => r.TargetNationId == player.Id && r.Day > week && r.Launched > 0f).ToList();
+        if (ours.Count > 0)
+            text += " · " + Loc.Format("our salvos this week {0}, {1:P0} shot down", ours.Count,
+                ours.Sum(r => r.Intercepted) / MathF.Max(0.01f, ours.Sum(r => r.Launched)));
+        if (theirs.Count > 0)
+            text += " · " + Loc.Format("incoming {0}, {1:P0} intercepted", theirs.Count,
+                theirs.Sum(r => r.Intercepted) / MathF.Max(0.01f, theirs.Sum(r => r.Launched)));
+        return text;
+    }
+
+    /// <summary>Give the selected strike formations a kind of target and/or a region (null keeps each one's own).</summary>
+    private void SetSupportStrikeTarget(string target, int? stateMapIndex)
+    {
+        if (_campaign?.Player is null) return;
+        var commands = new List<SetSupportStrikeTargetCommand>();
+        foreach (var formation in _campaign.SupportFormations.Where(f => _supportSelected.Contains(f.Id) &&
+                     f.NationId == _campaign.Player.Id && CanStrike(f)).OrderBy(f => f.Id))
+        {
+            var command = new SetSupportStrikeTargetCommand
+            {
+                IssuerId = _campaign.Player.Id, FormationId = formation.Id,
+                Target = target ?? formation.StrikeTarget ?? "",
+                StateMapIndex = stateMapIndex ?? formation.TargetStateMapIndex
+            };
+            commands.Add(command);
+            _campaign.Commands.Enqueue(command);
+        }
+        if (commands.Count == 0) return;
+        _campaign.Commands.ApplyAll(_campaign);
+        var applied = commands.Count(c => c.Refusal.Length == 0);
+        _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour(applied > 0 ? "state.positive" : "state.negative"));
+        _supportFeedback.Text = applied > 0
+            ? Loc.Format("Strike target set for {0} formation(s).", applied)
+            : Tr(commands[0].Refusal);
+        if (applied > 0) PlayStrategicCue("support_mission");
+        RefreshSupportScreen();
+    }
+
+    private void ToggleSupportTargetPick()
+    {
+        _supportTargetArmed = !_supportTargetArmed && _supportSelected.Count > 0;
+        if (_supportTargetArmed) _supportRebaseArmed = false;
+        _supportFeedback.Text = "";
+        RefreshSupportScreen();
+    }
+
+    private void ClearSupportTargetRegion()
+    {
+        _supportTargetArmed = false;
+        SetSupportStrikeTarget(null, -1);
+    }
+
+    /// <summary>A region clicked while naming a target: an enemy's is taken, anything else explains itself.</summary>
+    private void AimSupportSelection(ScenarioState region)
+    {
+        var player = _campaign.Player;
+        var anchor = LongRangeStrikes.AnchorOf(_campaign.ProvinceMap, region.MapIndex);
+        var controllers = _campaign.ProvinceController ?? _campaign.ProvinceMap.ProvinceToNation;
+        var controller = anchor > 0 && anchor < controllers.Length ? controllers[anchor] : -1;
+        var enemy = _campaign.Nations.FirstOrDefault(n => n.MapIndex == controller);
+        var atWar = enemy is not null && _campaign.Wars.Any(w => !w.Ended && w.Involves(player.Id) && w.Involves(enemy.Id) &&
+                                                               w.Side(true).Contains(player.Id) != w.Side(true).Contains(enemy.Id));
+        if (!atWar)
+        {
+            _supportFeedback.AddThemeColorOverride("font_color", Ui.Colour("state.negative"));
+            _supportFeedback.Text = region.DisplayName + " · " + Tr("Choose a region held by a country we are at war with.");
+            RefreshSupportScreen();
+            return;
+        }
+        _supportTargetArmed = false;
+        SetSupportStrikeTarget(null, region.MapIndex);
     }
 }

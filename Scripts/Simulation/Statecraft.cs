@@ -102,11 +102,20 @@ public static class Statecraft
     }
 
     /// <summary>
-    /// Everybody who has an opinion of a notorious country revises it.
+    /// Everybody who has an opinion of a notorious country revises it - by as much as its
+    /// appetite concerns them.
     ///
     /// Only relations that already exist are touched, deliberately: creating one for every
     /// pair in the world would leave sixty-eight thousand relationships to settle weekly,
     /// and a country nobody has ever dealt with has no opinion to revise.
+    ///
+    /// The weight used to be the same for everybody: a country that had taken a province on
+    /// the far side of the world was minus sixty-eight with every capital it had ever spoken
+    /// to, its own allies included. Now it is scaled by what the bystander has at stake
+    /// (OpinionWitnesses.Concern): the neighbours, who could be next, mind in full; its allies
+    /// and friends hardly at all; a country an ocean away with no tie to it notes it and little
+    /// more. The cap stays at one and a half times the declared weight, because a bad name is
+    /// a bystander's grievance and not a victim's.
     /// </summary>
     private static void RememberNotoriety(Campaign campaign)
     {
@@ -116,8 +125,13 @@ public static class Statecraft
             var b = campaign.NationById(relation.B);
             if (a is null || b is null) continue;
             var worst = MathF.Max(a.Notoriety, b.Notoriety);
-            if (worst < 8f) OpinionSystem.Forget(campaign, relation, "notoriety");
-            else OpinionSystem.Remember(campaign, relation, "notoriety", M.Clamp(worst / 60f, 0.1f, 2.0f));
+            if (worst < 8f) { OpinionSystem.Forget(campaign, relation, "notoriety"); continue; }
+            var notorious = a.Notoriety >= b.Notoriety ? a : b;
+            var observer = notorious == a ? b : a;
+            var concern = OpinionWitnesses.Concern(campaign, observer, notorious, null);
+            var scale = M.Clamp(worst / 60f, 0.1f, 1.5f) * MathF.Min(1f, concern);
+            if (scale < campaign.Defines.WitnessThreshold) OpinionSystem.Forget(campaign, relation, "notoriety");
+            else OpinionSystem.Remember(campaign, relation, "notoriety", scale);
         }
     }
 

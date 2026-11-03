@@ -1,0 +1,13 @@
+// Pockets and the garrisons a rising strands (StrandedGarrisons): stores, relief, holding out and breaking out.
+{
+  "In a pocket: {0} days of stores left": "In a pocket: {0} days of stores left",
+  "In a pocket: the stores are gone, {0} days hungry": "In a pocket: the stores are gone, {0} days hungry",
+  "In a pocket: its stores are being counted": "In a pocket: its stores are being counted",
+  ", relief {0} province(s) away.": ", relief {0} province(s) away.",
+  ", no friendly ground within reach.": ", no friendly ground within reach.",
+  "Holding out behind the rising's lines.": "Holding out behind the rising's lines.",
+  "Breaking out toward friendly ground.": "Breaking out toward friendly ground.",
+  "An air bridge carries {0:P0} of its needs.": "An air bridge carries {0:P0} of its needs.",
+  ", cut off together with a large part of the country.": ", cut off together with a large part of the country.",
+  "A held port or town covers {0:P0}.": "A held port or town covers {0:P0}."
+}

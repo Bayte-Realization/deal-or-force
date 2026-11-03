@@ -186,7 +186,6 @@ ElectronicsPlant · Shipyard · Port · RailNetwork · ResearchLab
     "name": "Lithium mine",
     "cost": 0.90,
     "days": 200,
-    "gdp_gain": 0.30,
     "capacity_gain": 0.04,
     "description": "Brine extraction and carbonate refining."
   }

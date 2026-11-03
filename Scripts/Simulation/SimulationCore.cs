@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -154,6 +154,9 @@ public sealed class CampaignCommandQueue
         {
             var command = _pending.Dequeue();
             CrashEnvelope.Record(campaign, command);
+            // Несмотря на имя, TraceCommand не только пишет лог: он вызывает Apply
+            // ровно один раз и при выключенной диагностике тоже. Повторный Apply здесь
+            // удвоит цену/набор войск. Граница записи и трассировки должна остаться общей.
             DiagnosticLogs.TraceCommand(campaign, command);
         }
     }
@@ -515,6 +518,23 @@ public sealed partial class Campaign
     /// the player questions. This is the seat that is not asked.
     /// </summary>
     public bool ObserverMode;
+
+    /// <summary>
+    /// Nobody is at the wheel: the watching mode, or a campaign with no human seat and no human
+    /// country at all (the top bar's "Observer mode"). The two used to be separate questions, so a
+    /// world watched through Jordan's eyes was asked to sign Jordan into a Levant federation: the
+    /// country being looked at is not a country being played.
+    /// </summary>
+    public bool NobodyPlays
+    {
+        get
+        {
+            if (ObserverMode) return true;
+            if (HumanSeats.Count > 0) return false;
+            foreach (var nation in Nations) if (nation.IsHuman) return false;
+            return true;
+        }
+    }
     public readonly Dictionary<long, DiplomaticRelation> Relations = new();
     public readonly List<int> HumanSeats = new();
     public readonly CampaignCommandQueue Commands;
@@ -798,6 +818,31 @@ public sealed partial class Campaign
 
     private IEnumerable<int> TickStages()
     {
+        // =====================================================================================
+        // THE RHYTHM OF THE SIMULATION - the contract every system here obeys.
+        //
+        // A step is whatever the player or a bench asks for: six hours, one hour, three days. The
+        // whole architecture is a promise that the answer does not depend on which of those it was.
+        //
+        //   PASSES PER STEP (this half of the method). Marching, supply, organisation, the fighting
+        //   itself and the building of things accumulate at a rate per day, so they are handed the
+        //   fraction of a day the step covers, and they run once per step whatever the step is. That
+        //   is why a six-hour tick moves an army a quarter of the way instead of not at all.
+        //
+        //   PASSES PER DAY (the loop further down, marked "THE DAY, IN ORDER"). A decision happens
+        //   on a day: an event either fires today or it does not, the economy clears on the week,
+        //   history takes one sample. These run once for every whole day the step crossed, which is
+        //   what stops them from running four times on an hourly clock and once on a six-hour one.
+        //
+        //   PASSES ON THEIR OWN CLOCK. Inside the day a system may gate itself: `OnItsDay` spreads
+        //   the countries of the world across a cycle so that a monthly decision does not land on
+        //   the same day for everybody, and `% 7` / `% 30` gates keep weekly and monthly work off
+        //   the daily path. A gate is not an optimisation detail, it is part of this contract: a
+        //   system that loses its gate runs thirty times more often than it was tuned for.
+        //
+        // Orders are applied at the top of the step, before anything reads the world, so a player's
+        // command and a computer's are read at exactly the same point of the clock.
+        // =====================================================================================
         if (IsPaused || SimulationFault.Length > 0) yield break;
         // A world under the ice or the static (WorldCurses): the clock goes on and nothing
         // else does - no system runs and no order is carried out, the player's included.
@@ -846,6 +891,10 @@ public sealed partial class Campaign
         // step is, which is what lets a six-hour tick move an army a quarter of the way
         // instead of not at all.
         using (SimProfiler.Measure("military access")) MilitaryAccess.Tick(this);
+        using (SimProfiler.Measure("expeditions")) Expeditions.Tick(this);
+        using (SimProfiler.Measure("border shape")) BorderShape.Tick(this);
+        using (SimProfiler.Measure("civil war fronts")) CivilWarFronts.Tick(this);
+        using (SimProfiler.Measure("movement mergers")) MovementMergers.Tick(this);
         using (SimProfiler.Measure("diplomatic acts")) DiplomaticActs.Tick(this);
         using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
         // A frame may stop here and between the fleets and the fighting: the same passes in the
@@ -865,6 +914,8 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
         // A pocket the computer is in is a pocket it tries to leave.
         using (SimProfiler.Measure("pocket breakout")) PocketBreakout.Tick(this);
+        // And a pocket whose stores are gone, with nobody coming, gives up (StrandedGarrisons).
+        using (SimProfiler.Measure("pocket surrender")) StrandedGarrisons.Tick(this);
         // The ordinary staff is conservative by design. A war for existence is the one
         // exception: mend a hole with a reserve, take an empty enemy province, or queue an
         // emergency formation - all through the same commands and the same manpower/debt
@@ -884,6 +935,51 @@ public sealed partial class Campaign
         // whether the campaign is stepping six hours at a time or three days.
         for (var day = 0; day < daysCrossed; day++)
         {
+            // =====================================================================================
+            // THE DAY, IN ORDER - read this before adding anything below.
+            //
+            // Sixty passes run here, every whole day the step crosses. They are grouped by what
+            // they read, and the grouping is the reason for the order:
+            //
+            //   1. A country's own numbers ..... recruitment, contractors, stockpiles, support,
+            //                                    militia, modifiers
+            //   2. What people think ........... social memory, opinion
+            //   3. Treaties and courts ......... alliances, guarantees and agreements, gestures,
+            //                                    land arrangements, treasury dynamics
+            //   4. Our hand abroad ............. parallel administration, internal migration
+            //   5. Sanity ...................... numeric integrity (reports; never repairs)
+            //   6. What the war costs .......... war damage, war weariness, civil-war reserves,
+            //                                    crisis ladder, DEFCON
+            //   7. Power inside ................ factions, defections, desertion, coups
+            //   8. The world's furniture ....... proxy wars, organizations and their life, deals,
+            //                                    ultimatums, foreign assistance
+            //   9. Movements and our kin ....... movement methods, kin statecraft
+            //  10. Long arcs ................... research, shipbuilding, statecraft, subjects,
+            //                                    consolidation, culture union, corridors, world war,
+            //                                    intel, covert operations, addresses
+            //  11. Record and story ............ historical timeline, events, history sample
+            //  12. The map changes ............. secession, union, demography, extinction, resistance,
+            //                                    civil-war outbreak, names, governance, rulers,
+            //                                    crises, mood, promises, goals, identity, naming,
+            //                                    colonisation, submission, occupations, lost lands,
+            //                                    capital
+            //
+            // Three sentences for why: numbers before opinions, opinions before treaties, treaties
+            // before the map; a war's cost is counted before anything is decided about it; and the
+            // map is redrawn last, because every pass above was worked out on the map that is still
+            // standing.
+            //
+            // ADDING SOMETHING? Put it in the group whose state it reads, and put it here only if it
+            // is a daily decision - the passes before this loop scale with the hours in the step and
+            // must not. A pass that writes anything must also reach the save (SaveSystem) and, when
+            // it changes what the world *is*, the fingerprint (CampaignFingerprint); otherwise a
+            // loaded campaign and the bench disagree and nothing says so.
+            //
+            // A phase that is heavy belongs behind a day-cycle gate (`MovementRules.OnItsDay`) or
+            // in stages (`DemographicCycle.Stages`), never dropped in raw: at the hourly step the
+            // profiler shows a single system eating the frame, and this list is where a reader looks
+            // first.
+            // =====================================================================================
             using (SimProfiler.Measure("recruitment")) RecruitmentSystem.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("contractors")) Contractors.Tick(this);
@@ -950,6 +1046,7 @@ public sealed partial class Campaign
             yield return 0;
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("crisis ladder")) CrisisLadder.Tick(this);
+            using (SimProfiler.Measure("defcon system")) DefconSystem.Tick(this);
             using (SimProfiler.Measure("factions")) Factions.Tick(this);
             yield return 0;
             // A formation that has been cut off or is standing among its own people can
@@ -993,6 +1090,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("culture union")) CultureUnion.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("corridors")) Corridors.Tick(this);
+            using (SimProfiler.Measure("border diplomacy")) BorderDiplomacy.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
             yield return 0;
@@ -1037,6 +1135,10 @@ public sealed partial class Campaign
             yield return 0;
             // And whether any country has lost its government's grip on part of itself.
             using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
+            // And whether a state failing on several fronts at once is coming apart, its capital
+            // overthrowing its government, or a piece of a state that came apart going home
+            // (StateFailure). After the single outbreak, so the two read the same day's world.
+            using (SimProfiler.Measure("state failure")) StateFailure.Tick(this);
             yield return 0;
             CountryNames.Remember(this);
 
@@ -1119,12 +1221,9 @@ public sealed partial class Campaign
         if (HumanSeats.Count == 0) return false;
         foreach (var pending in PendingEvents)
             if (HumanSeats.Contains(pending.NationId)) return true;
-        foreach (var war in Wars)
-        {
-            if (war.Ended || war.PendingOfferFromId < 0) continue;
-            foreach (var seat in HumanSeats)
-                if (PeaceOffers.AwaitingAnswer(war, seat)) return true;
-        }
+        // A peace offer no longer stops the clock: it arrives as a notification the player
+        // opens when they choose (PeaceOfferUI), so it waits for the frame like anything else.
+        // Counting it here redrew the whole interface every step for the sixty days it stood.
         return false;
     }
 
@@ -1266,7 +1365,12 @@ public sealed partial class Campaign
 
         // A fleet's home port is a province, and provinces only exist once the map is
         // attached. Until then a fleet knows where it is but not what it belongs to.
-        FleetHistory.AssignHomePorts(this);
+        FleetHistory.AssignHomePorts(this, keepSaved: _pendingProvinceController is not null);
+        // And every state's church and people from the first look: the State Affairs screen of
+        // 1 January showed nothing declared until the first day had ticked, as if each
+        // country made its mind up on the morning of the 2nd. A new campaign only - a save
+        // carries its own declarations, and an empty one there is what was saved.
+        if (_pendingProvinceController is null) StateIdentity.EnsureDeclared(this, strain: false);
         var savedTopologyMatches = _pendingProvinceController is not null &&
             _pendingProvinceOccupation is not null &&
             _pendingProvinceController.Length == ProvinceController.Length &&
@@ -1437,6 +1541,15 @@ public sealed partial class Campaign
             if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && string.IsNullOrWhiteSpace(nation.CapitalName))
             {
                 nation.CapitalName = state.Name;
+            }
+            // A name inherited with a fallen state's title (a faction proclaimed as Syria keeps
+            // "Damascus") while the city itself is somebody else's: the seat is where it rules.
+            else if (state is not null && !string.IsNullOrWhiteSpace(state.Name) && CapitalCore.SeatNameLost(this, nation))
+            {
+                nation.CapitalName = state.Name;
+                var centre = topology.CenterOf(best);
+                nation.CapitalLatitude = centre.Latitude;
+                nation.CapitalLongitude = centre.Longitude;
             }
         }
         // A landless headquarters stands at its host's capital or its region's main city

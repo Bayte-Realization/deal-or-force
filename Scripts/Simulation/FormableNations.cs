@@ -32,10 +32,18 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     /// countries' tags - a Kurdistan of Erbil, Duhok and Sulaymaniyah.</summary>
     public string[] RequiredRegions { get; init; } = Array.Empty<string>();
     public string[] Supersedes { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// The share of the foundation territory the founders must hold, as Victoria 3 asks for
+    /// most of a homeland and not every last county of it. Negative means the defaults:
+    /// FormableRequiredShare, or FormableRestorationShare for a restoration.
+    /// </summary>
+    public float RequiredShare { get; init; } = -1f;
 }
 public sealed record FormationRequirement(string Label, bool Met);
 public sealed record FormationStatus(FormationRequirement[] Requirements, int Owned, int Total, float Cost)
 {
+    /// <summary>How many of the Total provinces must be held: Total times the formable's share.</summary>
+    public int Required { get; init; } = -1;
     public bool CanForm => Requirements.Length > 0 && Requirements.All(r => r.Met);
 }
 
@@ -178,7 +186,9 @@ public static class FormableNations
                     MinimumReligionShare = Number("minimum_religion_share", old?.MinimumReligionShare ?? .5f),
                     RequiredRegions = Ids("required_regions", old?.RequiredRegions),
                     Supersedes = Ids("supersedes", old?.Supersedes),
+                    RequiredShare = Number("required_share", old?.RequiredShare ?? -1f),
                     AliasOf = Text("alias_of", old?.AliasOf ?? ""),
+                    Restores = (Text("restores", old?.Restores ?? "") ?? "").ToUpperInvariant(),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
                         ? accession.GetBoolean() : old?.PeacefulAccession ?? false,
                     SubjectIntegration = e.TryGetProperty("subject_integration", out var integration)
@@ -194,6 +204,8 @@ public static class FormableNations
                 if (d.Supersedes.Contains(d.Id, StringComparer.OrdinalIgnoreCase))
                     throw new FormatException("a state cannot supersede itself");
                 if (d.AliasOf == d.Id) throw new FormatException("a state cannot alias itself");
+                if (d.Restores.Length > 0 && !d.RequiredTags.Contains(d.Restores, StringComparer.OrdinalIgnoreCase))
+                    throw new FormatException("a restoration must require the restored country's scenario territory");
                 if (d.RequiredGovernment.Any(id => !GovernmentCatalog.Knows(id)))
                     throw new FormatException("names a form of government nothing declares");
                 if (d.RequiredReligions.Any(id => DemographyCatalog.Religion(id) is null))
@@ -339,6 +351,17 @@ public static class FormableNations
         return people;
     }
 
+    /// <summary>The land provinces of a formable's foundation territory, for the map.</summary>
+    public static int[] Land(Campaign campaign, Nation nation, FormableNation d)
+    {
+        if (campaign is null || d is null) return Array.Empty<int>();
+        var map = campaign.ProvinceMap;
+        var provinces = new HashSet<int>(d.RequiredProvinces);
+        provinces.UnionWith(PeacefulFormation.RegionProvinces(campaign, d));
+        foreach (var tag in d.RequiredTags) provinces.UnionWith(FormableRestorations.Authored(campaign, tag));
+        return provinces.Where(p => map is not null && p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]).ToArray();
+    }
+
     public static FormationStatus Evaluate(Campaign campaign, Nation nation, FormableNation d)
     {
         if (campaign is null || nation is null || d is null) return new(Array.Empty<FormationRequirement>(), 0, 0, 0);
@@ -372,14 +395,22 @@ public static class FormableNations
         // Unresolved IDs fail closed rather than silently disappearing.
         var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
         var owned = land.Count(Held);
-        var requiredCount = !string.IsNullOrEmpty(d.Restores) && land.Length > 1
-            ? Math.Max(1, (int)MathF.Ceiling(land.Length * 0.5f))
-            : land.Length;
+        // Most of it, not all of it: every formable used to demand each last province, so one
+        // island or one rebel-held valley kept a union from ever being proclaimed. The share is
+        // the formable's own (required_share), or the defaults.
+        var heldShare = d.RequiredShare > 0f && d.RequiredShare <= 1f ? d.RequiredShare
+            : !string.IsNullOrEmpty(d.Restores) ? campaign.Defines.FormableRestorationShare
+            : campaign.Defines.FormableRequiredShare;
+        var requiredCount = land.Length <= 1 ? land.Length
+            : Math.Clamp((int)MathF.Ceiling(land.Length * Math.Clamp(heldShare, 0.05f, 1f)), 1, land.Length);
         requirements.Add(new(Loc.Format("Foundation territory secured: {0}/{1}", owned, requiredCount),
             land.Length > 0 && owned >= requiredCount));
         var cost = Math.Max(.05f, nation.Gdp * d.CostShare);
         requirements.Add(new(Loc.Get("Treasury covers the founding cost"), nation.Treasury >= cost));
-        requirements.Add(new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id)));
+        requirements.Add(string.IsNullOrEmpty(d.Restores)
+            ? new(Loc.Get("No other country has proclaimed this state"), !campaign.Nations.Any(n => n.FormedNationId == d.Id))
+            : new(Loc.Get("No competing state or government in exile claims this identity"),
+                !FormableRestorations.HasLivingIdentity(campaign, d.Restores)));
         requirements.Add(new(Loc.Get("The new state is not smaller than the country already is"),
             !SmallerThanCountry(campaign, nation, d)));
 
@@ -409,7 +440,7 @@ public static class FormableNations
             requirements.Add(new(Loc.Format("Religious founding mandate ({0}): {1:P0} / {2:P0}",
                 string.Join(", ", beliefs), share, d.MinimumReligionShare), share >= d.MinimumReligionShare));
         }
-        return new(requirements.ToArray(), owned, land.Length, cost);
+        return new(requirements.ToArray(), owned, land.Length, cost) { Required = requiredCount };
     }
 }
 
@@ -430,6 +461,7 @@ public sealed class FormNationCommand : ICampaignCommand
         nation.FormedNationHistory.Add(d.Id);
         nation.FormedNationId = d.Id;
         nation.FormedNationDay = campaign.ElapsedDays;
+        FormableRestorations.Invalidate(campaign);
         // How well the proclaimed state holds together starts here: one people is one country, and
         // every people after that is a promise to be kept (UnionCohesion).
         nation.UnionCohesion = UnionCohesion.Start(campaign, nation, d);

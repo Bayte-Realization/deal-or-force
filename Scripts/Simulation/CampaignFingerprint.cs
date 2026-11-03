@@ -62,6 +62,25 @@ public static class CampaignFingerprint
         {
             MixText("world_curse"); MixText(campaign.Curse); Mix(campaign.CurseDay); Mix(campaign.CurseDrowned);
         }
+        if (campaign.DefconLevel != 5 || campaign.DefconDaysInStage > 0 || campaign.DefconPeakLevel != 5)
+        {
+            MixText("defcon"); Mix(campaign.DefconLevel); Mix(campaign.DefconDaysInStage); Mix(campaign.DefconPeakLevel);
+        }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.NuclearPosture != 5 || n.NuclearPostureDay != -100000 || n.LastNuclearTestDay != -100000 || n.LastHotlineDay != -100000)
+            {
+                MixText("nuclear_posture"); Mix(n.Id); Mix(n.NuclearPosture); Mix(n.NuclearPostureDay);
+                Mix(n.LastNuclearTestDay); Mix(n.LastHotlineDay);
+            }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.LastNuclearStrikeDay != -100000) { MixText("nuclear_strike"); Mix(n.Id); Mix(n.LastNuclearStrikeDay); }
+        foreach (var army in campaign.Armies.OrderBy(a => a.Id))
+            if (army.LentById >= 0) { MixText("volunteers"); Mix(army.Id); Mix(army.LentById); Mix(army.LentDay); }
+        foreach (var n in campaign.Nations.OrderBy(n => n.Id))
+            if (n.NuclearStruckDay != -100000 || n.NuclearStruckBy != -1 || n.NuclearFirstUseDay != -100000)
+            {
+                MixText("nuclear_struck"); Mix(n.Id); Mix(n.NuclearStruckDay); Mix(n.NuclearStruckBy); Mix(n.NuclearFirstUseDay);
+            }
         if (!campaign.Defines.FrontStaffDisengages || campaign.Defines.FrontDisengagementMinimumBattleDays != 2 ||
             campaign.Defines.FrontDisengagementMaximumShare != .35f || campaign.Defines.FrontDisengagementDefenceRatio != .8f)
         {
@@ -86,6 +105,18 @@ public static class CampaignFingerprint
         {
             MixText("supply_attack_cover");
             MixFloat(campaign.Defines.SupplyAttackCoverageFloor);
+        }
+        if (campaign.Defines.DoctrineBooksPerShelf != 2)
+        {
+            MixText("doctrine_books_per_shelf");
+            Mix(campaign.Defines.DoctrineBooksPerShelf);
+        }
+        if (MathF.Abs(campaign.Defines.ResearchUseShare - Defines.DefaultResearchUseShare) > 0.0001f ||
+            MathF.Abs(campaign.Defines.ResearchUseCeiling - Defines.DefaultResearchUseCeiling) > 0.0001f)
+        {
+            MixText("research_field_use");
+            MixFloat(campaign.Defines.ResearchUseShare);
+            MixFloat(campaign.Defines.ResearchUseCeiling);
         }
         // Non-default combat-tactic rules, in the same discipline: a world fought without
         // manoeuvres must not share a fingerprint with one fought with them.
@@ -312,11 +343,19 @@ public static class CampaignFingerprint
         foreach (var id in campaign.Defines.Features.Keys.Concat(campaign.FeatureOverrides.Keys).Concat(MechanicFeatures.BuiltIns)
                      .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
         {
+            // A switch added after the table was frozen speaks only when it is not simply on.
+            if (MechanicFeatures.LateBuiltIns.Contains(id) && campaign.FeatureEnabled(id) &&
+                !campaign.FeatureOverrides.ContainsKey(id)) continue;
             foreach (var character in id.ToLowerInvariant()) Mix(character);
             Mix(-2); Mix(campaign.FeatureEnabled(id) ? 1 : 0);
         }
+        // The define bindings count only when a scenario changed them: the shipped table adds no bytes.
+        var defineBindings = campaign.Defines.FeatureDefines;
+        var shippedBindings = MechanicFeatures.DefineDefaults();
+        var boundDefines = defineBindings.Count == shippedBindings.Count &&
+            defineBindings.All(p => shippedBindings.TryGetValue(p.Key, out var v) && v == p.Value) ? null : defineBindings;
         foreach (var table in new[] { campaign.Defines.FeatureUnlocks, campaign.Defines.FeatureCommands,
-                     campaign.Defines.FeatureScreens, campaign.Defines.FeatureSystems })
+                     campaign.Defines.FeatureScreens, campaign.Defines.FeatureSystems, boundDefines }.Where(t => t is not null))
         {
             Mix(-3);
             foreach (var entry in table.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
@@ -401,6 +440,14 @@ public static class CampaignFingerprint
             MixText(o.Name); MixText(o.GeneratedCountryTag); MixText(o.CharterId); MixFloat(o.Budget); MixFloat(o.Cohesion); Mix(o.Dissolved ? 1 : 0);
             if (!string.IsNullOrEmpty(o.DoctrineId)) { MixText("org_doctrine"); MixText(o.DoctrineId); }
             if (o.CrisisMemberId >= 0) { MixText("org_crisis"); Mix(o.CrisisMemberId); Mix(o.CrisisSinceDay); }
+            // Suspended seats (OrganizationDiscipline): mixed only when there are any, so a world
+            // without a suspension hashes exactly as before.
+            if (o.Suspended.Count > 0 || o.SuspendedFor.Count > 0)
+            {
+                MixText("org_suspended");
+                foreach (var seat in o.Suspended.OrderBy(entry => entry.Key)) { Mix(seat.Key); Mix(seat.Value); MixText(o.SuspendedFor.GetValueOrDefault(seat.Key, "")); }
+                Mix(-24);
+            }
             MixText(o.LastOutcome); Mix(o.LastYes); Mix(o.LastVoters);
             foreach (var member in o.Members.OrderBy(id => id)) Mix(member); Mix(-20);
             foreach (var invitation in o.Invitations.OrderBy(id => id)) Mix(invitation); Mix(-21);
@@ -486,6 +533,12 @@ public static class CampaignFingerprint
             MixText(crisis.ResponseId); Mix(crisis.ResponseUntilDay); Mix(crisis.ResponseCooldownUntilDay);
             if (crisis.ConciliationUntilDay >= 0)
             { MixText("conciliation"); Mix(crisis.ConciliationRegion); Mix(crisis.ConciliationUntilDay); }
+            if (crisis.SpendingMemory >= 0f)
+            {
+                MixText("street"); MixFloat(crisis.ProtestGrievance); MixFloat(crisis.ProtestIntensity);
+                MixFloat(crisis.SpendingMemory); MixFloat(crisis.MilitaryMemory);
+                Mix(crisis.LastProtestNewsDay); Mix(crisis.LastConcessionDay);
+            }
             Mix(nation.CoupPlotDay); Mix(nation.LastCoupDay);
             if (nation.LastPoliticalScandalDay >= 0)
             { MixText("political_scandal"); Mix(nation.LastPoliticalScandalDay); }
@@ -557,6 +610,12 @@ public static class CampaignFingerprint
             if (nation.Movement is { } movement)
             {
                 MixFloat(movement.Militancy);
+                if (movement.GainedTraits.Count + movement.LostTraits.Count > 0)
+                {
+                    MixText("traits_became");
+                    foreach (var trait in movement.GainedTraits.OrderBy(t => t, StringComparer.Ordinal)) MixText("+" + trait);
+                    foreach (var trait in movement.LostTraits.OrderBy(t => t, StringComparer.Ordinal)) MixText("-" + trait);
+                }
                 // Panel history is not authority. These inputs and cooldowns are: they
                 // can change the next strike/march before any headline total changes.
                 // Keep empty legacy state at its old hash, and exclude LastReport,
@@ -606,6 +665,16 @@ public static class CampaignFingerprint
             if (nation.RecessionDepth != 0f || nation.RecessionUntilDay != 0)
             { MixText("recession"); MixFloat(nation.RecessionDepth); Mix(nation.RecessionStartDay); Mix(nation.RecessionUntilDay); }
             Mix(nation.LastCivilWarDay);
+            // A collapse under way and the dates of the last collapse and revolution: they decide
+            // the next wave and the next outbreak before any border moves (StateFailure). A
+            // country that never failed emits nothing, keeping untouched worlds' fingerprints.
+            if (nation.CollapseStartDay != -1 || nation.CollapseWaves != 0 || nation.CollapseStartPopulation != 0 ||
+                nation.LastCollapseDay != -99999 || nation.LastRevolutionDay != -99999)
+            {
+                MixText("state_failure"); Mix(nation.CollapseStartDay); Mix(nation.CollapseWaves);
+                Mix(nation.CollapseStartPopulation);
+                Mix(nation.LastCollapseDay); Mix(nation.LastRevolutionDay);
+            }
             Mix(nation.AssessedDay); MixFloat(nation.AssessedStrength);
             MixText(nation.RememberedInstitutions); Mix(nation.InstitutionAgeDays);
             Mix(nation.LastInstitutionReviewDay); Mix(nation.LastSocialReviewDay);
@@ -690,6 +759,13 @@ public static class CampaignFingerprint
                     MixText("tactical_doctrines"); MixText(slot); MixText(track.Branch); Mix(track.Known.Count);
                     foreach (var node in track.Known.OrderBy(id => id, StringComparer.Ordinal)) MixText(node);
                     MixText(track.LearningNode); Mix(track.LearningDoneDay);
+                    var companion = track.Companion;
+                    if (companion is null || (companion.Branch.Length == 0 && companion.Known.Count == 0 &&
+                                              companion.LearningNode.Length == 0)) continue;
+                    MixText("tactical_doctrine_second"); MixText(slot); MixText(companion.Branch);
+                    Mix(companion.Known.Count);
+                    foreach (var node in companion.Known.OrderBy(id => id, StringComparer.Ordinal)) MixText(node);
+                    MixText(companion.LearningNode); Mix(companion.LearningDoneDay);
                 }
             }
             // The grand strategy in force, and when the government last changed its mind.
@@ -698,6 +774,19 @@ public static class CampaignFingerprint
             {
                 MixText("strategic_doctrine"); MixText(nation.StrategicDoctrine.Id);
                 Mix(nation.StrategicDoctrine.LastChangeDay);
+            }
+            // Practice on a technology the country already has. An idle country, and an
+            // old save, store nothing here, so an untouched world keeps the hash it had.
+            if (nation.TechnologyFamiliarity.Count > 0)
+            {
+                var wroteFamiliarity = false;
+                foreach (var entry in nation.TechnologyFamiliarity.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    if (!(entry.Value > 0f) || !float.IsFinite(entry.Value)) continue;
+                    if (!wroteFamiliarity) { MixText("technology_familiarity"); wroteFamiliarity = true; }
+                    MixText(entry.Key);
+                    MixFloat(entry.Value);
+                }
             }
             if (nation.ArmyExperience != 0f || nation.AirExperience != 0f ||
                 nation.NavalExperience != 0f || nation.PoliticalPoints != 0f)
@@ -864,6 +953,9 @@ public static class CampaignFingerprint
         }
         foreach (var line in Ordered(campaign.FrontLines, line => line.Id))
         {
+            // The whole front against every enemy (DrawnFrontLine.AllEnemies). Mixed only when
+            // set, so a campaign without one hashes exactly as it did before the flag existed.
+            if (line.AllEnemies) { MixText("whole_front"); Mix(line.Id); Mix(line.NationId); }
             if (line.Kind != FrontLineKind.Offensive || line.OffensivePhases.Count <= 1 &&
                 line.ActiveOffensivePhase == 0 && line.OffensiveRegroupDay < 0) continue;
             MixText("offensive_phases"); Mix(line.Id); Mix(line.OffensivePhases.Count);
@@ -946,6 +1038,11 @@ public static class CampaignFingerprint
             if (army.CutOff) { MixText("cut_off"); Mix(army.Id); }
             if (army.DaysCutOff > 0) { MixText("days_cut_off"); Mix(army.Id); Mix(army.DaysCutOff); }
             if (army.BreakingOut) { MixText("breaking_out"); Mix(army.Id); }
+            // Pockets and their stores (StrandedGarrisons): each only off its default, so a world
+            // without a pocket fingerprints as it did before these existed.
+            if (army.PocketStores >= 0f) { MixText("pocket_stores"); Mix(army.Id); MixFloat(army.PocketStores); Mix(army.PocketSinceDay); }
+            if (army.HoldoutSinceDay >= 0) { MixText("holdout"); Mix(army.Id); Mix(army.HoldoutSinceDay); }
+            if (army.ReliefDistance != -1) { MixText("relief_distance"); Mix(army.Id); Mix(army.ReliefDistance); }
         }
         foreach (var item in campaign.PendingEvents.OrderBy(e => e.Id))
             if (item.Options.Any(o => o.SecessionTargetId >= 0))
@@ -964,6 +1061,18 @@ public static class CampaignFingerprint
             { MixText("world_war"); Mix(war.WorldWarDay); }
             if (war.PendingOffer is { BeneficiaryId: >= 0 } offer)
             { MixText("peace_beneficiary"); Mix(offer.BeneficiaryId); }
+            // The spacing of settlements put to a player (PeaceOffers.ToPlayerBlockReason).
+            // Only a war a player is in ever sets these, so a world nobody plays mixes nothing.
+            if (war.LastOfferToPlayerDay >= 0 || war.RefusedOfferDay >= 0)
+            {
+                MixText("peace_offer_to_player"); Mix(war.LastOfferToPlayerDay); Mix(war.RefusedOfferDay);
+                Mix(war.RefusedOfferWasWritten ? 1 : 0); Mix((int)war.RefusedOfferTerms);
+                if (war.RefusedOffer is { } refused)
+                {
+                    Mix(refused.Provinces.Count);
+                    foreach (var province in refused.Provinces.OrderBy(id => id)) Mix(province);
+                }
+            }
             // Coalition membership changes combat and access before any province moves.
             // Keep the historical bilateral golden when there are no allied members.
             if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
@@ -987,6 +1096,20 @@ public static class CampaignFingerprint
                 Mix(route.SellerId); Mix(route.BuyerId); Mix((int)route.Commodity);
                 MixFloat(route.Volume); MixFloat(route.Value);
             }
+        }
+        // The deep-strike war (LongRangeStrikes): its rules when they differ from the shipped
+        // ones, and each formation's chosen target when one was chosen. A world that never
+        // names a target and keeps the defaults mixes nothing here.
+        var strikeRules = LongRangeStrikes.Rules(campaign.Defines);
+        if (!strikeRules.SequenceEqual(LongRangeStrikes.DefaultRules))
+        {
+            MixText("long_range_strike_rules");
+            foreach (var rule in strikeRules) MixFloat(rule);
+        }
+        foreach (var formation in campaign.SupportFormations
+                     .Where(f => !string.IsNullOrEmpty(f.StrikeTarget) || f.TargetStateMapIndex >= 0).OrderBy(f => f.Id))
+        {
+            MixText("strike_target"); Mix(formation.Id); MixText(formation.StrikeTarget); Mix(formation.TargetStateMapIndex);
         }
         var controllers = campaign.ProvinceController ?? campaign.PendingProvinceController;
         if (controllers is null) return hash;

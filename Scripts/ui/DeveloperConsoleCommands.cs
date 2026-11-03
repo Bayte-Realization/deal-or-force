@@ -203,7 +203,7 @@ public partial class DealOrForceGame
         Add("teleport", "ARMIES", "teleport PROVINCE",
             "Move the selected divisions to a province at once.", ConsoleTeleport, "tp");
         Add("heal", "ARMIES", "heal [all]",
-            "Fill the selected divisions back up - men, organisation, equipment, supply. " +
+            "Fill the selected divisions back up - men, morale, equipment, supply. " +
             "`heal all` does the whole army.", ConsoleHeal, "reinforce");
         Add("kill", "ARMIES", "kill [all]",
             "Delete the selected divisions, or the whole army with `all`.", ConsoleKill, "disband");
@@ -998,7 +998,7 @@ public partial class DealOrForceGame
                 $"      order {army.OrderKind} -> province {army.OrderProvinceId:N0}, issued {since}\n" +
                 $"      {progress} · queued {army.Route.Count} · planned {army.PlannedRoute.Count} · " +
                 $"last attempt: {attempt}\n" +
-                $"      org {army.Organisation:P0} · strength {army.Strength:P0} · supply {army.SupplyLevel:P0} · " +
+                $"      morale {army.Organisation:P0} · strength {army.Strength:P0} · supply {army.SupplyLevel:P0} · " +
                 $"stance {army.Stance}");
         }));
     }
@@ -1201,7 +1201,7 @@ public partial class DealOrForceGame
         var projects = _campaign.Construction
             .Where(project => project.StateMapIndex == state.MapIndex)
             .Select(project => $"    building {project.Building} · {project.Progress:P0} · " +
-                               $"{project.ProgressDays}/{project.DurationDays} day(s)")
+                               $"{project.ProgressDays:0.#}/{project.DurationDays} day(s)")
             .ToArray();
         var standing = state.Buildings.Count == 0
             ? "    nothing built"

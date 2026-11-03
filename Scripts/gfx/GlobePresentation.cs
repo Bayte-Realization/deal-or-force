@@ -204,12 +204,33 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private double _militaryVisualAccumulator;
     private double _visualClock;
     private Simulation.ProvinceTopology _provinceTopology;
+
+    /// <summary>The provinces of the map this globe has built, or 0 before it has one.</summary>
+    public int ProvinceCount => _provinceTopology?.ProvinceCount ?? 0;
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
     public bool LoadingInputBlocked { get; set; }
-    public bool MediaLibraryInputBlocked { get; set; }
-    public bool MapLayerDrawerInputBlocked { get; set; }
+    private bool _mediaLibraryInputBlocked, _mapLayerDrawerInputBlocked;
+    public bool MediaLibraryInputBlocked
+    {
+        get => _mediaLibraryInputBlocked;
+        set { _mediaLibraryInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+    public bool MapLayerDrawerInputBlocked
+    {
+        get => _mapLayerDrawerInputBlocked;
+        set { _mapLayerDrawerInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+
+    private void DismissMapTooltips()
+    {
+        // Godot attaches its native tooltip PopupPanel directly to the owner Control.
+        // Stop already-visible map popups too: blocking new input alone leaves an old
+        // tooltip above a newly opened modal, until the physical pointer moves.
+        foreach (var child in GetChildren())
+            if (child is PopupPanel popup) popup.Hide();
+    }
     public string MapLoadingError { get; private set; } = "";
     public string MapLoadingStage => _pendingMapResult is null
         ? "Reading province and terrain maps"
@@ -245,6 +266,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action<Simulation.SupportFormation> SupportPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
+    /// <summary>A box drawn over fleets and no divisions: the player's own fleets inside it.</summary>
+    public event Action<IReadOnlyList<Simulation.Fleet>> FleetsBoxPicked;
     public event Action<GlobePick> ProvinceCommanded;
 
     /// <summary>
@@ -554,6 +577,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         UpdateSky(delta);
         UpdateCrossoverProjection();
+        PollPlateRepaint();
         if (!LoadingInputBlocked && !MediaLibraryInputBlocked && !MapLayerDrawerInputBlocked)
         {
             if (_freeCamera) UpdateFreeCamera(delta);
@@ -599,6 +623,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var worldDelta = Simulation.WorldCurses.Frozen(_campaign) ? 0.0 : delta;
         UpdateTradeTraffic(worldDelta);
         UpdateEventPulses(worldDelta);
+        UpdateNuclearBlasts();
         KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && (_capitalRevision != _campaign.CapitalRevision ||
@@ -703,7 +728,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 using var plate = Image.CreateFromData(MapWidth / PoliticalScale, MapHeight / PoliticalScale,
                     false, Image.Format.Rgba8, result.PoliticalPixels);
                 plate.GenerateMipmaps();
-                _globeMaterial.SetShaderParameter("political_map", ImageTexture.CreateFromImage(plate));
+                _plateTexture = ImageTexture.CreateFromImage(plate);
+                _globeMaterial.SetShaderParameter("political_map", _plateTexture);
+                _platePixels = result.PoliticalPixels;
+                _plateProvinces = result.PlateProvinces;
+                _plateShade = result.PlateShade;
+                _platePainted = null;
                 result.PoliticalPixels = null;
                 break;
             }
@@ -734,6 +764,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgb8, result.HydrologyPixels);
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(img));
                 result.HydrologyPixels = null;
+                if (result.RiverCentrePixels is { } centre)
+                {
+                    using var lines = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, centre);
+                    _globeMaterial.SetShaderParameter("river_centre_map", ImageTexture.CreateFromImage(lines));
+                    result.RiverCentrePixels = null;
+                }
                 break;
             }
             case 5:
@@ -1467,8 +1503,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
+                // The whole front faces several countries; each post marks the border with
+                // the enemy actually next to it.
                 if (line.Kind == Simulation.FrontLineKind.Defence)
-                    PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
+                    PutBorderTarget(borderTargets, province, line.NationId, line.AllEnemies
+                        ? Simulation.BorderFronts.EnemyAt(_campaign, line.NationId, province) : line.BorderNationId);
             }
         }
         _drawingPlanId = -1;
@@ -1704,6 +1743,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         {
                             var selected = ArmiesInScreenRect(rect);
                             if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                                FleetsBoxPicked?.Invoke(fleets);
                         }
                     }
                     QueueRedraw();
@@ -1883,6 +1924,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override string _GetTooltip(Vector2 atPosition)
     {
+        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) return "";
         var supportTip = SupportMapTooltip(atPosition);
         if (supportTip.Length > 0) return supportTip;
         var eventTip = EventPulseTooltip(atPosition);
@@ -1993,7 +2035,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            if (!IsInstanceValid(node) || !node.IsVisibleInTree() || !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            // A counter standing behind another country's in the same province is hidden, not
+            // gone: a box drawn over the province takes its divisions too (CoverSharedProvinces).
+            if (!IsInstanceValid(node) || (!node.IsVisibleInTree() && !_coveredCounters.Contains(node)) ||
+                !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
                 selected.AddRange((marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack)
                     .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
@@ -2117,6 +2162,9 @@ uniform sampler2D region_ids : filter_nearest;
 uniform sampler2D province_ids : filter_nearest;
 uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
+// Where the nearest river's real course lies from each texel (RG, 16ths of a texel from 128) and
+// that river's importance (B, 0 = none near). Read texel by texel, never filtered.
+uniform sampler2D river_centre_map : filter_nearest, repeat_enable;
 uniform sampler2D crossover_excavations : filter_nearest, repeat_enable;
 uniform float crossover_excavations_active = 0.0;
 uniform sampler2D lake_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -2125,6 +2173,11 @@ uniform float river_inset = -0.10;
 uniform float river_curve_filter = 1.0;
 uniform float river_near_opacity = 0.92;
 uniform float river_far_opacity = 0.58;
+// River width on screen, as half-widths in pixels: a headwater's thread and a great river's line.
+// Close in, a river is never wider than water that size is (river_real_half, in map texels).
+uniform float river_thread_px = 0.75;
+uniform float river_great_px = 1.9;
+uniform float river_real_half = 0.11;
 uniform float water_shore_width = 0.75;
 uniform float water_depth_reach = 5.0;
 uniform float water_texture_strength = 0.65;
@@ -2166,7 +2219,10 @@ uniform float terrain_detail = 0.35;
 uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
-uniform float political_opacity = 0.68;
+uniform float political_opacity = 0.62;
+// The nation palette a little short of full strength, so the paint reads as ink over ground
+// rather than as a poster: the relief under China is a country, not a yellow sheet.
+uniform float political_saturation = 0.86;
 // 1 on the flat map: an atlas sheet read straight on, without the globe's light and curvature
 // to soften it. The terrain tiles showing through the country colours read there as blotches
 // and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
@@ -2693,6 +2749,7 @@ void fragment() {
         ? mix(nation_paint(other_nation), nation_paint(near_nation), nation_share)
         : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
+    political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, political_saturation);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
@@ -2887,13 +2944,48 @@ void fragment() {
     // Rivers of low importance no longer disappear at a hard intensity threshold.
     vec3 hydrography = texture(hydrology_map, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).rgb;
     float lake_distance = (hydrography.r * 255.0 - 128.0) / 16.0;
-    float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
-        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset;
+    // A river is as wide as it is great: a headwater a thread, the Danube a ribbon. One inset
+    // for every river drew brooks as wide as the Rhine and both as pale bands of paint.
+    // The raster paints a river as a corridor one to five cells wide - seven to thirty-five
+    // kilometres - and drawing the corridor drew rivers as fat sausages that swelled as the camera
+    // came down. The line is drawn along the river's real course instead (river_centre_map), as
+    // wide as the screen needs to see it (river_thread_px .. river_great_px) and close in never
+    // wider than water of that size is (river_real_half).
+    ivec2 river_map_size = textureSize(river_centre_map, 0);
+    vec2 river_point = vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)) * vec2(river_map_size) - 0.5;
+    ivec2 river_cell = ivec2(floor(river_point));
+    float river_centre = 1.0e4;
+    float river_importance = 0.0;
+    for (int ry = 0; ry < 2; ry++) {
+        for (int rx = 0; rx < 2; rx++) {
+            ivec2 at = river_cell + ivec2(rx, ry);
+            ivec2 fetch = ivec2((at.x % river_map_size.x + river_map_size.x) % river_map_size.x,
+                clamp(at.y, 0, river_map_size.y - 1));
+            vec4 entry = texelFetch(river_centre_map, fetch, 0);
+            if (entry.b <= 0.0) continue;
+            vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
+            // Through the stored point runs the river, in the stored direction: the distance is to
+            // that line within a texel of the point, and to the point beyond, where a course ends.
+            float heading = entry.a * 3.14159265;
+            vec2 along_course = vec2(cos(heading), sin(heading));
+            vec2 offset = river_point - course;
+            float along = abs(dot(offset, along_course));
+            float reach = along < 1.0 ? abs(dot(offset, vec2(-along_course.y, along_course.x))) : length(offset);
+            if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
+        }
+    }
+    vec2 river_line = vec2(river_centre, river_importance);
+    float river_size = smoothstep(0.55, 0.98, river_importance);
+    vec2 river_texels = UV * vec2(river_map_size);
+    float river_texel_px = max(max(length(dFdx(river_texels)), length(dFdy(river_texels))), 0.0001);
+    float river_half = max(mix(0.25, 1.0, river_size) * river_real_half,
+        mix(river_thread_px, river_great_px, river_size) * river_texel_px);
+    float river_distance = river_line.g > 0.0 ? river_centre - river_half : 1.0e4;
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
-    float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
+    float river_edge = max(river_texel_px * 0.75, 0.005);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
     float river_water = 1.0 - smoothstep(-river_edge, river_edge, river_distance);
-    float prominent_river = smoothstep(0.89, 0.98, hydrography.b);
+    float prominent_river = smoothstep(0.78, 0.88, river_line.g);
     float inland_coverage = max(lake_water, river_water);
     float lake_depth = smoothstep(0.0, water_depth_reach, -lake_distance);
     float lake_bank = (1.0 - smoothstep(0.0, water_shore_width + lake_edge, abs(lake_distance))) * lake_water;
@@ -2903,7 +2995,15 @@ void fragment() {
     vec2 water_motion = vec2(TIME * water_animation_speed, 0.0);
     float water_detail = max(detail_mix, province_detail) * water_texture_strength;
     vec3 inland_water = mix(vec3(0.028, 0.145, 0.185), vec3(0.014, 0.080, 0.125), lake_depth);
-    vec3 river_color = mix(vec3(0.025, 0.130, 0.170), vec3(0.035, 0.205, 0.265), prominent_river);
+    // River water is water: a clear blue that reads against every political colour - thin, but
+    // never the same grey as a border line. The near-black
+    // teal it was drew the Han and the Dnieper exactly like the grey region lines beside them, so
+    // a player could not tell a river from a border. Great channels run lighter, and carry a
+    // brighter current down their middle.
+    vec3 river_color = mix(vec3(0.045, 0.190, 0.330), vec3(0.065, 0.260, 0.430), prominent_river);
+    float river_current = (1.0 - smoothstep(0.0, river_half * 0.45 + river_edge, river_centre)) * prominent_river;
+    river_color = mix(river_color, vec3(0.200, 0.470, 0.620), river_current * 0.55);
+    float river_bank = (1.0 - smoothstep(0.0, river_edge * 2.5, abs(river_distance))) * (1.0 - river_water);
     if (inland_coverage > 0.001 && water_detail > 0.001) {
         vec3 lake_tile = texture(lake_surface, water_uv + water_motion * 0.30).rgb;
         vec3 river_tile = texture(river_surface, water_uv + water_motion).rgb;
@@ -2921,8 +3021,14 @@ void fragment() {
     base = mix(base, inland_water, lake_water);
     base = mix(base, vec3(0.075, 0.175, 0.185), lake_bank * 0.20);
     float river_opacity = mix(river_far_opacity, river_near_opacity, max(detail_mix, province_detail));
+    // A line a pixel or two wide has no width to spare for transparency: drawn at the far opacity
+    // the rivers of a whole continent faded out of the middle zoom.
+    river_opacity = max(river_opacity, 0.85);
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
+    // A thin green-brown bank, so the water sits in a valley rather than lying on the land like
+    // paint - and not a black outline, which is what a border is drawn with.
+    base = mix(base, base * vec3(0.78, 0.86, 0.74), river_bank * river_opacity * 0.50 * (1.0 - lake_water));
     // Land relief must not turn a lake into a mountain ridge.
     NORMAL_MAP = mix(NORMAL_MAP, vec3(0.5, 0.5, 1.0), inland_coverage);
     // The region line, the last one still drawn by asking four neighbours whether they
@@ -3037,7 +3143,9 @@ void fragment() {
     base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
-    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.35) * political.a * 0.86);
+    // Full weight on the world map too: at 0.35 the frontier between two states was a hairline
+    // under the province grid, and the strategic view lost the one line it is for.
+    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.62) * political.a * 0.86);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -3106,9 +3214,10 @@ void fragment() {
         plan_color * plan_on * 0.16 +
         vec3(0.095, 0.024, 0.006) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    ROUGHNESS = mix(0.36, mix(0.84, 0.40, inland_coverage), political.a);
+    // Sea glint as a soft sheen rather than a white disc: the open Pacific read as fog at 0.48/0.36.
+    ROUGHNESS = mix(0.56, mix(0.84, 0.40, inland_coverage), political.a);
     METALLIC = 0.0;
-    SPECULAR = mix(0.48, mix(0.12, 0.40, inland_coverage), political.a);
+    SPECULAR = mix(0.26, mix(0.12, 0.40, inland_coverage), political.a);
     // A flat map is a map: under the orthographic camera the sun's glint on the water landed as
     // a white haze across whole seas (the Sea of Japan, the open Pacific). The globe keeps it.
     SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);
@@ -3684,7 +3793,7 @@ void fragment() {
         foreach (var marker in markers)
             if (IsInstanceValid(marker.Node))
             {
-                var visible = marker.Normal.Dot(viewNormal) > horizon;
+                var visible = marker.Normal.Dot(viewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
                 if (marker.Node.Visible != visible) marker.Node.Visible = visible;
             }
     }
@@ -3903,8 +4012,61 @@ void fragment() {
         }
 
         PruneArmyCounterTextureCaches();
+        CoverSharedProvinces(campaign);
 
         _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
+    }
+
+    private readonly HashSet<Node3D> _coveredCounters = new();
+    private readonly Dictionary<int, ArmyStackMarker> _provinceLeader = new();
+
+    /// <summary>
+    /// One counter per province on the globe, the way Hearts of Iron draws it.
+    ///
+    /// Counters are bucketed by country and province, so two countries in one province - allies
+    /// side by side, a garrison and a rising - made two counters on the same point. Both are
+    /// billboards drawn without a depth test, and which one came out on top changed from frame
+    /// to frame: two flags flickering through each other. Now the country with the most
+    /// divisions there is drawn and the others stand behind it, hidden; the province, the
+    /// roster and a box selection still reach every division. The flat map fans its counters
+    /// out instead and is left as it is.
+    /// </summary>
+    private void CoverSharedProvinces(Simulation.Campaign campaign)
+    {
+        _coveredCounters.Clear();
+        _provinceLeader.Clear();
+        var playerId = campaign.Player?.Id ?? -1;
+        foreach (var (bucket, marker) in _armyStacks)
+        {
+            if (bucket.Item2 <= 0 || marker.Node is null || marker.Stack.Count == 0) continue;
+            if (!_provinceLeader.TryGetValue(bucket.Item2, out var leader))
+            {
+                _provinceLeader[bucket.Item2] = marker;
+                continue;
+            }
+            var mine = Strength(marker);
+            var theirs = Strength(leader);
+            var wins = mine > theirs + 0.01f ||
+                       (MathF.Abs(mine - theirs) <= 0.01f &&
+                        (marker.Stack[0].NationId == playerId ||
+                         (leader.Stack[0].NationId != playerId && marker.Stack[0].NationId < leader.Stack[0].NationId)));
+            if (wins)
+            {
+                _coveredCounters.Add(leader.Node);
+                _provinceLeader[bucket.Item2] = marker;
+            }
+            else _coveredCounters.Add(marker.Node);
+        }
+        if (_flatMap) _coveredCounters.Clear();
+        foreach (var node in _coveredCounters)
+            if (IsInstanceValid(node) && node.Visible) node.Visible = false;
+
+        static float Strength(ArmyStackMarker stack)
+        {
+            var divisions = 0f;
+            foreach (var army in stack.Stack) divisions += army.Divisions;
+            return divisions;
+        }
     }
 
     private void CreateArmyStackMarker(ArmyStackMarker marker, Simulation.Nation nation,
@@ -4099,7 +4261,7 @@ void fragment() {
             };
             marker.AddChild(plate);
             var fleetGlow = AttachSelectionGlow(plate, 160, 96, 3);
-            fleetGlow.Visible = fleet.Id == _selectedFleetId;
+            fleetGlow.Visible = FleetChosen(fleet.Id);
             var strength = new Label3D
             {
                 Name = "FleetHullCount",
@@ -4140,7 +4302,7 @@ void fragment() {
             _fleetUpdateStateKey = int.MinValue;
             BuildFleetMarkers(_campaign);
         }
-        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _flatMap);
+        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _fleetSelectionStamp, _flatMap);
         if (stateKey == _fleetUpdateStateKey) return;
         _fleetUpdateStateKey = stateKey;
 
@@ -4161,7 +4323,7 @@ void fragment() {
             if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
             if (IsInstanceValid(parts.Plate) && parts.Plate.GetChildOrNull<Sprite3D>(0) is { } fleetGlow)
             {
-                var chosen = fleet.Id == _selectedFleetId;
+                var chosen = FleetChosen(fleet.Id);
                 if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
                 // Selection changes the frame, never the geometry or click footprint.
                 var lift = Vector3.One;
@@ -4175,7 +4337,7 @@ void fragment() {
                     parts.Count.Text = hulls.ToString();
                 var tint = fleet.InAction
                     ? Ui.Colour("military.battle")
-                    : fleet.Id == _selectedFleetId
+                    : FleetChosen(fleet.Id)
                         ? Ui.Colour("globe.selection")
                         : Ui.Colour("globe.label_province");
                 if (parts.Count.Modulate != tint) parts.Count.Modulate = tint;
@@ -4200,7 +4362,40 @@ void fragment() {
         return fleet is not null;
     }
 
-    public void SelectFleet(int fleetId) => _selectedFleetId = fleetId;
+    public void SelectFleet(int fleetId)
+    {
+        _selectedFleetId = fleetId;
+        _selectedFleetIds.Clear();
+        _fleetSelectionStamp++;
+    }
+
+    /// <summary>Several fleets at once: the first is the one the panel describes.</summary>
+    public void SelectFleets(IEnumerable<int> fleetIds)
+    {
+        _selectedFleetIds.Clear();
+        foreach (var id in fleetIds) _selectedFleetIds.Add(id);
+        _selectedFleetId = _selectedFleetIds.Count > 0 ? _selectedFleetIds.Min() : -1;
+        _fleetSelectionStamp++;
+    }
+
+    private readonly HashSet<int> _selectedFleetIds = new();
+    private int _fleetSelectionStamp;
+
+    private bool FleetChosen(int fleetId) => fleetId == _selectedFleetId || _selectedFleetIds.Contains(fleetId);
+
+    /// <summary>The player's own fleets whose counters lie inside a screen rectangle.</summary>
+    private List<Simulation.Fleet> FleetsInScreenRect(Rect2 rect)
+    {
+        var found = new List<Simulation.Fleet>();
+        if (!IsInstanceValid(_camera) || (!_flatMap && ViewDistance > 13.5f) || _campaign?.Player is null) return found;
+        foreach (var (node, candidate) in _fleetByMarker)
+        {
+            if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            if (candidate.NationId != _campaign.Player.Id) continue;
+            if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition))) found.Add(candidate);
+        }
+        return found;
+    }
 
     private static Texture2D CreateFleetMarkerTexture()
     {
@@ -4545,6 +4740,7 @@ void fragment() {
             _ownerIdTexture.Update(_ownerIdImage);
         }
         _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
+        if (ownersMoved) RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();
         _frontRevision = _controlRevision;
@@ -4998,6 +5194,7 @@ void fragment() {
         var politicalHeight = MapHeight / PoliticalScale;
         var political = new byte[politicalWidth * politicalHeight * 4];
         var politicalShade = new byte[politicalWidth * politicalHeight];
+        var plateProvinces = new ushort[politicalWidth * politicalHeight];
         var regionIds = new byte[MapWidth * MapHeight * 2];
         var provinceIds = new byte[MapWidth * MapHeight * 2];
         var nationIds = new byte[MapWidth * MapHeight * 2];
@@ -5021,6 +5218,8 @@ void fragment() {
         var seaWork = Task.Run(() => Simulation.SeaLanes.CoastalProvinces(provinces));
         var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
+        var centreWork = Task.Run(() => HydrologySurfaceData.BuildCentreline(MapWidth, MapHeight,
+            Simulation.HydrologyCatalog.RiverFeatures));
         var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
             Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures,
             widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
@@ -5072,6 +5271,7 @@ void fragment() {
                 // The darkest land in the block is the one a player reads as a border.
                 if (political[cell * 4 + 3] != 0 && shadeByte >= politicalShade[cell]) continue;
                 politicalShade[cell] = shadeByte;
+                plateProvinces[cell] = (ushort)provinceId;
                 var write = cell * 4;
                 political[write] = (byte)(((packed >> 24) & 0xFF) * shade);
                 political[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
@@ -5092,10 +5292,13 @@ void fragment() {
         return new MapBuildResult
         {
             PoliticalPixels = political,
+            PlateProvinces = plateProvinces,
+            PlateShade = politicalShade,
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
             HydrologyPixels = surfaceWork.GetAwaiter().GetResult(),
+            RiverCentrePixels = centreWork.GetAwaiter().GetResult(),
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             ProvinceRasterLoaded = true,
@@ -5257,10 +5460,13 @@ void fragment() {
     private sealed class MapBuildResult
     {
         public byte[] PoliticalPixels;
+        public ushort[] PlateProvinces;
+        public byte[] PlateShade;
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;
         public byte[] HydrologyPixels;
+        public byte[] RiverCentrePixels;
         public Simulation.ProvinceTopology Provinces;
         public Dictionary<int, TerritoryLabelAnchor> LabelAnchors;
         public bool ProvinceRasterLoaded;

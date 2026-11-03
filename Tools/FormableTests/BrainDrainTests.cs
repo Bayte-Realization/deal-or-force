@@ -161,6 +161,9 @@ static class BrainDrainTests
         var c = Fixture();
         var rich = c.NationByTag("RCH");
         var wealthy = Fixture();
+        // The receiving country's intake cap is a separate rule (checked below); here it is lifted
+        // so that what is compared is the push alone.
+        wealthy.Defines.BrainDrainMaxIntakeWeeklyShare = 0.002f;
         var guarded = wealthy.NationByTag("POR");
         var ruined = wealthy.StatesOf(guarded).Single();
         ruined.WarDamage = .9f;
@@ -170,6 +173,7 @@ static class BrainDrainTests
         var unattended = guarded.WeeklyNetMigration;
 
         var retained = Fixture();
+        retained.Defines.BrainDrainMaxIntakeWeeklyShare = 0.002f;
         var anchor = retained.NationByTag("POR");
         var held = retained.StatesOf(anchor).Single();
         held.WarDamage = .9f;
@@ -180,6 +184,19 @@ static class BrainDrainTests
         Check(anchor.WeeklyNetMigration > unattended,
             "a talent retention programme keeps more specialists home than doing nothing");
         Check(anchor.WeeklyNetMigration <= 0, "and it softens the outflow, it does not invert reality");
+
+        // However hard the push, a country takes in only so many a week.
+        var capped = Fixture();
+        var source = capped.NationByTag("POR");
+        var ruinedToo = capped.StatesOf(source).Single();
+        ruinedToo.WarDamage = .9f;
+        ruinedToo.LivelihoodStress = .8f;
+        AtWarWeek(capped);
+        BrainDrain.Tick(capped);
+        var receiver = capped.NationById(source.BrainDrainDestinationId);
+        Check(receiver is not null && receiver.WeeklyNetMigration <=
+              (long)(receiver.Population * (double)capped.Defines.BrainDrainMaxIntakeWeeklyShare) + 1,
+            "a country takes in no more in a week than its intake cap");
     }
 
     private static void AModCanTurnTheWholeThingOff()

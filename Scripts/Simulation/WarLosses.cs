@@ -25,6 +25,9 @@ namespace DealOrForce.Simulation;
 /// </summary>
 public static class WarLosses
 {
+    /// <summary>Formations that surrendered whole, this process: a bench counter, not campaign state.</summary>
+    public static int SurrenderedFormations;
+
     /// <summary>Put one side's losses on the war, broken down.</summary>
     public static void Record(StrategicWar war, int nationId, float killed, float wounded, float captured)
     {
@@ -110,6 +113,7 @@ public static class WarLosses
     {
         var war = WarOf(campaign, army);
         if (war is null) return;
+        SurrenderedFormations++;
         var defines = campaign.Defines;
         var standing = MathF.Max(0f, army.Divisions * MilitaryBootstrap.DivisionSize * army.Strength);
         var killed = standing * M.Clamp01(defines.SurrenderKilledShare);

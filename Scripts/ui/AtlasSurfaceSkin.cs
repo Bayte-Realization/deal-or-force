@@ -169,8 +169,10 @@ internal static class AtlasSurfaceSkin
         var key = $"tab|{active}|{state}";
         if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
         var accent = Ui.Colour("text.accent");
+        // An active tab is filled, not only outlined: a gold hairline on the same dark ground as
+        // its neighbours could not be told from them at a glance (CLOUDS on beside FOG off).
         var fill = active
-            ? Ui.Colour("surface.raised").Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.38f : 0.25f)
+            ? Ui.Colour("surface.raised").Lerp(Ui.Colour("button.primary_fill"), state == 1 ? 0.72f : 0.58f)
             : state == 1
                 ? Ui.Colour("button.fill_hover")
                 : Ui.Colour("surface.inset").Lightened(0.015f);
@@ -272,6 +274,80 @@ internal static class AtlasSurfaceSkin
         focus.SetContentMarginAll(0);
         if (rounded) _roundFocus = focus; else _focus = focus;
         return focus;
+    }
+
+    /// <summary>
+    /// The face of a switch. On is a lit key - solid gold, dark lettering - and off is a dark key
+    /// with a hairline: the two can be told apart across the room, not only by a shade of brown.
+    /// </summary>
+    internal static StyleBox ToggleFace(bool on, int state)
+    {
+        // One dark face for on and off - a fill read as "selected" or "hovered" as easily as "on",
+        // and the player could not tell. The state is the check box beside the word; on also sits
+        // pressed in, behind a gold rim, with bright lettering.
+        var key = $"toggle2|{on}|{state}";
+        if (SpecialButtons.TryGetValue(key, out var cached)) return cached;
+        var accent = Ui.Colour("text.accent");
+        var fill = state == 1 ? Ui.Colour("button.fill_hover") : on ? Ui.Colour("surface.inset").Darkened(0.25f) : Ui.Colour("surface.inset");
+        var style = new StyleBoxFlat
+        {
+            BgColor = fill,
+            BorderColor = on ? accent : Ui.Colour(state == 1 ? "button.border_hover" : "surface.line_faint"),
+            ContentMarginLeft = 9, ContentMarginRight = 10, ContentMarginTop = 5, ContentMarginBottom = 5
+        };
+        style.SetBorderWidthAll(1);
+        if (on) style.BorderWidthBottom = 2;
+        style.SetCornerRadiusAll(3);
+        SpecialButtons[key] = style;
+        return style;
+    }
+
+    private static readonly Texture2D[] _lamps = new Texture2D[2];
+
+    /// <summary>
+    /// The lamp of a switch: a lit gold dot when on, an empty ring when off. Worn by every
+    /// toggle-mode tab, so on and off read the same way on the map bar, in settings and in
+    /// any screen - the state is in the shape, not only in a shade of gold.
+    /// </summary>
+    internal static Texture2D ToggleLamp(bool on)
+    {
+        // A check box, the one sign of on and off everybody already reads: a gold box with a tick,
+        // or an empty one.
+        if (_lamps[on ? 1 : 0] is { } cached) return cached;
+        const int size = 28;
+        var image = Image.CreateEmpty(size, size, false, Image.Format.Rgba8);
+        image.Fill(Colors.Transparent);
+        var gold = Ui.Colour("text.accent");
+        var dim = Ui.Colour("text.muted");
+        var ink = Ui.Colour("surface.background");
+        const float lo = 4.5f, hi = 23.5f;
+        for (var y = 0; y < size; y++)
+        for (var x = 0; x < size; x++)
+        {
+            var px = x + 0.5f; var py = y + 0.5f;
+            var inside = px >= lo && px <= hi && py >= lo && py <= hi;
+            var edge = inside && (px < lo + 2f || px > hi - 2f || py < lo + 2f || py > hi - 2f);
+            Color pixel = Colors.Transparent;
+            if (on && inside)
+            {
+                pixel = gold;
+                // The tick: two strokes, short down-right then long up-right.
+                var d1 = Segment(new Vector2(px, py), new Vector2(8.5f, 14.5f), new Vector2(12.5f, 19f));
+                var d2 = Segment(new Vector2(px, py), new Vector2(12.5f, 19f), new Vector2(20f, 9f));
+                var tick = Mathf.Clamp(2.3f - Mathf.Min(d1, d2), 0f, 1f);
+                pixel = pixel.Lerp(ink, tick);
+            }
+            else if (!on && edge) pixel = new Color(dim, 0.95f);
+            image.SetPixel(x, y, pixel);
+        }
+        return _lamps[on ? 1 : 0] = ImageTexture.CreateFromImage(image);
+    }
+
+    private static float Segment(Vector2 p, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        var t = Mathf.Clamp((p - a).Dot(ab) / ab.LengthSquared(), 0f, 1f);
+        return (p - (a + ab * t)).Length();
     }
 
     internal static Texture2D MusicGlyph()

@@ -405,7 +405,16 @@ public static partial class AiStatecraft
             else OpinionSystem.Forget(campaign, relation, "shared_state_faith");
 
             var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / M.Max(0.01f, Strength(campaign, nation));
-            var fear = M.Clamp(strength - 1f, 0f, 2f);
+            // And only as far as the stronger one can reach. Fear of strength was the same at
+            // every distance, so the strongest country in the world was feared at full weight
+            // by every government in its circle - France and Brazil held minus thirty-two
+            // against China for being large - and that one line was most of everything the
+            // world held against anybody. A neighbour fears it in full, a region less, the far
+            // side of the world hardly at all; an ally a quarter as much, because a strong
+            // friend is a worry and not a threat.
+            var reach = OpinionWitnesses.FearReach(campaign, nation, other);
+            if (relation.Stance == DiplomaticStance.Allied) reach *= 0.25f;
+            var fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
             // The pair shares one relation, and only the weaker of the two is afraid. The
             // stronger one leaves the entry alone: when each wrote its own view in turn, the
             // weaker remembered the fear and the stronger forgot it, every week, and the
@@ -675,13 +684,21 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Warmaking(Campaign campaign, Nation nation)
     {
-        // By hand: Find's predicate closes over `nation`, so asking whether we are already
-        // at war allocated a closure and a delegate every time we asked - which is once a
-        // week for every country in the world.
-        StrategicWar ownWar = null;
-        foreach (var candidate in campaign.Wars)
-            if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
-        if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
+        // Every war it is in, not just the first one in the world's list. A country fighting three
+        // wars asked about whichever war the enumeration happened to reach first and never spoke
+        // about the other two: the bench found them at minus twenty with LastNegotiation empty and
+        // no offer ever made, for years, while the same country's first war was negotiated normally.
+        // A snapshot, because a settlement can end a war and a list being read must not change.
+        var negotiating = false;
+        foreach (var existing in campaign.Wars.ToArray())
+        {
+            if (existing.Ended || !existing.Involves(nation.Id)) continue;
+            // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
+            SeekRescue(campaign, nation, existing);
+            Negotiate(campaign, nation, existing);
+            negotiating = true;
+        }
+        if (negotiating) return;
         if (!campaign.Defines.AiMayDeclareWar) return;
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
@@ -970,6 +987,54 @@ public static partial class AiStatecraft
     }
 
     /// <summary>
+    /// How much fight the other side of this war still has, as far as its own score lets us measure.
+    ///
+    /// The simulation does not read an opponent's internal morale on purpose, but the score is the
+    /// measure of exactly that: a side a hundred points down has nothing left to hold out with. The
+    /// constant that used to stand here (0,5, "their morale is not ours to read") was above every
+    /// capitulation threshold, so the indemnity branch that tested it could never fire at any score.
+    /// </summary>
+    internal static float OpponentMoraleEstimate(StrategicWar war, int ourId)
+    {
+        if (war is null) return 1f;
+        var lead = MathF.Max(0f, war.IsAttacking(ourId) ? war.WarScore : -war.WarScore);
+        return M.Clamp01(1f - lead / 100f);
+    }
+
+    /// <summary>
+    /// Whether this country has lost the war on points, whatever its untouched home front still
+    /// says. Waiting for the home front to agree is how a defender at -100 sat out nine hundred
+    /// days with the fighting long decided.
+    /// </summary>
+    internal static bool DecisivelyBeaten(Campaign campaign, StrategicWar war, int nationId)
+    {
+        if (campaign?.Defines is null || war is null || war.Ended) return false;
+        var score = war.IsAttacking(nationId) ? war.WarScore : -war.WarScore;
+        return score <= -campaign.Defines.AiDecisiveWarScore;
+    }
+
+    /// <summary>
+    /// Whether a civil war that has stood still may be offered the status quo now.
+    ///
+    /// Civil wars wait longer than other wars before a deadlock is called: seven hundred and
+    /// thirty days on top of the ordinary stalemate, and a government does not hand its own
+    /// country back because the score says so. That is what kept a moving reconquest alive.
+    /// Signing those on points cost the bench eleven of fifteen recoveries. The same wait left
+    /// a war on the map whose status quo the signature would already accept, and nobody asked.
+    ///
+    /// Once the front has not moved and that acceptance already clears, the extra wait has
+    /// nothing left to protect. A front that is still moving is not this, whatever the score.
+    /// </summary>
+    internal static bool CivilFrozenOfferReady(Campaign campaign, StrategicWar war, int nationId)
+    {
+        if (campaign?.Defines is null || war is null || war.Ended || !war.CivilConflict || !war.Stalled)
+            return false;
+        if (!war.Involves(nationId)) return false;
+        if (campaign.ElapsedDays - war.StartedDay < campaign.Defines.AiStalemateDays) return false;
+        return PeaceNegotiation.BlockReason(campaign, war, nationId, PeaceTerms.StatusQuo).Length == 0;
+    }
+
+    /// <summary>
     /// A country at war asks, periodically, whether it is done. Winning it writes a peace
     /// out of the ground it actually holds - through the same conference a player uses -
     /// and losing it offers to stop.
@@ -1020,6 +1085,17 @@ public static partial class AiStatecraft
         // winning, and it is also how a player gets three modal dialogs in a row.
         if (war.PendingOfferFromId >= 0) return;
 
+        // Asked before the reclaiming return below. That return keeps a government fighting
+        // for the rest of its own country, and it is also how a stalled civil war never put
+        // a paper down: the side that was ahead left, and the side that was behind was still
+        // inside the extra civil delay. The status quo is the term the acceptance already
+        // priced. It is not a white peace, and it is not a surrender on points.
+        if (CivilFrozenOfferReady(campaign, war, nation.Id))
+        {
+            PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.StatusQuo);
+            return;
+        }
+
         var ledger = new PeaceLedger(campaign, war, nation.Id);
         if (ledger.Budget < WarAims.PeaceFloor(campaign, nation))
         {
@@ -1034,6 +1110,20 @@ public static partial class AiStatecraft
                                               (war.Stalled && duration >= defines.AiStalemateDays) ||
                                               (duration >= defines.AiWearyDays));
             if (ownScore > 0f && reclaiming && !staleReclaim) return;
+            // Beaten on points, not merely tired. A government that is eighty points down has lost
+            // the war by every measure its own army has, whatever its untouched home front still
+            // says; waiting for its morale to fall is how a defender at -100 sat out nine hundred
+            // days with the fighting long decided (WarWeariness.AiDecisiveWarScore).
+            //
+            // Not for a civil war: a state does not concede its own ground by points, and the
+            // breakaway rules (Reintegration, CivilWarPersistence) already carry that case with
+            // their own resolve. Ending those here cost the bench eleven of fifteen recoveries.
+            if (!war.CivilConflict && DecisivelyBeaten(campaign, war, nation.Id) &&
+                duration > defines.AiMinimumWarDays)
+            {
+                PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
+                return;
+            }
             // Not winning - which is not the same as wanting to stop. A country only walks
             // away from a war it started or is defending when the country itself has had
             // enough, and that takes years rather than a bad season. Otherwise the map
@@ -1046,7 +1136,10 @@ public static partial class AiStatecraft
                 // A government tired of its civil war cannot ask the side that is winning it to
                 // hand the ground back: it concedes the line, and the line is the de facto border.
                 PeaceOffers.Put(campaign, war, nation, opponent,
-                    war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
+                    // Any tired government, not only a civil war's: the line is the border. A white
+                    // peace handed back everything the war had changed - Russia, worn down after three
+                    // years, gave Ukraine back the Donbas it had held since 2014.
+                    WarWeariness.StalemateTerms(campaign, war));
             else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim ||
                 (nation.Parliament is { PeaceMandateActive: true } && campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
@@ -1072,18 +1165,32 @@ public static partial class AiStatecraft
         {
             // Ahead on points and holding none of their ground. A country in that position
             // does not stop - it pushes, because stopping converts a war it is winning into
-            // nothing at all. Only a genuinely broken opponent is worth an indemnity.
-            var opponentSupport = 0.5f; // Unknown; do not read the opponent's internal morale.
+            // nothing at all. Only a genuinely broken opponent is worth an indemnity - and
+            // "genuinely broken" is not unknowable: the score is the measure of it. The constant
+            // that stood here (0,5, "their morale is not ours to read") was above every
+            // capitulation threshold, so the branch could never fire: a war won on points and
+            // holding no ground could not be cashed in at all, it ran to nine hundred days.
+            var opponentSupport = OpponentMoraleEstimate(war, nation.Id);
             if (ledger.Budget >= defines.AiPeaceIndemnityBudget &&
                 opponentSupport <= defines.AiCapitulationWarSupport)
                 PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WarReparations);
             // Ahead on points for years and holding nothing: it is over, and it is time to say so.
             else if (WarWeariness.TimeToStop(campaign, war, winning: true))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
+            // Nothing to take and nothing moving. A front that has stood still for a year and a
+            // half is the border whatever the escalation ladder thinks about giving up: waiting
+            // for the weariness date is how a war ahead on points and holding nothing stayed on
+            // the map for two years with no offer ever made.
+            else if (war.Stalled && campaign.ElapsedDays - war.StartedDay >= defines.AiStalemateDays)
+                PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
             return;
         }
 
-        if (!decisive && ShouldPressWarAim(campaign, nation, war, demand)) return;
+        // Pressing a war needs a front that can move. A demand that has stood unchanged on a front
+        // that has not moved for a year and a half is not a plan, it is a war nobody is fighting:
+        // the line is the answer, whatever the local balance says.
+        var frozenFront = war.Stalled && campaign.ElapsedDays - war.StartedDay >= defines.AiStalemateDays;
+        if (!decisive && !frozenFront && ShouldPressWarAim(campaign, nation, war, demand)) return;
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
     }
 
@@ -1255,7 +1362,7 @@ public static partial class AiStatecraft
             spent += defines.PeaceCostDemilitarise;
         }
 
-        var opponentSupport = 0.5f; // Unknown under first-stage fog of war.
+        var opponentSupport = OpponentMoraleEstimate(war, nation.Id);
         if (opponentSupport <= defines.AiCapitulationWarSupport && Afford(defines.PeaceCostHumiliate))
             demand.Humiliate = true;
     }

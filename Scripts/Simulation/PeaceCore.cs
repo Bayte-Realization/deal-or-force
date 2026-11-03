@@ -51,10 +51,10 @@ public static class PeaceTermCatalog
     {
         [PeaceTerms.Ceasefire] = new(
             "An armistice on the line: troops stay in the regions they hold, no border moves - a frozen conflict.",
-            0f, 62f, -0.45f, 30, 50f),
+            0f, 62f, 0.45f, 30, 50f),
         [PeaceTerms.WhitePeace] = new(
             "Pre-war borders and a five-year truce, with no victor or indemnity.",
-            5f, 50f, -0.65f, 120, 50f),
+            5f, 50f, 0.65f, 120, 50f),
         [PeaceTerms.WarReparations] = new(
             "Pre-war borders plus an immediate economy-scaled indemnity.",
             24f, 14f, 0.90f, 60, 50f),
@@ -75,7 +75,7 @@ public static class PeaceTermCatalog
             100f, 100f, 0f, 0, 0f),
         [PeaceTerms.StatusQuo] = new(
             "Each side keeps the enemy ground it holds, drawn into a border, and a five-year truce: the peace of a war nobody is winning.",
-            12f, 50f, -0.35f, 365, 50f)
+            12f, 50f, 0.35f, 365, 50f)
     };
 
     static PeaceTermCatalog() => ResetCatalog();
@@ -172,10 +172,12 @@ public static class PeaceNegotiation
         }
         // And the weariness of a long war, on both sides of it (WarWeariness) - less, for a state
         // winning back its own breakaway, whatever it is offered short of the ground (Reintegration).
-        return M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
+        var score = M.Clamp(definition.AcceptanceBase + proposerScore * definition.ScoreWeight - winnerResolve +
                        exhaustion + timePressure + WarWeariness.Weariness(campaign, war) -
                        Reintegration.CompromisePenalty(campaign, war, proposerId, terms) -
                        Escalation.SunkCost(campaign, war) - WarAimResolve(campaign, war, proposerId, terms), 0f, 100f);
+        // A government nobody plays answers through the agreeableness game option.
+        return campaign.NationById(war.EnemyLeaderOf(proposerId)) is { IsHuman: false } ? AiTemper.Accepting(campaign, score) : score;
     }
 
     private static float WarAimResolve(Campaign campaign, StrategicWar war, int proposerId, PeaceTerms terms)
@@ -381,6 +383,8 @@ public static class PeaceNegotiation
                 war.AnnexedProvinces += kept.Count;
                 war.CreatedStates += created.Count;
             }
+            if (terms == PeaceTerms.Capitulate && !war.CivilConflict)
+                AiStatecraft.ImposeAfterCapitulation(campaign, winner, beaten);
         }
 
         // A deadlock: each side keeps the enemy ground it controls. Security used to be the
@@ -461,7 +465,8 @@ public static class PeaceNegotiation
                 relation.LastActionDay = campaign.ElapsedDays;
                 relation.Opinion = Math.Min(relation.Opinion, -35f);
             }
-        foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))
+        var released = campaign.Armies.Where(army => army.AssignedWarId == war.Id).ToList();
+        foreach (var army in released)
         {
             army.AssignedWarId = -1;
             army.OrderKind = ArmyOrder.Manual;
@@ -473,6 +478,8 @@ public static class PeaceNegotiation
         {
             Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
+        // A division on the whole front goes back to holding it if another war still has one.
+        BorderFronts.ReturnToWholeFronts(campaign, released);
         campaign.MarkMapChanged();
     }
 }

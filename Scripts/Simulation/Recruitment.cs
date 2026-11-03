@@ -37,6 +37,15 @@ public sealed partial class Defines
 public static class RecruitmentSystem
 {
     /// <summary>
+    /// What a barracks does for recruitment: divisions one order may raise in its own region,
+    /// and anywhere in the country; and divisions the national queue holds, at peace and at war.
+    /// </summary>
+    public const int BatchPerLocalBarracks = 4;
+    public const float BatchPerBarracks = 1.5f;
+    public const int QueuePerBarracks = 2;
+    public const int QueuePerBarracksAtWar = 3;
+
+    /// <summary>
     /// Maximum divisions in one order is a training-throughput figure, not a fixed political
     /// ceiling. It grows with the region's barracks, the country's barracks and its people;
     /// the real limits are always manpower, treasury and the physical depot bill.
@@ -51,7 +60,7 @@ public static class RecruitmentSystem
             nationalBarracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
 
         var popMillions = MathF.Max(1f, (state?.Population ?? nation.Population) / 1_000_000f);
-        var dynamicCap = 2 + barracks * 4 + nationalBarracks * 1.5f + popMillions * 1.2f;
+        var dynamicCap = 2 + barracks * BatchPerLocalBarracks + nationalBarracks * BatchPerBarracks + popMillions * 1.2f;
         if (mode == MobilisationMode.RapidCallUp) dynamicCap *= 1.5f;
         else if (mode == MobilisationMode.TotalMobilisation) dynamicCap *= 2.25f;
         return Math.Clamp((int)MathF.Ceiling(dynamicCap), 1, 400);
@@ -71,7 +80,7 @@ public static class RecruitmentSystem
         var barracks = 0;
         foreach (var st in c.StatesOf(nation))
             barracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
-        var bonus = barracks * (atWar ? 3 : 2);
+        var bonus = barracks * (atWar ? QueuePerBarracksAtWar : QueuePerBarracks);
         if (mode == MobilisationMode.RapidCallUp) bonus += 12;
         else if (mode == MobilisationMode.TotalMobilisation) bonus += 36;
         return baseCap + bonus;

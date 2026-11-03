@@ -461,20 +461,7 @@ public static class ProductionChains
     {
         if (Regional.Count == 0) return;
         var slots = Slots;
-        Array.Clear(slots, 0, SlotCount);
-
-        slots[SlotPopulation] = state.Population / 1_000_000f;
-        slots[SlotUrbanization] = state.Urbanization;
-        slots[SlotStandardOfLiving] = state.StandardOfLiving;
-        slots[SlotOutputFactor] = outputFactor;
-        slots[SlotIncome] = nation is not null && float.IsFinite(nation.IncomeFactor) && nation.IncomeFactor > 0f ? nation.IncomeFactor : 1f;
-
-        foreach (var kind in UsedBuildingsRaw)
-            slots[FixedSlots + BuildingKinds + kind] = state.Buildings.GetValueOrDefault((BuildingKind)kind);
-        foreach (var kind in UsedBuildingsStaffed)
-            slots[FixedSlots + kind] = slots[FixedSlots + BuildingKinds + kind] * outputFactor;
-        foreach (var commodity in UsedDeposits)
-            slots[DepositSlot(commodity)] = state.ResourceDeposits.GetValueOrDefault(commodity);
+        FillRegion(slots, nation, state, outputFactor, null);
 
         // ---- the government's hand on the economy -----------------------------------------
         //
@@ -496,17 +483,114 @@ public static class ProductionChains
                 civilian * (allocation.ConvertedMilitary / (float)allocation.RawCivilian);
         }
 
+        state.RegionalOutputValue = Run(Regional, nation, slots, allocation);
+    }
+
+    /// <summary>
+    /// The region's half of the slot table: its people, its buildings - with
+    /// <paramref name="plusOne"/> counted once more, for the build list's "what would one more
+    /// do" - its deposits, and the two compound factors built out of them. Everything but the
+    /// government's hand, which RunRegion applies on top.
+    /// </summary>
+    private static void FillRegion(float[] slots, Nation nation, ScenarioState state, float outputFactor, BuildingKind? plusOne)
+    {
+        Array.Clear(slots, 0, SlotCount);
+        int Count(BuildingKind kind) =>
+            state.Buildings.GetValueOrDefault(kind) + (plusOne == kind ? 1 : 0);
+
+        slots[SlotPopulation] = state.Population / 1_000_000f;
+        slots[SlotUrbanization] = state.Urbanization;
+        slots[SlotStandardOfLiving] = state.StandardOfLiving;
+        slots[SlotOutputFactor] = outputFactor;
+        slots[SlotIncome] = nation is not null && float.IsFinite(nation.IncomeFactor) && nation.IncomeFactor > 0f ? nation.IncomeFactor : 1f;
+
+        foreach (var kind in UsedBuildingsRaw)
+            slots[FixedSlots + BuildingKinds + kind] = Count((BuildingKind)kind);
+        foreach (var kind in UsedBuildingsStaffed)
+            slots[FixedSlots + kind] = slots[FixedSlots + BuildingKinds + kind] * outputFactor;
+        foreach (var commodity in UsedDeposits)
+            slots[DepositSlot(commodity)] = state.ResourceDeposits.GetValueOrDefault(commodity);
+
         // Read straight from the region rather than from the table, because the two
         // compound factors below are built out of them whether or not any recipe named them.
-        var infrastructure = (float)state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
-        var extraction = (float)state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry);
+        var infrastructure = (float)Count(BuildingKind.Infrastructure);
+        var extraction = (float)Count(BuildingKind.ExtractionIndustry);
         slots[SlotExtractionEfficiency] =
             (0.32f + extraction * 0.72f + infrastructure * 0.11f) * outputFactor;
         slots[SlotTimberYield] =
-            0.55f + state.Buildings.GetValueOrDefault(BuildingKind.Agriculture) * outputFactor * 0.06f +
+            0.55f + Count(BuildingKind.Agriculture) * outputFactor * 0.06f +
             extraction * 0.20f;
+    }
 
-        state.RegionalOutputValue = Run(Regional, nation, slots, allocation);
+    /// <summary>
+    /// What one more of a building would make and burn in this region each week, at this week's
+    /// staffing, prices and supply: every regional recipe worked out twice - as the region
+    /// stands, and with the building added - and the difference kept. The same arithmetic the
+    /// market runs (OutputOf), so an input in short supply, a glutted price or a mine's richer
+    /// seams all show up in the answer, and a recipe a mod adds describes itself.
+    ///
+    /// Before the government's hand: a war-industry conversion or a production line moves what
+    /// a factory makes between goods, and this is the plant at its own footing.
+    ///
+    /// <paramref name="makes"/> gets every good whose output rises, <paramref name="uses"/>
+    /// every good whose demand rises, largest first; <paramref name="needs"/> the goods it does
+    /// not consume but cannot work without (a recipe's needs and shortfalls), which is how a
+    /// smelter "drinks electricity" without buying any. Returns the weekly market value of what
+    /// it makes, at this week's prices.
+    /// </summary>
+    public static float Marginal(Nation nation, ScenarioState state, BuildingKind kind, float outputFactor,
+        List<(Commodity Good, float Amount)> makes, List<(Commodity Good, float Amount)> uses, List<Commodity> needs)
+    {
+        makes.Clear();
+        uses.Clear();
+        needs.Clear();
+        if (nation is null || state is null || (int)kind >= BuildingKinds) return 0f;
+        // Tables of their own: the market pass may be running on another thread with Slots.
+        var before = new float[SlotCount];
+        var after = new float[SlotCount];
+        FillRegion(before, nation, state, outputFactor, null);
+        FillRegion(after, nation, state, outputFactor, kind);
+
+        var value = 0f;
+        foreach (var recipe in Regional)
+        {
+            if (!nation.Market.TryGetValue(recipe.Good, out var quote)) continue;
+            if (recipe.Output.Length > 0)
+            {
+                var made = OutputOf(recipe, nation, quote, after) - OutputOf(recipe, nation, quote, before);
+                if (MathF.Abs(made) > 1e-5f)
+                {
+                    Accumulate(makes, recipe.Good, made);
+                    value += made * MathF.Max(0f, quote.Price);
+                }
+                // Named whether or not it is short this week: a farm depends on fertiliser even
+                // in a year the fertiliser came.
+                if (MathF.Abs(made) > 1e-5f || Mentions(recipe.Output, StaffedSlot(kind), RawSlot(kind), -1))
+                {
+                    foreach (var need in recipe.Needs) if (!needs.Contains(need.Good)) needs.Add(need.Good);
+                    foreach (var lack in recipe.Shortfall) if (!needs.Contains(lack.Good)) needs.Add(lack.Good);
+                }
+            }
+            if (recipe.Demand.Length > 0)
+            {
+                var used = MathF.Max(0f, recipe.Sum(recipe.Demand, after)) - MathF.Max(0f, recipe.Sum(recipe.Demand, before));
+                if (MathF.Abs(used) > 1e-5f) Accumulate(uses, recipe.Good, used);
+            }
+        }
+        makes.RemoveAll(entry => entry.Amount <= 0.005f);
+        uses.RemoveAll(entry => entry.Amount <= 0.005f);
+        makes.Sort((a, b) => b.Amount.CompareTo(a.Amount));
+        uses.Sort((a, b) => b.Amount.CompareTo(a.Amount));
+        // A need it also buys is already on the bill; name it once.
+        needs.RemoveAll(good => uses.Exists(entry => entry.Good == good));
+        return MathF.Max(0f, value);
+    }
+
+    private static void Accumulate(List<(Commodity Good, float Amount)> list, Commodity good, float amount)
+    {
+        var index = list.FindIndex(entry => entry.Good == good);
+        if (index < 0) list.Add((good, amount));
+        else list[index] = (good, list[index].Amount + amount);
     }
 
     /// <summary>What a country as a whole makes and spends, once, after its regions.</summary>
@@ -552,16 +636,9 @@ public static class ProductionChains
 
             if (recipe.Output.Length > 0)
             {
-                var output = recipe.Sum(recipe.Output, slots);
-                foreach (var need in recipe.Needs) output *= Supplied(nation, need.Good, need.Floor);
-                // What the price says about making more of it (SupplyResponse).
-                if (recipe.Shortfall.Length == 0 && nation is not null) output *= SupplyResponse(nation, quote);
-                foreach (var lack in recipe.Shortfall) output *= Supplied(nation, lack.Good, lack.Floor) - 1f;
-                // A recipe with a shortfall term is a penalty by construction and may go
-                // below zero; anything else may not, because a factory does not un-make
-                // things when it is short of coal.
-                quote.Production += recipe.Shortfall.Length > 0 ? output : MathF.Max(0f, output);
-                grossValue += (recipe.Shortfall.Length > 0 ? output : MathF.Max(0f, output)) * MathF.Max(0f, quote.Price);
+                var output = OutputOf(recipe, nation, quote, slots);
+                quote.Production += output;
+                grossValue += output * MathF.Max(0f, quote.Price);
             }
 
             if (applyLines)
@@ -575,6 +652,23 @@ public static class ProductionChains
                 quote.Demand += MathF.Max(0f, recipe.Sum(recipe.Demand, slots));
         }
         return MathF.Max(0f, grossValue);
+    }
+
+    /// <summary>
+    /// One recipe's output this week: its terms, scaled by how well its needs turned up, by what
+    /// the price says about making more (SupplyResponse), and by any shortfall it suffers.
+    /// </summary>
+    private static float OutputOf(Recipe recipe, Nation nation, MarketQuote quote, float[] slots)
+    {
+        var output = recipe.Sum(recipe.Output, slots);
+        foreach (var need in recipe.Needs) output *= Supplied(nation, need.Good, need.Floor);
+        // What the price says about making more of it (SupplyResponse).
+        if (recipe.Shortfall.Length == 0 && nation is not null) output *= SupplyResponse(nation, quote);
+        foreach (var lack in recipe.Shortfall) output *= Supplied(nation, lack.Good, lack.Floor) - 1f;
+        // A recipe with a shortfall term is a penalty by construction and may go
+        // below zero; anything else may not, because a factory does not un-make
+        // things when it is short of coal.
+        return recipe.Shortfall.Length > 0 ? output : MathF.Max(0f, output);
     }
 
     /// <summary>

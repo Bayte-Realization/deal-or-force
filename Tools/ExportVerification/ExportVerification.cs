@@ -239,6 +239,13 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
+                if (developmentProbe && args.Contains("--verify-research-route-only"))
+                {
+                    await VerifyResearchRoute(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-enemy-readiness-only"))
                 {
                     await VerifyEnemyReadiness(game);
@@ -321,9 +328,46 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
+                if (developmentProbe && args.Contains("--verify-stability-outlook-only"))
+                {
+                    await VerifyStabilityOutlook(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-soundtrack-player-only"))
+                {
+                    await VerifySoundtrackPlayer(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-player-comfort-only"))
+                {
+                    await VerifyMapLayerGuide(game);
+                    await VerifyEnemyReadiness(game);
+                    await VerifySoundtrackPlayer(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-map-layer-guide-only"))
+                {
+                    await VerifyMapLayerGuide(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-cartography-only"))
                 {
                     await VerifyCartography(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-yaml-workbench-only"))
+                {
+                    await VerifyYamlWorkbench(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;

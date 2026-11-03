@@ -16,7 +16,7 @@
   "held_talks": { "name": "Held talks with us", "opinion": 8, "days": 365, "decays": true },
   "armed_us": { "name": "Arms us in our war", "opinion": 25, "days": 1825, "decays": true },
   "armed_our_enemy": { "name": "Arms our enemy", "opinion": -30, "days": 1825, "decays": true },
-  "seized_power_by_coup": { "name": "Took power in a coup", "opinion": -20, "days": 1825, "decays": true },
+  "seized_power_by_coup": { "name": "Took power in a coup", "opinion": -12, "days": 1095, "decays": true, "third_party": true },
   "fishing_boat_seized": { "name": "Seized our fishing boat", "opinion": -3, "days": 365, "decays": true, "max_stacks": 2 },
   "border_marker_removed": { "name": "Moved the border markers", "opinion": -6, "days": 540, "decays": true, "max_stacks": 2 },
   "damaged_cable": { "name": "Cut our cables", "opinion": -7, "days": 540, "decays": true, "max_stacks": 2 },

@@ -23,12 +23,22 @@ public static class FormableRestorations
 {
     public const string Prefix = "restore_";
 
+    /// <summary>
+    /// A country of the starting world that still stands but has broken apart - a rump holding
+    /// less than half of its own people - may be put back together by one of its pieces: Texas
+    /// or California proclaiming the United States again while a rump in Washington still
+    /// flies the flag. Ids are "reunite_" and the old tag.
+    /// </summary>
+    public const string ReunionPrefix = "reunite_";
+
     /// <summary>The tag a restoration brings back, or null when the id is not one.</summary>
     public static string RestoredTag(string formableId)
     {
         if (string.IsNullOrEmpty(formableId)) return null;
         if (FormableNations.Find(formableId) is { Restores.Length: > 0 } authored)
             return authored.Restores.ToUpperInvariant();
+        if (formableId.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase) && formableId.Length > ReunionPrefix.Length)
+            return formableId[ReunionPrefix.Length..].ToUpperInvariant();
         return formableId.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) && formableId.Length > Prefix.Length
             ? formableId[Prefix.Length..].ToUpperInvariant()
             : null;
@@ -37,23 +47,31 @@ public static class FormableRestorations
     private static Campaign _cachedFor;
     private static int _cachedDay = int.MinValue;
     private static int _cachedRevision = int.MinValue;
+    private static int _cachedMovementRevision = int.MinValue;
+    private static int _cachedNationCount = -1;
     private static readonly List<FormableNation> Cached = new();
 
     /// <summary>Every restoration open in this campaign today.</summary>
     public static IReadOnlyList<FormableNation> In(Campaign campaign)
     {
         if (campaign is null) return Array.Empty<FormableNation>();
-        if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays && _cachedRevision == campaign.MapRevision)
+        if (ReferenceEquals(_cachedFor, campaign) && _cachedDay == campaign.ElapsedDays && _cachedRevision == campaign.MapRevision &&
+            _cachedMovementRevision == campaign.MovementRevision && _cachedNationCount == campaign.Nations.Count)
             return Cached;
         _cachedFor = campaign;
         _cachedDay = campaign.ElapsedDays;
         _cachedRevision = campaign.MapRevision;
+        _cachedMovementRevision = campaign.MovementRevision;
+        _cachedNationCount = campaign.Nations.Count;
         Cached.Clear();
         foreach (var gone in campaign.Nations)
         {
             if (!Vanished(campaign, gone)) continue;
             if (Restoration(campaign, gone) is { } definition) Cached.Add(definition);
         }
+        foreach (var broken in campaign.Nations)
+            if (BrokenApart(campaign, broken) && Restoration(campaign, broken, reunion: true) is { } reunion)
+                Cached.Add(reunion);
         return Cached;
     }
 
@@ -63,21 +81,67 @@ public static class FormableRestorations
         var tag = RestoredTag(formableId);
         if (tag is null || campaign is null) return null;
         var gone = campaign.NationByTag(tag);
-        return gone is not null && Vanished(campaign, gone) ? Restoration(campaign, gone) : null;
+        if (gone is null) return null;
+        if (formableId.StartsWith(ReunionPrefix, StringComparison.OrdinalIgnoreCase))
+            return BrokenApart(campaign, gone) ? Restoration(campaign, gone, reunion: true) : null;
+        return Vanished(campaign, gone) ? Restoration(campaign, gone) : null;
     }
 
     /// <summary>
-    /// Whether a country of the starting world has gone: a state (not a movement), with ground
-    /// written for it in the bookmark, that holds none of anything now and has not already
-    /// been brought back by somebody.
+    /// Whether a starting-world identity has gone: it has authored ground but no land,
+    /// no surviving government in exile and no living successor bearing that identity.
+    /// A historical proclamation or a dissolved exile is not an eternal lock.
     /// </summary>
     public static bool Vanished(Campaign campaign, Nation nation)
     {
-        if (nation is null || nation.Movement is not null || string.IsNullOrEmpty(nation.Tag)) return false;
+        if (campaign is null || nation is null || string.IsNullOrEmpty(nation.Tag)) return false;
+        // A surviving exile is still this country's government. Once that government has
+        // actually dissolved, however, its abandoned rolls must not veto every later return.
+        if (nation.Movement is { } movement && (!movement.Exile || !movement.Dissolved)) return false;
         if (campaign.HasOwnedLand(nation)) return false;
         if (Authored(campaign, nation.Tag).Length == 0) return false;
-        var id = Prefix + nation.Tag.ToLowerInvariant();
-        return !campaign.Nations.Any(other => string.Equals(other.FormedNationId, id, StringComparison.OrdinalIgnoreCase));
+        return !HasLivingIdentity(campaign, nation.Tag);
+    }
+
+    /// <summary>Historical proclamations stay in the ledger, not as an eternal veto.
+    /// Land or a surviving government in exile keeps the identity alive. Check the restored
+    /// tag too, so authored restoration ids cannot create a duplicate of a dynamic one.</summary>
+    public static bool HasLivingIdentity(Campaign campaign, string tag) =>
+        campaign is not null && !string.IsNullOrEmpty(tag) && campaign.Nations.Any(other =>
+            (string.Equals(other.Tag, tag, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(RestoredTag(other.FormedNationId), tag, StringComparison.OrdinalIgnoreCase)) &&
+            (campaign.HasOwnedLand(other) || other.Movement is { Exile: true, Dissolved: false }));
+
+    internal static void Invalidate(Campaign campaign)
+    {
+        if (ReferenceEquals(_cachedFor, campaign)) _cachedFor = null;
+    }
+
+    /// <summary>
+    /// Whether a country of the starting world still stands but has lost most of itself: of the
+    /// people living today on the ground the bookmark gave it, the share still under its own flag
+    /// is below ReunionRumpShare, and nobody has reunited it already.
+    /// </summary>
+    public static bool BrokenApart(Campaign campaign, Nation nation)
+    {
+        if (campaign?.ProvinceMap is null || nation is null || nation.Movement is not null || string.IsNullOrEmpty(nation.Tag)) return false;
+        if (!campaign.HasOwnedLand(nation)) return false;
+        var id = ReunionPrefix + nation.Tag.ToLowerInvariant();
+        if (campaign.Nations.Any(other => string.Equals(other.FormedNationId, id, StringComparison.OrdinalIgnoreCase))) return false;
+        var authored = Authored(campaign, nation.Tag);
+        if (authored.Length == 0) return false;
+        var toState = campaign.ProvinceMap.ProvinceToState;
+        var regions = new HashSet<int>();
+        foreach (var province in authored)
+            if (province > 0 && province < toState.Length) regions.Add(toState[province]);
+        long all = 0, own = 0;
+        foreach (var state in campaign.States)
+        {
+            if (!regions.Contains(state.MapIndex) && !regions.Contains(state.ParentMapIndex)) continue;
+            all += Math.Max(0L, state.Population);
+            if (state.NationMapIndex == nation.MapIndex) own += Math.Max(0L, state.Population);
+        }
+        return all > 0 && own < all * (double)campaign.Defines.ReunionRumpShare;
     }
 
     /// <summary>The ground the bookmark wrote for a tag.</summary>
@@ -170,13 +234,15 @@ public static class FormableRestorations
         if (grew) campaign.MarkStrategicChange();
     }
 
-    private static FormableNation Restoration(Campaign campaign, Nation gone)
+    private static FormableNation Restoration(Campaign campaign, Nation gone, bool reunion = false)
     {
         var name = CountryNames.Of(gone.Tag);
         if (string.IsNullOrEmpty(name) || name == gone.Tag) name = Loc.Get(gone.Name);
         var cultures = DemographyCatalog.PrimaryCultures(gone.Tag).ToArray();
-        return new FormableNation(Prefix + gone.Tag.ToLowerInvariant(), name,
-            Loc.Format("{0} again, on the ground it held when the world began - proclaimed by its own people, by a rising on its old soil, or by its government come home from exile.", name),
+        return new FormableNation((reunion ? ReunionPrefix : Prefix) + gone.Tag.ToLowerInvariant(), name,
+            reunion
+                ? Loc.Format("{0} put back together by one of its pieces: the successor that holds most of the old ground takes the name and the flag, and the rump that still calls itself {0} becomes a rival government to be brought in by treaty or by force.", name)
+                : Loc.Format("{0} again, on the ground it held when the world began - proclaimed by its own people, by a rising on its old soil, or by its government come home from exile.", name),
             Array.Empty<string>(), new[] { gone.Tag }, Array.Empty<int>(),
             campaign.Defines.RestorationMinimumStability, campaign.Defines.RestorationCostShare,
             campaign.Defines.RestorationGovernanceGain, campaign.Defines.RestorationProductivityGain,
@@ -230,6 +296,8 @@ public static class FormableRestorations
 
 public sealed partial class Defines
 {
+    /// <summary>The share of its own people below which a country of the starting world counts as broken apart (FormableRestorations.BrokenApart).</summary>
+    public float ReunionRumpShare { get; set; } = 0.5f;
     /// <summary>How settled a country must be to proclaim a vanished one again.</summary>
     public float RestorationMinimumStability { get; set; } = 0.40f;
     /// <summary>What it costs, as a share of the founder's output.</summary>

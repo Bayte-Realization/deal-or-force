@@ -1,0 +1,9 @@
+// Places in the navigator, and the way home (NavigatorUI.cs, TopBarHudUI.cs).
+{
+  "Countries": "Countries",
+  "Cities": "Cities",
+  "Show my capital on the map (Home).": "Show my capital on the map (Home).",
+  "Every screen in the campaign, every country and every city. Type to narrow it down.": "Every screen in the campaign, every country and every city. Type to narrow it down.",
+  "Search a screen, a country or a city": "Search a screen, a country or a city",
+  "{0} · capital {1}": "{0} · capital {1}"
+}

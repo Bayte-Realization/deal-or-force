@@ -31,9 +31,20 @@
 //                    available; the rest say what the formation does with its days.
 //                    "reconnaissance" lifts the fog over enemy ground inside the reach,
 //                    as far as the recon figure says (six sees all of it), and pays the
-//                    enemy's sky for it (AirReconnaissance.cs).
+//                    enemy's sky for it (AirReconnaissance.cs). "strike" fires one salvo a
+//                    week at a target behind the line - the enemy's formations, depots,
+//                    plants or power grid (LongRangeStrikes.cs).
+//   strike           deep-strike power of one weekly salvo at full strength. The enemy's
+//                    air defence in reach of the target shoots part of it down; what gets
+//                    through lands as hard as the reconnaissance over the target allows.
+//   munition         the depot good a salvo is fired from: Missiles, Drones or Ammunition.
+//                    An empty depot fires nothing - the strike war is a war of factories.
+//   munition_per_salvo  how much of it one full-strength salvo takes.
+//   evasion          0 to 1: the share of the enemy's interception the weapon shrugs off.
+//                    Ballistic missiles high, cruise missiles middling, slow drones low -
+//                    which is why drones come in swarms that saturate a screen.
 //
-// The stock game's nine kinds are balanced against a division's fire of about one, so
+// The stock game's eleven kinds are balanced against a division's fire of about one, so
 // that a country's whole long-range establishment over one battle is worth roughly a
 // third again of the divisions actually standing in it - decisive when it is aimed,
 // never a replacement for holding the ground.
@@ -62,10 +73,14 @@
     "support_fire": 5.0,
     "interdiction": 3.5,
     "recon": 0.8,
+    "strike": 3.0,
+    "munition": "Ammunition",
+    "munition_per_salvo": 0.4,
+    "evasion": 0.35,
     "recruitment_cost": 0.70,
     "build_days": 50,
     "personnel": 3500,
-    "missions": ["standby", "close_air_support", "interdiction"]
+    "missions": ["standby", "close_air_support", "interdiction", "strike"]
   },
 
   // The ground's own answer to the air war. No offensive mission at all: a missile
@@ -113,10 +128,14 @@
     "air_superiority": 3.0,
     "interdiction": 3.0,
     "recon": 2.0,
+    "strike": 4.0,
+    "munition": "Ammunition",
+    "munition_per_salvo": 0.5,
+    "evasion": 0.3,
     "recruitment_cost": 1.40,
     "build_days": 80,
     "personnel": 2800,
-    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
+    "missions": ["standby", "close_air_support", "interdiction", "strike", "reconnaissance"]
   },
 
   // The low, slow half of the air war: the shortest reach of any aircraft and the
@@ -146,10 +165,14 @@
     "support_fire": 6.0,
     "interdiction": 6.0,
     "recon": 2.0,
+    "strike": 10.0,
+    "munition": "Missiles",
+    "munition_per_salvo": 0.8,
+    "evasion": 0.3,
     "recruitment_cost": 2.20,
     "build_days": 120,
     "personnel": 4000,
-    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
+    "missions": ["standby", "close_air_support", "interdiction", "strike", "reconnaissance"]
   },
 
   // The eyes. Almost no fire at all, and no country that owns one regrets it: the
@@ -179,9 +202,53 @@
     "support_fire": 4.5,
     "interdiction": 2.5,
     "recon": 2.0,
+    "strike": 2.5,
+    "munition": "Drones",
+    "munition_per_salvo": 0.3,
+    "evasion": 0.15,
     "recruitment_cost": 0.50,
     "build_days": 40,
     "personnel": 600,
-    "missions": ["standby", "close_air_support", "interdiction", "reconnaissance"]
+    "missions": ["standby", "close_air_support", "interdiction", "strike", "reconnaissance"]
+  },
+
+  // The deep end of the ground war: cruise and ballistic missiles on launchers that never
+  // see the front. Nothing to add to a battle, everything to take from the depots, plants
+  // and power stations a thousand kilometres behind it - and a salvo is a week of what the
+  // missile plants make, so a country that fires faster than it builds runs dry.
+  "strike_missile_brigade": {
+    "name": "Strike missile brigade",
+    "kind": "ground",
+    "icon": "artillery",
+    "range_km": 900,
+    "interdiction": 2.0,
+    "recon": 0.5,
+    "strike": 9.0,
+    "munition": "Missiles",
+    "munition_per_salvo": 0.6,
+    "evasion": 0.55,
+    "recruitment_cost": 1.20,
+    "build_days": 75,
+    "personnel": 1500,
+    "missions": ["standby", "strike"]
+  },
+
+  // The cheapest reach in the book: slow one-way drones launched in swarms from far behind
+  // the line. Each is easy to shoot down and there are a great many of them - the screen
+  // that stops a few is saturated by a hundred - and nothing aboard to lose.
+  "long_range_drone_group": {
+    "name": "Long-range attack drone group",
+    "kind": "drone",
+    "icon": "drone",
+    "range_km": 1500,
+    "recon": 1.0,
+    "strike": 4.0,
+    "munition": "Drones",
+    "munition_per_salvo": 0.5,
+    "evasion": 0.1,
+    "recruitment_cost": 0.40,
+    "build_days": 30,
+    "personnel": 500,
+    "missions": ["standby", "strike"]
   }
 }

@@ -28,6 +28,7 @@ public partial class DealOrForceGame
 
     public override void _ExitTree()
     {
+        Loc.LanguageChanged -= RefreshHandbookLanguage;
         if (_stepCompletionCampaign is not null)
             _stepCompletionCampaign.StepCompleted -= CampaignStepCompleted;
         _stepCompletionCampaign = null;
@@ -39,6 +40,8 @@ public partial class DealOrForceGame
         DiagnosticLogs.Stop();
     }
 
+    private ulong _lastFrameUsec;
+
     private void ReportFrameCost(double delta)
     {
         if (!DiagnosticLogs.Enabled) return;
@@ -46,7 +49,13 @@ public partial class DealOrForceGame
         _frameReportFrames++;
         _frameReportAccumulator += delta;
         if (_frameDurations.Count < 4096) _frameDurations.Add(delta * 1000);
-        if (delta >= .1) DiagnosticLogs.Write("performance", $"FRAME_STALL frame_ms={DiagnosticLogs.N(delta * 1000)} speed={_speed} paused={_campaign.IsPaused} pending_seconds={DiagnosticLogs.N(_dayAccumulator)}");
+        // Wall time, not delta: the engine caps delta, so every stall longer than 150 ms was
+        // written as 150 and the worst hitches - the ones a player calls a freeze - looked alike.
+        var now = Time.GetTicksUsec();
+        var wall = _lastFrameUsec == 0 ? delta * 1000 : (now - _lastFrameUsec) / 1000.0;
+        _lastFrameUsec = now;
+        if (wall >= 100) DiagnosticLogs.Write("performance", $"FRAME_STALL frame_ms={DiagnosticLogs.N(wall)} speed={_speed} paused={_campaign.IsPaused} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} " +
+            $"after={ButtonMotion.LastPressed} {DiagnosticLogs.N((now - ButtonMotion.LastPressedUsec) / 1000.0)}ms_ago");
         if (_frameReportAccumulator < 5) return;
         var seconds = _frameReportAccumulator;
         var days = _campaign.ElapsedDays - _frameReportDay;
@@ -54,7 +63,7 @@ public partial class DealOrForceGame
         _frameDurations.Sort();
         var p95 = _frameDurations[(int)Math.Floor((_frameDurations.Count-1)*.95)];
         var maximum = _frameDurations[^1];
-        DiagnosticLogs.Write("performance", $"FRAME_WINDOW seconds={DiagnosticLogs.N(seconds)} frames={_frameReportFrames} fps={DiagnosticLogs.N(_frameReportFrames/seconds)} p95_ms={DiagnosticLogs.N(p95)} max_ms={DiagnosticLogs.N(maximum)} speed={_speed} paused={_campaign.IsPaused} network_client={IsNetworkClient} days_per_second={DiagnosticLogs.N(days/seconds)} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} managed_heap_bytes={GC.GetTotalMemory(false)} engine_bytes={OS.GetStaticMemoryUsage()} gc_counts={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} borders_rebuilt={CampaignDiplomacy.Rebuilds-_frameReportRebuilds} map_revisions={_campaign.MapRevision-_frameReportRevision}");
+        DiagnosticLogs.Write("performance", $"FRAME_WINDOW seconds={DiagnosticLogs.N(seconds)} frames={_frameReportFrames} fps={DiagnosticLogs.N(_frameReportFrames/seconds)} p95_ms={DiagnosticLogs.N(p95)} max_ms={DiagnosticLogs.N(maximum)} speed={_speed} paused={_campaign.IsPaused} network_client={IsNetworkClient} days_per_second={DiagnosticLogs.N(days/seconds)} pending_seconds={DiagnosticLogs.N(_dayAccumulator)} managed_heap_bytes={GC.GetTotalMemory(false)} engine_bytes={OS.GetStaticMemoryUsage()} video_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderVideoMemUsed)} texture_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderTextureMemUsed)} buffer_bytes={(long)Performance.GetMonitor(Performance.Monitor.RenderBufferMemUsed)} objects={(long)Performance.GetMonitor(Performance.Monitor.ObjectCount)} resources={(long)Performance.GetMonitor(Performance.Monitor.ObjectResourceCount)} nodes={(long)Performance.GetMonitor(Performance.Monitor.ObjectNodeCount)} orphans={(long)Performance.GetMonitor(Performance.Monitor.ObjectOrphanNodeCount)} process_bytes={PrivateBytes()} gc_counts={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} borders_rebuilt={CampaignDiplomacy.Rebuilds-_frameReportRebuilds} map_revisions={_campaign.MapRevision-_frameReportRevision}");
         _frameReportRebuilds = CampaignDiplomacy.Rebuilds;
         _frameReportRevision = _campaign.MapRevision;
         foreach (var sample in SimProfiler.All.OrderBy(s => s.Name))
@@ -68,5 +77,16 @@ public partial class DealOrForceGame
         _frameReportAccumulator = 0;
         _frameReportFrames = 0;
         _frameDurations.Clear();
+    }
+
+    /// <summary>
+    /// The whole process's private memory - what the player sees in the task manager. The heap
+    /// and the engine's own allocator were a tenth of it in a long 2046 campaign; the rest is the
+    /// renderer and the driver, so the log carries their counters beside it to show which grows.
+    /// </summary>
+    private static long PrivateBytes()
+    {
+        using var process = System.Diagnostics.Process.GetCurrentProcess();
+        return process.PrivateMemorySize64;
     }
 }

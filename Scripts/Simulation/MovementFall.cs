@@ -28,6 +28,15 @@ public sealed partial class Defines
     /// <summary>A landless movement with fewer cadres than this, no money and no following is no more.</summary>
     public float MovementDissolveCadres { get; set; } = 300f;
     /// <summary>
+    /// A movement (not a government in exile) beaten down this far - cadres under this, a following
+    /// under MovementCrushedFollowing - is broken: leaders in prison, the rank and file gone home.
+    /// </summary>
+    public float MovementCrushedCadres { get; set; } = 1500f;
+    public float MovementCrushedFollowing { get; set; } = 0.06f;
+    /// <summary>A peaceful movement this marginal and this tame folds into ordinary politics.</summary>
+    public float MovementFoldFollowing { get; set; } = 0.04f;
+    public float MovementFoldMilitancy { get; set; } = 0.08f;
+    /// <summary>
     /// The chance a beaten rising or breakaway goes underground rather than ending, before what
     /// raises it: the radicalism of its homeland (MovementUndergroundRadicalism per unit of it,
     /// weighted by people) and a friend abroad who would shelter it.
@@ -488,10 +497,23 @@ public static class MovementFall
             Dissolve(campaign, nation, Loc.Get("With nowhere left that would have it, the movement has broken up."));
         else if (state.Cadres < defines.MovementDissolveCadres && nation.Treasury < 0.002f && following < 0.05f)
             Dissolve(campaign, nation, Loc.Get("Nobody is left to carry it on: the movement is no more."));
+        // The ways movements really end. A government in exile lives on its legitimacy and
+        // outlasts all of this; an organisation of people at home does not - but not in its
+        // first year: a movement is judged on what it does, not on the day it was written down.
+        else if (!state.Exile && Matured(campaign, state) && state.Cadres < defines.MovementCrushedCadres &&
+                 following < defines.MovementCrushedFollowing && !campaign.Armies.Exists(a => a.NationId == nation.Id))
+            Dissolve(campaign, nation, Loc.Get("Its leaders are in prison or dead, and the rank and file have gone home: the movement is broken."));
+        else if (!state.Exile && Matured(campaign, state) && state.Militancy >= 0f && state.Militancy < defines.MovementFoldMilitancy &&
+                 following < defines.MovementFoldFollowing && !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+            Dissolve(campaign, nation, Loc.Get("What is left of it has joined ordinary politics: the movement has folded into the parties."));
     }
 
+    /// <summary>A year since it was founded, or since the world began for one that was there already.</summary>
+    private static bool Matured(Campaign campaign, MovementState state) =>
+        campaign.ElapsedDays - Math.Max(0, state.ReadyOnDay.GetValueOrDefault("lifecycle_born")) >= 365;
+
     /// <summary>The end of it.</summary>
-    public static void Dissolve(Campaign campaign, Nation nation, string why)
+    public static void Dissolve(Campaign campaign, Nation nation, string why, bool record = true)
     {
         var state = nation.Movement;
         if (state is null || state.Dissolved) return;
@@ -512,6 +534,6 @@ public static class MovementFall
             Attrition.Destroy(campaign, army, "movement dissolved", lost: false);
         campaign.MovementRevision++;
         campaign.MarkStrategicChange();
-        campaign.Chronicle.Record(campaign, "movement_dissolved", nation.Id);
+        if (record) campaign.Chronicle.Record(campaign, "movement_dissolved", nation.Id);
     }
 }

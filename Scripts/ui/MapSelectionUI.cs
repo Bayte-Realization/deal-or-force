@@ -32,6 +32,9 @@ public partial class DealOrForceGame
     private VBoxContainer _countryCardRows;
     private VBoxContainer _countryCardActionsHost;
     private ScrollContainer _countryFactsScroll;
+
+    /// <summary>The flag editor's door on the player's own card; hidden on everybody else's.</summary>
+    private Button _countryCardFlagEdit;
     private ScrollContainer _countryOrdersScroll;
     private HBoxContainer _countryCardLinks;
 
@@ -88,6 +91,15 @@ public partial class DealOrForceGame
         _countryCardCaption = Title("", 12, Ui.Colour("text.caption"));
         _countryCardCaption.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         names.AddChild(_countryCardCaption);
+        // The player's own country may redesign its flag: a cosmetic choice, saved as a flag
+        // description in the Editor workspace mod like any other (FlagEditorUI).
+        _countryCardFlagEdit = ActionButton("Flag…", () =>
+        {
+            if (_campaign?.Player is { } player) OpenFlagEditor(player.Tag);
+        }, 0, 32);
+        _countryCardFlagEdit.TooltipText = Ui.Tip(Tr("Design your country's flag"));
+        _countryCardFlagEdit.Visible = false;
+        header.AddChild(_countryCardFlagEdit);
         header.AddChild(ActionButton("×", CloseMapSelection, 34, 32));
 
         _countryCardStanding = Title("", 14, Ui.Colour("text.accent"));
@@ -395,6 +407,7 @@ public partial class DealOrForceGame
                 nation.Stability < 0.35f ? "state.negative" : nation.Stability < 0.55f ? "state.warning" : "text.bright");
             var wars = _campaign.Wars.Count(war => !war.Ended && war.Involves(nation.Id));
             AddWarSupportRow(nation, wars);
+            AddCountryStabilityOutlook(nation);
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (wars > 0) CardRow(_countryCardRows, "Wars", wars.ToString("N0"), null, "state.negative");
             }
@@ -441,6 +454,7 @@ public partial class DealOrForceGame
                 DemographicCycle.Explain(_campaign, nation),
                 forDeath > forBirth ? "state.warning" : "text.bright");
             CardRow(_countryCardRows, "Stability", Fmt.Percent(nation.Stability));
+            AddCountryStabilityOutlook(nation);
             CardRow(_countryCardRows, "Divisions", divisions.ToString("0.#"));
             if (TechnologyCatalog.All.Count > 0)
                 CardRow(_countryCardRows, "Technologies",
@@ -587,7 +601,8 @@ public partial class DealOrForceGame
             RegionOfCaption(state, owner) + (isCapital ? " · " + Tr("the capital") : "");
 
         // ---- the region: the same fog rule as the dossier, so the two never disagree.
-        var visible = state is not null && (owner is null || CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
+        var visible = state is not null && (!_campaign.Defines.FogHidesRegionStatistics || owner is null ||
+                                            CanInspectNation(owner.Id) || PlayerHoldsMostOf(state));
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
@@ -722,9 +737,9 @@ public partial class DealOrForceGame
                 _selectedState.DisplayName, Fmt.Money(CapitalCore.Cost(_campaign, _campaign.Player))));
     }
 
-    private void RegionCardBuild(BuildingKind kind)
+    private void RegionCardBuild(BuildingKind kind, int count = 1)
     {
-        QueueRegionalBuilding(kind);
+        QueueRegionalBuilding(kind, count);
         _regionCardFeedback.Text = _regionActionFeedback.Text;
     }
 

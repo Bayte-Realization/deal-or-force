@@ -239,12 +239,33 @@ public partial class DealOrForceGame
                 PolicyText(rows, "· " + Tr(node.Name) + (string.IsNullOrEmpty(effects) ? "" : " — " + effects));
             }
             if (written == 0) PolicyText(rows, Loc.Get("Nothing of it is drilled in yet."));
+            var companion = track.Companion;
+            var second = companion is { Branch.Length: > 0 } ? TacticalDoctrineCatalog.Find(companion.Branch) : null;
+            if (second is null) continue;
+            PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(second.Name), companion.Known.Count, second.Nodes.Count),
+                "text.accent");
+            var drilled = 0;
+            foreach (var node in second.Nodes)
+            {
+                if (!companion.Known.Contains(node.Id)) continue;
+                drilled++;
+                var effects = NationalModifiers.Block(node.Modifiers);
+                PolicyText(rows, "· " + Tr(node.Name) + (string.IsNullOrEmpty(effects) ? "" : " — " + effects));
+            }
+            if (drilled == 0) PolicyText(rows, Loc.Get("Nothing of it is drilled in yet."));
         }
         // A country's very first article is already being studied before it has a book in
         // force. Its progress belongs here too, on every shelf that is studying something.
         foreach (var slot in DoctrineSlots.All)
         {
             var track = n.TacticalDoctrine.Track(slot);
+            if (track.Companion is { LearningNode.Length: > 0 } extra)
+            {
+                var other = TacticalDoctrineCatalog.Find(extra.LearningBranch)?.Find(extra.LearningNode);
+                PolicyText(rows, Loc.Format("{0}: {1} days left.",
+                    other is null ? extra.LearningNode : Tr(other.Name),
+                    Math.Max(0, extra.LearningDoneDay - _campaign.ElapsedDays)));
+            }
             if (track.LearningNode.Length == 0) continue;
             var studying = TacticalDoctrineCatalog.Find(track.LearningBranch)?.Find(track.LearningNode);
             PolicyText(rows, Loc.Format("{0}: {1} days left.",

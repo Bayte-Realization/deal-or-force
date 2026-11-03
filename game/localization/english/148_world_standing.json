@@ -59,5 +59,11 @@
   "Open the conflicts screen": "Open the conflicts screen",
   "Open covert operations": "Open covert operations",
   "Opens the conflicts screen, where a sponsorship is reviewed. Opening it does not start one.": "Opens the conflicts screen, where a sponsorship is reviewed. Opening it does not start one.",
-  "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one.": "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one."
+  "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one.": "Opens the province card for that country. An operation already under way can be called off there. Opening it does not start one.",
+  "Aggressiveness of other governments": "Aggressiveness of other governments",
+  "How readily the governments you do not play go to war. Lower makes cautious cabinets that need a strong reason; higher makes adventurers who take their chances. Every reason behind a war still counts - only the appetite moves.": "How readily the governments you do not play go to war. Lower makes cautious cabinets that need a strong reason; higher makes adventurers who take their chances. Every reason behind a war still counts - only the appetite moves.",
+  "Agreeableness of other governments": "Agreeableness of other governments",
+  "How readily the governments you do not play say yes - to treaties, peace offers, aid and pleas to join a war. Lower makes them stubborn bargainers; higher makes them easy to persuade.": "How readily the governments you do not play say yes - to treaties, peace offers, aid and pleas to join a war. Lower makes them stubborn bargainers; higher makes them easy to persuade.",
+  "aggressiveness setting": "aggressiveness setting",
+  "Agreeableness setting": "Agreeableness setting"
 }

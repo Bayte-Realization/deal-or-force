@@ -1243,7 +1243,12 @@ public static class NationNaming
         }
         if (!clash) return;
         // Its people's adjective first - the Shona Republic - and only then its largest region.
-        var people = nation.FoundedCultures.FirstOrDefault(c => CultureAdjective(c).Length > 0);
+        // Never the people of the country it rose from, nor a people that already has a state of
+        // its own: Russians rising in Siberia held by Kazakhstan were the "Kazakh Republic" for a
+        // while, because the parent's people had been written down as theirs.
+        var parentNation = parentId >= 0 ? campaign.NationById(parentId) : null;
+        var people = nation.FoundedCultures.FirstOrDefault(c => CultureAdjective(c).Length > 0 &&
+            !SamePeople(c, parentNation) && !CountryNameTaken(campaign, c));
         if (people is not null && !(nation.FoundNameKind == "culture_adj" && nation.FoundNameId == people))
         {
             var keptKind = nation.FoundNameKind;

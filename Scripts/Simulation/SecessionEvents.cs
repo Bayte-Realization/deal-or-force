@@ -593,21 +593,53 @@ public static class SecessionEvents
     /// and the side that rose is named for what it wants rather than for whom it is
     /// (CivilWarOutbreak).
     /// </summary>
+    /// <remarks>
+    /// <paramref name="countsAsOutbreak"/> false keeps a rising out of the world's yearly count of
+    /// civil wars begun (CivilWarOutbreak.Budget): the second and later waves of one state's
+    /// collapse (StateFailure) are the same breakdown spreading, not new civil wars somewhere
+    /// else, and counting them would let one failing state silence every other country's
+    /// outbreak for a year.
+    /// </remarks>
     internal static SecessionReport Uprising(Campaign campaign, Nation parent, IReadOnlyList<ScenarioState> regions,
-        Action<Nation> shape)
+        Action<Nation> shape, bool countsAsOutbreak = true)
     {
         if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0) return null;
         var leaving = regions.Select(state => new SecessionPiece
         {
             MapIndex = state.MapIndex, Name = state.Name, Population = state.Population, Cause = SecessionCause.Discontent
         }).ToList();
-        var report = Secede(campaign, parent, leaving, "", regions.Sum(state => state.Population), shape, fight: true);
+        var report = Secede(campaign, parent, leaving, "", regions.Sum(state => state.Population), shape, fight: true,
+            countsAsOutbreak: countsAsOutbreak);
+        if (report is not null) Recent.Add(report);
+        return report;
+    }
+
+    /// <summary>
+    /// A people's own regions leaving a state that is coming apart, by the ordinary road of a
+    /// secession: founded for that people, given the ground, armed, and answered by the state
+    /// it left the way every secession is answered (SecessionCore.Response, or the player asked).
+    /// The weekly secession waits for the pressure to reach the line in each region and for the
+    /// state's cooling-off period; a collapsing centre (StateFailure) has stopped being able to
+    /// hold either, so this takes the regions it is given as they are.
+    /// </summary>
+    internal static SecessionReport Breakaway(Campaign campaign, Nation parent, IReadOnlyList<ScenarioState> regions,
+        string culture)
+    {
+        if (campaign?.ProvinceMap is null || parent is null || regions is null || regions.Count == 0 ||
+            string.IsNullOrWhiteSpace(culture)) return null;
+        var leaving = regions.Select(state => new SecessionPiece
+        {
+            MapIndex = state.MapIndex, Name = state.Name, Population = state.Population,
+            Cause = SecessionCause.Nationality
+        }).ToList();
+        var report = Secede(campaign, parent, leaving, culture, regions.Sum(state => state.Population));
         if (report is not null) Recent.Add(report);
         return report;
     }
 
     private static SecessionReport Secede(Campaign campaign, Nation parent,
-        List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false)
+        List<SecessionPiece> leaving, string culture, long people, Action<Nation> shape = null, bool fight = false,
+        bool countsAsOutbreak = true)
     {
         if (!RegionalResourcePartition.ValidAccounts(parent)) return null;
         leaving = leaving.Where(piece => RevoltRecovery.DaysLeft(campaign, parent,
@@ -762,6 +794,9 @@ public static class SecessionEvents
                     FrontPlanner.ReassignAi(campaign, war);
                     DiagnosticLogs.Write("simulation", $"SECESSION_DEFECTION born={born.Tag} formations={defected}");
                 }
+                // The loyal rest do not simply stand on the new state's ground and starve: each
+                // goes home or digs in as a pocket of resistance (StrandedGarrisons).
+                StrandedGarrisons.AtRising(campaign, parent, born, provinces);
             }
         }
         if (outcome == SecessionOutcome.Accepted)
@@ -780,7 +815,7 @@ public static class SecessionEvents
             OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, born.Id, parent.Id), "let_us_go");
         OpinionSystem.Remember(campaign, CampaignDiplomacy.Get(campaign, parent.Id, born.Id), "seceded_from_us");
 
-        if (fight) CivilWarOutbreak.RecordStart(campaign);
+        if (fight && countsAsOutbreak) CivilWarOutbreak.RecordStart(campaign);
         campaign.Chronicle.Record(campaign, fight ? "civil_war" : outcome == SecessionOutcome.Contested ? "secession_contested" : "secession",
             born.Id, parent.Id, place: leaving[0].Name);
         campaign.MarkStrategicChange();

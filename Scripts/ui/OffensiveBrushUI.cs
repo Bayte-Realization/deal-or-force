@@ -33,9 +33,11 @@ public partial class DealOrForceGame
     private void MoveOffensiveStroke(GlobePick pick)
     {
         var map = _campaign.ProvinceMap;
-        var enemy = _campaign.NationById(_offensiveSource?.BorderNationId ?? -1);
-        var control = _campaign.ProvinceController ?? map?.ProvinceToNation;
         var p = pick.ProvinceId;
+        // From the whole front the stroke picks its target: whoever holds where it starts.
+        var enemy = _campaign.NationById(OffensivePlanning.TargetOf(_campaign, _offensiveSource,
+            _offensiveStroke.Count > 0 ? _offensiveStroke[0] : p));
+        var control = _campaign.ProvinceController ?? map?.ProvinceToNation;
         if (map is null || enemy is null || p <= 0 || p > map.ProvinceCount || map.IsWater(p) || control[p] != enemy.MapIndex) return;
         if (_offensiveStroke.Count == 0) _offensiveStroke.Add(p);
         else
@@ -59,6 +61,12 @@ public partial class DealOrForceGame
         System.Collections.Generic.IReadOnlyCollection<int> departure = _appendOffensivePhase
             ? OffensivePlanning.PhaseGoals(_offensiveSource, OffensivePlanning.PhaseCount(_offensiveSource) - 1).ToArray()
             : _offensiveSource.Kind == FrontLineKind.Defence ? _offensiveSource.Provinces : _offensiveSource.SourceProvinces;
+        if (!_appendOffensivePhase && _offensiveSource.AllEnemies)
+        {
+            var facing = BorderFronts.Candidates(_campaign, _offensiveSource.NationId, enemy.Id);
+            facing.IntersectWith(_offensiveSource.Provinces);
+            if (facing.Count > 0) departure = facing;
+        }
         _globe.SetOffensivePlanPreview(_offensiveStroke, departure);
         RefreshDrawingUi();
     }

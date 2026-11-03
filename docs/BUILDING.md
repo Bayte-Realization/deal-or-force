@@ -4,7 +4,7 @@
 
 For handing the game to somebody who has neither Godot nor the sources.
 
-Current game release: **EntertAlpha 0.3.0.3**. `Tools/Test-ReleaseVersion.ps1`
+Current game release: **EntertAlpha 0.5.2.2**. `Tools/Test-ReleaseVersion.ps1`
 checks the shared game/launcher/rules metadata, engine/export settings and current
 release documentation before export. `SaveSystem.GameVersion` uses `GameBuildInfo`;
 the save format and network protocol are independent of the release label.
@@ -42,6 +42,9 @@ Switches: `-Debug` builds the debug version (it has a console and detailed error
 helps when a tester catches a crash), `-NoZip` skips the archive, `-Godot <path>` if the
 engine moves. `-OutputDirectory` selects a fresh child of `build/`; existing output is
 preserved unless `-ReplaceExistingOutput` is explicitly supplied.
+`-RuntimeVerificationTimeoutSeconds` sets the exported-process deadline (600 seconds
+by default, up to 900). This includes the probe's 420-second cold-world load allowance
+and its subsequent checks; it does not skip verification.
 
 The same thing by hand, if the script does not suit for some reason:
 

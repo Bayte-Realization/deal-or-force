@@ -61,31 +61,31 @@
     "name": "Public health networks",
     "description": "Clinics, laboratories and records that talk to each other, so an outbreak is a statistic before it is a funeral.",
     "category": "society", "cost": 400, "requires": ["health_informatics"], "icon": "icon_building_hospital",
-    "effects": { "output": 0.015, "stability_weekly": 0.05 }
+    "effects": { "output": 0.015, "stability_weekly": 0.0025 }
   },
   "civic_data_trusts": {
     "name": "Civic data trusts",
     "description": "Public statistics held where the public can check them, which is the cheapest honesty a government can buy.",
     "category": "society", "cost": 420, "requires": ["public_data_reproducibility", "civilian_cyber_resilience"], "icon": "icon_laws",
-    "effects": { "tax_efficiency": 0.015, "stability_weekly": 0.04 }
+    "effects": { "tax_efficiency": 0.015, "stability_weekly": 0.002 }
   },
   "regional_university_clusters": {
     "name": "Regional university clusters",
     "description": "Universities spread to the provinces instead of hoarding the country's talent in one capital.",
     "category": "society", "cost": 450, "requires": ["science_teaching_networks"], "icon": "icon_building_university",
-    "effects": { "research_speed": 0.06, "living_weekly": 0.06 }
+    "effects": { "research_speed": 0.06, "living_weekly": 0.003 }
   },
   "social_insurance_reform": {
     "name": "Social insurance reform",
     "description": "Sickness, unemployment and old age pooled across the whole country rather than across whoever is left.",
     "category": "society", "cost": 470, "requires": ["municipal_bond_markets"], "icon": "icon_welfare",
-    "effects": { "stability_weekly": 0.08, "living_weekly": 0.08 }
+    "effects": { "stability_weekly": 0.004, "living_weekly": 0.004 }
   },
   "civic_resilience_education": {
     "name": "Civic resilience education",
     "description": "Teaching people what to do in a flood, a raid or a blackout, so the answer does not have to be improvised.",
     "category": "society", "cost": 360, "requires": ["civil_emergency_coordination"], "icon": "icon_alert_event",
-    "effects": { "stability_weekly": 0.06, "militia_readiness": 0.03 }
+    "effects": { "stability_weekly": 0.003, "militia_readiness": 0.03 }
   },
 
   // ---------------------------------------------------------------- military
@@ -161,13 +161,13 @@
     "name": "Resilient water logistics",
     "description": "Treatment, storage and distribution with enough redundancy that a drought is a ration, not a migration.",
     "category": "logistics", "cost": 410, "requires": ["modular_water_treatment"], "icon": "icon_building_watertower",
-    "effects": { "living_weekly": 0.08, "reconstruction_speed": 0.02 }
+    "effects": { "living_weekly": 0.004, "reconstruction_speed": 0.02 }
   },
   "civil_reconstruction_corps": {
     "name": "Civil reconstruction corps",
     "description": "A standing service that rebuilds bridges, clinics and power lines as soon as the guns move on.",
     "category": "logistics", "cost": 460, "requires": ["civil_military_reconstruction", "low_waste_reconstruction"], "icon": "icon_building_infrastructure",
-    "effects": { "reconstruction_speed": 0.04, "living_weekly": 0.06 }
+    "effects": { "reconstruction_speed": 0.04, "living_weekly": 0.003 }
   },
   "maritime_security_network": {
     "name": "Maritime security network",

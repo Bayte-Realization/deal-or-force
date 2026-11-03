@@ -1,0 +1,8 @@
+{
+  "Show calculation": "Показать расчёт",
+  "Hide calculation": "Скрыть расчёт",
+  "How the target is calculated": "Из чего складывается целевой уровень",
+  "Target under current conditions: {0}": "Целевой уровень при нынешних условиях: {0}",
+  "{0:+0.0;-0.0;0.0} pp": "{0:+0.0;-0.0;0.0} п. п.",
+  "Read the stability calculation without hovering. This does not change policy.": "Открыть расчёт стабильности без наведения мыши. Это не меняет политику."
+}

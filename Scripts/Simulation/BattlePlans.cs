@@ -78,8 +78,27 @@ public sealed class DrawnFrontLine
     // Persistent border intent; Provinces below is only its current deployment cache.
     public int BorderNationId = -1;
     public bool WholeBorder;
+
+    /// <summary>
+    /// The whole front: one line along every stretch of land where this country touches ground
+    /// held by anybody it is at war with - every war, every co-belligerent, an enemy's allies
+    /// and the ground either side has occupied. BorderNationId stays -1 on such a line.
+    ///
+    /// A border front used to be keyed on one foreign country, so a player at war with an
+    /// alliance had to draw a separate little front against each member that shared a border,
+    /// and a member joining the war later opened a stretch of border held by nobody. This line
+    /// follows the war instead of a country: its provinces are worked out again whenever the
+    /// map or the list of enemies changes, so it grows when somebody joins against us, shrinks
+    /// when somebody makes peace, and stays on the books (empty) through a peace in case a
+    /// new war opens. The divisions on it are spread by the same posts any drawn line uses.
+    /// </summary>
+    public bool AllEnemies;
+
     public float StartLatitude, StartLongitude, EndLatitude, EndLongitude;
     internal int BorderRevision = int.MinValue;
+
+    /// <summary>Who the whole front was last worked out against (BorderFronts.EnemyStamp). Not saved.</summary>
+    internal long EnemyStamp = long.MinValue;
 
     /// <summary>How freely the planner may re-sort the formations along this line.</summary>
     public PlanCohesion Cohesion = PlanCohesion.Balanced;
@@ -426,6 +445,15 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
     public bool AppendOffensivePhase { get; init; }
     public int EditOffensivePhase { get; init; } = -1;
     public bool WholeBorder { get; init; }
+
+    /// <summary>
+    /// Put the divisions on the whole front against every enemy (DrawnFrontLine.AllEnemies)
+    /// instead of a border with one country. Provinces may be left empty: the line works its
+    /// own provinces out. A country keeps one such line; pressing it again for another army
+    /// group adds that group's divisions to the same front rather than drawing a second one.
+    /// </summary>
+    public bool AllEnemies { get; init; }
+
     public float StartLatitude { get; init; }
     public float StartLongitude { get; init; }
     public float EndLatitude { get; init; }
@@ -435,7 +463,13 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
-        if (nation is null || Provinces.Count == 0 || ArmyIds.Count == 0) return;
+        if (nation is null || ArmyIds.Count == 0) return;
+        if (AllEnemies && Kind == FrontLineKind.Defence && EditLineId < 0)
+        {
+            ApplyWholeFront(campaign);
+            return;
+        }
+        if (Provinces.Count == 0) return;
         var topology = campaign.ProvinceMap;
 
         var existing = EditLineId >= 0 ? campaign.FrontLines.Find(x => x.Id == EditLineId && x.NationId == IssuerId) : null;
@@ -551,6 +585,48 @@ public sealed class DrawFrontLineCommand : ICampaignCommand
         };
         foreach (var id in line.ArmyIds)
             new SetArmyOrderCommand { IssuerId = IssuerId, ArmyId = id, Order = order }.Apply(campaign);
+    }
+
+    /// <summary>
+    /// The whole front against every enemy, as one line.
+    ///
+    /// A country has one: the first press of "Whole front" draws it, and every later press -
+    /// for another army group, or for divisions raised since - adds to its roster, so two
+    /// army groups put on the whole front share one line and are spread along all of it
+    /// together instead of each covering the full length on its own. A country with no enemy
+    /// across a land border has no whole front to draw, and the order is refused without
+    /// touching anybody's existing plan.
+    /// </summary>
+    private void ApplyWholeFront(Campaign campaign)
+    {
+        var line = campaign.FrontLines.Find(candidate => candidate.NationId == IssuerId &&
+            candidate.AllEnemies && candidate.Kind == FrontLineKind.Defence);
+        var fresh = line is null;
+        line ??= new DrawnFrontLine { Id = -1, NationId = IssuerId, Kind = FrontLineKind.Defence, AllEnemies = true };
+        BorderFronts.Refresh(campaign, line);
+        if (line.Provinces.Count == 0) return;
+        var joining = new List<Army>();
+        foreach (var id in ArmyIds.Distinct())
+        {
+            var army = campaign.Armies.Find(candidate => candidate.Id == id);
+            if (army is null || army.NationId != IssuerId) continue;
+            joining.Add(army);
+        }
+        if (joining.Count == 0) return;
+        if (fresh) line.Id = campaign.NextFrontLineId++;
+        foreach (var army in joining)
+        {
+            if (army.FrontLineId == line.Id) continue;
+            Detach(campaign, army);
+            army.FrontLineId = line.Id;
+            line.ArmyIds.Add(army.Id);
+        }
+        // Detaching a division from some other line can never remove this one - it is not
+        // empty - but a line that is not yet on the books has to be put there.
+        if (!campaign.FrontLines.Contains(line)) campaign.FrontLines.Add(line);
+        line.PostsDay = int.MinValue;
+        foreach (var army in joining)
+            new SetArmyOrderCommand { IssuerId = IssuerId, ArmyId = army.Id, Order = ArmyOrder.DefendFront }.Apply(campaign);
     }
 
     internal static void Detach(Campaign campaign, Army army)

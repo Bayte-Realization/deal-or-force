@@ -32,6 +32,11 @@ public partial class DealOrForceGame
     private Label _fleetFeedback;
     private double _fleetSinceRefresh;
 
+    /// <summary>Every fleet a box selected, the described one first. One fleet is a list of one.</summary>
+    private readonly System.Collections.Generic.List<Fleet> _selectedFleets = new();
+    private Button _fleetMerge;
+    private Button _fleetSplit;
+
     /// <summary>How many hulls one press of the yard button lays down.</summary>
     private const int HullsPerOrder = 5;
     private readonly System.Collections.Generic.Dictionary<FleetMission, Button> _fleetMissionButtons = new();
@@ -71,10 +76,78 @@ public partial class DealOrForceGame
         _globe.SelectSupportFormation(-1);
         ClearArmySelectionAndClose();
         _selectedFleet = fleet;
+        _selectedFleets.Clear();
+        _selectedFleets.Add(fleet);
         _globe.SelectFleet(fleet.Id);
         SetFleetPanelVisible(true);
         ShowSelectedFleet();
         SetFleetFeedback(DefaultFleetHint(fleet));
+    }
+
+    /// <summary>A box drawn over the player's fleets: all of them take the next order.</summary>
+    private void OnFleetsBoxPicked(System.Collections.Generic.IReadOnlyList<Fleet> fleets)
+    {
+        if (!_campaign.FeatureEnabled("navy") || !_hudLayer.Visible || fleets is null || fleets.Count == 0) return;
+        if (fleets.Count == 1) { OnFleetPicked(fleets[0]); return; }
+        if (_supportLayer is { Visible: true }) CloseSupportScreen();
+        _globe.SelectSupportFormation(-1);
+        ClearArmySelectionAndClose();
+        _selectedFleets.Clear();
+        _selectedFleets.AddRange(fleets.OrderByDescending(fleet => fleet.Hulls).ThenBy(fleet => fleet.Id));
+        _selectedFleet = _selectedFleets[0];
+        _globe.SelectFleets(_selectedFleets.Select(fleet => fleet.Id));
+        SetFleetPanelVisible(true);
+        ShowSelectedFleet();
+        SetFleetFeedback(Simulation.Loc.Format(
+            "{0:N0} fleets selected, {1:N0} hulls. Right-click the map to send them all; join them where they lie together.",
+            _selectedFleets.Count, _selectedFleets.Sum(fleet => fleet.Hulls)));
+    }
+
+    /// <summary>The selected fleets that still exist and are the player's to order.</summary>
+    private System.Collections.Generic.List<Fleet> OwnSelectedFleets()
+    {
+        _selectedFleets.RemoveAll(fleet => !_campaign.Fleets.Contains(fleet));
+        if (_selectedFleet is not null && !_selectedFleets.Contains(_selectedFleet)) _selectedFleets.Insert(0, _selectedFleet);
+        return _selectedFleets.Where(fleet => _campaign.Player is not null && fleet.NationId == _campaign.Player.Id).ToList();
+    }
+
+    private void MergeSelectedFleets()
+    {
+        var fleets = OwnSelectedFleets();
+        if (fleets.Count < 2 || _campaign.Player is null)
+        {
+            SetFleetFeedback(Tr("Select at least two of your fleets with a box to join them."));
+            return;
+        }
+        var merge = new MergeFleetsCommand { IssuerId = _campaign.Player.Id, FleetIds = fleets.Select(fleet => fleet.Id).ToArray() };
+        _campaign.Commands.Enqueue(merge);
+        _campaign.Commands.ApplyAll(_campaign);
+        var left = OwnSelectedFleets();
+        _selectedFleet = left.OrderByDescending(fleet => fleet.Hulls).FirstOrDefault();
+        if (_selectedFleet is null) { CloseFleetPanel(); return; }
+        _globe.SelectFleets(left.Select(fleet => fleet.Id));
+        ShowSelectedFleet();
+        SetFleetFeedback(merge.Merged > 0
+            ? Simulation.Loc.Format(Simulation.Plural.Key("{0:N0} fleet joined the line: {1:N0} hulls under one flag.", merge.Merged),
+                merge.Merged, _selectedFleet.Hulls)
+            : merge.Refusal);
+    }
+
+    private void SplitSelectedFleet()
+    {
+        if (_selectedFleet is null || _campaign.Player is null || _selectedFleet.NationId != _campaign.Player.Id) return;
+        var split = new SplitFleetCommand { IssuerId = _campaign.Player.Id, FleetId = _selectedFleet.Id };
+        _campaign.Commands.Enqueue(split);
+        _campaign.Commands.ApplyAll(_campaign);
+        if (split.NewFleetId < 0) { SetFleetFeedback(split.Refusal); return; }
+        var detached = _campaign.Fleets.Find(fleet => fleet.Id == split.NewFleetId);
+        _selectedFleets.Clear();
+        _selectedFleets.Add(_selectedFleet);
+        if (detached is not null) _selectedFleets.Add(detached);
+        _globe.SelectFleets(_selectedFleets.Select(fleet => fleet.Id));
+        ShowSelectedFleet();
+        SetFleetFeedback(Simulation.Loc.Format("Split in two: {0} ({1:N0} hulls) and {2} ({3:N0} hulls). Both are selected.",
+            Loc.Get(_selectedFleet.Name), _selectedFleet.Hulls, detached is null ? "" : Loc.Get(detached.Name), detached?.Hulls ?? 0));
     }
 
     private string DefaultFleetHint(Fleet fleet)
@@ -120,6 +193,7 @@ public partial class DealOrForceGame
     private void CloseFleetPanel()
     {
         _selectedFleet = null;
+        _selectedFleets.Clear();
         _globe.SelectFleet(-1);
         _globe.ShowFleetRoute(null);
         SetFleetPanelVisible(false);
@@ -138,7 +212,9 @@ public partial class DealOrForceGame
         var owner = _campaign.NationById(fleet.NationId);
         var mine = owner is not null && _campaign.Player is not null && owner.Id == _campaign.Player.Id;
 
-        _fleetTitle.Text = Loc.Get(fleet.Name);
+        _fleetTitle.Text = _selectedFleets.Count > 1
+            ? Simulation.Loc.Format("{0} and {1:N0} more", Loc.Get(fleet.Name), _selectedFleets.Count - 1)
+            : Loc.Get(fleet.Name);
         _fleetSubtitle.Text = Simulation.Loc.Format("{0} · {1:N0} hulls · {2}",
                                   owner?.Tag ?? "?", fleet.Hulls, MissionName(fleet.Mission)) +
                               (fleet.IsMoving ? Tr(" · under way") : "") +
@@ -217,6 +293,11 @@ public partial class DealOrForceGame
             button.Disabled = !mine;
             StyleButton(button, mine && fleet.Mission == mission);
         }
+        if (IsInstanceValid(_fleetMerge))
+        {
+            _fleetMerge.Disabled = !mine || _selectedFleets.Count(candidate => candidate.NationId == fleet.NationId) < 2;
+            _fleetSplit.Disabled = !mine || fleet.Hulls < 2 || fleet.InAction;
+        }
         if (IsInstanceValid(_fleetAdmiralty))
         {
             _fleetAdmiralty.Visible = mine;
@@ -270,12 +351,13 @@ public partial class DealOrForceGame
     {
         if (_selectedFleet is null || _campaign.Player is null) return;
         if (_selectedFleet.NationId != _campaign.Player.Id) return;
-        _campaign.Commands.Enqueue(new SetFleetOrderCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            FleetId = _selectedFleet.Id,
-            Mission = mission
-        });
+        foreach (var fleet in OwnSelectedFleets())
+            _campaign.Commands.Enqueue(new SetFleetOrderCommand
+            {
+                IssuerId = _campaign.Player.Id,
+                FleetId = fleet.Id,
+                Mission = mission
+            });
         _campaign.Commands.ApplyAll(_campaign);
         ShowSelectedFleet();
         SetFleetFeedback(mission == FleetMission.Anchored
@@ -328,6 +410,21 @@ public partial class DealOrForceGame
             Longitude = longitude
         };
         _campaign.Commands.Enqueue(order);
+        // The rest of a box selection sails with it, each keeping what it was doing - an
+        // empty fleet lying in port puts to sea on patrol, as the described one does.
+        foreach (var other in OwnSelectedFleets())
+        {
+            if (ReferenceEquals(other, _selectedFleet) || other.Carried.Count > 0) continue;
+            _campaign.Commands.Enqueue(new SetFleetOrderCommand
+            {
+                IssuerId = _campaign.Player.Id,
+                FleetId = other.Id,
+                Mission = other.Mission is FleetMission.Anchored or FleetMission.Invasion ? FleetMission.Patrol : other.Mission,
+                HasDestination = true,
+                Latitude = latitude,
+                Longitude = longitude
+            });
+        }
         _campaign.Commands.ApplyAll(_campaign);
         ShowSelectedFleet();
         if (order.Refusal.Length > 0) { SetFleetFeedback(order.Refusal); return true; }
@@ -466,6 +563,21 @@ public partial class DealOrForceGame
         missions.AddChild(bottom);
         AddMissionButton(bottom, FleetMission.Blockade, 148);
         AddMissionButton(bottom, FleetMission.Raid, 148);
+
+        // Concentrate and detach: a box over several fleets joins them where they lie
+        // together; one fleet splits in half, both halves selected (Ctrl+K, Ctrl+X).
+        rows.AddChild(Title("FORMATION", 11, Ui.Colour("text.caption")));
+        var formation = new HBoxContainer();
+        formation.AddThemeConstantOverride("separation", 4);
+        rows.AddChild(formation);
+        _fleetMerge = ActionButton("Join fleets", MergeSelectedFleets, 148, 30);
+        _fleetMerge.TooltipText = Ui.Tip(Tr("Join fleets (Ctrl+K)\nFold every selected fleet lying in the same port or within a day's sail into the largest. " +
+                                 "Condition is averaged over the hulls. Draw a box over several fleets to select them."));
+        formation.AddChild(_fleetMerge);
+        _fleetSplit = ActionButton("Split in half", SplitSelectedFleet, 148, 30);
+        _fleetSplit.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X)\nDetach half the hulls as a new squadron in the same place, on the same mission. " +
+                                 "Troops aboard and hulls on the slipways stay with this fleet."));
+        formation.AddChild(_fleetSplit);
 
         rows.AddChild(Title("TROOPS", 11, Ui.Colour("text.caption")));
         var cargo = new HBoxContainer();

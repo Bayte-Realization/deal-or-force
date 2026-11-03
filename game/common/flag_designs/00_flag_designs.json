@@ -1,0 +1,36 @@
+// Flags written as data: a background pattern, exact colours and emblems, drawn by the game at
+// whatever size it needs (Scripts/Simulation/FlagDesign.cs).
+//
+// The base game's real flags are pictures in gfx/flags and stay that way. This folder is for
+// flags somebody designs: a mod's new countries, a regime variant nobody painted, a player's own
+// banner from the in-game flag editor (which saves into the Editor workspace mod, never here).
+//
+// A design's id is a sprite name - flag_<tag>, flag_<tag>_<ideology>, flag_<tag>_<government> -
+// so it joins the flag search in common/flags exactly as a PNG of that name would, and a design
+// outranks a picture of the same name. Every field is explained, with working examples, in
+// mods/_templates/flag_designs/common/flag_designs/50_examples.json.
+{
+  "flag_designs": {
+    // Factions of the 2024 wars that fly no widely known flag of their own: drawn here rather than
+    // left to borrow the state they fight, whose flag on their counters told the map a lie.
+    // ADF (Islamic State Central Africa Province): the black banner, white seal.
+    "flag_adf": {
+      "ratio": 1.5,
+      "background": { "pattern": "solid", "colours": ["#111111"] },
+      "emblems": [ { "shape": "disc", "colour": "#f2f2f2", "x": 0.5, "y": 0.56, "size": 0.42 },
+                   { "shape": "ring", "colour": "#111111", "x": 0.5, "y": 0.56, "size": 0.30 } ]
+    },
+    // CODECO: the Lendu farmers' green and the cooperative's white.
+    "flag_cdc": {
+      "ratio": 1.5,
+      "background": { "pattern": "horizontal", "colours": ["#3f6b2a", "#f4f1e6", "#3f6b2a"], "weights": [2, 1, 2] },
+      "emblems": [ { "shape": "star", "colour": "#c8102e", "x": 0.5, "y": 0.5, "size": 0.34 } ]
+    },
+    // Twirwaneho ("let us defend ourselves"): the high plateau's sky over the herds' pasture.
+    "flag_twr": {
+      "ratio": 1.5,
+      "background": { "pattern": "hoist_triangle", "colours": ["#2f5f9e", "#f5f5f5", "#4c8a3c"], "accent": "#b8892e" },
+      "emblems": [ { "shape": "star", "colour": "#f5f5f5", "x": 0.14, "y": 0.5, "size": 0.22 } ]
+    }
+  }
+}

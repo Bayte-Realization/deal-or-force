@@ -69,8 +69,15 @@ static class DiplomaticMissionTests
         c.Wars.Add(new StrategicWar { Id=1,AttackerId=n.Id,DefenderId=other.Id }); Days(c,71,80);
         fp=CampaignFingerprint.Of(c);
         Check(DiplomaticOutreach.Of(r,n.Id) is null && !Start(c,n,other).Changed && CampaignFingerprint.Of(c)==fp,"war closes and blocks a goodwill mission atomically");
-        var(c2,n2,o2)=World(); var relation=CampaignDiplomacy.Get(c2,n2.Id,o2.Id); relation.EmbargoByB=true;
-        Check(!Start(c2,n2,o2).Changed,"the recipient's embargo cannot be bypassed with political credit"); relation.EmbargoByB=false;
+        var(c2,n2,o2)=World(); var relation=CampaignDiplomacy.Get(c2,n2.Id,o2.Id);
+        if(relation.A==n2.Id) relation.EmbargoByA=true; else relation.EmbargoByB=true;
+        Check(!Start(c2,n2,o2).Changed,"our own embargo cannot be bypassed with political credit");
+        relation.EmbargoByA=relation.EmbargoByB=false;
+        // Theirs no longer closes the road: a mission is how a government talks its way out of
+        // a sanction (OpinionWitnesses, the player's complaint that nothing mended a relation).
+        if(relation.A==o2.Id) relation.EmbargoByA=true; else relation.EmbargoByB=true;
+        Check(DiplomaticOutreach.Refusal(c2,n2.Id,o2.Id).Length==0,"the recipient's embargo does not close the patient road back");
+        relation.EmbargoByA=relation.EmbargoByB=false;
         Start(c2,n2,o2); Days(c2,1,175);
         var grown=OpinionSystem.Weight(c2,relation.Reasons.Single(x=>x.Id=="diplomatic_outreach"));
         Check(grown>10 && grown<=c2.Defines.DiplomaticMissionOpinionCap,"long engagement remains inside one bounded opinion modifier");

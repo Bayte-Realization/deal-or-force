@@ -6,7 +6,13 @@ using System.Text.Json;
 
 namespace DealOrForce.Modding;
 
-// Shared source between the game and the standalone launcher. No Godot/UI dependency.
+/// <summary>
+/// The player's list of which mods and content packs are on, and the mod order.
+/// Shared by the game and the standalone launcher, with no Godot type in this file,
+/// so the launcher can show the same order the loader will use.
+/// Schema version 1. A missing file means every package keeps its manifest default.
+/// This file does not store campaign state and is not part of the save or the fingerprint.
+/// </summary>
 public sealed class ContentSelection
 {
     public int SchemaVersion { get; set; } = 1;
@@ -32,7 +38,8 @@ public sealed class ContentSelection
         return value;
     }
 
-    // Never modify descriptors or entitlements. Atomic replacement preserves a last-good copy.
+    // Writes this profile only. Never rewrites a mod manifest, a dlc.json, or entitlements.
+    // Atomic replacement keeps the previous file as a .bak if the replace fails halfway.
     public void Save(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -50,9 +57,11 @@ public sealed class ContentSelection
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
+    /// <summary>Launcher choice when the profile names this id; otherwise the manifest's own enabled flag.</summary>
     public bool IsEnabled(string id, bool dlc, bool defaultValue = true) =>
         (dlc ? Dlc : Mods).TryGetValue(id, out var enabled) ? enabled : defaultValue;
 
+    /// <summary>Index in <see cref="ModOrder"/>, or the manifest load_order when the player has not arranged this id.</summary>
     public int Order(string id, int fallback)
     {
         var index = ModOrder.FindIndex(item => string.Equals(item, id, StringComparison.OrdinalIgnoreCase));
@@ -62,6 +71,11 @@ public sealed class ContentSelection
 
 public sealed record ContentRequirement(string Id, bool Enabled, IReadOnlyList<string> Dependencies);
 
+/// <summary>
+/// One dependency walk for the launcher preview and the runtime loader.
+/// A cycle, a missing id, or a dependency the player turned off drops the package and records why.
+/// The returned list is the order later packages overlay earlier ones. Do not sort it again by file name.
+/// </summary>
 public static class ContentDependencies
 {
     // DFS rejects cycles and propagates missing/disabled dependencies through every level.

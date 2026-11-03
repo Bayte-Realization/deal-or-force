@@ -57,7 +57,14 @@ public static class ArmyVocabulary
             return Loc.Get("Interned on neutral ground; awaiting a safe return home.");
         if (campaign is not null && army.ReadyDay > campaign.ElapsedDays)
             return Loc.Format("Regrouping: {0} day(s) before combat readiness.", army.ReadyDay - campaign.ElapsedDays);
-        if (army.CutOff) return Loc.Get("Cut off from supply; waiting for the pocket to be relieved.");
+        // In a pocket: how long the stores last and how far relief is - the two numbers a player
+        // needs to choose between holding and breaking out (StrandedGarrisons.PocketLine).
+        if (army.CutOff)
+            return StrandedGarrisons.PocketLine(campaign, army) is { Length: > 0 } pocket
+                ? pocket
+                : Loc.Get("Cut off from supply; waiting for the pocket to be relieved.");
+        if (army.LentById >= 0 && campaign?.NationById(army.LentById) is { } sponsor)
+            return Loc.Format("Volunteers from {0}, fighting under this flag until the war ends.", sponsor.DisplayName);
         if (army.DirectOrder)
             return army.Route.Count > 0
                 ? Loc.Format("Following a direct march: {0:N0} province(s) to go.", army.Route.Count)

@@ -1,0 +1,14 @@
+# The same format in YAML. Every key means what it means in the JSON file beside this one.
+flag_designs:
+  flag_xmp_military_junta:
+    ratio: 1.5
+    background:
+      pattern: saltire
+      colours: ["#002868", "#ffffff", "#ce1126"]
+    emblems:
+      - shape: eight_point_star
+        colour: "#fcd116"
+        x: 0.5
+        y: 0.5
+        size: 0.3
+        rotation: 22.5

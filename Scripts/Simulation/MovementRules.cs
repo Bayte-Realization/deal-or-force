@@ -4,6 +4,42 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Movements: what a rebellion, a resistance, a separatist drive or a civil-rights
+/// campaign does, week by week — from leaflets to militias to a state of its own.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how movements work, from calm to armed:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// A MOVEMENT is what a people becomes when it organises against its government:
+/// Hamas, the SNP, the Houthi, Scottish independence. It lives in a region, with
+/// supporters, cadres, and a "heat" (how much the host state is cracking down).
+///
+/// THE LADDER (what a movement can do, in escalating order):
+///
+///   Leaflets     — support grows by itself if the region is angry.
+///   Campaign     — a push for support: costs money and heat, raises support.
+///   Fundraise    — donations from supporters, in money.
+///   Recruit      — converts supporters into cadres (the fighters and organisers).
+///   Recognition  — other countries recognise it as legitimate (opens diplomacy).
+///   Uprising     — the armed option: needs support ≥ 40%, ≥ 3000 cadres, costs money.
+///                 If it succeeds: the region's ground, militias, and a war.
+///   Call to arms — a held region raises more militia from its own supporters.
+///   Infiltrate   — sends fighters into a region from outside.
+///
+/// WHAT MOVES SUPPORT: the region's grievances (radicalism, poverty, discrimination,
+/// kin across the border), the movement's campaigns, the state's response. Support
+/// drifts toward what the grievances make of it — a quiet region stays quiet.
+///
+/// WHAT THE STATE CAN DO: crack down (raises heat, which can expel the headquarters),
+/// list it as terrorist (cuts donations), or address the grievance (support falls).
+///
+/// WHAT A MOD ADDS: a movement in `game/common/movements/*.json` — who, where,
+/// what it wants, its starting supporters and cadres, and optional traits that
+/// bend these rules (non-violence, foreign patron, religious base).
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>What one supporter gives in a week, in billions (5e-10 is fifty cents).</summary>
@@ -1080,13 +1116,13 @@ public static class MovementRules
         // The garrison changes flags once for the whole transfer, not once per region
         // (DefectGarrison): the share must be a share of the army that stood on the ground
         // given up, not a slice of what the previous region left behind.
+        var ground = new HashSet<int>();
         if (owner is not null && owner.Id != nation.Id)
         {
             var topology = campaign.ProvinceMap;
             var regions = new HashSet<ushort>();
             foreach (var region in gained)
                 if (region is not null) regions.Add((ushort)region.MapIndex);
-            var ground = new HashSet<int>();
             if (topology is not null)
                 for (var province = 1; province <= topology.ProvinceCount; province++)
                     if (regions.Contains(topology.ProvinceToState[province])) ground.Add(province);
@@ -1134,8 +1170,9 @@ public static class MovementRules
             if (owner.IsHuman && !campaign.ObserverMode)
                 SecessionResponse.Ask(campaign, owner, nation,
                     string.Join(", ", gained.Take(4).Select(r => r.DisplayName)), gained.Sum(r => r.Population), owner.Population + nation.Population);
-            else
-                CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false);
+            else if (CampaignDiplomacy.DeclareWar(campaign, owner.Id, nation.Id, seed.MapIndex, "uprising", onOwnInitiative: false) is not null)
+                // The garrison that did not go over goes home or holds (StrandedGarrisons).
+                StrandedGarrisons.AtRising(campaign, owner, nation, ground);
         }
         // Remember the newly liberated regions as the nation's homeland so restorations and title checks recognize them.
         if (!campaign.Homelands.TryGetValue(nation.Id, out var homes))

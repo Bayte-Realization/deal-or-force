@@ -2,7 +2,7 @@
 
 The current shipped set is authored as simple geometry in `minimal-icons.json`
 and exported to **individual transparent 96 × 96 PNGs**. Their authored palette
-is dark gold `#b48732` for **all 39 goods and resources**, and `#e7bd69` for
+is dark gold `#b48732` for **all 63 goods and resources**, and `#e7bd69` for
 commands and the supply mark, including when opened outside the game. No gradients, metallic
 highlights, dark outlines, text, or decorative frames are baked into these icons.
 Commodity icons combine slender contours and selective solid faces in one shade.
@@ -52,7 +52,7 @@ clears inherited `source_colour`: legacy white-mask mods still work. A gold mod 
 can opt into compensation with a declaration such as
 `{"icon_good_steel":{"source_colour":"#e7bd69"}}` in its `gfx/` JSON.
 An empty reference means a white mask. Explicit references must be `#RRGGBB`
-with nonzero channels. The current editable set contains 16 commands, 34 goods and one supply mark.
+with nonzero channels. The current editable set contains 16 commands, 63 goods and one supply mark (80 PNGs).
 The authoring script accepts `-GoodsColour` and `-Colour` independently; when changing
 the goods palette, also override `icon.commodity` in a mod's `interface/` file.
 

@@ -52,7 +52,7 @@ public static class AiFiscalPolicy
         {
             if (project.NationId != n.Id) continue;
             if (!float.IsFinite(project.Cost) || !float.IsFinite(project.Paid)) return Invalid();
-            capital += PaymentsWithin(n, project.Cost, project.Paid, project.DurationDays, weeks);
+            capital += PaymentsWithin(c, n, project.Cost, project.Paid, project.DurationDays, weeks);
         }
         var promised = 0d;
         if (c.FeatureEnabled("deals")) foreach (var paper in c.DealOffers)
@@ -84,13 +84,16 @@ public static class AiFiscalPolicy
         var speed = NationalModifiers.Factor(n, "construction_speed");
         if (!float.IsFinite(cost) || cost < 0 || !float.IsFinite(speed) || speed <= 0) return false;
         var days = Math.Max(1, (int)MathF.Round(definition.Days / speed));
-        var payment = PaymentsWithin(n, cost, 0, days, Math.Clamp(c.Defines.AiFiscalReserveWeeks, 0, 104));
+        var payment = PaymentsWithin(c, n, cost, 0, days, Math.Clamp(c.Defines.AiFiscalReserveWeeks, 0, 104));
         return assessment.DiscretionaryCash >= Math.Max(Math.Min(.05d, cost), payment);
     }
 
-    private static double PaymentsWithin(Nation n, float cost, float paid, int durationDays, int weeks) =>
+    /// <summary>What a site will draw from the treasury within the window: a day's share of its
+    /// price at the country's construction pace (ConstructionCost.Pace), the rate ConstructionSystem
+    /// pays it at, never more than is still owed.</summary>
+    private static double PaymentsWithin(Campaign c, Nation n, float cost, float paid, int durationDays, int weeks) =>
         Math.Min(Math.Max(0d, (double)cost - paid),
-            Math.Max(0d, cost) / Math.Max(1, durationDays) * Math.Max(.25d, n.ConstructionCapacity) * (weeks * 7));
+            Math.Max(0d, cost) / Math.Max(1, durationDays) * ConstructionCost.Pace(c, n) * (weeks * 7));
 
     private static AiFiscalAssessment Invalid() => new(AiFiscalReason.InvalidAccounts, 0, 0, 0, 0, 0, 0);
 }

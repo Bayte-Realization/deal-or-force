@@ -4,9 +4,21 @@ using System.Linq;
 
 namespace DealOrForce.Modding;
 
-/// <summary>New compiled-code mods live in corecode. Old explicit assembly paths remain readable.</summary>
+/// <summary>
+/// Where a compiled mod's assembly is allowed to live.
+/// New mods set <c>corecode_assembly</c> to a path under <c>corecode/</c> inside the package.
+/// An older mod that only set <c>csharp_assembly</c> is still loaded, from anywhere inside
+/// the package except a rooted path or <c>..</c>. Both must name a <c>.dll</c>.
+/// F# mods use the same field; <see cref="ManagedModLoadContext"/> then loads <c>FSharp.Core</c>
+/// beside the game assembly so <see cref="IGlobalityMod"/> stays one type.
+/// A path outside the package is refused. The loader does not search the game's own bin folder.
+/// </summary>
 public static class ModCodePaths
 {
+    /// <summary>
+    /// Returns the relative dll path, or empty when the manifest names no assembly.
+    /// Throws <see cref="InvalidDataException"/> when the path escapes the package or is not a dll.
+    /// </summary>
     public static string AssemblyPath(string corecode, string legacy)
     {
         var modern = !string.IsNullOrWhiteSpace(corecode);

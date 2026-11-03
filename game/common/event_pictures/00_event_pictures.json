@@ -113,6 +113,21 @@
     "olympic_bid": "celebration",
     "museum_disputed_artefact": "diplomacy",
     "port_outbreak": "epidemic",
-    "currency_raid": "finance"
+        "currency_raid": "finance",
+
+    "loitering_munitions_maturity_2027": "air_raid",
+    "counter_uas_wall_2028": "battlefield",
+    "rare_earth_squeeze_2029": "industry",
+    "orbital_broadband_2030": "digital",
+    "solid_state_batteries_2031": "laboratory",
+    "demographic_winter_2033": "city",
+    "ai_governance_referendum_2034": "digital",
+    "arctic_routes_2036": "sea_lanes",
+    "lunar_industrialisation_2039": "laboratory",
+    "grey_fleet_decarbonisation_2042": "naval",
+    "warning_satellite_scare_2032": "nuclear_brink",
+    "the_black_suitcase_2035": "nuclear_brink",
+    "second_caribbean_moment_2038": "nuclear_brink",
+    "red_line_treaty_2041": "diplomacy"
   }
 }

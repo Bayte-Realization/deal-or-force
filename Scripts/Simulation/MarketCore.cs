@@ -69,9 +69,33 @@ public sealed class CommodityDefinition
     public float EssentialWeight { get; set; }
     public string Description { get; set; }
 
+    /// <summary>
+    /// How much being cut off from this good is worth to whoever sells it (CommodityLeverage):
+    /// none, a strategic good - grain, fuel, potash, tungsten, the things a country can be
+    /// squeezed with - or a high-technology one, which counts twice, because what is made in
+    /// three places on Earth cannot be bought from a fourth. Written in the good's own file
+    /// (`"leverage": "strategic"` or `"high_tech"`) rather than in a compiled list, so the
+    /// semiconductor that a mod adds is a lever the moment it is declared.
+    /// </summary>
+    public CommodityLeverageTier Leverage { get; set; }
+
+    /// <summary>
+    /// Whether the world price follows the trade in this good rather than the whole harvest
+    /// (`"world_price": "traded"` in its file). Most of the world's grain is eaten where it
+    /// grows; what the price answers to is the part that crosses a border - how much the
+    /// importers want against how much the exporters can spare. Priced on the whole harvest,
+    /// losing the Black Sea's exports moved world output by a few per cent and the price by as
+    /// much, while the countries that live on those exports went without. Off for every good
+    /// that does not ask for it, so nothing else is priced differently.
+    /// </summary>
+    public bool TradedWorldPrice { get; set; }
+
     public CommodityDefinition(string name, string icon, float basePrice, float essentialWeight, string description) =>
         (Name, Icon, BasePrice, EssentialWeight, Description) = (name, icon, basePrice, essentialWeight, description);
 }
+
+/// <summary>What a good is to the country that cannot make it (CommodityDefinition.Leverage).</summary>
+public enum CommodityLeverageTier { None = 0, Strategic = 1, HighTech = 2 }
 
 public sealed partial class Defines
 {
@@ -175,7 +199,10 @@ public static class CommodityCatalog
         foreach (var entry in Defaults)
         {
             Definitions[entry.Key] = new CommodityDefinition(entry.Value.Name, entry.Value.Icon,
-                entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description);
+                entry.Value.BasePrice, entry.Value.EssentialWeight, entry.Value.Description)
+            {
+                Leverage = DefaultLeverage(entry.Key)
+            };
             Register(entry.Key, entry.Key.ToString());
         }
         foreach (var document in GameDataLoader.DataDocuments("common", "goods"))
@@ -194,8 +221,59 @@ public static class CommodityCatalog
                         entry.Value.TryGetProperty("base_price", out var price) && price.ValueKind == JsonValueKind.Number && price.TryGetSingle(out var basePrice) ? basePrice : null,
                         entry.Value.TryGetProperty("essential_weight", out var weight) && weight.ValueKind == JsonValueKind.Number && weight.TryGetSingle(out var essential) ? essential : null,
                         description.ValueKind == JsonValueKind.String ? description.GetString() : null);
+                    ReadLeverage(entry.Name, entry.Value);
+                    ReadWorldPrice(entry.Name, entry.Value);
                 }
             }
+    }
+
+    /// <summary>
+    /// The levers the first twenty goods always were, before the tier was data: rare earths,
+    /// electronics, machinery and uranium are high technology; chemicals, oil, gas and arms are
+    /// strategic. A file can change any of them.
+    /// </summary>
+    private static CommodityLeverageTier DefaultLeverage(Commodity commodity) => commodity switch
+    {
+        Commodity.RareEarths or Commodity.Electronics or Commodity.Machinery or Commodity.Uranium => CommodityLeverageTier.HighTech,
+        Commodity.Chemicals or Commodity.Oil or Commodity.NaturalGas or Commodity.Arms => CommodityLeverageTier.Strategic,
+        _ => CommodityLeverageTier.None
+    };
+
+    /// <summary>
+    /// A good's `"world_price"` field, if it has one: "traded" prices it on what crosses borders
+    /// (CommodityDefinition.TradedWorldPrice), "harvest" on the whole of world output, as every
+    /// good was. Read by the base loader and by a mod's alike. Returns whether it was set.
+    /// </summary>
+    public static bool ReadWorldPrice(string id, JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("world_price", out var pricing) ||
+            pricing.ValueKind != JsonValueKind.String || !TryParse(id, out var commodity) ||
+            !Definitions.TryGetValue(commodity, out var definition)) return false;
+        switch (pricing.GetString()?.Trim().ToLowerInvariant())
+        {
+            case "traded": definition.TradedWorldPrice = true; return true;
+            case "harvest": definition.TradedWorldPrice = false; return true;
+            default: return false;
+        }
+    }
+
+    /// <summary>
+    /// A good's `"leverage"` field, if it has one: "none", "strategic" or "high_tech". Read by
+    /// the base game's loader and by a mod's (ModLoader.ApplyGoods) alike; anything else is
+    /// ignored and the good keeps the tier it had. Returns whether a tier was set.
+    /// </summary>
+    public static bool ReadLeverage(string id, JsonElement value)
+    {
+        if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty("leverage", out var leverage) ||
+            leverage.ValueKind != JsonValueKind.String || !TryParse(id, out var commodity) ||
+            !Definitions.TryGetValue(commodity, out var definition)) return false;
+        switch (Squash(leverage.GetString()).ToLowerInvariant())
+        {
+            case "none": definition.Leverage = CommodityLeverageTier.None; return true;
+            case "strategic": definition.Leverage = CommodityLeverageTier.Strategic; return true;
+            case "hightech": definition.Leverage = CommodityLeverageTier.HighTech; return true;
+            default: return false;
+        }
     }
 
     private static string Squash(string id) => id is null
@@ -266,6 +344,36 @@ public sealed class MarketQuote
 /// A weekly, deterministic world clearing pass. Countries first satisfy demand from
 /// local production, then trade the remaining surpluses. A shortage therefore has a
 /// real cause and propagates into prices, GDP, living standards and the treasury.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how the market works and where to change it:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// The clearing runs once a week (EconomyTickDays, default 7) and is deterministic:
+/// the same world state always clears to the same prices, in the same order, so a
+/// seed replays exactly.
+///
+/// 1. ADD A COMMODITY → `game/common/trade/*.json`. Each key is an id; the fields
+///    are `name`, `icon` (a glyph), `basePrice`, `essentialWeight` (0 to 1: how much
+///    a shortage of it hurts), and `description`. The game registers it on load.
+///
+/// 2. MAKE A COUNTRY PRODUCE OR NEED IT → `game/common/production/*.json` (what
+///    each building adds to output) and `game/common/terrain/*.json` (what each
+///    terrain type naturally produces or consumes).
+///
+/// 3. WHAT HAPPENS IN A SHORTAGE → the satisfaction share (how much of demand was
+///    met) feeds into `nation.ShortageIndex` (average across essentials), which the
+///    HUD shows as an alert, the stability system penalises, and the AI tries to fix
+///    by building, trading or conquering.
+///
+/// 4. PRICES → each commodity's price eases toward its clearing level (what the
+///    world's supply and demand say it is worth) at a rate set by the defines. A
+///    mod that wants instant prices sets that rate to 1.0.
+///
+/// 5. TRADE ROUTES ON THE MAP → GlobeTradeTraffic.cs draws them from the data the
+///    clearing produced (who is selling what to whom); a mod that adds a commodity
+///    gets its routes for free.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class MarketSystem
 {
@@ -333,17 +441,25 @@ public static class MarketSystem
         {
             var totalDemand = 0f;
             var totalProduction = 0f;
+            var wantedImports = 0f;
+            var spareExports = 0f;
             foreach (var nation in campaign.Nations)
             {
                 if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
                 totalDemand += quote.Demand;
                 totalProduction += quote.Production;
+                if (quote.Demand > quote.Production) wantedImports += quote.Demand - quote.Production;
+                else spareExports += quote.Production - quote.Demand;
             }
             totalDemand = MathF.Max(0.01f, totalDemand);
             totalProduction = MathF.Max(0.01f, totalProduction);
 
             var definition = CommodityCatalog.Get(commodity);
-            var worldScarcity = M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
+            // A good priced on its trade: what the importers want against what the exporters can
+            // spare (CommodityDefinition.TradedWorldPrice). Everything else: the whole harvest.
+            var worldScarcity = definition.TradedWorldPrice
+                ? M.Clamp(MathF.Max(0.01f, wantedImports) / MathF.Max(0.01f, spareExports), 0.55f, 2.75f)
+                : M.Clamp(totalDemand / totalProduction, 0.55f, 2.75f);
             foreach (var nation in campaign.Nations)
             {
                 if (!nation.Market.TryGetValue(commodity, out var quote)) continue;
@@ -414,26 +530,41 @@ public static class MarketSystem
     /// Jobs a state's buildings ask for, in millions of workers. Deliberately coarse: the
     /// point is that industry has to be staffed by someone, not that every profession is
     /// tracked separately.
+    ///
+    /// How many each building asks for is its `jobs` in common/buildings (BuildingDefinition.Jobs),
+    /// read here and by the build list, so the tooltip's "jobs" is the number that staffs the
+    /// plant. The second tier needs hands too: refineries, smelters, chemical and electronics
+    /// plants, yards, ports and railways once employed nobody, so a rich country that built
+    /// them grew without ever running short of people - the United States doubled its real
+    /// output in two years at 86 % employment and reached two fifths of the world economy.
+    /// Universities, hospitals and barracks still ask for none.
+    ///
+    /// Summed in the order the hand-written sum used, then anything a mod declared, so the
+    /// shipped buildings add up to the same float they always did.
     /// </summary>
-    internal static float JobsDemanded(ScenarioState state) =>
-        state.Buildings.GetValueOrDefault(BuildingKind.Agriculture) * 0.42f +
-        state.Buildings.GetValueOrDefault(BuildingKind.CivilianIndustry) * 0.85f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ExtractionIndustry) * 0.55f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ArmsIndustry) * 0.60f +
-        state.Buildings.GetValueOrDefault(BuildingKind.PowerPlant) * 0.22f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * 0.30f +
-        // The second tier needs hands too. It did not: refineries, smelters, chemical and
-        // electronics plants, yards, ports and railways employed nobody, so a rich country that
-        // built them grew without ever running short of people - the United States doubled its
-        // real output in two years at 86 % employment and reached two fifths of the world economy.
-        state.Buildings.GetValueOrDefault(BuildingKind.Refinery) * 0.35f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ChemicalPlant) * 0.45f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Smelter) * 0.50f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ElectronicsPlant) * 0.60f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) * 0.55f +
-        state.Buildings.GetValueOrDefault(BuildingKind.Port) * 0.20f +
-        state.Buildings.GetValueOrDefault(BuildingKind.RailNetwork) * 0.25f +
-        state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.15f;
+    internal static float JobsDemanded(ScenarioState state)
+    {
+        var jobs = 0f;
+        foreach (var kind in JobOrder)
+            jobs += state.Buildings.GetValueOrDefault(kind) * BuildingCatalog.Get(kind).Jobs;
+        foreach (var (kind, count) in state.Buildings)
+        {
+            if ((int)kind <= (int)BuildingKind.ResearchLab || count == 0) continue;
+            jobs += count * BuildingCatalog.Get(kind).Jobs;
+        }
+        return jobs;
+    }
+
+    private static readonly BuildingKind[] JobOrder =
+    {
+        BuildingKind.Agriculture, BuildingKind.CivilianIndustry, BuildingKind.ExtractionIndustry,
+        BuildingKind.ArmsIndustry, BuildingKind.PowerPlant, BuildingKind.Infrastructure,
+        BuildingKind.Refinery, BuildingKind.ChemicalPlant, BuildingKind.Smelter,
+        BuildingKind.ElectronicsPlant, BuildingKind.Shipyard, BuildingKind.Port,
+        BuildingKind.RailNetwork, BuildingKind.ResearchLab,
+        // Never staffed in the shipped data; listed so a mod that gives them jobs is counted once.
+        BuildingKind.University, BuildingKind.Hospital, BuildingKind.Barracks
+    };
 
     /// <summary>
     /// Workers a state can actually put in those jobs, in millions. Not everyone alive is
@@ -556,11 +687,7 @@ public static class MarketSystem
         // to GDP after the fact.
         // And what its technologies, spirits and government add (NationalModifiers): a share
         // on top, not a new input.
-        var outputFactor = nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
-                           NationalModifiers.Factor(nation, "output") *
-                           CapitalReturns(campaign, nation, demandedJobs, availableWorkers) *
-                           // A recession from a financial crisis or a pandemic (TreasuryDynamics).
-                           TreasuryDynamics.OutputFactor(campaign, nation);
+        var outputFactor = NationalOutputFactor(campaign, nation, demandedJobs, availableWorkers);
 
         var allocation = ProductionProgramme.Allocate(states, nation);
         ProductionProgramme.MigrateLegacy(nation, allocation);
@@ -595,6 +722,38 @@ public static class MarketSystem
     /// because the jobs a region's buildings ask for are a coarse count - the median country
     /// asks for 0.95 workers per worker it has and Greenland for 130 - not a census.
     /// </summary>
+    /// <summary>
+    /// How much of its rated output a country's plant gives this week: the share of the jobs it
+    /// can staff, times how productive the staff are, its modifiers, the diminishing return on
+    /// capital past its headroom, and any recession.
+    /// </summary>
+    private static float NationalOutputFactor(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers) =>
+        nation.EmployedShare * M.Clamp(nation.Productivity, 0.35f, 3.0f) *
+        NationalModifiers.Factor(nation, "output") *
+        CapitalReturns(campaign, nation, demandedJobs, availableWorkers) *
+        // A recession from a financial crisis or a pandemic (TreasuryDynamics).
+        TreasuryDynamics.OutputFactor(campaign, nation);
+
+    /// <summary>
+    /// The output factor the market pass hands ProductionChains.RunRegion for this region, worked
+    /// out again from the country as it stands - for the build list, which wants to say what one
+    /// more plant here would make. Uses the staffing share the last market week measured rather
+    /// than measuring it again, so it reads the same number the economy ran on.
+    /// </summary>
+    public static float RegionOutputFactor(Campaign campaign, Nation nation, ScenarioState state)
+    {
+        if (campaign is null || nation is null || state is null) return 1f;
+        var demandedJobs = 0f;
+        var availableWorkers = 0f;
+        foreach (var region in HeldRegions.EconomyOf(campaign, nation))
+        {
+            demandedJobs += JobsDemanded(region);
+            availableWorkers += WorkersAvailable(region);
+        }
+        return NationalOutputFactor(campaign, nation, demandedJobs, availableWorkers) *
+               WarDamage.OutputFactor(campaign, nation, state) * HeldRegions.WorkedAt(campaign, nation, state);
+    }
+
     internal static float CapitalReturns(Campaign campaign, Nation nation, float demandedJobs, float availableWorkers)
     {
         var headroom = campaign.Defines.CapitalDeepeningHeadroom;

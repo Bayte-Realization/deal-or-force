@@ -23,5 +23,7 @@
   // Три тактические полки (земля, воздух, море) и одна полка генштаба. Мод может снизить число.
   "DoctrineTracks": 4,
   "DoctrineTacticalSlots": 3,
-  "DoctrineGeneralSlots": 1
+  "DoctrineGeneralSlots": 1,
+  // Вторая книга на той же полке. 1 возвращает старое правило: другая книга полку заменяет.
+  "DoctrineBooksPerShelf": 2
 }

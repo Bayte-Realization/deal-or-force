@@ -42,6 +42,8 @@ public static class IsolatedDepotTests
                 MapIndex = 1000 + p, NationMapIndex = 100, NationId = "DP0", Population = 100000 });
         c.States[4].Buildings[BuildingKind.Barracks] = 2;
         c.AttachProvinceTopology(map);
+        // The depot rule on the bare hunger clock; pocket stores are tested in StrandedGarrisonTests.
+        c.Defines.StrandedGarrisonsEnabled = false;
         c.ProvinceController[3] = (ushort)(open ? 100 : 101);
         c.Armies.Clear();
         c.Armies.Add(new Army { Id = 1, NationId = 0, ProvinceId = 6, StateMapIndex = 1006,
@@ -93,6 +95,8 @@ public static class IsolatedDepotTests
         }
         c.States[isolatedPort ? 2 : 4].Buildings[BuildingKind.Barracks] = 1;
         c.AttachProvinceTopology(map);
+        // The depot rule on the bare hunger clock; pocket stores are tested in StrandedGarrisonTests.
+        c.Defines.StrandedGarrisonsEnabled = false;
         for (var p = 1; p <= 5; p++) c.ProvinceController[p] = 100;
         if (isolatedPort) c.ProvinceController[2] = 101;
         c.Armies.Clear();

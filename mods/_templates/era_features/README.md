@@ -20,6 +20,23 @@ Events/decisions can use `{ "effects": { "use": "open_aviation" } }` or directly
 An automatic unlock rule that still matches can re-enable a manually disabled feature next day;
 remove the rule when manual scripts must be its only authority.
 
+Many systems answer to one true/false define in their own file (`ElectionsEnabled`,
+`ParliamentEnabled`, `OccupationResistanceEnabled`...). `FeatureDefines` binds a feature to
+such a define, and the define then follows the feature in play - opened by a technology rule,
+closed by an event. Shipped bindings: elections, parliament, dynastic_claims,
+diplomatic_missions, belief_conversion, brain_drain, internal_migration,
+occupation_resistance, mutual_deterrence, strategic_stockpiles, war_emergency, secular_cycle,
+combat_tactics, regional_administration, household_dynamics, demographic_extinction. A binding
+does nothing until the feature is declared in `Features` (or changed by an effect), so the
+shipped table changes no scenario. Bind any other boolean define the same way:
+
+    "Features": { "elections": false, "my_resistance": false },
+    "FeatureDefines": { "my_resistance": "OccupationResistanceEnabled" },
+    "FeatureUnlocks": { "elections": "universal_suffrage" }
+
+The nuclear age (`defcon`, `nuclear_posture`, `nuclear_strikes`) has its own example in
+`_templates/nuclear_age`.
+
 For a modded support type add `"required_feature": "experimental_air"` in `common/support`.
 This is an additional gate, not a replacement for its built-in arm/master switches.
 For an entirely new scripted mechanic check `api.feature_enabled("my_mechanic")` before

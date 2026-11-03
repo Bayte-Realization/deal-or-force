@@ -46,6 +46,21 @@ public sealed partial class Defines
     public float ResearchSecessionProgressShare { get; set; } = 0.55f;
     /// <summary>Extra difficulty of retaining advanced parent technologies after secession.</summary>
     public float ResearchSecessionComplexity { get; set; } = 0.45f;
+
+    /// <summary>
+    /// Share of a week's research points spent on technologies the country is actually using.
+    /// The rest still goes to the open project. Zero turns field use off.
+    /// </summary>
+    public const float DefaultResearchUseShare = 0.08f;
+
+    /// <summary>
+    /// Field familiarity on one known technology stops at this share of its listed cost.
+    /// Zero turns field use off.
+    /// </summary>
+    public const float DefaultResearchUseCeiling = 0.20f;
+
+    public float ResearchUseShare { get; set; } = DefaultResearchUseShare;
+    public float ResearchUseCeiling { get; set; } = DefaultResearchUseCeiling;
 }
 
 /// <summary>One technology: what it costs, what it needs first and what it does.</summary>
@@ -219,6 +234,12 @@ public sealed partial class Nation
     /// <summary>Points put into each technology so far. Switching keeps them: nothing researched is lost.</summary>
     public readonly Dictionary<string, float> ResearchProgress = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Research points gained by using a technology this country already has.
+    /// Absent on an old save, and absent while the technology sits idle.
+    /// </summary>
+    public readonly Dictionary<string, float> TechnologyFamiliarity = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>What it researched last week, for the interface.</summary>
     [JsonIgnore] public float ResearchPerWeek;
 
@@ -262,7 +283,7 @@ public sealed partial class Nation
 /// not, so a week's research is never thrown away. Diffusion keeps the world connected:
 /// global adoption, neighbours and formal partners each lower a discovery's remaining cost.
 /// </summary>
-public static class ResearchSystem
+public static partial class ResearchSystem
 {
     public readonly record struct DiffusionBreakdown(float World, float Neighbours, float Partners, float Total, float EffectiveCost);
 
@@ -292,6 +313,25 @@ public static class ResearchSystem
     public static IEnumerable<TechnologyDefinition> AvailableTo(Nation nation) =>
         TechnologyCatalog.All.Where(technology => Available(nation, technology));
 
+    /// <summary>
+    /// What a country's universities and laboratories multiply its research by: one, plus each
+    /// one's bonus per million residents, to a cap. <paramref name="plusOne"/> counts one more of
+    /// that building, so the build list can say what the next campus is worth - which, past the
+    /// cap, is nothing.
+    /// </summary>
+    public static float InstitutionFactor(Campaign campaign, Nation nation, BuildingKind? plusOne)
+    {
+        var defines = campaign.Defines;
+        var residents = MathF.Max(0.1f, nation.Population / 1_000_000f);
+        var institutions = 0f;
+        foreach (var state in campaign.StatesOf(nation))
+            institutions += state.Buildings.GetValueOrDefault(BuildingKind.University) * MathF.Max(0f, defines.ResearchUniversityBonus)
+                + state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * MathF.Max(0f, defines.ResearchLaboratoryBonus);
+        if (plusOne == BuildingKind.University) institutions += MathF.Max(0f, defines.ResearchUniversityBonus);
+        if (plusOne == BuildingKind.ResearchLab) institutions += MathF.Max(0f, defines.ResearchLaboratoryBonus);
+        return 1f + MathF.Min(MathF.Max(0f, defines.ResearchInstitutionBonusCap), institutions / residents);
+    }
+
     /// <summary>A week of research for this country, in points.</summary>
     public static float WeeklyPoints(Campaign campaign, Nation nation)
     {
@@ -299,12 +339,7 @@ public static class ResearchSystem
         var economy = defines.ResearchGdpWeight * MathF.Sqrt(MathF.Max(0f, nation.Gdp)) * M.Clamp01(nation.HumanCapital);
         var schools = MathF.Pow(M.Clamp(nation.EducationSpending / MathF.Max(0.0001f, defines.ResearchEducationBaseline),
             0.1f, 4f), defines.ResearchEducationExponent);
-        var residents = MathF.Max(0.1f, nation.Population / 1_000_000f);
-        var institutions = 0f;
-        foreach (var state in campaign.StatesOf(nation))
-            institutions += state.Buildings.GetValueOrDefault(BuildingKind.University) * MathF.Max(0f, defines.ResearchUniversityBonus)
-                + state.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * MathF.Max(0f, defines.ResearchLaboratoryBonus);
-        var institutionFactor = 1f + MathF.Min(MathF.Max(0f, defines.ResearchInstitutionBonusCap), institutions / residents);
+        var institutionFactor = InstitutionFactor(campaign, nation, null);
         var stabilityFactor = 1f - M.Clamp01(defines.ResearchInstabilityPenalty) * (1f - M.Clamp01(nation.Stability));
         return (defines.ResearchBasePerWeek + economy * schools) * institutionFactor * stabilityFactor *
             NationalModifiers.Factor(nation, "research_speed");
@@ -486,11 +521,18 @@ public static class ResearchSystem
 
     private static TechnologyDefinition Choose(Campaign campaign, Nation nation, Survey survey)
     {
-        // The proliferation race: a country that faces a rival's deterrent and could build
-        // its own reaches for it ahead of the cheap shelf. The history of the club is not
-        // countries shopping by price - it is each one racing the rival that already had
-        // one. Nothing forces the choice: the country still has to afford the research,
-        // and a country at peace with every holder shops the ordinary way.
+        // ─── The proliferation race ────────────────────────────────────────────────────
+        // A country that faces a rival's deterrent and could build its own reaches for
+        // it ahead of the cheap shelf. The history of the club is not countries shopping
+        // by price - it is each one racing the rival that already had one. Nothing
+        // forces the choice: the country still has to afford the research, and a country
+        // at peace with every holder shops the ordinary way.
+        //
+        // For modders: this fires when the AI country WITHOUT a deterrent has a rival
+        // (DiplomaticStance.Rival or AtWar) that HAS one. The technology it reaches for
+        // is any available technology whose `effects` include `"deterrence"`. If your
+        // mod doesn't have such a technology, this block simply doesn't fire.
+        // ─────────────────────────────────────────────────────────────────────────────
         if (Deterrence.TierOf(campaign, nation) < 1)
         {
             var threatened = false;
@@ -535,8 +577,11 @@ public static class ResearchSystem
                 nation.CurrentResearch = current?.Id ?? "";
             }
             nation.ResearchPerWeek = WeeklyPoints(campaign, nation);
+            // Using what is already known takes a slice of the same points. What is left
+            // still goes to the open project; a week with no project still practices.
+            var forProject = MathF.Max(0f, nation.ResearchPerWeek - ApplyFieldUse(campaign, nation, nation.ResearchPerWeek));
             if (current is null) continue;
-            var progress = nation.ResearchProgress.GetValueOrDefault(current.Id) + nation.ResearchPerWeek;
+            var progress = nation.ResearchProgress.GetValueOrDefault(current.Id) + forProject;
             nation.ResearchProgress[current.Id] = progress;
             if (progress < CostFor(campaign, survey, nation, current)) continue;
             nation.Technologies.Add(current.Id);

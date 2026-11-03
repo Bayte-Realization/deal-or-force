@@ -1,6 +1,12 @@
 // What leaving an organisation, or being thrown out of one, leaves with its members (OrganizationDynamics.cs).
+// The members are witnesses: each remembers it as much as it concerns it (OpinionWitnesses) - the
+// member attacked in full, its allies and neighbours nearly so, its rivals not at all.
 {
-  "left_our_organization": { "name": "Walked out of our organization", "opinion": -12, "days": 730, "decays": true },
+  "left_our_organization": { "name": "Walked out of our organization", "opinion": -8, "days": 730, "decays": true, "third_party": true },
   "bought_us_back": { "name": "Paid to keep us in the organization", "opinion": 15, "days": 1095, "decays": true },
-  "attacked_a_fellow_member": { "name": "Attacked a fellow member", "opinion": -30, "days": 1825, "decays": true }
+  "attacked_a_fellow_member": { "name": "Attacked a fellow member", "opinion": -30, "days": 1825, "decays": true, "third_party": true },
+  "suspended_us": { "name": "Suspended our seat in their organization", "opinion": -15, "days": 1095, "decays": true },
+  "voted_to_expel_us": { "name": "Voted to expel us", "opinion": -25, "days": 1825, "decays": true },
+  "expelled_from_our_organization": { "name": "Was expelled from our organization", "opinion": -10, "days": 1095, "decays": true, "third_party": true },
+  "refused_our_border_settlement": { "name": "Refused to settle our border", "opinion": -10, "days": 1095, "decays": true, "max_stacks": 2 }
 }

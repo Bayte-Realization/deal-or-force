@@ -1,0 +1,9 @@
+{
+  "id": "example_flag_designs",
+  "name": "Example: flags written as data, and a country edited as a whole",
+  "version": "1.0.0",
+  "supported_game_version": "*",
+  "enabled": false,
+  "load_order": 60,
+  "dependencies": []
+}

@@ -16,15 +16,38 @@ namespace DealOrForce.Simulation;
 /// Competition between holders does not disappear - it moves to proxies, sanctions and
 /// coups, which are priced elsewhere and stay cheap.
 ///
-/// Who holds one is data, not code: the 2024 club is authored in `common/deterrence`, and
-/// anybody else acquires one the way anything else is acquired - by researching it
-/// (`effects: deterrence` on a technology), which is how proliferation arrives in play
-/// rather than being declared. A mod for an era before the bomb ships an empty holders row
-/// and no such technology, and the mechanic simply never speaks.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the three things you might want to change, and where:
+/// ═══════════════════════════════════════════════════════════════════════════════
 ///
-/// The tier is derived, never stored: it is the authored row or the researched effect,
-/// whichever is higher, worked out when asked. There is therefore nothing to save, nothing
-/// to fingerprint, and nothing a save written before this existed can get wrong.
+/// 1. WHO holds one at the start → `game/common/deterrence/*.json`.
+///    The file is a single object: `"holders": { "RUS": 1, "USA": 1, ... }`.
+///    Delete the file (or empty the object) for a world without the bomb.
+///    Higher tiers (2, 3) are for mods that want a second rung — a defence
+///    that survives a first strike, say.
+///
+/// 2. HOW EXPENSIVE the wall is → `AiMutualDeterrencePrice` in
+///    `game/common/defines/`. Default 6 — the same order as an entire war's
+///    price list. Lower it and the Cold War thaws; raise it and not even a
+///    border incident cracks the ice. Set `MutualDeterrenceEnabled` to false
+///    and every holder is an ordinary neighbour again.
+///
+/// 3. WHO CAN GET ONE during play → add a technology with
+///    `"effects": { "deterrence": 1 }` in `game/common/technologies/*.json`.
+///    That's it. The country researches it, becomes tier 1, and the wall
+///    goes up between it and every other holder. The AI reaches for it when
+///    a rival already has one (TechnologyCore.Choose) — this is the
+///    proliferation race, not a scripted event.
+///
+/// 4. СВЯЗЬ С ЛЕСТНИЦЕЙ БОЕГОТОВНОСТИ DEFCON:
+///    DefconSystem опрашивает Deterrence.TierOf(campaign, nation) >= 1 для определения
+///    участников ядерного клуба. Любая война или острый дипломатический кризис между
+///    двумя державами с TierOf >= 1 переводит планету в DEFCON 2 или DEFCON 1,
+///    включая мобилизационные издержки и сжатие мировой торговли.
+///
+/// Everything else is derived from these inputs. There is nothing to save,
+/// nothing to fingerprint, and nothing a save written before this existed can get wrong.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class Deterrence
 {
@@ -55,8 +78,11 @@ public static class Deterrence
     /// <summary>
     /// What this country holds that makes attacking it directly unthinkable for another
     /// holder: the authored tier of the 2024 club, or what its research has earned it,
-    /// whichever is higher. Zero is a country like any other. Off means off: with the
-    /// define down, every holder is an ordinary neighbour again.
+    /// whichever is higher. Zero is a country like any other.
+    ///
+    /// A mod adds a holder by adding a row to `common/deterrence` (authored at start)
+    /// or a technology with `effects: deterrence` (acquired in play). Both paths
+    /// arrive here and the higher wins.
     /// </summary>
     public static int TierOf(Campaign campaign, Nation nation)
     {
@@ -70,6 +96,10 @@ public static class Deterrence
     /// The price a direct war between two deterrent holders carries, and zero for every other pair.
     /// Read by the war judgement's price list, so what the bench reports, what the console
     /// explains and what the government decided are one arithmetic, as ever.
+    ///
+    /// The default (6) is roughly the entire rest of a war's price list added up. A mod
+    /// that wants the Cold War to crack at the seams lowers it; a mod that wants
+    /// never-touch peace raises it. Zero and the wall is gone.
     /// </summary>
     public static float MutualPrice(Campaign campaign, Nation a, Nation b) =>
         TierOf(campaign, a) >= 1 && TierOf(campaign, b) >= 1 ? campaign.Defines.AiMutualDeterrencePrice : 0f;
@@ -79,8 +109,16 @@ public static class Deterrence
     /// product of the two tiers, zero for every ordinary war. Nobody plans a conquest
     /// through a war like that - not because either government is timid, but because the
     /// world (and each government's own cities) prices the map's redrafting out of it.
-    /// Read by the peace outcomes, which end holders' wars in limited terms and relax the
-    /// decisive bar by this pressure: the higher the shadow, the sooner the armistice.
+    ///
+    /// Who reads this and what they do with it:
+    ///   • AiPeaceOutcomes.WriteDecisiveSettlement — the Cuba rule: holders' wars end
+    ///     in limited terms, and the decisive bar comes DOWN by this pressure (the
+    ///     higher the shadow, the sooner the armistice).
+    ///   • WarWeariness.Tick — the home front: both sides' populations bleed war
+    ///     support and stability weekly under the `nuclear_shadow` spirit.
+    ///   • The dossier card shows the tier to the player ("Mutual assured destruction").
+    ///
+    /// The value is the product of the two tiers (1×1=1, 2×1=2, 2×2=4), capped at 4.
     /// </summary>
     public static float Brinkmanship(Campaign campaign, StrategicWar war)
     {

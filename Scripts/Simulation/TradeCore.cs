@@ -351,6 +351,7 @@ public static class TradeNetwork
                 var blockedShare = blockedCapacity / MathF.Max(0.0001f, availableCapacity + blockedCapacity);
                 deficit *= 1f - 0.35f * M.Clamp01(blockedShare);
             }
+            deficit *= DefconSystem.GlobalTradeMultiplier(campaign);
 
             for (var rank = 0; rank < SellerOrder.Count && deficit > 0.0001f; rank++)
             {
@@ -532,11 +533,23 @@ public static class TradeNetwork
             var counted = Counts.GetValueOrDefault(nation.MapIndex);
             var averageInfrastructure = counted.States == 0 ? 0f : counted.Infrastructure / (float)counted.States;
             work.TransportReach[nation.Id] = M.Clamp(
-                0.45f + averageInfrastructure * 0.06f + counted.Ports * 0.05f + counted.Rails * 0.035f +
-                NationalModifiers.Of(nation, "trade_reach"),
-                0.45f, 1.50f);
+                ReachFloor + averageInfrastructure * ReachPerInfrastructure + counted.Ports * ReachPerPort +
+                counted.Rails * ReachPerRail + NationalModifiers.Of(nation, "trade_reach"),
+                ReachFloor, ReachCeiling);
         }
     }
+
+    /// <summary>
+    /// How far a country's goods travel (MeasureReach): a floor every country has, the average
+    /// infrastructure of its regions, every port - a river port at its waterfront yield - and
+    /// every rail network, to a ceiling half as far again as the world's average. Public so the
+    /// build list can say what one more port adds without a copy of its own.
+    /// </summary>
+    public const float ReachFloor = 0.45f;
+    public const float ReachCeiling = 1.50f;
+    public const float ReachPerInfrastructure = 0.06f;
+    public const float ReachPerPort = 0.05f;
+    public const float ReachPerRail = 0.035f;
 
     /// <summary>What one country's goods can reach, for anything that wants to show it.</summary>
     public static float ReachOf(Campaign campaign, Nation nation) =>

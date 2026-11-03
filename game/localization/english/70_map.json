@@ -6,7 +6,7 @@
   "{0} · {1:N0} observed divisions": "{0} · {1:N0} observed divisions",
   "Observed personnel: {0:N0}": "Observed personnel: {0:N0}",
   "Foreign formation — orders and route are not available.": "Foreign formation — orders and route are not available.",
-  "Personnel {0:N0} · organisation {1:P0}": "Personnel {0:N0} · organisation {1:P0}",
+  "Personnel {0:N0} · organisation {1:P0}": "Personnel {0:N0} · morale {1:P0}",
   "Equipment {0:P0} · experience {1:P0} · supply {2:P0}": "Equipment {0:P0} · experience {1:P0} · supply {2:P0}",
   "{0} · {1} posture · planning {2:P0}": "{0} · {1} posture · planning {2:P0}",
   "Click to select every independent division in this province.": "Click to select every independent division in this province.",

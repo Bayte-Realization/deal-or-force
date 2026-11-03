@@ -157,6 +157,8 @@ static class TacticalDoctrineTests
         Check(MathF.Abs(nation.ArmyExperience - 30f) < 0.01f, "the crash course cost the rush price");
         Check(NationalModifiers.Of(nation, "supply") > 0.02f, "the rushed article counts at once");
 
+        // One book on the shelf: a different Doctrine replaces it.
+        campaign.Defines.DoctrineBooksPerShelf = 1;
         // Rewriting: another Doctrine on the same shelf, sold to the government and paid for in retraining.
         var before = NationalModifiers.Of(nation, "army_speed");
         Check(TacticalDoctrines.Refusal(campaign, nation, "fire", "fire_concentrated", false).Length > 0,
@@ -234,6 +236,8 @@ static class TacticalDoctrineTests
             "all three books reach the country at once");
         Check(TacticalDoctrines.Books(nation).Count() == 3, "the country is reading three books");
 
+        // One book on the shelf: changing the army's mind replaces that book and leaves the others.
+        campaign.Defines.DoctrineBooksPerShelf = 1;
         // Rewriting one shelf leaves the others untouched.
         Check(TacticalDoctrines.Study(campaign, nation, "fortress", "fortress_dig", true),
             "the ground shelf may change its mind");
@@ -306,8 +310,19 @@ static class TacticalDoctrineTests
         // it must not become a fourth tactical book.
         if (fifth.Length == 0)
             TacticalDoctrines.Study(full, reader, "sea_denial", "sub_boats", true);
+        var seaShelf = reader.TacticalDoctrine.Track(DoctrineSlots.Sea);
+        Check(seaShelf.Branch == "coast" && seaShelf.Companion?.Branch == "sea_denial",
+            "the second naval book stands beside the first");
         Check(TacticalDoctrines.BooksHeld(reader, false) == 3,
-            "a further tactical doctrine does not open a fourth tactical slot");
+            "a second book on the sea shelf does not open a fourth tactical slot");
+        var another = TacticalDoctrineCatalog.OnShelf(DoctrineSlots.Sea)
+            .FirstOrDefault(book => book.Id != "coast" && book.Id != "sea_denial");
+        if (another is not null)
+        {
+            var root = another.Nodes.First(node => node.Requires.Count == 0);
+            Check(TacticalDoctrines.Refusal(full, reader, another.Id, root.Id, true).Length > 0,
+                "a third book on the same shelf is refused");
+        }
 
         var tight = Campaign.CreateBootstrap(1708);
         tight.Defines.DoctrineTacticalSlots = 2;

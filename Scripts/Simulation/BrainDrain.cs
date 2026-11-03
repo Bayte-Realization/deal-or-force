@@ -11,6 +11,16 @@ public sealed partial class Defines
     public float BrainDrainStabilityThreshold { get; set; } = 0.48f;
     public float BrainDrainLivingThreshold { get; set; } = 0.52f;
     public float BrainDrainLiteracyWeight { get; set; } = 0.25f;
+    /// <summary>
+    /// The most a country takes in across its borders in a week, as a share of its own people.
+    /// 0.0001 is about one in two hundred a year - a busy immigration country; the Gulf states at
+    /// their busiest took twice that. Without it every Chinese region under pressure sent its
+    /// emigrants to the one most attractive region of one country, and an independent Texas was
+    /// 38% Han by 2046.
+    /// </summary>
+    public float BrainDrainMaxIntakeWeeklyShare { get; set; } = 0.0001f;
+    /// <summary>How many of a destination's best regions share its arrivals.</summary>
+    public int BrainDrainReceptionRegions { get; set; } = 4;
 }
 
 public sealed partial class ScenarioState
@@ -167,6 +177,26 @@ public static class BrainDrain
         return best;
     }
 
+    /// <summary>
+    /// The regions arrivals settle in, the most attractive first: cities, universities and the
+    /// capital pull, but people go to many places, not one.
+    /// </summary>
+    public static List<ScenarioState> ReceptionStates(Campaign c, Nation destination, int count)
+    {
+        var states = c.StatesOf(destination);
+        return states.Where(s => !s.Unclaimed && s.Population > 0)
+            .OrderByDescending(s => Attraction(destination, s)).ThenBy(s => s.MapIndex)
+            .Take(Math.Max(1, count)).ToList();
+    }
+
+    private static float Attraction(Nation destination, ScenarioState s)
+    {
+        var isCap = s.MapIndex == destination.CapitalStateMapIndex ? 0.35f : 0f;
+        var research = s.Buildings.GetValueOrDefault(BuildingKind.University) * 0.05f +
+                       s.Buildings.GetValueOrDefault(BuildingKind.ResearchLab) * 0.08f;
+        return s.StandardOfLiving + isCap + research - s.WarDamage;
+    }
+
     public static ScenarioState ReceptionState(Campaign c, Nation destination)
     {
         var states = c.StatesOf(destination);
@@ -224,6 +254,7 @@ public static class BrainDrain
         }
 
         var topSourceForDest = new Dictionary<int, (int SourceId, long Moved)>();
+        var intakeRoom = new Dictionary<int, long>();
         for (var i = 0; i < c.Nations.Count; i++)
         {
             var n = c.Nations[i];
@@ -257,8 +288,12 @@ public static class BrainDrain
 
             var destNation = BestDestination(c, sourceNation, atWarNations);
             if (destNation is null) continue;
-            var destState = ReceptionState(c, destNation);
-            if (destState is null) continue;
+            var receptions = ReceptionStates(c, destNation, c.Defines.BrainDrainReceptionRegions);
+            if (receptions.Count == 0) continue;
+            // A country takes in only so many a week, whoever they come from.
+            if (!intakeRoom.TryGetValue(destNation.Id, out var room))
+                room = (long)(destNation.Population * (double)M.Clamp(c.Defines.BrainDrainMaxIntakeWeeklyShare, 0f, 0.002f));
+            var arrivals = 0;
 
             long totalOutflow = 0;
             double weightedPressure = 0;
@@ -270,12 +305,14 @@ public static class BrainDrain
 
                 var doorMultiplier = ModifierSystem.Has(destNation, "open_migration_doors") ? 1.65d : 1.0d;
                 var moved = (long)Math.Round(st.Population * (double)st.BrainDrainPressure * maxWeeklyShare * doorMultiplier);
-                moved = Math.Clamp(moved, 0L, st.Population / 50L);
+                moved = Math.Clamp(moved, 0L, Math.Min(st.Population / 50L, room));
                 if (moved <= 0) continue;
+                var destState = receptions[arrivals++ % receptions.Count];
 
                 // The people themselves cross: who they are arrives with them.
                 moved = InternalMigration.Move(st, destState, moved, withinCountry: false);
                 if (moved <= 0) continue;
+                room -= moved;
                 st.ReviewNetMigration -= moved;
                 destState.ReviewNetMigration += moved;
                 totalOutflow += moved;
@@ -285,6 +322,7 @@ public static class BrainDrain
                 destState.Literacy = M.Clamp(destState.Literacy + stateShare * literacyWeight * 0.5f * st.Literacy, 0.05f, 0.999f);
             }
 
+            intakeRoom[destNation.Id] = room;
             if (totalOutflow <= 0) continue;
 
             sourceNation.Population = Math.Max(1L, states.Sum(s => s.Population));

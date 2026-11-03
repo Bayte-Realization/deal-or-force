@@ -21,6 +21,18 @@ public sealed partial class Defines
     /// differ from the government's primary culture. Applies to ordinary AI cash sales.</summary>
     public bool DealProtectCivicHomelandSales { get; set; } = true;
     public float DealHomelandSaleCultureShare { get; set; } = .5f;
+    /// <summary>
+    /// What ridding a country of its whole grievance over the shape of a border (BorderShape, 0..1)
+    /// is worth to it in a deal, in diplomatic utility points. One wrapped region is a third of it.
+    /// 0 leaves deals blind to the shape of borders, as before.
+    /// </summary>
+    public float DealBorderReliefWorth { get; set; } = 36f;
+    /// <summary>
+    /// A pocket - a region wrapped by one neighbour and cut off from the rest of its owner - whose
+    /// people are mostly not its owner's own may be sold for money although it was held on the
+    /// first day: an exclave of strangers is not the national heartland.
+    /// </summary>
+    public bool DealForeignPocketSales { get; set; } = true;
 }
 
 /// <summary>
@@ -135,6 +147,13 @@ public static partial class Ultimatum
         // Evaluate the complete swap so a border adjustment is not mistaken for two enclaves.
         var borders = -TerritorialCoherence.Penalty(c, recipient,
             receive.ReleaseRegions ? Array.Empty<int>() : receive.Regions, give.Regions);
+        // An ugly border fixed is worth something to both sides of it: the one whose pocket goes
+        // as much as the one who gets it (BorderShape). A package that makes a new pocket costs
+        // the same in reverse. Released land changes the donor's shape but hands nobody anything.
+        if (c.Defines.DealBorderReliefWorth > 0f && float.IsFinite(c.Defines.DealBorderReliefWorth))
+            borders += BorderShape.Relief(c, recipient, counterparty,
+                receive.ReleaseRegions ? Array.Empty<int>() : receive.Regions,
+                give.ReleaseRegions ? Array.Empty<int>() : give.Regions) * MathF.Min(200f, c.Defines.DealBorderReliefWorth);
         // A promise received is worth what its maker's name can carry.
         var trust = 1f - M.Clamp01(counterparty.Notoriety / 100f) * .5f;
         var partnerLeverage = CommodityLeverage.Calculate(c, counterparty, recipient);
@@ -361,6 +380,11 @@ public static partial class Ultimatum
         if (c is null || owner is null || state is null || !c.Defines.DealProtectHomelandSales ||
             state.NationMapIndex != owner.MapIndex || TerritorialClaims.TitleOf(c, owner, state) != TerritorialTitle.Homeland)
             return false;
+        if (c.Defines.DealForeignPocketSales && BorderShape.IsCutOffPocket(c, state))
+        {
+            var largest = EconomySystem.Cultures(state).FirstOrDefault().Culture;
+            if (largest is null || !DemographyCatalog.IsPrimary(owner.Tag, largest)) return false;
+        }
         if (c.Defines.DealProtectCivicHomelandSales) return true;
         long total = 0, primary = 0;
         foreach (var group in state.PopulationGroups)

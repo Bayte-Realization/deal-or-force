@@ -13,7 +13,7 @@ public static class OffensivePlanning
     public static DrawnFrontLine Source(Campaign c, IEnumerable<Army> armies)
     {
         var lines = armies.Select(a => BattlePlanning.LineFor(c, a)).ToArray();
-        if (lines.Length == 0 || lines.Any(l => l is null || l.BorderNationId < 0 ||
+        if (lines.Length == 0 || lines.Any(l => l is null || (l.BorderNationId < 0 && !l.AllEnemies) ||
             (l.Kind != FrontLineKind.Defence && l.Kind != FrontLineKind.Offensive))) return null;
         // Ambiguous mixed fronts need an explicit selection, not a silently chosen country.
         return lines.All(l => l.Id == lines[0].Id) ? lines[0] : null;
@@ -29,9 +29,9 @@ public static class OffensivePlanning
         var source = Source(c, armies);
         if (source is null) return;
         var own = c.NationById(command.IssuerId);
-        var enemy = c.NationById(source.BorderNationId);
         var control = c.ProvinceController ?? map.ProvinceToNation;
         var goals = command.Provinces.Distinct().ToArray();
+        var enemy = c.NationById(goals.Length > 0 ? TargetOf(c, source, goals[0]) : source.BorderNationId);
         if (enemy is null || own is null || goals.Length == 0 || goals.Length > 128 || goals.Any(p =>
             p <= 0 || p > map.ProvinceCount || map.IsWater(p) || control[p] != enemy.MapIndex)) return;
         for (var i = 1; i < goals.Length; i++)
@@ -46,6 +46,14 @@ public static class OffensivePlanning
         IReadOnlyCollection<int> departure = phaseIndex == 0
             ? source.Kind == FrontLineKind.Defence ? source.Provinces : source.SourceProvinces
             : PhaseGoals(existing, phaseIndex - 1).ToArray();
+        // From the whole front, an offensive departs from the stretch facing the country it
+        // is aimed at, not from every border the country is fighting on.
+        if (phaseIndex == 0 && source.AllEnemies)
+        {
+            var facing = BorderFronts.Candidates(c, own.Id, enemy.Id);
+            facing.IntersectWith(source.Provinces);
+            if (facing.Count > 0) departure = facing;
+        }
         if (departure.Count == 0) return;
         var seed = departure.OrderBy(x => x).First();
         var war = c.Wars.Find(w => !w.Ended && w.Opposes(own.Id, enemy.Id));
@@ -79,6 +87,17 @@ public static class OffensivePlanning
             Kind = FrontLineKind.Offensive, BorderNationId = enemy.Id, WholeBorder = source.WholeBorder,
             StartLatitude = source.StartLatitude, StartLongitude = source.StartLongitude,
             EndLatitude = source.EndLatitude, EndLongitude = source.EndLongitude, Cohesion = source.Cohesion };
+        if (source.AllEnemies)
+        {
+            // An offensive is against one country, and its departure is re-found along the
+            // border with that country as the line moves: anchor it on the whole stretch
+            // of that border nearest the first objective.
+            var anchor = departure.OrderBy(p => Distance(map, p, goals[0])).ThenBy(p => p).First();
+            var (latitude, longitude) = map.CenterOf(anchor);
+            line.WholeBorder = true;
+            line.StartLatitude = line.EndLatitude = latitude;
+            line.StartLongitude = line.EndLongitude = longitude;
+        }
         line.SourceProvinces.UnionWith(departure);
         line.BorderRevision = c.MapRevision;
         line.Provinces.UnionWith(goals);
@@ -105,6 +124,25 @@ public static class OffensivePlanning
         foreach (var army in armies)
             new SetArmyOrderCommand { IssuerId = own.Id, ArmyId = army.Id, Order = ArmyOrder.AdvanceFront }.Apply(c);
         DiagnosticLogs.Write("orders", $"OFFENSIVE_PLAN line={line.Id} owner={own.Id} target={enemy.Id} divisions={armies.Length} source_posts={departure.Count} goal_posts={goals.Length} edit={existing is not null}");
+    }
+
+    /// <summary>
+    /// The country an offensive from this front would be aimed at, starting at this province:
+    /// the front's own country for a border front, and for the whole front whoever holds the
+    /// province, if that is somebody this country is at war with. -1 when it is nobody's.
+    /// </summary>
+    public static int TargetOf(Campaign c, DrawnFrontLine source, int province)
+    {
+        if (source is null) return -1;
+        if (!source.AllEnemies || source.Kind != FrontLineKind.Defence) return source.BorderNationId;
+        var map = c.ProvinceMap;
+        if (map is null || province <= 0 || province > map.ProvinceCount) return -1;
+        var control = c.ProvinceController ?? map.ProvinceToNation;
+        var holder = c.Nations.FirstOrDefault(n => n.MapIndex == control[province] && n.MapIndex > 0);
+        if (holder is null) return -1;
+        foreach (var war in c.Wars)
+            if (!war.Ended && war.Opposes(source.NationId, holder.Id)) return holder.Id;
+        return -1;
     }
 
     public static int PhaseCount(DrawnFrontLine line) => Math.Max(1, line.OffensivePhases.Count);

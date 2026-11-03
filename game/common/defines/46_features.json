@@ -19,7 +19,14 @@
     "formable_nations": true,
     "secession": true,
     "war_damage": true,
-    "war_weariness": true
+    "war_weariness": true,
+    // The nuclear age: the world's alert ladder, a holder's own posture (alert, tests, the red
+    // telephone, the umbrella), and the use of a weapon. Each can start closed and be opened by
+    // an event's "feature.nuclear_strikes_set": 1 or a FeatureUnlocks rule below; see
+    // mods/_templates/nuclear_age.
+    "defcon": true,
+    "nuclear_posture": true,
+    "nuclear_strikes": true
   },
   // Optional feature -> named common/scripted_triggers rule. No automatic unlocks in 2024.
   "FeatureUnlocks": {}

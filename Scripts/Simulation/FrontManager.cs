@@ -88,6 +88,7 @@ public static class FrontManager
     private static readonly Dictionary<int, int> DonorComponents = new();
     private static readonly Queue<int> DonorFrontier = new();
     private static readonly List<DrawnFrontLine> Lines = new();
+    private static readonly HashSet<int> LineEnemies = new();
 
     /// <summary>Re-postings made since the campaign began, for the bench and the console.</summary>
     public static int Reposts { get; private set; }
@@ -209,14 +210,22 @@ public static class FrontManager
     private static void BalanceLine(Campaign campaign, DrawnFrontLine line)
     {
         var nation = campaign.NationById(line.NationId);
-        if (nation is null || line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
+        if (nation is null) return;
+        // The whole front moves with the map and with the list of enemies; bring it up to date
+        // before it is read, as a division asking for its line would.
+        if (line.AllEnemies) BorderFronts.Refresh(campaign, line);
+        if (line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
         var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id) &&
             (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)));
+        // The whole front is under pressure from everybody it faces, in every war - not only
+        // from the other side of whichever war happens to be first in the list.
+        if (line.AllEnemies) BorderFronts.FillEnemies(campaign, nation.Id, LineEnemies);
         EnemyPower.Clear();
         foreach (var army in campaign.Armies)
         {
             if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0 || army.NationId == nation.Id) continue;
-            if (war is null || !war.Opposes(army.NationId, nation.Id)) continue;
+            if (line.AllEnemies ? !LineEnemies.Contains(army.NationId)
+                : war is null || !war.Opposes(army.NationId, nation.Id)) continue;
             EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
         }
         Posts.Clear();

@@ -1,0 +1,15 @@
+# A world that holds grudges longer: a public denunciation is remembered for five years
+# instead of three.
+#
+# This is the same data as game/common/opinion_modifiers/00_diplomacy.json, written as
+# YAML. Keys and nesting are identical; only the punctuation differs. The game turns this
+# file into exactly the JSON document below before any system sees it:
+#
+#   { "denounced": { "opinion": -15, "days": 1825 } }
+#
+# `opinion` has to be given even when it is unchanged - the catalogue refuses a reason
+# that says nothing about opinion. Everything left out (`name`, `decays`, `max_stacks`)
+# is kept from the base game.
+denounced:
+  opinion: -15
+  days: 1825

@@ -98,6 +98,31 @@ public sealed partial class StrategicWar
     public int PendingOfferFromId = -1;
     public int PendingOfferDay = -1;
     public int PendingOfferExpiresDay = -1;
+
+    /// <summary>
+    /// The day a government run by the computer last put a settlement to a player in this
+    /// war, or -1 when it never has.
+    ///
+    /// Between two computer governments an offer is answered in the same breath it is made,
+    /// so how often one is made costs nobody anything. Put to a person, every offer is a
+    /// letter they have to read, and a country that asks every few weeks - because its war
+    /// score wobbled, or because its ally asked after it did - is nagging rather than
+    /// negotiating. So offers to a player are spaced by AiPeaceOfferToPlayerIntervalDays,
+    /// counted from this day and from the day the last one was refused (PeaceOffers).
+    /// </summary>
+    public int LastOfferToPlayerDay = -1;
+
+    /// <summary>
+    /// The last settlement a player in this war turned down or let lapse, kept so that the
+    /// next one has to be a different offer rather than the same paper sent again. -1 when
+    /// nothing has been refused; the other three fields mean nothing until it is set.
+    /// A refused written settlement keeps its demand (the same object that was on the
+    /// table); a refused standing term keeps which term it was.
+    /// </summary>
+    public int RefusedOfferDay = -1;
+    public bool RefusedOfferWasWritten;
+    public PeaceTerms RefusedOfferTerms = PeaceTerms.WhitePeace;
+    public PeaceDemand RefusedOffer;
     public int EndedDay = -1;
     public int WinnerId = -1;
     public string PeaceSummary = "";
@@ -423,6 +448,16 @@ public static partial class FrontPlanner
 
         var result = new HashSet<int>();
         var front = war.FriendlyFront(nationId);
+        // The seat of government on the front itself: the reserve stands in it. A country that
+        // sent every brigade forward and left its capital to the local guards lost the war in the
+        // afternoon the capital fell - the whole of a small country can be one province.
+        var seat = nation.CapitalProvinceId;
+        if (seat > 0 && seat < controllers.Length && controllers[seat] == nation.MapIndex && front.Contains(seat))
+        {
+            result.Add(seat);
+            lines[key] = (stamp, result);
+            return result;
+        }
         foreach (var province in front)
         foreach (var neighbor in topology.Neighbors[province])
             if (!front.Contains(neighbor) && controllers[neighbor] == nation.MapIndex)

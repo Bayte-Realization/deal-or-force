@@ -86,6 +86,7 @@ static class FormableProclamationAiTests
             ConsolidationLeadershipAndSwitch();
             EstablishedSuccessorPartner();
             PartialRestorationKeepsForeignLand();
+            RestorationCycleTests.Run();
         }
         finally { FormableNations.ResetCatalog(); FormableProclamationAi.ResetCatalog(); }
     }
@@ -218,7 +219,8 @@ static class FormableProclamationAiTests
     {
         var (c, n, other, land) = Fixture();
         var all = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).ToArray();
-        var d = Definition(n, all, "partner_proclamation_fixture") with { SubjectIntegration = true };
+        // The whole territory, so the partner's land is needed and its loyalty decides (FormableRequiredShare would let the founder go without it).
+        var d = Definition(n, all, "partner_proclamation_fixture") with { SubjectIntegration = true, RequiredShare = 1f };
         other.IsHuman = false; other.IsPlayer = false; c.HumanSeats.Clear();
         other.SubjectType = "puppet"; other.OverlordId = n.Id; other.LibertyDesire = 1;
         Check(!FormableProclamationAi.Evaluate(c, n, d).CanProclaim,

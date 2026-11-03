@@ -116,11 +116,13 @@ public static class ClaudeStateFingerprintTests
         // RevoltLineageTests shows two identical worlds fingerprinting alike, and recording a
         // parent changing the hash.
         var fixture = CampaignFingerprint.Of(Fixture());
-        Check(fixture == 0xDA9F63EBAEB9AEA7UL,
+        // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
+        Check(fixture == 0xD2110AF9B5F9FA1AUL,
             $"registered land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
         var beforeLand = Fixture();
         beforeLand.Defines.Features.Remove("land_arrangements");
         beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
+        beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
         beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         ulong beforeLandPrint;
@@ -132,6 +134,7 @@ public static class ClaudeStateFingerprintTests
         var legacyMetadata = Fixture();
         legacyMetadata.Defines.Features.Remove("land_arrangements");
         legacyMetadata.Defines.FeatureCommands.Remove("LandArrangementCommand");
+        legacyMetadata.Defines.FeatureCommands.Remove("MergeFleetsCommand"); legacyMetadata.Defines.FeatureCommands.Remove("SplitFleetCommand");
         legacyMetadata.Defines.FeatureSystems.Remove("LandArrangementSystem");
         legacyMetadata.Defines.Features.Remove("crisis_ladder");
         legacyMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");

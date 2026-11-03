@@ -80,6 +80,19 @@ public partial class DealOrForceGame
         _campaignNavigationScreenGroups.Clear();
 
         var lastGroup = "";
+        // A caption that repeats any row under it is a duplicate, not a heading: the rail said
+        // COUNTRY and then COUNTRY, and the second one was the country dossier itself. The guard
+        // used to look only at the first row of the group, which is exactly why it did not catch
+        // this: the group opens with "Situation", and the row that repeats the caption is the one
+        // after it. Checked over the whole group, and on the translated words, so a mod's own
+        // grouping is treated the same way.
+        var repeatedCaptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in CampaignUiCatalog.NavigationItems)
+        {
+            var rowGroup = string.IsNullOrWhiteSpace(row.Group) ? "OTHER SCREENS" : row.Group;
+            if (string.Equals(Tr(rowGroup), Tr(row.Short), StringComparison.OrdinalIgnoreCase))
+                repeatedCaptions.Add(rowGroup);
+        }
         foreach (var item in CampaignUiCatalog.NavigationItems)
         {
             var group = string.IsNullOrWhiteSpace(item.Group) ? "OTHER SCREENS" : item.Group;
@@ -91,11 +104,8 @@ public partial class DealOrForceGame
             if (group != lastGroup)
             {
                 lastGroup = group;
-                // A caption that repeats the name of the row under it is a duplicate, not a
-                // heading: the rail said COUNTRY and then COUNTRY, and the second one was the
-                // country dossier itself. The caption is skipped when the first row of the group
-                // already says the word - the grouping is still there, it just stops stuttering.
-                if (!string.Equals(Tr(group), Tr(item.Short), StringComparison.OrdinalIgnoreCase))
+                // The grouping is still there, it just stops stuttering: see repeatedCaptions.
+                if (!repeatedCaptions.Contains(group))
                 {
                     var caption = Fixed(Title(group, 10, Ui.Colour("text.caption")));
                     caption.Name = "NavGroup" + group.Replace(" ", "");

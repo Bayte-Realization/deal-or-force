@@ -1,0 +1,79 @@
+// The world's resources, 2024: what the harvest, the mines and the fabs are actually made of.
+//
+// Thirty-nine goods could say that a country had "food" and "electronics". They could not say
+// that Egypt eats Ukrainian wheat, that Europe's sunflower oil came through Odesa, that nine
+// chips in ten of the most advanced kind are made on one island, that every one of those fabs
+// runs on a Dutch machine, that a steelworks without South African manganese makes nothing,
+// that China mines four-fifths of the tungsten and nearly all of the gallium, or that a
+// Belarusian potash embargo is felt in an Indian harvest. These twenty-four can, and each of
+// them is in the economy rather than beside it: made somewhere (common/production and the
+// deposits in history/states/2024/zz_world_resources.json), wanted by something, traded, and
+// - through a recipe's `needs` or `shortfall` - missed when it does not come.
+//
+// Food stays the good households eat. The raw harvest - grain, oilseeds, sugar, fish - is what
+// Food is made of, traded on its own, so the countries that grow it and the countries that
+// import it are different countries, as they are.
+//
+// Grain is priced on its trade (`"world_price": "traded"`): importers' wants against exporters'
+// spare, not the whole harvest, most of which never leaves the country that grows it. Its base
+// price is set so that the 2024 price, at the trade's opening tightness, is where it was.
+//
+// `leverage` is what a seller can do with it (CommodityLeverage): "strategic" goods are levers,
+// "high_tech" ones count twice. Abstract weekly market units and prices in billions, like every
+// other good. Essential weights are kept small: a shortage of tungsten is felt through the
+// shells it did not make, not by the household directly; grain and fuel are the exceptions.
+{
+  // ---- the harvest -----------------------------------------------------------------------
+  "Grain": { "name": "Grain", "icon": "GRN", "base_price": 0.0062, "essential_weight": 0.14, "leverage": "strategic", "world_price": "traded",
+    "description": "Wheat, maize and rice: what a nation eats and what it feeds its animals. A few plains feed the world, and a war on one of them is felt in every bakery from Cairo to Jakarta." },
+  "Oilseeds": { "name": "Oilseeds and vegetable oil", "icon": "OIL", "base_price": 0.016, "essential_weight": 0.06, "leverage": "strategic",
+    "description": "Soy, palm, sunflower and rapeseed: cooking oil, animal feed and biodiesel. Indonesia and Malaysia make most of the palm oil, Ukraine and Russia most of the sunflower oil." },
+  "Sugar": { "name": "Sugar", "icon": "SUG", "base_price": 0.011, "essential_weight": 0.04,
+    "description": "Cane and beet sugar, and the ethanol Brazil fills its cars with." },
+  "CashCrops": { "name": "Coffee, cocoa and tea", "icon": "CAF", "base_price": 0.030, "essential_weight": 0.02,
+    "description": "Plantation crops grown in the tropics and drunk in the rich world: the export a dozen poor countries live on." },
+  "Fish": { "name": "Fish", "icon": "FSH", "base_price": 0.018, "essential_weight": 0.05,
+    "description": "The catch and the fish farms: protein for coastal Asia and fishmeal for everyone's livestock." },
+  "Cotton": { "name": "Cotton", "icon": "CTN", "base_price": 0.015, "essential_weight": 0.03,
+    "description": "The fibre most cloth is still woven from. China, India, Brazil and the United States grow three-quarters of it." },
+
+  // ---- the mines ---------------------------------------------------------------------------
+  "Gold": { "name": "Gold", "icon": "Au", "base_price": 0.090, "essential_weight": 0.01,
+    "description": "Jewellery, reserves and the contacts in every circuit board. For Sudan, Mali or Ghana, much of what the world pays them." },
+  "Diamonds": { "name": "Diamonds", "icon": "Dia", "base_price": 0.080, "essential_weight": 0.01,
+    "description": "Gems from Russia, Botswana and Canada, and industrial diamond for every drill bit and cutting wheel." },
+  "ZincLead": { "name": "Zinc and lead", "icon": "Zn", "base_price": 0.024, "essential_weight": 0.03,
+    "description": "Zinc to galvanise steel and lead for batteries and bullets." },
+  "Tin": { "name": "Tin", "icon": "Sn", "base_price": 0.050, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "The solder every circuit board is held together with. Mined in China, Indonesia and the hills of Myanmar's Wa State." },
+  "Tungsten": { "name": "Tungsten", "icon": "W", "base_price": 0.070, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "The hardest metal in use: cutting tools, armour-piercing shot and turbine parts. China mines four-fifths of it." },
+  "Gallium": { "name": "Gallium and germanium", "icon": "Ga", "base_price": 0.110, "essential_weight": 0.02, "leverage": "high_tech",
+    "description": "By-products of aluminium and zinc refining that radar, power chips and night sights cannot do without. China makes nearly all of the gallium and restricted its export in 2023." },
+  "Manganese": { "name": "Manganese", "icon": "Mn", "base_price": 0.022, "essential_weight": 0.03, "leverage": "strategic",
+    "description": "No steel is made without it. South Africa and Gabon mine more than half." },
+  "Chromium": { "name": "Chromium", "icon": "Cr", "base_price": 0.026, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "What makes steel stainless and turbines survive their heat. South Africa, Turkey and Kazakhstan mine three-quarters of it." },
+  "PlatinumMetals": { "name": "Platinum metals", "icon": "Pt", "base_price": 0.120, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "Platinum and palladium for exhaust catalysts, refineries and electronics. South Africa and Russia between them mine four-fifths." },
+  "Potash": { "name": "Potash", "icon": "K", "base_price": 0.020, "essential_weight": 0.04, "leverage": "strategic",
+    "description": "Potassium for fertiliser. Canada, Russia and Belarus hold two-thirds of the world's supply." },
+  "Graphite": { "name": "Graphite", "icon": "C", "base_price": 0.034, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "The anode of every lithium battery and the electrode of every electric furnace. Three-quarters of it is Chinese." },
+  "NobleGases": { "name": "Helium and neon", "icon": "He", "base_price": 0.085, "essential_weight": 0.01, "leverage": "high_tech",
+    "description": "Helium from American and Qatari gas fields; neon from the air-separation plants of steelworks - Mariupol and Odesa purified half the world's chip-grade neon before 2022." },
+  "Titanium": { "name": "Titanium", "icon": "Ti", "base_price": 0.095, "essential_weight": 0.02, "leverage": "strategic",
+    "description": "Sponge metal for airframes, engines and submarine hulls. Russia's VSMPO supplied a third of the world's aerospace titanium." },
+
+  // ---- what is made from them --------------------------------------------------------------
+  "Fuel": { "name": "Refined fuel", "icon": "FUEL", "base_price": 0.048, "essential_weight": 0.22, "leverage": "strategic",
+    "description": "Petrol, diesel and jet fuel from the refineries. Crude oil is worth nothing to a tank until it has been through one." },
+  "Plastics": { "name": "Plastics", "icon": "PLA", "base_price": 0.036, "essential_weight": 0.05,
+    "description": "Polymers from oil and gas: packaging, pipes, car parts and the case of everything electronic." },
+  "AdvancedChips": { "name": "Advanced chips", "icon": "5nm", "base_price": 0.240, "essential_weight": 0.04, "leverage": "high_tech",
+    "description": "Logic chips at the leading edge, for phones, data centres and guided weapons. In 2024 about nine in ten were made in Taiwan, the rest in South Korea and a few fabs in America." },
+  "ChipTools": { "name": "Chipmaking equipment", "icon": "EUV", "base_price": 0.300, "essential_weight": 0.02, "leverage": "high_tech",
+    "description": "Lithography, etching and deposition machines and their optics. Every leading-edge fab on Earth runs on Dutch lithography, German lenses and American and Japanese tools." },
+  "NuclearFuel": { "name": "Nuclear fuel", "icon": "U235", "base_price": 0.160, "essential_weight": 0.03, "leverage": "high_tech",
+    "description": "Enriched uranium. Russia enriched about two-fifths of the world's supply in 2024; Urenco, Orano and China most of the rest." }
+}

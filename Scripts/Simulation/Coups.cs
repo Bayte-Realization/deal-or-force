@@ -6,6 +6,40 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Military coups: the way a government ends in the 2020s far more often than by conquest.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how coups work:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// A coup is NOT random. It happens when the ARMY decides the government has to go.
+/// Every month the officers are asked: is stability below 42%? If yes, a plot forms.
+///
+/// WHAT MAKES A PLOT MORE LIKELY:
+///   • Stability below the threshold (the further below, the more likely).
+///   • A government that rests on the army (military_junta, military_dictatorship).
+///   • Losing a war (CoupLosingWar doubles the risk).
+///   • A coup next door in the last three years (CoupContagion: it spreads).
+///   • Poverty: below the wealth reference, risk grows with the square of the gap.
+///
+/// WHAT STOPS IT:
+///   • Stability back above the threshold before the plot matures (60 days).
+///   • A junta that has just taken power has a two-year grace period.
+///   • Wealth: rich democracies do not have coups (the Przeworski finding, in the code).
+///
+/// WHAT HAPPENS WHEN IT SUCCEEDS:
+///   • The government changes to a military junta.
+///   • Stability jumps (+12 points) and war support (+5) — the order a junta brings.
+///   • Foreign relations reset with countries of a different government type.
+///
+/// WHAT TO CHANGE:
+///   • More coups → lower CoupStabilityThreshold to 0.50 and raise CoupBaseChance.
+///   • Fewer coups → raise CoupStabilityThreshold to 0.35 and set CoupWealthReference to 5000.
+///   • Contagion off → set CoupContagion to 1.0.
+///   • Instant coups → lower CoupPlotDays to 30 (a month from plot to tanks).
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>How often the officers of every country are asked whether they have had enough, in days.</summary>
@@ -268,8 +302,10 @@ public static class Coups
         {
             if (other.Id == nation.Id || other.Movement is not null || other.Population <= 0) continue;
             if (!_disapproving.Contains(other.Ideology)) continue;
-            if (CampaignDiplomacy.Get(c, other.Id, nation.Id) is { } relation)
-                OpinionSystem.Remember(c, relation, "seized_power_by_coup");
+            // Disapproved of by the governments whose politics a coup offends - each as much as
+            // the new junta concerns it (OpinionWitnesses): its neighbours and partners in full,
+            // a democracy on another continent with nothing at stake only a little.
+            OpinionWitnesses.Witness(c, other, nation, null, "seized_power_by_coup");
         }
         c.Chronicle.Record(c, before == nation.Government ? "coup_counter" : "coup", nation.Id);
         c.MarkStrategicChange();

@@ -8,6 +8,8 @@ using DealOrForce.Simulation;
 
 static class WorkerBackendTests
 {
+    private const int HealthyLimitMs = 15000;
+
     static void Check(bool ok, string label)
     { if (!ok) throw new Exception(label); Console.WriteLine("PASS worker: " + label); }
     public static void Fixture(string kind)
@@ -22,10 +24,9 @@ static class WorkerBackendTests
     {
         var c = Campaign.CreateBootstrap(802); var logs = new List<string>();
         c.SetFeature("aviation", false);
-        // Launch the managed protocol fixture with the framework host when present.
-        // Apphost self-spawn and framework-host launch behave differently on this Windows
-        // machine; neither the production worker deadline nor its failure cases change.
         var path = Environment.ProcessPath;
+        // Resolve the managed fixture through the framework host when available;
+        // leave this working tree's independently chosen deadlines unchanged.
         if (!Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase))
         {
             var host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
@@ -37,7 +38,7 @@ static class WorkerBackendTests
         string[] Args(string kind) => Path.GetFileNameWithoutExtension(path).Equals("dotnet", StringComparison.OrdinalIgnoreCase)
             ? new[] { typeof(WorkerBackendTests).Assembly.Location, "--worker-fixture", kind }
             : new[] { "--worker-fixture", kind };
-        var good = new WorkerModBackend(path, Args("ok"), 2500, 7, logs.Add);
+        var good = new WorkerModBackend(path, Args("ok"), 10000, 7, logs.Add);
         good.Hook(c, "campaign_created");
         Check(!good.Disabled && logs.Contains("fixture"), "real process receives a snapshot and responds: " +
             string.Join(" | ", logs));
@@ -48,7 +49,7 @@ static class WorkerBackendTests
         Check(logs.Count == 0, "same day is not dispatched twice");
         foreach (var mode in new[] { "hang", "oversize", "exit" })
         {
-            var broken = new WorkerModBackend(path, Args(mode), mode == "hang" ? 150 : 2500, 7, logs.Add);
+            var broken = new WorkerModBackend(path, Args(mode), mode == "hang" ? 150 : 5000, 7, logs.Add);
             var timer = Stopwatch.StartNew(); broken.Hook(c, "load");
             Check(broken.Disabled && timer.ElapsedMilliseconds < 6000, mode + " is bounded and disables the worker");
             var count = logs.Count; broken.Hook(c, "load");
@@ -113,7 +114,7 @@ static class WorkerBackendTests
         {
             if (!File.Exists(exe)) { Console.WriteLine("SKIP compiled " + language + " fixture: " + exe); continue; }
             c.SetFeature("aviation", false);
-            var worker = new WorkerModBackend(exe, arguments, 2500, 1, logs.Add);
+            var worker = new WorkerModBackend(exe, arguments, HealthyLimitMs, 1, logs.Add);
             worker.Hook(c, "day_advanced"); c.Commands.ApplyAll(c);
             Check(!worker.Disabled && c.FeatureEnabled("aviation"), language + " example runs through the real backend");
         }

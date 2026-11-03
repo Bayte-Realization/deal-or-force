@@ -74,6 +74,7 @@ public partial class DealOrForceGame
         scroll.Name = "OutlinerScroll";
         _outlinerScroll = scroll;
         column.AddChild(scroll);
+        BuildCampaignSoundtrack(column);
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_group_gap", 12));
         scroll.AddChild(body);
@@ -124,6 +125,7 @@ public partial class DealOrForceGame
         // The chronicle's newest sequence is in the fingerprint, so a stop-press entry is
         // always news by the time this runs.
         RefreshTeletype();
+        RefreshNuclearAlert();
         if (_outliner.FindChild("OutlinerToggle", true, false) is Button toggle)
             toggle.Text = Tr("Situation report") + (_outlinerCollapsed ? "  +" : "  −");
 
@@ -153,7 +155,7 @@ public partial class DealOrForceGame
         var peaceOffers = PeaceOffers.AwaitingAnswer(_campaign, player.Id).Count;
         if (peaceOffers > 0)
             AddAlert(AlertLevel.Critical, "alert_peace",
-                Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => RefreshPeaceOfferInterface(),
+                Simulation.Loc.Format("Peace offer: {0}", peaceOffers), () => OpenPeaceOffer(),
                 Tr("Another government has put a settlement to you and is waiting on an answer."));
 
         // The army is the one opponent a player cannot see on the map.
@@ -795,7 +797,7 @@ public partial class DealOrForceGame
             OpenConflictsScreen();
             return;
         }
-        if (line.Id == "peace") { RefreshPeaceOfferInterface(); return; }
+        if (line.Id == "peace") { OpenPeaceOffer(); return; }
         if (line.Id == "event") { RefreshEventInterface(); return; }
         if (line.ArmyId >= 0)
         {

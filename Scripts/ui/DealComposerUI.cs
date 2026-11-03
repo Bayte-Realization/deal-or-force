@@ -208,8 +208,14 @@ public partial class DealOrForceGame
         var frame = new PanelContainer { Name = ours ? "DealGivePanel" : "DealAskPanel",
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         frame.AddThemeStyleboxOverride("panel", WarInsetStyle(12, 10)); body.AddChild(frame);
-        var half = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        half.AddThemeConstantOverride("separation", 7); frame.AddChild(half);
+        // The whole half scrolls when the screen is short, and the region list below keeps a
+        // real height of its own: it used to get whatever the treaties left over, which on a
+        // 1080p screen was one row - one region visible at a time out of thirty-five.
+        var halfScroll = new ScrollContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+        frame.AddChild(halfScroll);
+        var half = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        half.AddThemeConstantOverride("separation", 7); halfScroll.AddChild(half);
         half.AddChild(Title(caption, 17, Ui.Colour("text.accent")));
         var party = new HBoxContainer(); party.AddThemeConstantOverride("separation", 9); half.AddChild(party);
         party.AddChild(FlagBadge(owner.Tag, 24, owner.DisplayName));
@@ -264,6 +270,7 @@ public partial class DealOrForceGame
         regionCount.Name = ours ? "DealGiveRegionCount" : "DealAskRegionCount";
         half.AddChild(regionCount);
         var scroll = new ScrollContainer { SizeFlagsVertical = SizeFlags.ExpandFill,
+            CustomMinimumSize = new Vector2(0, Ui.Metric("deal.region_list_height", 260f)),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
         half.AddChild(scroll);
         var regionRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };

@@ -1,0 +1,6 @@
+{
+  // A peace offer arrives as a notification, not as a window over the map (PeaceOfferUI).
+  "Later": "Later",
+  "Put the terms down without answering. The offer waits in your alerts until it lapses.": "Put the terms down without answering. The offer waits in your alerts until it lapses.",
+  "{0} has put peace terms to you. Open them from the alerts when you are ready.": "{0} has put peace terms to you. Open them from the alerts when you are ready."
+}

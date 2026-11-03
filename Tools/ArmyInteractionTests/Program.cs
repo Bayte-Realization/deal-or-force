@@ -26,6 +26,7 @@ static class Program
         if (args.Length == 0) PostBattleOrderTests.Run();
         if (args.Contains("--battle-reinforcement-only")) { BattleReinforcementTests.RunFixture(); return; }
         if (args.Contains("--military-access-only")) { MilitaryAccessTests.Run(); return; }
+        if (args.Contains("--insurgent-supply-only")) { InsurgentSupplyTests.Run(); return; }
         if (args.Length == 0) MilitaryAccessTests.Run();
         if (args.Contains("--capital-loss-only")) { CapitalLossTests.Run(); return; }
         if (args.Length == 0) CapitalLossTests.Run();
@@ -65,6 +66,7 @@ static class Program
         BattleReinforcementTests.RunFixture();
         if (args.Contains("--advance-layout-only")) { AdvanceLayoutTests.Run(); return; }
         if (args.Contains("--peace81-only")) { Peace81Tests.Run(); return; }
+        if (args.Contains("--peace-offer-throttle-only")) { PeaceOfferThrottleTests.Run(); return; }
         if (args.Contains("--peace-coalition-only")) { PeaceCoalitionTests.Run(); return; }
         OpenAdvanceTests.Run();
         FrontCacheIsolationTests.Run();
@@ -117,8 +119,10 @@ static class Program
             DealOrForce.Simulation.WorldMapSource.Width, DealOrForce.Simulation.WorldMapSource.Height, out var map, out var message), message);
         c.AttachProvinceTopology(map);
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
+        if (args.Contains("--country-merges-map-only")) { CountryMergeTests.Run(c); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
+        if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }
         if (args.Contains("--militia-only")) { MilitiaSeatTests.Run(c); return; }
         if (args.Contains("--gaza-only")) { HeldGroundTests.Run(c); return; }
         if (args.Contains("--ally-ground-only")) { AllyGroundTests.Run(c); return; }
@@ -145,11 +149,15 @@ static class Program
         if (args.Contains("--peace-real-only")) { PeaceCoalitionTests.RunReal(c); return; }
         if (args.Contains("--movement82-only")) { Movement82Tests.Run(c); return; }
         if (args.Contains("--ai-war-only")) { AiWarTests.Run(map); return; }
+        if (args.Contains("--nuclear-strike-only")) { NuclearStrikeTests.Run(map); return; }
+        if (args.Contains("--expeditions-only")) { ExpeditionTests.Run(map); return; }
         if (args.Contains("--backlog69-only")) { Backlog69Tests.Run(c); return; }
         if (args.Contains("--defence-only")) { DefensivePlanTests.Run(c); return; }
         if (args.Contains("--radicalism-only")) { RadicalismTests.Run(c); return; }
         if (args.Contains("--offensive-only")) { OffensivePlanTests.Run(c); return; }
         if (args.Contains("--pocket-only")) { PocketTests.Run(map); return; }
+        if (args.Contains("--stranded-garrison-only")) { StrandedGarrisonTests.RunRising(map); return; }
+        if (args.Contains("--pocket-stores-only")) { StrandedGarrisonTests.RunPocket(map); return; }
         if (args.Contains("--loss-only")) { LossTests.Run(map); return; }
         if (args.Contains("--capital-only")) { CapitalTests.Run(map); return; }
         if (args.Contains("--options-only")) { CampaignOptionsTests.Run(map); return; }
@@ -163,6 +171,7 @@ static class Program
         if (args.Contains("--front-staff-only")) { FrontStaffTests.Run(map); return; }
         if (args.Contains("--modifiers-only")) { ModifierTests.Run(map); return; }
         if (args.Contains("--conflicts-only")) { ConflictTests.Run(map); return; }
+        if (args.Contains("--whole-front-only")) { WholeFrontTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();
         var border = BorderFronts.Candidates(c, rus.Id, ukr.Id);

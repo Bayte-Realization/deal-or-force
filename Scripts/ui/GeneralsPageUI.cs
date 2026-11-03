@@ -52,7 +52,14 @@ public partial class DealOrForceGame
             card.AddChild(body);
 
             var trait = Generals.Trait(group.CommanderTrait);
-            body.AddChild(Title(group.Commander, 16, Ui.Colour("text.bright")));
+            // The commander's emblem beside the name: the temperament read at a glance.
+            var head = new HBoxContainer();
+            head.AddThemeConstantOverride("separation", 10);
+            head.AddChild(TemperamentEmblem(trait.Id, 34));
+            var name = Title(group.Commander, 16, Ui.Colour("text.bright"));
+            name.SizeFlagsVertical = SizeFlags.ShrinkCenter;
+            head.AddChild(name);
+            body.AddChild(head);
             body.AddChild(Title(Loc.Format("{0} · {1:N0} formations · {2:N0} men",
                 group.Name, members.Length, members.Sum(army => army.Personnel)), 12, Ui.Colour("text.caption")));
             body.AddChild(Title(Loc.Format("{0} · skill {1:0}% · {2} won / {3} lost · in command since {4}",
@@ -114,13 +121,38 @@ public partial class DealOrForceGame
         }
     }
 
+    /// <summary>
+    /// A temperament's emblem (gfx/interface/icons/icon_general_&lt;id&gt;.png, replaceable by a mod
+    /// through the sprite catalogue); a mod's temperament without one shows the plain shield.
+    /// </summary>
+    private TextureRect TemperamentEmblem(string traitId, int size) => new()
+    {
+        Texture = Art("icon_general_" + traitId, "res://game/gfx/interface/icons/icon_general_" + traitId + ".png") ??
+                  Art("icon_general_steady", "res://game/gfx/interface/icons/icon_general_steady.png"),
+        CustomMinimumSize = new Vector2(size, size),
+        ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+        StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+        MouseFilter = MouseFilterEnum.Ignore
+    };
+
     /// <summary>The right-hand column on the generals page: the temperaments and what each does.</summary>
     private void GeneralsSide(VBoxContainer rows)
     {
         PolicyHeading(rows, "TEMPERAMENTS");
         foreach (var trait in Generals.All)
-            PolicyText(rows, Loc.Format("{0} — attack ×{1}, defence ×{2}. {3}", Tr(trait.Name),
-                Fmt.Number(trait.Attack), Fmt.Number(trait.Defence), Tr(trait.Description)));
+        {
+            var line = new HBoxContainer();
+            line.AddThemeConstantOverride("separation", 8);
+            var emblem = TemperamentEmblem(trait.Id, 22);
+            emblem.SizeFlagsVertical = SizeFlags.ShrinkBegin;
+            line.AddChild(emblem);
+            var text = Title(Loc.Format("{0} — attack ×{1}, defence ×{2}. {3}", Tr(trait.Name),
+                Fmt.Number(trait.Attack), Fmt.Number(trait.Defence), Tr(trait.Description)), 12, Ui.Colour("text.body"));
+            text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+            text.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            line.AddChild(text);
+            rows.AddChild(line);
+        }
         PolicyHeading(rows, "THE RULES");
         var d = _campaign.Defines;
         PolicyText(rows, Loc.Format(

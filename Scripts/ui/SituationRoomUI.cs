@@ -401,7 +401,7 @@ public partial class DealOrForceGame
         {
             case SituationRoute.Inbox: _assistanceInboxSelected = -1; ClearArmsInboxSelection(); _dealInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
             case SituationRoute.Assistance: _dealInboxSelected = -1; ClearArmsInboxSelection(); _assistanceInboxSelected = item.TargetId; OpenDealInbox(); _situationReturn = "Inbox"; break;
-            case SituationRoute.PeaceOffer: OpenWarLedger(); ShowWarLedgerDetail(item.TargetId); _situationReturn = "Wars"; break;
+            case SituationRoute.PeaceOffer: OpenPeaceOffer(item.TargetId); break;
             case SituationRoute.Organization:
                 _selectedOrganization = item.TargetId; _conflictTab = 4; OpenScreen("Conflicts"); _situationReturn = "Conflicts"; break;
             case SituationRoute.Conflict:
@@ -441,7 +441,10 @@ public partial class DealOrForceGame
     {
         if (input is not InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape }) return false;
         if (_handbookLayer is { Visible: true } || _settingsLayer is { Visible: true } || _saveLoadLayer is { Visible: true } ||
-            _pauseMenuLayer is { Visible: true } || _eventLayer is { Visible: true } || _peaceOfferLayer is { Visible: true }) return false;
+            _pauseMenuLayer is { Visible: true } || _eventLayer is { Visible: true }) return false;
+        // Peace terms the player opened are put down unanswered, as the "Later" button does.
+        if (_peaceOfferLayer is { Visible: true })
+        { ClosePeaceOffer(); GetViewport().SetInputAsHandled(); return true; }
         if (_campaignAlertPopup is { Visible: true })
         { _campaignAlertPopup.Hide(); GetViewport().SetInputAsHandled(); return true; }
         // Search keeps the ordinary first-Esc-to-release-focus contract.

@@ -310,9 +310,12 @@ public static partial class Warfare
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
-                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army) ||
-                StaffReasons.SupplyHoldsAttack(campaign, army))
+                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
                 continue;
+            // A cut-off or stranded formation does not begin an attack on its own (StaffReasons),
+            // but it still marches into ground nobody holds: that is how a pocket breaks out, and
+            // holding it still there froze its escape.
+            var heldBack = StaffReasons.SupplyHoldsAttack(campaign, army);
 
             var enemyMaps = war.IsAttacking(army.NationId) ? DefenderMaps : AttackerMaps;
             var friendlyMaps = war.IsAttacking(army.NationId) ? AttackerMaps : DefenderMaps;
@@ -320,7 +323,8 @@ public static partial class Warfare
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
             bool routed;
-            using (SimProfiler.Measure("      adv:route")) routed = PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
+            using (SimProfiler.Measure("      adv:route"))
+                routed = !heldBack && PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
             if (routed) continue;
             var target = ChooseAssaultTarget(campaign, topology, war, army, controllers, enemyMaps);
             if (target < 0) continue;
@@ -332,6 +336,7 @@ public static partial class Warfare
             Present.Clear();
             foreach (var other in InProvince(target))
                 if (war.Opposes(army.NationId, other.NationId) && other.Divisions >= 0.1f) Present.Add(other);
+            if (heldBack && Present.Count > 0) continue;
 
             if (Present.Count == 0)
             {

@@ -432,6 +432,9 @@ public partial class DealOrForceGame
     {
         var player = _campaign.Player;
         if (nation.Id == player.Id) return false;
+        // A reef, a glacier or a base area the map source drew as a country is not one, and
+        // nobody can be written to there (common/country_merges).
+        if (Simulation.CountryMerges.IsArtefact(_campaign, nation)) return false;
         if (_diplomacyFilter == DiplomacyFilter.All) return true;
         var relation = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
         return _diplomacyFilter switch
@@ -488,9 +491,10 @@ public partial class DealOrForceGame
             _diplomacyRows.RemoveAt(_diplomacyRows.Count - 1);
             if (GodotObject.IsInstanceValid(spare.Select)) spare.Select.QueueFree();
         }
+        var added = false;
         for (var index = 0; index < matches.Length; index++)
         {
-            if (index >= _diplomacyRows.Count) _diplomacyRows.Add(BuildDiplomacyRow());
+            if (index >= _diplomacyRows.Count) { _diplomacyRows.Add(BuildDiplomacyRow()); added = true; }
             // A stable name per place in the list, for tests and tours to press.
             _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
             RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
@@ -500,7 +504,23 @@ public partial class DealOrForceGame
         _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
                                  (query.Length > 0 ? " · " + Tr("found by name") : "");
         _diplomacyCountryEmpty.Visible = matches.Length == 0;
-        FitNegotiationTypography(_diplomacyLayer);
+        FitNegotiationTypography(_diplomacyLayer, full: added);
+    }
+
+    /// <summary>
+    /// The country list's rows, made before the screen is first opened (PrebuildScreens): the
+    /// list keeps and repaints its rows, and building the first two hundred was half of the
+    /// 0.65 s the first open of diplomacy froze the game for. The layer is hidden until then, and
+    /// the first open repaints every row it shows and frees the rest.
+    /// </summary>
+    private void WarmDiplomacyRows()
+    {
+        if (_diplomacyListRows is null || _campaign is null) return;
+        var wanted = _campaign.Nations.Count(nation => DiplomacyListShows(nation, null));
+        while (_diplomacyRows.Count < wanted)
+        {
+            _diplomacyRows.Add(BuildDiplomacyRow());
+        }
     }
 
     private DiplomacyRow BuildDiplomacyRow()

@@ -539,11 +539,11 @@ public partial class DealOrForceGame
             Waterfront.NeedsWater(kind)
             ? Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days. Inland water: it will be worth {4} of a coastal one.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days,
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), ConstructionCost.ExpectedDays(_campaign, nation, kind),
                 Fmt.Percent(Waterfront.Yield(_campaign, WaterAccess.Inland)))
             : Simulation.Loc.Format("{0} begun in {1} · {2} over {3} days.",
                 Simulation.Loc.Get(definition.Name), _stateRegionPicker.GetItemText(_stateRegionPicker.Selected),
-                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), definition.Days);
+                Fmt.Money(ConstructionCost.Of(_campaign, nation, kind)), ConstructionCost.ExpectedDays(_campaign, nation, kind));
         RefreshStateAffairs();
     }
     /// <summary>

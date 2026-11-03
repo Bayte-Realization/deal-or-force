@@ -80,10 +80,11 @@ static class MovementPowerFingerprintTests
         // re-recording, so the shift is those two and nothing else.
         // Pin one current value, not an accumulating allowance of historical goldens.
         var withoutMovement = CampaignFingerprint.Of(Fixture(movement: false));
-        Check(withoutMovement == 0xA51130DBC982C7E3UL,
+        // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
+        Check(withoutMovement == 0x69654ABCA8CA3DF6UL,
             $"a world without movement state retains the current catalogue golden fingerprint (got 0x{withoutMovement:X16})");
         var withMovement = CampaignFingerprint.Of(Fixture());
-        Check(withMovement == 0x3B861D79212F6DD3UL,
+        Check(withMovement == 0x22A558E6BC330E2EUL,
             $"an empty legacy movement retains the current presence and militancy fingerprint (got 0x{withMovement:X16})");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         try
@@ -93,6 +94,7 @@ static class MovementPowerFingerprintTests
             var beforeLand = Fixture(movement);
             beforeLand.Defines.Features.Remove("land_arrangements");
             beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
+            beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
             beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
             var beforeLandPrint = CampaignFingerprint.Of(beforeLand);
             Check(beforeLandPrint == (movement ? 0x6DFF324AB26F9608UL : 0x9FA0DB7DB966B9C4UL),

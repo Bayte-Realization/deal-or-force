@@ -69,11 +69,23 @@ public static class SpriteCatalog
 
     public static IEnumerable<string> Names => Sprites.Keys;
 
+    /// <summary>
+    /// Whether a picture by this name exists - a file, a declaration, or a flag described in
+    /// common/flag_designs. A design is a sprite like any other, so the flag resolver, the
+    /// variant search and every list that asks "does this flag exist" find it without knowing
+    /// it was never a file.
+    /// </summary>
     public static bool Has(string name) =>
-        !string.IsNullOrEmpty(name) && Sprites.ContainsKey(name);
+        !string.IsNullOrEmpty(name) && (Sprites.ContainsKey(name) || FlagDesignCatalog.Has(name));
 
+    /// <summary>
+    /// A design outranks a picture of the same name: it was written on purpose, usually by a
+    /// mod or a player replacing exactly that flag. Its path is not a file but a
+    /// <see cref="FlagDesignCatalog.TexturePrefix"/> address the interface draws.
+    /// </summary>
     public static Sprite Get(string name) =>
-        !string.IsNullOrEmpty(name) && Sprites.TryGetValue(name, out var sprite)
+        FlagDesignCatalog.Has(name) ? new Sprite(FlagDesignCatalog.TexturePrefix + name, "", 1)
+        : !string.IsNullOrEmpty(name) && Sprites.TryGetValue(name, out var sprite)
             ? sprite
             : default;
 

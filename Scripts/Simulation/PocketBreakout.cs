@@ -32,6 +32,13 @@ public sealed partial class Army
 /// day a cut-off formation of a computer-run country that is not fighting and not already marching
 /// is ordered to the nearest friendly province, by the same order a player would give, and is
 /// handed back to the staff when it gets there. Whether it makes it is the fighting's business.
+///
+/// Not every pocket runs at once any more. A pocket lives off its stores for a while
+/// (StrandedGarrisons), and a column on the road is weaker than the same men dug in: a pocket
+/// whose country is fighting its way toward it, or a garrison holding out behind a rising's lines,
+/// stays while the stores last and breaks out when they run low. Every pocket, played or not, has
+/// the distance to friendly ground measured here each morning - it is what the army card shows as
+/// "relief N provinces away", and what decides whether a starving pocket still has someone coming.
 /// </summary>
 public static class PocketBreakout
 {
@@ -40,6 +47,9 @@ public static class PocketBreakout
     private static readonly List<int> Pocketed = new();
     private static readonly HashSet<int> Pocket = new();
     private const int PocketLimit = 200;
+
+    /// <summary>Whether the last <see cref="WayHome"/> gave up because the "pocket" was a large piece of the country, not a pocket.</summary>
+    internal static bool LastPocketTooLarge { get; private set; }
 
     public static void Tick(Campaign campaign)
     {
@@ -58,8 +68,12 @@ public static class PocketBreakout
                 army.AssignedWarId = -1;
                 continue;
             }
-            if (!army.CutOff || army.InBattle || army.IsMoving || army.Divisions < 0.1f ||
-                army.EmbarkedFleetId >= 0 || army.SupportOnly) continue;
+            if (!army.CutOff)
+            {
+                army.ReliefDistance = -1;
+                continue;
+            }
+            if (army.Divisions < 0.1f || army.EmbarkedFleetId >= 0) continue;
             Pocketed.Add(army.Id);
         }
 
@@ -68,10 +82,16 @@ public static class PocketBreakout
             var army = campaign.Armies.Find(candidate => candidate.Id == id);
             if (army is null) continue;
             var nation = campaign.NationById(army.NationId);
-            if (nation is null || !Delegation.RunByAi(nation)) continue;
-            if (army.DirectOrder && !army.BreakingOut) continue;
+            if (nation is null) continue;
+            // Measured for every pocket, played or not: the card reads it, and so does surrender.
             var path = WayHome(campaign, nation, army.ProvinceId);
+            // -2: not a pocket but a whole piece of the country cut off from its capital; nobody
+            // surrenders a province of a country cut in two for want of a road home.
+            army.ReliefDistance = path is not null ? path.Count - 1 : LastPocketTooLarge ? -2 : -1;
+            if (army.InBattle || army.IsMoving || army.SupportOnly || !Delegation.RunByAi(nation)) continue;
+            if (army.DirectOrder && !army.BreakingOut && army.HoldoutSinceDay < 0) continue;
             if (path is null) continue;
+            if (StrandedGarrisons.ShouldHold(campaign, army, path)) continue;
             if (Order(campaign, nation, army, path[^1]) || path.Count > 1 && Order(campaign, nation, army, path[1]))
                 army.BreakingOut = true;
         }
@@ -89,18 +109,25 @@ public static class PocketBreakout
     /// the provinces in order, the pocket first and the friendly province last; null if there is
     /// none within BreakoutSearchDepth.
     /// </summary>
-    private static List<int> WayHome(Campaign campaign, Nation nation, int start)
+    internal static List<int> WayHome(Campaign campaign, Nation nation, int start)
     {
         var map = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
+        LastPocketTooLarge = false;
         if (start <= 0 || start >= map.Neighbors.Length) return null;
         // The pocket itself: the formation's own ground it can reach without crossing the enemy's.
         // Home is own ground outside it. A "pocket" of hundreds of provinces is a country cut in
         // two, not a pocket, and is the staff's to deal with.
+        //
+        // A formation standing on ground the enemy holds - a garrison the morning its region rose -
+        // has no pocket of its own ground to flood: flooding from there ran straight into the
+        // homeland next door, found a "pocket" of hundreds of provinces and gave up on a road home
+        // one province long. Its pocket is the province it stands on.
         Pocket.Clear();
         Frontier.Clear();
         Frontier.Enqueue(start);
         Pocket.Add(start);
+        if (controllers[start] != (ushort)nation.MapIndex) Frontier.Clear();
         while (Frontier.Count > 0)
         {
             var here = Frontier.Dequeue();
@@ -109,7 +136,11 @@ public static class PocketBreakout
                 if (next <= 0 || next >= map.Neighbors.Length || map.IsWater(next) || Pocket.Contains(next) ||
                     controllers[next] != (ushort)nation.MapIndex) continue;
                 Pocket.Add(next);
-                if (Pocket.Count > PocketLimit) return null;
+                if (Pocket.Count > PocketLimit)
+                {
+                    LastPocketTooLarge = true;
+                    return null;
+                }
                 Frontier.Enqueue(next);
             }
         }

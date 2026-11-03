@@ -5,6 +5,38 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Escalation: the ladder from peace to war, climbed and descended, between every pair
+/// of countries in the world.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the escalation ladder explained:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// Every pair of countries has a tension number from 0 to 100 and a stage:
+///   0–24  Peace      — nothing happens.
+///  25–49 Friction   — border incidents, spy exposure, words at the UN.
+///  50–69 Crisis     — ambassadors recalled, mobilisation on the news.
+///  70+   Armed clashes — shooting on the border, casualties, rally.
+///
+/// Each stage begins at the defines below and, once entered, requires tension to
+/// fall BELOW (stage threshold − hysteresis) to leave: a crisis does not end
+/// because tension dipped to 49 for a week.
+///
+/// WHAT PUSHES TENSION UP: hostility, grievances (lost land, lost people), rivalry
+/// stance, proxy wars against each other, opposing ideologies. Neighbours feel all
+/// of it; countries an ocean apart feel half. Allies feel almost none.
+///
+/// WHAT PUSHES IT DOWN: time (the fall rate), a non-aggression pact, trade, and
+/// the peace negotiations the situation room offers.
+///
+/// WHAT TO CHANGE:
+///   • `common/escalation/*.json` — incidents (what happens at friction/crisis).
+///   • The defines below — every threshold, rate and weight.
+///   • To make the world calmer: raise TensionFallRate, lower IncidentChance.
+///   • To make it hair-trigger: raise TensionCrisisAt to 40 and IncidentChance to 0.15.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>How often the tension between two countries is weighed, in days.</summary>

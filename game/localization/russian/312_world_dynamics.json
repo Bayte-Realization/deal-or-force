@@ -1,0 +1,9 @@
+{
+  "chronicle.civil_war_third_front": "{0} обращает оружие против {1}: в гражданской войне внутри {2} открывается новый фронт.",
+  "A war inside the war: {0} against {1}": "Война внутри войны: {0} против {1}",
+  "chronicle.movement_merged": "{1} влилось в {0}: один фронт вместо двух.",
+  "chronicle.movement_absorbed": "{1} перешло к {0}: его люди и бойцы теперь служат этому государству.",
+  "It has joined {0}: one front instead of two.": "Оно влилось в {0}: один фронт вместо двух.",
+  "{0} has joined us: its people, money and fighters are ours now.": "{0} присоединилось к нам: его люди, деньги и бойцы теперь наши.",
+  "Its people and its fighters have gone over to {0}.": "Его люди и бойцы перешли к {0}."
+}

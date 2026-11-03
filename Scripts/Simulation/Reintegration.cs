@@ -495,7 +495,10 @@ public static class Reintegration
         {
             if (army.NationId != parent.Id || army.EmbarkedFleetId >= 0 || army.InBattle ||
                 !ground.Contains(army.ProvinceId)) continue;
-            if (Roll(c.Seed, army.Id, born.Id, c.ElapsedDays) >= share) continue;
+            // Each formation by its own makeup: the people around it, its cohesion, how little
+            // its army will do for this government (StrandedGarrisons.DefectionChance).
+            if (Roll(c.Seed, army.Id, born.Id, c.ElapsedDays) >=
+                StrandedGarrisons.DefectionChance(c, parent, born, army, share)) continue;
             army.NationId = born.Id;
             army.AssignedWarId = -1;
             army.ArmyGroupId = -1;

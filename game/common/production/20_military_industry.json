@@ -6,23 +6,23 @@
 {
   "tank_chain": {
     "good": "Tanks", "output": { "ArmsIndustry": 0.47 },
-    "needs": { "Steel": 0.70, "Machinery": 0.65, "PrecisionComponents": 0.80, "Rubber": 0.85 }
+    "needs": { "Steel": 0.70, "Machinery": 0.65, "PrecisionComponents": 0.80, "Rubber": 0.85, "Tungsten": 0.90 }
   },
   "drone_chain": {
     "good": "Drones", "output": { "ArmsIndustry": 0.46, "ElectronicsPlant": 0.17 },
-    "needs": { "Semiconductors": 0.70, "Batteries": 0.75, "Aluminium": 0.80 }
+    "needs": { "Semiconductors": 0.70, "Batteries": 0.75, "Aluminium": 0.80, "AdvancedChips": 0.85 }
   },
   "combat_aircraft_chain": {
     "good": "CombatAircraft", "output": { "ArmsIndustry": 0.31 },
-    "needs": { "Aluminium": 0.70, "PrecisionComponents": 0.70, "Semiconductors": 0.75, "Machinery": 0.75 }
+    "needs": { "Aluminium": 0.70, "PrecisionComponents": 0.70, "Semiconductors": 0.75, "Machinery": 0.75, "Titanium": 0.80, "Chromium": 0.90, "AdvancedChips": 0.85 }
   },
   "missile_chain": {
     "good": "Missiles", "output": { "ArmsIndustry": 0.28 },
-    "needs": { "Semiconductors": 0.70, "Chemicals": 0.65, "PrecisionComponents": 0.75 }
+    "needs": { "Semiconductors": 0.70, "Chemicals": 0.65, "PrecisionComponents": 0.75, "Gallium": 0.85, "Titanium": 0.90, "AdvancedChips": 0.85 }
   },
   "artillery_chain": {
     "good": "Artillery", "output": { "ArmsIndustry": 0.43 },
-    "needs": { "Steel": 0.65, "Machinery": 0.70 }
+    "needs": { "Steel": 0.65, "Machinery": 0.70, "Tungsten": 0.90 }
   },
 
   "army_tank_bill": { "scope": "nation", "good": "Tanks", "demand": { "divisions": 0.0032, "divisions_at_war": 0.0096 } },
@@ -39,6 +39,7 @@
   // Shells: the 2024 world asked for about one and a half times what its arms plants made.
   "ammunition_chain": {
     "good": "Ammunition", "output": { "ArmsIndustry": 2.75 },
-    "needs": { "Steel": 0.65, "Chemicals": 0.55, "Copper": 0.80 }
+    // Lead cores and tungsten penetrators besides the steel case and the charge.
+    "needs": { "Steel": 0.65, "Chemicals": 0.55, "Copper": 0.80, "ZincLead": 0.85, "Tungsten": 0.90 }
   }
 }

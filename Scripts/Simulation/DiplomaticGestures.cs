@@ -34,6 +34,35 @@ public sealed partial class Defines
     public float ExercisesPoliticalCost { get; set; } = 5f;
     public float ExercisesRivalTension { get; set; } = 5f;
     public int ExercisesCooldownDays { get; set; } = 365;
+    /// <summary>
+    /// A formal apology with compensation: the political credit it costs, the compensation as a share
+    /// of our GDP (never less than <see cref="ApologyMinimumCash"/>), how much of every grievance between
+    /// us it forgives - the relation's own and the ones held as a bystander - and how long before the
+    /// same government can apologise to the same country again.
+    /// </summary>
+    public float ApologyPoliticalCost { get; set; } = 12f;
+    public float ApologyShareOfGdp { get; set; } = 0.001f;
+    public float ApologyMinimumCash { get; set; } = 0.02f;
+    public float ApologyForgiveness { get; set; } = 0.5f;
+    public float ApologyThirdPartyForgiveness { get; set; } = 0.75f;
+    public float ApologyGrievanceRelief { get; set; } = 6f;
+    public float ApologyTensionRelief { get; set; } = 6f;
+    /// <summary>What the grievances between us must be worth (a negative opinion) before there is anything to apologise for.</summary>
+    public float ApologyMinimumGrievance { get; set; } = -5f;
+    public int ApologyCooldownDays { get; set; } = 730;
+    /// <summary>
+    /// Humanitarian aid: its size as a share of our GDP (at most <see cref="HumanitarianAidRecipientShare"/> of
+    /// theirs, never less than <see cref="HumanitarianAidMinimumCash"/>), the share of the grievances they
+    /// hold as a bystander it lets go of, and how long before the same help is sent again.
+    /// </summary>
+    public float HumanitarianAidShareOfGdp { get; set; } = 0.0015f;
+    public float HumanitarianAidRecipientShare { get; set; } = 0.02f;
+    public float HumanitarianAidMinimumCash { get; set; } = 0.01f;
+    public float HumanitarianAidThirdPartyForgiveness { get; set; } = 0.25f;
+    public int HumanitarianAidCooldownDays { get; set; } = 365;
+    /// <summary>Who is in need: stability below this, a war on their soil, or income per head below this share of ours.</summary>
+    public float HumanitarianAidNeedStability { get; set; } = 0.45f;
+    public float HumanitarianAidNeedIncomeShare { get; set; } = 0.5f;
 }
 
 public sealed partial class DiplomaticRelation
@@ -59,7 +88,7 @@ public sealed partial class DiplomaticRelation
 /// </summary>
 public static class DiplomaticGestures
 {
-    public static readonly string[] All = { "state_visit", "show_of_force", "mediate", "loan", "expel_diplomats", "joint_exercises" };
+    public static readonly string[] All = { "state_visit", "show_of_force", "mediate", "loan", "expel_diplomats", "joint_exercises", "apology", "humanitarian_aid" };
 
     private static string Key(string gesture, int target) => $"gesture:{gesture}:{target}";
 
@@ -116,6 +145,21 @@ public static class DiplomaticGestures
                 if (issuer.PoliticalPoints < d.ExercisesPoliticalCost)
                     return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.ExercisesPoliticalCost, issuer.PoliticalPoints);
                 return issuer.Treasury < d.ExercisesCash ? Loc.Get("The treasury cannot pay for it.") : "";
+            case "apology":
+                // Unlike a visit, an apology is for exactly the relationship too poor to receive
+                // one: no opinion is needed, only something to apologise for and the means to pay.
+                if (atWar) return Loc.Get("Not with a country we are at war with.");
+                if (relation is null || OpinionWitnesses.Grievances(c, relation) > d.ApologyMinimumGrievance)
+                    return Loc.Get("There is nothing between us to apologise for.");
+                if (issuer.PoliticalPoints < d.ApologyPoliticalCost)
+                    return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.ApologyPoliticalCost, issuer.PoliticalPoints);
+                return issuer.Treasury < ApologyCost(c, issuer) ? Loc.Get("The treasury cannot pay for it.") : "";
+            case "humanitarian_aid":
+                if (atWar) return Loc.Get("Not with a country we are at war with.");
+                if (!InNeed(c, issuer, target)) return Loc.Get("They are not in need of help.");
+                var aid = HumanitarianAidSize(c, issuer, target);
+                if (aid <= 0f) return Loc.Get("The treasury cannot pay for it.");
+                return issuer.Treasury < aid * 2f ? Loc.Get("The treasury cannot spare it.") : "";
             default:
                 return Loc.Get("This cannot be done.");
         }
@@ -157,6 +201,41 @@ public static class DiplomaticGestures
                 PeaceNegotiation.Acceptance(c, war, side, PeaceTerms.Ceasefire) < c.Defines.MediationAcceptance)
                 return false;
         return true;
+    }
+
+    /// <summary>What a formal apology costs this government in compensation, in billions.</summary>
+    public static float ApologyCost(Campaign c, Nation issuer)
+    {
+        var amount = MathF.Max(c.Defines.ApologyMinimumCash, MathF.Max(0f, issuer.Gdp) * MathF.Max(0f, c.Defines.ApologyShareOfGdp));
+        return float.IsFinite(amount) ? MathF.Round(amount, 3) : c.Defines.ApologyMinimumCash;
+    }
+
+    /// <summary>What humanitarian aid from this donor to this recipient would be, in billions.</summary>
+    public static float HumanitarianAidSize(Campaign c, Nation donor, Nation recipient)
+    {
+        var d = c.Defines;
+        var amount = MathF.Max(0f, donor.Gdp) * MathF.Max(0f, d.HumanitarianAidShareOfGdp);
+        amount = MathF.Min(amount, MathF.Max(0f, recipient.Gdp) * MathF.Max(0f, d.HumanitarianAidRecipientShare));
+        amount = MathF.Max(amount, d.HumanitarianAidMinimumCash);
+        return float.IsFinite(amount) && amount > 0f ? MathF.Round(amount, 3) : 0f;
+    }
+
+    /// <summary>
+    /// Whether a country is in need of help from this one: a government losing its grip, a war
+    /// fought on its own soil, or a people much poorer than ours. Rich countries at peace are not
+    /// sent food parcels, so humanitarian aid cannot be bought as goodwill from anybody at all.
+    /// </summary>
+    public static bool InNeed(Campaign c, Nation donor, Nation recipient)
+    {
+        if (c is null || donor is null || recipient is null || recipient.Population <= 0) return false;
+        var d = c.Defines;
+        if (recipient.Stability < d.HumanitarianAidNeedStability) return true;
+        foreach (var war in c.Wars)
+            if (!war.Ended && war.Involves(recipient.Id) && !war.Involves(donor.Id)) return true;
+        if (donor.Population <= 0) return false;
+        var theirs = recipient.Gdp / recipient.Population;
+        var ours = donor.Gdp / donor.Population;
+        return float.IsFinite(theirs) && float.IsFinite(ours) && theirs < ours * d.HumanitarianAidNeedIncomeShare;
     }
 
     /// <summary>What a development loan from this lender to this borrower would be, in billions.</summary>
@@ -256,6 +335,36 @@ public static class DiplomaticGestures
                     rivals.Count == 0 ? "" : string.Join(", ", rivals.Take(3).Select(r => r.DisplayName)));
                 cooldown = d.ExercisesCooldownDays;
                 break;
+            case "apology":
+                // Say it, pay for it, and let both of them start forgetting. Every fading grievance
+                // between the two keeps only half of what it is worth today and fades from there at
+                // the pace it already had; the ones held as a bystander keep a quarter. Standing
+                // conditions - an embargo in force, a border, fear of the bigger country - are not
+                // memories, and an apology does not touch them: they end when the condition does.
+                var compensation = ApologyCost(c, issuer);
+                issuer.PoliticalPoints -= d.ApologyPoliticalCost;
+                issuer.Treasury -= compensation;
+                target.Treasury += compensation;
+                OpinionWitnesses.Forgive(c, relation, d.ApologyForgiveness, d.ApologyThirdPartyForgiveness);
+                OpinionSystem.Remember(c, relation, "apology_accepted");
+                if (relation.A == targetId) relation.GrievanceA = MathF.Max(0f, relation.GrievanceA - d.ApologyGrievanceRelief);
+                else relation.GrievanceB = MathF.Max(0f, relation.GrievanceB - d.ApologyGrievanceRelief);
+                relation.Tension = MathF.Max(0f, relation.Tension - d.ApologyTensionRelief);
+                c.Chronicle.Record(c, "apology", issuerId, targetId, Fmt.Money(compensation));
+                cooldown = d.ApologyCooldownDays;
+                break;
+            case "humanitarian_aid":
+                // Help, asked for nothing. Remembered whatever they thought of us before, and the
+                // grievances they hold as a bystander - our bad name, a test, a coup they disliked -
+                // count for a little less once our help has arrived.
+                var aid = HumanitarianAidSize(c, issuer, target);
+                issuer.Treasury -= aid;
+                target.Treasury += aid;
+                OpinionSystem.Remember(c, relation, "humanitarian_aid");
+                OpinionWitnesses.Forgive(c, relation, 0f, d.HumanitarianAidThirdPartyForgiveness);
+                c.Chronicle.Record(c, "humanitarian_aid", issuerId, targetId, Fmt.Money(aid));
+                cooldown = d.HumanitarianAidCooldownDays;
+                break;
             default:
                 return false;
         }
@@ -299,6 +408,15 @@ public static class DiplomaticGestures
             relation.LoanLender = -1; relation.LoanOutstanding = 0f; relation.LoanWeekly = 0f; relation.LoanMissedWeeks = 0;
         }
     }
+
+    /// <summary>
+    /// Whether a relationship is worth mending for this government: a great power, a neighbour, or a
+    /// country a noticeable share of our trade runs through. The AI does not apologise to the world.
+    /// </summary>
+    private static bool Matters(Campaign c, Nation nation, Nation other) =>
+        AllianceSystem.GreatPowers(c).Contains(other.Id) ||
+        CampaignDiplomacy.SharesLandBorder(c, nation.MapIndex, other.MapIndex) ||
+        nation.TradeDependenceOn(other.Id) >= 0.02f;
 
     /// <summary>
     /// The computer's governments make the same gestures, once a month each, on its own day:
@@ -349,11 +467,31 @@ public static class DiplomaticGestures
                 relations.Where(r => r.Opinion >= 30f && c.NationById(Other(r)) is { } poor && poor.Gdp < nation.Gdp * 0.05f)
                     .OrderByDescending(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } friend)
                 Perform(c, nation.Id, Other(friend), "loan");
+
+            // Mending a relationship that has gone bad with a country that matters to us - a
+            // great power, a neighbour, a trading partner - and that we are not planning to fight.
+            // The same apology a player can make, on the same terms; the AI reaches for it rarely,
+            // and only where the grievances between the two are real.
+            if (Roll(7) < 0.10f && relations.Where(r => r.Opinion <= -30f && r.Stance != DiplomaticStance.AtWar &&
+                        Other(r) != nation.WarPlanTargetId && c.NationById(Other(r)) is { } them && Matters(c, nation, them) &&
+                        Refusal(c, nation.Id, them.Id, "apology").Length == 0)
+                    .OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } estranged)
+                Perform(c, nation.Id, Other(estranged), "apology");
+
+            // Help for a country in need that thinks poorly or only lukewarmly of us: the cheapest
+            // honest way back from a cold relationship, and one that does not need them to agree.
+            if (Roll(8) < 0.06f && nation.Gdp > 50f && relations.Where(r => r.Opinion is > -70f and < 20f &&
+                        r.Stance != DiplomaticStance.AtWar && Other(r) != nation.WarPlanTargetId &&
+                        c.NationById(Other(r)) is { } them && Matters(c, nation, them) &&
+                        Refusal(c, nation.Id, them.Id, "humanitarian_aid").Length == 0)
+                    .OrderBy(r => r.Opinion).ThenBy(Other).FirstOrDefault() is { } needy)
+                Perform(c, nation.Id, Other(needy), "humanitarian_aid");
         }
     }
 }
 
-/// <summary>A diplomatic gesture made by a government (DiplomaticGestures): state_visit, show_of_force, mediate or loan.</summary>
+/// <summary>A diplomatic gesture made by a government (DiplomaticGestures): state_visit, show_of_force, mediate, loan,
+/// expel_diplomats, joint_exercises, apology or humanitarian_aid.</summary>
 public sealed class DiplomaticGestureCommand : ICampaignCommand
 {
     public int IssuerId { get; init; }

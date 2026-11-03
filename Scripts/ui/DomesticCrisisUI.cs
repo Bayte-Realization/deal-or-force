@@ -55,6 +55,7 @@ public partial class DealOrForceGame
         PolicyText(_policyList, "This is a weekly risk, not a countdown. Low stability, recent coups and defeats raise it. Armed opposition can take only connected governed territory; a foreign office does not grant land.", "text.caption");
         if (civilReason.Length > 0) PolicyText(_policyList, civilReason, "text.body_soft");
         else PolicyText(_policyList, "An outbreak is possible. Restore institutional stability before the next weekly review.", "state.warning");
+        StateFailureBlock(nation);
         if (nation.CoupPlotDay >= 0 && MechanicFeatures.SystemEnabled(_campaign, nameof(Coups)))
         {
             PolicyStat(_policyList, "Military plot under way", Loc.Format("{0} / {1} days",
@@ -202,6 +203,40 @@ public partial class DealOrForceGame
                 group.Governing ? "government" : "agenda");
         }
         PolicyText(rows, "Each group leans the way its own regions do, not the way its name does.", "text.caption");
+    }
+
+    /// <summary>
+    /// The state's failure, read by the same functions the simulation rolls on (StateFailure):
+    /// the signs of collapse that hold, the weekly chance, a collapse under way, and the three
+    /// gauges a revolution needs - a radicalised capital, a full street, a disloyal army.
+    /// </summary>
+    private void StateFailureBlock(Nation nation)
+    {
+        PolicyHeading(_policyList, "STATE FAILURE");
+        if (nation.CollapseStartDay >= 0)
+        {
+            PolicyStat(_policyList, "The state is coming apart", Loc.Format("{0} / {1} waves",
+                nation.CollapseWaves, Math.Max(1, _campaign.Defines.CollapseMaxWaves)), "stability");
+            PolicyText(_policyList, "Regions are breaking away in waves. Raise stability to stop the slide.", "state.warning");
+        }
+        else
+        {
+            PolicyStat(_policyList, "Weekly collapse chance", StateFailure.CollapseChance(_campaign, nation).ToString("P2"), "stability");
+            var refusal = StateFailure.CollapseRefusal(_campaign, nation);
+            if (refusal.Length > 0) PolicyText(_policyList, refusal, "text.body_soft");
+        }
+        foreach (var sign in StateFailure.Signs(_campaign, nation)) PolicyText(_policyList, sign, "text.body");
+        var capital = _campaign.StatesOf(nation).FirstOrDefault(s => s.MapIndex == nation.CapitalStateMapIndex);
+        CrisisGauge(_policyList, "Capital radicalism", M.Clamp01(capital?.Radicalism ?? 0f), _campaign.Defines.RevolutionCapitalRadicalism,
+            "How radical the capital's own people are. A revolution is made in the capital.", "government");
+        CrisisGauge(_policyList, "Street", StateFailure.Street(_campaign, nation), _campaign.Defines.RevolutionStreet,
+            "How many people are out in the capital's streets, from its anger and how organised its people are.", "agenda");
+        CrisisGauge(_policyList, "Army disloyalty", StateFailure.ArmyDisloyalty(_campaign, nation), _campaign.Defines.RevolutionArmyDisloyalty,
+            "How little the army will do for this government: strain among the officers, unpaid soldiers, a war being lost.", "military");
+        var revolution = StateFailure.RevolutionRefusal(_campaign, nation);
+        PolicyText(_policyList, revolution.Length == 0
+            ? "A revolution is possible: the capital, the street and the army have all turned." : revolution,
+            revolution.Length == 0 ? "state.warning" : "text.body_soft");
     }
 
     private void CrisisGauge(VBoxContainer rows, string caption, float value, float threshold, string help, string icon)

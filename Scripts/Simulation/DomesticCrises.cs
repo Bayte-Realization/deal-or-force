@@ -46,7 +46,7 @@ public sealed partial class Nation
 }
 
 /// <summary>Saved history of institutional strain, not a random event probability.</summary>
-public sealed class DomesticCrisisState
+public sealed partial class DomesticCrisisState
 {
     public float CoupPressure;
     public int DaysAboveThreshold;
@@ -167,6 +167,8 @@ public static partial class DomesticCrises
                 ReviewConciliation(c, nation, days);
                 ReviewPressure(c, nation, days);
                 ConsiderConciliation(c, nation);
+                // The street is read weekly: a wave takes days to build, and Read walks every region.
+                if (c.Defines.ProtestsEnabled && (c.ElapsedDays + nation.Id) % 7 == 0) MassProtests.Review(c, nation, Read(c, nation), 7);
             }
         }
     }

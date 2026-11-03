@@ -177,6 +177,8 @@ public partial class DealOrForceGame
         AddGestureAction(rows, target, "loan", "Development loan", "AGREEMENTS");
         AddGestureAction(rows, target, "joint_exercises", "Joint exercises", "INFLUENCE");
         AddGestureAction(rows, target, "expel_diplomats", "Expel their diplomats", "INFLUENCE");
+        AddGestureAction(rows, target, "apology", "Apologise and make amends", "INFLUENCE");
+        AddGestureAction(rows, target, "humanitarian_aid", "Send humanitarian aid", "AGREEMENTS");
         if (!atWar) AddGestureAction(rows, target, "mediate", "Mediate their war", "War and peace");
 
         // --- Cooperation, straight from the map ---
@@ -283,6 +285,10 @@ public partial class DealOrForceGame
             "joint_exercises" => Simulation.Loc.Format("Exercises with them: {0:0.##} political credit and {1}. Opinion between us +15; every rival we share hears the message - tension with both of us rises.",
                 d.ExercisesPoliticalCost, Fmt.Money(d.ExercisesCash)),
             "expel_diplomats" => Simulation.Loc.Get("Expel their diplomats: free, and loud. Their opinion -25 and a grievance, tension between us up; the hawks at home applaud."),
+            "apology" => Simulation.Loc.Format("A formal apology with {0} in compensation and {1:0.##} political credit. Every fading grievance between us is halved, those over other countries' quarrels cut to a quarter; opinion +10 for three years. Standing conditions - an embargo, a border, fear of our strength - are untouched.",
+                Fmt.Money(DiplomaticGestures.ApologyCost(_campaign, player)), d.ApologyPoliticalCost),
+            "humanitarian_aid" => Simulation.Loc.Format("Send {0} of help to a country in need - unstable, at war, or much poorer than us. Opinion +12 for three years whatever they think of us now, and their grudges over other countries' quarrels ease.",
+                Fmt.Money(DiplomaticGestures.HumanitarianAidSize(_campaign, player, target))),
             _ => ""
         };
         button.Disabled = refusal.Length > 0;

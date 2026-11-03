@@ -31,6 +31,12 @@ public sealed partial class Defines
 
     /// <summary>General-staff books held at once. The staff's book does not spend a tactical slot.</summary>
     public int DoctrineGeneralSlots { get; set; } = 1;
+
+    /// <summary>
+    /// Books standing on one shelf at once. The second is learned beside the first.
+    /// One keeps the older rule: a different book on that shelf replaces it.
+    /// </summary>
+    public int DoctrineBooksPerShelf { get; set; } = 2;
 }
 
 /// <summary>
@@ -99,11 +105,25 @@ public sealed class DoctrineTrack
     public int LearningDoneDay = -1;
     public int LastRewriteDay = -9999;
 
-    public DoctrineTrack Clone() => new()
+    /// <summary>The other book on this same shelf. Null until a second book is opened. Not a third shelf.</summary>
+    public DoctrineTrack Companion;
+
+    public DoctrineTrack Clone()
     {
-        Branch = Branch, Known = new List<string>(Known), LearningBranch = LearningBranch,
-        LearningNode = LearningNode, LearningDoneDay = LearningDoneDay, LastRewriteDay = LastRewriteDay
-    };
+        var copy = new DoctrineTrack
+        {
+            Branch = Branch, Known = new List<string>(Known), LearningBranch = LearningBranch,
+            LearningNode = LearningNode, LearningDoneDay = LearningDoneDay, LastRewriteDay = LastRewriteDay
+        };
+        if (Companion is not null)
+            copy.Companion = new DoctrineTrack
+            {
+                Branch = Companion.Branch, Known = new List<string>(Companion.Known),
+                LearningBranch = Companion.LearningBranch, LearningNode = Companion.LearningNode,
+                LearningDoneDay = Companion.LearningDoneDay, LastRewriteDay = Companion.LastRewriteDay
+            };
+        return copy;
+    }
 }
 
 /// <summary>
@@ -390,7 +410,44 @@ public static class TacticalDoctrines
     {
         if (nation is null || branch is null) return null;
         EnsureShelves(nation);
-        return nation.TacticalDoctrine.Track(branch.Slot);
+        var primary = nation.TacticalDoctrine.Track(branch.Slot);
+        if (primary.Companion is { } companion &&
+            (string.Equals(companion.Branch, branch.Id, StringComparison.Ordinal) ||
+             string.Equals(companion.LearningBranch, branch.Id, StringComparison.Ordinal)))
+            return companion;
+        return primary;
+    }
+
+    private enum ShelfHome { Primary, Companion, Open, Rewrite, Full }
+
+    /// <summary>
+    /// Where a book would be written. Does not open the second book: a refusal must not
+    /// leave an empty companion behind.
+    /// </summary>
+    private static ShelfHome Decide(Campaign campaign, Nation nation, DoctrineBranch branch, out DoctrineTrack track)
+    {
+        track = null;
+        if (nation is null || branch is null) return ShelfHome.Full;
+        EnsureShelves(nation);
+        var primary = nation.TacticalDoctrine.Track(branch.Slot);
+        track = primary;
+        if (primary.Branch.Length == 0 ||
+            string.Equals(primary.Branch, branch.Id, StringComparison.Ordinal) ||
+            string.Equals(primary.LearningBranch, branch.Id, StringComparison.Ordinal))
+            return ShelfHome.Primary;
+        if (primary.Companion is { } companion &&
+            (companion.Branch.Length == 0 ||
+             string.Equals(companion.Branch, branch.Id, StringComparison.Ordinal) ||
+             string.Equals(companion.LearningBranch, branch.Id, StringComparison.Ordinal)))
+        {
+            track = companion;
+            return ShelfHome.Companion;
+        }
+        var cap = Math.Max(1, campaign.Defines.DoctrineBooksPerShelf);
+        var held = 1 + (primary.Companion is { Branch.Length: > 0 } ? 1 : 0);
+        if (held < cap) return ShelfHome.Open;
+        if (cap <= 1) return ShelfHome.Rewrite;
+        return ShelfHome.Full;
     }
 
     /// <summary>The book in force on one shelf, or null while the shelf is empty.</summary>
@@ -407,7 +464,12 @@ public static class TacticalDoctrines
     {
         if (nation is null) yield break;
         foreach (var slot in DoctrineSlots.All)
+        {
             if (BookOn(nation, slot) is { } branch) yield return (slot, branch);
+            var extra = nation.TacticalDoctrine.Tracks.GetValueOrDefault(slot)?.Companion;
+            if (extra is { Branch.Length: > 0 } && TacticalDoctrineCatalog.Find(extra.Branch) is { } second)
+                yield return (slot, second);
+        }
     }
 
     /// <summary>Whether this node has been learned under the book in force on its shelf.</summary>
@@ -478,23 +540,27 @@ public static class TacticalDoctrines
         if (branch is null) return Loc.Get("No such Doctrine is written.");
         var node = branch.Find(nodeId);
         if (node is null) return Loc.Get("No such article of the Doctrine is written.");
-        var track = TrackFor(nation, branch);
+        var home = Decide(campaign, nation, branch, out var track);
         if (track is null) return Loc.Get("No such Doctrine is written.");
-        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal) && track.Known.Contains(node.Id))
+        if (home == ShelfHome.Full)
+            return Loc.Format("This shelf already holds {0} doctrines.",
+                Math.Max(1, campaign.Defines.DoctrineBooksPerShelf));
+        var writingThis = home is ShelfHome.Primary or ShelfHome.Companion &&
+            string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
+        if (writingThis && track.Known.Contains(node.Id))
             return Loc.Get("This article has already been learned.");
-        if (track.LearningNode.Length > 0) return Loc.Get("This service is already learning an article.");
-        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal))
+        if (home != ShelfHome.Open && track.LearningNode.Length > 0)
+            return Loc.Get("This service is already learning an article.");
+        if (writingThis)
         {
             foreach (var need in node.Requires)
                 if (!track.Known.Contains(need)) return Loc.Get("The earlier articles of this Doctrine come first.");
         }
-        // A shelf with no book, or another book, starts at the roots: a tree is climbed from
-        // the bottom whether the service is beginning it or beginning it again.
+        // A shelf with no book, a second book, or a replacement starts at the roots.
         else if (node.Requires.Count > 0)
             return Loc.Get("The earlier articles of this Doctrine come first.");
-        var sameBook = string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
-        var rewriting = Rewriting(nation, branch);
-        if (!sameBook)
+        var rewriting = home == ShelfHome.Rewrite;
+        if (home == ShelfHome.Primary && track.Branch.Length == 0)
         {
             var generalShelf = branch.Slot == DoctrineSlots.General;
             var held = BooksHeld(nation, generalShelf);
@@ -533,8 +599,14 @@ public static class TacticalDoctrines
         var branch = TacticalDoctrineCatalog.Find(branchId);
         var node = branch?.Find(nodeId);
         if (branch is null || node is null || Refusal(campaign, nation, branchId, nodeId, rush).Length > 0) return false;
-        var track = TrackFor(nation, branch);
-        if (Rewriting(nation, branch))
+        var home = Decide(campaign, nation, branch, out var track);
+        if (home == ShelfHome.Open)
+        {
+            var primary = nation.TacticalDoctrine.Track(branch.Slot);
+            primary.Companion ??= new DoctrineTrack();
+            track = primary.Companion;
+        }
+        if (home == ShelfHome.Rewrite)
         {
             nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - campaign.Defines.DoctrineRewritePoliticalCost);
             track.Branch = branch.Id;
@@ -554,7 +626,7 @@ public static class TacticalDoctrines
         Spend(nation, branch.Experience, rush ? node.RushCost : node.Cost);
         if (rush)
         {
-            Learn(campaign, nation, branch, node);
+            Learn(campaign, nation, branch, node, track);
         }
         else
         {
@@ -567,9 +639,8 @@ public static class TacticalDoctrines
         return true;
     }
 
-    private static void Learn(Campaign campaign, Nation nation, DoctrineBranch branch, DoctrineNode node)
+    private static void Learn(Campaign campaign, Nation nation, DoctrineBranch branch, DoctrineNode node, DoctrineTrack track)
     {
-        var track = TrackFor(nation, branch);
         // Whose article has just landed is whose book is in force: a crash course taken from
         // nothing must start the Doctrine, not leave the service with a known article and no book.
         track.Branch = branch.Id;
@@ -584,10 +655,28 @@ public static class TacticalDoctrines
         if (Delegation.RunByAi(nation)) Count("doctrine_adopted");
     }
 
+    private static void FinishCourse(Campaign campaign, Nation nation, DoctrineTrack track, int day)
+    {
+        if (track.LearningNode.Length == 0 || day < track.LearningDoneDay) return;
+        var branch = TacticalDoctrineCatalog.Find(track.LearningBranch);
+        var node = branch?.Find(track.LearningNode);
+        if (branch is null || node is null)
+        {
+            track.LearningBranch = ""; track.LearningNode = ""; track.LearningDoneDay = -1;
+            return;
+        }
+        Learn(campaign, nation, branch, node, track);
+        campaign.MarkStrategicChange();
+    }
+
     private static void SyncLegacyFields(Nation nation, DoctrineTrack activeTrack)
     {
         var memory = nation?.TacticalDoctrine;
         if (memory is null || activeTrack is null) return;
+        var primary = false;
+        foreach (var slot in DoctrineSlots.All)
+            if (ReferenceEquals(memory.Tracks.GetValueOrDefault(slot), activeTrack)) { primary = true; break; }
+        if (!primary) return;
         memory.Branch = activeTrack.Branch;
         memory.Known = new List<string>(activeTrack.Known);
         memory.LearningBranch = activeTrack.LearningBranch;
@@ -618,20 +707,10 @@ public static class TacticalDoctrines
         {
             EnsureShelves(nation);
             var memory = nation.TacticalDoctrine;
-            foreach (var track in memory.Tracks.Values)
+            foreach (var track in memory.Tracks.Values.ToArray())
             {
-                if (track.LearningNode.Length == 0 || day < track.LearningDoneDay) continue;
-                var branch = TacticalDoctrineCatalog.Find(track.LearningBranch);
-                var node = branch?.Find(track.LearningNode);
-                if (branch is null || node is null)
-                {
-                    track.LearningBranch = ""; track.LearningNode = ""; track.LearningDoneDay = -1;
-                }
-                else
-                {
-                    Learn(campaign, nation, branch, node);
-                    campaign.MarkStrategicChange();
-                }
+                FinishCourse(campaign, nation, track, day);
+                if (track.Companion is not null) FinishCourse(campaign, nation, track.Companion, day);
             }
             if (!runAi || !Delegation.RunByAi(nation)) continue;
             if ((day + nation.Id) % 7 != 0) continue;
@@ -729,6 +808,24 @@ public static class TacticalDoctrines
                     totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
             }
             if (totals.Count > 0) yield return (book.Name, totals);
+            var companion = track.Companion;
+            if (companion is not { Branch.Length: > 0 } || companion.Known.Count == 0) continue;
+            var other = TacticalDoctrineCatalog.Find(companion.Branch);
+            if (other is null) continue;
+            var key = slot + "#2";
+            if (!cache.TryGetValue(key, out var secondTotals))
+            {
+                secondTotals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                cache[key] = secondTotals;
+            }
+            secondTotals.Clear();
+            foreach (var node in other.Nodes)
+            {
+                if (!companion.Known.Contains(node.Id)) continue;
+                foreach (var effect in node.Modifiers)
+                    secondTotals[effect.Key] = secondTotals.GetValueOrDefault(effect.Key) + effect.Value;
+            }
+            if (secondTotals.Count > 0) yield return (other.Name, secondTotals);
         }
     }
 }

@@ -65,7 +65,11 @@ public static class WarInterventions
 {
     public const int MaxActive = 8, MaxHistory = 24, MaxCooldowns = 256;
 
-    public static bool Enabled(Campaign c) => c is not null && c.FeatureEnabled("diplomacy") &&
+    // Open unless a scenario names a "diplomacy" switch and closes it. It used to require the switch
+    // to be on, and no scenario declares it - so no plea was ever possible, the player's included.
+    public static bool Enabled(Campaign c) => c is not null &&
+        (!(c.Defines.Features?.ContainsKey("diplomacy") == true || c.FeatureOverrides.ContainsKey("diplomacy")) ||
+         c.FeatureEnabled("diplomacy")) &&
         MechanicFeatures.SystemEnabled(c, nameof(CampaignDiplomacy));
 
     public static int Incoming(Campaign c, int nationId) => c?.InterventionRequests.Count(r =>
@@ -195,7 +199,7 @@ public static class WarInterventions
             ArmsShipmentRequests.Incoming(c, donorId) + DealNegotiations.Incoming(c, donorId) >=
             Math.Clamp(c.Defines.DealInboxLimit, 1, 16))
             refusal = "The diplomatic request inbox is full. Wait for a reply.";
-        else if (c.InterventionCooldowns.Count >= MaxCooldowns)
+        else if (c.InterventionCooldowns.Count(x => x.ReadyOnDay > c.ElapsedDays) >= MaxCooldowns)
             refusal = "Too many intervention pleas are already open.";
         else if (c.NextInterventionRequestId <= 0 || c.NextInterventionRequestId == int.MaxValue)
             refusal = "Too many intervention pleas are already open.";
@@ -244,6 +248,7 @@ public static class WarInterventions
         var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
         if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
+        willingness = AiTemper.Willing(c, willingness);
         var aiWouldGrant = !donor.IsHuman && willingness >= c.Defines.AiInterventionWillingness;
 
         return new(true, pretext, willingness, aiWouldGrant, "A valid pretext exists for requesting military intervention.");
@@ -363,6 +368,9 @@ public static class WarInterventions
         var clock = c.InterventionCooldowns.FirstOrDefault(x => x.RequesterId == requesterId && x.DonorId == donorId);
         if (clock is null)
         {
+            // Lapsed clocks go first. They were never cleared, so the 256th plea in a long game
+            // filled the list for good and every plea after it was refused as one too many.
+            c.InterventionCooldowns.RemoveAll(x => x.ReadyOnDay <= c.ElapsedDays);
             if (c.InterventionCooldowns.Count >= MaxCooldowns) return;
             clock = new WarInterventionCooldown { RequesterId = requesterId, DonorId = donorId };
             c.InterventionCooldowns.Add(clock);
