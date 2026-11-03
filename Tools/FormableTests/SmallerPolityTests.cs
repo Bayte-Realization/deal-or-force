@@ -33,6 +33,7 @@ static class SmallerPolityTests
             RepairOnlyOffendingIdentity();
             RepairKeepsLocalRumpsAndPriorUnions();
             DiskRepairIsNotANetworkMutation();
+            BrokenCountryCanBeReunited();
         }
         finally { FormableNations.ResetCatalog(); }
     }
@@ -150,6 +151,32 @@ static class SmallerPolityTests
         Check(!FormableNations.SmallerThanCountry(campaign, holder, restoration) &&
                 FormableProclamationAi.Evaluate(campaign, holder, restoration).CanProclaim,
             "a rump government holding only the local ground is not compared to its lost empire by the AI");
+    }
+
+    static void BrokenCountryCanBeReunited()
+    {
+        // A successor holding the heartland of a country whose rump keeps only a strip: Texas and
+        // a Washington that holds one coast. The rump still stands, so nothing is "vanished".
+        var (campaign, holder) = World("TEX", "Texas", 140_000_000,
+            new ushort[] { 0, 1, 1, 1, 1, 2, 2 }, heartland: new[] { 1, 2, 3, 4 }, strip: new[] { 5, 6 });
+        var rump = new Nation { Id = 1, MapIndex = 2, Tag = "USA", Name = "United States", Population = 400_000,
+            Gdp = 10f, Treasury = 5f, Stability = 0.5f, Government = "presidential_republic", Ideology = "liberalism" };
+        campaign.Nations.Add(rump);
+        campaign.States[1].NationMapIndex = 2;
+        campaign.States[1].NationId = "USA";
+        campaign.ScenarioTerritories["USA"] = new[] { 1, 2, 3, 4, 5, 6 };
+        holder.SecededFromId = rump.Id;
+        Check(FormableRestorations.BrokenApart(campaign, rump) && !FormableRestorations.Vanished(campaign, rump),
+            "a rump holding a sliver of its people is broken apart, not vanished");
+        var reunion = FormableNations.Find(campaign, "reunite_usa");
+        Check(reunion is { Restores: "USA" }, "a broken country is offered as a reunion under its own tag");
+        Check(FormableRestorations.MayRestore(campaign, holder, "USA"), "a successor that rose on its ground may reunite it");
+        var status = FormableNations.Evaluate(campaign, holder, reunion);
+        Check(status.Owned >= status.Required && status.Required < status.Total,
+            $"holding most of the old ground is enough, not all of it ({status.Owned}/{status.Required}/{status.Total})");
+        Check(FormableRestorations.RestoredTag("reunite_usa") == "USA", "a reunion flies the reunited country's flag");
+        campaign.States[0].Population = 300_000; campaign.States[1].Population = 400_000;
+        Check(!FormableRestorations.BrokenApart(campaign, rump), "a rump holding most of its people is not broken apart");
     }
 
     static void BadProclamation(Nation holder)

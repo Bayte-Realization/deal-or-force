@@ -203,6 +203,48 @@
       "patrons": ["RWA"], "listed_by": ["USA", "GBR", "FRA", "BEL"]
     },
     {
+      "id": "allied_democratic_forces", "tag": "ADF", "name": "Allied Democratic Forces",
+      "description": "A Ugandan Islamist insurgency that crossed into the Congo in the 1990s and pledged itself to the Islamic State in 2019 as its Central Africa Province. From camps in the forests of Beni and Irumu it massacres villages along the Ituri road; Ugandan and Congolese troops hunt it together in Operation Shujaa.",
+      "parent": "COD", "colour": "#2b2b2b",
+      "capital": "Mwalika", "capital_at": [29.62, 0.62],
+      "government": "theocracy", "ideology": "theocratic_rule", "peoples": ["nande"],
+      "areas": [
+        [[29.35, 0.25], [29.95, 0.22], [30.08, 0.85], [29.8, 1.35], [29.4, 1.25]]
+      ],
+      "claims_state": false,
+      "relation": "war", "war_name": "ADF Insurgency",
+      "army_share": 0.0, "fighters": 1800, "militia": 2, "stability": 0.35, "war_support": 0.95,
+      "listed_by": ["USA", "UGA", "COD", "GBR"]
+    },
+    {
+      "id": "codeco", "tag": "CDC", "name": "CODECO",
+      "description": "The Cooperative for the Development of the Congo: a Lendu farmers' cooperative turned militia federation in Djugu territory of Ituri, fighting the Hema, the gold-mining sites and the Congolese army in a war over land that has killed thousands since 2017.",
+      "parent": "COD", "colour": "#6d8b3a",
+      "capital": "Fataki", "capital_at": [30.2, 1.95],
+      "government": "military_junta", "ideology": "nationalism", "peoples": ["lendu"],
+      "areas": [
+        [[29.85, 1.5], [30.35, 1.5], [30.45, 2.0], [30.25, 2.4], [29.8, 2.1]]
+      ],
+      "claims_state": false,
+      "relation": "war", "war_name": "Ituri Conflict",
+      "army_share": 0.0, "fighters": 3000, "militia": 3, "stability": 0.3, "war_support": 0.8,
+      "listed_by": ["COD"]
+    },
+    {
+      "id": "twirwaneho", "tag": "TWR", "name": "Twirwaneho",
+      "description": "The self-defence militia of the Banyamulenge, the Tutsi herders of the Minembwe high plateaux in South Kivu, at war with Mai-Mai groups and the Congolese army since 2020. In 2024 its commanders turned towards the M23; Kinshasa calls it the same rebellion under another name.",
+      "parent": "COD", "colour": "#3f6fb5",
+      "capital": "Minembwe", "capital_at": [28.88, -3.55],
+      "government": "military_junta", "ideology": "nationalism", "peoples": ["tutsi"],
+      "areas": [
+        [[28.65, -3.85], [29.1, -3.85], [29.15, -3.35], [28.75, -3.3]]
+      ],
+      "claims_state": false,
+      "relation": "war", "war_name": "Minembwe War",
+      "army_share": 0.0, "fighters": 2500, "militia": 2, "stability": 0.4, "war_support": 0.85,
+      "patrons": ["RWA"], "listed_by": ["COD"]
+    },
+    {
       "id": "united_wa_state_army",
       "tag": "UWS",
       "name": "United Wa State Army",
@@ -472,6 +514,9 @@
     { "sponsor": "TUR", "client": "SOM", "war": ["SOM", "SHB"], "level": 1 },
     { "sponsor": "RUS", "client": "MMR", "war": ["MMR", "NUG"], "level": 1 },
     { "sponsor": "RWA", "client": "AFC", "war": ["COD", "AFC"], "level": 2 },
-    { "sponsor": "ZAF", "client": "COD", "war": ["COD", "AFC"], "level": 1 }
+    { "sponsor": "ZAF", "client": "COD", "war": ["COD", "AFC"], "level": 1 },
+    { "sponsor": "UGA", "client": "COD", "war": ["COD", "ADF"], "level": 2 },
+    { "sponsor": "BDI", "client": "COD", "war": ["COD", "AFC"], "level": 2 },
+    { "sponsor": "RWA", "client": "TWR", "war": ["COD", "TWR"], "level": 1 }
   ]
 }
