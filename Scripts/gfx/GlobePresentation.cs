@@ -746,6 +746,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgb8, result.HydrologyPixels);
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(img));
                 result.HydrologyPixels = null;
+                if (result.RiverCentrePixels is { } centre)
+                {
+                    using var lines = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, centre);
+                    _globeMaterial.SetShaderParameter("river_centre_map", ImageTexture.CreateFromImage(lines));
+                    result.RiverCentrePixels = null;
+                }
                 break;
             }
             case 5:
@@ -2137,6 +2143,9 @@ uniform sampler2D region_ids : filter_nearest;
 uniform sampler2D province_ids : filter_nearest;
 uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
+// Where the nearest river's real course lies from each texel (RG, 16ths of a texel from 128) and
+// that river's importance (B, 0 = none near). Read texel by texel, never filtered.
+uniform sampler2D river_centre_map : filter_nearest, repeat_enable;
 uniform sampler2D crossover_excavations : filter_nearest, repeat_enable;
 uniform float crossover_excavations_active = 0.0;
 uniform sampler2D lake_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -2145,6 +2154,11 @@ uniform float river_inset = -0.10;
 uniform float river_curve_filter = 1.0;
 uniform float river_near_opacity = 0.92;
 uniform float river_far_opacity = 0.58;
+// River width on screen, as half-widths in pixels: a headwater's thread and a great river's line.
+// Close in, a river is never wider than water that size is (river_real_half, in map texels).
+uniform float river_thread_px = 0.75;
+uniform float river_great_px = 1.9;
+uniform float river_real_half = 0.11;
 uniform float water_shore_width = 0.75;
 uniform float water_depth_reach = 5.0;
 uniform float water_texture_strength = 0.65;
@@ -2913,14 +2927,46 @@ void fragment() {
     float lake_distance = (hydrography.r * 255.0 - 128.0) / 16.0;
     // A river is as wide as it is great: a headwater a thread, the Danube a ribbon. One inset
     // for every river drew brooks as wide as the Rhine and both as pale bands of paint.
-    float river_size = smoothstep(0.55, 0.98, hydrography.b);
-    float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
-        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset + mix(0.30, -0.16, river_size);
+    // The raster paints a river as a corridor one to five cells wide - seven to thirty-five
+    // kilometres - and drawing the corridor drew rivers as fat sausages that swelled as the camera
+    // came down. The line is drawn along the river's real course instead (river_centre_map), as
+    // wide as the screen needs to see it (river_thread_px .. river_great_px) and close in never
+    // wider than water of that size is (river_real_half).
+    ivec2 river_map_size = textureSize(river_centre_map, 0);
+    vec2 river_point = vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)) * vec2(river_map_size) - 0.5;
+    ivec2 river_cell = ivec2(floor(river_point));
+    float river_centre = 1.0e4;
+    float river_importance = 0.0;
+    for (int ry = 0; ry < 2; ry++) {
+        for (int rx = 0; rx < 2; rx++) {
+            ivec2 at = river_cell + ivec2(rx, ry);
+            ivec2 fetch = ivec2((at.x % river_map_size.x + river_map_size.x) % river_map_size.x,
+                clamp(at.y, 0, river_map_size.y - 1));
+            vec4 entry = texelFetch(river_centre_map, fetch, 0);
+            if (entry.b <= 0.0) continue;
+            vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
+            // Through the stored point runs the river, in the stored direction: the distance is to
+            // that line within a texel of the point, and to the point beyond, where a course ends.
+            float heading = entry.a * 3.14159265;
+            vec2 along_course = vec2(cos(heading), sin(heading));
+            vec2 offset = river_point - course;
+            float along = abs(dot(offset, along_course));
+            float reach = along < 1.0 ? abs(dot(offset, vec2(-along_course.y, along_course.x))) : length(offset);
+            if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
+        }
+    }
+    vec2 river_line = vec2(river_centre, river_importance);
+    float river_size = smoothstep(0.55, 0.98, river_importance);
+    vec2 river_texels = UV * vec2(river_map_size);
+    float river_texel_px = max(max(length(dFdx(river_texels)), length(dFdy(river_texels))), 0.0001);
+    float river_half = max(mix(0.25, 1.0, river_size) * river_real_half,
+        mix(river_thread_px, river_great_px, river_size) * river_texel_px);
+    float river_distance = river_line.g > 0.0 ? river_centre - river_half : 1.0e4;
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
-    float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
+    float river_edge = max(river_texel_px * 0.75, 0.005);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
     float river_water = 1.0 - smoothstep(-river_edge, river_edge, river_distance);
-    float prominent_river = smoothstep(0.89, 0.98, hydrography.b);
+    float prominent_river = smoothstep(0.78, 0.88, river_line.g);
     float inland_coverage = max(lake_water, river_water);
     float lake_depth = smoothstep(0.0, water_depth_reach, -lake_distance);
     float lake_bank = (1.0 - smoothstep(0.0, water_shore_width + lake_edge, abs(lake_distance))) * lake_water;
@@ -2930,12 +2976,13 @@ void fragment() {
     vec2 water_motion = vec2(TIME * water_animation_speed, 0.0);
     float water_detail = max(detail_mix, province_detail) * water_texture_strength;
     vec3 inland_water = mix(vec3(0.028, 0.145, 0.185), vec3(0.014, 0.080, 0.125), lake_depth);
-    // River water is water: a clear blue that reads against every political colour. The near-black
+    // River water is water: a clear blue that reads against every political colour - thin, but
+    // never the same grey as a border line. The near-black
     // teal it was drew the Han and the Dnieper exactly like the grey region lines beside them, so
     // a player could not tell a river from a border. Great channels run lighter, and carry a
     // brighter current down their middle.
-    vec3 river_color = mix(vec3(0.060, 0.230, 0.360), vec3(0.090, 0.320, 0.480), prominent_river);
-    float river_current = (1.0 - smoothstep(-1.10, -0.35, river_distance)) * prominent_river;
+    vec3 river_color = mix(vec3(0.045, 0.190, 0.330), vec3(0.065, 0.260, 0.430), prominent_river);
+    float river_current = (1.0 - smoothstep(0.0, river_half * 0.45 + river_edge, river_centre)) * prominent_river;
     river_color = mix(river_color, vec3(0.200, 0.470, 0.620), river_current * 0.55);
     float river_bank = (1.0 - smoothstep(0.0, river_edge * 2.5, abs(river_distance))) * (1.0 - river_water);
     if (inland_coverage > 0.001 && water_detail > 0.001) {
@@ -2955,6 +3002,9 @@ void fragment() {
     base = mix(base, inland_water, lake_water);
     base = mix(base, vec3(0.075, 0.175, 0.185), lake_bank * 0.20);
     float river_opacity = mix(river_far_opacity, river_near_opacity, max(detail_mix, province_detail));
+    // A line a pixel or two wide has no width to spare for transparency: drawn at the far opacity
+    // the rivers of a whole continent faded out of the middle zoom.
+    river_opacity = max(river_opacity, 0.85);
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
     // A thin green-brown bank, so the water sits in a valley rather than lying on the land like
@@ -5149,6 +5199,8 @@ void fragment() {
         var seaWork = Task.Run(() => Simulation.SeaLanes.CoastalProvinces(provinces));
         var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
+        var centreWork = Task.Run(() => HydrologySurfaceData.BuildCentreline(MapWidth, MapHeight,
+            Simulation.HydrologyCatalog.RiverFeatures));
         var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
             Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures,
             widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
@@ -5227,6 +5279,7 @@ void fragment() {
             ProvinceIds = provinceIds,
             NationIds = nationIds,
             HydrologyPixels = surfaceWork.GetAwaiter().GetResult(),
+            RiverCentrePixels = centreWork.GetAwaiter().GetResult(),
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             ProvinceRasterLoaded = true,
@@ -5394,6 +5447,7 @@ void fragment() {
         public byte[] ProvinceIds;
         public byte[] NationIds;
         public byte[] HydrologyPixels;
+        public byte[] RiverCentrePixels;
         public Simulation.ProvinceTopology Provinces;
         public Dictionary<int, TerritoryLabelAnchor> LabelAnchors;
         public bool ProvinceRasterLoaded;

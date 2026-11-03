@@ -169,6 +169,79 @@ public static class HydrologySurfaceData
     }
 
     /// <summary>
+    /// How far each texel lies from the nearest river's real course, and how great that river is.
+    ///
+    /// The raster paints a river as a corridor one to five cells wide - seven to thirty-five
+    /// kilometres - and a river drawn as its corridor is a sausage that swells as the camera comes
+    /// down. The course itself is in the vectors. Each texel holds where the nearest river line
+    /// is from its centre - R and G the offset in sixteenths of a texel (128 = none), up to eight
+    /// texels - B that river's importance (the raster's own 225 - 22 per rank, 0 = no river
+    /// near) and A the course's direction there (0..255 over half a turn): the four nearest
+    /// texels' points alone left a dotted line, a texel apart; through each point runs the river. A distance field would not do: filtered, its V-shaped valley never reaches zero, so
+    /// a line thinner than half a texel vanished. The shader finds the true distance to the
+    /// course from the four nearest texels and draws a line as wide as it chooses along it.
+    /// </summary>
+    public static byte[] BuildCentreline(int width, int height, IReadOnlyList<RiverFeature> rivers, int maxRank = 6)
+    {
+        var result = new byte[checked(width * height * 4)];
+        var best = new float[width * height];
+        Array.Fill(best, float.MaxValue);
+        for (var cell = 0; cell < width * height; cell++) { result[cell * 4] = 128; result[cell * 4 + 1] = 128; }
+        if (rivers is null) return result;
+        const float reach = 7.9f;
+        foreach (var river in rivers)
+        {
+            if (river.Rank > maxRank) continue;
+            var importance = (byte)Math.Clamp(225 - river.Rank * 22, 72, 225);
+            foreach (var part in river.Parts)
+                for (var index = 1; index < part.Length; index++)
+                    Segment(part[index - 1], part[index], importance);
+        }
+        return result;
+
+        void Segment(HydroPoint start, HydroPoint end, byte importance)
+        {
+            var ax = (start.Longitude + 180f) / 360f * width - .5f;
+            var ay = (90f - start.Latitude) / 180f * height - .5f;
+            var bx = (end.Longitude + 180f) / 360f * width - .5f;
+            var by = (90f - end.Latitude) / 180f * height - .5f;
+            if (MathF.Abs(bx - ax) > width * .5f)
+            {
+                if (ax < bx) ax += width;
+                else bx += width;
+            }
+            var dx = bx - ax;
+            var dy = by - ay;
+            var lengthSquared = dx * dx + dy * dy;
+            var angle = MathF.Atan2(dy, dx);
+            if (angle < 0f) angle += MathF.PI;
+            var heading = (byte)Math.Clamp((int)MathF.Round(angle / MathF.PI * 255f), 0, 255);
+            var minX = (int)MathF.Floor(MathF.Min(ax, bx) - reach);
+            var maxX = (int)MathF.Ceiling(MathF.Max(ax, bx) + reach);
+            var minY = Math.Clamp((int)MathF.Floor(MathF.Min(ay, by) - reach), 0, height - 1);
+            var maxY = Math.Clamp((int)MathF.Ceiling(MathF.Max(ay, by) + reach), 0, height - 1);
+            for (var y = minY; y <= maxY; y++)
+            for (var x = minX; x <= maxX; x++)
+            {
+                var t = lengthSquared > .00001f
+                    ? Math.Clamp(((x - ax) * dx + (y - ay) * dy) / lengthSquared, 0f, 1f) : 0f;
+                var ox = x - (ax + dx * t);
+                var oy = y - (ay + dy * t);
+                var distance = MathF.Sqrt(ox * ox + oy * oy);
+                if (distance > reach) continue;
+                var cell = y * width + (x % width + width) % width;
+                // The nearer river owns the texel; at equal distance the greater one.
+                if (distance > best[cell] || distance == best[cell] && importance <= result[cell * 4 + 2]) continue;
+                best[cell] = distance;
+                result[cell * 4] = (byte)Math.Clamp((int)MathF.Round(128 - ox * 16f), 0, 255);
+                result[cell * 4 + 1] = (byte)Math.Clamp((int)MathF.Round(128 - oy * 16f), 0, 255);
+                result[cell * 4 + 2] = importance;
+                result[cell * 4 + 3] = heading;
+            }
+        }
+    }
+
+    /// <summary>
     /// A one-cell-wide diagonal raster river is a chain of squares touching at a point.
     /// Linear SDF filtering turns those contacts into narrow, regularly spaced necks.
     /// Round just those 8-connected contacts with short capsules, not a global dilation:
