@@ -79,6 +79,8 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Length == 0) FormableProclamationAiTests.Run();
         if (args.Contains("--smaller-polity-only")) { SmallerPolityTests.Run(); return; }
         if (args.Length == 0) SmallerPolityTests.Run();
+        if (args.Contains("--headline-popups-only")) { HeadlinePopupTests.Run(); return; }
+        if (args.Length == 0) HeadlinePopupTests.Run();
         if (args.Contains("--organic-blocs-only")) { OrganicBlocTests.Run(); return; }
         if (args.Length == 0) OrganicBlocTests.Run();
         if (args.Contains("--diplomatic-missions-only")) { DiplomaticMissionTests.Run(); return; }

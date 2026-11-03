@@ -126,6 +126,14 @@
     "labels": ["Ours, allies and wars", "All", "Ours only"],
     "default": "relevant"
   },
+  "headline_popups": {
+    "category": "interface", "order": 233, "kind": "choice",
+    "name": "Headlines as they happen",
+    "description": "News that comes up on the screen the moment it happens, with why it concerns you: everything about your own country, what happens to your allies, neighbours and enemies, and the world's news only when a great power is in it. A few cards at a time, never a dialog - the full feed is always in the reports.",
+    "values": ["important", "mine", "all", "off"],
+    "labels": ["Important to me", "My country only", "Everything notable", "Off"],
+    "default": "important"
+  },
   "city_names": {
     "category": "interface", "order": 235, "kind": "toggle",
     "name": "Cities on the map",
