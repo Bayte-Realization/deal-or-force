@@ -524,7 +524,7 @@ public static class SaveSystem
         }
     }
 
-    public static SaveLoadResult Load(string root, string slot, string activeModFingerprint)
+    public static SaveLoadResult Load(string root, string slot, string activeModFingerprint, int activeProvinceCount = 0)
     {
         slot = SafeSlot(slot);
         var dataPath = ExistingDataPath(root, slot);
@@ -576,6 +576,12 @@ public static class SaveSystem
         if (!string.Equals(payload.MapDataVersion, MapDataVersion, StringComparison.Ordinal))
             return new SaveLoadResult(null, metadata,
                 $"This save uses map data '{payload.MapDataVersion}', but the active map is '{MapDataVersion}'.");
+        // Saves written before the version was always stored read back as the current version;
+        // the province count still tells a save of another map apart.
+        if (activeProvinceCount > 0 && payload.ProvinceCount > 0 && payload.ProvinceCount != activeProvinceCount)
+            return new SaveLoadResult(null, metadata, Loc.Format(
+                "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign.",
+                payload.ProvinceCount, activeProvinceCount));
         if (payload.ProvinceCount <= 0 ||
             payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
             payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)

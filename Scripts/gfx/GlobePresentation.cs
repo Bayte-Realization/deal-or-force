@@ -204,6 +204,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private double _militaryVisualAccumulator;
     private double _visualClock;
     private Simulation.ProvinceTopology _provinceTopology;
+
+    /// <summary>The provinces of the map this globe has built, or 0 before it has one.</summary>
+    public int ProvinceCount => _provinceTopology?.ProvinceCount ?? 0;
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;

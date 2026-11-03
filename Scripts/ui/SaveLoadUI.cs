@@ -405,7 +405,8 @@ public partial class DealOrForceGame
         WaitForPendingSave();
         // Gzip and the save graph are plain data. Parsing them off this thread lets the
         // loading plate keep drawing; the campaign is swapped in only after the parse returns.
-        var result = await System.Threading.Tasks.Task.Run(() => SaveSystem.Load(SaveRoot, slot, ModFingerprint));
+        var provinces = _campaign?.ProvinceMap?.ProvinceCount ?? _globe?.ProvinceCount ?? 0;
+        var result = await System.Threading.Tasks.Task.Run(() => SaveSystem.Load(SaveRoot, slot, ModFingerprint, provinces));
         DiagnosticLogs.Write(result.Success ? "system" : "errors", $"LOAD_RESULT slot={slot} success={result.Success} detail={result.Warning}");
         if (!result.Success)
         {

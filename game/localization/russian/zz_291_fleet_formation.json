@@ -21,5 +21,6 @@
   "Show on the map": "Показать на карте",
   "Hide from the map": "Скрыть с карты",
   "Paint the foundation territory on the map in your colour, as the new state would stand.": "Закрасить на карте территорию будущего государства вашим цветом — каким оно станет.",
-  "never taken, and they can still fight for it": "не занята, и за неё ещё готовы сражаться"
+  "never taken, and they can still fight for it": "не занята, и за неё ещё готовы сражаться",
+  "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign.": "Это сохранение сделано на другой карте ({0:N0} провинций; на этой карте {1:N0}). Начните новую кампанию."
 }

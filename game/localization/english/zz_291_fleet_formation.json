@@ -21,5 +21,6 @@
   "Show on the map": "Show on the map",
   "Hide from the map": "Hide from the map",
   "Paint the foundation territory on the map in your colour, as the new state would stand.": "Paint the foundation territory on the map in your colour, as the new state would stand.",
-  "never taken, and they can still fight for it": "never taken, and they can still fight for it"
+  "never taken, and they can still fight for it": "never taken, and they can still fight for it",
+  "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign.": "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign."
 }
