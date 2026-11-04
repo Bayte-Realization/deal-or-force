@@ -255,6 +255,7 @@ else {
 # report an unsuccessful managed publish as an export warning rather than an error.
 if ($exportExitCode -ne 0) { throw "Godot export failed with exit code $exportExitCode." }
 if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
+& (Join-Path $PSScriptRoot 'Test-WindowsExecutableIdentity.ps1') -Executable $exe
 
 # ---------------------------------------------------------------- somewhere to put a mod
 # The one folder in the build that belongs to the player rather than to us. Content packs

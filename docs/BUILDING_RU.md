@@ -8,6 +8,11 @@
 `GameVersion.props`, `GameBuildInfo.Version`, `project.godot`, Windows-пресете
 и обоих README/инструкциях сборки; `Tools/Test-ReleaseVersion.ps1` проверяет это до экспорта.
 Версия `SaveSystem.GameVersion` берётся из `GameBuildInfo`.
+Windows-поля `product_name` и `file_description` должны содержать **Deal or Force**.
+`Tools/Test-WindowsExecutableIdentity.ps1 -Executable <game.exe>` проверяет ресурс
+готового `.exe`, из которого диспетчер задач берёт имя. Проверка обязательна при
+упаковке и запуске экспортного стенда: переименование файла или заголовка окна
+не исправляет метаданные уже собранного приложения.
 Папки `docs` и `licenses` в новом пакете не создаются: сведения о сторонних
 материалах сохраняются в `THIRD_PARTY_NOTICES.md`, корневые LICENSE и
 LICENSE-EXCEPTIONS.md остаются. Проверка упаковки: `Tools/Test-PlayerNotices.ps1`.

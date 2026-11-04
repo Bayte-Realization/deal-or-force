@@ -9,6 +9,11 @@ checks the shared game/launcher/rules metadata, engine/export settings and curre
 release documentation before export. `SaveSystem.GameVersion` uses `GameBuildInfo`;
 the save format and network protocol are independent of the release label.
 
+Windows export `product_name` and `file_description` must both be **Deal or Force**.
+`Tools/Test-WindowsExecutableIdentity.ps1 -Executable <game.exe>` checks the actual
+native version resource used by Task Manager; both packaging and runtime verification
+run this gate. Changing the window title or renaming an old `.exe` does not repair it.
+
 ## Once: the export templates
 
 Godot will run the project in the editor with no preparation at all, but it can only build a

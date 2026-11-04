@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ExportDiagnostics.ps1')
 $verificationExecutable = [IO.Path]::GetFullPath($Executable)
 if (-not (Test-Path -LiteralPath $verificationExecutable -PathType Leaf)) { throw "Missing game executable: $verificationExecutable" }
+& (Join-Path $PSScriptRoot 'Test-WindowsExecutableIdentity.ps1') -Executable $verificationExecutable
 if (-not $LogDirectory) {
     $LogDirectory = Join-Path ([IO.Path]::GetTempPath()) ('dof-export-verification-' + [Guid]::NewGuid().ToString('N'))
 }
