@@ -135,6 +135,10 @@ public partial class DealOrForceGame
     {
         _loadingCanvas.Hide();
         _loadingCanvas.QueueFree();
+        // A later input/loading operation must not inspect the already freed
+        // cover's child buttons through a surviving managed wrapper.
+        _loadingCanvas = null;
+        _loadingScreen = null;
         if (_globe is not null) _globe.LoadingInputBlocked = false;
         _isLoading = false;
         _dayAccumulator = 0;

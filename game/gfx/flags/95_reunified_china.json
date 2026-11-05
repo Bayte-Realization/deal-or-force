@@ -1,0 +1,7 @@
+{
+  "sprites": {
+    "flag_chn_china_reunified": "res://game/gfx/flags/flag_chn.png",
+    "flag_twn_china_reunified": "res://game/gfx/flags/flag_twn.png",
+    "flag_formable_china_reunified": "res://game/gfx/flags/flag_chn.png"
+  }
+}

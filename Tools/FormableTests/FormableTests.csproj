@@ -12,6 +12,8 @@
   <ItemGroup><Compile Include="../../Scripts/gfx/DateLineSeam.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/StartupTimeline.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/ApplicationExitState.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/CompatibilityMapShader.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/PackedMapShader.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Modding/ModScalarAccess.cs" /></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
   <ItemGroup><Compile Include="../Shared/ArmyOrderObservation.cs" /></ItemGroup>

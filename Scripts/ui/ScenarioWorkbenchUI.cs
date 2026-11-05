@@ -26,7 +26,9 @@ public partial class DealOrForceGame
     private string _authorScenarioId = "";
     private Action _authorRefreshFiles;
     private ScenarioMapEditor _authorMap;
-    private string AuthorRoot => _authorVerificationRoot ?? ProjectSettings.GlobalizePath("user://mods/editor_workspace");
+    private string _authorSelectedRoot;
+    private string AuthorRoot => _authorSelectedRoot ?? _authorVerificationRoot ?? Path.Combine(GamePaths.Mods, "editor_workspace");
+    private string AuthorModsRoot => _authorVerificationRoot is null ? GamePaths.Mods : Path.Combine(_authorVerificationRoot, "packages");
     private IEnumerable<string> ScenarioRoots => _modLoader.Packages.Select(p => p.PhysicalRoot);
 
     /// <summary>
@@ -55,7 +57,7 @@ public partial class DealOrForceGame
     /// <summary>Whether the campaign was already paused when the workshop opened.</summary>
     private bool _authorPausedBefore;
 
-    private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close")
+    private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close", Action reopen = null)
     {
         var inheritedExit = onClose ?? _authorHomeExit;
         var pausedBefore = _authorCanvas is null
@@ -82,6 +84,7 @@ public partial class DealOrForceGame
         header.AddChild(title);
         _authorExit = inheritedExit ?? (() => CloseAuthorWindow());
         header.AddChild(ActionButton(closeLabel, () => ConfirmAuthorExit(_authorExit), 200, 36));
+        AddAuthorPackageBar(rows, reopen ?? OpenScenarioLibrary);
         return rows;
     }
 
@@ -128,7 +131,7 @@ public partial class DealOrForceGame
 
     private void ConfirmAuthorExit(Action action)
     {
-        if (!_authorDirty) { action(); return; }
+        if (!_authorDirty && !(IsInstanceValid(_authorMap) && _authorMap.Draft?.Dirty == true)) { action(); return; }
         if (_authorCanvas.GetChildren().OfType<ConfirmationDialog>().Any(d => d.Visible)) return;
         var confirm = new ConfirmationDialog { Title = Tr("Unsaved changes"), DialogText = Tr("Discard unsaved changes?"), Exclusive = true };
         _authorCanvas.AddChild(confirm);
@@ -348,7 +351,7 @@ public partial class DealOrForceGame
     private void CreateScenarioCopy()
     {
         if (_campaign.ProvinceMap is null) return;
-        var rows = AuthorWindow("Create scenario");
+        var rows = AuthorWindow("Create scenario", reopen: CreateScenarioCopy);
         rows.AddChild(Title("An independent copy of the current world. Edit its contents in the workshop before publishing.", 14, Ui.Colour("text.muted")));
         var name = new LineEdit { Text = Tr("My scenario"), CustomMinimumSize = new Vector2(400, 40) };
         rows.AddChild(name);
@@ -372,7 +375,7 @@ public partial class DealOrForceGame
 
     private void OpenContentEditor()
     {
-        var rows = AuthorWindow("Content editor");
+        var rows = AuthorWindow("Content editor", reopen: OpenContentEditor);
         rows.AddChild(Title("Game data → your mod. The base game is never overwritten. Ctrl+Z / Ctrl+Y: undo / redo.", 14, Ui.Colour("text.muted")));
         var formatHint = Title("Property and layout edits reformat the document and remove comments. Edit Source to preserve them.", 13, Ui.Colour("text.caption"));
         formatHint.AutowrapMode = TextServer.AutowrapMode.WordSmart;

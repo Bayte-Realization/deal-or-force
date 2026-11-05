@@ -17,10 +17,9 @@ $actual = [IO.File]::ReadAllText($path)
 Assert-Notice ($actual.Contains('© ESA 2010 and UCLouvain')) 'map attribution retained'
 Assert-Notice ($actual.Contains('Keep the original credits and licence links')) 'flag attribution instructions retained'
 Assert-Notice ($actual.Contains('[game/gfx/CREDITS.md](game/gfx/CREDITS.md)')) 'register links resolve from build root'
-foreach ($source in Get-ChildItem (Join-Path $project 'docs/art_sources') -Recurse -File |
-        Where-Object { $_.Extension -in @('.md', '.txt') }) {
-    Assert-Notice ($actual.Contains([IO.File]::ReadAllText($source.FullName))) ("artwork provenance retained: " + $source.Name)
-}
+Assert-Notice ($actual.Contains([IO.File]::ReadAllText((Join-Path $project 'THIRD_PARTY_NOTICES.md')))) 'reviewed player register retained in full'
+Assert-Notice (-not $actual.Contains('Roman restoration flags') -and -not $actual.Contains('#original-artwork')) 'internal art briefs and broken anchors are not appended'
+Assert-Notice ($actual.Contains('Blue Marble') -and $actual.Contains('Natural Earth') -and $actual.Contains('Godot is MIT-licensed')) 'remaining third-party notices retained'
 Assert-Notice (-not (Test-Path (Join-Path $testRoot 'licenses'))) 'no licenses directory generated'
 Assert-Notice (-not (Test-Path (Join-Path $testRoot 'docs'))) 'no docs directory generated'
 Assert-Notice (-not $actual.Contains('## godot-luau-script')) 'native adapter notices omitted when adapter absent'

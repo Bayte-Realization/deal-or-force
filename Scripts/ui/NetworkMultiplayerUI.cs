@@ -195,7 +195,9 @@ public partial class DealOrForceGame
     {
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        // The picker is lazy-built only on the single-player route. A cold direct
+        // Multiplayer launch must not assume the player visited that screen first.
+        if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
         _hudLayer.Visible = false;
         _networkLayer.Visible = true;
         _networkCountryTag.Text = _campaign.Player?.Tag ?? "KOR";
@@ -424,7 +426,7 @@ public partial class DealOrForceGame
         _networkLayer.Visible = false;
         if (firstStart) PlayStrategicCue("campaign_start");
         _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
         _pauseMenuLayer.Visible = false;
         _handoverLayer.Visible = false;
         _hudLayer.Visible = true;

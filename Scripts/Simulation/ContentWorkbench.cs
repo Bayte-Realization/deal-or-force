@@ -215,7 +215,7 @@ public static class ContentWorkbench
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
-    private static void RejectLinks(string target)
+    internal static void RejectLinks(string target)
     {
         for (var p = target; !string.IsNullOrEmpty(p); p = Path.GetDirectoryName(p))
             if ((Directory.Exists(p) || File.Exists(p)) && (File.GetAttributes(p) & FileAttributes.ReparsePoint) != 0)

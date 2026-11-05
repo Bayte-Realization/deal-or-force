@@ -740,27 +740,35 @@ public sealed partial class GlobePresentation : SubViewportContainer
             case 1:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.RegionIds);
-                _globeMaterial.SetShaderParameter("region_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("region_ids", img);
                 result.RegionIds = null;
                 break;
             }
             case 2:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.ProvinceIds);
-                _globeMaterial.SetShaderParameter("province_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("province_ids", img);
                 result.ProvinceIds = null;
                 break;
             }
             case 3:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.NationIds);
-                _globeMaterial.SetShaderParameter("nation_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("nation_ids", img);
                 result.NationIds = null;
                 break;
             }
             case 4:
             {
                 _crossoverHydrology = null;
+                if (ReducedMap)
+                {
+                    // The lightweight material has no hydrology/river-centre samplers.
+                    // Release worker buffers without allocating invisible GPU copies.
+                    result.HydrologyPixels = null;
+                    result.RiverCentrePixels = null;
+                    break;
+                }
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgb8, result.HydrologyPixels);
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(img));
                 result.HydrologyPixels = null;
@@ -1531,17 +1539,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _frontPreview.Visible = _frontMesh.GetSurfaceCount() > 0;
         UpdateBorderTexture(ref _borderControllerTexture, ref _borderControllerImage, controllers, Image.Format.Rg8, "border_controller_ids");
 
-        if (_frontTexture is null)
-        {
-            _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-            _frontTexture = ImageTexture.CreateFromImage(_frontImage);
-            _globeMaterial.SetShaderParameter("front_membership", _frontTexture);
-        }
-        else
-        {
-            _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-            _frontTexture.Update(_frontImage);
-        }
+        if (_frontImage is null) _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("front_membership", _frontImage, ref _frontTexture);
     }
 
     private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch
@@ -1565,12 +1565,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         if (image is null) image = Image.CreateFromData(256, 256, false, format, pixels);
         else image.SetData(256, 256, false, format, pixels);
-        if (texture is null)
-        {
-            texture = ImageTexture.CreateFromImage(image);
-            _globeMaterial.SetShaderParameter(uniform, texture);
-        }
-        else texture.Update(image);
+        UpdateMapImage(uniform, image, ref texture);
     }
 
     /// <summary>
@@ -1908,17 +1903,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var states = map.ProvinceToState;
         for (var province = 1; province < states.Length && province < _selectedRegionPixels.Length; province++)
             if (states[province] == liveRegion) _selectedRegionPixels[province] = 255;
-        if (_selectedRegionTexture is null)
-        {
-            _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
-            _selectedRegionTexture = ImageTexture.CreateFromImage(_selectedRegionImage);
-            _globeMaterial.SetShaderParameter("selected_region_members", _selectedRegionTexture);
-        }
-        else
-        {
-            _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
-            _selectedRegionTexture.Update(_selectedRegionImage);
-        }
+        if (_selectedRegionImage is null) _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+        else _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+        UpdateMapImage("selected_region_members", _selectedRegionImage, ref _selectedRegionTexture);
         _globeMaterial.SetShaderParameter("selected_region_live", 1f);
     }
 
@@ -3223,19 +3210,29 @@ void fragment() {
     SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);
 }"
         };
+        if (ReducedMap) shader.Code = CompatibilityMapShader.Source;
+        else if (RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility") shader.Code = PackedMapShader.Build(shader.Code);
         _globeMaterial = new ShaderMaterial { Shader = shader };
+        InitializePackedTextures();
+        GD.Print("[dof] map material=" + (ReducedMap ? "safe-atlas (reduced visuals)" :
+            _packedLookups is not null ? "full-packed-atlas (12 texture units)" : "full-atlas") + " renderer=" + RenderingServer.GetCurrentRenderingMethod());
         // Until the asynchronous political map has finished, the shader sees transparent
         // political pixels and presents the deliberately flat strategic ocean.
         var transparent = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
         var placeholder = ImageTexture.CreateFromImage(transparent);
         _globeMaterial.SetShaderParameter("political_map", placeholder);
         var emptyIds = ImageTexture.CreateFromImage(Image.CreateEmpty(2, 2, false, Image.Format.Rg8));
-        _globeMaterial.SetShaderParameter("region_ids", emptyIds);
-        _globeMaterial.SetShaderParameter("province_ids", emptyIds);
-        _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
+        if (_packedIds is null)
+        {
+            _globeMaterial.SetShaderParameter("region_ids", emptyIds);
+            _globeMaterial.SetShaderParameter("province_ids", emptyIds);
+            _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
+        }
         var dryWater = Image.CreateEmpty(2, 2, false, Image.Format.Rgb8);
         dryWater.Fill(Colors.White);
         _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(dryWater));
+        if (_packedLookups is null)
+        {
         _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
         _globeMaterial.SetShaderParameter("province_owner_ids",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
@@ -3246,6 +3243,7 @@ void fragment() {
         _globeMaterial.SetShaderParameter("map_mode_colors",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
         _globeMaterial.SetShaderParameter("resource_colors", placeholder);
+        }
         mesh.Material = _globeMaterial;
 
         _globeNode = new MeshInstance3D { Name = "PoliticalGlobe", Mesh = mesh };
@@ -4641,12 +4639,7 @@ void fragment() {
         WriteUnownedPaletteEntry(pixels);
         if (_nationPaletteImage is null) _nationPaletteImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _nationPaletteImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_nationPaletteTexture is null)
-        {
-            _nationPaletteTexture = ImageTexture.CreateFromImage(_nationPaletteImage);
-            _globeMaterial.SetShaderParameter("nation_palette", _nationPaletteTexture);
-        }
-        else _nationPaletteTexture.Update(_nationPaletteImage);
+        UpdateMapImage("nation_palette", _nationPaletteImage, ref _nationPaletteTexture);
     }
 
     private void RefreshProvinceControllers()
@@ -4704,41 +4697,15 @@ void fragment() {
             }
         }
 
-        if (_controllerTexture is null)
-        {
-            _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-            _controllerTexture = ImageTexture.CreateFromImage(_controlImage);
-            _globeMaterial.SetShaderParameter("province_control_colors", _controllerTexture);
-        }
-        else
-        {
-            _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-            _controllerTexture.Update(_controlImage);
-        }
-
-        if (_ownerTexture is null)
-        {
-            _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-            _ownerTexture = ImageTexture.CreateFromImage(_ownerImage);
-            _globeMaterial.SetShaderParameter("province_owner_colors", _ownerTexture);
-        }
-        else
-        {
-            _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-            _ownerTexture.Update(_ownerImage);
-        }
-
-        if (_ownerIdTexture is null)
-        {
-            _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
-            _ownerIdTexture = ImageTexture.CreateFromImage(_ownerIdImage);
-            _globeMaterial.SetShaderParameter("province_owner_ids", _ownerIdTexture);
-        }
-        else
-        {
-            _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
-            _ownerIdTexture.Update(_ownerIdImage);
-        }
+        if (_controlImage is null) _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("province_control_colors", _controlImage, ref _controllerTexture);
+        if (_ownerImage is null) _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+        else _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+        UpdateMapImage("province_owner_colors", _ownerImage, ref _ownerTexture);
+        if (_ownerIdImage is null) _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
+        else _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
+        UpdateMapImage("province_owner_ids", _ownerIdImage, ref _ownerIdTexture);
         _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
         if (ownersMoved) RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;

@@ -23,6 +23,9 @@ param(
     [switch]$NoZip,
     [switch]$IncludeExperimentalNativeLuau,
     [switch]$SkipRuntimeVerification,
+    # Headless tests cannot compile/draw a GPU material. Opt in on a Windows
+    # release workstation; keep GPU-less build servers explicitly separate.
+    [switch]$VerifyRenderers,
     # The in-game probe permits 420 seconds for a cold campaign load, followed
     # by UI/simulation checks. Its enclosing process must not be killed at 180.
     [ValidateRange(10, 900)][int]$RuntimeVerificationTimeoutSeconds = 600,
@@ -448,6 +451,11 @@ Write-Host "  the map rasters ship once, as real files the loader can open" -For
 if (-not $SkipRuntimeVerification) {
     Write-Host '== verifying the actual exported executable ==' -ForegroundColor Cyan
     & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification') -TimeoutSeconds $RuntimeVerificationTimeoutSeconds
+}
+if ($VerifyRenderers) {
+    Write-Host '== verifying real GPU map surfaces (OpenGL + ANGLE + Forward+) ==' -ForegroundColor Cyan
+    # Evidence/profile folders are development output, not part of the player package.
+    & (Join-Path $PSScriptRoot 'verify-renderers.ps1') -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory (Join-Path $stage 'verification-renderers')
 }
 
 # ---------------------------------------------------------------- something to send

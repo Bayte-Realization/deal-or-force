@@ -147,6 +147,10 @@ public sealed class ModLoader
         foreach (var root in GameDataLoader.InstallFolders("mods"))
             DiscoverRoot(root, "res://mods", candidates);
         DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
+        // The workshop writes to the public Documents folder, not a possibly unrelated
+        // Godot user-dir fallback. Prefer that same canonical location as the launcher.
+        if (!string.Equals(Path.GetFullPath(GamePaths.Mods), Path.GetFullPath(ProjectSettings.GlobalizePath("user://mods")), StringComparison.OrdinalIgnoreCase))
+            DiscoverRoot(GamePaths.Mods, "user://mods", candidates);
 
         var selection = LauncherSelection.Read();
         var orderedMods = candidates.Values
@@ -740,7 +744,7 @@ public sealed class ModLoader
 
         foreach (var directory in Directory.GetDirectories(physicalRoot).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
-            if (Path.GetFileName(directory).StartsWith("_", StringComparison.Ordinal)) continue;
+            if (Path.GetFileName(directory).StartsWith("_", StringComparison.Ordinal) || Path.GetFileName(directory).StartsWith(".", StringComparison.Ordinal)) continue;
             var manifestPath = Path.Combine(directory, "manifest.json");
             if (!File.Exists(manifestPath)) continue;
             try
@@ -760,6 +764,10 @@ public sealed class ModLoader
                     PhysicalRoot = directory,
                     VirtualRoot = $"{virtualRoot}/{folder}"
                 };
+                var scripts = Path.Combine(directory, "Scripts");
+                if (Directory.Exists(scripts) && Directory.EnumerateFiles(scripts, "*.cs", new EnumerationOptions
+                    { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, MaxRecursionDepth = 16 }).Any())
+                    Write($"[{manifest.Id}] Scripts/*.cs are source files, not host replacements. Compile an IGlobalityMod assembly under corecode/ and declare corecode_assembly. Use game data IDs or feature-system gates to replace existing behavior.");
             }
             catch (Exception exception)
             {
@@ -1011,7 +1019,10 @@ public sealed class ModLoader
             var loadContext = new ManagedModLoadContext(path);
             _managedContexts.Add(loadContext);
             var assembly = loadContext.LoadFromAssemblyPath(path);
-            var types = assembly.GetTypes().Where(type => !type.IsAbstract && typeof(IGlobalityMod).IsAssignableFrom(type));
+            var types = assembly.GetTypes().Where(type => !type.IsAbstract && !type.IsInterface && !type.ContainsGenericParameters &&
+                typeof(IGlobalityMod).IsAssignableFrom(type)).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+            if (types.Length == 0)
+                throw new InvalidDataException("Code assembly contains no concrete IGlobalityMod entry point. Copying or renaming a game class does not replace the host script.");
             foreach (var type in types)
             {
                 if (Activator.CreateInstance(type) is not IGlobalityMod instance) continue;

@@ -42,11 +42,15 @@ public static partial class FlagCatalog
         for (var i = names.Count-1; i >= 0; i--)
         {
             var name = names[i];
+            var stableIdentity = PreferCountryBase && n.Movement is null &&
+                (name == "flag_" + Slug(n.Tag) || name == "flag_formable_" + Slug(n.FormedNationId) ||
+                 name == "flag_" + Slug(n.Tag) + "_" + Slug(n.FormedNationId));
             var resolved = false;
             // Bounded even for a mod that accidentally creates a fallback cycle.
             for (var depth = 0; depth < 16; depth++)
             {
                 if (!ContextRules.TryGetValue(name,out var rule) || rule.Requires.All(pair =>
+                    (stableIdentity && pair.Key is "ideology" or "government") ||
                     pair.Value.Contains(ValueOf(pair.Key,c,n),StringComparer.OrdinalIgnoreCase)))
                 { resolved = true; break; }
                 name = rule.Otherwise;

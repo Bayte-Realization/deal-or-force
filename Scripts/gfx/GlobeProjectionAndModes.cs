@@ -167,9 +167,7 @@ public sealed partial class GlobePresentation
             }
         if (_resourceImage is null) _resourceImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _resourceImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(_resourceImage);
-        else _resourceTexture.Update(_resourceImage);
-        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        UpdateMapImage("resource_colors", _resourceImage, ref _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
     }
@@ -524,12 +522,7 @@ public sealed partial class GlobePresentation
 
         if (_mapModeImage is null) _mapModeImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _mapModeImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_mapModeTexture is null)
-        {
-            _mapModeTexture = ImageTexture.CreateFromImage(_mapModeImage);
-            _globeMaterial.SetShaderParameter("map_mode_colors", _mapModeTexture);
-        }
-        else _mapModeTexture.Update(_mapModeImage);
+        UpdateMapImage("map_mode_colors", _mapModeImage, ref _mapModeTexture);
         _globeMaterial.SetShaderParameter("map_mode", 1f);
     }
 
@@ -621,10 +614,8 @@ public sealed partial class GlobePresentation
                 pixels[i + 3] = 255;
             }
         }
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(image);
-        else _resourceTexture.Update(image);
-        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        using var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("resource_colors", image, ref _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
     }

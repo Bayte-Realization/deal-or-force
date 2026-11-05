@@ -64,7 +64,7 @@ public partial class DealOrForceGame
     private void OpenFlagEditor(string tag, Action back = null)
     {
         if (_networkConnected || _isLoading) return;
-        var rows = AuthorWindow("Flag editor", back, back is null ? "Close" : "Back");
+        var rows = AuthorWindow("Flag editor", back, back is null ? "Close" : "Back", () => OpenFlagEditor(tag, back));
         BuildFlagEditor(rows, tag, () => _authorDirty = true);
     }
 

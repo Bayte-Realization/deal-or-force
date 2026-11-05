@@ -2,10 +2,10 @@
   "id": "example_csharp_mod",
   "name": "Example: compiled C# mod",
   "version": "1.0.0",
-  "supported_game_version": "0.1.*",
+  "supported_game_version": "0.5.*",
   "enabled": false,
   "load_order": 200,
   "dependencies": [],
   "gdscript_entry": "",
-  "corecode_assembly": "corecode/bin/Debug/net8.0/ExampleCSharpMod.dll"
+  "corecode_assembly": "corecode/bin/Debug/net10.0/ExampleCSharpMod.dll"
 }

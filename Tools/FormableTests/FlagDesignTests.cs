@@ -136,6 +136,9 @@ static class FlagDesignTests
         SpriteCatalog.Load();
         var campaign = Campaign.CreateBootstrap(20261101);
         FlagDesignCatalog.ResetCatalog();
+        // Political variants are an explicit mod policy now; national artwork is stable
+        // in the base game. Test the opt-in ability without changing that default.
+        FlagCatalog.Merge("""{"prefer_country_base":false}""");
         var proven = false;
         foreach (var nation in campaign.Nations.Where(n => n.Ideology.Length > 0).Take(80))
         {
@@ -153,6 +156,7 @@ static class FlagDesignTests
             break;
         }
         Check(proven, "some country's ideology variant can be supplied by a design");
+        FlagCatalog.ResetCatalog();
         var named = tricolour.Clone();
         named.Id = "flag_zz_editor_probe";
         FlagDesignCatalog.Put(named);

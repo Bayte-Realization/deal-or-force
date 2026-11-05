@@ -23,7 +23,7 @@ public partial class DealOrForceGame
     {
         if (_networkConnected || _isLoading || _campaign is null) return;
         tag = (tag ?? _campaign.Player?.Tag ?? "").Trim().ToUpperInvariant();
-        var rows = AuthorWindow("Country editor", back, back is null ? "Close" : "Back");
+        var rows = AuthorWindow("Country editor", back, back is null ? "Close" : "Back", () => OpenCountryEditor(tag, back));
         rows.AddChild(Title("Edit a country as a whole. Saving writes common/countries, history/countries, history/provinces and localization files into your mod; the base game is never changed.", 14, Ui.Colour("text.muted")));
 
         var nation = _campaign.NationByTag(tag);

@@ -143,7 +143,7 @@ public partial class DealOrForceGame
         if (_campaign is not null) _campaign.IsPaused = true;
         if (_pause is not null) _pause.Text = Tr("▶");
         _hudLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
         _menuLayer.Visible = true;
         _sidePanel.Visible = false;
         if (_ledgerLayer is not null) _ledgerLayer.Visible = false;

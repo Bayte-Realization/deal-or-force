@@ -38,6 +38,9 @@ public sealed record FormableNation(string Id, string Name, string Description, 
     /// FormableRequiredShare, or FormableRestorationShare for a restoration.
     /// </summary>
     public float RequiredShare { get; init; } = -1f;
+    /// <summary>Optional per-component floor. A tiny partner must not disappear in a
+    /// continental total (China cannot count Taiwan as a rounding error).</summary>
+    public float MinimumComponentShare { get; init; } = .5f;
 }
 public sealed record FormationRequirement(string Label, bool Met);
 public sealed record FormationStatus(FormationRequirement[] Requirements, int Owned, int Total, float Cost)
@@ -187,6 +190,7 @@ public static class FormableNations
                     RequiredRegions = Ids("required_regions", old?.RequiredRegions),
                     Supersedes = Ids("supersedes", old?.Supersedes),
                     RequiredShare = Number("required_share", old?.RequiredShare ?? -1f),
+                    MinimumComponentShare = Number("minimum_component_share", old?.MinimumComponentShare ?? .5f),
                     AliasOf = Text("alias_of", old?.AliasOf ?? ""),
                     Restores = (Text("restores", old?.Restores ?? "") ?? "").ToUpperInvariant(),
                     PeacefulAccession = e.TryGetProperty("peaceful_accession", out var accession)
@@ -197,7 +201,7 @@ public static class FormableNations
                         ? ai.GetBoolean() : old?.AiFoundation ?? false
                 };
                 if (string.IsNullOrWhiteSpace(d.Id) || string.IsNullOrWhiteSpace(d.Name) || (d.EligibleTags.Length == 0 && d.EligibleCultures.Length == 0 && d.EligibleCultureGroups.Length == 0 && d.EligibleReligions.Length == 0) || (d.RequiredTags.Length == 0 && d.RequiredProvinces.Length == 0 && d.RequiredRegions.Length == 0) ||
-                    d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain, d.MinimumReligionShare }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
+                    d.RequiredProvinces.Any(p => p <= 0) || new[] { d.MinimumStability, d.CostShare, d.GovernanceGain, d.ProductivityGain, d.MinimumReligionShare, d.MinimumComponentShare }.Any(v => !float.IsFinite(v) || v < 0 || v > 1))
                     throw new FormatException("empty eligibility/territory or values outside 0..1");
                 if (d.RequiredIdeology.Any(id => !IdeologyCatalog.Knows(id)))
                     throw new FormatException("names an ideology nothing declares");
@@ -395,6 +399,19 @@ public static class FormableNations
         // Unresolved IDs fail closed rather than silently disappearing.
         var land = provinces.Where(p => map is null || p <= 0 || p > map.ProvinceCount || !map.WaterByProvince[p]).ToArray();
         var owned = land.Count(Held);
+        // Authored components are separate founding mandates, not province-weighted votes.
+        // Restorations retain their aggregate rule. Mods can explicitly opt out of
+        // the component floor with minimum_component_share: 0.
+        if (d.MinimumComponentShare > 0f && string.IsNullOrEmpty(d.Restores))
+            foreach (var tag in d.RequiredTags)
+            {
+                var component = FormableRestorations.Authored(campaign, tag)
+                    .Where(p => map is not null && p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]).ToArray();
+                var secured = component.Count(Held);
+                var needed = (int)MathF.Ceiling(component.Length * d.MinimumComponentShare);
+                requirements.Add(new(Loc.Format("Founding component {0} secured: {1}/{2}", tag, secured, needed),
+                    component.Length > 0 && secured >= needed));
+            }
         // Most of it, not all of it: every formable used to demand each last province, so one
         // island or one rebel-held valley kept a union from ever being proclaimed. The share is
         // the formable's own (required_share), or the defaults.

@@ -1,31 +1,7 @@
--- Luau data module, not an attachable Godot class (.mod.lua).
+-- Pure event-design example, not an attachable Godot class (.mod.lua).
+-- This returns proposals only. It is NOT registered with the campaign event system.
+-- Each function is defined once: Lua silently replaces earlier duplicate definitions.
 local Event = {}
-
-function Event.city_in_ruins(state)
-    if state.at_war and state.worst_war_damage >= 0.45 then
-        return {
-            title = "A city in ruins",
-            options = {
-                { title = "Evacuate", effects = { stability = 0.004, gdp_percent = -0.002 } },
-                { title = "Symbol", effects = { war_support = 0.02, stability = -0.004 } }
-            }
-        }
-    end
-    return nil
-end
-
-function Event.refugees_come_home(state)
-    if not state.at_war and state.recent_war_damage > 0.1 then
-        return {
-            title = "Refugees come home",
-            options = {
-                { title = "Welcome", effects = { workforce = 0.01, stability = 0.005 } },
-                { title = "Control", effects = { stability = 0.01, war_support = -0.005 } }
-            }
-        }
-    end
-    return nil
-end
 
 function Event.grid_failure_capital(state)
     if not state.at_war and state.capital_infrastructure_failure then

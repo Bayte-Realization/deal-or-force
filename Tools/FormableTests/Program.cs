@@ -10,6 +10,10 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--gpu-atlas-contract-only")) { GpuAtlasContractTests.Run(); return; }
+        if (args.Length == 0) GpuAtlasContractTests.Run();
+        if (args.Contains("--release-0530-only")) { Release0530Tests.Run(); return; }
+        if (args.Length == 0) Release0530Tests.Run();
         if (args.Contains("--country-name-settings-only")) { CountryNameSettingTests.Run(); return; }
         if (args.Length == 0) CountryNameSettingTests.Run();
         if (args.Contains("--field-use-only")) { FieldUseTests.Run(); return; }

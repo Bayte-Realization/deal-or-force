@@ -144,8 +144,9 @@ public static class QualityProfiles
         foreach (var marker in SoftwareMarkers)
             if (name.Contains(marker, StringComparison.OrdinalIgnoreCase))
                 return Loaded[^1].Clone();
-        if ((renderingMethod ?? "").Contains("gl_compatibility", StringComparison.OrdinalIgnoreCase))
-            return Loaded[Math.Max(0, Loaded.Count - 2)].Clone();
+        // OpenGL/ANGLE is an API choice, not a performance measurement. A working
+        // full material must not lose city names, weather or resolution merely for
+        // using that backend. Auto adapts to measured frames; a manual tier wins.
         return Loaded[0].Clone();
     }
 

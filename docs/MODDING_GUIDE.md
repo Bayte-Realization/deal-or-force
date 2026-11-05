@@ -1,5 +1,7 @@
 # The modding guide
 
+[0.5.3.0: choosing editor packages and what code/data replacement actually supports](MOD_WORKSPACES_0530.md).
+
 *Русская версия: [MODDING_GUIDE_RU.md](MODDING_GUIDE_RU.md)*
 
 Scenario mechanic switches (`Features` / `FeatureUnlocks`), scripted activation,

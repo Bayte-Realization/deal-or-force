@@ -109,6 +109,7 @@ public partial class ExportVerification : Node
                 ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                 return;
             }
+            if (args.Contains("--verify-release-0530-only")) MainMenuScene.Wanted = MenuIntent.Multiplayer;
             Check(tree.ChangeSceneToFile("res://Scenes/Main.tscn") == Error.Ok, "campaign scene opens from the pack");
             // How long the world may take to appear before the gate calls it a hang.
             //
@@ -144,7 +145,31 @@ public partial class ExportVerification : Node
             Check(game is not null, "world, loose data and managed campaign finish loading");
             if (game is not null)
             {
+                if (args.Contains("--verify-release-0530-only"))
+                    Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
+                        "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 game.Call("BeginSession");
+                if (DisplayServer.GetName() != "headless") await VerifyMapSurface(game);
+                if (args.Contains("--verify-map-render-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "map-render verification requires a real GPU viewport");
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-release-0530-only"))
+                {
+                    await VerifyRelease0530(game, args);
+                    game.Call("OpenScenarioLibrary");
+                    await Wait(.15);
+                    using (var escape = new InputEventKey { Pressed = true, Keycode = Key.Escape }) game._Input(escape);
+                    await Wait(.3);
+                    Check(tree.CurrentScene is MainMenuScene, "workshop Escape returns to the main menu without using a detached viewport");
+                    await Capture("workshop-escape-main-menu");
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-campaign-exit-only"))
                 {
                     VerifyCampaignApplicationExit(game);

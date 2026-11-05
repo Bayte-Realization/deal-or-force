@@ -82,7 +82,7 @@ public partial class DealOrForceGame : Control
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
-        await RunLoadingOperation("Preparing the world", async () =>
+        var loaded = await RunLoadingOperation("Preparing the world", async () =>
         {
             // Folders first: the journal below writes into `logs/`, and the first thing a
             // support conversation needs is one known folder rather than two.
@@ -118,7 +118,9 @@ public partial class DealOrForceGame : Control
         // BuildInterface: the intent can mean "load the last save", and a save cannot be
         // loaded into a world that has not been created yet - which is exactly what happened
         // the first time this was called from the interface pass.
-        OpenWhateverWasAskedFor();
+        // A failed boot keeps its error cover. Do not open an intent against a
+        // half-built campaign/UI (the cold multiplayer route used to do exactly that).
+        if (loaded && _startupComplete && IsInsideTree()) OpenWhateverWasAskedFor();
     }
 
     public override void _Process(double delta)
@@ -291,6 +293,15 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        // Loading can yield before any covered panel exists. Gate BEFORE dispatching
+        // to helpers or authoring dialogs, not half way through the input chain.
+        if (_isLoading || !_startupComplete)
+        {
+            if (inputEvent is InputEventKey loadingKey &&
+                !(IsInstanceValid(_loadingScreen) && _loadingScreen.CanDismiss && loadingKey.Keycode is Key.Enter or Key.Space))
+                GetViewport().SetInputAsHandled();
+            return;
+        }
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
         // The big trees are read before the map is: a wheel over a graph is a wheel about the
         // graph, and must not also march the camera or scroll the page behind it.
@@ -326,16 +337,12 @@ public partial class DealOrForceGame : Control
             // with no interface on it, which is exactly the bug it looked like. See
             // `AuthorWindow`: the window is told where its exit leads when it is opened.
             if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { EscapeAuthorWindow(); GetViewport().SetInputAsHandled(); }
-            return;
-        }
-        if (_isLoading || !_startupComplete)
-        {
-            // Tab/hotkeys must not move focus to the covered game. Only the error
-            // action may receive keyboard activation; mouse delivery stays with the cover.
-            if (inputEvent is InputEventKey loadingKey &&
-                !(_loadingScreen is { CanDismiss: true } && loadingKey.Keycode is Key.Enter or Key.Space))
+            {
+                // The workshop's exit can switch scenes immediately. Mark the input
+                // first: after that callback this node may no longer have a viewport.
                 GetViewport().SetInputAsHandled();
+                EscapeAuthorWindow();
+            }
             return;
         }
         // Space is a sacred strategy-game time key: it never activates a focused

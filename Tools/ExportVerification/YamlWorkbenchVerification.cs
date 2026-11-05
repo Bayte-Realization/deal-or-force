@@ -103,7 +103,7 @@ public partial class ExportVerification
 
 public partial class DealOrForceGame
 {
-    internal void VerificationAuthorRoot(string root) => _authorVerificationRoot = root;
+    internal void VerificationAuthorRoot(string root) { _authorSelectedRoot = null; _authorVerificationRoot = root; }
     internal string VerificationAuthorRelative => _authorRelative;
     internal string VerificationAuthorStatus => _authorStatus?.Text;
     internal void VerificationAuthorTab(int index) => _authorTabs.CurrentTab = index;
