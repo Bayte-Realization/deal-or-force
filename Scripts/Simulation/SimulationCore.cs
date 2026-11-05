@@ -895,8 +895,8 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("border shape")) BorderShape.Tick(this);
         using (SimProfiler.Measure("civil war fronts")) CivilWarFronts.Tick(this);
         using (SimProfiler.Measure("movement mergers")) MovementMergers.Tick(this);
-        using (SimProfiler.Measure("diplomatic acts")) DiplomaticActs.Tick(this);
-        using (SimProfiler.Measure("logistics")) LogisticsSystem.Tick(this);
+        using (SimProfiler.Measure("diplomatic acts")) ModSimulationPasses.Run(this, SimulationPass.DiplomaticActs, DiplomaticActs.Tick);
+        using (SimProfiler.Measure("logistics")) ModSimulationPasses.Run(this, SimulationPass.Logistics, LogisticsSystem.Tick);
         // A frame may stop here and between the fleets and the fighting: the same passes in the
         // same order, but the step's heaviest pair - supply and the battles with their staff
         // work, thirty milliseconds together - no longer has to land in one frame.
@@ -908,7 +908,7 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("  naval:operations")) NavalOperations.Tick(this);
         }
         yield return 0;
-        using (SimProfiler.Measure("warfare")) Warfare.Tick(this);
+        using (SimProfiler.Measure("warfare")) ModSimulationPasses.Run(this, SimulationPass.Warfare, Warfare.Tick);
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
         using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
@@ -926,7 +926,7 @@ public sealed partial class Campaign
         using (SimProfiler.Measure("military experience")) MilitaryExperience.Tick(this);
         using (SimProfiler.Measure("tactical doctrines")) TacticalDoctrines.Tick(this);
         using (SimProfiler.Measure("strategic doctrines")) StrategicDoctrines.Tick(this);
-        using (SimProfiler.Measure("construction")) ConstructionSystem.Tick(this);
+        using (SimProfiler.Measure("construction")) ModSimulationPasses.Run(this, SimulationPass.Construction, ConstructionSystem.Tick);
         yield return 0;
 
         // And these happen on a day rather than during one. An event either fires today or

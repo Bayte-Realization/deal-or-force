@@ -10,6 +10,9 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--audit-formable-opening")) { FormableOpeningAudit.Run(args); return; }
+        if (args.Contains("--mod-simulation-passes-only")) { ModSimulationPassTests.Run(); return; }
+        if (args.Length == 0) ModSimulationPassTests.Run();
         if (args.Contains("--gpu-atlas-contract-only")) { GpuAtlasContractTests.Run(); return; }
         if (args.Length == 0) GpuAtlasContractTests.Run();
         if (args.Contains("--release-0530-only")) { Release0530Tests.Run(); return; }

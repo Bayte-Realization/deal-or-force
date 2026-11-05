@@ -13,6 +13,10 @@
 // The last block opens the Arab projects to every Arab side, not only to the recognised
 // states: Hamas or a Syrian faction that holds the ground can proclaim them as Egypt could.
 // Entries naming an existing id change only the fields they name.
+// A reunification of an already split state needs its whole declared ground, not
+// merely the default 75%: Libya's eastern government and Sudan's army already
+// exceed that share in the bookmark. Gaza is named explicitly because the
+// bookmark gives it a different owner; PSE's own authored ground is the West Bank.
 {
   "moldova_reunited": {
     "name": "Moldova", "description": "One Moldova on both banks of the Dniester. Whoever holds Chișinău and Tiraspol together proclaims it, the government in Chișinău or the one in Tiraspol.",
@@ -37,26 +41,31 @@
   "yemen_reunited": {
     "name": "Yemen", "description": "Sanaa and Aden under one government once more: the Houthis, the internationally recognised government or the Southern Transitional Council, whoever holds it all.",
     "eligible_tags": ["YEM", "HTH", "STC"], "required_tags": ["YEM"],
+    "required_share": 1.0,
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#ce1126"
   },
   "libya_reunited": {
     "name": "Libya", "description": "Tripoli and Benghazi one country again, the two governments and two banks folded into one.",
     "eligible_tags": ["LBY", "LNA"], "required_tags": ["LBY"],
+    "required_share": 1.0,
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#239e46"
   },
   "syria_reunited": {
     "name": "Syria", "description": "One Syria from Idlib to the Euphrates: the government in Damascus, the north-west, the Turkish-held north and the north-east under one administration.",
     "eligible_tags": ["SYR", "HTS", "SIG", "SDF"], "required_tags": ["SYR"],
+    "required_share": 1.0,
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#007a3d"
   },
   "sudan_reunited": {
     "name": "Sudan", "description": "The army, the Rapid Support Forces and the Nuba Mountains under one state, after the war or instead of it.",
     "eligible_tags": ["SDN", "RSF", "SPN"], "required_tags": ["SDN"],
+    "required_share": 1.0,
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.04, "productivity_gain": 0.01, "colour": "#d21034"
   },
   "palestine_united": {
     "name": "Palestine", "description": "The West Bank and Gaza under one Palestinian government - Fatah's, Hamas's or another's.",
     "eligible_tags": ["PSE", "HMS"], "eligible_cultures": ["palestinian"], "required_tags": ["PSE"],
+    "required_regions": ["ps_gza"], "required_share": 1.0,
     "minimum_stability": 0.3, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#007a3d"
   },
   "kurdistan": {

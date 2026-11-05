@@ -210,7 +210,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
-    public bool LoadingInputBlocked { get; set; }
+    private bool _loadingInputBlocked;
+    public bool LoadingInputBlocked
+    {
+        get => _loadingInputBlocked;
+        set { _loadingInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
     private bool _mediaLibraryInputBlocked, _mapLayerDrawerInputBlocked;
     public bool MediaLibraryInputBlocked
     {
@@ -225,9 +230,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     private void DismissMapTooltips()
     {
+        // Most tooltips are owned by the persistent keeper at the root, not by
+        // this Control. Its grace for rebuilt rows must not cross modal boundaries.
+        TooltipKeeper.DismissFor(this);
         // Godot attaches its native tooltip PopupPanel directly to the owner Control.
-        // Stop already-visible map popups too: blocking new input alone leaves an old
-        // tooltip above a newly opened modal, until the physical pointer moves.
+        // Stop already-visible popups too: blocking new input alone leaves an old
+        // tooltip above a newly opened modal until the physical pointer moves.
+        // Pending tooltip requests see the blocked _GetTooltip and return empty.
         foreach (var child in GetChildren())
             if (child is PopupPanel popup) popup.Hide();
     }

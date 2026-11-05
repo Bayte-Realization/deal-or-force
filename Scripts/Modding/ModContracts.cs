@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using DealOrForce.Simulation;
 
 namespace DealOrForce.Modding;
@@ -53,6 +54,8 @@ public sealed record CrossoverVoxel(int x, int y, int z, int block, int metadata
 public sealed class ModContext
 {
     private readonly Action<string> _logger;
+    private readonly List<IDisposable> _simulationPasses = new();
+    private bool _simulationRegistrationOpen = true;
 
     public string ModId { get; }
     public Campaign Campaign { get; internal set; }
@@ -84,6 +87,29 @@ public sealed class ModContext
     /// An id the manifest did not name is refused. The handler runs on the UI thread when the player picks that action.
     /// </summary>
     public bool RegisterFrontendAction(string id, Func<string> handler) => FrontendActions?.Register(id, handler) ?? false;
+
+    /// <summary>
+    /// Replace a supported built-in simulation pass for this campaign. Register only
+    /// in OnLoad/OnCampaignCreated. Call original synchronously, at most once, to decorate
+    /// instead of suppressing the built-in logic. The loader also disposes the returned
+    /// lease on failure/unload. Conflicting owners throw, never silently win by load order.
+    /// </summary>
+    public IDisposable ReplaceSimulationPass(SimulationPass pass, SimulationPassReplacement replacement)
+    {
+        if (!_simulationRegistrationOpen)
+            throw new InvalidOperationException("Register simulation replacements in OnLoad or OnCampaignCreated.");
+        var lease = ModSimulationPasses.Register(Campaign, pass, ModId, replacement);
+        _simulationPasses.Add(lease);
+        return lease;
+    }
+
+    internal void SealSimulationPasses() => _simulationRegistrationOpen = false;
+    internal void ReleaseSimulationPasses()
+    {
+        SealSimulationPasses();
+        foreach (var lease in _simulationPasses) lease.Dispose();
+        _simulationPasses.Clear();
+    }
 
     /// <summary>Queues intent only; the game applies it at its command boundary.
     /// The command must still validate issuer, current price and target in Apply.

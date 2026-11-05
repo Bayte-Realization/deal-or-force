@@ -243,7 +243,7 @@
   "renderer": {
     "category": "video", "order": 305, "kind": "choice", "needs_restart": true,
     "name": "Graphics renderer",
-    "description": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or awkward graphics drivers.",
+    "description": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or non-standard graphics drivers.",
     "values": ["auto", "d3d12", "vulkan", "opengl3", "opengl3_angle"],
     "labels": ["Automatic", "Direct3D 12", "Vulkan", "OpenGL", "OpenGL (ANGLE)"],
     "default": "auto"

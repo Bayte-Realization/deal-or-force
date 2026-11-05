@@ -40,6 +40,8 @@ static class Release0530Tests
         }
         finally { FlagCatalog.ResetCatalog(); }
         Components();
+        Reunifications();
+        RendererWording();
         Workspaces();
         LuauExample();
     }
@@ -53,6 +55,25 @@ static class Release0530Tests
             "Luau reference module has one effective definition per event and a final return");
         Check(!File.Exists(Path.Combine(repo, "mods", "luau_events", "war_damage.mod.lua")),
             "inactive Luau event reference lives with its template, not among installed mods");
+    }
+
+    private static void RendererWording()
+    {
+        var language = Loc.Language;
+        try
+        {
+            SettingsCatalog.ResetCatalog(); Loc.ResetCatalog();
+            var description = SettingsCatalog.Of("renderer").Description;
+            Check(description.Contains("non-standard graphics drivers") && !description.Contains("awkward"),
+                "renderer description uses the requested non-standard wording");
+            foreach (var locale in new[] { "english", "russian" })
+            {
+                Loc.Language = locale;
+                Check(Loc.Has(description) && Loc.Get(description).Contains(locale == "english" ? "non-standard" : "нестандартных"),
+                    "updated renderer localization key resolves: " + locale);
+            }
+        }
+        finally { Loc.Language = language; }
     }
 
     private static void Components()
@@ -75,6 +96,33 @@ static class Release0530Tests
         foreach (var p in island) c.ProvinceMap.ProvinceToNation[p] = 1;
         Check(FormableNations.Evaluate(c, founder, d).CanForm, "secured ownership of both components permits genuine reunification");
         Check(FormableNations.Find("italia_unita").MinimumComponentShare == 1f, "Greater Italy requires every enclave and Malta, not just Italian provinces");
+    }
+
+    private static void Reunifications()
+    {
+        foreach (var (tag, id) in new[] { ("LNA", "libya_reunited"), ("SDN", "sudan_reunited"),
+                     ("SYR", "syria_reunited"), ("YEM", "yemen_reunited"), ("PSE", "palestine_united") })
+        {
+            var c = new Campaign(20261105) { ScenarioId = "reunification_fixture" };
+            var founder = new Nation { Id = 0, MapIndex = 1, Tag = tag, Population = 1000000,
+                Gdp = 100, Treasury = 100, Stability = .95f };
+            c.Nations.Add(founder);
+            c.Nations.Add(new Nation { Id = 1, MapIndex = 2, Tag = "RIVAL", Population = 100000 });
+            var states = Enumerable.Range(1, 100).Select(i => (ushort)i).ToArray();
+            var owners = Enumerable.Range(1, 100).Select(i => (ushort)(i <= 80 ? 1 : 2)).ToArray();
+            c.AttachProvinceTopology(ProvinceTopology.Build(states, owners, 100, 1, _ => false));
+            var all = Enumerable.Range(1, c.ProvinceMap.ProvinceCount).ToArray();
+            var missing = all.Where(p => c.ProvinceMap.ProvinceToNation[p] == 2).ToArray();
+            var d = FormableNations.Find(id);
+            c.ScenarioTerritories[d.RequiredTags.Single()] = id == "palestine_united" ? all.Except(missing).ToArray() : all;
+            if (id == "palestine_united")
+                c.States.Add(new ScenarioState { Id = "ps_gza", MapIndex = c.ProvinceMap.ProvinceToState[missing[0]] });
+            Check(!FormableNations.Evaluate(c, founder, d).CanForm, id + " cannot be a free opening proclamation from the largest component");
+            foreach (var p in missing) c.ProvinceController[p] = 1;
+            Check(!FormableNations.Evaluate(c, founder, d).CanForm, id + " still needs a settlement, not occupation alone");
+            foreach (var p in missing) c.ProvinceMap.ProvinceToNation[p] = 1;
+            Check(FormableNations.Evaluate(c, founder, d).CanForm, id + " remains possible after genuine reunification");
+        }
     }
 
     private static void Workspaces()

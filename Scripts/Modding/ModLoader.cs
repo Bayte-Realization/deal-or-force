@@ -648,6 +648,7 @@ public sealed class ModLoader
         // A managed mod may own a local bridge or worker; release it before unloading its assembly.
         foreach (var plugin in _csharp)
         {
+            plugin.Context.ReleaseSimulationPasses();
             plugin.Context.FrontendActions?.Dispose();
             if (plugin.Instance is IDisposable disposable) Try(plugin.Context.ModId, disposable.Dispose);
         }
@@ -1037,6 +1038,7 @@ public sealed class ModLoader
                 {
                     instance.OnLoad(context);
                     instance.OnCampaignCreated(context);
+                    context.SealSimulationPasses();
                     _csharp.Add((instance, context));
                     retained = true;
                 }
@@ -1044,6 +1046,7 @@ public sealed class ModLoader
                 {
                     if (!retained)
                     {
+                        context.ReleaseSimulationPasses();
                         context.FrontendActions.Dispose();
                         if (instance is IDisposable disposable) Try(package.Manifest.Id, disposable.Dispose);
                     }

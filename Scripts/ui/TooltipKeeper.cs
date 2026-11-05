@@ -36,6 +36,34 @@ public sealed partial class TooltipKeeper : Node
     private double _lost;
     private double _sinceProbe;
 
+    private bool BelongsTo(Control owner)
+    {
+        var source = _sourceId == 0 ? null : GodotObject.InstanceFromId(_sourceId) as Control;
+        return IsInstanceValid(source) && (ReferenceEquals(source, owner) || owner.IsAncestorOf(source));
+    }
+
+    /// <summary>A modal blocks the map immediately, not after the row-rebuild grace
+    /// period. Only dismiss this owner's tooltip; do not suppress the modal's help.</summary>
+    internal static void DismissFor(Control owner)
+    {
+        if (!IsInstanceValid(owner) || !owner.IsInsideTree()) return;
+        var keeper = owner.GetTree().Root.GetNodeOrNull<TooltipKeeper>("TooltipKeeper");
+        if (keeper is null || !keeper.BelongsTo(owner)) return;
+        keeper.Hide();
+        keeper._sourceId = 0;
+        keeper._text = "";
+        keeper._rest = keeper._sinceProbe = 0;
+    }
+
+    // Runtime observation of the real persistent tooltip, not a test-only overlay.
+    internal static string VisibleTextFor(Control owner)
+    {
+        if (!IsInstanceValid(owner) || !owner.IsInsideTree()) return "";
+        var keeper = owner.GetTree().Root.GetNodeOrNull<TooltipKeeper>("TooltipKeeper");
+        return keeper is not null && keeper.BelongsTo(owner) && IsInstanceValid(keeper._panel) && keeper._panel.Visible
+            ? keeper._text : "";
+    }
+
     public static void Install(SceneTree tree)
     {
         if (tree is null || ReferenceEquals(tree, _installed)) return;
@@ -199,7 +227,7 @@ public sealed partial class TooltipKeeper : Node
     private void Hide()
     {
         if (_panel is null) return;
-        if (IsInstanceValid(_panel)) _panel.QueueFree();
+        if (IsInstanceValid(_panel)) { _panel.Hide(); _panel.QueueFree(); }
         _panel = null;
         _lost = 0;
     }

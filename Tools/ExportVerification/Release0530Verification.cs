@@ -25,7 +25,8 @@ public partial class ExportVerification
         var before = CampaignFingerprint.Of(world);
         try
         {
-            foreach (var (tag, project) in new[] { ("CHN", "china_reunified"), ("ITA", "italia_unita") })
+            foreach (var (tag, project) in new[] { ("CHN", "china_reunified"), ("ITA", "italia_unita"),
+                         ("LNA", "libya_reunited"), ("PSE", "palestine_united"), ("SDN", "sudan_reunited") })
                 Check(!FormableNations.Evaluate(world, world.NationByTag(tag), FormableNations.Find(project)).CanForm,
                     "real opening map cannot proclaim " + project + " by ignoring its small founding partners");
             game.Call("OpenNetworkMultiplayer");
@@ -56,8 +57,14 @@ public partial class ExportVerification
                 }
                 await Capture("cooperation-" + suffix);
                 game.Call("CloseDiplomacyScreen");
+                game.VerificationPrimeMapHover();
+                await Wait(1.1);
+                Check(game.VerificationCentreTooltip().Length > 0, "unblocked map still supplies a real tooltip " + suffix);
+                Check(game.VerificationReadinessPopupText().Length > 0, "actual persistent map tooltip is open before the modal " + suffix);
                 game.Call("OpenContentEditor");
                 await Wait(.25);
+                Check(game.VerificationReadinessPointerTooltip().Length == 0 && game.VerificationReadinessPopupText().Length == 0,
+                    "workshop dismisses the actual map popup and blocks new map hover " + suffix);
                 var bar = game.FindChild("AuthorPackageBar", true, false) as Control;
                 CheckFits(bar, "visible mod destination and package action " + suffix);
                 Check(game.VerificationLoadingInputKeepsWorkshop(), "loading cover owns Escape before workshop handlers " + suffix);
@@ -67,6 +74,7 @@ public partial class ExportVerification
                 var picker = bar.GetChildren().OfType<Button>().Single();
                 picker.EmitSignal(Button.SignalName.Pressed);
                 await Wait(.15);
+                Check(game.VerificationReadinessPopupText().Length == 0, "package picker cannot resurrect the map tooltip " + suffix);
                 var dialog = game.FindChild("AuthorPackagePicker", true, false) as Window;
                 Check(dialog is { Visible: true } && dialog.Size.Y <= size.Y, "mod picker opens inside the screen " + suffix);
                 await Capture("mod-picker-" + suffix);
@@ -117,13 +125,25 @@ public partial class ExportVerification
             loader.StartCode(api, world);
             Check(package.Errors.Count == 0 && loader.Log.Any(s => s.Contains("Example corecode mod loaded")) &&
                 loader.Log.Any(s => s.Contains("Campaign ready:")), "compiled template really executes OnLoad and OnCampaignCreated");
+            Check(ModSimulationPasses.Owner(world, SimulationPass.Construction) == manifest.Id,
+                "production loader installs the DLL's declared core replacement");
+            world.IsPaused = false;
+            world.Tick();
+            world.IsPaused = true;
+            Check(loader.Log.Count(s => s.Contains("Construction pass forwarded once")) == 1,
+                "compiled replacement runs at the real simulation pass, not a rendered frame");
+            korea.Stability = .5f;
             typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(world, 30 * 24L);
             loader.OnDayAdvanced(world);
             Check(Math.Abs(korea.Stability - .502f) < .00001f, "compiled daily hook changes the real campaign once");
             loader.StopCode();
+            Check(ModSimulationPasses.Owner(world, SimulationPass.Construction) == "",
+                "production StopCode releases replacement delegates before unloading the DLL");
             loader.OnDayAdvanced(world);
             Check(Math.Abs(korea.Stability - .502f) < .00001f, "StopCode detaches the old plugin before another campaign");
             loader.StartCode(api, world);
+            Check(ModSimulationPasses.Owner(world, SimulationPass.Construction) == manifest.Id,
+                "compiled replacement can be installed again without a leaked owner");
             loader.OnDayAdvanced(world);
             Check(Math.Abs(korea.Stability - .504f) < .00001f, "reloading a compiled package does not duplicate its daily hook");
         }
@@ -135,6 +155,14 @@ public partial class DealOrForceGame
 {
     internal string VerificationSelectedAuthorRoot => AuthorRoot;
     internal float VerificationDiplomacyStandardHeight => _diplomacyImproveButton.CustomMinimumSize.Y;
+    internal void VerificationPrimeMapHover()
+    {
+        // Send a viewport-local hover without moving the user's OS pointer. The
+        // production TooltipKeeper owns the popup, not the verification fixture.
+        var point = GetViewport().GetVisibleRect().Size / 2;
+        using var motion = new InputEventMouseMotion { Position = point, GlobalPosition = point };
+        GetViewport().PushInput(motion, true);
+    }
     internal bool VerificationLoadingInputKeepsWorkshop()
     {
         var canvas = _authorCanvas;
