@@ -84,6 +84,7 @@ public partial class DealOrForceGame
     private void RenderNetworkLobby()
     {
         if (_networkRoster is null) return;
+        RefreshNetworkScenarioChoice();
         foreach (var child in _networkRoster.GetChildren()) { _networkRoster.RemoveChild(child); child.QueueFree(); }
         var localPeer = NetworkLocalPeer;
         foreach (var pair in _networkPeerNations.OrderBy(p => p.Key))

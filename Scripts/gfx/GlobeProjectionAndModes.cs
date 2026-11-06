@@ -80,7 +80,14 @@ public sealed partial class GlobePresentation
     /// letting go leaves nothing to carry.
     /// </summary>
     private Vector2 _flatGlide;
+    private Vector2 _orbitGlide;
     private ulong _lastFlatDragUsec;
+    private bool _cameraInertia = true;
+    public bool CameraInertiaEnabled
+    {
+        get => _cameraInertia;
+        set { _cameraInertia = value; if (!value) { _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero; } }
+    }
 
     private void BeginCameraDrag(Vector2 pixel, MouseButton button)
     {
@@ -89,6 +96,7 @@ public sealed partial class GlobePresentation
         _dragDistance = 0f;
         _previousPointer = pixel;
         _flatGlide = Vector2.Zero;
+        _orbitGlide = Vector2.Zero;
         _lastFlatDragUsec = Time.GetTicksUsec();
         if (!_flatMap)
         {
@@ -215,6 +223,7 @@ public sealed partial class GlobePresentation
     public void SetFlatMap(bool enabled)
     {
         if (_flatMap == enabled || !IsInstanceValid(_camera) || !ProjectionAllowed(enabled)) return;
+        _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         if (enabled)
         {

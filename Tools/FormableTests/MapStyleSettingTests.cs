@@ -22,6 +22,12 @@ static class MapStyleSettingTests
             var style = SettingsCatalog.Of("map_visual_style");
             var clouds = SettingsCatalog.Of("map_cloud_opacity");
             var lighting = SettingsCatalog.Of("map_consistent_lighting");
+            var inertia = SettingsCatalog.Of("map_camera_inertia");
+            Check(inertia is { Kind: SettingKind.Toggle, Default: true, NeedsRestart: false, Campaign: false },
+                "camera inertia is a live, local and reversible preference");
+            SettingsCatalog.Store(inertia.Id, false);
+            PlayerSettings.UseDirectory(folder);
+            Check(!SettingsCatalog.Flag(inertia.Id), "disabled camera inertia survives preference reload");
             Check(errors.Count == 0 && style is { Category: "video", Campaign: false, NeedsRestart: false },
                 "styles are live video preferences, not rules or renderer selections");
             Check(style.Values.SequenceEqual(new[] { "balanced", "vivid", "relief" }) &&

@@ -303,6 +303,12 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
+        if (IsInstanceValid(_warDeclaration))
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            { CloseWarDeclaration(); GetViewport().SetInputAsHandled(); }
+            return;
+        }
         // The big trees are read before the map is: a wheel over a graph is a wheel about the
         // graph, and must not also march the camera or scroll the page behind it.
         if (HandleTreeViewportInput(inputEvent)) return;
@@ -561,6 +567,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_warDeclaration)) { GetViewport().SetInputAsHandled(); return; }
         if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         if (_mapModeDrawerLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.

@@ -27,7 +27,7 @@ public partial class DealOrForceGame
     private readonly Dictionary<DeskLens, Button> _deskLenses = new();
     private DeskLens _deskLens = DeskLens.Security;
     private bool _deskOnLeft;
-    private bool _deskOpen = true;
+    private bool _deskOpen = false;
     private bool _deskRefreshing;
     private int _deskDay = -1;
     private int _deskNation = -1;

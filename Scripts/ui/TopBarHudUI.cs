@@ -77,7 +77,8 @@ public partial class DealOrForceGame
 
     private static void StyleCampaignNavigationButton(Button button, bool selected)
     {
-        StyleHudButton(button, selected, true);
+        // Navigation always looks clickable, including its resting state.
+        StyleHudButton(button, selected, false);
         button.AddThemeColorOverride("font_color", Ui.Colour(selected ? "button.text_hover" : "text.body_soft"));
         button.AddThemeColorOverride("icon_normal_color", Ui.Colour(selected ? "text.accent" : "text.muted"));
         button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));

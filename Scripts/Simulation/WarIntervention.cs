@@ -163,6 +163,8 @@ public static class WarInterventions
         if (c is null || donor is null || requester is null || enemy is null || war is null) return "";
         if (requester.AnswersTo(donor.Id))
             return "They answer to you, and the war has reached them.";
+        if (donor.AnswersTo(requester.Id) && SubjectCatalog.Of(donor.SubjectType) is { DraggedIntoWars: true })
+            return "The subject treaty calls for military support.";
         var toRequester = CampaignDiplomacy.Peek(c, donor.Id, requester.Id);
         var defending = war.IsDefending(requester.Id);
         if (defending && toRequester is not null &&
@@ -207,6 +209,11 @@ public static class WarInterventions
     }
 
     public static WarInterventionAssessment Assess(Campaign c, int requesterId, int donorId, int warId)
+        => AssessForWar(c, requesterId, donorId, c is null ? null : WarFor(c, requesterId, warId));
+
+    // The declaration screen supplies a detached prospective war. Do not append it to
+    // the campaign or create diplomatic relations just to explain a possible decision.
+    internal static WarInterventionAssessment AssessForWar(Campaign c, int requesterId, int donorId, StrategicWar war)
     {
         WarInterventionAssessment Not(string reason) => new(false, "", 0f, false, reason);
         if (!Enabled(c)) return Not("Military intervention is not available.");
@@ -220,11 +227,15 @@ public static class WarInterventions
         if (donor.Movement is not null) return Not("A movement cannot send military forces.");
         if (CampaignDiplomacy.AtWar(c, requesterId, donorId))
             return Not(donor.IsHuman ? "They are at war with you." : "You are at war with them.");
-        var war = WarFor(c, requesterId, warId);
         if (war is null || war.Ended || !war.Involves(requesterId))
             return Not(requester.IsHuman ? "You are not fighting a war." : "They are not fighting a war.");
         if (war.Involves(donorId))
             return Not(donor.IsHuman ? "They are fighting in that war themselves." : "You are fighting in that war yourself.");
+        if ((war.CivilConflict || war.Limited) && !CampaignDiplomacy.MayJoinCivilWar(c, war, donor, war.IsDefending(requesterId)))
+            return Not("This internal conflict does not permit foreign belligerents.");
+        foreach (var opponentId in war.EnemiesOf(requesterId))
+            if (!CampaignDiplomacy.CanDeclareWar(c, donorId, opponentId, out var blocked, onOwnInitiative: false))
+                return Not(blocked);
         var enemyId = war.EnemyLeaderOf(requesterId);
         var enemy = c.NationById(enemyId);
         if (enemy is null) return Not("No enemy leader in this war.");
@@ -233,7 +244,7 @@ public static class WarInterventions
         var pretext = Pretext(c, donor, requester, enemy, war);
         if (pretext.Length == 0) return Not("There is no pretext for requesting military intervention in that war.");
 
-        var bond = CampaignDiplomacy.Get(c, donorId, requesterId);
+        var bond = CampaignDiplomacy.Peek(c, donorId, requesterId);
         var willingness = bond?.Opinion / 100f ?? 0f;
         var defending = war.IsDefending(requesterId);
         if (bond is not null && bond.Stance == DiplomaticStance.Allied)

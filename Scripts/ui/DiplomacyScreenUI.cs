@@ -1361,9 +1361,8 @@ public partial class DealOrForceGame
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, player.Id, nation.Id, out var reason);
         _diplomacyWarButton.Disabled = !canDeclare;
         if (!canDeclare) _diplomacyWarButton.TooltipText = Ui.Tip(reason);
-        _diplomacyWarButton.Text = _diplomacyPendingWarTarget == nation.Id
-            ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
-            : Tr("Declare war");
+        _diplomacyWarButton.Text = Tr("Declare war");
+        if (canDeclare) _diplomacyWarButton.TooltipText = Ui.Tip(Tr("Review allies and intervention risks before declaring war."));
 
         _diplomacyUltimatumButton.Disabled = !canDeclare || nation.IsHuman;
         _diplomacyUltimatumButton.TooltipText = Ui.Tip(!canDeclare ? reason : nation.IsHuman
@@ -1486,31 +1485,7 @@ public partial class DealOrForceGame
     {
         if (!ValidDiplomacyTarget()) return;
         var target = DiplomacyTarget();
-        if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, target.Id, out var reason))
-        {
-            _diplomacyFeedback.Text = reason;
-            return;
-        }
-        if (_diplomacyPendingWarTarget != target.Id)
-        {
-            _diplomacyPendingWarTarget = target.Id;
-            _diplomacyFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            ForceDiplomacyRefresh();
-            return;
-        }
-        _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            TargetId = target.Id,
-            ClaimedStateMapIndex = _selectedState?.NationMapIndex == target.MapIndex
-                ? _selectedState.MapIndex
-                : -1
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("war_declared");
-        _diplomacyPendingWarTarget = -1;
-        _diplomacyFeedback.Text = Simulation.Loc.Format("War declared on {0}.", target.DisplayName);
-        ForceDiplomacyRefresh();
+        OpenWarDeclaration(target, _selectedState?.NationMapIndex == target.MapIndex ? _selectedState.MapIndex : -1);
     }
 
     private void ConfirmOrIssueUltimatum() => OpenUltimatumComposer(DiplomacyTarget());

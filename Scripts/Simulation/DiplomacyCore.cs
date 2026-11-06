@@ -388,6 +388,8 @@ public static class CampaignDiplomacy
         // they meant it. They answer with their own declarations, through this same path, so
         // nothing downstream has to learn about wars with more than two sides.
         Statecraft.CallToArms(campaign, war);
+        if (onOwnInitiative && !attacker.IsHuman)
+            WarDeclarationPlanning.InviteAiAllies(campaign, war);
         return war;
     }
 
@@ -667,10 +669,16 @@ public sealed class DeclareWarCampaignCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
     public int ClaimedStateMapIndex { get; init; } = -1;
+    /// <summary>Optional invitations selected in the declaration review. Old commands remain valid.</summary>
+    public int[] InvitedNationIds { get; init; } = Array.Empty<int>();
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
-        CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+        // Create the war once, then recheck invitations against the new coalition. A stale
+        // dialog, duplicate click or forged country id must never create extra wars.
+        var war = CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+        if (war is not null)
+            WarDeclarationPlanning.InviteSelected(campaign, war, IssuerId, InvitedNationIds);
     }
 }
 

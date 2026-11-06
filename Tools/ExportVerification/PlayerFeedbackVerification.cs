@@ -52,7 +52,7 @@ public partial class ExportVerification
                 game.FindChildren("OpenMediaLibrary", "Button", true, false).Count == 1,
                 "one permanent soundtrack entry, no navigation/outliner duplicates " + language + size.X);
             Check(game.VerificationReadableCountryCodes(), "country codes are explained in tooltips rather than unexplained headlines");
-            Check(game.VerificationAllNavigationReachable(), "category filtering preserves every enabled destination " + language + size.X);
+            Check(game.VerificationAllNavigationReachable(), "all destinations stay on the bordered rail without a category dropdown " + language + size.X);
             await Wait(.2);
             CheckFits(game.FindChild("CampaignNavigation", true, false) as Control, "filtered navigation " + language + size.X);
             await Capture("feedback-clean-hud-" + language + "-" + size.X);
@@ -64,6 +64,7 @@ public partial class ExportVerification
         var research = CampaignHintArt.Of("research") as AtlasTexture;
         Check(research?.Atlas.ResourcePath.EndsWith("icon_research.png", StringComparison.Ordinal) == true,
             "alert glyph and top-bar/nav research glyph share the authored icon family");
+        await VerifyDeclarationAndLobby(game);
         await VerifyRegimeArtwork(game);
         // The soundtrack probe deliberately returns to the real main menu and frees
         // this campaign scene. It must be last, not followed by a stale game reference.
@@ -157,18 +158,13 @@ public partial class DealOrForceGame
     }
     internal bool VerificationAllNavigationReachable()
     {
-        var reachable = new System.Collections.Generic.HashSet<Button>();
-        for (var i = 1; i < _campaignNavigationGroups.Count; i++)
-        {
-            _campaignNavigationCategory.Select(i);
-            _campaignNavigationCategory.EmitSignal(OptionButton.SignalName.ItemSelected, i);
-            foreach (var entry in _campaignNavigationEntries)
-                if (entry.Button.Visible) reachable.Add(entry.Button);
-        }
-        var all = _campaignNavigationEntries.All(entry =>
-            !NavigationDestinationEnabled(_screenButtons.First(pair => pair.Value == entry.Button).Key) || reachable.Contains(entry.Button));
-        _campaignNavigationCategory.Select(1);
-        _campaignNavigationCategory.EmitSignal(OptionButton.SignalName.ItemSelected, 1);
+        var previous = _campaignNavigationSearch.Text;
+        _campaignNavigationSearch.Text = "";
+        LayoutCampaignNavigation();
+        var all = FindChild("NavigationCategory", true, false) is null &&
+            _campaignNavigationEntries.All(entry =>
+                !NavigationDestinationEnabled(_screenButtons.First(pair => pair.Value == entry.Button).Key) || entry.Button.Visible);
+        _campaignNavigationSearch.Text = previous;
         return all;
     }
 }

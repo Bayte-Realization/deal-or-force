@@ -215,7 +215,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public bool LoadingInputBlocked
     {
         get => _loadingInputBlocked;
-        set { _loadingInputBlocked = value; if (value) DismissMapTooltips(); }
+        set
+        {
+            _loadingInputBlocked = value;
+            if (value) { DismissMapTooltips(); _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero; _dragging = false; }
+        }
     }
     private bool _mediaLibraryInputBlocked, _mapLayerDrawerInputBlocked;
     public bool MediaLibraryInputBlocked
@@ -852,6 +856,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// <summary>Frames a geographic point exactly as the source globe's country focus does.</summary>
     public void FocusOn(float latitude, float longitude, float distance = 8f)
     {
+        _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         if (_flatMap)
         {
@@ -1782,6 +1787,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
             if (button.ButtonIndex == MouseButton.WheelUp || button.ButtonIndex == MouseButton.WheelDown)
             {
+                _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
                 // A step proportional to the altitude rather than a fixed one. A quarter
                 // of a unit is a nudge from orbit and a lurch from a hundred metres up,
                 // and the whole reason for coming this close is to move one division.
@@ -1863,10 +1869,16 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // the view centre. Use the displayed altitude, never a pending wheel/fly-to target.
         var radians = MapPanScale.OrbitRadiansPerPixel(_distance, GlobeRadius, _camera.Fov, ViewportSize().Y);
         var longitudeScale = Math.Max(.15f, Mathf.Cos(_pitch));
-        _targetYaw -= delta.X * radians / longitudeScale;
-        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * radians, -MaxPitch, MaxPitch);
+        var movement = new Vector2(-delta.X * radians / longitudeScale, -delta.Y * radians);
+        _targetYaw += movement.X;
+        _targetPitch = Mathf.Clamp(_targetPitch + movement.Y, -MaxPitch, MaxPitch);
         _yaw = _targetYaw;
         _pitch = _targetPitch;
+        var dragNow = Time.GetTicksUsec();
+        var dragSeconds = Mathf.Clamp((dragNow - _lastFlatDragUsec) / 1_000_000f, .004f, .1f);
+        _lastFlatDragUsec = dragNow;
+        _orbitGlide = _orbitGlide.Lerp(movement / dragSeconds, 1f - Mathf.Exp(-dragSeconds * 24f))
+            .LimitLength(radians * ViewportSize().Y * .9f / longitudeScale);
     }
 
     /// <summary>
@@ -3360,6 +3372,7 @@ void fragment() {
     /// </summary>
     private void UpdateFlatGlide(float delta)
     {
+        if (!_cameraInertia) { _flatGlide = Vector2.Zero; return; }
         if (_dragging)
         {
             if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _flatGlide = Vector2.Zero;
@@ -3367,13 +3380,27 @@ void fragment() {
         }
         if (_flatGlide.LengthSquared() < _flatZoom * _flatZoom * 1e-6f) { _flatGlide = Vector2.Zero; return; }
         _flatZoomAnchorActive = false;
-        _targetFlatX += _flatGlide.X * delta;
-        _targetFlatY += _flatGlide.Y * delta;
+        _targetFlatX += CameraInertia.Travel(_flatGlide.X, delta);
+        _targetFlatY += CameraInertia.Travel(_flatGlide.Y, delta);
         ClampFlatCamera();
         _flatX = _targetFlatX;
         _flatY = _targetFlatY;
-        // Down to a twentieth in a second: a flick travels, a nudge settles at once.
-        _flatGlide *= Mathf.Pow(0.05f, delta);
+        _flatGlide *= Mathf.Exp(-CameraInertia.Damping * Math.Clamp(delta, 0, .1f));
+    }
+
+    private void UpdateOrbitGlide(float delta)
+    {
+        if (!_cameraInertia) { _orbitGlide = Vector2.Zero; return; }
+        if (_dragging)
+        {
+            if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _orbitGlide = Vector2.Zero;
+            return;
+        }
+        if (_orbitGlide.LengthSquared() < 1e-9f) { _orbitGlide = Vector2.Zero; return; }
+        _targetYaw += CameraInertia.Travel(_orbitGlide.X, delta);
+        _targetPitch = Mathf.Clamp(_targetPitch + CameraInertia.Travel(_orbitGlide.Y, delta), -MaxPitch, MaxPitch);
+        _yaw = _targetYaw; _pitch = _targetPitch;
+        _orbitGlide *= Mathf.Exp(-CameraInertia.Damping * Math.Clamp(delta, 0, .1f));
     }
 
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
@@ -3397,6 +3424,7 @@ void fragment() {
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
         if (_flatMap) UpdateFlatGlide((float)delta);
+        else UpdateOrbitGlide((float)delta);
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         if (_flatMap && !typing)

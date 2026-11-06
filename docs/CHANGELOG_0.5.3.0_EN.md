@@ -30,7 +30,16 @@ usability and tools for modders.
 - Fixed label placement/orientation for elongated countries after annexation,
   including Korean unification, and largest-landmass selection after border changes.
 - Alert icons share the main HUD's restrained icon family; borders and counts retain urgency colors.
-- Navigation can show one screen group or all screens; search still covers every destination.
+- Removed the category dropdown. All screens stay on one searchable rail with
+  visible button borders and group headings; short displays scroll the list.
+- The situation report opens by default; its button still opens the Desk.
+- Added a short camera coast in both projections and an immediately applied,
+  persistent Camera inertia toggle.
+- War declarations open a shared confirmation screen with both sides' partners,
+  current willingness forecasts, refusal reasons and selectable invitations.
+  Forecasts are not random percentages or guarantees. AI attackers also call willing allies immediately.
+- Multiplayer scenarios can be chosen before creating a lobby. Clients receive
+  the host's world before registering a country; connected lobbies lock the scenario.
 - Headlines show readable names, while technical country codes remain in clearly labelled tooltips.
 - Removed duplicate music controls from navigation and the outliner. One permanent
   music note opens track selection and transport controls; playback continues when closed.
@@ -98,7 +107,7 @@ usability and tools for modders.
 
 ## Verification and known limitations
 
-- The general CPU test suite completed 12,312 checks without failures. Additional
+- The general CPU test suite completed 12,330 checks without failures. Additional
   checks cover the updated wording, reunification conditions and core-mod lifecycle.
 - Real OpenGL, ANGLE/Direct3D 11 and Forward+/Direct3D 12 runs were checked on an
   RTX 3060, alongside English/Russian UI checks at 1920×1080 and 1280×720.

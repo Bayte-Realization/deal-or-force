@@ -395,10 +395,8 @@ public partial class DealOrForceGame
             : Tr("Compose territorial, financial and treaty demands. Review before sending."));
         StyleButton(_quickUltimatumButton, false);
         _quickUltimatumButton.Text = Tr("Issue ultimatum");
-        _declareWarButton.TooltipText = Ui.Tip(canDeclare ? "Requires a second click to confirm." : reason);
-        _declareWarButton.Text = _pendingWarTarget == nation.Id
-            ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
-            : Tr("Declare war");
+        _declareWarButton.TooltipText = Ui.Tip(canDeclare ? Tr("Review allies and intervention risks before declaring war.") : reason);
+        _declareWarButton.Text = Tr("Declare war");
         if (!canDeclare && !_negotiatePeaceButton.Visible && string.IsNullOrWhiteSpace(_countryActionFeedback.Text))
             _countryActionFeedback.Text = reason;
     }
@@ -429,32 +427,7 @@ public partial class DealOrForceGame
     private void ConfirmOrDeclareWar()
     {
         if (!ValidForeignSelection()) return;
-        if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, _selectedNation.Id, out var reason))
-        {
-            _countryActionFeedback.Text = reason;
-            RefreshCountryViews("Diplomatic crisis");
-            return;
-        }
-        if (_pendingWarTarget != _selectedNation.Id)
-        {
-            _pendingWarTarget = _selectedNation.Id;
-            _countryActionFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            RefreshCountryViews("War declaration prepared");
-            return;
-        }
-        _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            TargetId = _selectedNation.Id,
-            ClaimedStateMapIndex = _selectedState?.NationMapIndex == _selectedNation.MapIndex
-                ? _selectedState.MapIndex
-                : -1
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("war_declared");
-        _pendingWarTarget = -1;
-        _countryActionFeedback.Text = Simulation.Loc.Format("War declared on {0}. Select your armies and assign Advance front.", _selectedNation.Name);
-        RefreshCountryViews("WAR DECLARED");
+        OpenWarDeclaration(_selectedNation, _selectedState?.NationMapIndex == _selectedNation.MapIndex ? _selectedState.MapIndex : -1);
     }
 
     private void FocusSelectedCapital()

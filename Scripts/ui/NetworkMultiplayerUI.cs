@@ -104,9 +104,11 @@ public partial class DealOrForceGame
         explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(explanation);
 
+        BuildNetworkScenarioChoice(rows);
+
         rows.AddChild(Title("1 · Connect", 16, Ui.Colour("text.accent")));
         rows.AddChild(Title("Player name", 12, Ui.Colour("text.caption")));
-        _networkPlayerName = NetworkField(Tr("Player name"), "Player");
+        _networkPlayerName = NetworkField("Player name", "Player");
         _networkPlayerName.MaxLength = 32;
         rows.AddChild(_networkPlayerName);
         _networkCountryTag = NetworkField("Country tag", "KOR");
@@ -167,7 +169,7 @@ public partial class DealOrForceGame
         _networkSelection = Title("", 16, Ui.Colour("text.accent"));
         _networkSelection.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         countryRows.AddChild(_networkSelection);
-        _networkSearch = NetworkField(Tr("Country name or tag"), "");
+        _networkSearch = NetworkField("Country name or tag", "");
         _networkSearch.Name = "LobbyCountrySearch";
         _networkSearch.TextChanged += _ => RenderNetworkCountries();
         countryRows.AddChild(_networkSearch);
@@ -183,13 +185,12 @@ public partial class DealOrForceGame
         Multiplayer.ServerDisconnected += OnNetworkServerDisconnected;
     }
 
-    private static LineEdit NetworkField(string placeholder, string value) => new()
+    private static LineEdit NetworkField(string placeholder, string value) => Placeholder(new LineEdit
     {
-        PlaceholderText = placeholder,
         Text = value,
         CustomMinimumSize = new Vector2(0, 38),
         ClearButtonEnabled = true
-    };
+    }, placeholder);
 
     private void OpenNetworkMultiplayer()
     {
@@ -211,6 +212,7 @@ public partial class DealOrForceGame
 
     private void HostNetworkGame()
     {
+        if (_isLoading || _networkPeer is not null) return;
         if (!ValidateNetworkPort()) return;
         ShutdownNetworkPeer();
         var nation = RequestedNetworkNation();
@@ -279,9 +281,7 @@ public partial class DealOrForceGame
     {
         _networkConnected = true;
         PlayStrategicCue("network_connected");
-        var nation = RequestedNetworkNation();
-        RpcId(1, nameof(ServerRegisterNetworkPlayer), _networkPlayerName.Text.Trim(), nation?.Tag ?? "");
-        _networkStatus.Text = Tr("Connected. Waiting for the host to start the campaign.");
+        _networkStatus.Text = Tr("Connected. Receiving the host's scenario before country selection.");
     }
 
     private void OnNetworkConnectionFailed()
@@ -302,7 +302,11 @@ public partial class DealOrForceGame
 
     private void OnNetworkPeerConnected(long peerId)
     {
-        if (_networkIsHost) _networkStatus.Text = Simulation.Loc.Format("Peer {0} connected; waiting for country registration.", peerId);
+        if (!_networkIsHost) return;
+        _networkStatus.Text = Simulation.Loc.Format("Peer {0} connected; waiting for country registration.", peerId);
+        NetworkSnapshotDelivery.Send(new[] { peerId },
+            () => SaveSystem.ExportNetworkSnapshot(_campaign, ModFingerprint),
+            (peer, snapshot) => RpcId(peer, nameof(ClientReceiveLobbyScenario), snapshot, _networkScenarioTitle));
     }
 
     private void OnNetworkPeerDisconnected(long peerId)

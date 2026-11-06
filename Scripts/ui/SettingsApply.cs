@@ -234,6 +234,9 @@ public partial class DealOrForceGame
                 break;
 
             // ---- what it looks like --------------------------------------------------
+            case "map_camera_inertia":
+                if (_globe is not null) _globe.CameraInertiaEnabled = SettingsCatalog.Flag("map_camera_inertia");
+                break;
             case "map_visual_style":
             case "map_cloud_opacity":
             case "map_consistent_lighting":
