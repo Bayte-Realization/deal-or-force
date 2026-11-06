@@ -237,6 +237,8 @@ public static class BuildingCatalog
     public static BuildingDefinition Get(BuildingKind kind) =>
         Definitions.TryGetValue(kind, out var definition) ? definition : Unknown;
 
+    public static bool Contains(BuildingKind kind) => Definitions.ContainsKey(kind);
+
     public static IEnumerable<BuildingKind> All => Definitions.Keys;
 
     /// <summary>The name this building has in a file, which is what a save should be keyed by.</summary>
@@ -288,6 +290,7 @@ public static class BuildingCatalog
                 Number(value, "jobs", out var jobs);
                 Declare(entry.Name, name, cost, days, capacity, description, needsWater, jobs);
             }
+        BuildingRules.ResetCatalog();
     }
 
     /// <summary>
@@ -381,26 +384,16 @@ public sealed class QueueConstructionCommand : ICampaignCommand
             if (candidate.MapIndex == StateMapIndex) { state = candidate; break; }
         // Its own regions, and those it administers although another owns them (HeldRegions):
         // held ground is built on as one's own.
-        if (state is null || (state.NationMapIndex != nation.MapIndex &&
-                              !(state.HeldById == nation.Id && HeldRegions.Administered(campaign, state)))) return;
+        if (ConstructionAdmission.Refusal(campaign, nation, state, Building).Length > 0) return;
 
-        var running = 0;
         var highest = 0;
         foreach (var project in campaign.Construction)
         {
             if (project.Id > highest) highest = project.Id;
-            if (project.NationId == nation.Id && ++running >= ConstructionCost.Limit(campaign, nation, campaign.Defines.MaxConstructionProjects)) return;
         }
-
-        // A wharf needs water. The AI never orders one and the player's button now says
-        // so before it is pressed, but a command is the boundary of the simulation and an
-        // order arriving over the network or out of a save has not been through either.
-        if (Waterfront.NeedsWater(Building) &&
-            Waterfront.OfRegion(campaign, state) == WaterAccess.None) return;
 
         var definition = BuildingCatalog.Get(Building);
         var cost = ConstructionCost.Of(campaign, nation, Building);
-        if (nation.Treasury < Math.Min(0.05f, cost)) return;
         campaign.Construction.Add(new ConstructionProject
         {
             Id = highest + 1,

@@ -33,7 +33,15 @@ internal static class WarDeclarationTests
     internal static void Run()
     {
         var c = Rack(); var rng = c.Random.State; var relations = c.Relations.Count;
+        var fingerprint = CampaignFingerprint.Of(c);
         var preview = WarDeclarationPlanning.Preview(c, 0, 1);
+        Check(CampaignFingerprint.Of(c) == fingerprint && c.Nations.All(n => n.AssessedDay == -1),
+            "preview does not refresh unassessed saved intelligence for either side");
+        c.Nations[1].AssessedDay = -200; c.Nations[1].AssessedStrength = .123f;
+        fingerprint = CampaignFingerprint.Of(c);
+        WarDeclarationPlanning.Preview(c, 0, 1);
+        Check(CampaignFingerprint.Of(c) == fingerprint && c.Nations[1].AssessedStrength == .123f,
+            "preview calculates an expired intelligence estimate without committing it");
         Check(preview.Allowed && preview.Support.Any(p => p.NationId == 2 && !p.Defending && p.CanInvite && p.ExpectedJoin), "willing offensive ally is selectable");
         Check(preview.Support.Any(p => p.NationId == 3 && p.Defending && p.Automatic && p.ExpectedJoin), "defensive ally is forecast on the opposing side");
         Check(preview.Support.Any(p => p.NationId == 4 && !p.Defending && !p.ExpectedJoin), "reluctant ally is not presented as certain support");

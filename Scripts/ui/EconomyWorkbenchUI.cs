@@ -200,7 +200,6 @@ public partial class DealOrForceGame
         RefreshConstructionQueue();
         ClearRuntimeChildren(_buildingCatalogRows);
         var player = _campaign.Player;
-        var count = _campaign.Construction.Count(project => project.NationId == player.Id);
         var hasRegion = _selectedState is not null && _selectedState.NationMapIndex == player.MapIndex
             && !LakeRegions.IsWaterState(_selectedState);
         // What a building would do is a question about a place - what lies under it, whether it
@@ -275,19 +274,18 @@ public partial class DealOrForceGame
                     Fmt.Money(ConstructionCost.Of(_campaign, player, kind) * _campaign.Defines.DemolitionRefund)));
             line.AddChild(remove);
 
-            var dry = hasRegion
-                ? Waterfront.Refusal(_campaign, _selectedState.MapIndex, kind)
-                : "";
+            var refusal = ConstructionAdmission.Refusal(_campaign, player, hasRegion ? _selectedState : null, kind);
+            var place = ActionButton("On map", () => BeginConstructionPlacement(captured), 76, 32);
+            place.Name = "PlaceBuilding" + BuildingCatalog.IdOf(kind);
+            place.Disabled = BuildingRules.Refusal(_campaign, player, kind).Length > 0 || !_campaign.FeatureEnabled("construction");
+            Tip(place, place.Disabled ? BuildingRules.Refusal(_campaign, player, kind)
+                : Tr("Choose this building, then click the map to place a regional construction project."));
+            line.AddChild(place);
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            var slots = ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects);
-            add.Disabled = !hasRegion || dry.Length > 0 || count >= slots ||
-                           player.Treasury < Math.Min(0.05f, ConstructionCost.Of(_campaign, player, kind));
-            Tip(add, !hasRegion ? Tr("Select an owned region.")
-                : dry.Length > 0 ? dry
-                : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)
-                : add.Disabled ? Tr("Insufficient treasury to start construction.")
+            add.Disabled = refusal.Length > 0;
+            Tip(add, add.Disabled ? refusal
                 : Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip);
             line.AddChild(add);
         }

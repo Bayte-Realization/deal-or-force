@@ -310,6 +310,7 @@ public partial class DealOrForceGame
             : !string.IsNullOrEmpty(leader.Name)
                 ? leader.Name
                 : Tr("player nation");
+        if (SettingsCatalog.Flag("show_country_tags")) _identityTag.Text = player.Tag + " · " + _identityTag.Text;
         _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}\n" +
             Loc.Format("Country code (saves and mods): {0}", player.Tag));
         _identity.TooltipText = Ui.Tip(player.DisplayName + "\n" + Loc.Format("Country code (saves and mods): {0}", player.Tag));

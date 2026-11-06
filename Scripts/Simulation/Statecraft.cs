@@ -686,12 +686,12 @@ public static class Statecraft
     /// </summary>
     private static bool WillAnswer(Campaign campaign, Nation friend, Nation defender, Nation attacker,
         DiplomaticRelation bond, bool favour = false)
-        => AssessCall(campaign, friend, defender, attacker, bond, favour).WouldJoin;
+        => AssessCall(campaign, friend, defender, attacker, bond, favour, refreshAssessment: true).WouldJoin;
 
     /// <summary>The actual deterministic decision, also used by the declaration preview.
     /// A score is willingness, NOT a random percentage; opening a preview consumes no RNG.</summary>
     public static WarCallAssessment AssessCall(Campaign campaign, Nation friend, Nation defender, Nation attacker,
-        DiplomaticRelation bond, bool favour = false)
+        DiplomaticRelation bond, bool favour = false, bool refreshAssessment = false)
     {
         if (CampaignDiplomacy.AtWar(campaign, friend.Id, attacker.Id))
             return new(false, false, 0, "Already fighting this opponent in another war.");
@@ -716,7 +716,7 @@ public static class Statecraft
 
         // And the arithmetic. Nobody honours a promise into a war they cannot survive.
         var mine = AiStatecraft.StrengthOf(campaign, friend);
-        var theirs = CampaignIntel.EstimatedStrength(campaign, friend.Id, attacker);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, friend.Id, attacker, refreshAssessment);
         willingness += M.Clamp(mine / MathF.Max(0.01f, theirs) - 0.75f, -0.8f, 0.8f);
 
         // A coalition member answers more readily; that is what it joined for.

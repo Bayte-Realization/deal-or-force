@@ -1,0 +1,11 @@
+// Floors are physical window pixels, not design-canvas units. These three diplomatic
+// documents reflow inside the window; their scrolling bodies never own the action footer.
+{
+  "metrics": {
+    "decision.minimum_width_pixels": 1100,
+    "decision.minimum_height_pixels": 760,
+    "decision.margin_pixels": 20,
+    "decision.minimum_font_pixels": 14,
+    "decision.minimum_target_pixels": 32
+  }
+}

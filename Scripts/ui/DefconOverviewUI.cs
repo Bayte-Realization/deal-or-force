@@ -151,20 +151,19 @@ public partial class DealOrForceGame
             // The last resort, behind a question: one click must never end a world.
             var strikeWhy = NuclearPosture.Refusal(_campaign, player, "strike");
             var answering = NuclearPosture.Avenging(_campaign, player) is not null;
-            var strike = ActionButton(Tr(answering ? "Answer the strike" : "Use a nuclear weapon"), () => ConfirmNuclearStrike(false), 0, 32);
+            var strike = ActionButton("Plan strike on armed forces", () => ConfirmNuclearStrike(false), 0, 32);
             strike.Name = "Posture_strike";
-            strike.Disabled = strikeWhy.Length > 0;
+            strike.Disabled = false; // Planning is available even when execution needs a higher alert.
             strike.Modulate = strikeWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
             strike.TooltipText = Ui.Tip(strikeWhy.Length > 0 ? strikeWhy : Tr(answering ? AnswerHelp : StrikeHelp));
             acts.AddChild(strike);
 
             // The strategic use: not the enemy's army but the enemy's country.
             var citiesWhy = NuclearPosture.Refusal(_campaign, player, "devastate");
-            NuclearPosture.CityTarget(_campaign, player, out var victim);
-            var cities = ActionButton(victim is null ? Tr("Strike their cities") : string.Format(Tr("Strike the cities of {0}"), victim.DisplayName),
+            var cities = ActionButton("Plan strike on cities",
                 () => ConfirmNuclearStrike(true), 0, 32);
             cities.Name = "Posture_devastate";
-            cities.Disabled = citiesWhy.Length > 0;
+            cities.Disabled = false;
             cities.Modulate = citiesWhy.Length > 0 ? Colors.White : Ui.Colour("state.critical");
             cities.TooltipText = Ui.Tip(citiesWhy.Length > 0 ? citiesWhy : Tr(CitiesHelp));
             acts.AddChild(cities);
@@ -212,30 +211,7 @@ public partial class DealOrForceGame
 
     private void ConfirmNuclearStrike(bool cities)
     {
-        if (_campaign?.Player is not { } player) return;
-        var answering = NuclearPosture.Avenging(_campaign, player) is not null;
-        if (GetChildren().OfType<ConfirmationDialog>().Any(dialog => dialog.Visible)) return;
-        var campaign = _campaign;
-        var confirm = new ConfirmationDialog { Name = "ConfirmNuclearStrike",
-            Title = Tr(cities ? "Strike their cities?" : "Use a nuclear weapon?"),
-            DialogText = Tr(cities ? CitiesHelp : answering ? AnswerHelp : StrikeHelp) + "\n\n" + Tr("There is no taking it back."),
-            Exclusive = true };
-        var theme = ScenarioEditorTheme.Create();
-        theme.SetStylebox("panel", "AcceptDialog", ScenarioEditorTheme.Surface("shell.background", "shell.border", 16));
-        confirm.Theme = theme;
-        confirm.GetLabel().AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        confirm.GetLabel().CustomMinimumSize = new Vector2(480, 120);
-        confirm.GetOkButton().Text = Tr("Give the order");
-        confirm.GetCancelButton().Text = Tr("Cancel");
-        AddChild(confirm);
-        var issuer = player.Id;
-        confirm.Confirmed += () =>
-        {
-            confirm.QueueFree();
-            if (ReferenceEquals(_campaign, campaign) && _campaign.Player?.Id == issuer) PostureOrder(cities ? "devastate" : "strike", -1);
-        };
-        confirm.Canceled += () => confirm.QueueFree();
-        confirm.PopupCentered(new Vector2I(540, 240));
+        OpenNuclearStrikeReview(cities);
     }
 
     private void PostureOrder(string action, int targetId)

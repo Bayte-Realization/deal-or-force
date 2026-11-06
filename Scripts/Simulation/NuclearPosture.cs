@@ -145,6 +145,12 @@ public static class NuclearPosture
 
     private static bool AtWarWith(Campaign c, int a, int b) => c.Wars.Any(w => !w.Ended && w.Opposes(a, b));
 
+    /// <summary>Player-visible country targets follow the same non-civil wars as automatic
+    /// targeting. Choosing a country never creates a war or bypasses readiness and cooldown.</summary>
+    public static IReadOnlyList<Nation> Targets(Campaign c, Nation n) => c is null || n is null ? Array.Empty<Nation>() :
+        c.Wars.Where(w => !w.Ended && !w.CivilConflict && w.Involves(n.Id)).SelectMany(w => w.EnemiesOf(n.Id)).Distinct()
+            .Select(c.NationById).Where(t => t is { Population: > 0 }).OrderBy(t => t.Id).ToArray();
+
     public static string Refusal(Campaign c, Nation n, string action, Nation target = null)
     {
         if (!Active(c)) return Loc.Get("The nuclear alert is switched off in this campaign.");
@@ -174,6 +180,7 @@ public static class NuclearPosture
                     return Loc.Format("A test costs {0:0} political credit; there is {1:0.#}.", d.NuclearTestCost, n.PoliticalPoints);
                 return "";
             case "devastate":
+                if (target is not null && !Targets(c, n).Any(t => t.Id == target.Id)) return Loc.Get("The selected country is not an opponent in an active interstate war.");
                 if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (d.NuclearCityCasualties <= 0f) return Loc.Get("No government in this world can order a strike on cities.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
@@ -182,9 +189,10 @@ public static class NuclearPosture
                         c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
                 if (n.PoliticalPoints < d.NuclearDevastateCost)
                     return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", d.NuclearDevastateCost, n.PoliticalPoints);
-                if (CityTarget(c, n, out _) <= 0) return Loc.Get("No enemy country is at war with us.");
+                if (CityTarget(c, n, out _, target) <= 0) return Loc.Get("No eligible city target exists in the selected country.");
                 return "";
             case "strike":
+                if (target is not null && !Targets(c, n).Any(t => t.Id == target.Id)) return Loc.Get("The selected country is not an opponent in an active interstate war.");
                 if (!c.FeatureEnabled("nuclear_strikes")) return Loc.Get("No government in this world can order a nuclear weapon used.");
                 if (n.NuclearPosture > 1) return Loc.Get("Only forces at DEFCON 1 can be ordered to use a weapon.");
                 if (c.ElapsedDays - n.LastNuclearStrikeDay < d.NuclearStrikeCooldownDays)
@@ -192,7 +200,7 @@ public static class NuclearPosture
                         c.ElapsedDays - n.LastNuclearStrikeDay, d.NuclearStrikeCooldownDays);
                 if (n.PoliticalPoints < d.NuclearStrikeCost)
                     return Loc.Format("The order costs {0:0} political credit; there is {1:0.#}.", d.NuclearStrikeCost, n.PoliticalPoints);
-                if (StrikeTarget(c, n, out _) <= 0)
+                if (StrikeTarget(c, n, out _, target) <= 0)
                     return Loc.Get("No enemy force is within reach of a weapon.");
                 return "";
             case "hotline":
@@ -248,10 +256,10 @@ public static class NuclearPosture
                 }
                 break;
             case "strike":
-                Strike(c, n, cities: false);
+                Strike(c, n, cities: false, target);
                 break;
             case "devastate":
-                Strike(c, n, cities: true);
+                Strike(c, n, cities: true, target);
                 break;
             case "hotline":
                 n.LastHotlineDay = target.LastHotlineDay = c.ElapsedDays;
@@ -278,7 +286,7 @@ public static class NuclearPosture
     /// of its own to defend with it. When the AI orders it at all is still Existential (defeat or
     /// the capital lost); NuclearCounterforce false keeps the old homeland-only rule.
     /// </summary>
-    public static int StrikeTarget(Campaign c, Nation n, out HashSet<int> enemies)
+    public static int StrikeTarget(Campaign c, Nation n, out HashSet<int> enemies, Nation target = null)
     {
         enemies = new HashSet<int>();
         var topology = c.ProvinceMap;
@@ -286,10 +294,16 @@ public static class NuclearPosture
         foreach (var war in c.Wars)
             if (!war.Ended && !war.CivilConflict && war.Involves(n.Id))
                 foreach (var id in war.EnemiesOf(n.Id)) enemies.Add(id);
+        if (target is not null)
+        {
+            if (!enemies.Contains(target.Id)) { enemies.Clear(); return 0; }
+            enemies.IntersectWith(new[] { target.Id });
+        }
         if (enemies.Count == 0) return 0;
         // An answer to a strike falls on the striker's strongest force wherever it stands; failing
         // that, and always otherwise, the weapon defends our own soil.
         var avenged = Avenging(c, n);
+        if (target is not null && avenged?.Id != target.Id) avenged = null;
         var weight = new Dictionary<int, float>();
         var passes = c.Defines.NuclearCounterforce ? 3 : 2;
         for (var pass = avenged is null ? 1 : 0; pass < passes; pass++)
@@ -333,12 +347,17 @@ public static class NuclearPosture
     /// Where a strike on a country's cities would fall: the seat of the country it is answering, or
     /// else of its most populous enemy in a war that is not a civil one - the capital's province.
     /// </summary>
-    public static int CityTarget(Campaign c, Nation n, out Nation victim)
+    public static int CityTarget(Campaign c, Nation n, out Nation victim, Nation target = null)
     {
         victim = null;
         if (c?.ProvinceMap is null || n is null) return 0;
-        victim = Avenging(c, n);
-        if (victim is null)
+        if (target is not null)
+        {
+            if (target.Movement is not null || !Targets(c, n).Any(t => t.Id == target.Id)) return 0;
+            victim = target;
+        }
+        else victim = Avenging(c, n);
+        if (victim is null && target is null)
             foreach (var war in c.Wars)
             {
                 if (war.Ended || war.CivilConflict || !war.Involves(n.Id)) continue;
@@ -353,17 +372,18 @@ public static class NuclearPosture
         var largest = c.StatesOf(victim).OrderByDescending(r => r.Population).FirstOrDefault();
         if (largest is null) return 0;
         for (var p = 1; p <= map.ProvinceCount; p++)
-            if (map.ProvinceToState[p] == largest.MapIndex && !map.IsWater(p)) return p;
+            if (map.ProvinceToState[p] == largest.MapIndex && map.ProvinceToNation[p] == victim.MapIndex && !map.IsWater(p)) return p;
         return 0;
     }
 
-    private static void Strike(Campaign c, Nation n, bool cities)
+    private static void Strike(Campaign c, Nation n, bool cities, Nation target = null)
     {
         var d = c.Defines;
         var answer = Avenging(c, n);
+        if (target is not null && answer?.Id != target.Id) answer = null;
         var enemies = new HashSet<int>();
         Nation victim = null;
-        var province = cities ? CityTarget(c, n, out victim) : StrikeTarget(c, n, out enemies);
+        var province = cities ? CityTarget(c, n, out victim, target) : StrikeTarget(c, n, out enemies, target);
         if (province <= 0) return;
         if (cities) enemies.Add(victim.Id);
         n.PoliticalPoints -= cities ? d.NuclearDevastateCost : d.NuclearStrikeCost;
@@ -600,8 +620,12 @@ public sealed class NuclearPostureCommand : ICampaignCommand
 
     public void Apply(Campaign campaign)
     {
+        Changed = false;
         if (!MechanicFeatures.Allows(campaign, this)) return;
         var nation = campaign.NationById(IssuerId);
+        // -1 is the legacy automatic target. A missing explicit id must never fall back
+        // to another country merely because a save/queued order became stale.
+        if (TargetId >= 0 && campaign.NationById(TargetId) is null) return;
         Changed = NuclearPosture.Apply(campaign, nation, Action, campaign.NationById(TargetId));
         if (!Changed)
             DiagnosticLogs.Write("orders", $"NUCLEAR_POSTURE_REFUSED nation={IssuerId} action={Action} reason={NuclearPosture.Refusal(campaign, nation, Action, campaign.NationById(TargetId))}");

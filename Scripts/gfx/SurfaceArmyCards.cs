@@ -50,6 +50,7 @@ public sealed partial class GlobePresentation
         {
             "fleet" => "fleet.globe_counter_pixels",
             "support" => "support.globe_counter_pixels",
+            "battle" => "combat.map_marker_pixels",
             _ => "map.globe_counter_pixels"
         };
         var worldKey = prefix switch

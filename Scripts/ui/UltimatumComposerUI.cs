@@ -32,6 +32,7 @@ public partial class DealOrForceGame
         _ultimatumPicks.Clear();
         _ultimatumConfirm = false;
         _ultimatumCompleted = false;
+        RestoreDecisionFocus(ref _ultimatumReturnFocus);
     }
 
     private Ultimatum.Demand ComposedUltimatum() => new()
@@ -107,6 +108,8 @@ public partial class DealOrForceGame
     {
         if (_campaign?.Player is null || target is null || target.Id == _campaign.Player.Id) return;
         CloseUltimatumComposer();
+        CloseDealComposer(); CloseWarDeclaration();
+        _ultimatumReturnFocus = GetViewport().GuiGetFocusOwner();
         _ultimatumTarget = target.Id;
         _ultimatumComposer = FullLayer("UltimatumComposer");
         _hudLayer.AddChild(_ultimatumComposer);
@@ -114,6 +117,7 @@ public partial class DealOrForceGame
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _ultimatumComposer.AddChild(shade);
         var panel = TexturedPanel(_ultimatumComposer);
+        panel.Name = "UltimatumPanel";
         Ui.Place(panel, "modal.ultimatum");
         var rows = PanelRows(panel, 20, 16, 12);
         var ultHead = ScreenHeader(rows, Loc.Format("Ultimatum to {0}", target.DisplayName),
@@ -122,19 +126,9 @@ public partial class DealOrForceGame
         PrependToScreenHeader(ultHead, FlagBadge(target.Tag, 30, target.DisplayName));
         rows.AddChild(WrappedUltimatumText(Loc.Format("If accepted: {0} days of protected peace. If refused: {1} days before war can be declared.",
             Math.Max(1, _campaign.Defines.UltimatumSettlementTruceDays), Math.Max(1, _campaign.Defines.UltimatumRefusalTruceDays)), 13));
-        var bodyScroll = new ScrollContainer
-        {
-            Name = "UltimatumBodyScroll",
-            SizeFlagsVertical = SizeFlags.ExpandFill,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            VerticalScrollMode = ScrollContainer.ScrollMode.Auto,
-            FollowFocus = true
-        };
-        rows.AddChild(bodyScroll);
-        var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
+        var body = new HBoxContainer { Name = "UltimatumColumns", SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 20);
-        bodyScroll.AddChild(body);
+        rows.AddChild(body);
         var land = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         body.AddChild(land);
         SectionRule(land, "Territorial demands");
@@ -143,10 +137,14 @@ public partial class DealOrForceGame
         _ultimatumRegionCount = Title("", 11, Ui.Colour("text.muted"));
         _ultimatumRegionCount.Name = "UltimatumRegionCount";
         land.AddChild(_ultimatumRegionCount);
+        var regionScroll = new ScrollContainer { Name = "UltimatumRegionsScroll",
+            SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+        land.AddChild(regionScroll);
         var regionRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         regionRows.AddThemeConstantOverride("separation", 4);
-        land.AddChild(regionRows);
-        var offered = _campaign.States.Where(s => s.NationMapIndex == target.MapIndex).OrderBy(s => s.Name).ToArray();
+        regionScroll.AddChild(regionRows);
+        var offered = _campaign.States.Where(s => s.NationMapIndex == target.MapIndex).OrderBy(s => s.DisplayName).ToArray();
         foreach (var state in offered)
         {
             var id = state.MapIndex;
@@ -154,7 +152,7 @@ public partial class DealOrForceGame
             Ultimatum.ValidateTerms(_campaign, _campaign.Player, target, new Ultimatum.Demand { Regions = new[] { id } }, out var heldWhy);
             var choice = new CheckBox
             {
-                Name = $"UltimatumRegion_{id}", Text = state.Name, Disabled = !eligible,
+                Name = $"UltimatumRegion_{id}", Text = state.DisplayName, Disabled = !eligible,
                 TooltipText = eligible ? Fmt.People(state.Population) : Ui.Tip(Tr(heldWhy.Length > 0 ? heldWhy : "They cannot yield what they do not hold.")),
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill
@@ -186,15 +184,20 @@ public partial class DealOrForceGame
         ShowRegionCount("");
         var terms = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         terms.AddThemeConstantOverride("separation", 10);
-        body.AddChild(terms);
-        SectionRule(terms, "Additional demands");
+        var termsColumn = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        body.AddChild(termsColumn);
+        SectionRule(termsColumn, "Additional demands");
+        var termsScroll = new ScrollContainer { Name = "UltimatumTermsScroll",
+            SizeFlagsVertical = SizeFlags.ExpandFill, SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+        termsColumn.AddChild(termsScroll); termsScroll.AddChild(terms);
         terms.AddChild(WrappedUltimatumText("One-time reparations · billions of dollars", 13));
         _ultimatumCash = new SpinBox { Name = "UltimatumReparations", MinValue = 0, Step = .01,
             MaxValue = Math.Max(0, target.Treasury) * Math.Clamp(_campaign.Defines.UltimatumMaxTreasuryShare, 0, 1),
             CustomMinimumSize = new(0, 36) };
         terms.AddChild(_ultimatumCash);
         terms.AddChild(Title(Loc.Format("Maximum: {0}", Fmt.Money((float)_ultimatumCash.MaxValue)), 12, Ui.Colour("text.muted")));
-        var embargoed = CampaignDiplomacy.Get(_campaign, _campaign.Player.Id, target.Id).EmbargoBy(target.Id);
+        var embargoed = CampaignDiplomacy.Peek(_campaign, _campaign.Player.Id, target.Id)?.EmbargoBy(target.Id) == true;
         _ultimatumEmbargo = new CheckBox
         {
             Name = "UltimatumLiftEmbargo", Text = Tr("Lift their embargo"), Disabled = !embargoed,
@@ -297,7 +300,10 @@ public partial class DealOrForceGame
         foot.AddChild(_ultimatumAssessment);
         _ultimatumSummary = WrappedUltimatumText("", 13);
         _ultimatumSummary.Name = "UltimatumTerms";
-        foot.AddChild(_ultimatumSummary);
+        // A package can contain dozens of terms. It belongs in the scrolling document,
+        // not in the pinned footer where it could push the only Send/Cancel buttons away.
+        SectionRule(terms, "REVIEW BEFORE SIGNING");
+        terms.AddChild(_ultimatumSummary);
         var actions = new HBoxContainer();
         actions.AddThemeConstantOverride("separation", 12);
         foot.AddChild(actions);
@@ -308,8 +314,7 @@ public partial class DealOrForceGame
         _ultimatumSend.Name = "SendComposedUltimatum";
         _ultimatumSend.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         actions.AddChild(_ultimatumSend);
-        panel.Resized += () => FitNegotiationTypography(panel);
-        FitNegotiationTypography(panel);
+        ReadableDecision(panel, "modal.ultimatum");
         RefreshUltimatumComposer();
         search.GrabFocus();
     }
@@ -329,6 +334,7 @@ public partial class DealOrForceGame
         var demand = ComposedUltimatum();
         var assessment = Ultimatum.Assess(_campaign, _campaign.Player, target, demand);
         _ultimatumSend.Disabled = !assessment.Valid;
+        _ultimatumSend.TooltipText = assessment.Valid ? "" : Tr(assessment.Reason);
         _ultimatumSend.Text = Tr("Review demand");
         _ultimatumAssessment.Text = !assessment.Valid ? Tr(assessment.Reason) : assessment.Response == Ultimatum.Answer.Yield
             ? Tr("They are expected to yield") : Tr("They are expected to refuse");

@@ -77,6 +77,7 @@ public partial class DealOrForceGame
         if (_campaign?.Player is null || target is null || target.Id == _campaign.Player.Id) return;
         CloseDealComposer();
         CloseUltimatumComposer();
+        CloseWarDeclaration();
         PlayStrategicCue("diplomacy_page");
         _dealReturnFocus = GetViewport().GuiGetFocusOwner();
         _dealTarget = target.Id;
@@ -184,8 +185,7 @@ public partial class DealOrForceGame
         _dealSend.Name = "SendComposedDeal";
         _dealSend.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         actions.AddChild(_dealSend);
-        panel.Resized += () => FitNegotiationTypography(panel);
-        FitNegotiationTypography(panel);
+        ReadableDecision(panel, "modal.deal");
         RefreshDealComposer();
         _dealGiveCash.GetLineEdit().GrabFocus();
     }
@@ -212,7 +212,7 @@ public partial class DealOrForceGame
         // real height of its own: it used to get whatever the treaties left over, which on a
         // 1080p screen was one row - one region visible at a time out of thirty-five.
         var halfScroll = new ScrollContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = true };
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FollowFocus = false };
         frame.AddChild(halfScroll);
         var half = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         half.AddThemeConstantOverride("separation", 7); halfScroll.AddChild(half);
@@ -360,7 +360,8 @@ public partial class DealOrForceGame
         _dealAssessment.LabelSettings.FontColor = Ui.Colour(!valid ? "state.warning"
             : target?.IsHuman == true ? "text.body" : acceptable ? "state.positive" : "state.warning");
         _dealTerms.Text = valid ? Ultimatum.DealSummary(_campaign, player, target, deal)
-            : Tr("No terms have been sent. Change the package to resolve this restriction.");
+            : Tr("No offer has been sent. Change the package to resolve this restriction.");
+        _dealSend.TooltipText = valid ? "" : Tr(assessment.Reason);
         if (valid && (deal.From.ReleaseRegions || deal.To.ReleaseRegions))
         {
             var owner = deal.From.ReleaseRegions ? player : target;

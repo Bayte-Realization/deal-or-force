@@ -18,11 +18,14 @@ public partial class DealOrForceGame
     private void CloseWarDeclaration()
     {
         if (IsInstanceValid(_warDeclaration))
-        { _warDeclaration.GetParent()?.RemoveChild(_warDeclaration); _warDeclaration.QueueFree(); }
+        {
+            _warDeclaration.GetParent()?.RemoveChild(_warDeclaration); _warDeclaration.QueueFree();
+            if (_globe is not null) _globe.LoadingInputBlocked = false;
+        }
         _warDeclaration = null;
         _warInvitations.Clear();
         _warDeclarationTarget = -1;
-        if (_globe is not null) _globe.LoadingInputBlocked = false;
+        RestoreDecisionFocus(ref _warDeclarationReturnFocus);
     }
 
     /// <summary>One shared review for the dossier and full diplomacy screen.
@@ -31,6 +34,7 @@ public partial class DealOrForceGame
     {
         if (_campaign?.Player is null || target is null || target == _campaign.Player) return;
         CloseWarDeclaration(); CloseDealComposer(); CloseUltimatumComposer();
+        _warDeclarationReturnFocus = GetViewport().GuiGetFocusOwner();
         _warDeclarationTarget = target.Id; _warDeclarationGoal = goal; _warDeclarationSent = false;
         var preview = WarDeclarationPlanning.Preview(_campaign, _campaign.Player.Id, target.Id);
         _warDeclaration = FullLayer("WarDeclarationReview");
@@ -39,6 +43,7 @@ public partial class DealOrForceGame
         var shade = new ColorRect { Color = Ui.Colour("surface.overlay"), MouseFilter = MouseFilterEnum.Stop };
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); _warDeclaration.AddChild(shade);
         var panel = TexturedPanel(_warDeclaration);
+        panel.Name = "WarDeclarationPanel";
         Ui.Place(panel, "modal.ultimatum");
         var rows = PanelRows(panel, 20, 16, 10);
         var header = ScreenHeader(rows, Loc.Format("Declare war on {0}?", target.DisplayName),
@@ -57,7 +62,8 @@ public partial class DealOrForceGame
             ? "Nothing is sent until you confirm. Unchecked partners will not receive an offensive invitation."
             : preview.Refusal, 12);
         _warDeclarationFeedback.Name = "WarDeclarationFeedback"; rows.AddChild(_warDeclarationFeedback);
-        var actions = new HBoxContainer(); actions.AddThemeConstantOverride("separation", 10); rows.AddChild(actions);
+        var actions = new HFlowContainer { Name = "WarDeclarationActions", Alignment = FlowContainer.AlignmentMode.End };
+        actions.AddThemeConstantOverride("h_separation", 10); actions.AddThemeConstantOverride("v_separation", 8); rows.AddChild(actions);
         var cancel = ActionButton("Cancel", CloseWarDeclaration, 130, 38);
         cancel.Name = "CancelWarDeclaration"; actions.AddChild(cancel);
         var refresh = ActionButton("Refresh forecast", () =>
@@ -66,14 +72,16 @@ public partial class DealOrForceGame
             OpenWarDeclaration(target, goal);
             foreach (var (id, box) in _warInvitations) box.ButtonPressed = selected.Contains(id);
         }, 160, 38);
+        refresh.Name = "RefreshWarForecast";
         actions.AddChild(refresh);
-        actions.AddChild(new Control { SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        _warDeclarationConfirm = ActionButton("Declare war and send invitations", SubmitWarDeclaration, 0, 38);
+        _warDeclarationConfirm = ActionButton("Declare War", SubmitWarDeclaration, 0, 38, true);
         _warDeclarationConfirm.Name = "ConfirmWarDeclaration";
         _warDeclarationConfirm.Disabled = !preview.Allowed;
         // Prevent an accidental key repeat from activating a freshly opened destructive action.
-        _warDeclarationConfirm.FocusMode = FocusModeEnum.None;
+        _warDeclarationConfirm.FocusMode = FocusModeEnum.All;
+        _warDeclarationConfirm.TooltipText = preview.Allowed ? Tr("Confirm with a click or Space. Enter never declares war.") : preview.Refusal;
         actions.AddChild(_warDeclarationConfirm);
+        ReadableDecision(panel, "modal.ultimatum");
         cancel.GrabFocus();
     }
 
@@ -113,6 +121,7 @@ public partial class DealOrForceGame
             {
                 var box = new CheckBox { Name = "InviteWarPartner_" + nation.Id, Text = Tr("Invite on declaration"),
                     Disabled = !candidate.CanInvite, ButtonPressed = candidate.CanInvite && candidate.ExpectedJoin,
+                    TooltipText = Tr(candidate.Reason),
                     SizeFlagsHorizontal = SizeFlags.ExpandFill };
                 content.AddChild(box); _warInvitations[nation.Id] = box;
             }

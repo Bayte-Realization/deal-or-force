@@ -427,8 +427,8 @@ public static class SaveSystem
         /// <summary>
         /// Write the history and selected format. Safe on any thread: it reads
         /// nothing but its own bytes and its own copy of the history.
-        /// An autosave is compressed for speed rather than for size - a tenth larger, in less
-        /// than half the time - because it is taken every month and read almost never.
+        /// The normal compressor balances speed and size for manual AND automatic saves.
+        /// Thorough compression is an explicit opt-in, never an implicit cost of clicking Save.
         /// </summary>
         public SaveMetadata Commit()
         {
@@ -461,8 +461,7 @@ public static class SaveSystem
             using (var memory = new MemoryStream())
             {
                 memory.Write(System.Text.Encoding.ASCII.GetBytes(brotliMagic));
-                using (var brotli = new BrotliStream(memory,
-                           Metadata.IsAutosave && !_thorough ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
+                using (var brotli = new BrotliStream(memory, StorageCompression(_thorough), true))
                     brotli.Write(json);
                 compressed = memory.ToArray();
             }
@@ -759,6 +758,12 @@ public static class SaveSystem
         stored is { Length: >= 2 } && stored[0] == 0x1f && stored[1] == 0x8b;
 
     private const string BrotliMagic = "BDF2";
+
+    // Keep this policy independent of autosave metadata. Previously every manual save
+    // selected quality 11 even with SaveCompressionThorough=false: a 2039 campaign
+    // spent 110 seconds in Commit. File format and losslessness are unchanged.
+    internal static CompressionLevel StorageCompression(bool thorough) =>
+        thorough ? CompressionLevel.SmallestSize : CompressionLevel.Optimal;
 
     private static bool IsBrotli(byte[] stored) =>
         stored is { Length: >= 4 } && System.Text.Encoding.ASCII.GetString(stored, 0, 4) == BrotliMagic;

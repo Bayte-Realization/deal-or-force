@@ -75,6 +75,15 @@ static class UltimatumTests
     {
         UltimatumTerms();
         {
+            var (c, _, demander, target, _, _) = Setup();
+            c.Relations.Clear(); c.Wars.Clear();
+            var before = CampaignFingerprint.Of(c);
+            var valid = Ultimatum.ValidateTerms(c, demander, target, new Ultimatum.Demand { NonAggression = true }, out var reason);
+            Check(valid, "read-only fixture exercises a valid pact on attached land, not an early invalid-target return: " + reason);
+            Check(c.Relations.Count == 0 && CampaignFingerprint.Of(c) == before,
+                "validating terms for an uncontacted country never creates a diplomatic record");
+        }
+        {
             var (c, map, demander, target, stateIdx, provinces) = Setup();
             var stability = target.Stability;
             var notoriety = demander.Notoriety;

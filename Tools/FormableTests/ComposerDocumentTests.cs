@@ -23,8 +23,9 @@ static class ComposerDocumentTests
         var deal = Source("Scripts/ui/DealComposerUI.cs");
 
         Check(!ultimatum.Contains("ScrollablePanelRows("), "the ultimatum page does not scroll its verdict away");
-        Check(ultimatum.Contains("Name = \"UltimatumBodyScroll\""), "ultimatum terms have their own scroll");
-        Check(ultimatum.IndexOf("UltimatumBodyScroll") < ultimatum.IndexOf("UltimatumSettlementFooter"),
+        Check(ultimatum.Contains("Name = \"UltimatumTermsScroll\"") && ultimatum.Contains("Name = \"UltimatumRegionsScroll\""),
+            "ultimatum terms and regions have independent scrolls");
+        Check(ultimatum.IndexOf("UltimatumTermsScroll") < ultimatum.IndexOf("UltimatumSettlementFooter"),
             "ultimatum terms sit above the pinned footer");
         Check(ultimatum.IndexOf("UltimatumSettlementFooter") < ultimatum.IndexOf("_ultimatumSend = ActionButton"),
             "the ultimatum send button is built into the pinned footer");

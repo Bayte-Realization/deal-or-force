@@ -100,6 +100,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public Node3D Node;
         public Sprite3D Plate;
         public Texture2D FullPlateTexture;
+        public ulong FlagVisualId;
         public Sprite3D Glow;
         public Sprite3D ConditionBars;
         public Label3D Count;
@@ -2972,6 +2973,13 @@ void fragment() {
     ivec2 river_cell = ivec2(floor(river_point));
     float river_centre = 1.0e4;
     float river_importance = 0.0;
+    vec2 river_course_sum = vec2(0.0);
+    float river_weight = 0.0;
+    float river_importance_sum = 0.0;
+    vec2 river_fraction = fract(river_point);
+    vec2 river_first_course = vec2(0.0);
+    bool river_has_course = false;
+    bool river_coherent = true;
     for (int ry = 0; ry < 2; ry++) {
         for (int rx = 0; rx < 2; rx++) {
             ivec2 at = river_cell + ivec2(rx, ry);
@@ -2980,15 +2988,25 @@ void fragment() {
             vec4 entry = texelFetch(river_centre_map, fetch, 0);
             if (entry.b <= 0.0) continue;
             vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
-            // Through the stored point runs the river, in the stored direction: the distance is to
-            // that line within a texel of the point, and to the point beyond, where a course ends.
-            float heading = entry.a * 3.14159265;
-            vec2 along_course = vec2(cos(heading), sin(heading));
-            vec2 offset = river_point - course;
-            float along = abs(dot(offset, along_course));
-            float reach = along < 1.0 ? abs(dot(offset, vec2(-along_course.y, along_course.x))) : length(offset);
+            if (!river_has_course) { river_first_course = course; river_has_course = true; }
+            else if (length(course - river_first_course) > 1.6) river_coherent = false;
+            float weight = (rx == 0 ? 1.0 - river_fraction.x : river_fraction.x) *
+                (ry == 0 ? 1.0 - river_fraction.y : river_fraction.y);
+            river_course_sum += course * weight;
+            river_importance_sum += entry.b * weight;
+            river_weight += weight;
+            float reach = length(river_point - course);
             if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
         }
+    }
+    // Interpolate projected POINTS, not scalar distances or extended tangents. A
+    // straight course is reconstructed exactly; bends become one continuous curve,
+    // not a union of tangent spikes or pairwise chords (which draw little ladders).
+    // Large jumps mean unrelated channels: retain bounded point caps there instead
+    // of inventing a third river between them. Same four fetches, no new texture.
+    if (river_coherent && river_weight > 0.0001) {
+        river_centre = length(river_point - river_course_sum / river_weight);
+        river_importance = river_importance_sum / river_weight;
     }
     vec2 river_line = vec2(river_centre, river_importance);
     float river_size = smoothstep(0.55, 0.98, river_importance);
@@ -3990,6 +4008,7 @@ void fragment() {
                 InvalidateFlatCounterDensity();
             }
             else if (marker.NationId != nation.Id ||
+                     marker.FlagVisualId != NationalFlagVisualId(nation) ||
                      !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
             {
                 marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
@@ -3997,6 +4016,7 @@ void fragment() {
                 marker.NationId = nation.Id;
                 marker.TemplateId = templateId;
             }
+            marker.FlagVisualId = NationalFlagVisualId(nation);
             if (marker.Node is null) continue;
 
             var location = ArmyPresentationLocation(marker.Stack);
@@ -4254,6 +4274,8 @@ void fragment() {
     private int ArmyStructureFingerprint(Simulation.Campaign campaign)
     {
         var hash = new HashCode();
+        hash.Add(FlagCatalog.VisualStateHash(campaign));
+        hash.Add(SettingsCatalog.Flag("movement_flags"));
         hash.Add(campaign.Armies.Count);
         foreach (var army in campaign.Armies)
         {
@@ -4851,6 +4873,9 @@ void fragment() {
             { BuildCountryLabels(_lastLabelAnchors); return; }
     }
 
+    public void RefreshCountryTagDisplay()
+    { if (_lastLabelAnchors is not null) BuildCountryLabels(_lastLabelAnchors); }
+
     /// <summary>
     /// Put the names back where the borders are now.
     ///
@@ -4930,7 +4955,8 @@ void fragment() {
             if (!_nationByMapIndex.TryGetValue(mapIndex, out var nation) || anchor.Cells < 80)
                 continue;
 
-            var text = nation.MapName.ToUpperInvariant();
+            var text = (Simulation.SettingsCatalog.Flag("show_country_tags")
+                ? nation.MapName + " (" + nation.Tag + ")" : nation.MapName).ToUpperInvariant();
             _lastLabelNames[mapIndex] = nation.MapName;
             if (text.Length == 0) continue;
             // Retain the glyph instances when names or borders change. Replacing every
@@ -5237,9 +5263,10 @@ void fragment() {
         var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
         var centreWork = Task.Run(() => HydrologySurfaceData.BuildCentreline(MapWidth, MapHeight,
-            Simulation.HydrologyCatalog.RiverFeatures));
+            hydrology.AuthoredRivers ? RasterRiverCourses.Extract(hydrology) : Simulation.HydrologyCatalog.RiverFeatures));
         var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
-            Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures,
+            hydrology.AuthoredRivers ? null : Simulation.TerrainCatalog.Water.RiverProfiles,
+            hydrology.AuthoredRivers ? null : Simulation.HydrologyCatalog.RiverFeatures,
             widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
         var labelAnchors = anchorWork.GetAwaiter().GetResult();
 

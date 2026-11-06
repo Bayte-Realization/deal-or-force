@@ -25,13 +25,14 @@ static class Release0530Tests
             if (nation.Tag == "AFG")
             {
                 Check(FlagCatalog.Resolve(campaign, nation) == "flag_afg_theocratic_rule" &&
-                    FlagCatalog.ResolvePreview(campaign, nation, "presidential_republic", "liberalism") == own,
+                    FlagCatalog.ResolvePreview(campaign, nation, "presidential_republic", "liberalism") == "flag_afg_liberalism",
                     "Afghanistan distinguishes its actual starting government from a restored republic");
                 count++; continue;
             }
-            Check(GovernmentCatalog.All.All(g => FlagCatalog.ResolvePreview(campaign, nation, g.Id) == own) &&
-                IdeologyCatalog.All.All(i => FlagCatalog.ResolvePreview(campaign, nation, ideology: i.Id) == own),
-                nation.Tag + " retains national artwork across every government and ideology");
+            bool Authored(string sprite) => SpriteCatalog.Has(sprite) && (sprite == own || FlagCatalog.HasAutomaticVariantArt(sprite));
+            Check(GovernmentCatalog.All.All(g => Authored(FlagCatalog.ResolvePreview(campaign, nation, g.Id))) &&
+                IdeologyCatalog.All.All(i => Authored(FlagCatalog.ResolvePreview(campaign, nation, ideology: i.Id))),
+                nation.Tag + " uses national or matching authored artwork, not workshop variants, across its political previews");
             count++;
         }
         Check(count > 150 && CampaignFingerprint.Of(campaign) == before, "real-world flag previews are broad and non-mutating");

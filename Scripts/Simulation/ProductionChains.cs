@@ -69,8 +69,8 @@ public static class ProductionChains
     // it indexes this table like any other. Sixty-four spare of each is a table of a few
     // hundred floats - nothing next to being unable to add a twenty-first good.
     private const int ModdedHeadroom = 64;
-    private static readonly int BuildingKinds = Enum.GetValues<BuildingKind>().Length + ModdedHeadroom;
-    private static readonly int CommodityKinds = Enum.GetValues<Commodity>().Length + ModdedHeadroom;
+    private static int BuildingKinds = Enum.GetValues<BuildingKind>().Length + ModdedHeadroom;
+    private static int CommodityKinds = Enum.GetValues<Commodity>().Length + ModdedHeadroom;
 
     /// <summary>Staffed building count: the count times the nation's output factor.</summary>
     private static int StaffedSlot(BuildingKind kind) => FixedSlots + (int)kind;
@@ -84,7 +84,33 @@ public static class ProductionChains
 
     private static int SlotCount => FixedSlots + BuildingKinds * 2 + CommodityKinds;
 
-    private static readonly float[] Slots = new float[FixedSlots + BuildingKinds * 2 + CommodityKinds];
+    private static float[] Slots = new float[FixedSlots + BuildingKinds * 2 + CommodityKinds];
+
+    /// <summary>The initial headroom is an allocation hint, not a mod-content limit.
+    /// Grow at catalogue load, never per region/tick. Remap already compiled raw/deposit
+    /// factors when the building stride changes: otherwise a large late-loading mod
+    /// would quietly reinterpret an old mine's deposit as another building.</summary>
+    private static void EnsureSlotCapacity()
+    {
+        var buildings = BuildingKinds; var goods = CommodityKinds;
+        foreach (var kind in BuildingCatalog.All) while ((int)kind >= buildings) buildings = checked(buildings * 2);
+        foreach (var good in CommodityCatalog.All) while ((int)good >= goods) goods = checked(goods * 2);
+        if (buildings == BuildingKinds && goods == CommodityKinds) return;
+        foreach (var recipes in new[] { Regional, National })
+            foreach (var recipe in recipes)
+                foreach (var terms in new[] { recipe.Output, recipe.Demand })
+                    foreach (var term in terms)
+                        for (var i = 0; i < term.Factors.Length; i++)
+                        {
+                            var slot = term.Factors[i];
+                            if (slot >= FixedSlots + BuildingKinds * 2)
+                                term.Factors[i] = slot + (buildings - BuildingKinds) * 2;
+                            else if (slot >= FixedSlots + BuildingKinds)
+                                term.Factors[i] = slot + buildings - BuildingKinds;
+                        }
+        BuildingKinds = buildings; CommodityKinds = goods;
+        Slots = new float[SlotCount];
+    }
 
     // ---------------------------------------------------------------- recipes -----------
 
@@ -225,6 +251,7 @@ public static class ProductionChains
     /// </summary>
     public static void Merge(JsonElement root, List<string> errors = null)
     {
+        EnsureSlotCapacity();
         if (root.ValueKind != JsonValueKind.Object)
         {
             errors?.Add("Production recipes must be an object keyed by recipe ID.");
@@ -279,6 +306,7 @@ public static class ProductionChains
     /// </summary>
     public static void Validate(JsonElement root, List<string> problems)
     {
+        EnsureSlotCapacity();
         if (root.ValueKind != JsonValueKind.Object)
         {
             problems.Add("Production recipes must be an object keyed by recipe ID.");

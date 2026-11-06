@@ -42,6 +42,7 @@ public partial class DealOrForceGame
     private void OnArmyPicked(Army army)
     {
         if (!_hudLayer.Visible || !ArmyInteraction.CanSelect(_campaign, army)) return;
+        CancelConstructionPlacement();
         CloseFleetPanel();
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
         _globe.SelectSupportFormation(-1);
@@ -85,6 +86,7 @@ public partial class DealOrForceGame
         if (!_hudLayer.Visible) return;
         var playerArmies = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
         if (playerArmies.Length == 0) return;
+        CancelConstructionPlacement();
         // Aggregated-card clicks arrive here too, not through OnArmyPicked.
         // They must replace the previous military inspector just like a single click.
         CloseFleetPanel();

@@ -1,0 +1,21 @@
+{
+  "Plan strike on armed forces": "Plan strike on armed forces",
+  "Plan strike on cities": "Plan strike on cities",
+  "Nuclear strike planning": "Nuclear strike planning",
+  "Choose the country explicitly. No order is sent while you are choosing or reviewing.": "Choose the country explicitly. No order is sent while you are choosing or reviewing.",
+  "Nuclear target country": "Target country",
+  "Choose a target country…": "Choose a target country…",
+  "Only opponents in active interstate wars are listed. Selecting a country does not start a war or bypass readiness, cost or cooldown.": "Only opponents in active interstate wars are listed. Selecting a country does not start a war or bypass readiness, cost or cooldown.",
+  "Type of strike": "Type of strike",
+  "Enemy armed forces": "Enemy armed forces",
+  "Enemy cities": "Enemy cities",
+  "Review nuclear strike": "Review nuclear strike",
+  "Choose a target country before reviewing the order.": "Choose a target country before reviewing the order.",
+  "Target country: {0}\nTarget region: {1}\nOrder cost: {2:0} political credit": "Target country: {0}\nTarget region: {1}\nOrder cost: {2:0} political credit",
+  "No eligible target": "No eligible target",
+  "Give the order against {0}": "Give the order against {0}",
+  "Check the named country and strike type. Confirming gives the order; Escape cancels.": "Check the named country and strike type. Confirming gives the order; Escape cancels.",
+  "Order sent to the host. Awaiting confirmation.": "Order sent to the host. Awaiting confirmation.",
+  "The selected country is not an opponent in an active interstate war.": "The selected country is not an opponent in an active interstate war.",
+  "No eligible city target exists in the selected country.": "No eligible city target exists in the selected country."
+}

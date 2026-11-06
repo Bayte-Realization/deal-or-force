@@ -294,6 +294,8 @@ public partial class DealOrForceGame
         // ---------------------------------------------------------------------- the debug --
         Add("fps", "DEBUG", "fps", "Frames, frame time, draw calls and what the renderer is holding.",
             _ => ConsoleFps());
+        Add("tags", "DEBUG", "tags [on|off]", "Show or hide country IDs on the map and in country headers; no argument toggles.",
+            ConsoleCountryTags, "tdebug");
         Add("sim", "DEBUG", "sim [filter]",
             "Where a simulated day is actually spent, slowest pass first.", ConsoleSimulation);
         Add("mem", "DEBUG", "mem", "What the process is holding, and a collection on request.",

@@ -15,7 +15,8 @@ public sealed record LakeFeature(string Name, int Rank, HydroPoint[][] Rings);
 /// R contains lake coverage; G contains river importance. Neither layer changes
 /// political ownership, so hydrography cannot accidentally carve countries apart.
 /// </summary>
-public sealed record HydrologyRaster(int Width, int Height, byte[] Pixels, int RiverCount, int LakeCount, string Source = "GeoJSON vectors");
+public sealed record HydrologyRaster(int Width, int Height, byte[] Pixels, int RiverCount, int LakeCount,
+    string Source = "GeoJSON vectors", bool AuthoredRivers = false);
 
 /// <summary>
 /// Paradox-style, data-driven physical map catalogue. The shipped Natural Earth

@@ -129,16 +129,21 @@ public static class HeldRegions
     /// The regions whose economy answers to this country: its own, less those another holds,
     /// and those it holds of others. A list reused between calls - read it before asking again.
     /// </summary>
-    public static List<ScenarioState> EconomyOf(Campaign c, Nation nation)
+    public static List<ScenarioState> EconomyOf(Campaign c, Nation nation, bool refresh = true)
     {
         Scratch.Clear();
-        Refresh(c);
+        if (refresh) Refresh(c);
         var working = c.Defines.HeldRegionsWorkForHolder;
         foreach (var state in c.StatesOf(nation))
             if (!working || !Administered(c, state)) Scratch.Add(state);
-        if (working && HeldBy.TryGetValue(nation.Id, out var held))
+        // A UI projection reads the last committed administration, not Refresh's
+        // cached lists: building a tooltip must not set HeldById/HeldSinceDay.
+        if (working && refresh && HeldBy.TryGetValue(nation.Id, out var held))
             foreach (var state in held)
                 if (Administered(c, state)) Scratch.Add(state);
+        if (working && !refresh)
+            foreach (var state in c.States)
+                if (state.HeldById == nation.Id && state.NationMapIndex != nation.MapIndex && Administered(c, state)) Scratch.Add(state);
         return Scratch;
     }
 

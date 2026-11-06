@@ -745,7 +745,7 @@ public static class MarketSystem
         if (campaign is null || nation is null || state is null) return 1f;
         var demandedJobs = 0f;
         var availableWorkers = 0f;
-        foreach (var region in HeldRegions.EconomyOf(campaign, nation))
+        foreach (var region in HeldRegions.EconomyOf(campaign, nation, refresh: false))
         {
             demandedJobs += JobsDemanded(region);
             availableWorkers += WorkersAvailable(region);

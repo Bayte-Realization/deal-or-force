@@ -10,6 +10,19 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--inspect-save")) { SaveAudit.Run(args); return; }
+        if (args.Contains("--save-compression-only")) { SaveCompressionTests.Run(); return; }
+        if (args.Length == 0) SaveCompressionTests.Run();
+        if (args.Contains("--region-reunion-only")) { RegionReunionTests.Run(); return; }
+        if (args.Length == 0) RegionReunionTests.Run();
+        if (args.Contains("--raster-rivers-only")) { RasterRiverCourseTests.Run(); return; }
+        if (args.Length == 0) RasterRiverCourseTests.Run();
+        if (args.Contains("--large-production-only")) { LargeProductionCatalogTests.Run(); return; }
+        if (args.Length == 0) LargeProductionCatalogTests.Run();
+        if (args.Contains("--construction-placement-only")) { ConstructionPlacementTests.Run(); return; }
+        if (args.Length == 0) ConstructionPlacementTests.Run();
+        if (args.Contains("--decision-readability-only")) { DecisionReadabilityTests.Run(); return; }
+        if (args.Length == 0) DecisionReadabilityTests.Run();
         if (args.Contains("--war-declaration-only")) { WarDeclarationTests.Run(); return; }
         if (args.Length == 0) WarDeclarationTests.Run();
         if (args.Contains("--bce-calendar-only")) { BceCalendarTests.Run(); return; }

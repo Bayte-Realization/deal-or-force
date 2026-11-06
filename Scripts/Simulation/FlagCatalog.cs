@@ -162,6 +162,7 @@ public static partial class FlagCatalog
         GenericTags.Clear();
         ContextRules.Clear();
         RegimeFlags.Clear();
+        AutomaticVariantArt.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -428,6 +429,9 @@ public static partial class FlagCatalog
     /// the real thing.
     /// </summary>
     public static List<string> Candidates(Campaign campaign, Nation nation)
+        => AutomaticCountryVariants(campaign, nation, CollectCandidates(campaign, nation));
+
+    private static List<string> CollectCandidates(Campaign campaign, Nation nation)
     {
         var names = new List<string>();
         if (nation is null) return names;
@@ -457,8 +461,8 @@ public static partial class FlagCatalog
             }
             else if (nation.FoundNameKind is "tag" or "free_tag" && !string.IsNullOrWhiteSpace(nation.FoundNameId))
                 names.Add("flag_" + Slug(nation.FoundNameId));
-            // Do not put the old founder's flag above the new state's identity families.
-            if (string.IsNullOrEmpty(nation.FormedNationId)) names.Add("flag_" + tag);
+            // Ordinary national artwork comes after exact authored regime variants below,
+            // but before borrowed aliases or generic ideology art. A nation is not frozen.
         }
 
         // A landless organisation's banner is its identity, not the hypothetical regime it
@@ -550,7 +554,7 @@ public static partial class FlagCatalog
         // being - in which case it goes to the very bottom, after everything else has had a
         // chance, because a communist banner over a conservative republic is worse than no
         // flag at all.
-        var ownFlagStillFits = Fits(campaign, nation, tag);
+        var ownFlagStillFits = PreferCountryBase && nation.Movement is null || Fits(campaign, nation, tag);
         if (ownFlagStillFits) names.Add($"flag_{tag}");
         else if (Otherwise.TryGetValue(tag, out var instead) && instead.Length > 0)
             names.Add(instead);

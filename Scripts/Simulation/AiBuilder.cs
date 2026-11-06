@@ -88,6 +88,7 @@ public static class AiBuilder
             Candidates.Clear();
             foreach (var building in BuildingCatalog.All)
             {
+                if (BuildingRules.Refusal(campaign, nation, building).Length > 0) continue;
                 ProductionChains.RolesOf(building, Makes, Uses);
                 if (Makes.Contains(good)) Candidates.Add((building, Makes.Count));
             }

@@ -1,0 +1,6 @@
+{
+  "Show country tags": "Показывать теги стран",
+  "Show country IDs beside map names and in country headers. Useful for console commands, saves and modding. Can also be toggled with tags or tdebug.": "Показывать теги рядом с названиями на карте и в заголовках стран. Полезно для команд консоли, сохранений и модов. Также переключается командами tags и tdebug.",
+  "Country tags: on": "Теги стран: включены",
+  "Country tags: off": "Теги стран: выключены"
+}

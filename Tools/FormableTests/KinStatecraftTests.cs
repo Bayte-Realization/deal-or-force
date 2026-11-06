@@ -108,6 +108,24 @@ static class KinStatecraftTests
         {
             DeclareCatalog();
 
+            // Many cohort rows describe the same culture. Candidate selection must not
+            // depend on whether a mod stores 1 row or 1,500 class/sector/religion rows.
+            var compact = Fixture(out _, out _, out _, out _);
+            var expectedScan = KinStatecraft.ScanSummary(compact);
+            var dense = Fixture(out var denseCountry, out _, out var denseRegion, out _);
+            var english = denseRegion.PopulationGroups.Where(g => g.Culture == "english").ToArray();
+            var people = english.Sum(g => g.Size);
+            foreach (var group in english) denseRegion.PopulationGroups.Remove(group);
+            for (var row = 0; row < 1500; row++)
+                denseRegion.PopulationGroups.Add(new PopulationGroup { Culture = "english",
+                    Size = people / 1500 + (row < people % 1500 ? 1 : 0) });
+            var denseHash = CampaignFingerprint.Of(dense);
+            Check(KinStatecraft.ScanSummary(dense) == expectedScan,
+                "splitting identical cultures into 1500 cohort rows preserves exact candidate order, hosts and shares");
+            Check(KinStatecraft.LastScanKinEvaluations <= 3,
+                "monthly scan evaluates each foreign country/region pair once, not once per cohort");
+            Check(CampaignFingerprint.Of(dense) == denseHash, "dense monthly candidate scan changes no saved state or RNG");
+
         // ---- measuring: ours are ours, theirs are not --------------------------------
         {
             var c = Fixture(out var ours, out var host, out var abroad, out var home);

@@ -152,11 +152,7 @@ public partial class DealOrForceGame
             var underway = _campaign.Construction.Count(project => project.StateMapIndex == state.MapIndex && project.Building == kind);
 
             // Why not, in the order a player would want to hear it.
-            var refusal = Waterfront.Refusal(_campaign, state.MapIndex, kind);
-            if (refusal.Length == 0 && running >= limit)
-                refusal = Simulation.Loc.Format("The national construction limit is reached: {0} projects are under way.", running);
-            if (refusal.Length == 0 && player.Treasury < MathF.Min(0.05f, ConstructionCost.Of(_campaign, player, kind)))
-                refusal = Tr("The treasury cannot start it.");
+            var refusal = ConstructionAdmission.Refusal(_campaign, player, state, kind);
 
             var row = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
             row.AddThemeConstantOverride("separation", 6);

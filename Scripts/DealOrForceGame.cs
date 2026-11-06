@@ -302,11 +302,12 @@ public partial class DealOrForceGame : Control
                 GetViewport().SetInputAsHandled();
             return;
         }
+        if (IsInstanceValid(_nuclearStrikeComposer))
+        { HandleDecisionInput(_nuclearStrikeComposer, inputEvent, CloseNuclearStrikeReview, war: true); return; }
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
         if (IsInstanceValid(_warDeclaration))
         {
-            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { CloseWarDeclaration(); GetViewport().SetInputAsHandled(); }
+            HandleDecisionInput(_warDeclaration, inputEvent, CloseWarDeclaration, war: true);
             return;
         }
         // The big trees are read before the map is: a wheel over a graph is a wheel about the
@@ -316,19 +317,15 @@ public partial class DealOrForceGame : Control
         if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
         {
-            if (inputEvent is InputEventKey { Pressed: true, Echo: false } dealKey)
-            {
-                if (dealKey.Keycode == Key.Escape) { CloseDealComposer(); GetViewport().SetInputAsHandled(); }
-                else if (dealKey.Keycode is Key.F7 or Key.F10) GetViewport().SetInputAsHandled();
-            }
+            HandleDecisionInput(_dealComposer, inputEvent, CloseDealComposer);
             return;
         }
         if (IsInstanceValid(_ultimatumComposer))
         {
-            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { CloseUltimatumComposer(); GetViewport().SetInputAsHandled(); }
+            HandleDecisionInput(_ultimatumComposer, inputEvent, CloseUltimatumComposer);
             return;
         }
+        if (HandleConstructionPlacementInput(inputEvent)) return;
         if (IsInstanceValid(_authorCanvas))
         {
             // Child inspectors and confirmation dialogs own their Escape key.
@@ -567,7 +564,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
-        if (IsInstanceValid(_warDeclaration)) { GetViewport().SetInputAsHandled(); return; }
+        if (IsInstanceValid(_nuclearStrikeComposer) || IsInstanceValid(_warDeclaration)) { GetViewport().SetInputAsHandled(); return; }
         if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         if (_mapModeDrawerLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
@@ -954,6 +951,7 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        CancelConstructionPlacement();
         if (screen == "Situation") { OpenSituationRoom(); return; }
         if (_situationLayer is not null) _situationLayer.Visible = false;
         _situationReturn = "";
@@ -1350,6 +1348,7 @@ public partial class DealOrForceGame : Control
 
     private void OnCountryPicked(GlobePick pick)
     {
+        if (TryConstructionMapPick(pick)) return;
         if (_networkLayer is not null && _networkLayer.Visible)
         {
             SelectNetworkCountry(pick.Nation, false);

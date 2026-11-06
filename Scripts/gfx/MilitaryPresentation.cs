@@ -40,7 +40,7 @@ public sealed partial class GlobePresentation
         // and a cached card must not go on flying the old one.
         var flagSprite = FlagSpriteFor(nation);
         var resolvedTemplate = string.IsNullOrWhiteSpace(templateId) ? "line_infantry" : templateId;
-        var key = (nation.MapIndex, resolvedTemplate + "#" + flagSprite);
+        var key = (nation.MapIndex, resolvedTemplate + "#" + flagSprite + "#" + NationalFlagVisualId(nation));
         if (_armyCounterTextures.TryGetValue(key, out var cached)) return cached;
         const int width = 176;
         const int height = 104;
@@ -345,6 +345,9 @@ public sealed partial class GlobePresentation
         return sprite;
     }
 
+    private static ulong NationalFlagVisualId(Nation nation) => nation is null ? 0 :
+        DealOrForceGame.FlagTextureFor(nation.Tag)?.GetInstanceId() ?? 0;
+
     /// <summary>Flags already decoded for the cards: one image per sprite, not one per card.</summary>
     private static readonly Dictionary<string, Image> FlagChipImages = new(StringComparer.Ordinal);
     private static readonly Queue<string> FlagChipOrder = new();
@@ -372,10 +375,14 @@ public sealed partial class GlobePresentation
     private static void PaintFlagChip(byte[] pixels, int width, string sprite,
         float left, float top, float chipWidth, float chipHeight, Nation nation = null)
     {
-        var cacheKey = !string.IsNullOrWhiteSpace(sprite) ? sprite : (nation?.Tag ?? "fallback");
+        // A seceded regional country's diplomatic flag may be a bespoke provisional
+        // banner, not the generic culture sprite FlagCatalog uses as its fallback.
+        // Use the exact same final texture as the country UI, including its identity.
+        var nationalFlag = nation is null ? null : DealOrForceGame.FlagTextureFor(nation.Tag);
+        var cacheKey = nation is null ? sprite ?? "fallback" : nation.Tag + "#" + (nationalFlag?.GetInstanceId() ?? 0);
         if (!FlagChipImages.TryGetValue(cacheKey, out var image) || image is null || image.IsEmpty())
         {
-            image = DealOrForceGame.FlagSpriteTexture(sprite)?.GetImage();
+            image = (nationalFlag ?? DealOrForceGame.FlagSpriteTexture(sprite))?.GetImage();
             if (image is not null && !image.IsEmpty())
             {
                 if (image.IsCompressed()) image.Decompress();
@@ -944,6 +951,7 @@ public sealed partial class GlobePresentation
             {
                 var node = new Node3D { Name = $"Battle_{battle.Id}" };
                 _battleRoot.AddChild(node);
+                node.AddChild(new SurfaceBattleBadge { Name = "SurfaceBadge" });
                 marker = (node, Vector3.Zero);
                 _battleMarkers[battle.Id] = marker;
             }
@@ -971,6 +979,8 @@ public sealed partial class GlobePresentation
             var tone = !detailed || !assessment.Known ? "text.muted" : !own ? "state.info" :
                 share > .55f ? "state.positive" : share < .45f ? "state.negative" : "state.warning";
             _battleReadouts[battle.Id] = (detailed && assessment.Known ? $"{share * 100:0}" : "?", share, tone);
+            marker.Node.GetNode<SurfaceBattleBadge>("SurfaceBadge").SetReadout(_battleReadouts[battle.Id].Text, share, tone,
+                BattleSymbolFor(SpriteCatalog.TextureOf("icon_battle", "res://game/gfx/interface/icons/icon_battle.png")));
             marker.Node.SetMeta("endurance_known", detailed && assessment.Known);
             marker.Node.SetMeta("endurance_share", detailed ? share : -1f);
         }
@@ -1011,9 +1021,12 @@ public sealed partial class GlobePresentation
         if (_flatMap)
         {
             var geo = GeographicFromNormal(normal);
-            node.Position = FlatPoint(geo.Latitude, geo.Longitude, 0f);
+            node.Position = FlatPoint(geo.Latitude, geo.Longitude, FlatMarkerZ + .004f);
         }
-        else node.Position = normal * GlobeRadius;
+        else node.Position = normal * SurfaceMarkerRadius;
+        OrientSurfaceCounter(node, normal);
+        node.Scale = Vector3.One * (_flatMap ? _counterWorldPixel * _counterFlatFar * BattleMarkerRadius() * 2
+            : SurfaceCounterWidth(node, "battle"));
     }
 
     private void ReprojectBattleMarkers()
@@ -1026,12 +1039,12 @@ public sealed partial class GlobePresentation
     {
         battle = null;
         if (!IsInstanceValid(_camera) || !IsInstanceValid(_battleRoot) || !_battleRoot.IsVisibleInTree() || ViewDistance > 14f) return false;
-        var radius = BattleMarkerRadius();
-        var best = (radius + 3f) * (radius + 3f);
+        var best = float.MaxValue;
         foreach (var (battleId, marker) in _battleMarkers)
         {
             if (!IsInstanceValid(marker.Node) || !marker.Node.Visible || _camera.IsPositionBehind(marker.Node.GlobalPosition)) continue;
-            var distance = BattleMarkerScreen(marker.Node).DistanceSquaredTo(pixel);
+            if (marker.Node.GetNodeOrNull<SurfaceBattleBadge>("SurfaceBadge")?.Plate is not { } plate ||
+                !TryHitSurfaceCounter(plate, pixel, out var distance)) continue;
             if (distance >= best) continue;
             var candidate = _campaign?.Battles.FirstOrDefault(item => item.Id == battleId && !item.Ended);
             if (candidate is null) continue;

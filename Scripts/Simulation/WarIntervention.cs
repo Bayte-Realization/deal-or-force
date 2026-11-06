@@ -256,7 +256,7 @@ public static class WarInterventions
         willingness += Math.Clamp(donor.WarSupport - 0.5f, -0.4f, 0.4f);
         willingness += Math.Clamp(donor.Stability - 0.5f, -0.3f, 0.3f);
         var mine = AiStatecraft.StrengthOf(c, donor);
-        var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy);
+        var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy, refreshAssessment: false);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
         if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
         willingness = AiTemper.Willing(c, willingness);

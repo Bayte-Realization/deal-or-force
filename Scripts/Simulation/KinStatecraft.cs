@@ -589,6 +589,7 @@ public static class KinStatecraft
     private static Campaign _scanned;
     private static int _scannedMonth = -1;
     private static readonly Dictionary<int, List<Candidate>> Candidates = new();
+    internal static int LastScanKinEvaluations { get; private set; }
 
     private readonly record struct Candidate(Nation Host, ScenarioState Region, float Share);
 
@@ -600,6 +601,7 @@ public static class KinStatecraft
         _scanned = campaign;
         _scannedMonth = month;
         Candidates.Clear();
+        LastScanKinEvaluations = 0;
         if (campaign.States is null || campaign.Nations is null) return;
 
         // Which countries claim which people, built once: the reverse of the demography's own
@@ -624,11 +626,13 @@ public static class KinStatecraft
         var holders = new Dictionary<int, Nation>(campaign.Nations.Count);
         foreach (var nation in campaign.Nations)
             if (nation is not null) holders.TryAdd(nation.MapIndex, nation);
+        var evaluated = new HashSet<int>();
         foreach (var region in campaign.States)
         {
             if (region is null || region.Population <= 0) continue;
             if (!holders.TryGetValue(region.NationMapIndex, out var host)) continue;
             if (!Answerable(host)) continue;
+            evaluated.Clear();
             foreach (var group in region.PopulationGroups)
             {
                 if (group is null || group.Size <= 0) continue;
@@ -636,6 +640,12 @@ public static class KinStatecraft
                 foreach (var country in claimants)
                 {
                     if (country.Id == host.Id) continue;
+                    // A culture occurs in many class/sector/religion rows. Kin already
+                    // totals ALL those rows: repeating that same full scan for every row
+                    // made the monthly pass quadratic in a mature region's population mix.
+                    // First occurrence and candidate ordering are unchanged; no RNG is used.
+                    if (!evaluated.Add(country.Id)) continue;
+                    LastScanKinEvaluations++;
                     var (ours, _, share) = Kin(campaign, country, region);
                     if (ours <= 0 || share < minimum) continue;
                     if (!Candidates.TryGetValue(country.Id, out var list))

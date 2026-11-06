@@ -98,6 +98,47 @@ static class NuclearStrikeTests
         SetDay(c, pk.LastNuclearStrikeDay + c.Defines.NuclearShadowDays + 1);
         pk.NuclearPosture = 5; ind.NuclearPosture = 5;
         Check(DefconSystem.EvaluateTarget(c, out _) > 2, "until the shadow passes");
+        ChosenCountry(map);
         if (failures > 0) throw new Exception($"{failures} nuclear strike checks failed");
+    }
+
+    private static void ChosenCountry(ProvinceTopology map)
+    {
+        var c = Campaign.CreateBootstrap(947986505); c.AttachProvinceTopology(map);
+        c.Wars.Clear(); c.MarkWarsChanged();
+        var pk = c.NationByTag("PAK"); var india = c.NationByTag("IND"); var france = c.NationByTag("FRA");
+        var neutral = c.NationByTag("BRA");
+        c.ConfigureSinglePlayer(pk.Id); pk.NuclearPosture = 1; pk.PoliticalPoints = 500;
+        SetDay(c, 300);
+        var war = new StrategicWar { Id = 92003, AttackerId = pk.Id, DefenderId = india.Id, StartedDay = 200 };
+        war.DefenderAllies.Add(france.Id); c.Wars.Add(war); c.MarkWarsChanged();
+        var before = CampaignFingerprint.Of(c);
+        var choices = NuclearPosture.Targets(c, pk);
+        var province = NuclearPosture.StrikeTarget(c, pk, out var enemies, france);
+        Check(choices.Count == 2 && choices.Any(t => t.Id == france.Id) && !choices.Any(t => t.Id == pk.Id || t.Id == neutral.Id),
+            "country selector lists actual enemy belligerents, not ourselves or neutral countries");
+        Check(province > 0 && enemies.SetEquals(new[] { france.Id }) && c.Armies.Any(a => a.NationId == france.Id && a.ProvinceId == province),
+            "chosen counterforce target stays inside the selected enemy's forces");
+        var city = NuclearPosture.CityTarget(c, pk, out var victim, france);
+        Check(city > 0 && victim == france && c.ProvinceMap.ProvinceToNation[city] == france.MapIndex,
+            "chosen city target is France even when another enemy is more populous");
+        Check(CampaignFingerprint.Of(c) == before, "country and province previews leave the whole campaign unchanged");
+        var missing = new NuclearPostureCommand { IssuerId = pk.Id, Action = "devastate", TargetId = int.MaxValue };
+        missing.Apply(c);
+        Check(!missing.Changed && CampaignFingerprint.Of(c) == before, "missing explicit country never falls back to an automatic victim");
+        var invalid = new NuclearPostureCommand { IssuerId = pk.Id, Action = "devastate", TargetId = neutral.Id };
+        invalid.Apply(c);
+        Check(!invalid.Changed && CampaignFingerprint.Of(c) == before, "a neutral target is rejected atomically without spending political credit");
+        var frenchPopulation = c.StatesOf(france).Sum(s => s.Population); var indianPopulation = c.StatesOf(india).Sum(s => s.Population);
+        var command = new NuclearPostureCommand { IssuerId = pk.Id, Action = "devastate", TargetId = france.Id };
+        Check(NetworkCommandCodec.TryEncode(command, out var type, out var json) && NetworkCommandCodec.TryDecode(type, json, out var restored) &&
+            restored is NuclearPostureCommand { TargetId: var selected } && selected == france.Id,
+            "selected country survives the existing replay/network command codec");
+        command.Apply(c);
+        Check(command.Changed && c.StatesOf(france).Sum(s => s.Population) < frenchPopulation && c.StatesOf(india).Sum(s => s.Population) == indianPopulation,
+            "execution strikes only the selected country's city region, not the default larger enemy");
+        Check(c.Chronicle.Entries.Any(e => e.Kind == "nuclear_devastation" && e.TargetId == france.Id), "chronicle names the actual selected country");
+        before = CampaignFingerprint.Of(c); command.Apply(c);
+        Check(!command.Changed && CampaignFingerprint.Of(c) == before, "repeated selected strike still respects the shared cooldown");
     }
 }

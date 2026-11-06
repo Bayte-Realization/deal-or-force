@@ -43,7 +43,10 @@ static class StageBudgetTests
             Stepped(budget);
             var bytes = GC.GetAllocatedBytesForCurrentThread() - start;
             Console.WriteLine($"STAGE_BUDGET budget={budget} iterations={count} iterator_bytes={iteratorBytes} total_bytes={bytes} overhead_bytes={bytes - iteratorBytes}");
-            if (enforce) Check(bytes == iteratorBytes, "budget timing adds no heap object, budget=" + budget);
+            // Tiered JIT can eliminate a one-time allocation in the measured path
+            // after Bare was sampled. Fewer bytes is valid; additional heap work
+            // (including a single timing object) must still fail this guard.
+            if (enforce) Check(bytes <= iteratorBytes, "budget timing adds no heap object, budget=" + budget);
         }
         Check(c.ElapsedHours == 0 && !c.MidStep, "allocation probe never advances a paused campaign");
     }

@@ -362,6 +362,7 @@ public partial class DealOrForceGame
         _countryCardName.Text = nation.DisplayName;
         _countryCardCaption.Text = Simulation.Loc.Format("{0} · {1}",
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name));
+        if (SettingsCatalog.Flag("show_country_tags")) _countryCardCaption.Text = nation.Tag + " · " + _countryCardCaption.Text;
         BeginCountryFactsUpdate();
         ClearChildren(_countryCardLinks);
         RefreshCountryDossierTabs(nation);

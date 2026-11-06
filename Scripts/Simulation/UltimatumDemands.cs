@@ -273,8 +273,8 @@ public static partial class Ultimatum
                 StateMapIndices = new List<int> { demand.LiberateRegion }
             }, out reason))
             return false;
-        var relation = CampaignDiplomacy.Get(c, demander.Id, target.Id);
-        if (demand.LiftEmbargo && !relation.EmbargoBy(target.Id)) return Rejected("They have not imposed an embargo on us.", out reason);
+        var relation = CampaignDiplomacy.Peek(c, demander.Id, target.Id);
+        if (demand.LiftEmbargo && relation?.EmbargoBy(target.Id) != true) return Rejected("They have not imposed an embargo on us.", out reason);
         foreach (var id in ids)
             if (!c.States.Any(s => s.MapIndex == id && s.NationMapIndex == target.MapIndex))
                 return Rejected("They cannot yield what they do not hold.", out reason);
