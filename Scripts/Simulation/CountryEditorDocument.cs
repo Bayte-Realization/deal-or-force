@@ -40,6 +40,9 @@ public sealed class CountryEditorDocument
     public string Ideology = "";
     public string HeadOfState = "";
     public string HeadOfGovernment = "";
+    public string HeadOfStatePortrait = "";
+    public string HeadOfGovernmentPortrait = "";
+    public bool HasPortraitSettings;
     public List<string> PrimaryCultures = new();
 
     /// <summary>Starting treasury, in billions like every money figure in the game; null leaves the base value.</summary>
@@ -96,6 +99,9 @@ public sealed class CountryEditorDocument
         if (CapitalLatitude is { } lat && (!float.IsFinite(lat) || MathF.Abs(lat) > 90)) problems.Add("Capital latitude must be -90 to 90.");
         if (CapitalLongitude is { } lon && (!float.IsFinite(lon) || MathF.Abs(lon) > 180)) problems.Add("Capital longitude must be -180 to 180.");
         if (Ownership.Any(o => o.Province <= 0 || string.IsNullOrWhiteSpace(o.Owner))) problems.Add("A region change names no province or no owner.");
+        foreach (var portrait in new[] { HeadOfStatePortrait, HeadOfGovernmentPortrait })
+            if (portrait.Length > 200 || portrait.Any(char.IsControl) || portrait.IndexOfAny(new[] { '/', '\\', ':' }) >= 0)
+                problems.Add("Portrait must be a sprite id, not a file path or URL.");
         return problems;
     }
 
@@ -136,6 +142,15 @@ public sealed class CountryEditorDocument
                     foreach (var culture in PrimaryCultures) writer.WriteStringValue(culture);
                     writer.WriteEndArray();
                 }
+            });
+
+        if (HasPortraitSettings || HeadOfStatePortrait.Length > 0 || HeadOfGovernmentPortrait.Length > 0)
+            files[$"history/rulers/{FileStem}.json"] = Json("Officeholder pictures. Empty sprite ids restore automatic portraits.", writer =>
+            {
+                if (HeadOfState.Trim().Length > 0) writer.WriteString("head_of_state", HeadOfState.Trim());
+                if (HeadOfGovernment.Trim().Length > 0) writer.WriteString("head_of_government", HeadOfGovernment.Trim());
+                writer.WriteString("state_portrait", HeadOfStatePortrait.Trim());
+                writer.WriteString("gov_portrait", HeadOfGovernmentPortrait.Trim());
             });
 
         foreach (var (language, (name, adjective)) in Names.OrderBy(pair => pair.Key, StringComparer.Ordinal))
@@ -235,6 +250,15 @@ public sealed class CountryEditorDocument
                     .Select(c => c.GetString()).ToList();
         }
         history?.Dispose();
+        if (Entry(Path.Combine("history", "rulers", stem + ".json"), out var rulers) is { } people)
+        {
+            found = true; document.HasPortraitSettings = true;
+            document.HeadOfStatePortrait = Text(people, "state_portrait");
+            document.HeadOfGovernmentPortrait = Text(people, "gov_portrait");
+            if (Text(people, "head_of_state").Length > 0) document.HeadOfState = Text(people, "head_of_state");
+            if (Text(people, "head_of_government").Length > 0) document.HeadOfGovernment = Text(people, "head_of_government");
+        }
+        rulers?.Dispose();
         var localization = Path.Combine(modRoot, "localization");
         if (Directory.Exists(localization))
             foreach (var folder in Directory.EnumerateDirectories(localization))

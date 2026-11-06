@@ -309,6 +309,7 @@ public static class ScriptedEffects
         private readonly List<Entry> _entries = new();
         private readonly List<(string Id, int Days)> _grants = new();
         private readonly List<string> _revokes = new();
+        private readonly List<OfficeholderEffect> _people = new();
 
         public IReadOnlyList<Entry> Entries => _entries;
 
@@ -317,12 +318,14 @@ public static class ScriptedEffects
 
         /// <summary>National spirits the effect takes off the country.</summary>
         public IReadOnlyList<string> Revokes => _revokes;
+        public IReadOnlyList<OfficeholderEffect> People => _people;
 
-        public bool IsEmpty => _entries.Count == 0 && _grants.Count == 0 && _revokes.Count == 0;
+        public bool IsEmpty => _entries.Count == 0 && _grants.Count == 0 && _revokes.Count == 0 && _people.Count == 0;
 
         internal void Add(string key, float value) => _entries.Add(new Entry(key, value));
         internal void Grant(string id, int days) => _grants.Add((id, days));
         internal void Revoke(string id) => _revokes.Add(id);
+        internal void Person(OfficeholderEffect person) => _people.Add(person);
 
         public void Apply(Campaign campaign, Nation nation)
         {
@@ -386,6 +389,9 @@ public static class ScriptedEffects
                 foreach (var state in owned)
                     field.SetState(state, Combine(field.GetState(state), entry.Value, operation, field));
             }
+            // Officeholder changes follow the numeric effects. They use the same
+            // persistence/preview path as a pending event's other consequences.
+            foreach (var person in _people) person.Apply(campaign, nation);
             // Keep compound scripts ordered: charges and refunds in one effect cancel
             // before legacy overdrafts are imported. This is a balance-sheet adjustment,
             // not an ordinary bond issue and not a weekly settlement.
@@ -414,12 +420,14 @@ public static class ScriptedEffects
         /// <summary>Plain-language summary, so the UI can describe a modded option that shipped no text.</summary>
         public string Describe()
         {
-            if (_entries.Count == 0) return "No effect.";
+            if (IsEmpty) return "No effect.";
             return string.Join(", ", _entries.Select(entry =>
             {
                 var sign = entry.Value >= 0f ? "+" : "";
                 return $"{entry.Key} {sign}{entry.Value.ToString("0.###", CultureInfo.InvariantCulture)}";
-            }));
+            }).Concat(ScriptedEffects.SpiritLines(_grants))
+                .Concat(_revokes.Select(id => Loc.Format("Loses «{0}»", Loc.Get(ModifierCatalog.Get(id)?.Name ?? id))))
+                .Concat(_people.Select(person => person.Describe())));
         }
     }
 
@@ -450,6 +458,10 @@ public static class ScriptedEffects
             if (root.TryGetProperty("Revokes", out var revokes) && revokes.ValueKind == JsonValueKind.Array)
                 foreach (var revoke in revokes.EnumerateArray())
                     if (revoke.ValueKind == JsonValueKind.String) effect.Revoke(revoke.GetString() ?? "");
+            if (root.TryGetProperty("People", out var people) && people.ValueKind == JsonValueKind.Array)
+                foreach (var person in people.EnumerateArray())
+                    if (person.ValueKind == JsonValueKind.Object && JsonSerializer.Deserialize<OfficeholderEffect>(person.GetRawText(), options) is { } restored)
+                        effect.Person(restored);
             return effect;
         }
 
@@ -478,6 +490,11 @@ public static class ScriptedEffects
             writer.WriteEndArray();
             writer.WritePropertyName("Revokes");
             JsonSerializer.Serialize(writer, value.Revokes, options);
+            if (value.People.Count > 0)
+            {
+                writer.WritePropertyName("People");
+                JsonSerializer.Serialize(writer, value.People, options);
+            }
             writer.WriteEndObject();
         }
     }
@@ -515,7 +532,21 @@ public static class ScriptedEffects
                     foreach (var entry in borrowed.Entries) effect.Add(entry.Key, entry.Value);
                     foreach (var (id, days) in borrowed.Grants) effect.Grant(id, days);
                     foreach (var id in borrowed.Revokes) effect.Revoke(id);
+                    foreach (var person in borrowed.People) effect.Person(person);
                 }
+                continue;
+            }
+
+            if (property.Name is "head_of_state" or "head_of_government")
+            {
+                if (OfficeholderEffect.Parse(property.Name, property.Value, context, errors) is { } person) effect.Person(person);
+                continue;
+            }
+            if (property.Name == "ministers")
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object) errors?.Add(context + ": ministers must be an object of portfolios");
+                else foreach (var minister in property.Value.EnumerateObject())
+                    if (OfficeholderEffect.Parse(minister.Name, minister.Value, context, errors) is { } person) effect.Person(person);
                 continue;
             }
 
@@ -581,6 +612,7 @@ public static class ScriptedEffects
         if (effect is null) return lines;
         // The spirits first: they are usually the point of the option.
         lines.AddRange(SpiritLines(effect.Grants));
+        lines.AddRange(effect.People.Select(person => person.Describe()));
         foreach (var id in effect.Revokes)
             if (ModifierCatalog.Get(id) is { } spirit)
                 lines.Add(Loc.Format("Loses «{0}»", Loc.Get(spirit.Name)));
@@ -666,6 +698,7 @@ public static class ScriptedEffects
         }
         if (effect is null) return lines;
         lines.AddRange(SpiritLines(effect.Grants));
+        lines.AddRange(effect.People.Select(person => person.Describe()));
         foreach (var id in effect.Revokes)
             if (ModifierCatalog.Get(id) is { } spirit)
                 lines.Add(Loc.Format("Loses «{0}»", Loc.Get(spirit.Name)));
@@ -809,9 +842,11 @@ public sealed class ScriptedTrigger
     // это не выдаёт такому показателю разрешение на запись через ScriptedEffects.
     private readonly List<(string Key, float Value, bool IsMinimum)> _bounds = new();
     private readonly List<string> _tags = new();
+    private readonly List<OfficeholderCondition> _people = new();
+    private bool _invalidPeople;
     private bool? _atWar;
 
-    public bool IsEmpty => _bounds.Count == 0 && _atWar is null && _tags.Count == 0;
+    public bool IsEmpty => _bounds.Count == 0 && _atWar is null && _tags.Count == 0 && _people.Count == 0 && !_invalidPeople;
 
     public static ScriptedTrigger Parse(JsonElement element, string context, List<string> errors,
         int depth = 0)
@@ -822,6 +857,16 @@ public sealed class ScriptedTrigger
         foreach (var property in element.EnumerateObject())
         {
             var name = property.Name.Trim().Replace('-', '_');
+
+            if (name == "officeholders")
+            {
+                if (property.Value.ValueKind != JsonValueKind.Object)
+                { errors?.Add(context + ": officeholders must be an object of office conditions"); trigger._invalidPeople = true; }
+                else foreach (var role in property.Value.EnumerateObject())
+                    if (OfficeholderCondition.Parse(role.Name, role.Value, context, errors) is { } condition) trigger._people.Add(condition);
+                    else trigger._invalidPeople = true;
+                continue;
+            }
 
             // A named condition out of common/scripted_triggers. Numeric bounds accumulate
             // (AND), tags accumulate as alternatives (OR); an explicit local at_war replaces
@@ -872,7 +917,7 @@ public sealed class ScriptedTrigger
                 errors?.Add($"{context}: trigger '{property.Name}' must be min_<key>, max_<key>, at_war or tags.");
                 continue;
             }
-            if (!property.Value.TryGetSingle(out var value))
+            if (property.Value.ValueKind != JsonValueKind.Number || !property.Value.TryGetSingle(out var value) || !float.IsFinite(value))
             {
                 errors?.Add($"{context}: trigger '{property.Name}' must be a number.");
                 continue;
@@ -895,12 +940,15 @@ public sealed class ScriptedTrigger
         if (other is null) return;
         _bounds.AddRange(other._bounds);
         _tags.AddRange(other._tags);
+        _people.AddRange(other._people);
+        _invalidPeople |= other._invalidPeople;
         _atWar ??= other._atWar;
     }
 
     public bool Matches(Campaign campaign, Nation nation)
     {
         if (nation is null) return false;
+        if (_invalidPeople || _people.Any(person => !person.Matches(campaign, nation))) return false;
         if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
             return false;
         if (_atWar.HasValue && campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id)) != _atWar.Value)
@@ -923,6 +971,7 @@ public sealed class ScriptedTrigger
     /// </summary>
     public float Shortfall(Campaign campaign, Nation nation)
     {
+        if (_invalidPeople || _people.Any(person => !person.Matches(campaign, nation))) return float.PositiveInfinity;
         if (nation is null) return float.PositiveInfinity;
         if (_tags.Count > 0 && !_tags.Any(tag => string.Equals(tag, nation.Tag, StringComparison.OrdinalIgnoreCase)))
             return float.PositiveInfinity;

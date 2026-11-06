@@ -819,6 +819,8 @@ public partial class DealOrForceGame
             var active = Rulers.ActiveMinister(nation, portfolio.Id);
             var personName = Rulers.MinisterPersonName(nation, portfolio.Id);
             var minAge = Rulers.MinisterPersonAge(_campaign, nation, portfolio.Id);
+            if (active is not null)
+                pBox.AddChild(BuildLeaderPortraitBadge(OfficeholderEffect.MinisterProfile(_campaign, nation, portfolio.Id), nation.Color, 40, 48));
             pBox.AddChild(Title(Tr(portfolio.Name).ToUpperInvariant(), 10, Ui.Colour("text.caption")));
             pBox.AddChild(Title(active is null
                 ? (!string.IsNullOrEmpty(personName)

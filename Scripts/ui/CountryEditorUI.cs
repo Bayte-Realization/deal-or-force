@@ -23,12 +23,21 @@ public partial class DealOrForceGame
     {
         if (_networkConnected || _isLoading || _campaign is null) return;
         tag = (tag ?? _campaign.Player?.Tag ?? "").Trim().ToUpperInvariant();
-        var rows = AuthorWindow("Country editor", back, back is null ? "Close" : "Back", () => OpenCountryEditor(tag, back));
-        rows.AddChild(Title("Edit a country as a whole. Saving writes common/countries, history/countries, history/provinces and localization files into your mod; the base game is never changed.", 14, Ui.Colour("text.muted")));
+        var rows = AuthorWindow("Country editor", back, back is null ? "Close" : "Back", () => OpenCountryEditor(tag, back), readable: true);
+        rows.AddChild(Title("Edit the country, then save to your mod. The editor writes the required files automatically and never changes the base game.", 14, Ui.Colour("text.muted")));
 
         var nation = _campaign.NationByTag(tag);
         var saved = CountryEditorDocument.Read(AuthorRoot, tag);
         var document = nation is not null ? CountryEditorDocument.FromNation(nation, Loc.Languages) : new CountryEditorDocument { Tag = tag, Colour = "#888888" };
+        if (nation is not null)
+        {
+            var statePerson = Rulers.HeadOfState(_campaign, nation);
+            var govPerson = Rulers.HeadOfGovernment(_campaign, nation);
+            if (document.HeadOfState.Length == 0) document.HeadOfState = statePerson.Name;
+            if (Rulers.HasDualExecutive(nation) && document.HeadOfGovernment.Length == 0) document.HeadOfGovernment = govPerson.Name;
+            document.HeadOfStatePortrait = statePerson.PortraitId;
+            document.HeadOfGovernmentPortrait = govPerson.PortraitId;
+        }
         // What this editor saved before wins over the running world, which may not have the mod
         // enabled yet: reopening the editor shows the author's own last word.
         if (saved is not null) Overlay(document, saved);
@@ -53,7 +62,8 @@ public partial class DealOrForceGame
             row.AddThemeConstantOverride("separation", 8);
             var label = Title(caption, 13, Ui.Colour("text.muted"));
             label.CustomMinimumSize = new Vector2(170, 0);
-            label.AutowrapMode = TextServer.AutowrapMode.Off;
+            label.SetMeta("readability_label_width_pixels", 170f);
+            label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             row.AddChild(label);
             column.AddChild(row);
             return row;
@@ -119,6 +129,30 @@ public partial class DealOrForceGame
         var ideology = Choice("Ideology", IdeologyCatalog.All.Select(i => (i.Id, i.Name)), document.Ideology);
         var headOfState = Field(right, "Head of state", document.HeadOfState);
         var headOfGovernment = Field(right, "Head of government", document.HeadOfGovernment);
+        OptionButton PortraitChoice(string caption, string current, LineEdit personName, bool isState)
+        {
+            var ids = SpriteCatalog.Names.Where(id =>
+                SpriteCatalog.TextureOf(id).Replace('\\', '/').Contains("/leaders/", StringComparison.OrdinalIgnoreCase) ||
+                id.Contains("portrait", StringComparison.OrdinalIgnoreCase)).Append(current)
+                .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.Ordinal).OrderBy(id => id, StringComparer.Ordinal).ToArray();
+            var chooser = Choice(caption, ids.Select(id => (id, id)), current);
+            chooser.Name = isState ? "CountryStatePortrait" : "CountryGovernmentPortrait";
+            chooser.SetItemText(0, Tr("Automatic")); chooser.FitToLongestItem = false;
+            chooser.TooltipText = Ui.Tip(Tr("Choose a portrait from enabled mods. Put PNG/JPEG/WebP images in gfx/leaders; their file names become choices after reloading the mod."));
+            var preview = new TextureRect { Name = chooser.Name + "Preview", CustomMinimumSize = new Vector2(40, 48),
+                ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize, StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered };
+            Row(right, "Portrait preview").AddChild(preview);
+            void RefreshPreview()
+            {
+                var person = nation is null ? new LeaderProfile(personName.Text, "", 45, 1979, "", "", 0, isState)
+                    : isState ? Rulers.HeadOfState(_campaign, nation) : Rulers.HeadOfGovernment(_campaign, nation);
+                preview.Texture = LeaderPortraitTexture(person with { Name = personName.Text, PortraitId = chooser.GetSelectedMetadata().AsString() }, nation?.Color ?? "#888888");
+            }
+            chooser.ItemSelected += _ => RefreshPreview(); personName.TextChanged += _ => RefreshPreview();
+            RefreshPreview(); return chooser;
+        }
+        var statePortrait = PortraitChoice("Head of state portrait", document.HeadOfStatePortrait, headOfState, true);
+        var governmentPortrait = PortraitChoice("Head of government portrait", document.HeadOfGovernmentPortrait, headOfGovernment, false);
         var cultures = Field(right, "Primary cultures", string.Join(", ", document.PrimaryCultures));
         cultures.TooltipText = Ui.Tip(Tr("Culture ids from common/cultures, separated by commas."));
         var treasury = Field(right, "Starting treasury (billions)", document.Treasury?.ToString("0.###", CultureInfo.InvariantCulture) ?? "", 160);
@@ -205,6 +239,9 @@ public partial class DealOrForceGame
                 edited.Ideology = ideology.GetSelectedMetadata().AsString();
                 edited.HeadOfState = headOfState.Text;
                 edited.HeadOfGovernment = headOfGovernment.Text;
+                edited.HasPortraitSettings = true;
+                edited.HeadOfStatePortrait = statePortrait.GetSelectedMetadata().AsString();
+                edited.HeadOfGovernmentPortrait = governmentPortrait.GetSelectedMetadata().AsString();
                 edited.PrimaryCultures = cultures.Text.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(c => c.Trim()).ToList();
                 edited.Treasury = Optional(treasury.Text, "Starting treasury");
                 var recipient = releaseTo.Text.Trim().ToUpperInvariant();
@@ -219,7 +256,8 @@ public partial class DealOrForceGame
                 var written = edited.Write(AuthorRoot);
                 ContentWorkbench.EnsureMod(AuthorRoot);
                 _authorDirty = false;
-                status.Text = Tr("Saved. Enable the Editor workspace mod and start a new campaign to play it.") + "\n" + string.Join("\n", written);
+                status.Text = Simulation.Loc.Format("Saved {0} files to your mod. Enable it and start a new campaign to use the changes.", written.Count);
+                status.TooltipText = Ui.Tip(string.Join("\n", written));
             }
             catch (Exception e) { status.Text = e.Message; }
         }, 260, 42, true));
@@ -245,6 +283,12 @@ public partial class DealOrForceGame
         if (saved.Ideology.Length > 0) into.Ideology = saved.Ideology;
         if (saved.HeadOfState.Length > 0) into.HeadOfState = saved.HeadOfState;
         if (saved.HeadOfGovernment.Length > 0) into.HeadOfGovernment = saved.HeadOfGovernment;
+        if (saved.HasPortraitSettings)
+        {
+            into.HasPortraitSettings = true;
+            into.HeadOfStatePortrait = saved.HeadOfStatePortrait;
+            into.HeadOfGovernmentPortrait = saved.HeadOfGovernmentPortrait;
+        }
         if (saved.PrimaryCultures.Count > 0) into.PrimaryCultures = saved.PrimaryCultures;
         into.Treasury = saved.Treasury ?? into.Treasury;
         foreach (var (language, value) in saved.Names) into.Names[language] = value;

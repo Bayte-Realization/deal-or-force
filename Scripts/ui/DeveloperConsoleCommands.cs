@@ -349,7 +349,7 @@ public partial class DealOrForceGame
         // One joke, kept on purpose: it takes its own advice. The rest of the console is tools.
         Add("touchgrass", "FUN", "touchgrass",
             "A verse, and eight seconds later the game closes. It does not save first. " +
-            "The verse is in game/common/console.",
+            "The text is in game/localization.",
             _ => ConsoleTouchGrass());
         // And two that cannot be taken back, after the routes of Deltarune that cannot either.
         Add("snowgrave", "FUN", "snowgrave",

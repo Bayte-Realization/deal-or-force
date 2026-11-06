@@ -894,6 +894,12 @@ public static class CampaignFingerprint
                     Mix(entry.Value?.AppointedDay ?? 0);
                 }
             }
+            if (nation.PersonPortraits.Count > 0)
+            {
+                MixText("person_portraits_v1"); Mix(nation.PersonPortraits.Count);
+                foreach (var entry in nation.PersonPortraits.OrderBy(p => p.Key, StringComparer.Ordinal))
+                { MixText(entry.Key); MixText(entry.Value); }
+            }
         }
 
         // How far each region has gone towards leaving. Two peers that disagree about this

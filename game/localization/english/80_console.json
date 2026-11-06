@@ -3,6 +3,7 @@
   "People": "People",
   "War support": "War support",
   "Prices": "Prices",
-  "A verse, and eight seconds later the game closes. It does not save first. The verse is in game/common/console.": "A verse, and eight seconds later the game closes. It does not save first. The verse is in game/common/console.",
+  "console.touchgrass.verse": "For a hundred years you steered the fate of states,\nCarved up the seas and moved the borders round.\nOutside, there is grass that no map ever drew.\nIt is real. Go out and feel it on the ground.",
+  "A verse, and eight seconds later the game closes. It does not save first. The text is in game/localization.": "A verse, and eight seconds later the game closes. It does not save first. The text is in game/localization.",
   "The game closes in eight seconds. Nothing has been saved.": "The game closes in eight seconds. Nothing has been saved."
 }

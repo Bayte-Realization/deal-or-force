@@ -5,6 +5,36 @@ November 6, 2026
 This update focuses on technical stability, graphics compatibility, interface
 usability and tools for modders.
 
+## Latest polish — November 6
+
+- Fixed reunification of compatible pieces of a region, including the reported save,
+  without annexing pieces owned by another country.
+- Sped up default save compression. The slow thorough mode no longer runs against
+  the selected setting; campaign history is not pruned.
+- Removed repeated kin-region traversal in the expensive Statecraft pass. This
+  improves that calculation, not every frame or every campaign by the same amount.
+- Battle markers now sit on the map surface with depth testing instead of drawing
+  over the globe; markers on the far side cannot intercept clicks.
+- Diplomacy, unit and support flags share a source and update together.
+- Nuclear strikes have an explicit target-country choice and a second confirmation.
+  Fixed excessive empty height in nuclear alerts; long text scrolls within the card.
+- Construction supports clicking a region on the map, repeated queue placement,
+  and Escape/right-click cancellation. Era, technology and building-enabled rules
+  are moddable through JSON/YAML.
+- Fixed river-projection spikes on the globe. The authored river raster remains
+  the display source; further geographic polish is still in progress.
+- Optional `tags` / `tdebug` commands restore visible technical country tags.
+- Added portrait selection and live previews to the country editor. Saving writes
+  the required mod documents automatically without editing the running campaign.
+  Improved 1280×720 readability and access to the Save action.
+- Events and decisions can appoint, edit or remove current heads of state,
+  heads of government and ministers, change their portraits and test conditions
+  against them. This is officeholder modding, not a full NPC/family registry.
+- A portrait-only history overlay no longer wipes unrelated rulers or ministers.
+  Loose-mod PNG/JPEG/WebP portraits need no prior Godot Editor import.
+- Removed the obsolete `common/console` text and dedicated loader; the command now
+  uses normal localization and its mod overlays.
+
 ## Graphics and compatibility
 
 - Corrected excessive map brightness and saturation in OpenGL/ANGLE by aligning
@@ -71,8 +101,9 @@ usability and tools for modders.
 - Military occupation is not settled ownership. Genuine reunification remains
   possible after securing the required territory.
 - Audited all 84 authored formation projects against the opening map.
-- Authored national flags are now retained by default when ideology or government
-  changes. Special rules for movements and formable countries remain in place.
+- Authored flag variants now activate automatically when their ideology/regime
+  conditions apply. Without an authored variant, the national flag is retained
+  instead of a generic generated design. Movement and formable-country rules remain.
 - Reunified China's flag depends on its founder: the PRC or Taiwan.
 
 ## Supply and military priorities
@@ -107,7 +138,7 @@ usability and tools for modders.
 
 ## Verification and known limitations
 
-- The general CPU test suite completed 12,330 checks without failures. Additional
+- The latest general CPU test suite completed 12,900 checks without failures. Additional
   checks cover the updated wording, reunification conditions and core-mod lifecycle.
 - Real OpenGL, ANGLE/Direct3D 11 and Forward+/Direct3D 12 runs were checked on an
   RTX 3060, alongside English/Russian UI checks at 1920×1080 and 1280×720.

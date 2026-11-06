@@ -92,6 +92,7 @@ public sealed class AuthoredMinisterEntry
     public int Age = 55;
     public string Trait = "";
     public string Option = "";
+    public string Portrait = "";
 }
 
 public sealed class AuthoredRulerEntry
@@ -102,6 +103,8 @@ public sealed class AuthoredRulerEntry
     public int GovAge = 52;
     public string StateTrait = "";
     public string GovTrait = "";
+    public string StatePortrait = "";
+    public string GovPortrait = "";
     public readonly Dictionary<string, AuthoredMinisterEntry> Ministers = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -113,7 +116,8 @@ public readonly record struct LeaderProfile(
     string TraitId,
     string TraitName,
     int PortraitSeed,
-    bool IsHeadOfState);
+    bool IsHeadOfState,
+    string PortraitId = "");
 
 public static class Rulers
 {
@@ -270,27 +274,36 @@ public static class Rulers
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
             var v = entry.Value;
+            Authored.TryGetValue(entry.Name, out var previous);
             var authored = new AuthoredRulerEntry
             {
-                HeadOfState = Text(v, "head_of_state"),
-                HeadOfGovernment = Text(v, "head_of_government"),
-                StateAge = Int(v, "state_age", 58),
-                GovAge = Int(v, "gov_age", 52),
-                StateTrait = Text(v, "state_trait"),
-                GovTrait = Text(v, "gov_trait")
+                HeadOfState = Text(v, "head_of_state", previous?.HeadOfState ?? ""),
+                HeadOfGovernment = Text(v, "head_of_government", previous?.HeadOfGovernment ?? ""),
+                StateAge = Int(v, "state_age", previous?.StateAge ?? 58),
+                GovAge = Int(v, "gov_age", previous?.GovAge ?? 52),
+                StateTrait = Text(v, "state_trait", previous?.StateTrait ?? ""),
+                GovTrait = Text(v, "gov_trait", previous?.GovTrait ?? ""),
+                StatePortrait = Text(v, "state_portrait", previous?.StatePortrait ?? ""),
+                GovPortrait = Text(v, "gov_portrait", previous?.GovPortrait ?? "")
             };
+            // A one-photo mod must inherit the names/ages/other ministers it did
+            // not mention, just like the rest of the game's key-based overlays.
+            if (previous is not null)
+                foreach (var minister in previous.Ministers) authored.Ministers[minister.Key] = minister.Value;
             if (v.TryGetProperty("ministers", out var minObj) && minObj.ValueKind == JsonValueKind.Object)
             {
                 foreach (var minProp in minObj.EnumerateObject())
                 {
                     if (minProp.Value.ValueKind != JsonValueKind.Object) continue;
                     var mv = minProp.Value;
+                    authored.Ministers.TryGetValue(minProp.Name, out var former);
                     authored.Ministers[minProp.Name] = new AuthoredMinisterEntry
                     {
-                        Name = Text(mv, "name"),
-                        Age = Int(mv, "age", 55),
-                        Trait = Text(mv, "trait"),
-                        Option = Text(mv, "option")
+                        Name = Text(mv, "name", former?.Name ?? ""),
+                        Age = Int(mv, "age", former?.Age ?? 55),
+                        Trait = Text(mv, "trait", former?.Trait ?? ""),
+                        Option = Text(mv, "option", former?.Option ?? ""),
+                        Portrait = Text(mv, "portrait", former?.Portrait ?? "")
                     };
                 }
             }
@@ -366,7 +379,9 @@ public static class Rulers
         var trait = TraitOf(traitId) ?? TraitOf(DefaultTraitFor(nation, 0, isState: true));
         var age = Math.Max(0, year - birthYear);
         var seed = StableHash(name, birthYear);
-        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "reformer", trait?.Name ?? "Institutional Reformer", seed, true);
+        var portrait = Authored.TryGetValue(nation.Tag ?? "", out var authoredPhoto) && authoredPhoto.HeadOfState == name ? authoredPhoto.StatePortrait : "";
+        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "reformer", trait?.Name ?? "Institutional Reformer", seed, true,
+            OfficeholderEffect.PortraitFor(nation, name, birthYear, portrait));
     }
 
     // Authored ages refer to the scenario's calendar origin, not invariably 2024.
@@ -412,7 +427,9 @@ public static class Rulers
         var trait = TraitOf(traitId) ?? TraitOf(DefaultTraitFor(nation, 1, isState: false));
         var age = Math.Max(0, year - birthYear);
         var seed = StableHash(name, birthYear ^ 0x5A5A);
-        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "technocrat", trait?.Name ?? "Fiscal Technocrat", seed, false);
+        var portrait = Authored.TryGetValue(nation.Tag ?? "", out var authoredPhoto) && authoredPhoto.HeadOfGovernment == name ? authoredPhoto.GovPortrait : "";
+        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "technocrat", trait?.Name ?? "Fiscal Technocrat", seed, false,
+            OfficeholderEffect.PortraitFor(nation, name, birthYear, portrait));
     }
 
     public static LeaderProfile PrimaryLeader(Campaign campaign, Nation nation) => HeadOfState(campaign, nation);

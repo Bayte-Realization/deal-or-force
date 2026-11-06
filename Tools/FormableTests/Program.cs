@@ -10,6 +10,10 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--officeholder-modding-only")) { OfficeholderModdingTests.Run(); return; }
+        if (args.Length == 0) OfficeholderModdingTests.Run();
+        if (args.Contains("--console-localization-only")) { ConsoleLocalizationTests.Run(); return; }
+        if (args.Length == 0) ConsoleLocalizationTests.Run();
         if (args.Contains("--inspect-save")) { SaveAudit.Run(args); return; }
         if (args.Contains("--save-compression-only")) { SaveCompressionTests.Run(); return; }
         if (args.Length == 0) SaveCompressionTests.Run();

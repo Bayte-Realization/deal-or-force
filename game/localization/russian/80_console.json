@@ -3,6 +3,7 @@
   "People": "Люди",
   "War support": "Поддержка войны",
   "Prices": "Цены",
-  "A verse, and eight seconds later the game closes. It does not save first. The verse is in game/common/console.": "Стих, а через восемь секунд игра закрывается. Перед этим ничего не сохраняется. Стих лежит в game/common/console.",
+  "console.touchgrass.verse": "Ты сотню лет вершил судьбу держав,\nКроил моря и двигал рубежи.\nА за окном — трава, её нет в картах.\nОна живая. Выйди — подержи.",
+  "A verse, and eight seconds later the game closes. It does not save first. The text is in game/localization.": "Стих, а через восемь секунд игра закрывается. Перед этим ничего не сохраняется. Текст находится в game/localization.",
   "The game closes in eight seconds. Nothing has been saved.": "Игра закроется через восемь секунд. Ничего не сохранено."
 }

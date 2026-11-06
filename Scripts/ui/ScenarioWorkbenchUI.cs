@@ -57,7 +57,7 @@ public partial class DealOrForceGame
     /// <summary>Whether the campaign was already paused when the workshop opened.</summary>
     private bool _authorPausedBefore;
 
-    private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close", Action reopen = null)
+    private VBoxContainer AuthorWindow(string heading, Action onClose = null, string closeLabel = "Close", Action reopen = null, bool readable = false)
     {
         var inheritedExit = onClose ?? _authorHomeExit;
         var pausedBefore = _authorCanvas is null
@@ -85,6 +85,8 @@ public partial class DealOrForceGame
         _authorExit = inheritedExit ?? (() => CloseAuthorWindow());
         header.AddChild(ActionButton(closeLabel, () => ConfirmAuthorExit(_authorExit), 200, 36));
         AddAuthorPackageBar(rows, reopen ?? OpenScenarioLibrary);
+        if (readable)
+            panel.CallDeferred(Node.MethodName.AddChild, new DecisionDialogLayout { Name = "WorkshopReadability", Panel = panel, LayoutKey = "workshop.panel" });
         return rows;
     }
 

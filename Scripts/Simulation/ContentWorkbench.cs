@@ -74,6 +74,29 @@ public static class ContentWorkbench
         }
         if (doc.RootElement.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
             throw new InvalidDataException("A content document must be an object or array.");
+        if (editedPath.StartsWith("events/", StringComparison.OrdinalIgnoreCase) && doc.RootElement.ValueKind == JsonValueKind.Object)
+        {
+            var errors = new List<string>();
+            void CheckScript(JsonElement body, string context)
+            {
+                if (body.ValueKind != JsonValueKind.Object) return;
+                if (body.TryGetProperty("effects", out var effects)) ScriptedEffects.Parse(effects, context, errors);
+                if (body.TryGetProperty("trigger", out var trigger)) ScriptedTrigger.Parse(trigger, context, errors);
+            }
+            foreach (var entry in doc.RootElement.EnumerateObject())
+            {
+                if (entry.Value.ValueKind != JsonValueKind.Object) continue;
+                var context = relative + "/" + entry.Name;
+                CheckScript(entry.Value, context);
+                if (entry.Value.TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Array)
+                {
+                    var index = 0;
+                    foreach (var option in options.EnumerateArray()) CheckScript(option, context + "/options/" + index++);
+                }
+            }
+            if (errors.Count > 0) throw new InvalidDataException(string.Join("\n", errors));
+            return "Event scripts valid. The live campaign has not been changed.";
+        }
         if (relative.Replace('\\', '/').StartsWith("common/formable_nations/", StringComparison.OrdinalIgnoreCase))
         {
             var errors = new List<string>();

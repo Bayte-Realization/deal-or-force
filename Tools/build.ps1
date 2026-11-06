@@ -463,7 +463,17 @@ if (-not $SkipRuntimeVerification) {
 if ($VerifyRenderers) {
     Write-Host '== verifying real GPU map surfaces (OpenGL + ANGLE + Forward+) ==' -ForegroundColor Cyan
     # Evidence/profile folders are development output, not part of the player package.
-    & (Join-Path $PSScriptRoot 'verify-renderers.ps1') -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory (Join-Path $stage 'verification-renderers')
+    $rendererVerifier = Join-Path $PSScriptRoot 'verify-renderers.ps1'
+    $rendererEvidence = Join-Path $stage 'verification-renderers'
+    if ($PSVersionTable.PSVersion -lt [version]'7.4') {
+        # The renderer probe uses Start-Process -Environment, absent in Windows
+        # PowerShell 5.1. Keep the documented build entrypoint working there too.
+        $rendererShell = Get-Command pwsh -ErrorAction SilentlyContinue
+        if (-not $rendererShell) { throw 'GPU verification requires PowerShell 7.4+. Run this build with pwsh, or omit -VerifyRenderers on a GPU-less machine.' }
+        & $rendererShell.Source -NoProfile -File $rendererVerifier -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory $rendererEvidence
+        if ($LASTEXITCODE -ne 0) { throw "GPU verification failed (exit $LASTEXITCODE); evidence: $rendererEvidence" }
+    }
+    else { & $rendererVerifier -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory $rendererEvidence }
 }
 
 # ---------------------------------------------------------------- something to send

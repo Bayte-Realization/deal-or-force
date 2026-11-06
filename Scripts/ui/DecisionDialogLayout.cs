@@ -64,6 +64,8 @@ public partial class DecisionDialogLayout : Node
         foreach (var control in Panel.FindChildren("*", "Control", true, false).OfType<Control>())
         {
             if (control is not (Label or Button or LineEdit)) continue;
+            if (control.HasMeta("readability_label_width_pixels"))
+                control.CustomMinimumSize = new Vector2(MathF.Max(170, control.GetMeta("readability_label_width_pixels").AsSingle() / MathF.Max(.01f, scale)), control.CustomMinimumSize.Y);
             if (!control.HasMeta("decision_authored_font"))
             {
                 // LabelSettings outranks a theme override. The old negotiation fit changed
@@ -78,6 +80,7 @@ public partial class DecisionDialogLayout : Node
                 Ui.Metric("decision.minimum_font_pixels", 14));
             if (control is Label { LabelSettings: not null } paragraph) paragraph.LabelSettings.FontSize = font;
             else control.AddThemeFontSizeOverride("font_size", font);
+            if (control is OptionButton choice) choice.GetPopup().AddThemeFontSizeOverride("font_size", font);
             if (control is not (Button or LineEdit)) continue;
             if (!control.HasMeta("decision_authored_height")) control.SetMeta("decision_authored_height", control.CustomMinimumSize.Y);
             control.CustomMinimumSize = new Vector2(control.CustomMinimumSize.X,

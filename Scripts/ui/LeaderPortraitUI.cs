@@ -78,11 +78,12 @@ public partial class DealOrForceGame
         }
         var slug = SlugLeaderName(leader.Name);
         // File-name sprites and explicit mod declarations share the existing gfx overlay.
-        var path = SpriteCatalog.TextureOf("leader_" + slug);
+        var path = string.IsNullOrEmpty(leader.PortraitId) ? "" : SpriteCatalog.TextureOf(leader.PortraitId);
+        if (string.IsNullOrEmpty(path)) path = SpriteCatalog.TextureOf("leader_" + slug);
         var background = Ui.Colour("portrait.anonymous_background");
         var foreground = Ui.Colour("portrait.anonymous_foreground");
         var anonymousKey = "anonymous:" + background.ToHtml() + ":" + foreground.ToHtml();
-        var key = string.IsNullOrEmpty(path) ? anonymousKey + ":" + slug : "photo:" + path;
+        var key = string.IsNullOrEmpty(path) ? anonymousKey + ":" + slug + ":" + leader.PortraitId : "photo:" + path;
         if (PortraitCache.TryGetValue(key, out var cached)) return cached;
         if (string.IsNullOrEmpty(path))
         {
@@ -135,7 +136,12 @@ public partial class DealOrForceGame
         try
         {
             if (path.StartsWith("res://", StringComparison.Ordinal))
-                return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
+            {
+                if (ResourceLoader.Exists(path)) return GD.Load<Texture2D>(path);
+                // Game data/mod PNGs are loose files in a release too. A missing
+                // .import sidecar is not a missing portrait and needs no editor.
+                path = ProjectSettings.GlobalizePath(path);
+            }
             if (!Godot.FileAccess.FileExists(path))
                 return ResourceLoader.Exists(path) ? GD.Load<Texture2D>(path) : null;
             using (var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Read))
