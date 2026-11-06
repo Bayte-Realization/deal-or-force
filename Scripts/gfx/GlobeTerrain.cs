@@ -259,6 +259,7 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("relief_strength", TerrainCatalog.ReliefStrength);
         _globeMaterial.SetShaderParameter("relief_color_opacity", TerrainCatalog.ReliefColorOpacity);
         _globeMaterial.SetShaderParameter("terrain_ready", 1f);
+        ApplyMapVisualStyle();
         ApplyWaterPresentation(prepared);
         GD.Print($"[dof] terrain ready: {definitions.Count} types, {topology.ProvinceCount} provinces; {TerrainCatalog.TerrainPath}");
     }

@@ -98,6 +98,7 @@ void fragment() {
     private void UpdateSky(double delta)
     {
         UpdateAtmosphereRim();
+        SyncAtlasSun();
         if (!IsInstanceValid(_daySun) || (!DayNightEnabled && _cloudLayer is null)) return;
         var target = ((_campaign?.ElapsedHours ?? 6) % 24) / 24f * Mathf.Tau;
         _skyAngle = Mathf.LerpAngle(_skyAngle, target, 1f - MathF.Exp(-(float)delta * 3f));

@@ -163,7 +163,7 @@ public static partial class ElectoralPolitics
             var candidate = Rulers.CandidatePool(c, n, 4).FirstOrDefault(p => p.Name != executive.Name);
             e.Winner = candidate.Name ?? Rulers.GenerateName(n, e.Round + 3000, false, c.Seed);
             e.WinnerTrait = candidate.TraitId ?? "reformer";
-            e.WinnerBirthYear = candidate.BirthYear > 0 ? candidate.BirthYear : c.Date.Year - 45;
+            e.WinnerBirthYear = candidate.BirthYear != 0 ? candidate.BirthYear : c.Date.Year - 45;
             e.TransferOnDay = c.ElapsedDays + Math.Clamp(c.Defines.ElectionHandoverDays, 1, 365);
             e.Result = "Opposition victory; handover pending";
             c.Chronicle.Record(c, "election_lost", n.Id, place: e.Winner);

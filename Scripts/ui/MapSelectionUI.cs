@@ -360,7 +360,7 @@ public partial class DealOrForceGame
         var own = nation == player;
         SetFlag(_countryCardFlag, nation.Tag, 40);
         _countryCardName.Text = nation.DisplayName;
-        _countryCardCaption.Text = Simulation.Loc.Format("{0} · {1} · {2}", nation.Tag,
+        _countryCardCaption.Text = Simulation.Loc.Format("{0} · {1}",
             Tr(PoliticsCore.GovernmentOf(nation).Name), Tr(PoliticsCore.IdeologyOf(nation).Name));
         BeginCountryFactsUpdate();
         ClearChildren(_countryCardLinks);
@@ -489,7 +489,7 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Guaranteed by them", Tr("they have promised to fight for you"), null, "state.positive");
         var allies = AllianceSystem.AlliesOf(_campaign, nation);
         if (allies.Count > 0)
-            CardRow(_countryCardRows, "Allied to", string.Join(", ", allies.Take(5).Select(ally => ally.Tag)) +
+            CardRow(_countryCardRows, "Allied to", string.Join(", ", allies.Take(5).Select(CountryNames.Compact)) +
                                                    (allies.Count > 5 ? $" +{allies.Count - 5:N0}" : ""));
         var through = player.TradePartners.GetValueOrDefault(nation.Id);
         if (through > 0.0001f)

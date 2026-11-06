@@ -307,9 +307,11 @@ public partial class DealOrForceGame
         _identityTag.Text = _observerMode
             ? Tr("Observer mode")
             : !string.IsNullOrEmpty(leader.Name)
-                ? $"{player.Tag} · {leader.Name}"
-                : player.Tag + " · " + Tr("player nation");
-        _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}");
+                ? leader.Name
+                : Tr("player nation");
+        _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}\n" +
+            Loc.Format("Country code (saves and mods): {0}", player.Tag));
+        _identity.TooltipText = Ui.Tip(player.DisplayName + "\n" + Loc.Format("Country code (saves and mods): {0}", player.Tag));
         SetFlag(_identityFlag, player.Tag, 34);
         if (_identityPortraitSlot is not null)
         {

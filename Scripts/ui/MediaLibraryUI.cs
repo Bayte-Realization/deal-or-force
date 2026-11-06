@@ -129,6 +129,13 @@ public partial class DealOrForceGame
     }
     private static string MediaKindName(LibraryMediaKind? kind) => kind switch
     { LibraryMediaKind.Music => "Music", LibraryMediaKind.Sound => "Sound effects", LibraryMediaKind.Image => "Artwork", LibraryMediaKind.Video => "Video", _ => "All materials" };
+    private void OpenSoundtrackLibrary()
+    {
+        _mediaKind = LibraryMediaKind.Music;
+        OpenMediaLibrary();
+        RebuildMediaList();
+    }
+
     private void OpenMediaLibrary()
     {
         if (_mediaLibraryLayer is { Visible: true }) return;

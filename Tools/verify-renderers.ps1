@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory)][string]$Executable,
     [string[]]$Methods = @('gl_compatibility', 'gl_angle', 'forward_plus'),
     [ValidateRange(30,900)][int]$TimeoutSeconds = 300,
+    [switch]$MapStyles,
     [string]$OutputDirectory
 )
 $ErrorActionPreference = 'Stop'
@@ -29,6 +30,7 @@ foreach ($method in $Methods) {
     if ($method -eq 'gl_angle') { $arguments += @('--rendering-driver', 'opengl3_angle') }
     # Start-Process joins ArgumentList on Windows. Quote the evidence path explicitly.
     $arguments += @('--', '--verify-build', '--verify-map-render-only', '--verify-build-output', ('"' + $folder + '"'))
+    if ($MapStyles) { $arguments += '--verify-map-styles' }
     $process = Start-Process -FilePath $executablePath -WorkingDirectory (Split-Path -Parent $executablePath) `
         -WindowStyle Hidden -ArgumentList $arguments -PassThru `
         -Environment @{ APPDATA = $roaming; DOF_VERIFICATION_DOCUMENTS = $documents } `

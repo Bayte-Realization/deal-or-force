@@ -207,7 +207,8 @@ public static partial class Warfare
                 terrainPenalty +
                 observedResistance * 0.018f +
                 observedEntrenchment * 0.008f * terrainWeight +
-                multiAxisBonus + pocketBonus;
+                multiAxisBonus + pocketBonus -
+                StrategicExclaves.Importance(campaign, province) * M.Clamp(campaign.Defines.ExclaveAssaultWeight, 0f, 1f);
             if (target >= 0 && (score > bestScore || (score == bestScore && province > target))) continue;
             bestScore = score;
             target = province;

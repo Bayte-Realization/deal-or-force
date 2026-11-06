@@ -54,7 +54,10 @@ static class WorkerBackendTests
         {
             var broken = new WorkerModBackend(path, Args(mode), mode == "hang" ? 150 : 5000, 7, logs.Add);
             var timer = Stopwatch.StartNew(); broken.Hook(c, "load");
-            Check(broken.Disabled && timer.ElapsedMilliseconds < 6000, mode + " is bounded and disables the worker");
+            Check(broken.Disabled && timer.ElapsedMilliseconds < 6000, mode + " is bounded and disables the worker: " +
+                timer.ElapsedMilliseconds + "ms; " + string.Join(" | ", logs));
+            if (mode == "oversize") Check(logs.Any(line => line.Contains("output exceeds the size limit", StringComparison.Ordinal)),
+                "oversized output fails at the size boundary, not by deadlocking until timeout");
             var count = logs.Count; broken.Hook(c, "load");
             Check(logs.Count == count, "failed worker does not flood later hooks: " + mode);
         }

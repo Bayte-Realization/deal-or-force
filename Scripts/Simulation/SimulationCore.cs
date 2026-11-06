@@ -59,6 +59,7 @@ public struct GameDate
         "July", "August", "September", "October", "November", "December"
     };
 
+    /// <summary>Astronomical year, shared with HistoricalDate: 0 = 1 BCE, -299 = 300 BCE.</summary>
     public int Year;
     public int Month;
     public int Day;
@@ -98,7 +99,12 @@ public struct GameDate
     /// stays in one language whatever the interface is set to - see <see cref="Display"/>
     /// for the one a player reads.
     /// </summary>
-    public override string ToString() => $"{Day} {MonthNames[Month - 1]} {Year}";
+    public override string ToString() => $"{Day} {MonthNames[Month - 1]} " +
+        (Year <= 0 ? $"{1L - Year} BCE" : Year.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string DisplayYear => Year <= 0 ? Loc.Format("{0} BCE", 1L - Year) :
+        Year.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The date in the player's language. Day, month and year in that order, which every
@@ -112,8 +118,8 @@ public struct GameDate
     /// A campaign stepping a whole day is never anywhere but midnight, so it says nothing.
     /// </param>
     public string Display(bool withTime = false) => Hour == 0 && !withTime
-        ? $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}"
-        : $"{Day} {Loc.Get(MonthNames[Month - 1])} {Year}, {Hour:00}:00";
+        ? $"{Day} {Loc.Get(MonthNames[Month - 1])} {DisplayYear}"
+        : $"{Day} {Loc.Get(MonthNames[Month - 1])} {DisplayYear}, {Hour:00}:00";
 }
 
 /// <summary>Commands are the only legal way UI and AI mutate the campaign.</summary>

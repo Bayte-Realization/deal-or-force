@@ -13,9 +13,6 @@ public partial class DealOrForceGame
     private int _soundtrackCatalogRevision = -1;
     private string _soundtrackLanguage = "";
     private Button _soundtrackPause, _soundtrackPlaySelected, _soundtrackAuto;
-    private Control _campaignSoundtrack;
-    private Label _campaignSoundtrackTitle, _campaignSoundtrackStatus;
-    private Button _campaignSoundtrackPause;
     private double _soundtrackUiClock;
 
     private void BuildSoundtrackPlayer(VBoxContainer parent)
@@ -84,84 +81,15 @@ public partial class DealOrForceGame
         MusicDirector.Ensure(this).StepTrack(direction); RefreshSoundtrackPlayer();
     }
 
-    private void BuildCampaignSoundtrack(VBoxContainer parent)
-    {
-        var card = new PanelContainer { Name = "CampaignSoundtrack", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        card.AddThemeStyleboxOverride("panel", WarInsetStyle(8, 6));
-        parent.AddChild(card);
-        _campaignSoundtrack = card;
-        var rows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        rows.AddThemeConstantOverride("separation", 2); card.AddChild(rows);
-        _campaignSoundtrackTitle = SituationText("", 13, "text.bright");
-        _campaignSoundtrackTitle.Name = "CampaignSoundtrackTitle";
-        _campaignSoundtrackTitle.ClipText = true;
-        _campaignSoundtrackTitle.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        _campaignSoundtrackTitle.AutowrapMode = TextServer.AutowrapMode.Off;
-        rows.AddChild(_campaignSoundtrackTitle);
-        var controls = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        controls.AddThemeConstantOverride("separation", 4); rows.AddChild(controls);
-        void Act(string text, string name, string tip, Action action)
-        {
-            var button = ActionButton(text, action, 0, 28);
-            button.Name = name;
-            button.ClipText = true;
-            button.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-            button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            button.TooltipText = Tr(tip);
-            StyleHudButton(button, false);
-            controls.AddChild(button);
-        }
-        Act("Prev.", "CampaignSoundtrackPrevious", "Previous track", () => StepSoundtrack(-1));
-        _campaignSoundtrackPause = ActionButton("Hold track", () =>
-        {
-            var music = MusicDirector.Ensure(this);
-            music.SetPaused(!music.Paused);
-            RefreshSoundtrackPlayer();
-        }, 0, 28);
-        _campaignSoundtrackPause.Name = "CampaignSoundtrackPause";
-        _campaignSoundtrackPause.ClipText = true;
-        _campaignSoundtrackPause.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        StyleHudButton(_campaignSoundtrackPause, false);
-        controls.AddChild(_campaignSoundtrackPause);
-        Act("Next.", "CampaignSoundtrackNext", "Next track", () => StepSoundtrack(1));
-        Act("Auto track", "CampaignSoundtrackAutomatic", "Automatic soundtrack", () =>
-        {
-            StopMediaPreview();
-            MusicDirector.Ensure(this).ResumeAutomatic();
-            RefreshSoundtrackPlayer();
-        });
-        _campaignSoundtrackStatus = SituationText("", 11, "text.caption");
-        _campaignSoundtrackStatus.Name = "CampaignSoundtrackStatus";
-        _campaignSoundtrackStatus.ClipText = true;
-        _campaignSoundtrackStatus.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
-        _campaignSoundtrackStatus.AutowrapMode = TextServer.AutowrapMode.Off;
-        rows.AddChild(_campaignSoundtrackStatus);
-    }
-
-    private void RefreshCampaignSoundtrack(MusicDirector music)
-    {
-        var title = string.IsNullOrEmpty(music.CurrentTrack) ? Tr("No recording") : music.CurrentTrack;
-        _campaignSoundtrackTitle.Text = Loc.Format("Now playing: {0}", title);
-        _campaignSoundtrackTitle.TooltipText = _campaignSoundtrackTitle.Text;
-        var hold = music.Paused ? "Resume soundtrack" : "Pause soundtrack";
-        _campaignSoundtrackPause.TooltipText = Tr(hold);
-        var presence = MusicTransport.Presence(music.Manual, music.Paused);
-        _campaignSoundtrackStatus.Text = Tr(presence);
-        _campaignSoundtrackStatus.TooltipText = _campaignSoundtrackStatus.Text;
-    }
 
     private void RefreshSoundtrackPlayer(double delta = 1)
     {
         var libraryOpen = _mediaLibraryLayer is { Visible: true } && _soundtrackTitle is not null;
-        var onCampaign = _campaignSoundtrack is not null && _campaign is not null && _menuLayer is not { Visible: true };
-        if (_campaignSoundtrack is not null) _campaignSoundtrack.Visible = onCampaign;
-        if (!libraryOpen && !onCampaign) return;
+        if (!libraryOpen) return;
         _soundtrackUiClock += delta;
         if (_soundtrackUiClock < .25) return;
         _soundtrackUiClock = 0;
         var music = MusicDirector.Ensure(this);
-        if (onCampaign) RefreshCampaignSoundtrack(music);
-        if (!libraryOpen) return;
         if (_soundtrackCatalogRevision != MusicCatalog.Revision || _soundtrackLanguage != Loc.Language)
         {
             _soundtrackTracks.Clear();

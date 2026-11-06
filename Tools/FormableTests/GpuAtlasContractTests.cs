@@ -27,6 +27,18 @@ static class GpuAtlasContractTests
         var end = globe.IndexOf("\n}\"", start, StringComparison.Ordinal);
         Check(start > 0 && end > start, "full shader source is located, not replaced by a test-only approximation");
         var full = globe[start..(end + 2)];
+        var corrected = MapColorSpaceShader.Build(full);
+        Check(corrected.Contains("atlas_color_sample(texture(terrain_tiles, vec3(terrain_uv, near_slot)))") &&
+            corrected.Contains("atlas_color_output(mix(base,"), "colour samples decode before mixing; final albedo encodes only for sRGB backends");
+        Check(corrected.Contains("texture(front_membership, destruction_uv)") &&
+            !corrected.Contains("atlas_color_sample(texture(front_membership,"), "front/ID masks are not colour corrected");
+        Check(corrected.Contains("value.rgb = atlas_decode_srgb(value.rgb)") && !corrected.Contains("value.a ="),
+            "colour transfer preserves alpha and data channels");
+        Check(PackedMapShader.Build(corrected).Contains("atlas_color_sample(packed_lookup(3.0,"),
+            "packed palette colours decode once at their callsite, never across the mixed array");
+        var duplicateRejected = false;
+        try { MapColorSpaceShader.Build(corrected); } catch (InvalidOperationException) { duplicateRejected = true; }
+        Check(duplicateRejected, "double colour conversion is rejected at construction");
         var packed = PackedMapShader.Build(full);
         Check(Regex.Matches(packed, @"uniform\s+sampler\w+\s+").Count == PackedMapShader.TextureUnits,
             "full Compatibility material fits twelve bindings without removing visual features");
@@ -49,5 +61,6 @@ static class GpuAtlasContractTests
         Check(QualityProfiles.For("auto", "NVIDIA GeForce RTX 3060", "gl_compatibility").Id == QualityProfiles.Ladder[0].Id &&
             QualityProfiles.For("auto", "Intel HD Graphics 530", "gl_compatibility").CityLabels,
             "Compatibility is not mistaken for a mandatory low-quality preset");
+        MapStyleSettingTests.Run();
     }
 }

@@ -1,0 +1,11 @@
+{
+  "Consistent atlas lighting": "Единое освещение карты",
+  "Avoid overbright shadow blending on the map in Compatibility. Mountain relief, cloud shadows and shadows on 3D objects remain. Disable to restore scenery shadows projected onto the map surface; Forward+ keeps its original lighting either way.": "Убирает пересвет от смешивания теней на карте в Compatibility. Сохраняет рельеф гор, тени облаков и тени на 3D-объектах. Выключите, чтобы вернуть тени объектов, проецируемые на поверхность карты. В Forward+ исходное освещение сохраняется в обоих случаях.",
+  "Map visual style": "Визуальный стиль карты",
+  "The same styles on every graphics renderer. Balanced keeps the original palette; Vivid strengthens country colours; Relief emphasises mountain shading. Changes immediately, without reducing detail or changing gameplay.": "Одинаковые стили на всех рендерах. Сбалансированный сохраняет исходную палитру; насыщенный усиливает цвета стран; рельефный подчёркивает тени гор. Применяется сразу, без снижения детализации и изменения игровых правил.",
+  "map.style.balanced": "Сбалансированный",
+  "map.style.vivid": "Насыщенный",
+  "map.style.relief": "Рельефный",
+  "Cloud veil strength": "Плотность облачной пелены",
+  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Сохраняет движущиеся облака, но позволяет сделать их прозрачнее, чтобы лучше читать политическую карту. Меняются только декоративные облака и их тени — не туман войны и не разведданные."
+}

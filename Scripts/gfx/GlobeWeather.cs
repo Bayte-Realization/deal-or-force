@@ -179,13 +179,13 @@ public sealed partial class GlobePresentation
         var paused = _campaign is null || _campaign.IsPaused;
         // Except under the ice, where the sky is as still as everything else.
         if (!Simulation.WorldCurses.Frozen(_campaign)) _weatherClock += delta * (paused ? 0.25 : 1.0);
-        var clock = (float)(_weatherClock % 100000.0);
+        var clock = (float)((VerificationWeatherTime ?? _weatherClock) % 100000.0);
         var readability = Simulation.WeatherReadability.Read(defines);
 
         _cloudMaterial.SetShaderParameter("presence", clouds);
         _cloudShadeMaterial.SetShaderParameter("presence", clouds);
-        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
-        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
+        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
+        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
         _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);

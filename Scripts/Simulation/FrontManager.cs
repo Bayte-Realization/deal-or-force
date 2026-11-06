@@ -324,7 +324,10 @@ public static class FrontManager
             var pressure = 0f;
             foreach (var neighbour in topology.Neighbors[post])
                 pressure += EnemyPower.GetValueOrDefault(neighbour);
-            var need = 1f + pressure / typical;
+            var homeImportance = topology.ProvinceToNation[post] == nation.MapIndex
+                ? StrategicExclaves.Importance(campaign, post) : 0f;
+            var need = (1f + pressure / typical) *
+                (1f + homeImportance * M.Clamp(defines.ExclaveDefenceWeight, 0f, 2f));
             Need[post] = need;
             totalNeed += need;
         }

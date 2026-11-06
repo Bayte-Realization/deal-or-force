@@ -10,6 +10,17 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--bce-calendar-only")) { BceCalendarTests.Run(); return; }
+        if (args.Length == 0) BceCalendarTests.Run();
+        if (args.Contains("--authored-flags-only")) { AuthoredRegimeFlagTests.Run(); return; }
+        if (args.Length == 0) AuthoredRegimeFlagTests.Run();
+        if (args.Contains("--strategic-exclaves-only")) { StrategicExclaveTests.Run(); return; }
+        if (args.Length == 0) StrategicExclaveTests.Run();
+        if (args.Contains("--kaliningrad-real-only")) { ExclaveSupplyTests.RealKaliningrad(); return; }
+        if (args.Contains("--exclave-supply-only")) { ExclaveSupplyTests.Run(); return; }
+        if (args.Length == 0) ExclaveSupplyTests.Run();
+        if (args.Contains("--map-usability-only")) { MapUsabilityTests.Run(); return; }
+        if (args.Length == 0) MapUsabilityTests.Run();
         if (args.Contains("--audit-formable-opening")) { FormableOpeningAudit.Run(args); return; }
         if (args.Contains("--mod-simulation-passes-only")) { ModSimulationPassTests.Run(); return; }
         if (args.Length == 0) ModSimulationPassTests.Run();

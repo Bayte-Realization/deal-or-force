@@ -74,7 +74,8 @@ public partial class DealOrForceGame
         scroll.Name = "OutlinerScroll";
         _outlinerScroll = scroll;
         column.AddChild(scroll);
-        BuildCampaignSoundtrack(column);
+        // The top-bar music note is the single persistent player entry. The report
+        // rail is reserved for campaign information, not a second transport deck.
         var body = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", HudRhythm("shell.outliner_group_gap", 12));
         scroll.AddChild(body);

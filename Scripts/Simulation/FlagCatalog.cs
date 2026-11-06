@@ -161,6 +161,7 @@ public static partial class FlagCatalog
         GenericCultures.Clear();
         GenericTags.Clear();
         ContextRules.Clear();
+        RegimeFlags.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -182,6 +183,7 @@ public static partial class FlagCatalog
     {
         if (root.ValueKind != JsonValueKind.Object) return;
         MergeContextRules(root, errors);
+        MergeRegimeFlags(root, errors);
         if (root.TryGetProperty("prefer_country_base", out var countryBase) &&
             countryBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
             PreferCountryBase = countryBase.GetBoolean();
@@ -438,6 +440,8 @@ public static partial class FlagCatalog
             var custom = Slug(nation.CustomFlag);
             names.Add(custom.StartsWith("flag_", StringComparison.Ordinal) ? custom : "flag_" + custom);
         }
+
+        AddRegimeFlags(campaign, nation, names);
 
         // A cabinet change does not erase a country's visual identity. Keep authored
         // national/formable/restored artwork before regime variants by default. Mods may

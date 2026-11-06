@@ -787,7 +787,8 @@ public partial class DealOrForceGame
         _topBarShowsMovement = true;
         var defines = _campaign.Defines;
         var civic = Movements.DefinitionOf(player)?.Has("civic_independence") == true;
-        _identityTag.Text = player.Tag + " · " + Tr("movement without land");
+        _identityTag.Text = Tr("movement without land");
+        _identityTag.TooltipText = Ui.Tip(Loc.Format("Country code (saves and mods): {0}", player.Tag));
 
         var strongest = state.Support.OrderByDescending(pair => pair.Value).FirstOrDefault();
         var strongestName = strongest.Value > 0f ? MovementRules.RegionName(_campaign, strongest.Key) : "";

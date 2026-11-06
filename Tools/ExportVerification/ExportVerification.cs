@@ -109,6 +109,12 @@ public partial class ExportVerification : Node
                 ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                 return;
             }
+            if (args.Contains("--verify-map-styles") || args.Contains("--verify-player-feedback-only"))
+            {
+                if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS")))
+                    throw new InvalidOperationException("Style verification requires an isolated documents profile.");
+                SettingsCatalog.Store("fresh_world_each_game", false);
+            }
             if (args.Contains("--verify-release-0530-only")) MainMenuScene.Wanted = MenuIntent.Multiplayer;
             Check(tree.ChangeSceneToFile("res://Scenes/Main.tscn") == Error.Ok, "campaign scene opens from the pack");
             // How long the world may take to appear before the gate calls it a hang.
@@ -150,8 +156,17 @@ public partial class ExportVerification : Node
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 game.Call("BeginSession");
                 if (DisplayServer.GetName() != "headless") await VerifyMapSurface(game);
+                if (args.Contains("--verify-player-feedback-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "player feedback verification uses a real GPU viewport");
+                    await VerifyPlayerFeedback(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (args.Contains("--verify-map-render-only"))
                 {
+                    if (args.Contains("--verify-map-styles")) await VerifyMapStyles(game);
                     Check(DisplayServer.GetName() != "headless", "map-render verification requires a real GPU viewport");
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);

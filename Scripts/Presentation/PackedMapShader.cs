@@ -55,8 +55,8 @@ public static class PackedMapShader
 
         const string helpers = @"
 uniform sampler2DArray packed_ids : filter_nearest, repeat_enable;
-// Compatibility shades in sRGB. Mixing color and data in this unhinted array
-// preserves both raw color bytes and two-channel identifiers (no sRGB decode).
+// Store raw bytes because these layers mix colours and identifiers. Colour-only
+// fetches are decoded by atlas_color_sample; data layers/alpha remain untouched.
 uniform sampler2DArray packed_lookups : filter_nearest, repeat_disable;
 uniform sampler2DArray packed_water_tiles : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 vec4 packed_id(float layer, vec2 uv) { return texture(packed_ids, vec3(uv, layer)); }

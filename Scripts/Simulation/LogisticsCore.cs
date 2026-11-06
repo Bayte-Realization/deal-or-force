@@ -250,25 +250,26 @@ public static class LogisticsSystem
         // marooned whole fronts on their own connected ground - the far north of Russia, two
         // dozen provinces from the nearest depot - where no breakout could help, because there was
         // nothing to break out of, and the formations sat worn out and unreinforced for years.
-        while (Frontier.Count > 0)
+        TraceDepots(nation, topology, controllers, generation);
+
+        // A region is not necessarily one land component (Kaliningrad includes detached
+        // coastal spits). The root trace correctly reached every sea entrance, but the
+        // single regional depot could sit on a spit whose land walk reached none of the
+        // mainland. SupplyBySea then rescued coast *armies* only, leaving inland troops
+        // falsely encircled. Give each root-reachable home fragment a distribution point.
+        // These points share the SAME regional source and demand/capacity, not free new
+        // throughput. A lost harbour still fails the root trace, so a real pocket stays cut.
+        foreach (var province in territory)
         {
-            var province = Frontier.Dequeue();
-            var next = distance[province] + 1;
-            var from = source[province];
-            foreach (var neighbor in topology.Neighbors[province])
-            {
-                if (stamp[neighbor] == generation || !Passable(nation, controllers[neighbor])) continue;
-                stamp[neighbor] = generation;
-                // Water is transparent to a supply line and impassable to a column. An
-                // army cannot march across a lake; the lorries that feed it go round by
-                // the roads on the shore, and charging that as extra hops of a trace
-                // budget would be inventing a cost the map does not model anywhere else.
-                // Before lakes were regions this ground was land and cost nothing extra;
-                // it should not start costing something because it was given a name.
-                distance[neighbor] = topology.IsWater(neighbor) ? distance[province] : next;
-                source[neighbor] = from;
-                Frontier.Enqueue(neighbor);
-            }
+            if (stamp[province] == generation || reach[province] != generation || topology.IsWater(province) ||
+                topology.ProvinceToNation[province] != nation.MapIndex) continue;
+            var state = topology.ProvinceToState[province];
+            if (!HubByState.ContainsKey(state) || IsIsolatedHub.GetValueOrDefault(state)) continue;
+            stamp[province] = generation;
+            distance[province] = 0;
+            source[province] = state;
+            Frontier.Enqueue(province);
+            TraceDepots(nation, topology, controllers, generation);
         }
 
         SupplyBySea(campaign, nation, armies, controllers, generation);
@@ -354,6 +355,26 @@ public static class LogisticsSystem
                                         barracksTotal * ReinforcementPerBarracks) * ReinforcementBudget(campaign, nation) *
                                        NationalModifiers.Factor(nation, "reinforcement_rate");
         if (campaign.ElapsedDays % 7 == 0) nation.ReinforcedLastWeek = 0f;
+    }
+
+    /// <summary>
+    /// Walk from the queued distribution points without crossing hostile controllers.
+    /// </summary>
+    private static void TraceDepots(Nation nation, ProvinceTopology topology, ushort[] controllers, int generation)
+    {
+        while (Frontier.Count > 0)
+        {
+            var province = Frontier.Dequeue();
+            foreach (var neighbor in topology.Neighbors[province])
+            {
+                if (_stamp[neighbor] == generation || !Passable(nation, controllers[neighbor])) continue;
+                _stamp[neighbor] = generation;
+                // Lakes do not charge extra road hops; columns still cannot march across them.
+                _distance[neighbor] = _distance[province] + (topology.IsWater(neighbor) ? 0 : 1);
+                _source[neighbor] = _source[province];
+                Frontier.Enqueue(neighbor);
+            }
+        }
     }
 
     /// <summary>

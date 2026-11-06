@@ -1,0 +1,2023 @@
+// 64 ORIGINAL ALTERNATE-HISTORY designs by Bayte Realization (2026), not historical flags.
+// National palettes are inspirations, geometric symbols are our own fictional political outcomes.
+// They are rendered at runtime at the requested size: no extra PNGs, imports or VRAM atlas.
+{
+  "flag_designs": {
+    "flag_usa_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#17365c",
+          "#f4eee0",
+          "#b32032"
+        ],
+        "accent": "#17365c"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_usa_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#17365c",
+          "#f4eee0",
+          "#17365c"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#b32032",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#17365c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_can_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#b32032",
+          "#f4eee0",
+          "#9c633e"
+        ],
+        "accent": "#b32032"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_can_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#b32032",
+          "#f4eee0",
+          "#b32032"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#9c633e",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#b32032",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_mex_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#146346",
+          "#f4eee0",
+          "#aa2532"
+        ],
+        "accent": "#146346"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_mex_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#146346",
+          "#f4eee0",
+          "#146346"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#aa2532",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#146346",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_bra_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#176941",
+          "#e2b645",
+          "#17365c"
+        ],
+        "accent": "#176941"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_bra_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#176941",
+          "#e2b645",
+          "#176941"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#17365c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#176941",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_arg_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#69a6c8",
+          "#f4eee0",
+          "#d2a54c"
+        ],
+        "accent": "#69a6c8"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_arg_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#69a6c8",
+          "#f4eee0",
+          "#69a6c8"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#d2a54c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#69a6c8",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_chl_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#1b3c77",
+          "#f4eee0",
+          "#b32032"
+        ],
+        "accent": "#1b3c77"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_chl_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#1b3c77",
+          "#f4eee0",
+          "#1b3c77"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#b32032",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#1b3c77",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_pol_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#9e1b34",
+          "#f4eee0",
+          "#b89348"
+        ],
+        "accent": "#9e1b34"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_pol_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#9e1b34",
+          "#f4eee0",
+          "#9e1b34"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#b89348",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#9e1b34",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_ukr_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#1d5e9e",
+          "#e4c058",
+          "#f4eee0"
+        ],
+        "accent": "#1d5e9e"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_ukr_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#1d5e9e",
+          "#e4c058",
+          "#1d5e9e"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#f4eee0",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#1d5e9e",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_fin_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#254f7b",
+          "#f4eee0",
+          "#a7bdc7"
+        ],
+        "accent": "#254f7b"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_fin_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#254f7b",
+          "#f4eee0",
+          "#254f7b"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#a7bdc7",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#254f7b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_swe_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#245780",
+          "#d6b049",
+          "#f4eee0"
+        ],
+        "accent": "#245780"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_swe_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#245780",
+          "#d6b049",
+          "#245780"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#f4eee0",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#245780",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_nor_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#a72d38",
+          "#f4eee0",
+          "#213d69"
+        ],
+        "accent": "#a72d38"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_nor_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#a72d38",
+          "#f4eee0",
+          "#a72d38"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#213d69",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#a72d38",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_dnk_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#ad283b",
+          "#f4eee0",
+          "#b39b67"
+        ],
+        "accent": "#ad283b"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_dnk_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#ad283b",
+          "#f4eee0",
+          "#ad283b"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#b39b67",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#ad283b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_deu_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#252a31",
+          "#ad283b",
+          "#c5a146"
+        ],
+        "accent": "#252a31"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_deu_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#252a31",
+          "#ad283b",
+          "#252a31"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#c5a146",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#252a31",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_fra_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#274b79",
+          "#f4eee0",
+          "#b33142"
+        ],
+        "accent": "#274b79"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_fra_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#274b79",
+          "#f4eee0",
+          "#274b79"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#b33142",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#274b79",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_gbr_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "canton",
+        "colours": [
+          "#233c64",
+          "#f4eee0",
+          "#ab3547"
+        ],
+        "accent": "#233c64"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_gbr_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#233c64",
+          "#f4eee0",
+          "#233c64"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#ab3547",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#233c64",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_kor_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "hoist_triangle",
+        "colours": [
+          "#f4eee0",
+          "#245682",
+          "#ab3547"
+        ],
+        "accent": "#f4eee0"
+      },
+      "emblems": [
+        {
+          "shape": "ring",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.52
+        },
+        {
+          "shape": "star",
+          "colour": "#d1b16a",
+          "x": 0.26,
+          "y": 0.5,
+          "size": 0.28
+        }
+      ]
+    },
+    "flag_kor_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "vertical",
+        "colours": [
+          "#f4eee0",
+          "#245682",
+          "#f4eee0"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "eight_point_star",
+          "colour": "#ab3547",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.58
+        },
+        {
+          "shape": "ring",
+          "colour": "#f4eee0",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.32
+        }
+      ]
+    },
+    "flag_rus_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#f3f0e4",
+          "#355b86",
+          "#a53341"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_rus_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#f3f0e4",
+          "#355b86"
+        ],
+        "accent": "#a53341"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#355b86",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#a53341",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_ita_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#26734f",
+          "#f3f0e4",
+          "#b5313d"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#26734f",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#26734f",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_ita_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#26734f",
+          "#f3f0e4"
+        ],
+        "accent": "#b5313d"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#b5313d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_esp_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#a3263b",
+          "#d4b74b",
+          "#202d44"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#a3263b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#a3263b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_esp_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#a3263b",
+          "#d4b74b"
+        ],
+        "accent": "#202d44"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#d4b74b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#202d44",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_prt_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#28654c",
+          "#a92e3a",
+          "#d4b74b"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#28654c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#28654c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_prt_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#28654c",
+          "#a92e3a"
+        ],
+        "accent": "#d4b74b"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#a92e3a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#d4b74b",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_grc_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#316b98",
+          "#f3f0e4",
+          "#c8ac58"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#316b98",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#316b98",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_grc_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#316b98",
+          "#f3f0e4"
+        ],
+        "accent": "#c8ac58"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#c8ac58",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_tur_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#a62937",
+          "#f3f0e4",
+          "#b7a276"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#a62937",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#a62937",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_tur_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#a62937",
+          "#f3f0e4"
+        ],
+        "accent": "#b7a276"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#b7a276",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_aus_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#214d71",
+          "#d1ae57",
+          "#f3f0e4"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#214d71",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#214d71",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_aus_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#214d71",
+          "#d1ae57"
+        ],
+        "accent": "#f3f0e4"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#d1ae57",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_nzl_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#264a6d",
+          "#f3f0e4",
+          "#b73841"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#264a6d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#264a6d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_nzl_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#264a6d",
+          "#f3f0e4"
+        ],
+        "accent": "#b73841"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#b73841",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_ind_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#bd7545",
+          "#f3f0e4",
+          "#29714d"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#bd7545",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#bd7545",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_ind_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#bd7545",
+          "#f3f0e4"
+        ],
+        "accent": "#29714d"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#29714d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_pak_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#235e46",
+          "#f3f0e4",
+          "#b9a56c"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#235e46",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#235e46",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_pak_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#235e46",
+          "#f3f0e4"
+        ],
+        "accent": "#b9a56c"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#b9a56c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_idn_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#ad303c",
+          "#f3f0e4",
+          "#b9a56c"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#ad303c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#ad303c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_idn_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#ad303c",
+          "#f3f0e4"
+        ],
+        "accent": "#b9a56c"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#b9a56c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_jpn_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#f3f0e4",
+          "#ac283c",
+          "#1e3043"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_jpn_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#f3f0e4",
+          "#ac283c"
+        ],
+        "accent": "#1e3043"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#ac283c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#1e3043",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_chn_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#a62b3c",
+          "#ccad53",
+          "#25394e"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#a62b3c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#a62b3c",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_chn_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#a62b3c",
+          "#ccad53"
+        ],
+        "accent": "#25394e"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#ccad53",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#25394e",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_twn_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#244d7d",
+          "#f3f0e4",
+          "#ac3341"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#244d7d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#244d7d",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_twn_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#244d7d",
+          "#f3f0e4"
+        ],
+        "accent": "#ac3341"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#f3f0e4",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#ac3341",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_zaf_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "horizontal",
+        "colours": [
+          "#246b53",
+          "#d3b251",
+          "#254c79"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#246b53",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#246b53",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_zaf_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "saltire",
+        "colours": [
+          "#246b53",
+          "#d3b251"
+        ],
+        "accent": "#254c79"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#d3b251",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#254c79",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    },
+    "flag_rou_defence_council": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "diagonal",
+        "colours": [
+          "#254d84",
+          "#d2b14f",
+          "#aa3341"
+        ],
+        "weights": [
+          1,
+          2,
+          1
+        ]
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#254d84",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.62
+        },
+        {
+          "shape": "eight_point_star",
+          "colour": "#d1b16a",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.44
+        },
+        {
+          "shape": "disc",
+          "colour": "#254d84",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.16
+        }
+      ]
+    },
+    "flag_rou_covenant": {
+      "ratio": 1.5,
+      "background": {
+        "pattern": "cross",
+        "colours": [
+          "#254d84",
+          "#d2b14f"
+        ],
+        "accent": "#aa3341"
+      },
+      "emblems": [
+        {
+          "shape": "disc",
+          "colour": "#d2b14f",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.6
+        },
+        {
+          "shape": "sun",
+          "colour": "#aa3341",
+          "x": 0.5,
+          "y": 0.5,
+          "size": 0.43
+        }
+      ]
+    }
+  }
+}

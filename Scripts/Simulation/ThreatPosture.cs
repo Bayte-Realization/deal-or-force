@@ -145,9 +145,19 @@ public static class ThreatPosture
             count = Math.Min(count, onBorders - given);
             var border = BorderWith(map, controllers, ours, (ushort)neighbour.MapIndex);
             if (border.Count == 0) continue;
+            var strategicPost = -1;
+            var importance = 0f;
+            if (defines.ExclaveDefenceWeight > 0f)
+                foreach (var post in border)
+                {
+                    var value = StrategicExclaves.Importance(campaign, post);
+                    if (value <= importance) continue;
+                    importance = value; strategicPost = post;
+                }
             for (var index = 0; index < count; index++)
             {
-                var post = border[(int)((index + 0.5f) * border.Count / count) % border.Count];
+                var post = index == 0 && strategicPost > 0 ? strategicPost :
+                    border[(int)((index + 0.5f) * border.Count / count) % border.Count];
                 Desired.Add(post);
                 DesiredSet.Add(post);
             }

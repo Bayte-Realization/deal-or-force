@@ -90,7 +90,13 @@ public sealed partial class GlobePresentation
         _previousPointer = pixel;
         _flatGlide = Vector2.Zero;
         _lastFlatDragUsec = Time.GetTicksUsec();
-        if (!_flatMap) return;
+        if (!_flatMap)
+        {
+            _targetYaw = _yaw;
+            _targetPitch = _pitch;
+            _targetDistance = _distance;
+            return;
+        }
         _flatZoomAnchorActive = false;
         // Taking hold of the map cancels an unfinished fly-to/zoom. Starting a drag
         // from a pending target used to jump the map before it followed the hand.
@@ -193,6 +199,7 @@ public sealed partial class GlobePresentation
             {
                 Name = $"WorldCopy_{copy:+0;-0;0}",
                 Mesh = quad,
+                Layers = AtlasSurfaceLayers,
                 Position = new Vector3(copy * FlatMapWidth, 0f, 0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
             };

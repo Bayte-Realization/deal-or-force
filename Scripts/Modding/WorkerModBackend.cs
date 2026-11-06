@@ -120,12 +120,24 @@ public sealed class WorkerModBackend
             var errors = ReadBounded(process.StandardError, 16 * 1024, deadline.Token);
             await process.StandardInput.WriteAsync(request.AsMemory(), deadline.Token);
             process.StandardInput.Close();
-            await Task.WhenAll(output, errors, process.WaitForExitAsync(deadline.Token));
+            // WhenAll waits for *every* task even after a bounded reader rejects
+            // output. A child still writing into that abandoned pipe then blocks,
+            // and a size-limit violation needlessly waits for the entire timeout.
+            // Observe each completion immediately so the existing catch kills our
+            // child as soon as either stream or the process fails.
+            var pending = new List<Task> { output, errors, process.WaitForExitAsync(deadline.Token) };
+            while (pending.Count > 0)
+            {
+                var finished = await Task.WhenAny(pending);
+                await finished;
+                pending.Remove(finished);
+            }
             if (process.ExitCode != 0) throw new InvalidDataException($"Worker exit {process.ExitCode}: {await errors}");
             return await output;
         }
         catch
         {
+            deadline.Cancel();
             if (!process.HasExited) process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync();
             throw;

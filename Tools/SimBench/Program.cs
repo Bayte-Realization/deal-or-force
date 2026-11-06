@@ -78,6 +78,16 @@ public static class Program
             campaign = loaded.Campaign;
             Console.WriteLine($"  loaded {args[loadAt + 2]}: day {campaign.ElapsedDays}, {campaign.Date}");
         }
+        // Calendar stress only: this does NOT turn the modern roster/economy into a
+        // historical scenario. Actual ancient worlds are authored through the editor.
+        var calendarAt = Array.IndexOf(args, "--calendar");
+        if (calendarAt >= 0)
+        {
+            if (calendarAt + 1 >= args.Length || !HistoricalDate.TryParse(args[calendarAt + 1], out var calendar))
+            { Console.WriteLine("--calendar requires YYYY-MM-DD, optionally followed by BCE/CE inside the quoted value."); return 1; }
+            campaign.Date = new GameDate(calendar.Year, calendar.Month, calendar.Day);
+            Console.WriteLine("  calendar stress origin: " + campaign.Date);
+        }
         setup.Stop();
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
                           $"{campaign.Nations.Count} nations, {campaign.States.Count} states.");

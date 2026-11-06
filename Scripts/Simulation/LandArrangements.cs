@@ -946,8 +946,14 @@ public static class LandArrangementSystem
         if (regions.Count == 0) return;
         var kind = Text("kind") is Presence ? Presence : Lease;
         var until = entry.TryGetProperty("until", out var year) && year.TryGetInt32(out var y) ? y : -1;
-        var endDay = until <= 0 ? -1
-            : (int)(new DateTime(until, 1, 1) - new DateTime(c.Defines.StartYear, Math.Clamp(c.Defines.StartMonth, 1, 12), Math.Clamp(c.Defines.StartDay, 1, 28))).TotalDays;
+        var origin = new HistoricalDate(c.Date.Year, c.Date.Month, c.Date.Day).AddDays(-c.ElapsedDays);
+        var endDay = until <= 0 ? -1 : new HistoricalDate(until, 1, 1).DayNumber - origin.DayNumber;
+        if (Text("until_date").Length > 0)
+        {
+            if (!HistoricalDate.TryParse(Text("until_date"), out var end))
+            { errors?.Add("An arrangement's until_date must be a valid calendar date."); return; }
+            endDay = end.DayNumber - origin.DayNumber;
+        }
         var arrangement = new LandArrangement
         {
             Id = c.NextLandArrangementId++, Kind = kind, OwnerId = owner.Id, HolderId = holder.Id,
@@ -962,7 +968,7 @@ public static class LandArrangementSystem
     /// <summary>The calendar date of a campaign day.</summary>
     internal static string DateOfDay(Campaign c, int day)
     {
-        var start = new DateTime(c.Defines.StartYear, Math.Clamp(c.Defines.StartMonth, 1, 12), Math.Clamp(c.Defines.StartDay, 1, 28));
+        var start = new HistoricalDate(c.Date.Year, c.Date.Month, c.Date.Day).AddDays(-c.ElapsedDays);
         var date = start.AddDays(Math.Clamp(day, -36500, 365000));
         return new GameDate(date.Year, date.Month, date.Day).ToString();
     }

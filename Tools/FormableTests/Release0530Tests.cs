@@ -19,6 +19,16 @@ static class Release0530Tests
         foreach (var nation in campaign.Nations.Where(n => n.Movement is null && SpriteCatalog.Has("flag_" + n.Tag.ToLowerInvariant())))
         {
             var own = "flag_" + nation.Tag.ToLowerInvariant();
+            // Afghanistan's old base PNG is the republic, not the 2024 Taliban banner.
+            // Its explicit historical exceptions are exhaustively pinned separately;
+            // the broad invariant below remains strict for ordinary national identities.
+            if (nation.Tag == "AFG")
+            {
+                Check(FlagCatalog.Resolve(campaign, nation) == "flag_afg_theocratic_rule" &&
+                    FlagCatalog.ResolvePreview(campaign, nation, "presidential_republic", "liberalism") == own,
+                    "Afghanistan distinguishes its actual starting government from a restored republic");
+                count++; continue;
+            }
             Check(GovernmentCatalog.All.All(g => FlagCatalog.ResolvePreview(campaign, nation, g.Id) == own) &&
                 IdeologyCatalog.All.All(i => FlagCatalog.ResolvePreview(campaign, nation, ideology: i.Id) == own),
                 nation.Tag + " retains national artwork across every government and ideology");

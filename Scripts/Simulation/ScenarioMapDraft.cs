@@ -101,8 +101,8 @@ public sealed class ScenarioMapDraft
         if (settings is null || string.IsNullOrWhiteSpace(settings.Name) || settings.Name.Trim().Length > 160 ||
             (settings.Description?.Length ?? 0) > 4000 || settings.Seed <= 0 || settings.Hour is < 0 or > 23)
             throw new InvalidDataException("Enter a name (up to 160 characters), description (up to 4000), positive seed and valid hour.");
-        try { _ = new DateTime(settings.Year, settings.Month, settings.Day); }
-        catch (ArgumentOutOfRangeException) { throw new InvalidDataException("Choose a valid calendar date (years 1–9999)."); }
+        if (!HistoricalDate.TryCreate(settings.Year, settings.Month, settings.Day, out _))
+            throw new InvalidDataException("Choose a valid calendar date (astronomical years -9999 to 9999).");
         settings = settings with { Name = settings.Name.Trim(), Description = settings.Description ?? "" };
         if (settings == Settings) return;
         EndStroke();

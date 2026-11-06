@@ -234,6 +234,12 @@ public partial class DealOrForceGame
                 break;
 
             // ---- what it looks like --------------------------------------------------
+            case "map_visual_style":
+            case "map_cloud_opacity":
+            case "map_consistent_lighting":
+                _globe?.ApplyMapVisualStyle();
+                break;
+
             case "window_mode":
             case "window_size":
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));

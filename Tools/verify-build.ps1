@@ -14,9 +14,18 @@ if (-not $LogDirectory) {
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 $stdoutPath = Join-Path $LogDirectory 'verification.stdout.log'
 $stderrPath = Join-Path $LogDirectory 'verification.stderr.log'
-$verificationProcess = Start-Process -FilePath $verificationExecutable -ArgumentList '--headless', '--', '--verify-build' `
-    -WorkingDirectory (Split-Path -Parent $verificationExecutable) -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+# A release probe changes UI preferences and creates synthetic campaigns. Keep all
+# writable output away from the player's Documents, even when called on their PC.
+$verificationDocuments = Join-Path $LogDirectory 'profile/documents'
+New-Item -ItemType Directory -Force -Path $verificationDocuments | Out-Null
+$previousDocuments = $env:DOF_VERIFICATION_DOCUMENTS
+try {
+    $env:DOF_VERIFICATION_DOCUMENTS = $verificationDocuments
+    $verificationProcess = Start-Process -FilePath $verificationExecutable -ArgumentList '--headless', '--', '--verify-build' `
+        -WorkingDirectory (Split-Path -Parent $verificationExecutable) -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+}
+finally { $env:DOF_VERIFICATION_DOCUMENTS = $previousDocuments }
 # Touch the handle now: a process started with -PassThru and waited on with WaitForExit(ms)
 # reports no exit code at all unless its handle was taken while it was running, and a
 # clean run then fails as "exit ".

@@ -178,7 +178,8 @@ public static class SaveSystem
             payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
             payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
             throw new InvalidDataException("Scenario requires a complete political layer for the current map.");
-        _ = new DateTime(payload.Date.Year, payload.Date.Month, payload.Date.Day);
+        if (!HistoricalDate.TryCreate(payload.Date.Year, payload.Date.Month, payload.Date.Day, out _))
+            throw new InvalidDataException("Choose a valid calendar date (astronomical years -9999 to 9999).");
         if (payload.Nations.Count == 0 || !payload.Nations.Any(n => n.Id == payload.PlayerId) ||
             payload.Nations.Select(n => n.Id).Distinct().Count() != payload.Nations.Count ||
             payload.Nations.Select(n => n.MapIndex).Distinct().Count() != payload.Nations.Count ||

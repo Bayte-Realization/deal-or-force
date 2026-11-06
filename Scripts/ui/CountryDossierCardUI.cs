@@ -122,7 +122,8 @@ public partial class DealOrForceGame
         _countryOrdersScroll.Visible = _countryDossierTab == "Actions" && nation != _campaign.Player;
         // Opening actions does not execute them. This is still the one shared action block.
         _countryCardCaption.TooltipText = Ui.Tip(nation.DisplayName + "\n" +
-            Tr(PoliticsCore.GovernmentOf(nation).Name) + " · " + Tr(PoliticsCore.IdeologyOf(nation).Name));
+            Tr(PoliticsCore.GovernmentOf(nation).Name) + " · " + Tr(PoliticsCore.IdeologyOf(nation).Name) + "\n" +
+            Loc.Format("Country code (saves and mods): {0}", nation.Tag));
         if (!_countryDossierChangingPage && _countryDossierTab != "Actions")
         {
             var y = _countryFactsScroll.ScrollVertical;

@@ -35,7 +35,7 @@ public partial class DealOrForceGame
 
     private Button MusicShortcut()
     {
-        var button = ActionButton("", OpenMediaLibrary, 44, 32);
+        var button = ActionButton("", OpenSoundtrackLibrary, 44, 32);
         button.Name = "OpenMediaLibrary";
         button.Icon = AtlasSurfaceSkin.MusicGlyph();
         button.SetMeta("atlas_round_button", true);
@@ -44,8 +44,8 @@ public partial class DealOrForceGame
         button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         button.ExpandIcon = true;
         button.AddThemeConstantOverride("icon_max_width", 20);
-        button.TooltipText = Ui.Tip(Tr("Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign."));
-        button.AccessibilityName = Tr("Sound and artwork");
+        button.TooltipText = Ui.Tip(Tr("Soundtrack player: choose a recording, pause or skip. Music continues when this window closes."));
+        button.AccessibilityName = Tr("Soundtrack player");
         StyleButton(button, false);
         return button;
     }
