@@ -109,7 +109,7 @@ public partial class ExportVerification : Node
                 ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                 return;
             }
-            if (args.Contains("--verify-map-styles") || args.Contains("--verify-player-feedback-only") || args.Contains("--verify-scenario-peer") || args.Contains("--verify-decision-documents-only") || args.Contains("--verify-nuclear-target-only") || args.Contains("--verify-construction-placement-only"))
+            if (args.Contains("--verify-map-styles") || args.Contains("--verify-player-feedback-only") || args.Contains("--verify-scenario-peer") || args.Contains("--verify-decision-documents-only") || args.Contains("--verify-nuclear-target-only") || args.Contains("--verify-construction-placement-only") || args.Contains("--verify-nuclear-alert-only"))
             {
                 if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS")))
                     throw new InvalidOperationException("Style verification requires an isolated documents profile.");
@@ -155,6 +155,13 @@ public partial class ExportVerification : Node
                     Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
                         "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 game.Call("BeginSession");
+                if (args.Contains("--verify-nuclear-alert-only"))
+                {
+                    await VerifyNuclearAlertLayout(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
                 if (args.Contains("--verify-construction-placement-only"))
                 {
                     await VerifyConstructionPlacement(game);
