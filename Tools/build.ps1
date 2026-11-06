@@ -429,6 +429,14 @@ Write-Host "  nothing in the build that should not be there" -ForegroundColor Gr
 # asked directly, and the folder is asked as well.
 $pck = Join-Path $out 'Deal or Force.pck'
 if (Test-Path -LiteralPath $pck) {
+    # Re-exporting a retained stage must not turn earlier probe output into
+    # player content. Inspect the actual archive, not just loose directories.
+    $packedEvidence = @(Get-PackEntry -Path $pck | Where-Object {
+        $_.Path -match '^verification(?:[-/]|$)'
+    })
+    if ($packedEvidence.Count -gt 0) {
+        throw "Verification evidence must not be packed in the player archive: $($packedEvidence[0].Path)"
+    }
     if ((Get-PackSize -Path $pck -Filter 'docs/*').Count -gt 0) {
         throw "Development documentation must not be packed in the player archive."
     }

@@ -12,6 +12,9 @@ if (-not $LogDirectory) {
     $LogDirectory = Join-Path ([IO.Path]::GetTempPath()) ('dof-export-verification-' + [Guid]::NewGuid().ToString('N'))
 }
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+# Evidence may live inside a retained export staging project. Never let a later
+# export import synthetic preferences, diagnostic snapshots or screenshots.
+New-Item -ItemType File -Force -Path (Join-Path $LogDirectory '.gdignore') | Out-Null
 $stdoutPath = Join-Path $LogDirectory 'verification.stdout.log'
 $stderrPath = Join-Path $LogDirectory 'verification.stderr.log'
 # A release probe changes UI preferences and creates synthetic campaigns. Keep all

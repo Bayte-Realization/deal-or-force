@@ -13,6 +13,7 @@ if (-not $OutputDirectory) {
 }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Use a new renderer-evidence directory; existing evidence is never overwritten.' }
 New-Item -ItemType Directory -Path $OutputDirectory | Out-Null
+New-Item -ItemType File -Path (Join-Path $OutputDirectory '.gdignore') | Out-Null
 $OutputDirectory = (Resolve-Path -LiteralPath $OutputDirectory).Path
 foreach ($method in $Methods) {
     if ($method -notin @('gl_compatibility', 'gl_angle', 'forward_plus', 'mobile')) { throw "Unknown renderer: $method" }
