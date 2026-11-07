@@ -8,8 +8,6 @@ A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 
 > for Luau, F#, Nim, Odin, Rust and Kotlin, with build recipes, probes and a workbench
 > ([guide](LanguageKit/GUIDE.md)).
 
-Active development branch: **ReimAlpha**. [October 13 checkpoint](docs/REIMALPHA_2026_10_13.md).
-
 World rendering scripts now live in
 [`Scripts/gfx`](Scripts/gfx/README.md), separately from UI and simulation rules.
 
