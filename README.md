@@ -2,7 +2,7 @@
 
 # Deal or Force
 
-A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10. Version **0.5.3.0** — **EntertAlpha 0.5.3.0**.
+A grand strategy game about the whole world, on Godot 4.8 (.NET build) and .NET 10. Version **0.6.2.0** — **EntertAlpha 0.6.2.0**.
 
 > **[LanguageKit](LanguageKit/README.md)** — the Godot 4.8 Beta1 language kit: source integrations
 > for Luau, F#, Nim, Odin, Rust and Kotlin, with build recipes, probes and a workbench
