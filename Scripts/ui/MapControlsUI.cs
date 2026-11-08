@@ -59,6 +59,7 @@ public partial class DealOrForceGame
         row.AddChild(MapVisualToggle("map_trade_traffic", "TRADE", "Ships on the sea lanes between the world's busiest trading partners, and lorries on the roads between neighbours. Press to hide or show them.", 68));
         row.AddChild(MapVisualToggle("city_names", "CITIES", "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer.", 68));
         row.AddChild(MapVisualToggle("region_names", "NAMES", "Draw each country's name across its territory.", 68));
+        row.AddChild(MapVisualToggle("map_region_icons", "ICONS", "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.", 64));
 
         _showcasePanButton = ActionButton("PAN", ToggleShowcasePan, ToggleWidth, 34);
         _showcasePanButton.SetMeta("atlas_tab_button", true);

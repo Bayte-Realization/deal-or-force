@@ -647,14 +647,36 @@ public partial class DealOrForceGame
             if (foreign > 0.001f)
                 CardRow(_regionCardRegionRows, "Minorities", Fmt.Percent(foreign), null,
                     foreign > 0.5f ? "state.negative" : "state.warning");
+            // What stands there, as the icons the build list and the map's region badges use: read at
+            // a glance, named in the tooltip. Five kinds, the most numerous first.
             var buildings = BuildingCatalog.All
                 .Select(kind => (Kind: kind, Count: state.Buildings.GetValueOrDefault(kind)))
                 .Where(entry => entry.Count > 0)
                 .OrderByDescending(entry => entry.Count)
-                .Take(3)
-                .Select(entry => $"{Tr(BuildingCatalog.Get(entry.Kind).Name)} {entry.Count:N0}")
+                .Take(5)
                 .ToList();
-            CardRow(_regionCardRegionRows, "Buildings", buildings.Count == 0 ? Tr("none") : string.Join(" · ", buildings));
+            if (buildings.Count == 0) CardRow(_regionCardRegionRows, "Buildings", Tr("none"));
+            else
+            {
+                var chips = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Stop };
+                chips.AddThemeConstantOverride("separation", 5);
+                chips.CustomMinimumSize = new Vector2(0, 22);
+                chips.TooltipText = Ui.Tip(string.Join("\n", buildings.Select(entry => $"{Tr(BuildingCatalog.Get(entry.Kind).Name)}: {entry.Count:N0}")));
+                _regionCardRegionRows.AddChild(chips);
+                var caption = Title("Buildings", 13, Ui.Colour("text.body_soft"));
+                caption.AutowrapMode = TextServer.AutowrapMode.Off;
+                caption.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+                caption.MouseFilter = Control.MouseFilterEnum.Pass;
+                chips.AddChild(caption);
+                foreach (var entry in buildings)
+                {
+                    chips.AddChild(BuildingIconControl(entry.Kind, 18));
+                    var number = Title(entry.Count.ToString("N0"), 13, Ui.Colour("text.bright"));
+                    number.AutowrapMode = TextServer.AutowrapMode.Off;
+                    number.MouseFilter = Control.MouseFilterEnum.Pass;
+                    chips.AddChild(number);
+                }
+            }
             var building = _campaign.Construction.Count(project => project.StateMapIndex == state.MapIndex);
             if (building > 0) CardRow(_regionCardRegionRows, "Under construction", building.ToString("N0"));
         }

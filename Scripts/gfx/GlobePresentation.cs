@@ -708,6 +708,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
         if (_battleMarkers.Count > 0 && (visualDue || _dragging || _boxSelecting || FlatViewInMotion)) QueueRedraw();
         if (visualDue) { UpdateCityLabels(visualStep); UpdateSettlementModels(visualStep); }
+        KeepRegionIcons();
         UpdateMapModePaletteIfNeeded();
 
         if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
@@ -1415,6 +1416,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Draw()
     {
+        DrawRegionIcons();
         DrawFlatCounterLeaders();
         DrawBattleReadouts();
         if (!_boxSelecting) return;

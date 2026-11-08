@@ -175,6 +175,9 @@ public partial class DealOrForceGame
                 RefreshMapVisualToggles();
                 break;
 
+            case "map_region_icons":
+                if (_globe is not null) _globe.RegionIconsEnabled = SettingsCatalog.Flag("map_region_icons");
+                break;
             case "city_names":
                 if (_globe is not null) _globe.CityLabelsEnabled = SettingsCatalog.Flag("city_names");
                 RefreshMapVisualToggles();

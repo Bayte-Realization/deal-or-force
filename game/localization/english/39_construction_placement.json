@@ -29,5 +29,8 @@
   "Queued {0} × {1} for {2}.": "Queued {0} × {1} for {2}.",
   "Order submitted. The host will validate the construction sites.": "Order submitted. The host will validate the construction sites.",
   "Every selected region can take it.": "Every selected region can take it.",
-  "{0} of the {1} regions can take it.": "{0} of the {1} regions can take it."
+  "{0} of the {1} regions can take it.": "{0} of the {1} regions can take it.",
+  "ICONS": "ICONS",
+  "Region icons on the map": "Region icons on the map",
+  "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.": "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages."
 }

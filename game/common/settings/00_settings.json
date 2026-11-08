@@ -140,6 +140,12 @@
     "description": "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.",
     "default": true
   },
+  "map_region_icons": {
+    "category": "interface", "order": 236, "kind": "toggle",
+    "name": "Region icons on the map",
+    "description": "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.",
+    "default": true
+  },
   "map_smoothing": {
     "category": "interface", "order": 240, "kind": "toggle",
     "name": "Smooth the map",

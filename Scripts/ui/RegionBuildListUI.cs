@@ -158,6 +158,9 @@ public partial class DealOrForceGame
             row.AddThemeConstantOverride("separation", 6);
             _regionBuildRows.AddChild(row);
 
+            var icon = BuildingIconControl(kind, 18);
+            if (refusal.Length > 0) icon.Modulate = new Color(1f, 1f, 1f, 0.4f);
+            row.AddChild(icon);
             var name = Title(Tr(definition.Name), 12, Ui.Colour(refusal.Length > 0 ? "text.muted" : "text.body_soft"));
             name.AutowrapMode = TextServer.AutowrapMode.Off;
             name.ClipText = true;

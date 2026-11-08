@@ -29,5 +29,8 @@
   "Queued {0} × {1} for {2}.": "Заказано: {1} × {0} на {2}.",
   "Order submitted. The host will validate the construction sites.": "Приказ отправлен. Хост проверит места строительства.",
   "Every selected region can take it.": "Подходит каждый выделенный регион.",
-  "{0} of the {1} regions can take it.": "Подходит регионов: {0} из {1}."
+  "{0} of the {1} regions can take it.": "Подходит регионов: {0} из {1}.",
+  "ICONS": "ИКОНКИ",
+  "Region icons on the map": "Иконки регионов на карте",
+  "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.": "Вблизи каждый регион показывает, чем он знаменит: отрасль, которой в нём больше, чем в обычном регионе, и сколько её зданий, а также значки: идёт стройка, беспорядки, нехватка."
 }

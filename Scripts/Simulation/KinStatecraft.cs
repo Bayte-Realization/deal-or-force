@@ -586,23 +586,31 @@ public static class KinStatecraft
 
     // One scan a month, reused by every country that day: the ground worth working, worked out
     // from the demography in a single pass rather than a scan of the world for every country.
-    private static Campaign _scanned;
-    private static int _scannedMonth = -1;
-    private static readonly Dictionary<int, List<Candidate>> Candidates = new();
+    // Per campaign: the scan was one static, stamped with the last campaign that asked. Two worlds
+    // in one process (a network client holding the host's snapshot beside its own) took turns
+    // overwriting it, so each rescanned mid-month on the day's demography and the two drifted -
+    // the bench's "two worlds in one process do not read each other's notes" failure.
+    private sealed class ScanState
+    {
+        public int Month = -1;
+        public readonly Dictionary<int, List<Candidate>> Candidates = new();
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, ScanState> Scans = new();
     internal static int LastScanKinEvaluations { get; private set; }
 
     private readonly record struct Candidate(Nation Host, ScenarioState Region, float Share);
 
     /// <summary>Once a month: which countries have enough of their own people in whose ground.</summary>
-    private static void Scan(Campaign campaign)
+    private static Dictionary<int, List<Candidate>> Scan(Campaign campaign)
     {
         var month = campaign.ElapsedDays / 30;
-        if (ReferenceEquals(_scanned, campaign) && _scannedMonth == month) return;
-        _scanned = campaign;
-        _scannedMonth = month;
+        var state = Scans.GetValue(campaign, _ => new ScanState());
+        var Candidates = state.Candidates;
+        if (state.Month == month) return Candidates;
+        state.Month = month;
         Candidates.Clear();
         LastScanKinEvaluations = 0;
-        if (campaign.States is null || campaign.Nations is null) return;
+        if (campaign.States is null || campaign.Nations is null) return Candidates;
 
         // Which countries claim which people, built once: the reverse of the demography's own
         // table, so a region's population groups are read once each rather than once per
@@ -618,7 +626,7 @@ public static class KinStatecraft
                 if (!list.Contains(nation)) list.Add(nation);
             }
         }
-        if (claims.Count == 0) return;
+        if (claims.Count == 0) return Candidates;
 
         var minimum = campaign.Defines?.KinAgitationMinShare ?? 0.15f;
         // Who holds what, once: a region's holder is asked of the whole world for every region
@@ -657,6 +665,7 @@ public static class KinStatecraft
                 }
             }
         }
+        return Candidates;
     }
 
     /// <summary>
@@ -667,7 +676,7 @@ public static class KinStatecraft
     public static void Ai(Campaign campaign)
     {
         if (campaign?.Defines is null || !MechanicFeatures.SystemEnabled(campaign, nameof(KinStatecraft))) return;
-        Scan(campaign);
+        var Candidates = Scan(campaign);
         if (Candidates.Count == 0) return;
         var defines = campaign.Defines;
         const int cycle = 30;
@@ -724,7 +733,7 @@ public static class KinStatecraft
     /// <summary>What the month's scan found, for the bench and for tests that must not guess.</summary>
     internal static string ScanSummary(Campaign campaign)
     {
-        Scan(campaign);
+        var Candidates = Scan(campaign);
         var parts = new List<string>();
         foreach (var pair in Candidates)
             parts.Add($"{pair.Key}:" + string.Join(";", pair.Value.Select(c => $"{c.Host.Tag}@{c.Region.MapIndex}={c.Share:0.##}")));

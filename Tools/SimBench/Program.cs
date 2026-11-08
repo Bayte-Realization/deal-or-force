@@ -59,6 +59,22 @@ public static class Program
             return contentFailures == 0 ? 0 : 1;
         }
 
+        // `--creation-profile`: where creating the world goes, phase by phase, cold and then warm -
+        // the loading screen's longest stage, measured where nothing else is running.
+        if (args.Contains("--creation-profile"))
+        {
+            foreach (var pass in new[] { "cold", "warm" })
+            {
+                ScenarioCatalog.BuildTimings = new List<(string Phase, double Milliseconds)>();
+                var clock = Stopwatch.StartNew();
+                Campaign.CreateBootstrap(seed);
+                Console.WriteLine($"CREATION {pass}: {clock.ElapsedMilliseconds:N0} ms");
+                foreach (var (phase, ms) in ScenarioCatalog.BuildTimings.OrderByDescending(row => row.Milliseconds))
+                    Console.WriteLine($"  {phase,-22} {ms,8:N1} ms");
+            }
+            ScenarioCatalog.BuildTimings = null;
+            return 0;
+        }
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
         // The roster contract covers the world the bookmark opens with. Countries the
