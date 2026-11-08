@@ -32,5 +32,12 @@
   "{0} of the {1} regions can take it.": "{0} of the {1} regions can take it.",
   "ICONS": "ICONS",
   "Region icons on the map": "Region icons on the map",
-  "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.": "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages."
+  "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.": "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.",
+  "Known for: {0} × {1} (an ordinary region has {2:0.#})": "Known for: {0} × {1} (an ordinary region has {2:0.#})",
+  "Richest deposit: {0} {1:0.0}": "Richest deposit: {0} {1:0.0}",
+  "Building under way: {0} project(s)": "Building under way: {0} project(s)",
+  "Unrest: radicalism {0:P0}": "Unrest: radicalism {0:P0}",
+  "Shortages: basic needs covered {0:P0}": "Shortages: basic needs covered {0:P0}",
+  "Each is a whole sector: about {0} jobs; these {1}: {2}": "Each is a whole sector: about {0} jobs; these {1}: {2}",
+  "{0}: {1} · about {2} jobs": "{0}: {1} · about {2} jobs"
 }

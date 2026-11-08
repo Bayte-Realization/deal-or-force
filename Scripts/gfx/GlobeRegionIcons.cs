@@ -348,6 +348,51 @@ public sealed partial class GlobePresentation
         }
     }
 
+    /// <summary>
+    /// What a badge under the cursor says, in words: the legend where the player is looking, the
+    /// way every icon in a Paradox game answers when hovered.
+    /// </summary>
+    private string RegionBadgeTooltip(Vector2 at)
+    {
+        if (_regionBadges.Count == 0 || _campaign is null) return "";
+        var (iconSize, _, _) = BadgeMetrics();
+        foreach (var badge in _regionBadges.Values)
+        {
+            if (badge.Alpha < 0.5f || BadgeScreenPoint(badge.Latitude, badge.Longitude) is not { } point) continue;
+            point += badge.Offset;
+            var box = new Rect2(point.X - badge.Width / 2f, point.Y - iconSize / 2f, badge.Width, iconSize).Grow(2f);
+            if (!box.HasPoint(at)) continue;
+            var state = _campaign.States.Find(candidate => candidate.MapIndex == badge.Region);
+            if (state is null) return "";
+            var lines = new List<string> { state.DisplayName };
+            if (badge.Main is { } kind)
+            {
+                lines.Add(Loc.Format("Known for: {0} × {1} (an ordinary region has {2:0.#})",
+                    Loc.Get(BuildingCatalog.Get(kind).Name), badge.Count, _buildingAverage.GetValueOrDefault(kind)));
+                // A building here is a whole sector of a region, not one plant: say how big.
+                var jobs = BuildingCatalog.Get(kind).Jobs;
+                if (jobs > 0f) lines.Add(Loc.Format("Each is a whole sector: about {0} jobs; these {1}: {2}",
+                    Fmt.People((long)(jobs * 1_000_000)), badge.Count, Fmt.People((long)(jobs * badge.Count * 1_000_000))));
+            }
+            if (badge.Ground is not null)
+            {
+                var best = 0f; Commodity? richest = null;
+                foreach (var (good, amount) in state.ResourceDeposits) if (amount > best) { best = amount; richest = good; }
+                if (richest is { } good2) lines.Add(Loc.Format("Richest deposit: {0} {1:0.0}", Loc.Get(CommodityCatalog.Get(good2).Name), best));
+            }
+            foreach (var sign in badge.Signs)
+                lines.Add(sign switch
+                {
+                    "icon_alert_construction" => Loc.Format("Building under way: {0} project(s)",
+                        _campaign.Construction.FindAll(project => project.StateMapIndex == state.MapIndex).Count),
+                    "icon_unrest" => Loc.Format("Unrest: radicalism {0:P0}", state.Radicalism),
+                    _ => Loc.Format("Shortages: basic needs covered {0:P0}", state.BasicNeedsCoverage)
+                });
+            return string.Join("\n", lines);
+        }
+        return "";
+    }
+
     private void ReserveIconRoom(Sprite3D plate)
     {
         if (!IsInstanceValid(plate) || !plate.IsVisibleInTree() || _camera.IsPositionBehind(plate.GlobalPosition)) return;

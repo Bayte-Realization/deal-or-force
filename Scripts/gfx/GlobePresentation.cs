@@ -1966,6 +1966,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public override string _GetTooltip(Vector2 atPosition)
     {
         if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) return "";
+        var badgeTip = RegionBadgeTooltip(atPosition);
+        if (badgeTip.Length > 0) return badgeTip;
         var supportTip = SupportMapTooltip(atPosition);
         if (supportTip.Length > 0) return supportTip;
         var eventTip = EventPulseTooltip(atPosition);

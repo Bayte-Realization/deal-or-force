@@ -311,6 +311,21 @@ public static class Program
         if (OpeningOccupation.LastScaled.Count > 0)
             Console.WriteLine("  opening occupation: kept the written figure over the regions still held by " +
                               string.Join(" | ", OpeningOccupation.LastScaled.Select(row => $"{row.Tag} x{row.Scale:0.00} [{row.Lost}]")));
+        // `--fingerprint N`: the world's fingerprint after N days, and every 30 - for comparing two
+        // builds that must agree to the bit (a pass made parallel, a cache made per campaign).
+        var fingerprintAt = Array.IndexOf(args, "--fingerprint");
+        if (fingerprintAt >= 0)
+        {
+            var fingerprintDays = fingerprintAt + 1 < args.Length && int.TryParse(args[fingerprintAt + 1], out var fd) ? fd : 60;
+            campaign.IsPaused = false;
+            for (var day = 1; day <= fingerprintDays; day++)
+            {
+                campaign.TickDay();
+                if (day % 30 == 0 || day == fingerprintDays)
+                    Console.WriteLine($"FINGERPRINT day {day}: {CampaignFingerprint.Of(campaign)}");
+            }
+            return 0;
+        }
         var traceAt = Array.IndexOf(args, "--trace");
         if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
         {

@@ -1077,7 +1077,13 @@ public static class EconomySystem
             var states = campaign.StatesOf(nation);
             long totalPopulation = 0;
             using var stateScope = SimProfiler.Measure("eco:states");
-            foreach (var state in states)
+            // Each region's week reads the country and writes only that region - its households,
+            // its births and deaths, its faiths, its living and its anger - so a large country's
+            // regions are worked side by side, to the same bytes in any order. The control tally
+            // the anger reads is built first, here; a small country is not worth the hand-off.
+            var welfareRadicalism = budget.Radicalism;
+            var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
+            void Week(ScenarioState state)
             {
                 if (campaign.Defines.HouseholdDynamicsEnabled) HouseholdEconomy.Review(campaign, nation, state, annualGrowth);
                 else
@@ -1087,13 +1093,18 @@ public static class EconomySystem
                     AdjustStatePopulation(state, (long)Math.Round(state.Population * weeklyGrowth));
                 }
                 state.StandardOfLiving = M.Lerp(state.StandardOfLiving, nation.StandardOfLiving, 0.04f);
-                var welfareRadicalism = budget.Radicalism;
-                var focusRadicalism = cabinet.Radicalism + government.Radicalism + ideology.Radicalism;
                 state.Radicalism += RadicalismCore.WeeklyChange(campaign, nation, state,
                     atWar, welfareRadicalism, focusRadicalism);
                 MinorityPressure(campaign, nation, state);
-                totalPopulation += state.Population;
             }
+            if (states.Length >= ParallelRegionsFrom)
+            {
+                if (states.Length > 0) ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
+                System.Threading.Tasks.Parallel.For(0, states.Length, RegionWorkers, index => Week(states[index]));
+            }
+            else
+                foreach (var state in states) Week(state);
+            foreach (var state in states) totalPopulation += state.Population;
             if (states.Length > 0) nation.Population = totalPopulation;
             var focusSol = cabinet.Living + government.Living + ideology.Living;
             // The same tolerance growth and prices already forgive: a market 94% supplied is a
@@ -1163,6 +1174,11 @@ public static class EconomySystem
     /// taken by force is full of people who did not choose it, and it stays restive until
     /// a generation has passed.
     /// </summary>
+    /// <summary>From how many regions a country's weekly regional review is worked side by side.</summary>
+    private const int ParallelRegionsFrom = 16;
+    private static readonly System.Threading.Tasks.ParallelOptions RegionWorkers = new()
+        { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) };
+
     public static float ForeignShare(ScenarioState state, string ownerTag)
     {
         if (state is null || string.IsNullOrEmpty(ownerTag) || state.PopulationGroups.Count == 0) return 0f;

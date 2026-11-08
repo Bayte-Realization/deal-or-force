@@ -661,7 +661,7 @@ public partial class DealOrForceGame
                 var chips = new HBoxContainer { SizeFlagsHorizontal = Control.SizeFlags.ExpandFill, MouseFilter = Control.MouseFilterEnum.Stop };
                 chips.AddThemeConstantOverride("separation", 5);
                 chips.CustomMinimumSize = new Vector2(0, 22);
-                chips.TooltipText = Ui.Tip(string.Join("\n", buildings.Select(entry => $"{Tr(BuildingCatalog.Get(entry.Kind).Name)}: {entry.Count:N0}")));
+                chips.TooltipText = Ui.Tip(string.Join("\n", buildings.Select(entry => BuildingCatalog.Get(entry.Kind).Jobs > 0f ? Simulation.Loc.Format("{0}: {1} · about {2} jobs", Tr(BuildingCatalog.Get(entry.Kind).Name), entry.Count.ToString("N0"), Fmt.People((long)(BuildingCatalog.Get(entry.Kind).Jobs * entry.Count * 1_000_000))) : $"{Tr(BuildingCatalog.Get(entry.Kind).Name)}: {entry.Count:N0}")));
                 _regionCardRegionRows.AddChild(chips);
                 var caption = Title("Buildings", 13, Ui.Colour("text.body_soft"));
                 caption.AutowrapMode = TextServer.AutowrapMode.Off;
