@@ -27,6 +27,14 @@ public sealed class ProvinceTopology
 
     /// <summary>Latitude past which a province grows with the real ground it covers (Build).</summary>
     public const float PolarFromLatitude = 60f;
+    /// <summary>
+    /// From this latitude a province is grown by distance over the ground rather than over raster
+    /// cells. The raster is equirectangular: a cell of longitude at 80 degrees is a sixth of the
+    /// ground it is at the equator, so a province grown by cell distance came out six times taller
+    /// than wide, and the provinces of Antarctica and the Arctic islands were thin wedges meeting
+    /// at the pole - a sunburst of borders. Below it the world keeps the shapes it had.
+    /// </summary>
+    public const float PolarShapeFromLatitude = 50f;
 
     /// <summary>The narrowest raster read as the whole world for the latitude rule (Build).</summary>
     public const int WorldRasterWidth = 2048;
@@ -179,6 +187,7 @@ public sealed class ProvinceTopology
         if ((stride & 1) == 0) stride++;
         while (GreatestCommonDivisor(stride, states.Length) != 1) stride += 2;
         var cursor = 0;
+        var rowGround = RowGround(width, height);
 
         // A full-cycle modular walk scatters province seeds over the whole planet.
         // This removes the visible raster-scan bands while remaining deterministic.
@@ -205,8 +214,8 @@ public sealed class ProvinceTopology
             var seedLatitude = MathF.Abs(90f - (start / width + 0.5f) * 180f / height);
             // Only the world raster: a test grid of sixty-four cells has no latitudes to speak of.
             var ground = width < WorldRasterWidth ? 1f : seedLatitude <= PolarFromLatitude ? PopulatedShare
-                : MathF.Cos(PolarFromLatitude * MathF.PI / 180f) / MathF.Max(0.1f, MathF.Cos(seedLatitude * MathF.PI / 180f));
-            baseline = Math.Max(MinimumProvinceCells + 6, (int)MathF.Round(baseline * Math.Clamp(ground, 0.5f, 5f)));
+                : MathF.Cos(PolarFromLatitude * MathF.PI / 180f) / MathF.Max(0.0025f, MathF.Cos(seedLatitude * MathF.PI / 180f));
+            baseline = Math.Max(MinimumProvinceCells + 6, (int)MathF.Round(baseline * Math.Clamp(ground, 0.5f, 200f)));
             // Keep neighbouring provinces recognisably different without turning
             // their borders into tendrils.  The resulting cells are a relaxed,
             // irregular Voronoi-like layer: mostly convex, occasionally elongated,
@@ -250,8 +259,11 @@ public sealed class ProvinceTopology
                     var dx = Math.Abs(nextX - seedX);
                     dx = Math.Min(dx, width - dx);
                     var dy = y + oy - seedY;
-                    var localX = dx * MathF.Sign(nextX - seedX == 0 ? 1 : nextX - seedX);
+                    float localX = dx * MathF.Sign(nextX - seedX == 0 ? 1 : nextX - seedX);
                     if (Math.Abs(nextX - seedX) > width / 2) localX = -localX;
+                    // Over the ground: near a pole many cells of longitude are one step east.
+                    var cellGround = rowGround[y + oy];
+                    localX *= cellGround;
                     var localY = dy;
                     var major = localX * cos + localY * sin;
                     var minor = -localX * sin + localY * cos + major * skew;
@@ -260,7 +272,9 @@ public sealed class ProvinceTopology
                     // Low-amplitude coherent noise prevents repeated geometric cells.
                     // It is deliberately weaker than the elliptical distance field,
                     // keeping borders readable for front lines and selection.
-                    var coarseKey = (uint)((nextX / 3) * 73856093 ^ ((y + oy) / 3) * 19349663 ^ province * 83492791);
+                    // The noise cells are ground-sized too, or they would be thin wedges themselves.
+                    var noiseX = cellGround >= 1f ? nextX / 3 : (int)(nextX * cellGround / 3f);
+                    var coarseKey = (uint)(noiseX * 73856093 ^ ((y + oy) / 3) * 19349663 ^ province * 83492791);
                     var coarseNoise = ((int)(Hash(coarseKey) & 2047u) - 1024) * 2;
                     var fineNoise = (int)(Hash((uint)(next ^ province * 16777619)) & 2047u) - 1024;
                     var diagonalPenalty = ox != 0 && oy != 0 ? (int)((shapeHash >> 8) & 85u) : 0;
@@ -487,8 +501,27 @@ public sealed class ProvinceTopology
     /// before it is baked to provinces.png. IDs, political/state borders and one seed
     /// pixel per province remain fixed; only internal tactical borders are relaxed.
     /// </summary>
+    /// <summary>
+    /// How much ground a cell of longitude is on each row, against a cell of latitude: one below
+    /// PolarShapeFromLatitude (the shapes the world was cut with), eased into the true cosine of the
+    /// latitude over the next fifteen degrees, so no line of latitude shows where the rule changes.
+    /// </summary>
+    private static float[] RowGround(int width, int height)
+    {
+        var rows = new float[height];
+        for (var row = 0; row < height; row++)
+        {
+            var latitude = MathF.Abs(90f - (row + 0.5f) * 180f / height);
+            var toGround = width < WorldRasterWidth ? 0f : Math.Clamp((latitude - PolarShapeFromLatitude) / 15f, 0f, 1f);
+            toGround = toGround * toGround * (3f - 2f * toGround);
+            rows[row] = 1f + (MathF.Cos(latitude * MathF.PI / 180f) - 1f) * toGround;
+        }
+        return rows;
+    }
+
     public ProvinceTopology RelaxShapes(ushort[] states, ushort[] control, int iterations = 3)
     {
+        var rowGround = RowGround(Width, Height);
         if (states.Length != CellToProvince.Length || control.Length != states.Length)
             throw new ArgumentException("Political rasters must match province topology.");
         iterations = Math.Clamp(iterations, 0, 16);
@@ -540,11 +573,11 @@ public sealed class ProvinceTopology
                 if (!boundary || count == 1) continue;
 
                 var best = province;
-                var bestCost = ShapeCost(province, x, y, cosines, sines, ratios, skews);
+                var bestCost = ShapeCost(province, x, y, cosines, sines, ratios, skews, rowGround);
                 for (var index = 1; index < count; index++)
                 {
                     var candidate = candidates[index];
-                    var cost = ShapeCost(candidate, x, y, cosines, sines, ratios, skews);
+                    var cost = ShapeCost(candidate, x, y, cosines, sines, ratios, skews, rowGround);
                     if (cost < bestCost || Math.Abs(cost - bestCost) < 0.001f && candidate < best)
                     {
                         best = candidate;
@@ -565,7 +598,8 @@ public sealed class ProvinceTopology
             centers, neighbors, Width, Height);
     }
 
-    private float ShapeCost(int province, int x, int y, float[] cosines, float[] sines, float[] ratios, float[] skews)
+    private float ShapeCost(int province, int x, int y, float[] cosines, float[] sines, float[] ratios, float[] skews,
+        float[] rowGround)
     {
         var seed = ProvinceCenterCell[province];
         var seedX = seed % Width;
@@ -574,11 +608,14 @@ public sealed class ProvinceTopology
         if (dx > Width / 2) dx -= Width;
         else if (dx < -Width / 2) dx += Width;
         var dy = y - seedY;
-        var major = dx * cosines[province] + dy * sines[province];
-        var minor = -dx * sines[province] + dy * cosines[province] + major * skews[province];
+        // Over the ground, as the province was grown (RowGround).
+        var across = dx * rowGround[y];
+        var major = across * cosines[province] + dy * sines[province];
+        var minor = -across * sines[province] + dy * cosines[province] + major * skews[province];
         var ratio = ratios[province];
         var distance = major * major / ratio + minor * minor * ratio;
-        var noiseKey = (uint)((x / 5) * 73856093 ^ (y / 5) * 19349663 ^ province * 83492791);
+        var noiseX = rowGround[y] >= 1f ? x / 5 : (int)(x * rowGround[y] / 5f);
+        var noiseKey = (uint)(noiseX * 73856093 ^ (y / 5) * 19349663 ^ province * 83492791);
         var noise = ((Hash(noiseKey) & 1023u) / 1023f - 0.5f) * 2.4f;
         return distance + noise;
     }

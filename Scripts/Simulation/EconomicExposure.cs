@@ -79,29 +79,40 @@ public static class EconomicExposure
         return Loc.Get("Imports of this good are split across more than one partner.");
     }
 
+    // ─── Scratch, reused across calls ──────────────────────────────────────────
+    // This function is asked for by every AI country every week (TryHedgeSupply),
+    // and each call used to allocate a fresh nested dictionary, a list, a supplier
+    // array per good and a LINQ ordering chain — 49 kB a call, 113 MB over a
+    // 60-day profile. The scratch is the pattern LogisticsCore and WarScoring
+    // already use: cleared per call, kept between them.
+    private static readonly Dictionary<Commodity, Dictionary<int, double>> Totals = new();
+    private static readonly List<Row> Rows = new();
+    private static Row[] _result = Array.Empty<Row>();
+
     public static Row[] Read(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return Array.Empty<Row>();
+        foreach (var inner in Totals.Values) inner.Clear();
+        Totals.Clear();
+        Rows.Clear();
         // One attribution pass, not a filtered route array and a GroupBy for every good.
         // Keep double accumulators: LINQ Sum(float selector) also sums in double before
         // rounding once to float. Float += here would silently change supplier ties.
-        var totals = new Dictionary<Commodity, Dictionary<int, double>>();
         if (campaign.TradeRoutesDay >= 0)
             foreach (var route in TradeNetwork.RoutesTouching(campaign, nation.Id))
             {
                 if (route.BuyerId != nation.Id || route.SellerId == nation.Id ||
                     campaign.NationById(route.SellerId) is null || !float.IsFinite(route.Volume) || route.Volume <= 0) continue;
-                if (!totals.TryGetValue(route.Commodity, out var sellers))
-                    totals[route.Commodity] = sellers = new Dictionary<int, double>();
+                if (!Totals.TryGetValue(route.Commodity, out var sellers))
+                    Totals[route.Commodity] = sellers = new Dictionary<int, double>();
                 sellers[route.SellerId] = sellers.GetValueOrDefault(route.SellerId) + route.Volume;
             }
-        var rows = new List<Row>();
         foreach (var quote in nation.Market.Values)
         {
             if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
                 !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
-            var suppliers = Array.Empty<Supplier>();
-            if (totals.TryGetValue(quote.Commodity, out var sellers))
+            Supplier[] suppliers = null;
+            if (Totals.TryGetValue(quote.Commodity, out var sellers))
             {
                 suppliers = new Supplier[sellers.Count];
                 var at = 0;
@@ -110,14 +121,27 @@ public static class EconomicExposure
             }
             // Same sorted float inputs and double accumulation as the former LINQ sum.
             double named = 0;
-            foreach (var supplier in suppliers) named += supplier.Volume;
-            rows.Add(new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
-                Math.Max(0, quote.Imports - (float)named), suppliers));
+            if (suppliers is not null)
+                foreach (var supplier in suppliers) named += supplier.Volume;
+            Rows.Add(new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
+                Math.Max(0, quote.Imports - (float)named), suppliers ?? Array.Empty<Supplier>()));
         }
         // Preserve stable ordering even for hand-authored markets with duplicate goods.
-        return rows.OrderByDescending(r => r.LargestDemandShare).ThenByDescending(r => r.ImportShare)
-            .ThenBy(r => r.Good).ToArray();
+        if (_result.Length < Rows.Count) _result = new Row[Rows.Count];
+        for (var index = 0; index < Rows.Count; index++) _result[index] = Rows[index];
+        Array.Sort(_result, RowOrder);
+        Array.Resize(ref _result, Rows.Count);
+        return _result;
     }
+
+    private static readonly Comparison<Row> RowOrder = (left, right) =>
+    {
+        var byShare = right.LargestDemandShare.CompareTo(left.LargestDemandShare);
+        if (byShare != 0) return byShare;
+        byShare = right.ImportShare.CompareTo(left.ImportShare);
+        if (byShare != 0) return byShare;
+        return left.Good.CompareTo(right.Good);
+    };
 
     private static readonly IComparer<Supplier> SupplierOrder = Comparer<Supplier>.Create((left, right) =>
     {
