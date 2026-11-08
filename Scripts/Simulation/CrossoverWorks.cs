@@ -105,7 +105,6 @@ public sealed partial class Campaign
                 var owner=Nations.Find(n=>n.MapIndex==oldState.NationMapIndex);
                 if (owner is not null) {
                     var def=BuildingCatalog.Get(work.Building);
-                    owner.Gdp=Math.Max(.01f,owner.Gdp-def.GdpGain);
                     owner.ConstructionCapacity=Math.Max(0,owner.ConstructionCapacity-def.CapacityGain);
                 }
             }
@@ -172,11 +171,12 @@ public sealed partial class Campaign
         if(n.Treasury<def.Cost) return $"{n.Name} needs ${def.Cost:0.00}B treasury to commission this site.";
         n.Treasury-=def.Cost;
         s.Buildings[building]=s.Buildings.GetValueOrDefault(building)+1;
-        n.Gdp+=def.GdpGain; n.ConstructionCapacity+=def.CapacityGain;
+        // No GDP step: the market counts the building's output from next week (ConstructionSystem.Complete).
+        n.ConstructionCapacity+=def.CapacityGain;
         if (building==BuildingKind.Hospital) s.StandardOfLiving=Math.Clamp(s.StandardOfLiving+.018f,0,1);
         CrossoverWorks.Add(new() {Id=id,Province=province,State=s.MapIndex,Nation=n.Id,Building=building,
             X=x,Y=y,Z=z,Active=true,Blocks=selected.Select(v=>CrossoverCellKey(v.x,v.y,v.z)).ToArray()});
-        RecordCrossover(new(ElapsedHours,province,"construction",0,def.GdpGain,
+        RecordCrossover(new(ElapsedHours,province,"construction",0,0,
             $"{def.Name} commissioned in {s.Name}; ${def.Cost:0.00}B paid, +1 real regional building."));
         MarkStrategicChange();
         return "";

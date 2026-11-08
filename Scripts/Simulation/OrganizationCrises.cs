@@ -17,7 +17,7 @@ public sealed partial class Defines
     /// bargains before the vote on leaving, and how much the organisation's cohesion bleeds each
     /// week meanwhile. 0 days: members walk out at once, as before.
     /// </summary>
-    public int OrganizationCrisisDays { get; set; } = 0;
+    public int OrganizationCrisisDays { get; set; } = 180;
     public float OrganizationCrisisCohesionDrain { get; set; } = 0.006f;
     /// <summary>A crisis only in an organisation of at least this many members; a pair simply parts.</summary>
     public int OrganizationCrisisMinimumMembers { get; set; } = 3;

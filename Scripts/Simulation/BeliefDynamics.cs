@@ -60,7 +60,7 @@ public static class BeliefDynamics
             destination.Radicalism = Mean(destination.Radicalism, source.Radicalism);
             destination.Size = count; source.Size -= moved; changed += moved;
         }
-        if (changed > 0) campaign.MovementPeople.Week = -1;
+        if (changed > 0) campaign.MovementPeople.Day = -1;
         return changed;
     }
 

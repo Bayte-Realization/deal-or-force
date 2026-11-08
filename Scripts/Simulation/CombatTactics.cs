@@ -18,6 +18,35 @@ namespace DealOrForce.Simulation;
 /// way <see cref="Warfare"/>'s fortune is: a seed replays its war exactly, and no random
 /// state advances, so isolation holds to the bit. With the define off every multiplier
 /// is exactly one and the arithmetic is the old arithmetic.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how to add a manoeuvre to the book:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// The book lives in code, not in data — each manoeuvre is a `CombatTactic` record
+/// in the `All` array below, with nine fields:
+///
+///   • Id         — unique, used by the counter-cycle and the report.
+///   • Name       — shown in the battle dossier's "Manoeuvres: X vs Y" line.
+///   • Description— shown in the dossier tooltip; one sentence of what it looks like.
+///   • Attack     — multiplier on this side's fire that day (1.0 = no change).
+///   • Defence    — multiplier on this side's protection (1.0 = no change).
+///   • OrgDamage  — multiplier on the organisation damage this side DEALS.
+///   • EnemyAttack— multiplier on the ENEMY's fire (a feint lowers it below 1.0).
+///   • EnemyDefence— multiplier on the ENEMY's footing (encirclement stretches it).
+///   • CounterId  — which manoeuvre this one beats (gets the bonus define). Null = none.
+///   • BaseWeight — how often it comes up when no army composition pulls either way.
+///
+/// The weight is then pushed by <see cref="CombatTactics.Weights"/> — a pure function
+/// of armour, entrenchment, organisation, axes of attack, terrain and planning. If you
+/// want your manoeuvre to show up only in mountains, add a `case` there. If you want
+/// it to counter an existing one, set CounterId to that tactic's Id — the counter bonus
+/// is defined by `CombatCounterTacticBonus` in `game/common/defines/`.
+///
+/// With `CombatTacticsEnabled` set to false (a define), every multiplier is one and
+/// the arithmetic is exactly the old arithmetic — your mod can ship with tactics off
+/// until you've balanced them.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public sealed record CombatTactic(string Id, string Name, string Description, float Attack, float Defence,
     float OrgDamage, float EnemyAttack, float EnemyDefence, string CounterId, float BaseWeight)

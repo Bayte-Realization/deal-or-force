@@ -250,6 +250,31 @@ public partial class DealOrForceGame
             }
         }
 
+        // ---- forces far away: the selected formations flown and shipped here, where no march goes.
+        var chosen = _selectedArmies.Where(a => a.NationId == player.Id && _campaign.Armies.Contains(a)).ToList();
+        if (chosen.Count > 0 && pick.ProvinceId > 0)
+        {
+            Section("OUR SELECTED FORCES");
+            var why = Expeditions.AirliftRefusal(_campaign, player, chosen[0], pick.ProvinceId);
+            var days = chosen.Max(a => Expeditions.Quote(_campaign, a, pick.ProvinceId).Days);
+            var cost = chosen.Sum(a => Expeditions.Quote(_campaign, a, pick.ProvinceId).Cost);
+            Action("military", Simulation.Loc.Format("Fly and ship {0} formation(s) here", chosen.Count), () =>
+            {
+                var moved = 0;
+                foreach (var army in chosen)
+                {
+                    var order = new ExpeditionCommand { IssuerId = player.Id, ArmyId = army.Id, Action = Expeditions.Airlift, TargetId = pick.ProvinceId };
+                    _campaign.Commands.Enqueue(order);
+                    _campaign.Commands.ApplyAll(_campaign);
+                    if (order.Done) moved++;
+                }
+                SetArmyFeedback(Simulation.Loc.Format("{0} formation(s) on their way by air and sea: ready in {1} day(s).", moved, days));
+                CloseProvinceCard();
+            }, why, Simulation.Loc.Format(
+                "By air and sea, where no march goes - an exclave, an ally across the water, a base abroad: {0} day(s) out of action and {1}. They arrive unready to attack.",
+                days, Fmt.Money(cost)));
+        }
+
         var foreign = other;
         if (foreign is not null && foreign.Movement is null)
         {
@@ -277,6 +302,39 @@ public partial class DealOrForceGame
                 Action("drone", "Send reconnaissance flights here", () => { ReconFromMenu(flight); CloseProvinceCard(); },
                     flight is null ? Tr("No aircraft or drone of ours that can fly reconnaissance reaches this province.") : "");
             }
+            // Volunteers: our formations under their flag in their war, while we stay at peace.
+            if (!atWar && _campaign.Wars.Any(w => !w.Ended && w.Involves(foreign.Id)))
+            {
+                var host = foreign;
+                var refusal = chosen.Count == 0 ? Tr("Select the divisions to send first.") : Expeditions.VolunteerRefusal(_campaign, player, host);
+                Action("military", Simulation.Loc.Format("Send {0} formation(s) as volunteers", chosen.Count), () =>
+                {
+                    var sent = 0;
+                    foreach (var army in chosen)
+                    {
+                        var order = new ExpeditionCommand { IssuerId = player.Id, ArmyId = army.Id, Action = Expeditions.Volunteer, TargetId = host.Id };
+                        _campaign.Commands.Enqueue(order);
+                        _campaign.Commands.ApplyAll(_campaign);
+                        if (order.Done) sent++;
+                    }
+                    _selectedArmies.Clear();
+                    SetArmyFeedback(Simulation.Loc.Format("{0} formation(s) leave to fight for {1}. They come home when its war ends.", sent, host.DisplayName));
+                    CloseProvinceCard();
+                }, refusal, Simulation.Loc.Format(
+                    "Our divisions fight under {0}'s flag and command until its war ends; we stay at peace. {0} will remember it - and so will everyone it fights. Costs {1:0} political credit.",
+                    host.DisplayName, _campaign.Defines.VolunteerPoliticalCost));
+            }
+            var ourVolunteers = _campaign.Armies.Where(a => a.LentById == player.Id && a.NationId == foreign.Id).ToList();
+            if (ourVolunteers.Count > 0)
+                Action("military", Simulation.Loc.Format("Call our volunteers home ({0})", ourVolunteers.Count), () =>
+                {
+                    foreach (var army in ourVolunteers)
+                    {
+                        _campaign.Commands.Enqueue(new ExpeditionCommand { IssuerId = player.Id, ArmyId = army.Id, Action = Expeditions.Recall });
+                        _campaign.Commands.ApplyAll(_campaign);
+                    }
+                    CloseProvinceCard();
+                }, help: Tr("Formations in battle finish it first."));
             if (region is not null)
                 Action("unrest", "Disputes over this region", () => { CloseProvinceCard(); _territoryRegion = region.MapIndex; _conflictTab = 3; OpenScreen("Conflicts"); });
             AddCovertCardActions(foreign, region, Section, Action);

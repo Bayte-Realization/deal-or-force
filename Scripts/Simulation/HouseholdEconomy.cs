@@ -110,6 +110,23 @@ public static class HouseholdEconomy
     /// combining socioeconomic conditions with <see cref="DemographicCycle"/> age structure.
     /// When <paramref name="netBreakdown"/> is supplied, records each signed contribution.
     /// </summary>
+    /// <summary>
+    /// How well a region's hospitals cover it: beds per million people, with a diminishing
+    /// return, times the share of the medicine it wants that the market delivered. A hospital
+    /// with no pharmaceuticals saves nobody.
+    /// </summary>
+    public static float HospitalCover(ScenarioState s, int hospitals, float medicine)
+    {
+        var capacity = hospitals / Math.Max(.1f, s.Population / 1e6f);
+        return capacity / (1f + capacity) * medicine;
+    }
+
+    /// <summary>The share of a region's deaths full hospital cover prevents.</summary>
+    public const float HospitalDeathRelief = .25f;
+
+    /// <summary>How much of the medicine it wants a country's market delivered last week.</summary>
+    public static float MedicineSupply(Nation n) => Supply(n, Commodity.Pharmaceuticals);
+
     public static (float BirthAnnual, float DeathAnnual, float OldAgeBurden) VitalRates(
         Campaign c, Nation n, ScenarioState s, Breakdown netBreakdown = null)
     {
@@ -120,8 +137,7 @@ public static class HouseholdEconomy
         var medicine = Supply(n, Commodity.Pharmaceuticals);
         var coverage = food * .6f + energy * .25f + medicine * .15f;
         var scarcity = Math.Max(0f, 1f - coverage - c.Defines.ScarcityTolerance);
-        var healthCapacity = s.Buildings.GetValueOrDefault(BuildingKind.Hospital) / Math.Max(.1f, s.Population / 1e6f);
-        var health = healthCapacity / (1f + healthCapacity) * medicine;
+        var health = HospitalCover(s, s.Buildings.GetValueOrDefault(BuildingKind.Hospital), medicine);
 
         var baseBirth = c.Defines.DemographyBirthBaseAnnual;
         var lowLitBirth = (1f - s.Literacy) * c.Defines.DemographyLowLiteracyBirthAnnual;
@@ -171,7 +187,7 @@ public static class HouseholdEconomy
 
         var preHealthDeath = Math.Clamp(baseDeath + povertyDeath + shortageDeath + warDeath +
             famineSpike + winterExposureDeath + epidemicDeath + violenceDeath, 0f, .08f);
-        var hospitalRelief = preHealthDeath * health * .25f;
+        var hospitalRelief = preHealthDeath * health * HospitalDeathRelief;
         var postHealthDeath = preHealthDeath - hospitalRelief;
         var mortalityFactor = c.Defines.DemographyAgeStructureEnabled ? DemographicCycle.MortalityFactor(s, c.Defines) : 1f;
         var oldAgeDeathEffect = postHealthDeath * (mortalityFactor - 1f);

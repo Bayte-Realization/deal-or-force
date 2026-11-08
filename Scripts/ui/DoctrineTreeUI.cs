@@ -24,8 +24,9 @@ public partial class DealOrForceGame
     /// <summary>A node of a page that must survive a refresh: a canvas is not a row.</summary>
     private const string KeepOnRefresh = "keep_on_policy_refresh";
 
-    private const float DoctrineCardWidth = 336;
-    private const float DoctrineCardHeight = 168;
+    private float DoctrineCardWidth => DoctrineUnits(Ui.Metric("doctrine.card_width_pixels", 380));
+    private float DoctrineCardHeight => DoctrineUnits(MathF.Max(Ui.Metric("doctrine.card_height_pixels", 208),
+        136 + (TacticalDoctrineCatalog.Find(_doctrineBook)?.Nodes.Max(node => node.Modifiers.Count) ?? 0) * 16));
     private const float DoctrineColumnGap = 84;
     private const float DoctrineRowGap = 24;
 
@@ -160,7 +161,9 @@ public partial class DealOrForceGame
             var track = TacticalDoctrines.TrackFor(n, branch);
             var written = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal)
                 ? track.Known.Count : 0;
-            var inForce = string.Equals(TacticalDoctrines.BookOn(n, branch.Slot)?.Id, id, StringComparison.Ordinal);
+            var shelf = n.TacticalDoctrine.Track(branch.Slot);
+            var inForce = string.Equals(TacticalDoctrines.BookOn(n, branch.Slot)?.Id, id, StringComparison.Ordinal)
+                || string.Equals(shelf.Companion?.Branch, id, StringComparison.Ordinal);
             _doctrineBookSelect.SetItemText(bookIndex, Loc.Format("{0}: {1} · {2}/{3}{4}",
                 Tr(DoctrineSlots.Name(branch.Slot)), Tr(branch.Name), written, branch.Nodes.Count,
                 inForce ? " ✓" : ""));
@@ -233,6 +236,11 @@ public partial class DealOrForceGame
         _doctrineBook = id;
         _doctrineStructure = "";
         ResetDoctrineZoom();
+        if (_doctrineScroll is not null)
+        {
+            _doctrineScroll.ScrollHorizontal = 0;
+            _doctrineScroll.ScrollVertical = 0;
+        }
         RedrawDoctrinePage();
     }
 
@@ -243,6 +251,7 @@ public partial class DealOrForceGame
     private void RebuildDoctrineTree(Nation n, DoctrineBranch branch)
     {
         var structure = _doctrineBook + "|" + TacticalDoctrineCatalog.Revision + "|" + Loc.Language + "|" +
+            DoctrineCardWidth + "x" + DoctrineCardHeight + "|" +
             string.Join(',', branch.Nodes.Select(node => node.Id));
         if (structure == _doctrineStructure && _doctrineCards.Count == branch.Nodes.Count) return;
         _doctrineStructure = structure;
@@ -291,6 +300,7 @@ public partial class DealOrForceGame
         _doctrineTree.Scale = Vector2.One * _doctrineZoom;
         _doctrineViewport.CustomMinimumSize = extent * _doctrineZoom;
         _doctrineTree.QueueRedraw();
+        FitDoctrineTypography(_doctrineTree);
     }
 
     /// <summary>Column by how deep a prerequisite chain runs, row by order within the column.</summary>
@@ -343,19 +353,28 @@ public partial class DealOrForceGame
                 string.Equals(track?.LearningNode, node.Id, StringComparison.Ordinal);
             var missing = node.Requires.Where(need => !inForce || !track.Known.Contains(need))
                 .Select(need => Tr(branch.Find(need)?.Name ?? need)).ToArray();
+            var alternative = node.Excludes.Select(id => Tr(branch.Find(id)?.Name ?? id)).ToArray();
+            var excluded = inForce ? node.Excludes.FirstOrDefault(track.Known.Contains) : null;
+            card.TooltipText = Ui.Tip(Tr(node.Description) + (alternative.Length > 0
+                ? "\n\n" + Loc.Format("Alternative to: {0}", string.Join(", ", alternative)) : ""));
 
             var state = body.GetNodeOrNull<Label>("State_" + node.Id);
             if (state is not null)
             {
                 state.Text = known ? Loc.Get("in force")
                     : learning ? Loc.Format("being learned · {0} days left", left)
+                    : excluded is not null ? Loc.Get("locked by chosen subdoctrine")
                     : !inForce ? ((track?.Branch.Length ?? 0) > 0
                         ? Loc.Get("another book is in force")
                         : Loc.Get("not started"))
                     : missing.Length > 0 ? Loc.Format("waits on {0}", string.Join(", ", missing))
-                    : Loc.Get("ready to study");
+                    : alternative.Length > 0 ? Loc.Get("choose one subdoctrine") : Loc.Get("ready to study");
+                state.TooltipText = excluded is not null
+                    ? Ui.Tip(Loc.Format("This subdoctrine excludes {0}.", Tr(branch.Find(excluded).Name)))
+                    : alternative.Length > 0
+                        ? Ui.Tip(Loc.Format("Alternative to: {0}", string.Join(", ", alternative))) : "";
                 state.AddThemeColorOverride("font_color", Ui.Colour(known ? "state.positive"
-                    : learning ? "text.accent" : missing.Length > 0 ? "state.warning" : "text.caption"));
+                    : learning ? "text.accent" : excluded is not null || missing.Length > 0 ? "state.warning" : "text.caption"));
             }
             var title = body.GetNodeOrNull<Label>("Title_" + node.Id);
             if (title is not null)
@@ -393,7 +412,8 @@ public partial class DealOrForceGame
             var rush = row?.GetNodeOrNull<Button>("RushArticle_" + node.Id);
             if (rush is not null)
                 DoctrineButton(rush, n, branch, node, true, known, learning,
-                    Loc.Format("At once · {0}", Fmt.Number(node.RushCost)));
+                    Loc.Format("Rush · {0}", Fmt.Number(node.RushCost)));
+            FitDoctrineTypography(card);
             var cardSize = new Vector2(DoctrineCardWidth, DoctrineCardHeight);
             card.CustomMinimumSize = cardSize;
             card.Size = cardSize;
@@ -441,8 +461,8 @@ public partial class DealOrForceGame
         {
             Name = "Title_" + node.Id,
             Text = Tr(node.Name),
-            AutowrapMode = TextServer.AutowrapMode.Off,
-            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming,
             CustomMinimumSize = new Vector2(140, 0),
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
@@ -450,7 +470,7 @@ public partial class DealOrForceGame
         title.AddThemeColorOverride("font_color", Ui.Colour("text.bright"));
         title.SetMeta(LocSourceMeta, node.Name);
         title.SetMeta(LocAppliedMeta, title.Text);
-        title.ClipText = true;
+        title.ClipText = false;
         body.AddChild(title);
 
         // What it gives, written out: the numbers are the whole reason to read a book.
@@ -473,7 +493,10 @@ public partial class DealOrForceGame
         }
 
         var price = Fixed(Title("", 12, Ui.Colour("text.body")));
-        price.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        price.TextOverrunBehavior = TextServer.OverrunBehavior.NoTrimming;
+        price.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        price.ClipText = false;
+        price.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         price.Name = "Price_" + node.Id;
         body.AddChild(price);
 

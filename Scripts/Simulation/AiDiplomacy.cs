@@ -171,9 +171,14 @@ public static partial class AiStatecraft
             TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
 
         if (relation.Stance != DiplomaticStance.Allied && opinion >= allianceThreshold &&
-            AllianceSystem.CanPropose(campaign, nation, friend, out _))
+            !InternationalOrganizations.DefencePartners(campaign, nation.Id).Contains(friend.Id) &&
+            AllianceSystem.CanPropose(campaign, nation, friend, out _) &&
+            AllianceSystem.Willingness(campaign, nation, friend, refreshAssessment: false) > defines.AllianceWillingness &&
+            (friend.IsHuman || AllianceSystem.Willingness(campaign, friend, nation, refreshAssessment: false) > defines.AllianceWillingness))
         {
-            // Human recipients get a real offer; an AI recipient may refuse it.
+            // Ask only when the commitment benefits us and does not duplicate a defence
+            // charter. An AI recipient uses the same acceptance score as a player offer;
+            // a human recipient keeps their own decision, even when that score is low.
             AllianceSystem.Propose(campaign, nation, friend, out _);
             Count("alliance_offered");
             return true;
@@ -303,7 +308,7 @@ public static partial class AiStatecraft
             if (state is null || state.Population <= 0 || state.NationMapIndex == buyer.MapIndex) continue;
             // The day's own index rather than a linear search of every country in the world for
             // every region on the border.
-            var owner = ByMapIndex(state.NationMapIndex);
+            var owner = ByMapIndex(campaign, state.NationMapIndex);
             if (owner is null || owner.Id == buyer.Id || owner.Movement is not null) continue;
             if (state.MapIndex == owner.CapitalStateMapIndex) continue;
             if (CampaignDiplomacy.AtWar(campaign, buyer.Id, owner.Id)) continue;

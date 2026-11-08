@@ -33,28 +33,37 @@
     "demand": { "CivilianIndustry": 0.105, "ArmsIndustry": 0.12 }
   },
   "sulfur_chain": {
-    "good": "Sulfur", "output": { "deposit:Sulfur*extraction_efficiency": 1.0, "Refinery": 0.30 },
+    "good": "Sulfur", "output": { "deposit:Sulfur*extraction_efficiency": 1.0 },
     "demand": { "ChemicalPlant": 0.279, "ArmsIndustry": 0.116 }
+  },
+  // Sulphur recovered at refineries comes out of the crude they buy (00_chains oil_extraction).
+  "sulfur_from_refining": {
+    "good": "Sulfur", "output": { "Refinery": 0.30 },
+    "needs": { "Oil": 0.40 }
   },
   "steel_chain": {
     "good": "Steel", "output": { "Smelter": 2.0, "CivilianIndustry": 0.50 },
     "demand": { "CivilianIndustry": 0.077, "ArmsIndustry": 0.213, "Shipyard": 0.306 },
-    "needs": { "IronOre": 0.50, "Coal": 0.65, "Energy": 0.60 }
+    "needs": { "IronOre": 0.50, "Coal": 0.65, "Energy": 0.60, "Manganese": 0.60, "Chromium": 0.90, "ZincLead": 0.90, "Graphite": 0.95 }
   },
   "battery_chain": {
     "good": "Batteries", "output": { "ElectronicsPlant": 0.80, "CivilianIndustry": 0.35 },
     "demand": { "population*urbanization": 0.017, "CivilianIndustry": 0.028, "PowerPlant": 0.056 },
-    "needs": { "Lithium": 0.55, "Nickel": 0.75, "Cobalt": 0.85, "Copper": 0.75, "Energy": 0.70 }
+    "needs": { "Lithium": 0.55, "Nickel": 0.75, "Cobalt": 0.85, "Copper": 0.75, "Energy": 0.70, "Graphite": 0.80, "Manganese": 0.90 }
   },
+  // The chips any electronics industry makes for itself - memory, analogue, mature nodes. Cut to
+  // under a third of what it was when the foundries got their own recipe (foundry_semiconductors
+  // in 30_world_resources), so that the world's chips come from where they are really made:
+  // Taiwan about two-fifths of them, then China, Korea and the United States.
   "semiconductor_chain": {
-    "good": "Semiconductors", "output": { "ElectronicsPlant": 1.20, "CivilianIndustry": 0.35 },
+    "good": "Semiconductors", "output": { "ElectronicsPlant": 0.27, "CivilianIndustry": 0.08 },
     "demand": { "ElectronicsPlant": 0.796, "CivilianIndustry": 0.182, "ArmsIndustry": 0.318, "ResearchLab": 0.455 },
-    "needs": { "Silica": 0.55, "Chemicals": 0.65, "Energy": 0.55 }
+    "needs": { "Silica": 0.55, "Chemicals": 0.65, "Energy": 0.55, "NobleGases": 0.85, "Gallium": 0.90, "Tin": 0.95 }
   },
   "motor_vehicle_chain": {
     "good": "MotorVehicles", "output": { "CivilianIndustry": 0.65 },
     "demand": { "population*urbanization": 0.027, "raw:Infrastructure": 0.015 },
-    "needs": { "Steel": 0.60, "Rubber": 0.65, "Batteries": 0.85, "Semiconductors": 0.75 }
+    "needs": { "Steel": 0.60, "Rubber": 0.65, "Batteries": 0.85, "Semiconductors": 0.75, "PlatinumMetals": 0.85, "Plastics": 0.90 }
   },
   "ammunition_chain": {
     "good": "Ammunition", "output": { "ArmsIndustry": 1.50 },
@@ -63,7 +72,7 @@
   "precision_component_chain": {
     "good": "PrecisionComponents", "output": { "ElectronicsPlant": 0.65, "CivilianIndustry": 0.30 },
     "demand": { "CivilianIndustry": 0.133, "ArmsIndustry": 0.31, "ResearchLab": 0.354, "Shipyard": 0.221 },
-    "needs": { "Semiconductors": 0.55, "Copper": 0.75, "Aluminium": 0.75 }
+    "needs": { "Semiconductors": 0.55, "Copper": 0.75, "Aluminium": 0.75, "Gallium": 0.90, "AdvancedChips": 0.85 }
   },
   "strategic_ore_bill": { "good": "IronOre", "demand": { "Smelter": 0.605 } },
   "steel_energy_bill": { "good": "Coal", "demand": { "Smelter": 0.601 } },

@@ -1,0 +1,12 @@
+{
+  "Choose your own country or one of your direct subjects.": "Выберите свою страну или одну из своих прямых зависимых стран.",
+  "Country names must contain at most 96 printable characters.": "Название страны должно содержать не более 96 печатных символов.",
+  "Choose a flag sprite ID, not a file path.": "Выберите идентификатор изображения флага, а не путь к файлу.",
+  "Map colours must be written as #rgb or #rrggbb.": "Цвет на карте должен быть записан как #rgb или #rrggbb.",
+  "The original map colour is invalid and cannot be restored.": "Исходный цвет на карте некорректен и не может быть восстановлен.",
+  "The current map colour is invalid and cannot be backed up.": "Текущий цвет на карте некорректен и не может быть сохранён для восстановления.",
+  "Custom flag designs must fit within 64 KiB.": "Данные собственного флага должны занимать не более 64 КиБ.",
+  "A custom flag must contain exactly one design in a flag_designs object.": "Собственный флаг должен содержать ровно один рисунок в объекте flag_designs.",
+  "The custom flag contains invalid or excessive design elements.": "Собственный флаг содержит некорректные элементы или превышает их допустимое количество.",
+  "Invalid custom flag design.": "Некорректный рисунок собственного флага."
+}

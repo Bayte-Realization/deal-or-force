@@ -22,6 +22,7 @@ public partial class DealOrForceGame
     {
         KeepMapSelection(delta);
         KeepFleetPanel(delta);
+        KeepHeadlinePopups(delta);
         KeepResourceAtlas(delta);
         _interfaceSinceRefresh += delta;
         if (_interfaceSinceRefresh < RunningInterfaceInterval)

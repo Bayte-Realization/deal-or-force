@@ -1,11 +1,20 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <AssemblyName>ExampleCSharpMod</AssemblyName>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Condition="'$(GameAssembly)' == ''">
     <ProjectReference Include="..\..\..\..\DealOrForce.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(GameAssembly)' != ''">
+    <Reference Include="DealOrForce">
+      <HintPath>$(GameAssembly)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckGameAssembly" BeforeTargets="ResolveReferences" Condition="'$(GameAssembly)' != '' and !Exists('$(GameAssembly)')">
+    <Error Text="GameAssembly must name the installed game's data_DealOrForce_windows_x86_64/DealOrForce.dll." />
+  </Target>
 </Project>

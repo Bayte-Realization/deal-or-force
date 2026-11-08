@@ -56,6 +56,9 @@ public static class StrategicDeploymentPlanner
                     ? Math.Clamp((int)MathF.Round(armies.Length * campaign.Defines.PeacetimeBorderDeploymentShare), 1, armies.Length)
                     : 0;
             var operationalPosts = activeWar is not null && front.Count > 0 ? front : border;
+            var exclavePosts = StrategicExclaves.EntryPosts(campaign, nation);
+            var exclaveReserves = Math.Min(exclavePosts.Count, Math.Min(
+                Math.Max(0, campaign.Defines.ExclaveInitialGarrisons), Math.Max(0, armies.Length - operationalCount - 1)));
 
             for (var index = 0; index < armies.Length; index++)
             {
@@ -64,6 +67,9 @@ public static class StrategicDeploymentPlanner
                     province = EvenlySpaced(operationalPosts, index, operationalCount, nation.MapIndex);
                 else if (index == armies.Length - 1 || homeland.Count == 1)
                     province = capital;
+                else if (index - operationalCount < exclaveReserves &&
+                    controllers[exclavePosts[index - operationalCount]] == nation.MapIndex)
+                    province = exclavePosts[index - operationalCount];
                 else
                     province = EvenlySpaced(homeland, index - operationalCount,
                         Math.Max(1, armies.Length - operationalCount), nation.MapIndex + 31);

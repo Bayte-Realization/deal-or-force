@@ -61,6 +61,11 @@ public static class SpriteCatalog
     }
 
     private static readonly Dictionary<string, Sprite> Sprites = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, string> Shaders = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Typed shader assets never enter the texture warm-up or picture pickers.</summary>
+    public static string ShaderOf(string name, string fallback = "") =>
+        name is not null && Shaders.TryGetValue(name, out var path) ? path : fallback;
 
     /// <summary>Raised whenever the table is rebuilt, so cached textures can be dropped.</summary>
     public static event Action Changed;
@@ -69,11 +74,23 @@ public static class SpriteCatalog
 
     public static IEnumerable<string> Names => Sprites.Keys;
 
+    /// <summary>
+    /// Whether a picture by this name exists - a file, a declaration, or a flag described in
+    /// common/flag_designs. A design is a sprite like any other, so the flag resolver, the
+    /// variant search and every list that asks "does this flag exist" find it without knowing
+    /// it was never a file.
+    /// </summary>
     public static bool Has(string name) =>
-        !string.IsNullOrEmpty(name) && Sprites.ContainsKey(name);
+        !string.IsNullOrEmpty(name) && (Sprites.ContainsKey(name) || FlagDesignCatalog.Has(name));
 
+    /// <summary>
+    /// A design outranks a picture of the same name: it was written on purpose, usually by a
+    /// mod or a player replacing exactly that flag. Its path is not a file but a
+    /// <see cref="FlagDesignCatalog.TexturePrefix"/> address the interface draws.
+    /// </summary>
     public static Sprite Get(string name) =>
-        !string.IsNullOrEmpty(name) && Sprites.TryGetValue(name, out var sprite)
+        FlagDesignCatalog.Has(name) ? new Sprite(FlagDesignCatalog.TexturePrefix + name, "", 1)
+        : !string.IsNullOrEmpty(name) && Sprites.TryGetValue(name, out var sprite)
             ? sprite
             : default;
 
@@ -92,6 +109,7 @@ public static class SpriteCatalog
     public static void Load()
     {
         Sprites.Clear();
+        Shaders.Clear();
         var root = GameDataLoader.DataFolder("gfx");
         if (root is not null) LoadTree(root, "res://game/gfx", null);
         Changed?.Invoke();
@@ -182,6 +200,18 @@ public static class SpriteCatalog
         }
 
         var body = root;
+        if (root.TryGetProperty("shaders", out var shaders) && shaders.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var entry in shaders.EnumerateObject())
+            {
+                if (entry.Value.ValueKind == JsonValueKind.Null) Shaders.Remove(entry.Name);
+                else if (entry.Value.ValueKind == JsonValueKind.String)
+                    Shaders[entry.Name] = GameDataLoader.ResolveAssetPath(entry.Value.GetString(), assetRoot);
+                else errors?.Add(origin + ": shader paths must be strings or null");
+            }
+            if (!root.TryGetProperty("sprites", out _) && !root.TryGetProperty("sprite_types", out _) &&
+                !root.TryGetProperty("spriteTypes", out _)) return;
+        }
         foreach (var envelope in new[] { "sprites", "sprite_types", "spriteTypes" })
             if (root.TryGetProperty(envelope, out var inner) && inner.ValueKind == JsonValueKind.Object)
             {

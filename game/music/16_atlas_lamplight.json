@@ -1,0 +1,8 @@
+{
+  "tracks": {
+    "atlas_lamplight": {
+      "file": "audio/atlas_lamplight.mp3", "label": "Atlas by lamplight",
+      "when": "campaign", "moods": ["calm", "recovery"], "weight": 1, "volume_db": 0
+    }
+  }
+}

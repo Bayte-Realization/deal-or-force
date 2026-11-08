@@ -81,10 +81,17 @@
     "demand": { "population": 0.435 }
   },
 
+  // Heavy industry runs on power, and buys it: a smelter mostly on the electricity that turns
+  // alumina into metal, chemical and electronics plants on process heat and clean rooms. They
+  // slowed when energy ran short (their recipes' needs) without ever asking for any, so a
+  // country could put up smelters on a grid that had nothing to spare and no market noticed.
   "energy_household": {
     "good": "Energy",
     "output": { "population": 0.53, "raw:Infrastructure": 2.00 },
-    "demand": { "population*income": 0.977, "population*urbanization*income": 0.615, "CivilianIndustry": 0.814 }
+    "demand": {
+      "population*income": 0.977, "population*urbanization*income": 0.615, "CivilianIndustry": 0.814,
+      "Smelter": 1.60, "ChemicalPlant": 0.80, "ElectronicsPlant": 0.60
+    }
   },
 
   "arms_workshops": {
@@ -98,10 +105,12 @@
     "demand": { "CivilianIndustry": 1.302, "PowerPlant": 2.129 }
   },
 
+  // A refinery burns crude: about half the value of what it makes (energy_from_refining,
+  // chemicals_from_refining, sulfur_from_refining) is the oil it bought.
   "oil_extraction": {
     "good": "Oil",
     "output": { "deposit:Oil*extraction_efficiency": 1.00 },
-    "demand": { "population": 0.13, "CivilianIndustry": 0.18, "Barracks": 0.22 }
+    "demand": { "population": 0.13, "CivilianIndustry": 0.18, "Barracks": 0.22, "Refinery": 1.00 }
   },
 
   "iron_mining": {
@@ -113,16 +122,21 @@
   // Eight countries have these and everyone's electronics need them. Raise the demand and
   // the one good with a genuinely lopsided geography becomes leverage; lower it and the
   // world makes thirteen times what it uses, which is where this started.
+  // An electronics plant buys them in proportion to the electronics it makes, a little under
+  // the general factories' rate per unit; until November 2026 it only slowed without them.
   "rare_earth_mining": {
     "good": "RareEarths",
     "output": { "deposit:RareEarths*extraction_efficiency": 1.00 },
-    "demand": { "CivilianIndustry": 1.05, "ArmsIndustry": 0.35 }
+    "demand": { "CivilianIndustry": 1.05, "ArmsIndustry": 0.35, "ElectronicsPlant": 0.75 }
   },
 
   "machinery_manufacture": {
     "good": "Machinery",
     "output": { "CivilianIndustry": 1.45, "urbanization": 0.25 },
-    "demand": { "raw:ExtractionIndustry": 0.408, "Agriculture": 0.109 }
+    "demand": { "raw:ExtractionIndustry": 0.408, "Agriculture": 0.109 },
+    // Cutting tools are tungsten carbide and industrial diamond: short of either, the
+    // machine shops slow rather than stop.
+    "needs": { "Tungsten": 0.90, "Diamonds": 0.95 }
   },
 
   "energy_generation": {
@@ -161,7 +175,8 @@
     "good": "NaturalGas",
     "output": { "deposit:NaturalGas*extraction_efficiency": 1.00 },
     "demand": {
-      "population": 0.175, "PowerPlant": 0.836, "ChemicalPlant": 1.415, "CivilianIndustry": 0.216
+      "population": 0.175, "PowerPlant": 0.836, "ChemicalPlant": 1.415, "CivilianIndustry": 0.216,
+      "Refinery": 0.20
     }
   },
 
@@ -197,10 +212,10 @@
   "chemical_industry": {
     "good": "Chemicals",
     "output": {
-      "CivilianIndustry": 0.62, "ChemicalPlant": 3.10, "Refinery": 0.80,
+      "CivilianIndustry": 0.62, "ChemicalPlant": 3.10,
       "deposit:Oil*extraction_efficiency": 0.14, "deposit:NaturalGas*extraction_efficiency": 0.16
     },
-    "needs": { "Energy": 0.70 },
+    "needs": { "Energy": 0.70, "PlatinumMetals": 0.95 },
     "demand": {
       "CivilianIndustry": 0.425, "ArmsIndustry": 0.68, "ElectronicsPlant": 0.822, "Agriculture": 0.142
     }
@@ -211,7 +226,8 @@
     "output": {
       "Agriculture": 0.86, "ChemicalPlant": 1.25, "deposit:NaturalGas*extraction_efficiency": 0.14
     },
-    "needs": { "Chemicals": 0.68 },
+    // Potash is the third of nitrogen, phosphate and potassium: Canada, Russia and Belarus.
+    "needs": { "Chemicals": 0.68, "Potash": 0.70 },
     "demand": { "Agriculture": 0.78 }
   },
 
@@ -220,7 +236,7 @@
   "electronics_manufacture": {
     "good": "Electronics",
     "output": { "CivilianIndustry": 4.05, "ElectronicsPlant": 3.30 },
-    "needs": { "Energy": 0.70, "Chemicals": 0.68, "RareEarths": 0.62 },
+    "needs": { "Energy": 0.70, "Chemicals": 0.68, "RareEarths": 0.62, "Tin": 0.90, "Gold": 0.95 },
     "demand": {
       "population": 0.06, "population*urbanization": 0.17, "CivilianIndustry": 0.24,
       "ArmsIndustry": 0.36, "ResearchLab": 0.50
@@ -232,6 +248,8 @@
     "output": {
       "CivilianIndustry": 1.95, "population": 0.26, "deposit:Timber*timber_yield": 0.08
     },
+    // Woven from cotton: Xinjiang, Gujarat, Mato Grosso and Texas.
+    "needs": { "Cotton": 0.70 },
     "demand": { "population*income": 0.26, "population*standard_of_living*income": 0.22 }
   },
 
@@ -258,10 +276,23 @@
     "shortfall": { "Fertiliser": 0.74 }
   },
 
+  // What a refinery makes, each a recipe of its own so that crude oil scales the refinery's
+  // share and nothing else: the gas and uranium a country burns where it digs them up do not
+  // stop because its refineries are short of crude. A refinery cut off from oil keeps
+  // `needs` Oil of its output (the last of its stocks, other feedstocks), not all of it.
   "energy_from_refining": {
     "good": "Energy",
+    "output": { "Refinery": 2.30 },
+    "needs": { "Oil": 0.40 }
+  },
+  "chemicals_from_refining": {
+    "good": "Chemicals",
+    "output": { "Refinery": 0.80 },
+    "needs": { "Energy": 0.70, "Oil": 0.40 }
+  },
+  "energy_from_local_fuel": {
+    "good": "Energy",
     "output": {
-      "Refinery": 2.30,
       "deposit:NaturalGas*extraction_efficiency": 0.42,
       "deposit:Uranium*extraction_efficiency": 1.60
     }

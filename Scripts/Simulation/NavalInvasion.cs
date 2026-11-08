@@ -173,6 +173,10 @@ public static class NavalInvasion
     /// order and out of breath, and then one of two ordinary things happens: an undefended
     /// coast changes hands, or a battle starts.
     /// </summary>
+    /// <summary>Landings by outcome since the last clear - the --navy bench reads it.</summary>
+    public static readonly System.Collections.Generic.Dictionary<string, int> Tally = new();
+    private static void Count(string key) => Tally[key] = Tally.TryGetValue(key, out var n) ? n + 1 : 1;
+
     public static string Land(Campaign campaign, Fleet fleet, int provinceId)
     {
         var topology = campaign.ProvinceMap;
@@ -198,6 +202,7 @@ public static class NavalInvasion
             // asking again every hour for the rest of the campaign.
             fleet.Mission = FleetMission.Patrol;
             fleet.TargetProvinceId = -1;
+            Count("refused_neutral_shore");
             return $"not at war with {holder.Name}";
         }
 
@@ -225,6 +230,8 @@ public static class NavalInvasion
 
         fleet.Mission = FleetMission.Patrol;
         fleet.TargetProvinceId = -1;
+        Count(war is null ? "landed_friendly" : invader.IsHuman ? "assault_human" : "assault_ai");
+
         return war is null
             ? $"{landed.Count:N0} formation(s) put ashore"
             : Warfare.LandInvasion(campaign, war, provinceId, landed);

@@ -69,6 +69,8 @@ public sealed partial class GlobePresentation
         private Simulation.Campaign _campaign;
         private int _revision = -1;
         private bool _insignia;
+        private int _flags;
+        private double _flagPoll;
         private Texture2D _ring;
         private Texture2D _disc;
         private Texture2D _mark;
@@ -104,6 +106,13 @@ public sealed partial class GlobePresentation
             }
             Visible = true;
             var insignia = SettingsCatalog.Flag("movement_flags");
+            _flagPoll -= delta;
+            if (_flagPoll <= 0)
+            {
+                _flagPoll = .5;
+                var flags = FlagCatalog.VisualStateHash(campaign);
+                if (flags != _flags) { _flags = flags; _revision = -1; _roundels.Clear(); }
+            }
             if (!ReferenceEquals(campaign, _campaign) || campaign.MovementRevision != _revision || insignia != _insignia)
                 Rebuild(campaign, insignia);
 
@@ -315,7 +324,8 @@ public sealed partial class GlobePresentation
             // The same flag the interface flies for it - resolved by the flag catalogue, with
             // the provisional flag for a movement no artist has drawn yet. Looking only for
             // `flag_<tag>` left every such movement as a headquarters icon beside the others' flags.
-            var key = nation.Tag.ToLowerInvariant() + "|" + DealOrForceGame.FlagSpriteFor(nation.Tag);
+            var key = nation.Tag.ToLowerInvariant() + "|" + DealOrForceGame.FlagSpriteFor(nation.Tag) + "|" +
+                (DealOrForceGame.FlagTextureFor(nation.Tag)?.GetInstanceId() ?? 0);
             if (_roundels.TryGetValue(key, out var cached)) return cached;
             Texture2D made = null;
             if (DealOrForceGame.FlagTextureFor(nation.Tag) is { } flag)

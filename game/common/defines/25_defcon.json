@@ -1,0 +1,51 @@
+{
+  "DefconEnabled": true,
+  "DefconDeescalationDays": 21,
+  "DefconUpkeepMultiplier4": 1.05,
+  "DefconUpkeepMultiplier3": 1.15,
+  "DefconUpkeepMultiplier2": 1.35,
+  "DefconUpkeepMultiplier1": 1.75,
+  // World trade at DEFCON 2 and 1. 0.85 at 2 cut a tenth of the world's trade for as long as
+  // any two holders glared at each other; markets price the brink, not every standoff.
+  "DefconTradeConfidence2": 0.95,
+  "DefconTradeConfidence1": 0.80,
+  // Nuclear posture (NuclearPosture.cs): a holder's own alert, the same acts for every government.
+  // Changing it waits a month; raising it costs political credit.
+  "NuclearPostureCooldownDays": 30,
+  "NuclearPostureRaiseCost": 5,
+  // War support an enemy loses each week for each step of a holder's posture below 3.
+  "NuclearCoercionWarSupport": 0.004,
+  // A test: credit, a year between tests, and the tension it adds with every rival.
+  "NuclearTestCost": 15,
+  "NuclearTestCooldownDays": 365,
+  "NuclearTestTension": 15,
+  // The red telephone: tension removed, and the days before the next call.
+  "HotlineTension": 20,
+  "HotlineCooldownDays": 90,
+  // At DEFCON 2 and 1, the weekly chance of an incident nobody chose (Petrov, 1983).
+  "NuclearIncidentChance": 0.03,
+  "AiNuclearPosture": true,
+  "AiNuclearTestChance": 0.02,
+  "AiHotlineChance": 0.1,
+  // The last resort (NuclearPosture.Strike): only at DEFCON 1, only on the holder's own soil
+  // where the enemy stands strongest. Credit, a year between orders, the share of the men in the
+  // province it kills, the ruin it leaves, the war support it takes from the struck, the tension
+  // it adds with everybody not allied, and the year the world spends at the brink afterwards.
+  "NuclearStrikeCost": 25,
+  "NuclearStrikeCooldownDays": 365,
+  "NuclearStrikeLoss": 0.6,
+  "NuclearStrikeRuin": 0.5,
+  "NuclearStrikeWarSupport": 0.3,
+  "NuclearStrikeTension": 30,
+  "NuclearShadowDays": 365,
+  // A computer-run holder at DEFCON 1, losing on its own soil: the weekly chance it gives the order.
+  "AiNuclearStrikeChance": 0.1,
+  // The umbrella: attacking an ally of an alarmed holder costs this per step of its alert below 4.
+  "AiNuclearUmbrellaPrice": 1.0,
+  // The second strike: a holder whose forces were struck may answer, for this many days, on the
+  // striker's strongest force wherever it stands; the first user alone earns the notoriety that
+  // carries the world's sanctions votes; a computer-run holder answers by this weekly chance.
+  "NuclearRetaliationDays": 60,
+  "NuclearFirstUseNotoriety": 40,
+  "AiNuclearRetaliationChance": 0.5
+}

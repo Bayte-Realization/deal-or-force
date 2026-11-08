@@ -7,13 +7,8 @@ namespace DealOrForce.Simulation;
 // formations that are.
 public static partial class Warfare
 {
-    // Scratch for the split, reused by every battle on every day rather than allocated
-    // per side per battle. Cleared before each use.
-    private static readonly List<Army> LineCandidates = new();
-    private static readonly List<Army> AttackerLine = new();
-    private static readonly List<Army> AttackerReserve = new();
-    private static readonly List<Army> DefenderLine = new();
-    private static readonly List<Army> DefenderReserve = new();
+    // The line, the reserve and the candidates live on the campaign's battle buckets.
+    // This split clears and refills those lists; it does not allocate a fresh one per side.
 
     /// <summary>
     /// Splits one side into the formations that fit the ground and the ones that wait

@@ -31,7 +31,7 @@ public partial class LoadingScreen : Control
     private TextureRect _logo;
     private Panel _logoPlate;
     private TextureRect _paper;
-    public bool CanDismiss => _dismiss is { Visible: true };
+    public bool CanDismiss => IsInstanceValid(_dismiss) && _dismiss.Visible;
 
     /// <summary>
     /// The setting that takes the generated pictures away (`loading_without_ai_art`): the screen

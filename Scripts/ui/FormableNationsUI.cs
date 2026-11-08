@@ -10,6 +10,7 @@ public partial class DealOrForceGame
     private bool _showAllFormables;
     private string _formationSearch = "";
     private bool _peacefulFormablesOnly;
+    private string _formableOnMap = "";
 
     private void ShowFormableNations()
     {
@@ -139,6 +140,24 @@ public partial class DealOrForceGame
             pbar.AddThemeStyleboxOverride("fill", fill);
             card.AddChild(pbar);
             card.AddChild(Title(Simulation.Loc.Format("Foundation territory secured: {0}/{1}", status.Owned, status.Total), 13, Ui.Colour("text.bright")));
+            if (status.Required > 0 && status.Required < status.Total)
+                card.AddChild(Title(Simulation.Loc.Format("Needed to proclaim: {0} ({1:P0} of the territory)",
+                    status.Required, status.Required / (float)System.Math.Max(1, status.Total)), 12, Ui.Colour("text.muted")));
+            // The land itself, drawn on the map in the founder's colour: the state as it would stand.
+            var shown = _formableOnMap == d.Id;
+            var onMap = ActionButton(shown ? "Hide from the map" : "Show on the map", () =>
+            {
+                if (_formableOnMap == d.Id) { _formableOnMap = ""; _globe.ClearPeacePreview(); }
+                else
+                {
+                    _formableOnMap = d.Id;
+                    _globe.SetPeacePreview(FormableNations.Land(_campaign, nation, d), nation.MapIndex);
+                }
+                ShowFormableNations();
+            }, 0, 28);
+            onMap.Name = "FormableOnMap_" + d.Id;
+            Tip(onMap, "Paint the foundation territory on the map in your colour, as the new state would stand.");
+            card.AddChild(onMap);
             if (d.PeacefulAccession && FormableNations.Eligible(nation, d) && FormableNations.CompatibleProclamation(nation, d))
                 AddFormationPartners(card, nation, d);
             // Successful technical checks are not UI content. Failed checks remain explicit.

@@ -1,0 +1,7 @@
+{
+  "id": "example_soundtrack",
+  "name": "Example soundtrack playlist",
+  "version": "1.0.0",
+  "enabled": false,
+  "load_order": 100
+}

@@ -23,6 +23,12 @@ param(
     [switch]$NoZip,
     [switch]$IncludeExperimentalNativeLuau,
     [switch]$SkipRuntimeVerification,
+    # Headless tests cannot compile/draw a GPU material. Opt in on a Windows
+    # release workstation; keep GPU-less build servers explicitly separate.
+    [switch]$VerifyRenderers,
+    # The in-game probe permits 420 seconds for a cold campaign load, followed
+    # by UI/simulation checks. Its enclosing process must not be killed at 180.
+    [ValidateRange(10, 900)][int]$RuntimeVerificationTimeoutSeconds = 600,
     # Explicit recovery after an interrupted import/export. The raw export must
     # already exist; packaging, content checks and executable verification still run.
     [switch]$FinalizeExistingExport,
@@ -252,6 +258,7 @@ else {
 # report an unsuccessful managed publish as an export warning rather than an error.
 if ($exportExitCode -ne 0) { throw "Godot export failed with exit code $exportExitCode." }
 if (-not (Test-Path $exe)) { throw "Godot produced no executable at $exe." }
+& (Join-Path $PSScriptRoot 'Test-WindowsExecutableIdentity.ps1') -Executable $exe
 
 # ---------------------------------------------------------------- somewhere to put a mod
 # The one folder in the build that belongs to the player rather than to us. Content packs
@@ -422,6 +429,14 @@ Write-Host "  nothing in the build that should not be there" -ForegroundColor Gr
 # asked directly, and the folder is asked as well.
 $pck = Join-Path $out 'Deal or Force.pck'
 if (Test-Path -LiteralPath $pck) {
+    # Re-exporting a retained stage must not turn earlier probe output into
+    # player content. Inspect the actual archive, not just loose directories.
+    $packedEvidence = @(Get-PackEntry -Path $pck | Where-Object {
+        $_.Path -match '^verification(?:[-/]|$)'
+    })
+    if ($packedEvidence.Count -gt 0) {
+        throw "Verification evidence must not be packed in the player archive: $($packedEvidence[0].Path)"
+    }
     if ((Get-PackSize -Path $pck -Filter 'docs/*').Count -gt 0) {
         throw "Development documentation must not be packed in the player archive."
     }
@@ -443,7 +458,22 @@ if (-not (Test-Path -LiteralPath (Join-Path $out 'game\map_data\provinces.png'))
 Write-Host "  the map rasters ship once, as real files the loader can open" -ForegroundColor Green
 if (-not $SkipRuntimeVerification) {
     Write-Host '== verifying the actual exported executable ==' -ForegroundColor Cyan
-    & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification')
+    & (Join-Path $PSScriptRoot 'verify-build.ps1') -Executable $exe -LogDirectory (Join-Path $stage 'verification') -TimeoutSeconds $RuntimeVerificationTimeoutSeconds
+}
+if ($VerifyRenderers) {
+    Write-Host '== verifying real GPU map surfaces (OpenGL + ANGLE + Forward+) ==' -ForegroundColor Cyan
+    # Evidence/profile folders are development output, not part of the player package.
+    $rendererVerifier = Join-Path $PSScriptRoot 'verify-renderers.ps1'
+    $rendererEvidence = Join-Path $stage 'verification-renderers'
+    if ($PSVersionTable.PSVersion -lt [version]'7.4') {
+        # The renderer probe uses Start-Process -Environment, absent in Windows
+        # PowerShell 5.1. Keep the documented build entrypoint working there too.
+        $rendererShell = Get-Command pwsh -ErrorAction SilentlyContinue
+        if (-not $rendererShell) { throw 'GPU verification requires PowerShell 7.4+. Run this build with pwsh, or omit -VerifyRenderers on a GPU-less machine.' }
+        & $rendererShell.Source -NoProfile -File $rendererVerifier -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory $rendererEvidence
+        if ($LASTEXITCODE -ne 0) { throw "GPU verification failed (exit $LASTEXITCODE); evidence: $rendererEvidence" }
+    }
+    else { & $rendererVerifier -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory $rendererEvidence }
 }
 
 # ---------------------------------------------------------------- something to send

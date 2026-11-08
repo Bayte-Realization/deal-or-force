@@ -75,12 +75,14 @@ public partial class DealOrForceGame : Control
         Input.MouseMode = Input.MouseModeEnum.Visible;
         WrapGuard.Install(GetTree());
         InterfaceInteractionGuard.Install(GetTree());
+        ButtonMotion.Install(GetTree());
+        TooltipKeeper.Install(GetTree());
         ControlSkin.Apply();
         ApplyCustomCursors();
         // A campaign's own options are read from whichever campaign is on screen now - asked
         // each time, so a loaded save or a new scenario is never answered for by the last one.
         Simulation.SettingsCatalog.CurrentCampaign = () => _campaign;
-        await RunLoadingOperation("Preparing the world", async () =>
+        var loaded = await RunLoadingOperation("Preparing the world", async () =>
         {
             // Folders first: the journal below writes into `logs/`, and the first thing a
             // support conversation needs is one known folder rather than two.
@@ -116,7 +118,9 @@ public partial class DealOrForceGame : Control
         // BuildInterface: the intent can mean "load the last save", and a save cannot be
         // loaded into a world that has not been created yet - which is exactly what happened
         // the first time this was called from the interface pass.
-        OpenWhateverWasAskedFor();
+        // A failed boot keeps its error cover. Do not open an intent against a
+        // half-built campaign/UI (the cold multiplayer route used to do exactly that).
+        if (loaded && _startupComplete && IsInsideTree()) OpenWhateverWasAskedFor();
     }
 
     public override void _Process(double delta)
@@ -127,12 +131,14 @@ public partial class DealOrForceGame : Control
         MaintainQuality(delta);
         BindStepCompletion();
         RefreshMediaPreview();
+        RefreshSoundtrackPlayer(delta);
         // Before any of the early returns below it: a panel is read while the game is
         // paused, and a caption squeezed to nothing on a paused screen is still squeezed.
         LayoutAudit.Watch(this, delta);
         // The country card's facts panel is sized to its own contents, and that height is only
         // knowable after the layout pass rather than when the card is built. See the method.
         SyncCountryFactsHeight();
+        TickNuclearAlert(delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // The lens and the roll move while a key is held, so the line that reports them
@@ -233,9 +239,9 @@ public partial class DealOrForceGame : Control
 
     private void BindStepCompletion()
     {
-        // Clients advance synchronously in their RPC loop, which owns their mod hook.
-        // Local games and LAN hosts can also finish a step from a save or a UI command.
-        var campaign = IsNetworkClient ? null : _campaign;
+        // Every role can finish a staged step from a save or UI command. Mod hooks and
+        // held network items must see that stable boundary exactly once, not an RPC loop.
+        var campaign = _campaign;
         if (ReferenceEquals(campaign, _stepCompletionCampaign)) return;
         if (_stepCompletionCampaign is not null) _stepCompletionCampaign.StepCompleted -= CampaignStepCompleted;
         _stepCompletionCampaign = campaign;
@@ -244,7 +250,7 @@ public partial class DealOrForceGame : Control
 
     private void CampaignStepCompleted(Campaign campaign)
     {
-        if (!ReferenceEquals(campaign, _campaign) || IsNetworkClient) return;
+        if (!ReferenceEquals(campaign, _campaign)) return;
         var wasApplying = _applyingNetworkCommand;
         _applyingNetworkCommand = true;
         try
@@ -264,9 +270,10 @@ public partial class DealOrForceGame : Control
             return;
         }
         finally { _applyingNetworkCommand = wasApplying; }
+        if (IsNetworkClient) { ApplyDeferredNetworkCommands(); return; }
         if (_networkConnected && _networkIsHost && _networkGameStarted)
         {
-            Rpc(nameof(ClientAdvanceNetworkDay), campaign.ElapsedDays);
+            Rpc(nameof(ClientAdvanceNetworkHours), campaign.ElapsedHours, campaign.TickHours);
             BroadcastNetworkChecksum();
         }
     }
@@ -287,27 +294,55 @@ public partial class DealOrForceGame : Control
 
     public override void _Input(InputEvent inputEvent)
     {
+        ButtonFocusPresentation.Observe(GetViewport(), inputEvent);
+        // Loading can yield before any covered panel exists. Gate BEFORE dispatching
+        // to helpers or authoring dialogs, not half way through the input chain.
+        if (_isLoading || !_startupComplete)
+        {
+            if (inputEvent is InputEventKey loadingKey &&
+                !(IsInstanceValid(_loadingScreen) && _loadingScreen.CanDismiss && loadingKey.Keycode is Key.Enter or Key.Space))
+                GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (IsInstanceValid(_nuclearStrikeComposer))
+        { HandleDecisionInput(_nuclearStrikeComposer, inputEvent, CloseNuclearStrikeReview, war: true); return; }
         if (_mediaLibraryLayer is { Visible: true }) { HandleMediaLibraryInput(inputEvent); return; }
+        if (_countryRankingsLayer is { Visible: true }) { HandleCountryRankingsInput(inputEvent); return; }
+        if (_releaseModalLayer is { Visible: true })
+        {
+            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+            { CloseReleaseCountryModal(); GetViewport().SetInputAsHandled(); }
+            return;
+        }
+        if (IsInstanceValid(_warDeclaration))
+        {
+            HandleDecisionInput(_warDeclaration, inputEvent, CloseWarDeclaration, war: true);
+            return;
+        }
+        if (IsInstanceValid(_allianceProposalReview))
+        {
+            HandleDecisionInput(_allianceProposalReview, inputEvent, CloseAllianceProposalReview, war: true);
+            return;
+        }
         // The big trees are read before the map is: a wheel over a graph is a wheel about the
         // graph, and must not also march the camera or scroll the page behind it.
         if (HandleTreeViewportInput(inputEvent)) return;
+        if (IsInstanceValid(_regionGroupBuild) && inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        { CloseRegionGroupBuild(); GetViewport().SetInputAsHandled(); return; }
         if (HandleMapControlsInput(inputEvent)) return;
         if (HandleSituationEscape(inputEvent)) return;
         if (IsInstanceValid(_dealComposer))
         {
-            if (inputEvent is InputEventKey { Pressed: true, Echo: false } dealKey)
-            {
-                if (dealKey.Keycode == Key.Escape) { CloseDealComposer(); GetViewport().SetInputAsHandled(); }
-                else if (dealKey.Keycode is Key.F7 or Key.F10) GetViewport().SetInputAsHandled();
-            }
+            HandleDecisionInput(_dealComposer, inputEvent, CloseDealComposer);
             return;
         }
         if (IsInstanceValid(_ultimatumComposer))
         {
-            if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { CloseUltimatumComposer(); GetViewport().SetInputAsHandled(); }
+            HandleDecisionInput(_ultimatumComposer, inputEvent, CloseUltimatumComposer);
             return;
         }
+        if (HandleConstructionPlacementInput(inputEvent)) return;
+        if (HandleRecruitmentPlacementInput(inputEvent)) return;
         if (IsInstanceValid(_authorCanvas))
         {
             // Child inspectors and confirmation dialogs own their Escape key.
@@ -322,16 +357,12 @@ public partial class DealOrForceGame : Control
             // with no interface on it, which is exactly the bug it looked like. See
             // `AuthorWindow`: the window is told where its exit leads when it is opened.
             if (inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
-            { EscapeAuthorWindow(); GetViewport().SetInputAsHandled(); }
-            return;
-        }
-        if (_isLoading || !_startupComplete)
-        {
-            // Tab/hotkeys must not move focus to the covered game. Only the error
-            // action may receive keyboard activation; mouse delivery stays with the cover.
-            if (inputEvent is InputEventKey loadingKey &&
-                !(_loadingScreen is { CanDismiss: true } && loadingKey.Keycode is Key.Enter or Key.Space))
+            {
+                // The workshop's exit can switch scenes immediately. Mark the input
+                // first: after that callback this node may no longer have a viewport.
                 GetViewport().SetInputAsHandled();
+                EscapeAuthorWindow();
+            }
             return;
         }
         // Space is a sacred strategy-game time key: it never activates a focused
@@ -350,6 +381,12 @@ public partial class DealOrForceGame : Control
 
         if (inputEvent is not InputEventKey { Pressed: true, Echo: false } key)
             return;
+
+        if (HandleDiplomacySearchShortcut(key))
+        { GetViewport().SetInputAsHandled(); return; }
+
+        if (HandleRecruitmentWorkbenchShortcut(key))
+        { GetViewport().SetInputAsHandled(); return; }
 
         // The index of everywhere. Ctrl+K because that is where a hand that lives in an editor
         // reaches, and Ctrl+P because that is where a hand that lives in a code editor reaches
@@ -450,7 +487,7 @@ public partial class DealOrForceGame : Control
         // Escape takes back a rebase that is waiting for its region first, then the panel.
         if (key.Keycode == Key.Escape && _supportLayer is { Visible: true })
         {
-            if (_supportRebaseArmed) CancelSupportRebase(); else CloseSupportScreen();
+            if (_supportRebaseArmed || _supportTargetArmed) CancelSupportRebase(); else CloseSupportScreen();
             GetViewport().SetInputAsHandled();
             return;
         }
@@ -518,6 +555,8 @@ public partial class DealOrForceGame : Control
         if (key.Keycode == Key.F1 && _campaign is not null && _hudLayer is { Visible: true })
         { ToggleHandbook(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F5) { QuickSave(); GetViewport().SetInputAsHandled(); return; }
+        if (key.Keycode == Key.Home && _campaign is not null && _hudLayer is { Visible: true })
+        { FocusOwnCapital(); GetViewport().SetInputAsHandled(); return; }
         if (key.Keycode == Key.F6 && _campaign is not null && _hudLayer is { Visible: true })
         {
             ToggleShowcasePan();
@@ -548,6 +587,7 @@ public partial class DealOrForceGame : Control
 
     public override void _UnhandledInput(InputEvent inputEvent)
     {
+        if (IsInstanceValid(_nuclearStrikeComposer) || IsInstanceValid(_warDeclaration)) { GetViewport().SetInputAsHandled(); return; }
         if (_mediaLibraryLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         if (_mapModeDrawerLayer is { Visible: true }) { GetViewport().SetInputAsHandled(); return; }
         // A diplomatic modal must also shield the map's unhandled keyboard shortcuts.
@@ -571,6 +611,19 @@ public partial class DealOrForceGame : Control
         }
         HandleProjectionHotkey(inputEvent);
         if (GetViewport().IsInputHandled()) return;
+
+        // Halving and joining for what is not a division: the fleets of a box selection and the
+        // long-range formations. Divisions take the same keys below.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } splitKey &&
+            _hudLayer is { Visible: true } && _selectedArmies.Count == 0 && Input.IsKeyPressed(Key.Ctrl))
+        {
+            var letter = Letter(splitKey);
+            if (letter == Key.X && _selectedFleet is not null && _fleetPanel is { Visible: true })
+            { SplitSelectedFleet(); GetViewport().SetInputAsHandled(); return; }
+            if (letter == Key.K && _selectedFleet is not null && _fleetPanel is { Visible: true })
+            { MergeSelectedFleets(); GetViewport().SetInputAsHandled(); return; }
+            if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
+        }
 
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
@@ -597,6 +650,13 @@ public partial class DealOrForceGame : Control
 
                 case Key.K when Input.IsKeyPressed(Key.Ctrl):
                     ConsolidateSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
+                // Halve the selection: half the formations stay selected and take the next
+                // order, the other half stay where they are. One formation is cut in two.
+                case Key.X when Input.IsKeyPressed(Key.Ctrl):
+                    SplitSelectionInHalf();
                     GetViewport().SetInputAsHandled();
                     return;
 
@@ -632,6 +692,8 @@ public partial class DealOrForceGame : Control
             CloseHandbook();
         else if (_peaceLayer is { Visible: true })
             ClosePeaceConference();
+        else if (_defconLayer is { Visible: true })
+            CloseDefconOverview();
         else if (_pauseMenuLayer is { Visible: true })
             HidePauseMenu();
         else if (_stateAffairsLayer is { Visible: true })
@@ -718,6 +780,9 @@ public partial class DealOrForceGame : Control
         ApplyAllSettings();
         BindFlags(_campaign);
         Simulation.SpriteCatalog.Changed += ForgetFlags;
+        // A flag design saved in the editor, or a mod's designs re-read, changes which flag a
+        // country flies exactly as a new picture would.
+        Simulation.FlagDesignCatalog.Changed += ForgetFlags;
         _campaign.Changed += Refresh;
         _campaign.IsPaused = true;
         _selectedNation = _campaign.Player;
@@ -759,10 +824,13 @@ public partial class DealOrForceGame : Control
             _globe.UnclaimedPicked += OnUnclaimedPicked;
             _globe.ArmyPicked += OnArmyPicked;
             _globe.FleetPicked += OnFleetPicked;
+            _globe.NuclearFlashed += FlashScreen;
             _globe.SupportPicked += OnSupportPicked;
             _globe.SupportBoxPicked += OnSupportBoxPicked;
             _globe.BattlePicked += ShowBattleDetails;
             _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
+            _globe.ProvincesBoxSelected += OnRegionsBoxSelected;
+            _globe.FleetsBoxPicked += OnFleetsBoxPicked;
             _globe.ProvinceCommanded += OnProvinceCommanded;
             AddChild(_globe);
         });
@@ -813,11 +881,39 @@ public partial class DealOrForceGame : Control
         if (_builtScreens.Add(key)) build();
     }
 
+    /// <summary>
+    /// The heavy screens, built while the loading screen still covers the map. Built on first
+    /// open, each froze the running game the first time a player reached for it - state affairs
+    /// 0.7 s, production 0.4 s, the situation room 0.25 s, measured in the game. Under the
+    /// loading screen the same second and a half is part of a wait nobody is playing through.
+    /// </summary>
+    private void PrebuildScreens()
+    {
+        if (_campaign?.Player is null || _hudLayer is null) return;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            EnsureScreen("state_affairs", BuildStateAffairsInterface);
+            EnsureScreen("production", BuildProductionScreen);
+            if (_situationLayer is null) BuildSituationRoom();
+            WarmDiplomacyRows();
+        }
+        catch (Exception exception)
+        {
+            // Reported here; EnsureScreen does not retry a screen that failed, opened or not.
+            Simulation.DiagnosticLogs.Write("errors", "PREBUILD " + exception.Message);
+        }
+        Simulation.DiagnosticLogs.Write("performance", $"PREBUILD_SCREENS ms={clock.Elapsed.TotalMilliseconds:F1}");
+    }
+
     private void BuildHud()
     {
         _hudLayer = FullLayer("GameHud");
         _hudLayer.Visible = false;
         AddChild(_hudLayer);
+        BuildMapVignette();
+        // Every interface picture, from loader threads, before a screen asks for it (TextureWarmup).
+        TextureWarmup.Start(this);
 
         BuildTopBar();
         BuildCampaignNavigation();
@@ -861,6 +957,8 @@ public partial class DealOrForceGame : Control
 
     private void BeginSession()
     {
+        _globe.HighlightNation(-1);
+        _globe.ClearSelection();
         _observerMode = _campaign.HumanSeats.Count == 0 && !_campaign.Nations.Any(n => n.IsHuman);
         if (_pauseMenuLayer is not null) _pauseMenuLayer.Visible = false;
         if (_eventLayer is not null) _eventLayer.Visible = false;
@@ -879,6 +977,8 @@ public partial class DealOrForceGame : Control
 
     private void OpenScreen(string screen)
     {
+        CancelConstructionPlacement();
+        CancelRecruitmentPlacement();
         if (screen == "Situation") { OpenSituationRoom(); return; }
         if (_situationLayer is not null) _situationLayer.Visible = false;
         _situationReturn = "";
@@ -1275,6 +1375,9 @@ public partial class DealOrForceGame : Control
 
     private void OnCountryPicked(GlobePick pick)
     {
+        if (TryConstructionMapPick(pick)) return;
+        if (TryRecruitmentMapPick(pick)) return;
+        PlayStrategicCue("map_select");
         if (_networkLayer is not null && _networkLayer.Visible)
         {
             SelectNetworkCountry(pick.Nation, false);
@@ -1555,10 +1658,39 @@ public partial class DealOrForceGame : Control
         {
             if (panel.Size.X <= 8f) return;
             var modal = surface == PanelSurface.Modal;
+            // Depth rather than a flat fill: a faint light falling from the top edge and fading out
+            // by mid-panel, the way every engine's default window reads as a lit surface. One quad,
+            // drawn only when the panel is resized or restyled.
+            var top = Ui.Colour("text.body", modal ? 0.055f : 0.035f);
+            var clear = new Color(top, 0f);
+            var fall = MathF.Min(panel.Size.Y * 0.45f, 260f);
+            panel.DrawPolygon(
+                new[] { new Vector2(1f, 1f), new Vector2(panel.Size.X - 1f, 1f), new Vector2(panel.Size.X - 1f, fall), new Vector2(1f, fall) },
+                new[] { top, top, clear, clear });
             var light = Ui.Colour(modal ? "button.primary_border" : "text.body", modal ? 0.16f : 0.08f);
             panel.DrawLine(new Vector2(4f, 1.5f), new Vector2(panel.Size.X - 4f, 1.5f), light, 1f, true);
         };
+        // Windows arrive rather than appear: a short fade and a few pixels of lift whenever the
+        // panel becomes visible, whichever layer or button showed it.
+        if (surface is PanelSurface.Modal or PanelSurface.Dossier)
+            panel.VisibilityChanged += () => AnimateArrival(panel);
         return panel;
+    }
+
+    /// <summary>The arrival of a window: 140 ms of fade and lift, skipped when motion is turned down.</summary>
+    private static void AnimateArrival(Control panel)
+    {
+        if (!panel.IsVisibleInTree() || !panel.IsInsideTree()) return;
+        if (Ui.Metric("ui.motion", 1f) <= 0f) return;
+        if (panel.HasMeta("arrival_tween") && panel.GetMeta("arrival_tween").AsGodotObject() is Tween running && running.IsValid())
+            running.Kill();
+        panel.Modulate = new Color(1f, 1f, 1f, 0f);
+        panel.PivotOffset = panel.Size * 0.5f;
+        panel.Scale = new Vector2(0.985f, 0.985f);
+        var tween = panel.CreateTween().SetParallel().SetEase(Tween.EaseType.Out).SetTrans(Tween.TransitionType.Cubic);
+        tween.TweenProperty(panel, "modulate:a", 1f, 0.14f);
+        tween.TweenProperty(panel, "scale", Vector2.One, 0.16f);
+        panel.SetMeta("arrival_tween", tween);
     }
 
     private VBoxContainer PanelRows(PanelContainer panel, int horizontal, int vertical, int separation)
@@ -1898,6 +2030,7 @@ public partial class DealOrForceGame : Control
         RefreshStrategicHud();
         if (_hudLayer is { Visible: true } && _militarySpending is not null && _campaign?.Player is { } player)
             RefreshTopBar(player);
+        if (_mediaButton is not null) _mediaButton.AccessibilityName = Tr("Soundtrack player");
 
         // The names across the map. Built as 3D text once and rebuilt only when a country
         // renames itself - which is what a change of language is, for every country at once.
@@ -2014,6 +2147,7 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.NavTile(primary, 0));
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.NavTile(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.NavTile(primary, 2));
+            button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.NavTile(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.NavTile(primary, 3));
         }
         else if (tabPill)
@@ -2021,7 +2155,38 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("normal", AtlasSurfaceSkin.TabPill(primary, 0));
             button.AddThemeStyleboxOverride("hover", AtlasSurfaceSkin.TabPill(primary, 1));
             button.AddThemeStyleboxOverride("pressed", AtlasSurfaceSkin.TabPill(primary, 2));
+            // A pressed toggle under the pointer is drawn in hover_pressed; left to the theme it had
+            // other margins, so the active map layer changed width under the mouse and the whole
+            // two-column drawer jumped with it.
+            button.AddThemeStyleboxOverride("hover_pressed", AtlasSurfaceSkin.TabPill(primary, 2));
             button.AddThemeStyleboxOverride("disabled", AtlasSurfaceSkin.TabPill(primary, 3));
+            // A button with a picture of its own (the layer list's flag) keeps it.
+            if (button.ToggleMode && (button.Icon is null || button.HasMeta("toggle_lamp")))
+            {
+                button.SetMeta("toggle_lamp", true);
+                // A switch: a pressed toggle hovers in Godot's own hover_pressed style unless told
+                // otherwise, and its state wears a lamp beside the word.
+                foreach (var (state, index) in new[] { ("normal", 0), ("hover", 1), ("pressed", 2), ("hover_pressed", 1), ("disabled", 0) })
+                    button.AddThemeStyleboxOverride(state, AtlasSurfaceSkin.ToggleFace(primary, index));
+                button.Icon = AtlasSurfaceSkin.ToggleLamp(primary);
+                // Every switch redraws its box when it flips, whoever flipped it, so no screen can
+                // forget to (the map bar's check boxes stayed ticked after being turned off).
+                if (!button.HasMeta("lamp_wired"))
+                {
+                    button.SetMeta("lamp_wired", true);
+                    button.Toggled += on => { if (IsInstanceValid(button)) StyleButton(button, on); };
+                }
+                button.AddThemeConstantOverride("icon_max_width", 16);
+                button.AddThemeConstantOverride("h_separation", 6);
+                // Room for the lamp, once: a caption sized to its width would otherwise be clipped.
+                if (!button.HasMeta("lamp_room") && button.CustomMinimumSize.X > 0f)
+                {
+                    button.SetMeta("lamp_room", true);
+                    button.CustomMinimumSize += new Vector2(20f, 0f);
+                }
+                foreach (var key in new[] { "icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color" })
+                    button.AddThemeColorOverride(key, Colors.White);
+            }
         }
         else if (outlinerGroup)
         {
@@ -2042,6 +2207,7 @@ public partial class DealOrForceGame : Control
             button.AddThemeStyleboxOverride("normal", ButtonStyle(primary, 0, iconOnly, above, rounded));
             button.AddThemeStyleboxOverride("hover", ButtonStyle(primary, 1, iconOnly, above, rounded));
             button.AddThemeStyleboxOverride("pressed", ButtonStyle(primary, 2, iconOnly, above, rounded));
+            button.AddThemeStyleboxOverride("hover_pressed", ButtonStyle(primary, 2, iconOnly, above, rounded));
             // `primary` survives into the disabled look, and that is the whole of telling
             // "this is what we are" apart from "you may not have this". The politics screen
             // disables the form of government and the ideology a country already has - you
@@ -2049,7 +2215,7 @@ public partial class DealOrForceGame : Control
             // the country's own ideology look exactly like one the game was refusing.
             button.AddThemeStyleboxOverride("disabled", ButtonStyle(primary, 3, iconOnly, above, rounded));
         }
-        button.AddThemeStyleboxOverride("focus", AtlasSurfaceSkin.Focus(rounded));
+        ButtonFocusPresentation.Style(button, rounded);
         var normalTextColour = outlinerGroup
             ? Ui.Colour("text.accent_dim")
             : navTile
@@ -2084,6 +2250,13 @@ public partial class DealOrForceGame : Control
             button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
             button.AddThemeColorOverride("icon_pressed_color", Ui.Colour("button.text_pressed"));
         }
+        // A switch's lettering last, over the general colours above: dark on a lit key, muted on an unlit one.
+        if (tabPill && button.ToggleMode && button.HasMeta("toggle_lamp"))
+        {
+            var lettering = primary ? Ui.Colour("button.text_hover") : Ui.Colour("text.muted");
+            foreach (var key in new[] { "font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color" })
+                button.AddThemeColorOverride(key, key == "font_hover_color" && !primary ? Ui.Colour("button.text_hover") : lettering);
+        }
         button.SetMeta("skin_button_applied", button.GetThemeColor("font_color"));
     }
 
@@ -2116,7 +2289,7 @@ public partial class DealOrForceGame : Control
         };
         style.SetBorderWidthAll(1);
         style.SetCornerRadiusAll(rounded ? 8 : 3);
-        return style;
+        return InstrumentMaterials.Face(style, state == 2, state == 3);
     }
 
     private StyleBox PanelStyle(PanelSurface surface, bool inCampaign = false)

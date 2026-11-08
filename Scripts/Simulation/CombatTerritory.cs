@@ -149,6 +149,19 @@ public static partial class Warfare
             army.MoveProgress = 0f;
             army.Entrenchment = 0f;
             army.ReadyDay = campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays;
+            if (!WarCoalition.FriendlyController(campaign, war, army.NationId, controllers[retreat]))
+            {
+                // The first step of an undefended breakout corridor, not the old offensive.
+                // Further movement uses the ordinary player/AI breakout order after this battle.
+                army.CutOff = true;
+                army.BreakingOut = false;
+                army.DirectOrder = false;
+                army.PlanActive = false;
+                army.OrderKind = ArmyOrder.Manual;
+                army.OrderProvinceId = -1;
+                army.OrderStateMapIndex = -1;
+                army.ObjectiveStateMapIndex = -1;
+            }
         }
         return occupying;
     }

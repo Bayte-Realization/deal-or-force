@@ -1,0 +1,13 @@
+{
+  "flag_fabric": {
+    "category": "video", "order": 320, "kind": "toggle", "default": true,
+    "name": "Flag fabric",
+    "description": "Subtle woven texture and fold lighting on interface flags. Does not change the flag design."
+  },
+  "animated_flags": {
+    "category": "video", "order": 321, "kind": "toggle", "default": true,
+    "name": "Animated flags",
+    "description": "Gently wave interface flags. Turn off for still flags; fabric shading can remain enabled."
+  }
+}
+

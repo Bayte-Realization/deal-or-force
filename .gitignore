@@ -91,3 +91,6 @@ perf.log
 
 # GD-Sync API keys. Never commit these.
 addons/GD-Sync/keys.cfg
+
+# Empty legacy Godot resource folder stays local; authored game assets live in game/gfx.
+/Assets/

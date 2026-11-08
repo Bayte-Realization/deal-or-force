@@ -1,0 +1,7 @@
+{
+  "show_country_tags": {
+    "category": "interface", "order": 253, "kind": "toggle", "default": false,
+    "name": "Show country tags",
+    "description": "Show country IDs beside map names and in country headers. Useful for console commands, saves and modding. Can also be toggled with tags or tdebug."
+  }
+}

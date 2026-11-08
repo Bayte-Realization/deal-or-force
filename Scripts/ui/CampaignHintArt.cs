@@ -28,6 +28,15 @@ public static class CampaignHintArt
             using var image = own.GetImage();
             result = Crop(own, image, new(0, 0, image.GetWidth(), image.GetHeight()));
         }
+        else if (SpriteCatalog.Has("icon_" + HudRole(name)))
+        {
+            // Navigation, telemetry and alerts share one authored atlas-gold icon
+            // family. Severity belongs to the border/badge, not unrelated colourful
+            // illustrations. An explicit hint_NAME mod override above still wins.
+            var stock = GD.Load<Texture2D>(SpriteCatalog.TextureOf("icon_" + HudRole(name)));
+            using var image = stock.GetImage();
+            result = Crop(stock, image, new(0, 0, image.GetWidth(), image.GetHeight()));
+        }
         else if (Array.IndexOf(Cells, name) is var cell && cell >= 0)
         {
             _atlas ??= GD.Load<Texture2D>(SpriteCatalog.TextureOf("hints_atlas", "res://game/gfx/interface/campaign_hints/hints_atlas.png"));
@@ -48,6 +57,13 @@ public static class CampaignHintArt
         }
         return Cache[name] = result;
     }
+
+    internal static string HudRole(string name) => name switch
+    {
+        "must" => "unrest", "should" => "decision", "could" => "diplomacy", "important" => "ledger",
+        "materials" => "industry", "organisations" => "alliance", "elections" => "government",
+        "personnel" => "manpower", _ => name
+    };
 
     private static Texture2D Crop(Texture2D texture, Image image, Rect2I cell)
     {

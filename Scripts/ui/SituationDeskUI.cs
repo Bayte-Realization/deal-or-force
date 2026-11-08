@@ -22,11 +22,13 @@ public partial class DealOrForceGame
 {
     private PanelContainer _deskPanel, _deskTab;
     private VBoxContainer _deskRows;
+    private ScrollContainer _deskScroll;
     private Label _deskHeading, _deskEmpty, _deskPurpose;
     private readonly Dictionary<DeskLens, Button> _deskLenses = new();
     private DeskLens _deskLens = DeskLens.Security;
     private bool _deskOnLeft;
-    private bool _deskOpen = true;
+    private bool _deskOpen = false;
+    private bool _deskRefreshing;
     private int _deskDay = -1;
     private int _deskNation = -1;
     private string _deskSignature = "";
@@ -41,6 +43,15 @@ public partial class DealOrForceGame
     };
 
     /// <summary>What the lens watches, in the words a player needs once.</summary>
+    /// <summary>A purpose line shown as a sentence: capital first, full stop last, in any language.</summary>
+    private static string Sentence(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text ?? "";
+        text = text.Trim();
+        text = char.ToUpper(text[0], System.Globalization.CultureInfo.CurrentCulture) + text[1..];
+        return text.EndsWith('.') ? text : text + ".";
+    }
+
     private static string DeskLensPurpose(DeskLens lens) => lens switch
     {
         DeskLens.Security => "the front, the pockets, and whether anything stands in the way",
@@ -72,6 +83,7 @@ public partial class DealOrForceGame
         _deskPanel.Name = "SituationDesk";
         _deskPanel.GrowHorizontal = GrowDirection.Begin;
         _deskPanel.Visible = false;
+        _deskPanel.VisibilityChanged += SyncDeskDock;
         Ui.Place(_deskPanel, _deskOnLeft ? "hud.desk_left" : "hud.desk_right");
         ShiftHudDock(_deskPanel);
         var body = PanelRows(_deskPanel, 10, 8, 6);
@@ -91,9 +103,10 @@ public partial class DealOrForceGame
         fold.TooltipText = Ui.Tip(Tr("Fold the desk away."));
         head.AddChild(fold);
 
-        // Five forced equal columns silently cut translated captions and counts. Let
-        // whole buttons wrap, so narrow docks keep every lens readable and reachable.
-        var lenses = new HFlowContainer { Name = "DeskLenses" };
+        // Five forced equal columns silently cut translated captions and counts, and a free flow
+        // left the fifth lens alone on a second line, which read as a mistake. Three columns:
+        // two even rows, every caption whole in any language.
+        var lenses = new GridContainer { Name = "DeskLenses", Columns = 3 };
         lenses.AddThemeConstantOverride("h_separation", 4);
         lenses.AddThemeConstantOverride("v_separation", 4);
         body.AddChild(lenses);
@@ -113,6 +126,7 @@ public partial class DealOrForceGame
         }
 
         _deskPurpose = Title(DeskLensPurpose(_deskLens), (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.muted"));
+        _deskPurpose.Text = Sentence(Tr(DeskLensPurpose(_deskLens)));
         _deskPurpose.Name = "DeskPurpose";
         _deskPurpose.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         body.AddChild(_deskPurpose);
@@ -122,12 +136,26 @@ public partial class DealOrForceGame
             Name = "DeskScroll",
             SizeFlagsVertical = SizeFlags.ExpandFill,
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            FollowFocus = true
+            FollowFocus = true,
+            MouseFilter = MouseFilterEnum.Stop
+        };
+        // A wheel tick that the list cannot use must not leave the desk. The map, and any
+        // card that treats a wheel as a click, stay where they were.
+        scroll.GuiInput += input =>
+        {
+            if (input is InputEventMouseButton { ButtonIndex: MouseButton.WheelUp or MouseButton.WheelDown
+                    or MouseButton.WheelLeft or MouseButton.WheelRight })
+                scroll.AcceptEvent();
         };
         body.AddChild(scroll);
+        _deskScroll = scroll;
         _deskRows = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _deskRows.AddThemeConstantOverride("separation", Ui.Gap(6));
         scroll.AddChild(_deskRows);
+        // The rows learn their height only once they know their width - a wrapped line measured at
+        // no width is a word to a line. Fit the desk again whenever that settles, or it keeps the
+        // height of the first guess (655 pixels for two rows) until the next day.
+        _deskRows.MinimumSizeChanged += () => Callable.From(FitSituationDesk).CallDeferred();
         _deskEmpty = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body_soft"));
         _deskEmpty.Name = "DeskEmpty";
         _deskEmpty.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -144,6 +172,48 @@ public partial class DealOrForceGame
         _deskTab.AddChild(tab);
         if (_deskTab.GetParent() is not Container)
             Ui.Place(_deskTab, _deskOnLeft ? "hud.desk_tab_left" : "hud.desk_tab_right");
+    }
+
+    /// <summary>
+    /// Whether another dock stands where the desk would. It steps aside for whatever was opened
+    /// over its ground, on either side: docked right it used to sit on top of the army, fleet and
+    /// dossier panels that open there. Measured, not assumed, because the skin moves the docks.
+    /// </summary>
+    private bool DeskCovered()
+    {
+        if (_deskPanel is null) return false;
+        var area = _deskPanel.GetGlobalRect();
+        foreach (var dock in new Control[] { _sidePanel, _armyPanel, _fleetPanel, _movementPanel, _resourceAtlasPanel })
+        {
+            if (dock is null || !GodotObject.IsInstanceValid(dock)) continue;
+            // Every dock that can cover the desk brings it back the moment it closes.
+            if (!dock.HasMeta("desk_watch"))
+            {
+                dock.SetMeta("desk_watch", true);
+                dock.VisibilityChanged += () => Callable.From(RefreshSituationDesk).CallDeferred();
+            }
+            if (dock.IsVisibleInTree() && dock.GetGlobalRect().Intersects(area)) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// The right-hand report and the desk share one dock, and the button that opens the desk
+    /// lives in the report's header. Both followed the desk only when the desk refreshed itself,
+    /// so when anything else hid the desk - a closing window, a layout pass - on a paused day
+    /// the report, the desk and the button to bring it back were all gone at once. They follow
+    /// the desk's own visibility now, and a desk hidden from outside counts as closed.
+    /// </summary>
+    private void SyncDeskDock()
+    {
+        if (_deskPanel is null || !GodotObject.IsInstanceValid(_deskPanel)) return;
+        if (!_deskPanel.Visible && _deskOpen && !_deskRefreshing && !_observerMode && !DeskCovered())
+        {
+            _deskOpen = false;
+            if (_campaign is not null) _campaign.Settings["desk.open"] = "0";
+        }
+        if (_outliner is not null) _outliner.Visible = !_observerMode && (!_deskPanel.Visible || _deskOnLeft);
+        if (_deskTab is not null) _deskTab.Visible = !_deskOpen && !_observerMode;
     }
 
     private void SetDeskSide(bool left)
@@ -191,11 +261,9 @@ public partial class DealOrForceGame
             Enum.TryParse<DeskLens>(lens, true, out var parsed) && Enum.IsDefined(parsed)) _deskLens = parsed;
         if (_campaign.Settings.TryGetValue("desk.open", out var open)) _deskOpen = open != "0";
 
-        // A desk docked on the left shares its ground with the army panel; while that panel is
-        // open the desk steps aside rather than covering it.
-        var covered = _deskOnLeft && (_sidePanel is { Visible: true } || _armyPanel is { Visible: true } ||
-            _fleetPanel is { Visible: true } || _movementPanel is { Visible: true });
-        _deskPanel.Visible = _deskOpen && !covered && !_observerMode;
+        _deskRefreshing = true;
+        _deskPanel.Visible = _deskOpen && !DeskCovered() && !_observerMode;
+        _deskRefreshing = false;
         _deskTab.Visible = !_deskOpen && !_observerMode;
         // One right-hand dock, not two independent floating panels. The folded command is
         // part of the report's real header layout; the open desk replaces the report.
@@ -218,7 +286,7 @@ public partial class DealOrForceGame
 
         var urgent = SituationDesk.Count(_campaign, player, _deskLens);
         _deskHeading.Text = Tr("SITUATION DESK") + (urgent > 0 ? "  ·  " + urgent : "");
-        _deskPurpose.Text = Tr(DeskLensPurpose(_deskLens));
+        _deskPurpose.Text = Sentence(Tr(DeskLensPurpose(_deskLens)));
 
         foreach (var (lensId, chip) in _deskLenses)
         {
@@ -237,6 +305,38 @@ public partial class DealOrForceGame
         // Reset from the authored dock so closing a card restores the full height. Never
         // subtract from yesterday's clamped rectangle (which would progressively shrink it).
         ShiftHudDock(_deskPanel);
+        ClampAboveMapBar(_deskPanel);
+
+        // A desk with one line on it must not hold half the column. The rows ask for the height
+        // they need, the panel reports what it needs with them inside it - and the dock is clamped
+        // to that: never above what the skin gave us, and the scroll above takes the overflow when
+        // a busy week brings more lines than fit. Without this the panel was a black rectangle
+        // holding one sentence, on a fifth of the map.
+        if (_deskScroll is not null && _deskRows is not null && _deskPanel.Size.Y > 0f)
+        {
+            var rowsHeight = _deskRows.GetCombinedMinimumSize().Y;
+            // Never more than the room there is: a scroll asked to be as tall as all its rows does
+            // not scroll, it grows - the desk stood 2960 pixels tall, through the map bar and off
+            // the foot of the screen. The room ends at the map bar (or the screen's foot).
+            var chrome = _deskPanel.GetCombinedMinimumSize().Y - _deskScroll.CustomMinimumSize.Y;
+            var foot = _mapControlsPanel is { Visible: true } bar && bar.GetGlobalRect().Position.Y > _deskPanel.GlobalPosition.Y
+                ? bar.GetGlobalRect().Position.Y - Ui.Metric("hud.dock_gap", 8)
+                : GetViewportRect().Size.Y - 68f;
+            var room = Mathf.Max(60f, foot - _deskPanel.GlobalPosition.Y - chrome);
+            var scrollHeight = Mathf.Min(rowsHeight, room);
+            // Only when it actually changed: assigning it every refresh would mark the layout
+            // dirty every frame for a number that has not moved.
+            if (!Mathf.IsEqualApprox(_deskScroll.CustomMinimumSize.Y, scrollHeight))
+                _deskScroll.CustomMinimumSize = new Vector2(0, scrollHeight);
+            var dockHeight = _deskPanel.Size.Y;
+            var needed = _deskPanel.GetCombinedMinimumSize().Y;
+            if (needed > 0f && needed < dockHeight)
+            {
+                _deskPanel.AnchorBottom = 0;
+                _deskPanel.OffsetBottom = _deskPanel.Position.Y + needed;
+            }
+        }
+
         if (_regionCard is not { Visible: true }) return;
         var desk = _deskPanel.GetGlobalRect();
         var card = _regionCard.GetGlobalRect();
@@ -253,12 +353,30 @@ public partial class DealOrForceGame
         _deskPanel.OffsetBottom = bottom - _deskPanel.GetParent<Control>().GlobalPosition.Y;
     }
 
+    /// <summary>
+    /// A dock never comes down onto the map bar. The desk's authored rectangle ran to the foot
+    /// of the screen and sat on top of FOG, EVENTS and TRADE; it now stops a gap above the bar
+    /// wherever the two share a column.
+    /// </summary>
+    private void ClampAboveMapBar(Control dock)
+    {
+        if (dock is null || _mapControlsPanel is not { Visible: true } bar || dock.GetParent() is not Control parent) return;
+        var area = dock.GetGlobalRect();
+        var strip = bar.GetGlobalRect();
+        if (area.End.X <= strip.Position.X || area.Position.X >= strip.End.X || area.End.Y <= strip.Position.Y) return;
+        dock.AnchorBottom = 0;
+        dock.OffsetBottom = strip.Position.Y - Ui.Metric("hud.dock_gap", 8) - parent.GlobalPosition.Y;
+    }
+
     private void RebuildDeskRows(Nation player)
     {
         foreach (var child in _deskRows.GetChildren()) child.QueueFree();
         var items = SituationDesk.Read(_campaign, player, _deskLens);
         foreach (var item in items) AddDeskRow(item);
         _deskEmpty.Text = items.Count == 0 ? Tr("Nothing on this desk this week.") : "";
+        // The rows just changed, so the height the panel needs changed with them: fit again in the
+        // same frame, or the desk is one week behind its own contents.
+        FitSituationDesk();
     }
 
     /// <summary>One line: its urgency as an edge, what it is, the number, and where to go.</summary>
@@ -276,36 +394,85 @@ public partial class DealOrForceGame
         words.AddThemeConstantOverride("separation", 0);
         row.AddChild(words);
         var title = Title(item.Title, (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body"));
-        title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        words.AddChild(title);
-        var meta = (item.Detail ?? "") + (string.IsNullOrEmpty(item.Trend) ? "" : " · " + item.Trend);
-        if (!string.IsNullOrEmpty(meta))
+        var sentence = item.Tooltip ?? "";
+        if (sentence.Length > 0)
         {
-            var line = Title(meta, (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"));
-            line.AddThemeFontOverride("font", Ui.NumberFont);
-            line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-            words.AddChild(line);
+            // One fixed line. The report's sentence, and the labels it already names, sit
+            // in the tooltip so this row cannot wrap the desk down the screen.
+            Fixed(title);
+            title.TooltipText = Ui.Tip(sentence);
+            title.MouseFilter = MouseFilterEnum.Stop;
+            row.TooltipText = Ui.Tip(sentence);
         }
-        words.AddChild(Title(DeskSeverityName(item.Severity), (int)Ui.Metric("ui.font.micro", 10),
-            Ui.Colour(DeskSeverityColour(item.Severity)), true));
-
-        var go = ActionButton("→", () =>
+        else title.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        words.AddChild(title);
+        if (sentence.Length == 0)
         {
-            // A world line points at a country, so it opens that country rather than the list
-            // it is listed in: the reader asked "who", and the answer is a dossier.
-            if (item.HasNation && _campaign?.NationById(item.NationId) is { } target)
+            var meta = (item.Detail ?? "") + (string.IsNullOrEmpty(item.Trend) ? "" : " · " + item.Trend);
+            if (!string.IsNullOrEmpty(meta))
             {
-                SelectDiplomacyNation(target);
-                OpenScreen("Diplomacy");
-                return;
+                var line = Title(meta, (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"));
+                line.AddThemeFontOverride("font", Ui.NumberFont);
+                line.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+                words.AddChild(line);
             }
-            OpenScreen(item.Screen);
-        }, 30, 26);
+            words.AddChild(Title(DeskSeverityName(item.Severity), (int)Ui.Metric("ui.font.micro", 10),
+                Ui.Colour(DeskSeverityColour(item.Severity)), true));
+        }
+
+        var go = ActionButton("→", () => OpenDeskLine(item), 30, 26);
         go.Name = "DeskGo_" + item.Id;
-        go.TooltipText = Ui.Tip(item.HasNation && _campaign?.NationById(item.NationId) is { } named
-            ? named.DisplayName
-            : Tr(item.Screen));
+        go.TooltipText = Ui.Tip(DeskButtonTip(item));
         row.AddChild(go);
         _deskRows.AddChild(row);
+    }
+
+    /// <summary>Where the arrow says it goes. A name is not a licence to open that country's papers.</summary>
+    private string DeskButtonTip(DeskItem item)
+    {
+        if (item.Id == "host_temper") return Tr("Open the movement");
+        if (item.Id == "conciliation") return Tr("Laws");
+        if (item.Id == "detached_land") return Tr("Situation");
+        if (item.HasNation && _campaign?.NationById(item.NationId) is { } named)
+            return named.DisplayName;
+        return Tr(item.Screen);
+    }
+
+    /// <summary>
+    /// Open the screen that already holds the fact. A conciliation opens the political pressure,
+    /// a cut-off piece opens its proposal in the situation room, and a worn welcome opens the
+    /// movement. None of the three pays, buys the way, or funds the headquarters.
+    /// </summary>
+    private void OpenDeskLine(DeskItem item)
+    {
+        if (item.Id == "conciliation")
+        {
+            OpenScreen("Laws");
+            SelectPolicyTab("Crises");
+            return;
+        }
+        if (item.Id == "detached_land")
+        {
+            if (_situationLayer is null) BuildSituationRoom();
+            OpenSituationRoom();
+            _situationSelected = item.Id;
+            RefreshSituationList();
+            return;
+        }
+        if (item.Id == "host_temper")
+        {
+            var movement = item.HasNation ? _campaign?.NationById(item.NationId) : null;
+            if (movement?.Movement is not null) ShowMovement(movement);
+            return;
+        }
+        // A world line points at a country, so it opens that country rather than the list
+        // it is listed in: the reader asked "who", and the answer is a dossier.
+        if (item.HasNation && _campaign?.NationById(item.NationId) is { } target)
+        {
+            SelectDiplomacyNation(target);
+            OpenScreen("Diplomacy");
+            return;
+        }
+        OpenScreen(item.Screen);
     }
 }

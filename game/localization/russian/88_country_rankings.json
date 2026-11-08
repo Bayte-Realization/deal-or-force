@@ -1,0 +1,21 @@
+{
+  "Country rankings": "Рейтинг стран",
+  "Ranking index": "Индекс",
+  "Refresh rankings": "Обновить",
+  "Ranking country dossier": "Открыть страну",
+  "Compare the countries you can inspect. This index is not a prediction of victory.": "Сравнение стран, о которых есть сведения. Индекс не предсказывает победу в войне.",
+  "Country rankings · no visible territorial statistics": "Рейтинг стран · нет доступных сведений о территории",
+  "Overall rank #{0} · index {1}/100": "Место в мире: {0} · индекс {1}/100",
+  "Open the full country rankings": "Открыть полный мировой рейтинг стран",
+  "Find a country or tag...": "Найти страну или тег...",
+  "Descending": "По убыванию",
+  "Ascending": "По возрастанию",
+  "Ground power": "Сух. сила",
+  "Tech.": "Техн.",
+  "Living std.": "Жизнь",
+  "Overall index": "Общий индекс",
+  "{0} countries · page {1}/{2}": "Стран: {0} · страница {1}/{2}",
+  "Select a country to inspect its position.": "Выберите страну, чтобы посмотреть её место в рейтинге.",
+  "Index: GDP {0}% · population {1}% · ground power {2}% · technology {3}%.": "Индекс: ВВП {0}% · население {1}% · сух. сила {2}% · технологии {3}%.",
+  "Each component is divided by the largest visible value. Ground power sums existing army power; fleets and aircraft are not included. Living standards are a separate comparison. Hidden and landless countries are not ranked. Weights are moddable in game/interface.": "Каждая составляющая делится на наибольшее доступное значение. Сухопутная сила — сумма силы армий, без флота и авиации. Уровень жизни сравнивается отдельно. Страны без территории и скрытая статистика не учитываются. Веса можно изменить в game/interface."
+}

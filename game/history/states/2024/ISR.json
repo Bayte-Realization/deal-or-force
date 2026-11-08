@@ -1,4 +1,4 @@
-// Israel (ISR) on 1 January 2024: 1 region, 9,053,300 people.
+// Israel (ISR) on 1 January 2024: 6 regions, 9,050,000 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -13,10 +13,50 @@
 {
   // Southern District
   "il_d": {
-    "population": 9053300,
+    "population": 1390000,
+    "urbanization": 0.9,
+    "cultures": {"israeli_jew": 0.73, "bedouin": 0.19, "russian": 0.05, "palestinian": 0.03},
+    "buildings": {"Agriculture": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
+  },
+  // Jerusalem District
+  "il_jm": {
+    "population": 1240000,
+    "urbanization": 0.98,
+    "cultures": {"israeli_jew": 0.62, "palestinian": 0.36, "armenian": 0.01, "russian": 0.01},
+    "buildings": {"Infrastructure": 1},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
+  },
+  // Central District
+  "il_m": {
+    "population": 2290000,
     "urbanization": 0.95,
-    "cultures": { "israeli_jew": 0.7276, "palestinian": 0.1782, "bedouin": 0.0297, "russian": 0.0279, "druze_people": 0.0158, "arab_levantine": 0.0099, "maronite": 0.0049, "armenian": 0.004, "ukrainian": 0.002 },
-    "buildings": { "Agriculture": 3, "CivilianIndustry": 1, "Infrastructure": 3 },
-    "resources": { "Food": 0.917, "Coal": 0.598, "Oil": 0.539, "IronOre": 0.232, "RareEarths": 0.08, "NaturalGas": 1.118, "Timber": 1.127, "Bauxite": 0.16, "Uranium": 0.009 }
+    "cultures": {"israeli_jew": 0.87, "palestinian": 0.09, "russian": 0.03, "ukrainian": 0.01},
+    "buildings": {"CivilianIndustry": 1, "Infrastructure": 1},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
+  },
+  // Tel Aviv District
+  "il_ta": {
+    "population": 1470000,
+    "urbanization": 1.0,
+    "cultures": {"israeli_jew": 0.93, "palestinian": 0.04, "russian": 0.02, "ukrainian": 0.01},
+    "buildings": {"CivilianIndustry": 1},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
+  },
+  // Haifa District
+  "il_ha": {
+    "population": 1130000,
+    "urbanization": 0.95,
+    "cultures": {"israeli_jew": 0.67, "palestinian": 0.25, "druze_people": 0.04, "russian": 0.04},
+    "buildings": {"Infrastructure": 1},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
+  },
+  // Northern District
+  "il_z": {
+    "population": 1530000,
+    "urbanization": 0.85,
+    "cultures": {"palestinian": 0.44, "israeli_jew": 0.42, "druze_people": 0.08, "maronite": 0.03, "arab_levantine": 0.03},
+    "buildings": {"Agriculture": 2},
+    "resources": { "Food": 0.153, "Coal": 0.1, "Oil": 0.09, "IronOre": 0.04, "RareEarths": 0.013, "NaturalGas": 0.186, "Timber": 0.188, "Bauxite": 0.027, "Uranium": 0.0015 }
   }
 }

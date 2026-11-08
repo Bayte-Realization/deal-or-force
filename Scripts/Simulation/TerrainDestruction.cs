@@ -18,8 +18,8 @@ public sealed partial class Campaign
         var state = States.Find(s => s.MapIndex == stateId);
         var owner = Nations.Find(n => n.MapIndex == map.ProvinceToNation[province]);
         var remaining = 0;
-        for (var p = 1; p <= map.ProvinceCount; p++)
-            if (map.ProvinceToState[p] == stateId && !map.IsWater(p)) remaining++;
+        foreach (var p in map.ProvincesOfState(stateId))
+            if (!map.IsWater(p)) remaining++;
         if (state is not null && remaining > 0)
         {
             // Regional data has no building/house coordinates. Provinces share regional assets equally.

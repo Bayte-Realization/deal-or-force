@@ -239,12 +239,13 @@ public partial class DealOrForceGame
         var provinces = _campaign.ProvinceMap is null
             ? 0
             : PeaceConference.ProvincesOfState(_campaign.ProvinceMap, _selectedState.MapIndex).Count;
-        var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex);
+        var garrison = _campaign.Armies.Count(army => army.StateMapIndex == _selectedState.MapIndex &&
+                                                      CampaignIntel.PlayerCanSeeArmy(_campaign, army));
         DetailHeading("GROUND");
         DetailRow("Provinces", provinces.ToString("N0"),
             "Tactical provinces this region is made of. A border drawn through them splits the region in two.");
         DetailRow("Divisions here", garrison.ToString("N0"),
-            "Formations currently standing inside the region.");
+            "Formations you can see standing inside the region. Foreign forces are hidden by fog of war.");
 
         SetRegionalActionsEnabled(owned);
     }
@@ -486,7 +487,8 @@ public partial class DealOrForceGame
         Simulation.Loc.Format("Entrenchment: {0:P0}", army.Entrenchment) + "\n\n" +
         Simulation.Loc.Get("Foreign formation — orders and route are not available.");
 
-    private void QueueRegionalBuilding(BuildingKind kind)
+    /// <summary>Queue one or several of a building here; several stop at the first that cannot start.</summary>
+    private void QueueRegionalBuilding(BuildingKind kind, int count = 1)
     {
         if (_selectedState is null || _selectedState.NationMapIndex != _campaign.Player.MapIndex)
         {
@@ -494,14 +496,23 @@ public partial class DealOrForceGame
             return;
         }
         var before = _campaign.Construction.Count;
-        _campaign.Commands.Enqueue(new QueueConstructionCommand
+        for (var i = 0; i < Math.Max(1, count); i++)
         {
-            IssuerId = _campaign.Player.Id,
-            StateMapIndex = _selectedState.MapIndex,
-            Building = kind
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        _regionActionFeedback.Text = _campaign.Construction.Count > before
+            var was = _campaign.Construction.Count;
+            _campaign.Commands.Enqueue(new QueueConstructionCommand
+            {
+                IssuerId = _campaign.Player.Id,
+                StateMapIndex = _selectedState.MapIndex,
+                Building = kind
+            });
+            _campaign.Commands.ApplyAll(_campaign);
+            if (_campaign.Construction.Count == was) break;
+        }
+        var queued = _campaign.Construction.Count - before;
+        _regionActionFeedback.Text = queued > 1
+            ? Simulation.Loc.Format("{0} × {1} added to the {2} queue.",
+                queued, Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)
+            : queued == 1
             ? Simulation.Loc.Format("{0} added to the {1} queue.",
                 Tr(BuildingCatalog.Get(kind).Name), _selectedState.DisplayName)
             : Tr("Could not queue the project: check treasury or the national construction limit.");

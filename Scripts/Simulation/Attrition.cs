@@ -3,6 +3,40 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// The army's lifecycle: what grows in war, what goes home in peace, and the one
+/// thing that actually starves — a pocket nobody relieved.
+///
+/// Despite the filename, this is NOT about peacetime attrition. (Yeah? NO SHIT, SHERLOCK! (addressing GLM 5.3, who wrote this)) Formations do not
+/// decay in peace. They stand, they cost money (the military spending slider),
+/// and only an UNPAID SURPLUS goes home — one division at a time, only when the
+/// treasury cannot cover it, never one that is holding a front or an order.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — what this file actually does, in order of the Tick:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// 1. STARVE THE POCKETS — the only genuine attrition here: a formation cut off
+///   from supply loses people and organisation daily until relieved or broken.
+///   This is the cauldron mechanic (LogisticsCore marks it CutOff, this bleeds it).
+///
+/// 2. BURY THE BROKEN — removes formations that have reached zero. Bookkeeping.
+///
+/// 3. REBUILD THE LOST — the recruitment pass: fills the gap between the army a
+///   country has and the one its situation calls for (bigger at war, smaller at
+///   peace). One formation at a time in peace, several at a time in war.
+///
+/// 4. STAND DOWN THE SURPLUS — only at peace, only when the treasury cannot pay:
+///   one surplus division goes home, the men return to the manpower reserve.
+///   A division holding a front, fighting, or carrying out an order is never surplus.
+///
+/// WHAT TO CHANGE:
+///   • Bigger armies in war → WarDivisionsPerPost, WarCeiling, WarCeilingOverrun.
+///   • Faster recovery → WarRaiseBatch (more formations per pass).
+///   • Peace that disarms → PeaceDisbandMargin (1.0 = any surplus goes home).
+///   • Manpower as the real limit → ManpowerRecoveryRate in defines.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>
@@ -85,6 +119,9 @@ public sealed partial class Nation
 public static class Attrition
 {
     private static readonly List<Army> Broken = new();
+
+    /// <summary>Formations buried while cut off, this process: a bench counter, not campaign state.</summary>
+    public static int StarvedInPockets;
     private static readonly Dictionary<int, float> Standing = new();
 
     public static void Tick(Campaign campaign)
@@ -124,6 +161,11 @@ public static class Attrition
     /// And the men it cost were never counted - they came off the formation and out of the
     /// world, so the war that closed the pocket showed none of it. Now they are killed or
     /// taken, on the books of the war that is starving them (see WarLosses).
+    ///
+    /// The six weeks start when the pocket's own stores are gone, not when the ring closes.
+    /// What was stockpiled where it stands feeds it first (StrandedGarrisons.AssessStores), and a
+    /// pocket with stores and nobody coming gives up before it starves to the last man
+    /// (StrandedGarrisons.Tick).
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
@@ -138,6 +180,9 @@ public static class Attrition
                 continue;
             }
             if (MilitaryAccess.MustReturn(campaign, army)) { MilitaryAccess.Provision(army); army.DaysCutOff = 0; continue; }
+            // A pocket still living off its stores is fed: it starves when they are gone
+            // (LogisticsSystem.AgeCutOff, StrandedGarrisons).
+            if (army.PocketStores > 0f) continue;
             // The day count is advanced once, by the supply pass, earlier on this step.
             // Counting it again made every retraced day two days older than the calendar.
 
@@ -177,7 +222,7 @@ public static class Attrition
         {
             // A pocket that has starved down to nothing did not dissolve: what was left of it
             // surrendered, and those men are the other side's prisoners now.
-            if (army.CutOff) WarLosses.Surrender(campaign, army);
+            if (army.CutOff) { StarvedInPockets++; WarLosses.Surrender(campaign, army); }
             Destroy(campaign, army, "destroyed: broken in the field");
         }
         campaign.MarkStrategicChange();

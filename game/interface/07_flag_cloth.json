@@ -1,0 +1,9 @@
+{
+  "metrics": {
+    "flag.wave_speed": 0.8,
+    "flag.wave_amplitude": 0.016,
+    "flag.fold_strength": 0.16,
+    "flag.weave_strength": 0.035
+  }
+}
+

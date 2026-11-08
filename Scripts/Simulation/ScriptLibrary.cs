@@ -19,8 +19,9 @@ namespace DealOrForce.Simulation;
 /// own library beside the base game's and refers to both.
 ///
 /// The two libraries are used the same way. Anything that takes a trigger or an effect
-/// also takes a `use` list, and the named entries are folded in before the block's own
-/// clauses:
+/// also takes a `use` list. Effects expand at the position of that key; put `use` first
+/// when local entries should run afterwards. Numeric trigger bounds combine with AND;
+/// tags are alternatives, and contradictory at_war clauses should not be composed:
 ///
 ///   "trigger": { "use": [ "at_war", "solvent" ], "min_war_support": 0.30 }
 ///   "effects": { "use": [ "war_mobilisation" ], "treasury_percent": -0.01 }

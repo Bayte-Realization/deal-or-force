@@ -448,7 +448,7 @@ public static class MapRasterCatalog
                     _ => throw new InvalidDataException($"Unknown lake colour #{lakeColor:X6} at pixel {cell}; use #3366FF or black.")
                 };
             }
-            raster = new HydrologyRaster(width, height, pixels, 0, 0, "raster data maps");
+            raster = new HydrologyRaster(width, height, pixels, 0, 0, "raster data maps", AuthoredRivers: true);
             message = $"{Path.GetFileName(RiverPath)} + {Path.GetFileName(LakePath)}";
             return true;
         }

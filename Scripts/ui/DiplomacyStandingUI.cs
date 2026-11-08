@@ -14,7 +14,7 @@ namespace DealOrForce;
 /// opened Kosovo or Transnistria learned their opinion of us and the balance of power, and
 /// nothing of the wars they were fighting, the bloc they were in or who was paying for
 /// their army. Those are the facts a foreign ministry reads first. Each kind of tie is a row
-/// with a caption on the left and the countries in it on the right; a row with nothing in
+/// with a caption above its country chips; a row with nothing in
 /// it is not shown, except the wars, where "at peace" is itself the news.
 /// </summary>
 public partial class DealOrForceGame
@@ -27,12 +27,15 @@ public partial class DealOrForceGame
         var box = field("IN THE WORLD", wars.Count == 0 ? Tr("at peace")
             : Simulation.Loc.Format("{0} war(s)", wars.Count), wars.Count == 0 ? Ui.Colour("text.muted") : Ui.Colour("state.negative"));
 
-        HBoxContainer Row(string caption)
+        VBoxContainer Row(string caption)
         {
-            var row = new HBoxContainer();
-            row.AddThemeConstantOverride("separation", 10);
+            // A fixed caption column squeezes translated words and long country chips
+            // into fragments at 720p. A full-width caption keeps both readable at every scale.
+            var row = new VBoxContainer();
+            row.AddThemeConstantOverride("separation", 5);
             var label = RowLabel(caption, 11, Ui.Colour("text.caption"), upper: true);
-            label.CustomMinimumSize = new Vector2(150, 0);
+            label.Name = "DiplomacyStandingCaption";
+            label.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             label.SizeFlagsVertical = SizeFlags.ShrinkBegin;
             label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             row.AddChild(label);

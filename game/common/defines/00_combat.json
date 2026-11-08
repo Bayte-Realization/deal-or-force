@@ -60,6 +60,11 @@
   "RestAfterCaptureDays": 2,
   "RestAfterSpentAttackDays": 7,
   "RestAfterRetreatDays": 7,
+  // How many provinces deep a beaten formation looks for its own line before surrendering
+  // whole. 1 left divisions whose neighbours had all changed hands to surrender with their line
+  // two provinces away: 245,000 Ukrainian prisoners by day 300 in one run, 66,000 at 3. Over 24
+  // two-year runs Ukraine held 72 provinces (63 at 1).
+  "RetreatSearchDepth": 3,
   "FrontCoverageRadius": 2,
   "FrontCoverageFalloff": 0.45,
   "WoundedReturningShare": 0.55,

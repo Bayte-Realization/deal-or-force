@@ -203,7 +203,7 @@ public partial class DealOrForceGame
         Add("teleport", "ARMIES", "teleport PROVINCE",
             "Move the selected divisions to a province at once.", ConsoleTeleport, "tp");
         Add("heal", "ARMIES", "heal [all]",
-            "Fill the selected divisions back up - men, organisation, equipment, supply. " +
+            "Fill the selected divisions back up - men, morale, equipment, supply. " +
             "`heal all` does the whole army.", ConsoleHeal, "reinforce");
         Add("kill", "ARMIES", "kill [all]",
             "Delete the selected divisions, or the whole army with `all`.", ConsoleKill, "disband");
@@ -294,6 +294,8 @@ public partial class DealOrForceGame
         // ---------------------------------------------------------------------- the debug --
         Add("fps", "DEBUG", "fps", "Frames, frame time, draw calls and what the renderer is holding.",
             _ => ConsoleFps());
+        Add("tags", "DEBUG", "tags [on|off]", "Show or hide country IDs on the map and in country headers; no argument toggles.",
+            ConsoleCountryTags, "tdebug");
         Add("sim", "DEBUG", "sim [filter]",
             "Where a simulated day is actually spent, slowest pass first.", ConsoleSimulation);
         Add("mem", "DEBUG", "mem", "What the process is holding, and a collection on request.",
@@ -345,9 +347,12 @@ public partial class DealOrForceGame
         // ------------------------------------------------------------------------- the rest --
         //
         // One joke, kept on purpose: it takes its own advice. The rest of the console is tools.
+        Add("memory", "DIAGNOSTICS", "memory [count]",
+            "Where the game's memory is: the process, the managed heap, the renderer and the largest textures.",
+            args => DealOrForce.MemoryReport.Build(int.TryParse((args ?? "").Trim(), out var count) ? Math.Clamp(count, 1, 200) : 25));
         Add("touchgrass", "FUN", "touchgrass",
             "A verse, and eight seconds later the game closes. It does not save first. " +
-            "The verse is in game/common/console.",
+            "The text is in game/localization.",
             _ => ConsoleTouchGrass());
         // And two that cannot be taken back, after the routes of Deltarune that cannot either.
         Add("snowgrave", "FUN", "snowgrave",
@@ -998,7 +1003,7 @@ public partial class DealOrForceGame
                 $"      order {army.OrderKind} -> province {army.OrderProvinceId:N0}, issued {since}\n" +
                 $"      {progress} · queued {army.Route.Count} · planned {army.PlannedRoute.Count} · " +
                 $"last attempt: {attempt}\n" +
-                $"      org {army.Organisation:P0} · strength {army.Strength:P0} · supply {army.SupplyLevel:P0} · " +
+                $"      morale {army.Organisation:P0} · strength {army.Strength:P0} · supply {army.SupplyLevel:P0} · " +
                 $"stance {army.Stance}");
         }));
     }
@@ -1201,7 +1206,7 @@ public partial class DealOrForceGame
         var projects = _campaign.Construction
             .Where(project => project.StateMapIndex == state.MapIndex)
             .Select(project => $"    building {project.Building} · {project.Progress:P0} · " +
-                               $"{project.ProgressDays}/{project.DurationDays} day(s)")
+                               $"{project.ProgressDays:0.#}/{project.DurationDays} day(s)")
             .ToArray();
         var standing = state.Buildings.Count == 0
             ? "    nothing built"

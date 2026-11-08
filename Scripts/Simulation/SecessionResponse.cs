@@ -14,6 +14,11 @@ public static class SecessionResponse
     internal static void Begin(Campaign c, Nation parent, Nation rebel)
     {
         rebel.SecededFromId = parent.Id;
+        // The permanent record of whom it rose against, written at the rising. Without it a
+        // movement that took ground carried a SecededFromId and no RevoltParentId, and loading
+        // the save wrote one (Reintegration.AdoptLegacyLineage) - the loaded world then
+        // fingerprinted differently from the one that was saved, which in multiplayer is a desync.
+        if (rebel.RevoltParentId < 0) rebel.RevoltParentId = parent.Id;
         rebel.LastSecessionDay = c.ElapsedDays;
         parent.DecisionAvailableDay[Key(rebel)] = c.ElapsedDays + Math.Max(1, c.Defines.SecessionResponseDays);
     }
@@ -79,10 +84,21 @@ public static class SecessionResponse
         if (parent is null || rebel is null || !c.HasOwnedLand(rebel) || !Reintegration.IsBreakawayOf(rebel, parent)) return true;
         if (option.SecessionChoice == "fight")
         {
-            if (!CampaignDiplomacy.AtWar(c, parent.Id, rebel.Id) &&
+            var already = CampaignDiplomacy.AtWar(c, parent.Id, rebel.Id);
+            if (!already &&
                 CampaignDiplomacy.DeclareWar(c, parent.Id, rebel.Id, justification: "secession", onOwnInitiative: false) is null)
                 return false; // Never consume a blocked choice and pretend the army was sent.
             parent.DecisionAvailableDay.Remove(Key(rebel));
+            // The army a played country sends finds its own garrison on the ground that rose, as a
+            // country the computer runs does on the day of the rising: each formation goes home or
+            // holds (StrandedGarrisons). Only when this choice is what started the war.
+            if (!already && c.ProvinceMap is not null && c.ProvinceController is not null)
+            {
+                var ground = new HashSet<int>();
+                for (var province = 1; province <= c.ProvinceMap.ProvinceCount; province++)
+                    if (c.ProvinceController[province] == rebel.MapIndex) ground.Add(province);
+                StrandedGarrisons.AtRising(c, parent, rebel, ground);
+            }
         }
         else if (option.SecessionChoice == "recognise")
         {

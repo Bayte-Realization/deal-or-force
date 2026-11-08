@@ -45,6 +45,7 @@ public partial class DealOrForceGame
         pacts.AddChild(_guaranteeButton);
         BuildAgreementControls(list);
         BuildSubmissionControls(list);
+        AddCountryDiplomaticActButtons(list);
 
         _subjectActions = new VBoxContainer { Name = "SubjectActions", Visible = false };
         _subjectActions.AddThemeConstantOverride("separation", 5);
@@ -131,7 +132,7 @@ public partial class DealOrForceGame
         if (!ValidForeignSelection()) return;
         var player = _campaign.Player;
         var target = _selectedNation;
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, target.Id);
 
         if (relation.Stance == DiplomaticStance.Allied)
         {
@@ -145,17 +146,14 @@ public partial class DealOrForceGame
             _campaign.Commands.ApplyAll(_campaign);
             _countryActionFeedback.Text = Simulation.Loc.Format("Allied with {0}.", target.DisplayName);
         }
-        else if (!AllianceSystem.CanPropose(_campaign, player, target, out var refusal))
+        else if (!AllianceSystem.CanPropose(_campaign, player, target, out var refusal, preview: true))
         {
             _countryActionFeedback.Text = refusal;
         }
         else
         {
-            _campaign.Commands.Enqueue(new ProposeAllianceCommand { IssuerId = player.Id, TargetId = target.Id });
-            _campaign.Commands.ApplyAll(_campaign);
-            _countryActionFeedback.Text = relation.Stance == DiplomaticStance.Allied
-                ? Simulation.Loc.Format("{0} accepted.", target.DisplayName)
-                : Simulation.Loc.Format("{0} declined.", target.DisplayName);
+            OpenAllianceProposalReview(target);
+            return;
         }
         RefreshCountryViews("Diplomacy");
     }
@@ -258,24 +256,7 @@ public partial class DealOrForceGame
             _allianceButton.Text = Tr("Propose alliance");
             var can = AllianceSystem.CanPropose(_campaign, _campaign.Player, nation, out var refusal, preview: true);
             _allianceButton.Disabled = !can;
-            if (!can) _allianceButton.TooltipText = Ui.Tip(refusal);
-            else
-            {
-                var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, _campaign.Player, why, refreshAssessment: false);
-                var needed = _campaign.Defines.AllianceWillingness;
-                var parts = why.Entries
-                    .OrderByDescending(entry => System.Math.Abs(entry.Value))
-                    .Take(3)
-                    .Select(entry => $"{entry.Source} {entry.Value:+0.00;-0.00;0.00}");
-                _allianceButton.TooltipText = Ui.Tip(
-                    (willingness > needed
-                        ? Simulation.Loc.Format("They would sign: {0} against {1} needed.",
-                            $"{willingness:0.00}", $"{needed:0.00}")
-                        : Simulation.Loc.Format("They would refuse: {0} against {1} needed.",
-                            $"{willingness:0.00}", $"{needed:0.00}")) +
-                    "\n" + string.Join("\n", parts));
-            }
+            _allianceButton.TooltipText = AllianceProposalTooltip(nation);
         }
 
         var guaranteed = relation.GuaranteedBy(_campaign.Player.Id);
@@ -373,6 +354,7 @@ public partial class DealOrForceGame
         RefreshPactButtons(nation);
         RefreshAgreementButtons(nation);
         RefreshSubmissionButtons(nation);
+        RefreshCountryDiplomaticActButtons(nation);
         _subjectActions.Visible = nation.AnswersTo(_campaign.Player.Id);
         if (_subjectActions.Visible)
         {
@@ -395,10 +377,8 @@ public partial class DealOrForceGame
             : Tr("Compose territorial, financial and treaty demands. Review before sending."));
         StyleButton(_quickUltimatumButton, false);
         _quickUltimatumButton.Text = Tr("Issue ultimatum");
-        _declareWarButton.TooltipText = Ui.Tip(canDeclare ? "Requires a second click to confirm." : reason);
-        _declareWarButton.Text = _pendingWarTarget == nation.Id
-            ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
-            : Tr("Declare war");
+        _declareWarButton.TooltipText = Ui.Tip(canDeclare ? Tr("Review allies and intervention risks before declaring war.") : reason);
+        _declareWarButton.Text = Tr("Declare war");
         if (!canDeclare && !_negotiatePeaceButton.Visible && string.IsNullOrWhiteSpace(_countryActionFeedback.Text))
             _countryActionFeedback.Text = reason;
     }
@@ -429,32 +409,7 @@ public partial class DealOrForceGame
     private void ConfirmOrDeclareWar()
     {
         if (!ValidForeignSelection()) return;
-        if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, _selectedNation.Id, out var reason))
-        {
-            _countryActionFeedback.Text = reason;
-            RefreshCountryViews("Diplomatic crisis");
-            return;
-        }
-        if (_pendingWarTarget != _selectedNation.Id)
-        {
-            _pendingWarTarget = _selectedNation.Id;
-            _countryActionFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            RefreshCountryViews("War declaration prepared");
-            return;
-        }
-        _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            TargetId = _selectedNation.Id,
-            ClaimedStateMapIndex = _selectedState?.NationMapIndex == _selectedNation.MapIndex
-                ? _selectedState.MapIndex
-                : -1
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("war_declared");
-        _pendingWarTarget = -1;
-        _countryActionFeedback.Text = Simulation.Loc.Format("War declared on {0}. Select your armies and assign Advance front.", _selectedNation.Name);
-        RefreshCountryViews("WAR DECLARED");
+        OpenWarDeclaration(_selectedNation, _selectedState?.NationMapIndex == _selectedNation.MapIndex ? _selectedState.MapIndex : -1);
     }
 
     private void FocusSelectedCapital()

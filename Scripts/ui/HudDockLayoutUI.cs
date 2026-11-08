@@ -14,6 +14,13 @@ public partial class DealOrForceGame
         {
             Ui.Place(_countryCard, "hud.country_card");
             _countryCard.OffsetTop = Mathf.Max(_countryCard.OffsetTop, headerBottom);
+            if (_hudNavigationPanel is not null)
+            {
+                var local = _hudLayer.GetGlobalTransformWithCanvas().AffineInverse();
+                var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);
+                var shift = Mathf.Max(0, railEnd.X + gap - _countryCard.Position.X);
+                _countryCard.OffsetLeft += shift; _countryCard.OffsetRight += shift;
+            }
         }
         if (_regionCard is not { Visible: true }) { FitOutliner(); return; }
         var rect = InterfaceSkin.Layout("hud.region_card");
@@ -35,7 +42,7 @@ public partial class DealOrForceGame
 
     private Button MusicShortcut()
     {
-        var button = ActionButton("", OpenMediaLibrary, 44, 32);
+        var button = ActionButton("", OpenSoundtrackLibrary, 44, 32);
         button.Name = "OpenMediaLibrary";
         button.Icon = AtlasSurfaceSkin.MusicGlyph();
         button.SetMeta("atlas_round_button", true);
@@ -44,8 +51,8 @@ public partial class DealOrForceGame
         button.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         button.ExpandIcon = true;
         button.AddThemeConstantOverride("icon_max_width", 20);
-        button.TooltipText = Ui.Tip(Tr("Listen to the soundtrack, preview sound effects and inspect artwork without leaving the campaign."));
-        button.AccessibilityName = Tr("Sound and artwork");
+        Tip(button, "Soundtrack player: choose a recording, pause or skip. Music continues when this window closes.");
+        button.AccessibilityName = Tr("Soundtrack player");
         StyleButton(button, false);
         return button;
     }

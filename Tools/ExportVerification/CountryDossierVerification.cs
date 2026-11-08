@@ -8,6 +8,40 @@ namespace DealOrForce;
 
 public partial class ExportVerification
 {
+    private void VerifyCampaignDossierLayout(DealOrForceGame game, string caption)
+    {
+        var (panel, body, details, scroll, navigation, header) = game.VerificationDossierLayout;
+        Check(panel is { Visible: true } && body is not null && details is not null &&
+            scroll is not null && navigation is not null && header is not null,
+            "shared country dossier controls exist: " + caption);
+        if (panel is not { Visible: true } || body is null || details is null ||
+            scroll is null || navigation is null || header is null) return;
+
+        static Rect2 CanvasRect(Control control) =>
+            control.GetGlobalTransformWithCanvas() * new Rect2(Vector2.Zero, control.Size);
+        var panelRect = CanvasRect(panel);
+        var railRect = CanvasRect(navigation);
+        Check(panelRect.Position.X >= railRect.End.X,
+            "whole country dossier clears the transformed navigation rail: " + caption);
+        Check(panelRect.Position.Y >= CanvasRect(header).End.Y,
+            "whole country dossier clears the transformed header: " + caption);
+        foreach (var (control, part) in new[] { (body, "body"), (details, "facts"), ((Control)scroll, "scroll area") })
+        {
+            var contentRect = CanvasRect(control);
+            Check(contentRect.Position.X >= panelRect.Position.X && contentRect.End.X <= panelRect.End.X + .5f,
+                "country dossier " + part + " stays inside the panel width: " + caption);
+        }
+        CheckFits(panel, "shared country dossier " + caption);
+        var position = panel.Position; var size = panel.Size;
+        game.Call("LayoutCampaignDossier"); game.Call("LayoutCampaignDossier");
+        if (!panel.Position.IsEqualApprox(position) || !panel.Size.IsEqualApprox(size))
+            GD.Print($"DOSSIER_LAYOUT_DIAGNOSTIC {caption} before={position}/{size} after={panel.Position}/{panel.Size} " +
+                $"minimum={panel.GetCombinedMinimumSize()} rail={CanvasRect(navigation)} header={CanvasRect(header)} " +
+                $"offsets={panel.OffsetLeft},{panel.OffsetTop},{panel.OffsetRight},{panel.OffsetBottom}");
+        Check(panel.Position.IsEqualApprox(position) && panel.Size.IsEqualApprox(size),
+            "repeated dossier layout does not accumulate a rail inset: " + caption);
+    }
+
     private async Task VerifyCountryDossier(DealOrForceGame game)
     {
         var world = game.VerificationWorld;
@@ -20,6 +54,10 @@ public partial class ExportVerification
         {
             Loc.Language = language; game.Call("RefreshLocalisedText"); GetTree().Root.Size = size;
             var before = CampaignFingerprint.Of(world);
+            game.Call("OpenScreen", "Nation"); await Wait(.25);
+            VerifyCampaignDossierLayout(game, language + " " + size.X);
+            await Capture("campaign-dossier-" + language + "-" + size.X);
+            game.Call("CloseSidePanel");
             game.VerificationInspectPick(new GlobePick(country, null, -1, country.CapitalLatitude, country.CapitalLongitude));
             await Wait(.25);
             var card = game.FindChild("CountryCard", true, false) as Control;
@@ -73,5 +111,12 @@ public partial class ExportVerification
             "country tick does not switch a reader back to actions");
         game.Call("CloseMapSelection");
         Loc.Language = "english"; GetTree().Root.Size = new(1920,1080); game.Call("RefreshLocalisedText");
+        await VerifyCountryCooperation(game);
     }
+}
+
+public partial class DealOrForceGame
+{
+    internal (Control Panel, Control Body, Control Details, ScrollContainer Scroll, Control Navigation, Control Header)
+        VerificationDossierLayout => (_sidePanel, _sideBody, _sideDetail, _dossierScroll, _hudNavigationPanel, _hudTopPanel);
 }

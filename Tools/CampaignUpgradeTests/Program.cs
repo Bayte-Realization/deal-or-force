@@ -105,6 +105,19 @@ static class Program
         PeacefulFormation.Invite(loaded, humanFounder, humanPartner, definition);
         Check(loaded.PendingEvents.Count == eventsBefore, "an observer is not handed a union invitation");
         loaded.ObserverMode = false;
+        // The other observer: no human seat and no human country, the world seen through a country
+        // nobody plays. Looking at Jordan is not playing Jordan.
+        humanPartner.DecisionAvailableDay.Clear();
+        var seats = loaded.HumanSeats.ToArray();
+        var wasHuman = humanPartner.IsHuman;
+        loaded.HumanSeats.Clear();
+        foreach (var nation in loaded.Nations) nation.IsHuman = false;
+        humanPartner.IsPlayer = true;
+        eventsBefore = loaded.PendingEvents.Count;
+        PeacefulFormation.Invite(loaded, humanFounder, humanPartner, definition);
+        Check(loaded.NobodyPlays && loaded.PendingEvents.Count == eventsBefore, "a country only looked at is not handed a union invitation");
+        loaded.HumanSeats.AddRange(seats);
+        humanPartner.IsHuman = wasHuman;
         humanPartner.DecisionAvailableDay.Clear();
         var humanRefusal = PeacefulFormation.Refusal(loaded, humanFounder, humanPartner, definition);
         Check(PeacefulFormation.Invite(loaded, humanFounder, humanPartner, definition), "a human receives a proposal instead of automatic consent: " + humanRefusal);
@@ -158,9 +171,9 @@ static class Program
         var region = campaign.StatesOf(parent).First(s => s.Name.Contains("Tatar", StringComparison.OrdinalIgnoreCase));
         var report = SecessionEvents.Force(campaign, region, "tatar");
         Check(report is not null, "a separatist country actually forms");
-        var choice = campaign.PendingEvents.Single(e => e.NationId == parent.Id && e.Options.Any(o => o.DeclareWarOn == report.Seceded.Id));
+        var choice = campaign.PendingEvents.Single(e => e.NationId == parent.Id && e.Options.Any(o => o.SecessionTargetId == report.Seceded.Id && o.SecessionChoice == "fight"));
         Check(!CampaignDiplomacy.AtWar(campaign, parent.Id, report.Seceded.Id), "the player is asked before a reclamation war");
-        EventSystem.Resolve(campaign, choice, Array.FindIndex(choice.Options, o => o.DeclareWarOn == report.Seceded.Id));
+        EventSystem.Resolve(campaign, choice, Array.FindIndex(choice.Options, o => o.SecessionTargetId == report.Seceded.Id && o.SecessionChoice == "fight"));
         Check(CampaignDiplomacy.AtWar(campaign, parent.Id, report.Seceded.Id), "Send the army starts the real secession war (103)");
         using var overlay = JsonDocument.Parse("{\"united_korea\":{\"peaceful_accession\":false}}");
         var errors = new List<string>();
@@ -247,7 +260,8 @@ static class Program
             "AI's review deadline and unanswered proposal survive a real snapshot");
         // The vanilla campaign reloads balance from active game/mod data. These
         // one-day/early-game settings are test-only, not authored scenario rules.
-        Check(loaded.Defines.UnionAiReviewDays == 90 && loaded.Defines.UnionAiEarliestDay == 180,
+        // Whatever the data says today (it was 90 days, then 75) - never the test-only 1 and 10.
+        Check(loaded.Defines.UnionAiReviewDays > 1 && loaded.Defines.UnionAiEarliestDay > 10,
             "vanilla reload uses the mod-readable union balance rather than test-only overrides");
         loaded.Defines.UnionAiReviewDays = 1;
         loaded.Defines.UnionAiEarliestDay = 10;

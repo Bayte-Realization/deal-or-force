@@ -18,9 +18,42 @@ namespace DealOrForce.Simulation;
 /// part: a state survives a furious province and falls to a furious capital. Petrograd in
 /// 1917 was one city in an empire of a hundred and fifty million.
 ///
-/// Everything about the shape of it is in `common/stability`, including how much the
-/// capital is worth, so a mod that thinks provinces should matter more than palaces can
-/// say so in one file.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// PIPELINE РАСЧЁТА СТАБИЛЬНОСТИ (STABILITY AGGREGATION PIPELINE):
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+///  [ Рез-ты по регионам: RegionStability ]
+///  Base (0.62) + LivingDelta * Living (0.55) - Radicalism (0.85)
+///  - ForeignShare * Minority (0.30) - OccupiedShare * Occupation (0.55) + Literacy (0.04)
+///           │
+///           ▼
+///  [ Агрегация по стране ]
+///  Geography = CapitalStability * 35% + PopulationWeightedMean * 65%
+///           │
+///           ▼
+///  [ Национальные вычеты и надбавки ]
+///  - Война (WarCost = WarStanding * Stake + (1 - WarSupport) * 0.10)
+///  - Имперское перенапряжение (ImperialOverstretch * 0.18)
+///  - Перемещение правительства в военное время (-0.05)
+///  + Исторический базис (StabilityBias)
+///  + Эффект недавнего управления (StabilityGovernance)
+///  + Социальная память (SocialMemory / институты и ожидания)
+///           │
+///           ▼
+///  Target = Clamp(Target, Floor (0.05), Ceiling (0.98))
+///  Недельный дрейф: Stability += (Target - Stability) * Approach (0.10)
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ДЛЯ МОДДЕРОВ (FOR MODDERS) — Настройка в common/stability/*.json:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// • Base: базовый уровень спокойного региона (0.62).
+/// • CapitalShare: доля влияния столичного региона (по умолчанию 35%).
+/// • Living, LivingTolerance: порог терпимости уровня жизни (0.45) и вес влияния.
+/// • Minority: цена межнациональной напряжённости в некоренных регионах (0.30).
+/// • ImperialOverstretch: штраф за перенапряжение административного аппарата (0.18).
+/// • BaseImperialCapacity: число некоренных/напряжённых регионов до наступления
+///   перенапряжения (в Defines, по умолчанию 4).
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public sealed class StabilityWeights
 {
@@ -174,6 +207,16 @@ public static class StabilityCore
     /// country's own baseline.
     /// </summary>
     public static float Target(Campaign campaign, Nation nation, Breakdown drivers = null)
+        => CalculateTarget(campaign, nation, drivers, updateState: true);
+
+    /// <summary>The existing rule's target under current conditions, without writing regional stability
+    /// or imperial overstretch. Inspecting conditions on pause must not advance the world.</summary>
+    public static float Preview(Campaign campaign, Nation nation, Breakdown drivers = null)
+        => CalculateTarget(campaign, nation, drivers, updateState: false);
+    // drivers — заполняемый результат. Для UI передавайте новый Breakdown, а не
+    // nation.StabilityDrivers: «без записи состояния» не превращает аргумент в immutable.
+
+    private static float CalculateTarget(Campaign campaign, Nation nation, Breakdown drivers, bool updateState)
     {
         if (campaign is null || nation is null) return Weights.Base;
         var weights = Weights;
@@ -186,7 +229,7 @@ public static class StabilityCore
             // One walk of the map a day for the whole world, shared with everything that asks.
             var settled = RegionStability(nation, state,
                 ControlTally.World(campaign, nation.MapIndex, state.MapIndex));
-            state.Stability = settled;
+            if (updateState) state.Stability = settled;
             if (state.MapIndex == nation.CapitalStateMapIndex) capitalStability = settled;
             if (state.Population <= 0) continue;
             weighted += settled * (double)state.Population;
@@ -215,8 +258,9 @@ public static class StabilityCore
         }
         var warCost = atWar ? weights.War * stake + (1f - nation.WarSupport) * weights.WarSupport : 0f;
 
-        nation.ImperialOverstretch = Overstretch(campaign, nation);
-        var overstretchCost = nation.ImperialOverstretch * weights.ImperialOverstretch;
+        var overstretch = Overstretch(campaign, nation);
+        if (updateState) nation.ImperialOverstretch = overstretch;
+        var overstretchCost = overstretch * weights.ImperialOverstretch;
 
         var relocationCost = nation.GovernmentSeatProvinceId > 0 ? 0.05f : 0f;
 
@@ -236,7 +280,7 @@ public static class StabilityCore
                 drivers.Add("How it has been governed lately", nation.StabilityGovernance);
             if (MathF.Abs(memory) > 0.0005f)
                 drivers.Add(Loc.Get("Institutions and living-standard expectations"), memory);
-            drivers.Settle(M.Clamp(target, weights.Floor, weights.Ceiling) - target,
+            drivers.Settle(M.Clamp(target, weights.Floor, weights.Ceiling),
                 target > weights.Ceiling ? "already as settled as a country gets"
                     : target < weights.Floor ? "held up off the floor" : "rounding");
         }
@@ -259,7 +303,11 @@ public static class StabilityCore
             if (state is null || state.Unclaimed) continue;
             var isHomeland = TerritorialClaims.TitleOf(campaign, nation, state) == TerritorialTitle.Homeland;
             if (!isHomeland && EconomySystem.ForeignShare(state, nation.Tag) >= 0.35f)
-                strainedStates += 1f;
+                // A conquered people strains an empire by its anger, not by being there: a calm
+                // annexed region weighs 0.4, a seething one the full 1. Measured: Russia, after
+                // taking a dozen Ukrainian regions, sat at the overstretch cap for good - nothing
+                // it could do would ever digest them.
+                strainedStates += 0.4f + 0.6f * M.Clamp01(state.Radicalism / 0.4f);
             else if (campaign.ElapsedDays > 0 && state.MapIndex != nation.CapitalStateMapIndex &&
                      state.PoliticalDivergence >= 0.50f)
                 strainedStates += 0.5f;

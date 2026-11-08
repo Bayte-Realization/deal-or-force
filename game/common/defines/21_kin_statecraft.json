@@ -51,13 +51,19 @@
   // Parallel administration: our own offices inside somebody else's region. It needs a quarter
   // of the region, costs cash and credit to open, takes the region's share of the host's tax
   // (net of what it costs us to run), sours the ground, and can be discovered and shut.
+  //
+  // Discovery is the base rate only: it is scaled up by how stable the host is (a state that is
+  // coming apart has other worries) and down by how much of the region is ours (where our people
+  // are the region, foreign paperwork hides among its own). At 0.035 a week an office lived about
+  // eight months and never outlived anything; at 0.008 a typical one lasts about two years, a week
+  // one under a collapsing host with our majority five.
   "KinAdminMinShare": 0.25,
   "KinAdminOpenCashPerMillion": 0.006,
   "KinAdminPoliticalCost": 5,
   "KinAdminLevy": 0.55,
   "KinAdminUpkeepPerMillion": 0.0009,
   "KinAdminRadicalism": 0.004,
-  "KinAdminDiscovery": 0.035,
+  "KinAdminDiscovery": 0.008,
   "KinAdminGrievance": 6,
   "KinAdminCaughtGrievance": 18,
   "KinAdminShutdownChance": 0.18,

@@ -14,6 +14,11 @@ public sealed partial class Defines
     public int InterventionReviewDays { get; set; } = 14;
     /// <summary>Willingness score threshold above which an AI government agrees to intervene in a foreign war.</summary>
     public float AiInterventionWillingness { get; set; } = 0.45f;
+    /// <summary>
+    /// What fighting a deterrent holder costs a government that holds one itself, in willingness:
+    /// the war it would join is a war between two nuclear powers. Zero restores the old reckoning.
+    /// </summary>
+    public float AiInterventionDeterrence { get; set; } = 1.2f;
 }
 
 public enum WarInterventionState { Pending, Joined, Declined, Withdrawn, Expired, Invalidated }
@@ -65,7 +70,11 @@ public static class WarInterventions
 {
     public const int MaxActive = 8, MaxHistory = 24, MaxCooldowns = 256;
 
-    public static bool Enabled(Campaign c) => c is not null && c.FeatureEnabled("diplomacy") &&
+    // Open unless a scenario names a "diplomacy" switch and closes it. It used to require the switch
+    // to be on, and no scenario declares it - so no plea was ever possible, the player's included.
+    public static bool Enabled(Campaign c) => c is not null &&
+        (!(c.Defines.Features?.ContainsKey("diplomacy") == true || c.FeatureOverrides.ContainsKey("diplomacy")) ||
+         c.FeatureEnabled("diplomacy")) &&
         MechanicFeatures.SystemEnabled(c, nameof(CampaignDiplomacy));
 
     public static int Incoming(Campaign c, int nationId) => c?.InterventionRequests.Count(r =>
@@ -159,6 +168,8 @@ public static class WarInterventions
         if (c is null || donor is null || requester is null || enemy is null || war is null) return "";
         if (requester.AnswersTo(donor.Id))
             return "They answer to you, and the war has reached them.";
+        if (donor.AnswersTo(requester.Id) && SubjectCatalog.Of(donor.SubjectType) is { DraggedIntoWars: true })
+            return "The subject treaty calls for military support.";
         var toRequester = CampaignDiplomacy.Peek(c, donor.Id, requester.Id);
         var defending = war.IsDefending(requester.Id);
         if (defending && toRequester is not null &&
@@ -195,7 +206,7 @@ public static class WarInterventions
             ArmsShipmentRequests.Incoming(c, donorId) + DealNegotiations.Incoming(c, donorId) >=
             Math.Clamp(c.Defines.DealInboxLimit, 1, 16))
             refusal = "The diplomatic request inbox is full. Wait for a reply.";
-        else if (c.InterventionCooldowns.Count >= MaxCooldowns)
+        else if (c.InterventionCooldowns.Count(x => x.ReadyOnDay > c.ElapsedDays) >= MaxCooldowns)
             refusal = "Too many intervention pleas are already open.";
         else if (c.NextInterventionRequestId <= 0 || c.NextInterventionRequestId == int.MaxValue)
             refusal = "Too many intervention pleas are already open.";
@@ -203,6 +214,11 @@ public static class WarInterventions
     }
 
     public static WarInterventionAssessment Assess(Campaign c, int requesterId, int donorId, int warId)
+        => AssessForWar(c, requesterId, donorId, c is null ? null : WarFor(c, requesterId, warId));
+
+    // The declaration screen supplies a detached prospective war. Do not append it to
+    // the campaign or create diplomatic relations just to explain a possible decision.
+    internal static WarInterventionAssessment AssessForWar(Campaign c, int requesterId, int donorId, StrategicWar war)
     {
         WarInterventionAssessment Not(string reason) => new(false, "", 0f, false, reason);
         if (!Enabled(c)) return Not("Military intervention is not available.");
@@ -216,11 +232,15 @@ public static class WarInterventions
         if (donor.Movement is not null) return Not("A movement cannot send military forces.");
         if (CampaignDiplomacy.AtWar(c, requesterId, donorId))
             return Not(donor.IsHuman ? "They are at war with you." : "You are at war with them.");
-        var war = WarFor(c, requesterId, warId);
         if (war is null || war.Ended || !war.Involves(requesterId))
             return Not(requester.IsHuman ? "You are not fighting a war." : "They are not fighting a war.");
         if (war.Involves(donorId))
             return Not(donor.IsHuman ? "They are fighting in that war themselves." : "You are fighting in that war yourself.");
+        if ((war.CivilConflict || war.Limited) && !CampaignDiplomacy.MayJoinCivilWar(c, war, donor, war.IsDefending(requesterId)))
+            return Not("This internal conflict does not permit foreign belligerents.");
+        foreach (var opponentId in war.EnemiesOf(requesterId))
+            if (!CampaignDiplomacy.CanDeclareWar(c, donorId, opponentId, out var blocked, onOwnInitiative: false))
+                return Not(blocked);
         var enemyId = war.EnemyLeaderOf(requesterId);
         var enemy = c.NationById(enemyId);
         if (enemy is null) return Not("No enemy leader in this war.");
@@ -229,7 +249,7 @@ public static class WarInterventions
         var pretext = Pretext(c, donor, requester, enemy, war);
         if (pretext.Length == 0) return Not("There is no pretext for requesting military intervention in that war.");
 
-        var bond = CampaignDiplomacy.Get(c, donorId, requesterId);
+        var bond = CampaignDiplomacy.Peek(c, donorId, requesterId);
         var willingness = bond?.Opinion / 100f ?? 0f;
         var defending = war.IsDefending(requesterId);
         if (bond is not null && bond.Stance == DiplomaticStance.Allied)
@@ -241,9 +261,15 @@ public static class WarInterventions
         willingness += Math.Clamp(donor.WarSupport - 0.5f, -0.4f, 0.4f);
         willingness += Math.Clamp(donor.Stability - 0.5f, -0.3f, 0.3f);
         var mine = AiStatecraft.StrengthOf(c, donor);
-        var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy);
+        var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy, refreshAssessment: false);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
         if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
+        // Arms and money are one decision; troops against a nuclear power are another. The
+        // reckoning above priced the United States joining Ukraine's war by the size of the two
+        // armies, and found it worth doing by spring 2024. Every enemy holder counts once.
+        if (Deterrence.TierOf(c, donor) >= 1 && war.EnemiesOf(requesterId).Any(id => Deterrence.TierOf(c, c.NationById(id)) >= 1))
+            willingness -= Math.Max(0f, c.Defines.AiInterventionDeterrence);
+        willingness = AiTemper.Willing(c, willingness);
         var aiWouldGrant = !donor.IsHuman && willingness >= c.Defines.AiInterventionWillingness;
 
         return new(true, pretext, willingness, aiWouldGrant, "A valid pretext exists for requesting military intervention.");
@@ -363,6 +389,9 @@ public static class WarInterventions
         var clock = c.InterventionCooldowns.FirstOrDefault(x => x.RequesterId == requesterId && x.DonorId == donorId);
         if (clock is null)
         {
+            // Lapsed clocks go first. They were never cleared, so the 256th plea in a long game
+            // filled the list for good and every plea after it was refused as one too many.
+            c.InterventionCooldowns.RemoveAll(x => x.ReadyOnDay <= c.ElapsedDays);
             if (c.InterventionCooldowns.Count >= MaxCooldowns) return;
             clock = new WarInterventionCooldown { RequesterId = requesterId, DonorId = donorId };
             c.InterventionCooldowns.Add(clock);

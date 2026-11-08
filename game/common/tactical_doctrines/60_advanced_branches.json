@@ -1,0 +1,3030 @@
+// Append late specialisations without replacing any existing book or saved article ID.
+// Each book adds two independent exclusive pairs and one continuation per choice.
+// Modifiers use the existing national rules: air articles affect long-range formations;
+// naval articles affect fleet speed, shipbuilding and national supply, not a new convoy-loss system.
+{
+  "manoeuvre": {
+    "append_nodes": [
+      {
+        "id": "manoeuvre_adv_spearheads",
+        "name": "Narrow spearheads",
+        "description": "Concentrate attacking power at the expense of the army's prepared defence.",
+        "requires": [
+          "manoeuvre_grand"
+        ],
+        "excludes": [
+          "manoeuvre_adv_broad_march"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_attack": 0.05,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "manoeuvre_adv_broad_march",
+        "name": "Broad marching front",
+        "description": "Quicker marching columns accept less striking power when they meet resistance.",
+        "requires": [
+          "manoeuvre_grand"
+        ],
+        "excludes": [
+          "manoeuvre_adv_spearheads"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "minor_power": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_speed": 0.06,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "manoeuvre_adv_spearhead_reserves",
+        "name": "Spearhead relief echelons",
+        "description": "Practise restoring the attacking echelon before it is committed again.",
+        "requires": [
+          "manoeuvre_adv_spearheads"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "army_attack": 0.015
+        }
+      },
+      {
+        "id": "manoeuvre_adv_march_discipline",
+        "name": "March-control parties",
+        "description": "Dedicated march control keeps the chosen wide advance moving and supplied.",
+        "requires": [
+          "manoeuvre_adv_broad_march"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "minor_power": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_speed": 0.025,
+          "supply": 0.015
+        }
+      },
+      {
+        "id": "manoeuvre_adv_carried_reserves",
+        "name": "Carried campaign reserves",
+        "description": "Carry more supplies through the campaign, accepting a slower army.",
+        "requires": [
+          "manoeuvre_deep_raid"
+        ],
+        "excludes": [
+          "manoeuvre_adv_flying_recovery"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "supply": 0.05,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "manoeuvre_adv_flying_recovery",
+        "name": "Flying recovery detachments",
+        "description": "Recover organisation rapidly between engagements, but accept thinner supply throughput.",
+        "requires": [
+          "manoeuvre_deep_raid"
+        ],
+        "excludes": [
+          "manoeuvre_adv_carried_reserves"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "organisation_recovery": 0.06,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "manoeuvre_adv_reserve_handling",
+        "name": "Mobile reserve handling",
+        "description": "Standard handling procedures improve the throughput of the carried reserve system.",
+        "requires": [
+          "manoeuvre_adv_carried_reserves"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      },
+      {
+        "id": "manoeuvre_adv_recovery_sections",
+        "name": "Forward recovery sections",
+        "description": "The flying detachments organise replacements while the army recovers its cohesion.",
+        "requires": [
+          "manoeuvre_adv_flying_recovery"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      }
+    ]
+  },
+  "fire": {
+    "append_nodes": [
+      {
+        "id": "fire_adv_fire_density",
+        "name": "Barrage density standards",
+        "description": "Increase division attack through denser fire plans, sacrificing marching speed.",
+        "requires": [
+          "fire_total"
+        ],
+        "excludes": [
+          "fire_adv_fire_displacement"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_attack": 0.05,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "fire_adv_fire_displacement",
+        "name": "Displacement between fire tasks",
+        "description": "Move the army faster between engagements, accepting a less concentrated attack.",
+        "requires": [
+          "fire_total"
+        ],
+        "excludes": [
+          "fire_adv_fire_density"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_speed": 0.055,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "fire_adv_density_rehearsals",
+        "name": "Concentrated fire rehearsals",
+        "description": "Rehearse the dense fire plan to improve attacks and recovery after the battle.",
+        "requires": [
+          "fire_adv_fire_density"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_attack": 0.02,
+          "organisation_recovery": 0.02
+        }
+      },
+      {
+        "id": "fire_adv_displacement_drills",
+        "name": "Fire-position change drills",
+        "description": "Practise maintaining movement and long-range recovery during repeated displacements.",
+        "requires": [
+          "fire_adv_fire_displacement"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_speed": 0.02,
+          "support_recovery": 0.025
+        }
+      },
+      {
+        "id": "fire_adv_protected_guns",
+        "name": "Protected firing establishments",
+        "description": "Reduce long-range formation losses, accepting slower recovery of those formations.",
+        "requires": [
+          "fire_rolling"
+        ],
+        "excludes": [
+          "fire_adv_rapid_reconstitution"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "support_losses": -0.06,
+          "support_recovery": -0.035
+        }
+      },
+      {
+        "id": "fire_adv_rapid_reconstitution",
+        "name": "Rapid fire-group reconstitution",
+        "description": "Restore long-range strength faster while accepting greater losses over defended fronts.",
+        "requires": [
+          "fire_rolling"
+        ],
+        "excludes": [
+          "fire_adv_protected_guns"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "support_recovery": 0.065,
+          "support_losses": 0.025
+        }
+      },
+      {
+        "id": "fire_adv_protected_repairs",
+        "name": "Protected fire-group workshops",
+        "description": "Workshops improve long-range recovery within the protected establishment.",
+        "requires": [
+          "fire_adv_protected_guns"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "support_losses": -0.015
+        }
+      },
+      {
+        "id": "fire_adv_reconstitution_stocks",
+        "name": "Fire-group replacement stocks",
+        "description": "Keep replacement deliveries and repair work on compatible schedules.",
+        "requires": [
+          "fire_adv_rapid_reconstitution"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  },
+  "fortress": {
+    "append_nodes": [
+      {
+        "id": "fortress_adv_permanent_sectors",
+        "name": "Permanent fortress sectors",
+        "description": "Strengthen prepared defence while accepting a slower marching army.",
+        "requires": [
+          "fortress_country"
+        ],
+        "excludes": [
+          "fortress_adv_fortress_reserve"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_defense": 0.055,
+          "army_speed": -0.04
+        }
+      },
+      {
+        "id": "fortress_adv_fortress_reserve",
+        "name": "Mobile fortress reserve",
+        "description": "Recover and move reserve formations faster, devoting less effort to entrenchment.",
+        "requires": [
+          "fortress_country"
+        ],
+        "excludes": [
+          "fortress_adv_permanent_sectors"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "minor_power": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "organisation_recovery": 0.045,
+          "army_speed": 0.025,
+          "entrenchment_speed": -0.06
+        }
+      },
+      {
+        "id": "fortress_adv_sector_reliefs",
+        "name": "Fortress sector relief schedules",
+        "description": "Organised relief improves replacements and defence in the permanent sectors.",
+        "requires": [
+          "fortress_adv_permanent_sectors"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "reinforcement_rate": 0.025,
+          "army_defense": 0.015
+        }
+      },
+      {
+        "id": "fortress_adv_reserve_mustering",
+        "name": "Fortress reserve mustering",
+        "description": "Reserve headquarters rehearse restoring organisation before a new march.",
+        "requires": [
+          "fortress_adv_fortress_reserve"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "minor_power": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "army_speed": 0.015
+        }
+      },
+      {
+        "id": "fortress_adv_deep_stores",
+        "name": "Deep fortress stores",
+        "description": "Improve supply throughput from larger stores, accepting slower replacement delivery.",
+        "requires": [
+          "fortress_citadel"
+        ],
+        "excludes": [
+          "fortress_adv_replacement_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "fortress": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "supply": 0.055,
+          "reinforcement_rate": -0.03
+        }
+      },
+      {
+        "id": "fortress_adv_replacement_priority",
+        "name": "Fortress replacement priority",
+        "description": "Send replacements forward faster, leaving less throughput for routine supplies.",
+        "requires": [
+          "fortress_citadel"
+        ],
+        "excludes": [
+          "fortress_adv_deep_stores"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "reinforcement_rate": 0.06,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "fortress_adv_store_rotation",
+        "name": "Fortress store rotation",
+        "description": "Regular stock rotation improves supply and the readiness of regional militia.",
+        "requires": [
+          "fortress_adv_deep_stores"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "fortress": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "supply": 0.025,
+          "militia_readiness": 0.025
+        }
+      },
+      {
+        "id": "fortress_adv_replacement_depots",
+        "name": "Fortress replacement depots",
+        "description": "Specialised depots sustain the replacement priority through prolonged defence.",
+        "requires": [
+          "fortress_adv_replacement_priority"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "reinforcement_rate": 0.025,
+          "organisation_recovery": 0.015
+        }
+      }
+    ]
+  },
+  "levy": {
+    "append_nodes": [
+      {
+        "id": "levy_adv_short_courses",
+        "name": "Short mobilisation courses",
+        "description": "Train new formations faster while their basic routines leave organisation slower to recover.",
+        "requires": [
+          "levy_nation"
+        ],
+        "excludes": [
+          "levy_adv_cadre_courses"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "recruitment_speed": 0.075,
+          "organisation_recovery": -0.03
+        }
+      },
+      {
+        "id": "levy_adv_cadre_courses",
+        "name": "Cadre-led reserve courses",
+        "description": "Improve the army's recovery routines, accepting a longer training cycle.",
+        "requires": [
+          "levy_nation"
+        ],
+        "excludes": [
+          "levy_adv_short_courses"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "organisation_recovery": 0.05,
+          "recruitment_speed": -0.04
+        }
+      },
+      {
+        "id": "levy_adv_course_instructors",
+        "name": "Mobilisation instructor pool",
+        "description": "A shared instructor pool improves both training speed and the replacement stream.",
+        "requires": [
+          "levy_adv_short_courses"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      },
+      {
+        "id": "levy_adv_cadre_reviews",
+        "name": "Reserve cadre refresher reviews",
+        "description": "Regular reviews keep the trained cadres ready to organise units and local militia.",
+        "requires": [
+          "levy_adv_cadre_courses"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "organisation_recovery": 0.02,
+          "militia_readiness": 0.035
+        }
+      },
+      {
+        "id": "levy_adv_economical_kits",
+        "name": "Economical levy equipment sets",
+        "description": "Reduce formation training costs, accepting weaker attacks by the army.",
+        "requires": [
+          "levy_replacement"
+        ],
+        "excludes": [
+          "levy_adv_field_reserves"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "recruitment_cost": -0.055,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "levy_adv_field_reserves",
+        "name": "Field-army replacement emphasis",
+        "description": "Improve field replacements while raising the cost of training new formations.",
+        "requires": [
+          "levy_replacement"
+        ],
+        "excludes": [
+          "levy_adv_economical_kits"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "reinforcement_rate": 0.06,
+          "recruitment_cost": 0.035
+        }
+      },
+      {
+        "id": "levy_adv_kit_standardisation",
+        "name": "Levy kit standardisation",
+        "description": "Common equipment sets reduce training cost and help local militia prepare.",
+        "requires": [
+          "levy_adv_economical_kits"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "recruitment_cost": -0.02,
+          "militia_readiness": 0.03
+        }
+      },
+      {
+        "id": "levy_adv_reserve_dispatch",
+        "name": "Field reserve dispatch offices",
+        "description": "Dispatch offices organise replacements without interrupting the supply service.",
+        "requires": [
+          "levy_adv_field_reserves"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "reinforcement_rate": 0.025,
+          "supply": 0.015
+        }
+      }
+    ]
+  },
+  "shock": {
+    "append_nodes": [
+      {
+        "id": "shock_adv_weight_of_blow",
+        "name": "Weight of the opening blow",
+        "description": "Increase division attack by sacrificing the army's prepared defensive power.",
+        "requires": [
+          "shock_decision"
+        ],
+        "excludes": [
+          "shock_adv_covered_thrust"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 3
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_attack": 0.06,
+          "army_defense": -0.04
+        }
+      },
+      {
+        "id": "shock_adv_covered_thrust",
+        "name": "Covered breakthrough thrust",
+        "description": "Keep stronger defence during an advance, accepting less marching speed.",
+        "requires": [
+          "shock_decision"
+        ],
+        "excludes": [
+          "shock_adv_weight_of_blow"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "attrition": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_defense": 0.05,
+          "army_speed": -0.03
+        }
+      },
+      {
+        "id": "shock_adv_blow_rehearsals",
+        "name": "Opening-blow rehearsals",
+        "description": "Rehearse attack coordination and recovery after committing the opening echelon.",
+        "requires": [
+          "shock_adv_weight_of_blow"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 3
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_attack": 0.02,
+          "organisation_recovery": 0.02
+        }
+      },
+      {
+        "id": "shock_adv_thrust_support",
+        "name": "Breakthrough support timetable",
+        "description": "Supply and replacement services support the covered thrust on one timetable.",
+        "requires": [
+          "shock_adv_covered_thrust"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "attrition": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      },
+      {
+        "id": "shock_adv_pursuit_priority",
+        "name": "Unbroken pursuit priority",
+        "description": "March faster after a breakthrough, accepting thinner supply throughput.",
+        "requires": [
+          "shock_pursuit"
+        ],
+        "excludes": [
+          "shock_adv_reset_priority"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "army_speed": 0.065,
+          "supply": -0.035
+        }
+      },
+      {
+        "id": "shock_adv_reset_priority",
+        "name": "Operational reset priority",
+        "description": "Restore organisation before the next blow, accepting slower marching.",
+        "requires": [
+          "shock_pursuit"
+        ],
+        "excludes": [
+          "shock_adv_pursuit_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "organisation_recovery": 0.065,
+          "army_speed": -0.03
+        }
+      },
+      {
+        "id": "shock_adv_pursuit_relays",
+        "name": "Pursuit march relays",
+        "description": "Relay schedules help the marching army recover between successive engagements.",
+        "requires": [
+          "shock_adv_pursuit_priority"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "army_speed": 0.025,
+          "organisation_recovery": 0.015
+        }
+      },
+      {
+        "id": "shock_adv_reset_workshops",
+        "name": "Operational reset workshops",
+        "description": "Replacement delivery and long-range repairs share the regrouping interval.",
+        "requires": [
+          "shock_adv_reset_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "major_offensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "reinforcement_rate": 0.025,
+          "support_recovery": 0.02
+        }
+      }
+    ]
+  },
+  "infiltration": {
+    "append_nodes": [
+      {
+        "id": "infiltration_adv_assault_patrols",
+        "name": "Assault-patrol concentration",
+        "description": "Concentrate on stronger attacks, accepting slower entrenchment after moving.",
+        "requires": [
+          "inf_mastery"
+        ],
+        "excludes": [
+          "infiltration_adv_trench_parties"
+        ],
+        "ai_profiles": {
+          "irredentist": 3,
+          "major_offensive": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_attack": 0.05,
+          "entrenchment_speed": -0.05
+        }
+      },
+      {
+        "id": "infiltration_adv_trench_parties",
+        "name": "Trench-holding parties",
+        "description": "Improve division defence and entrenchment, accepting weaker attacks.",
+        "requires": [
+          "inf_mastery"
+        ],
+        "excludes": [
+          "infiltration_adv_assault_patrols"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "defensive": 3
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_defense": 0.035,
+          "entrenchment_speed": 0.05,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "infiltration_adv_patrol_rehearsals",
+        "name": "Assault-patrol rehearsals",
+        "description": "Practise recovering the assault force and coordinating its next attack.",
+        "requires": [
+          "infiltration_adv_assault_patrols"
+        ],
+        "ai_profiles": {
+          "irredentist": 3,
+          "major_offensive": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_attack": 0.02,
+          "organisation_recovery": 0.02
+        }
+      },
+      {
+        "id": "infiltration_adv_trench_reliefs",
+        "name": "Trench-party relief rotations",
+        "description": "Relief rotations help the chosen defensive method maintain men and positions.",
+        "requires": [
+          "infiltration_adv_trench_parties"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "defensive": 3
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "reinforcement_rate": 0.025,
+          "army_defense": 0.015
+        }
+      },
+      {
+        "id": "infiltration_adv_light_patrols",
+        "name": "Light infiltration columns",
+        "description": "Move the army faster using a lighter supply arrangement with lower throughput.",
+        "requires": [
+          "inf_hold"
+        ],
+        "excludes": [
+          "infiltration_adv_supported_patrols"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "blitzkrieg": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "army_speed": 0.055,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "infiltration_adv_supported_patrols",
+        "name": "Supported infiltration groups",
+        "description": "Improve the army's supply throughput, accepting slower movement.",
+        "requires": [
+          "inf_hold"
+        ],
+        "excludes": [
+          "infiltration_adv_light_patrols"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "supply": 0.05,
+          "army_speed": -0.03
+        }
+      },
+      {
+        "id": "infiltration_adv_patrol_links",
+        "name": "Infiltration march links",
+        "description": "Shared march procedures sustain the light columns' speed and organisation.",
+        "requires": [
+          "infiltration_adv_light_patrols"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "blitzkrieg": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "army_speed": 0.02,
+          "organisation_recovery": 0.025
+        }
+      },
+      {
+        "id": "infiltration_adv_patrol_stores",
+        "name": "Infiltration supply stations",
+        "description": "The supported groups rehearse delivering replacements alongside regular supplies.",
+        "requires": [
+          "infiltration_adv_supported_patrols"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  },
+  "sky": {
+    "append_nodes": [
+      {
+        "id": "sky_adv_air_preservation",
+        "name": "Air-service preservation policy",
+        "description": "Reduce losses across long-range formations, accepting slower recovery of their strength.",
+        "requires": [
+          "sky_command"
+        ],
+        "excludes": [
+          "sky_adv_air_turnaround"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "fortress": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_losses": -0.06,
+          "support_recovery": -0.035
+        }
+      },
+      {
+        "id": "sky_adv_air_turnaround",
+        "name": "Air-service turnaround policy",
+        "description": "Restore long-range formations faster, accepting more losses over defended fronts.",
+        "requires": [
+          "sky_command"
+        ],
+        "excludes": [
+          "sky_adv_air_preservation"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_recovery": 0.065,
+          "support_losses": 0.025
+        }
+      },
+      {
+        "id": "sky_adv_preservation_crews",
+        "name": "Preservation crew syllabus",
+        "description": "Careful maintenance improves long-range recovery within the preservation policy.",
+        "requires": [
+          "sky_adv_air_preservation"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "fortress": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "support_losses": -0.015
+        }
+      },
+      {
+        "id": "sky_adv_turnaround_teams",
+        "name": "Turnaround service teams",
+        "description": "Specialised service teams sustain the faster long-range recovery cycle.",
+        "requires": [
+          "sky_adv_air_turnaround"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_recovery": 0.03
+        }
+      },
+      {
+        "id": "sky_adv_attack_liaison",
+        "name": "Attack-priority air liaison",
+        "description": "Strengthen division attack at the expense of division defence through the national support plan.",
+        "requires": [
+          "sky_interdiction"
+        ],
+        "excludes": [
+          "sky_adv_defence_liaison"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "army_attack": 0.04,
+          "army_defense": -0.025
+        }
+      },
+      {
+        "id": "sky_adv_defence_liaison",
+        "name": "Defence-priority air liaison",
+        "description": "Strengthen division defence at the expense of division attack through the national support plan.",
+        "requires": [
+          "sky_interdiction"
+        ],
+        "excludes": [
+          "sky_adv_attack_liaison"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "army_defense": 0.045,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "sky_adv_attack_liaison_drills",
+        "name": "Attack-liaison staff drills",
+        "description": "Ground and support staffs rehearse the chosen attack plan and recovery intervals.",
+        "requires": [
+          "sky_adv_attack_liaison"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "major_offensive": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "army_attack": 0.02,
+          "organisation_recovery": 0.015
+        }
+      },
+      {
+        "id": "sky_adv_defence_liaison_drills",
+        "name": "Defence-liaison staff drills",
+        "description": "Defensive coordination sustains division defence and long-range readiness.",
+        "requires": [
+          "sky_adv_defence_liaison"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "army_defense": 0.02,
+          "support_recovery": 0.015
+        }
+      }
+    ]
+  },
+  "strategic_air": {
+    "append_nodes": [
+      {
+        "id": "strategic_air_adv_sustained_reach",
+        "name": "Long-reach sustainment cycle",
+        "description": "Improve long-range recovery, accepting a larger share of formation losses.",
+        "requires": [
+          "air_strangle"
+        ],
+        "excludes": [
+          "strategic_air_adv_measured_reach"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_recovery": 0.06,
+          "support_losses": 0.025
+        }
+      },
+      {
+        "id": "strategic_air_adv_measured_reach",
+        "name": "Measured long-reach commitments",
+        "description": "Limit long-range losses, accepting slower restoration of the formations committed.",
+        "requires": [
+          "air_strangle"
+        ],
+        "excludes": [
+          "strategic_air_adv_sustained_reach"
+        ],
+        "ai_profiles": {
+          "isolated": 3,
+          "defensive": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_losses": -0.06,
+          "support_recovery": -0.035
+        }
+      },
+      {
+        "id": "strategic_air_adv_sustainment_teams",
+        "name": "Long-reach sustainment teams",
+        "description": "Repair teams specialise in keeping the long-range recovery cycle running.",
+        "requires": [
+          "strategic_air_adv_sustained_reach"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "attrition": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_recovery": 0.03
+        }
+      },
+      {
+        "id": "strategic_air_adv_commitment_reviews",
+        "name": "Long-reach commitment reviews",
+        "description": "Systematic reviews preserve the formations and improve their replacement arrangements.",
+        "requires": [
+          "strategic_air_adv_measured_reach"
+        ],
+        "ai_profiles": {
+          "isolated": 3,
+          "defensive": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_losses": -0.02,
+          "reinforcement_rate": 0.015
+        }
+      },
+      {
+        "id": "strategic_air_adv_rear_service_priority",
+        "name": "Rear-service throughput priority",
+        "description": "Improve national supply throughput while assigning less support to division attacks.",
+        "requires": [
+          "air_campaign"
+        ],
+        "excludes": [
+          "strategic_air_adv_battle_service_priority"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "expeditionary": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "supply": 0.05,
+          "army_attack": -0.025
+        }
+      },
+      {
+        "id": "strategic_air_adv_battle_service_priority",
+        "name": "Battle-support priority",
+        "description": "Improve division attack while assigning less throughput to routine supplies.",
+        "requires": [
+          "air_campaign"
+        ],
+        "excludes": [
+          "strategic_air_adv_rear_service_priority"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "blitzkrieg": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "army_attack": 0.045,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "strategic_air_adv_rear_service_planning",
+        "name": "Long-reach rear-service planning",
+        "description": "Compatible replacement and supply schedules sustain the rear-service priority.",
+        "requires": [
+          "strategic_air_adv_rear_service_priority"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "expeditionary": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      },
+      {
+        "id": "strategic_air_adv_battle_service_planning",
+        "name": "Long-reach battle-support planning",
+        "description": "Staff rehearsals improve division attack and recovery within the chosen support policy.",
+        "requires": [
+          "strategic_air_adv_battle_service_priority"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "blitzkrieg": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "army_attack": 0.02,
+          "support_recovery": 0.02
+        }
+      }
+    ]
+  },
+  "coast": {
+    "append_nodes": [
+      {
+        "id": "coast_adv_coastal_concentration",
+        "name": "Concentrated coastal service",
+        "description": "Improve national supply throughput through concentrated service, accepting slower fleet movement.",
+        "requires": [
+          "coast_command"
+        ],
+        "excludes": [
+          "coast_adv_coastal_circuits"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "supply": 0.05,
+          "naval_speed": -0.04
+        }
+      },
+      {
+        "id": "coast_adv_coastal_circuits",
+        "name": "Mobile coastal circuits",
+        "description": "Move fleets faster, accepting lower national supply throughput from the service arrangement.",
+        "requires": [
+          "coast_command"
+        ],
+        "excludes": [
+          "coast_adv_coastal_concentration"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "trading_state": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "naval_speed": 0.065,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "coast_adv_coastal_loading",
+        "name": "Coastal loading standards",
+        "description": "Common handling standards improve the supply gains of the concentrated coastal service.",
+        "requires": [
+          "coast_adv_coastal_concentration"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "defensive": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "supply": 0.025
+        }
+      },
+      {
+        "id": "coast_adv_coastal_handover",
+        "name": "Coastal station handovers",
+        "description": "Station handover drills help fleets maintain their chosen movement rhythm.",
+        "requires": [
+          "coast_adv_coastal_circuits"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "trading_state": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "naval_speed": 0.03
+        }
+      },
+      {
+        "id": "coast_adv_yard_series",
+        "name": "Coastal yard production series",
+        "description": "Build hulls faster with standard series, accepting slower fleet movement.",
+        "requires": [
+          "coast_bases"
+        ],
+        "excludes": [
+          "coast_adv_yard_flexibility"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "minor_power": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "shipbuilding_speed": 0.07,
+          "naval_speed": -0.035
+        }
+      },
+      {
+        "id": "coast_adv_yard_flexibility",
+        "name": "Coastal service flexibility",
+        "description": "Prioritise fleet movement over the speed of new hull construction.",
+        "requires": [
+          "coast_bases"
+        ],
+        "excludes": [
+          "coast_adv_yard_series"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "naval_speed": 0.055,
+          "shipbuilding_speed": -0.04
+        }
+      },
+      {
+        "id": "coast_adv_series_components",
+        "name": "Standard coastal yard components",
+        "description": "Common components improve the output of the chosen hull-building programme.",
+        "requires": [
+          "coast_adv_yard_series"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "minor_power": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "shipbuilding_speed": 0.03
+        }
+      },
+      {
+        "id": "coast_adv_flexible_stations",
+        "name": "Flexible coastal service stations",
+        "description": "Flexible station routines sustain fleet movement and national supply throughput.",
+        "requires": [
+          "coast_adv_yard_flexibility"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "naval_speed": 0.025,
+          "supply": 0.015
+        }
+      }
+    ]
+  },
+  "sea_denial": {
+    "append_nodes": [
+      {
+        "id": "sea_denial_adv_dispersed_flotillas",
+        "name": "Dispersed flotilla patrol system",
+        "description": "Dispersed service schedules improve fleet speed, but reduce national supply throughput.",
+        "requires": [
+          "sub_command"
+        ],
+        "excludes": [
+          "sea_denial_adv_supported_flotillas"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "isolated": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "naval_speed": 0.06,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "sea_denial_adv_supported_flotillas",
+        "name": "Supported flotilla patrol system",
+        "description": "Concentrated support improves national supply throughput, but slows fleet movement.",
+        "requires": [
+          "sub_command"
+        ],
+        "excludes": [
+          "sea_denial_adv_dispersed_flotillas"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "garrison_state": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "supply": 0.05,
+          "naval_speed": -0.035
+        }
+      },
+      {
+        "id": "sea_denial_adv_flotilla_rendezvous",
+        "name": "Flotilla rendezvous schedules",
+        "description": "Rehearsed rendezvous keep the fleet's dispersed sailing routines predictable to its own staff.",
+        "requires": [
+          "sea_denial_adv_dispersed_flotillas"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "isolated": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "naval_speed": 0.03
+        }
+      },
+      {
+        "id": "sea_denial_adv_flotilla_depots",
+        "name": "Flotilla supply depots",
+        "description": "Common depot procedures increase national throughput within the supported patrol system.",
+        "requires": [
+          "sea_denial_adv_supported_flotillas"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "garrison_state": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "supply": 0.025
+        }
+      },
+      {
+        "id": "sea_denial_adv_flotilla_mass",
+        "name": "Flotilla hull replacement series",
+        "description": "Accelerate hull construction, accepting a slower operational fleet.",
+        "requires": [
+          "sub_blockade"
+        ],
+        "excludes": [
+          "sea_denial_adv_flotilla_endurance"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "shipbuilding_speed": 0.075,
+          "naval_speed": -0.04
+        }
+      },
+      {
+        "id": "sea_denial_adv_flotilla_endurance",
+        "name": "Flotilla operational tempo",
+        "description": "Prioritise fleet speed, accepting slower construction of replacement hulls.",
+        "requires": [
+          "sub_blockade"
+        ],
+        "excludes": [
+          "sea_denial_adv_flotilla_mass"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "naval_speed": 0.065,
+          "shipbuilding_speed": -0.045
+        }
+      },
+      {
+        "id": "sea_denial_adv_replacement_slips",
+        "name": "Flotilla replacement slipways",
+        "description": "Specialised slipway routines sustain the hull replacement programme.",
+        "requires": [
+          "sea_denial_adv_flotilla_mass"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "shipbuilding_speed": 0.035
+        }
+      },
+      {
+        "id": "sea_denial_adv_tempo_stations",
+        "name": "Flotilla tempo service stations",
+        "description": "Service stations sustain movement without introducing a separate submarine combat bonus.",
+        "requires": [
+          "sea_denial_adv_flotilla_endurance"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "naval_speed": 0.025,
+          "supply": 0.015
+        }
+      }
+    ]
+  },
+  "staff": {
+    "append_nodes": [
+      {
+        "id": "staff_adv_central_planning",
+        "name": "Central planning authority",
+        "description": "Coordinate stronger division attacks, accepting slower marching decisions.",
+        "requires": [
+          "staff_general"
+        ],
+        "excludes": [
+          "staff_adv_distributed_planning"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "fortress": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "army_attack": 0.04,
+          "army_speed": -0.03
+        }
+      },
+      {
+        "id": "staff_adv_distributed_planning",
+        "name": "Distributed staff authority",
+        "description": "Recover organisation faster through delegated routines, accepting weaker prepared defence.",
+        "requires": [
+          "staff_general"
+        ],
+        "excludes": [
+          "staff_adv_central_planning"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "organisation_recovery": 0.05,
+          "army_defense": -0.025
+        }
+      },
+      {
+        "id": "staff_adv_planning_cells",
+        "name": "Central operational planning cells",
+        "description": "Specialist planning cells improve attack coordination and national supply routines.",
+        "requires": [
+          "staff_adv_central_planning"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "fortress": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "army_attack": 0.015,
+          "supply": 0.015
+        }
+      },
+      {
+        "id": "staff_adv_staff_delegates",
+        "name": "Staff liaison delegates",
+        "description": "Liaison delegates preserve organisation while the delegated staff system moves the army.",
+        "requires": [
+          "staff_adv_distributed_planning"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "organisation_recovery": 0.02,
+          "army_speed": 0.015
+        }
+      },
+      {
+        "id": "staff_adv_intensive_staff_schools",
+        "name": "Intensive staff schooling",
+        "description": "Improve division defence, accepting slower training of new formations.",
+        "requires": [
+          "staff_doctrine"
+        ],
+        "excludes": [
+          "staff_adv_expanding_staff_schools"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "army_defense": 0.04,
+          "recruitment_speed": -0.035
+        }
+      },
+      {
+        "id": "staff_adv_expanding_staff_schools",
+        "name": "Expanding staff schooling",
+        "description": "Train formations faster, accepting less effective organisation recovery.",
+        "requires": [
+          "staff_doctrine"
+        ],
+        "excludes": [
+          "staff_adv_intensive_staff_schools"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "major_offensive": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "recruitment_speed": 0.065,
+          "organisation_recovery": -0.025
+        }
+      },
+      {
+        "id": "staff_adv_staff_examinations",
+        "name": "Staff field examinations",
+        "description": "Field examinations improve defence and recovery within the intensive schooling system.",
+        "requires": [
+          "staff_adv_intensive_staff_schools"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "garrison_state": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "army_defense": 0.015,
+          "organisation_recovery": 0.015
+        }
+      },
+      {
+        "id": "staff_adv_staff_instructors",
+        "name": "Staff instructor exchanges",
+        "description": "Instructor exchanges improve the expanded training and replacement programme.",
+        "requires": [
+          "staff_adv_expanding_staff_schools"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "major_offensive": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      }
+    ]
+  },
+  "mobilisation": {
+    "append_nodes": [
+      {
+        "id": "mobilisation_adv_industrial_continuity",
+        "name": "Mobilisation industrial continuity",
+        "description": "Preserve higher national output while accepting slower training of new formations.",
+        "requires": [
+          "mob_nation"
+        ],
+        "excludes": [
+          "mobilisation_adv_urgent_callup"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "garrison_state": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "output": 0.04,
+          "recruitment_speed": -0.045
+        }
+      },
+      {
+        "id": "mobilisation_adv_urgent_callup",
+        "name": "Urgent mobilisation priority",
+        "description": "Train formations faster, accepting a reduction in national production.",
+        "requires": [
+          "mob_nation"
+        ],
+        "excludes": [
+          "mobilisation_adv_industrial_continuity"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "irredentist": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "recruitment_speed": 0.075,
+          "output": -0.025
+        }
+      },
+      {
+        "id": "mobilisation_adv_industrial_rosters",
+        "name": "Mobilisation factory rosters",
+        "description": "Predictable factory rosters improve output and keep the supply plan regular.",
+        "requires": [
+          "mobilisation_adv_industrial_continuity"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "garrison_state": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "output": 0.015,
+          "supply": 0.015
+        }
+      },
+      {
+        "id": "mobilisation_adv_callup_processing",
+        "name": "Mobilisation processing centres",
+        "description": "Dedicated processing centres improve training and the replacement stream.",
+        "requires": [
+          "mobilisation_adv_urgent_callup"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "irredentist": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      },
+      {
+        "id": "mobilisation_adv_transport_reserves",
+        "name": "Mobilisation transport reserves",
+        "description": "Keep more throughput for supply, accepting a slower marching army.",
+        "requires": [
+          "mob_transport"
+        ],
+        "excludes": [
+          "mobilisation_adv_transport_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "supply": 0.055,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "mobilisation_adv_transport_priority",
+        "name": "Mobilisation movement priority",
+        "description": "Move the army faster, accepting less throughput for regular supplies.",
+        "requires": [
+          "mob_transport"
+        ],
+        "excludes": [
+          "mobilisation_adv_transport_reserves"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "army_speed": 0.055,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "mobilisation_adv_reserve_dispatchers",
+        "name": "Reserve transport dispatchers",
+        "description": "Dispatchers coordinate the supply reserve with arriving replacements.",
+        "requires": [
+          "mobilisation_adv_transport_reserves"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      },
+      {
+        "id": "mobilisation_adv_movement_timetables",
+        "name": "Mobilisation movement timetables",
+        "description": "Staff timetables sustain the chosen movement priority and restoration of organisation.",
+        "requires": [
+          "mobilisation_adv_transport_priority"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "army_speed": 0.02,
+          "organisation_recovery": 0.02
+        }
+      }
+    ]
+  },
+  "elastic_defence": {
+    "append_nodes": [
+      {
+        "id": "elastic_defence_adv_measured_fallback",
+        "name": "Measured fallback columns",
+        "description": "Improve normal marching and organisation recovery, accepting less prepared defence; no blocked retreat route is opened.",
+        "requires": [
+          "elastic_endurance"
+        ],
+        "excludes": [
+          "elastic_defence_adv_anchored_front"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_speed": 0.035,
+          "organisation_recovery": 0.035,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "elastic_defence_adv_anchored_front",
+        "name": "Anchored defensive front",
+        "description": "Hold stronger defensive positions at the expense of marching speed.",
+        "requires": [
+          "elastic_endurance"
+        ],
+        "excludes": [
+          "elastic_defence_adv_measured_fallback"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "garrison_state": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_defense": 0.055,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "elastic_defence_adv_fallback_rehearsals",
+        "name": "Fallback-column rehearsals",
+        "description": "Rehearse regrouping and restoring organisation after an ordinary movement.",
+        "requires": [
+          "elastic_defence_adv_measured_fallback"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "expeditionary": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "army_speed": 0.015
+        }
+      },
+      {
+        "id": "elastic_defence_adv_anchor_reliefs",
+        "name": "Anchored-front reliefs",
+        "description": "Relief schedules sustain defensive positions and the replacement stream.",
+        "requires": [
+          "elastic_defence_adv_anchored_front"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "garrison_state": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "army_defense": 0.02,
+          "reinforcement_rate": 0.02
+        }
+      },
+      {
+        "id": "elastic_defence_adv_elastic_buffers",
+        "name": "Defensive supply buffers",
+        "description": "Improve supply throughput, accepting slower training of new formations.",
+        "requires": [
+          "elastic_relief"
+        ],
+        "excludes": [
+          "elastic_defence_adv_elastic_intake"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "supply": 0.055,
+          "recruitment_speed": -0.035
+        }
+      },
+      {
+        "id": "elastic_defence_adv_elastic_intake",
+        "name": "Defensive replacement intake",
+        "description": "Train and reinforce formations faster, accepting less throughput for regular supply.",
+        "requires": [
+          "elastic_relief"
+        ],
+        "excludes": [
+          "elastic_defence_adv_elastic_buffers"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "recruitment_speed": 0.035,
+          "reinforcement_rate": 0.035,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "elastic_defence_adv_buffer_officers",
+        "name": "Defensive buffer officers",
+        "description": "Supply officers improve the buffer system and long-range repair schedules.",
+        "requires": [
+          "elastic_defence_adv_elastic_buffers"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "supply": 0.025,
+          "support_recovery": 0.015
+        }
+      },
+      {
+        "id": "elastic_defence_adv_intake_sections",
+        "name": "Defensive intake sections",
+        "description": "Organised intake keeps new training and replacement deliveries moving together.",
+        "requires": [
+          "elastic_defence_adv_elastic_intake"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  },
+  "dispersed_warfare": {
+    "append_nodes": [
+      {
+        "id": "dispersed_warfare_adv_local_depth",
+        "name": "Depth of local resistance",
+        "description": "Improve local militia readiness and division defence, accepting less division attack.",
+        "requires": [
+          "dispersed_continuity"
+        ],
+        "excludes": [
+          "dispersed_warfare_adv_roving_groups"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "minor_power": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "militia_readiness": 0.07,
+          "army_defense": 0.025,
+          "army_attack": -0.03
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_roving_groups",
+        "name": "Roving campaign groups",
+        "description": "Move and recover the regular army faster, accepting less prepared defence.",
+        "requires": [
+          "dispersed_continuity"
+        ],
+        "excludes": [
+          "dispersed_warfare_adv_local_depth"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "irredentist": 2
+        },
+        "cost": 70,
+        "days": 280,
+        "rush_cost": 196,
+        "modifiers": {
+          "army_speed": 0.04,
+          "organisation_recovery": 0.03,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_local_mustering",
+        "name": "Local resistance mustering",
+        "description": "Cadres rehearse organising the existing militia system and replacement network.",
+        "requires": [
+          "dispersed_warfare_adv_local_depth"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "minor_power": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "militia_readiness": 0.035,
+          "reinforcement_rate": 0.02
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_roving_rendezvous",
+        "name": "Roving-group rendezvous",
+        "description": "Shared rendezvous routines preserve organisation through repeated marches.",
+        "requires": [
+          "dispersed_warfare_adv_roving_groups"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "irredentist": 2
+        },
+        "cost": 90,
+        "days": 330,
+        "rush_cost": 252,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "army_speed": 0.015
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_dispersed_workshop_grid",
+        "name": "Distributed workshop grid",
+        "description": "Restore long-range formations faster, accepting a higher training cost for formations.",
+        "requires": [
+          "dispersed_workshops"
+        ],
+        "excludes": [
+          "dispersed_warfare_adv_simple_replacements"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "support_recovery": 0.06,
+          "recruitment_cost": 0.03
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_simple_replacements",
+        "name": "Simple replacement organisation",
+        "description": "Lower formation training costs, accepting slower long-range repairs.",
+        "requires": [
+          "dispersed_workshops"
+        ],
+        "excludes": [
+          "dispersed_warfare_adv_dispersed_workshop_grid"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 78,
+        "days": 300,
+        "rush_cost": 219,
+        "modifiers": {
+          "recruitment_cost": -0.055,
+          "support_recovery": -0.035
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_workshop_exchange",
+        "name": "Distributed workshop exchange",
+        "description": "Workshops share repair routines and supply handling without creating new units.",
+        "requires": [
+          "dispersed_warfare_adv_dispersed_workshop_grid"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "supply": 0.015
+        }
+      },
+      {
+        "id": "dispersed_warfare_adv_replacement_cadres",
+        "name": "Simple replacement cadres",
+        "description": "Permanent cadres keep the economical training and replacement system working.",
+        "requires": [
+          "dispersed_warfare_adv_simple_replacements"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "garrison_state": 2
+        },
+        "cost": 98,
+        "days": 350,
+        "rush_cost": 275,
+        "modifiers": {
+          "recruitment_cost": -0.02,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  },
+  "air_shield": {
+    "append_nodes": [
+      {
+        "id": "air_shield_adv_shelter_depth",
+        "name": "Depth of the shelter system",
+        "description": "Reduce long-range formation losses, accepting slower recovery under the shelter policy.",
+        "requires": [
+          "shield_endurance"
+        ],
+        "excludes": [
+          "air_shield_adv_rapid_relief"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "isolated": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_losses": -0.065,
+          "support_recovery": -0.04
+        }
+      },
+      {
+        "id": "air_shield_adv_rapid_relief",
+        "name": "Rapid shield relief cycles",
+        "description": "Recover long-range strength faster, accepting greater losses over defended fronts.",
+        "requires": [
+          "shield_endurance"
+        ],
+        "excludes": [
+          "air_shield_adv_shelter_depth"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "major_offensive": 2
+        },
+        "cost": 65,
+        "days": 285,
+        "rush_cost": 182,
+        "modifiers": {
+          "support_recovery": 0.07,
+          "support_losses": 0.03
+        }
+      },
+      {
+        "id": "air_shield_adv_shelter_servicing",
+        "name": "Shield shelter servicing",
+        "description": "Protected servicing improves long-range recovery within the shelter system.",
+        "requires": [
+          "air_shield_adv_shelter_depth"
+        ],
+        "ai_profiles": {
+          "fortress": 3,
+          "isolated": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "support_losses": -0.015
+        }
+      },
+      {
+        "id": "air_shield_adv_relief_specialists",
+        "name": "Shield relief specialists",
+        "description": "Specialists sustain the chosen rapid long-range recovery cycle.",
+        "requires": [
+          "air_shield_adv_rapid_relief"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "major_offensive": 2
+        },
+        "cost": 85,
+        "days": 335,
+        "rush_cost": 238,
+        "modifiers": {
+          "support_recovery": 0.03
+        }
+      },
+      {
+        "id": "air_shield_adv_area_defence_plan",
+        "name": "Area defence support plan",
+        "description": "Improve division defence through the national support plan, accepting lower supply throughput.",
+        "requires": [
+          "shield_crews"
+        ],
+        "excludes": [
+          "air_shield_adv_supply_defence_plan"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "fortress": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "army_defense": 0.05,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "air_shield_adv_supply_defence_plan",
+        "name": "Supply-first shield plan",
+        "description": "Improve national supply throughput, accepting less direct support to division defence.",
+        "requires": [
+          "shield_crews"
+        ],
+        "excludes": [
+          "air_shield_adv_area_defence_plan"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "expeditionary": 2
+        },
+        "cost": 73,
+        "days": 305,
+        "rush_cost": 205,
+        "modifiers": {
+          "supply": 0.05,
+          "army_defense": -0.025
+        }
+      },
+      {
+        "id": "air_shield_adv_area_staff_links",
+        "name": "Area defence staff links",
+        "description": "Staff links improve division defence and organisation recovery under the area plan.",
+        "requires": [
+          "air_shield_adv_area_defence_plan"
+        ],
+        "ai_profiles": {
+          "garrison_state": 3,
+          "fortress": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "army_defense": 0.02,
+          "organisation_recovery": 0.015
+        }
+      },
+      {
+        "id": "air_shield_adv_supply_shield_stations",
+        "name": "Shield supply service stations",
+        "description": "Service stations sustain national supply throughput and long-range repairs.",
+        "requires": [
+          "air_shield_adv_supply_defence_plan"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "expeditionary": 2
+        },
+        "cost": 93,
+        "days": 355,
+        "rush_cost": 261,
+        "modifiers": {
+          "supply": 0.025,
+          "support_recovery": 0.02
+        }
+      }
+    ]
+  },
+  "convoy_service": {
+    "append_nodes": [
+      {
+        "id": "convoy_service_adv_scheduled_lifts",
+        "name": "Scheduled lift allocations",
+        "description": "Raise national supply throughput with deliberate allocations, accepting slower fleet movement.",
+        "requires": [
+          "convoy_continuity"
+        ],
+        "excludes": [
+          "convoy_service_adv_flexible_lifts"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "attrition": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "supply": 0.055,
+          "naval_speed": -0.04
+        }
+      },
+      {
+        "id": "convoy_service_adv_flexible_lifts",
+        "name": "Flexible sailing allocations",
+        "description": "Increase fleet speed, accepting less national supply throughput from the service plan.",
+        "requires": [
+          "convoy_continuity"
+        ],
+        "excludes": [
+          "convoy_service_adv_scheduled_lifts"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2
+        },
+        "cost": 50,
+        "days": 275,
+        "rush_cost": 140,
+        "modifiers": {
+          "naval_speed": 0.065,
+          "supply": -0.035
+        }
+      },
+      {
+        "id": "convoy_service_adv_lift_accounting",
+        "name": "Scheduled lift accounting",
+        "description": "Compatible handling records sustain the supply gains of scheduled allocations.",
+        "requires": [
+          "convoy_service_adv_scheduled_lifts"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "attrition": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "supply": 0.025
+        }
+      },
+      {
+        "id": "convoy_service_adv_sailing_dispatch",
+        "name": "Flexible sailing dispatch",
+        "description": "Dispatch routines keep the chosen flexible sailing system moving.",
+        "requires": [
+          "convoy_service_adv_flexible_lifts"
+        ],
+        "ai_profiles": {
+          "expeditionary": 3,
+          "major_offensive": 2
+        },
+        "cost": 65,
+        "days": 325,
+        "rush_cost": 182,
+        "modifiers": {
+          "naval_speed": 0.03
+        }
+      },
+      {
+        "id": "convoy_service_adv_replacement_contracts",
+        "name": "Convoy-service hull contracts",
+        "description": "Accelerate shipbuilding with standard contracts, accepting lower supply throughput.",
+        "requires": [
+          "convoy_standards"
+        ],
+        "excludes": [
+          "convoy_service_adv_service_overhaul"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "shipbuilding_speed": 0.07,
+          "supply": -0.03
+        }
+      },
+      {
+        "id": "convoy_service_adv_service_overhaul",
+        "name": "Convoy-service overhaul priority",
+        "description": "Keep higher national supply throughput, accepting slower construction of new hulls.",
+        "requires": [
+          "convoy_standards"
+        ],
+        "excludes": [
+          "convoy_service_adv_replacement_contracts"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "garrison_state": 2
+        },
+        "cost": 55,
+        "days": 295,
+        "rush_cost": 154,
+        "modifiers": {
+          "supply": 0.05,
+          "shipbuilding_speed": -0.04
+        }
+      },
+      {
+        "id": "convoy_service_adv_contract_series",
+        "name": "Convoy-service contract series",
+        "description": "Longer standard production series improve the selected shipbuilding programme.",
+        "requires": [
+          "convoy_service_adv_replacement_contracts"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "attrition": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "shipbuilding_speed": 0.03
+        }
+      },
+      {
+        "id": "convoy_service_adv_overhaul_stations",
+        "name": "Convoy-service overhaul stations",
+        "description": "Common service-station routines improve throughput without a separate convoy-loss bonus.",
+        "requires": [
+          "convoy_service_adv_service_overhaul"
+        ],
+        "ai_profiles": {
+          "trading_state": 3,
+          "garrison_state": 2
+        },
+        "cost": 70,
+        "days": 345,
+        "rush_cost": 196,
+        "modifiers": {
+          "supply": 0.025,
+          "naval_speed": 0.015
+        }
+      }
+    ]
+  },
+  "mission_command": {
+    "append_nodes": [
+      {
+        "id": "mission_command_adv_intent_boundaries",
+        "name": "Broad intent boundaries",
+        "description": "Increase marching speed and recovery through wider discretion, accepting weaker prepared defence.",
+        "requires": [
+          "mission_continuity"
+        ],
+        "excludes": [
+          "mission_command_adv_decision_points"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "army_speed": 0.03,
+          "organisation_recovery": 0.035,
+          "army_defense": -0.03
+        }
+      },
+      {
+        "id": "mission_command_adv_decision_points",
+        "name": "Rehearsed decision points",
+        "description": "Coordinate stronger attacks and defence at the expense of marching speed.",
+        "requires": [
+          "mission_continuity"
+        ],
+        "excludes": [
+          "mission_command_adv_intent_boundaries"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "attrition": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "army_attack": 0.025,
+          "army_defense": 0.025,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "mission_command_adv_intent_exercises",
+        "name": "Broad-intent command exercises",
+        "description": "Exercises preserve organisation when subordinate staffs act within broad intent.",
+        "requires": [
+          "mission_command_adv_intent_boundaries"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "organisation_recovery": 0.025,
+          "army_speed": 0.015
+        }
+      },
+      {
+        "id": "mission_command_adv_decision_rehearsals",
+        "name": "Decision-point staff rehearsals",
+        "description": "Staff rehearsals refine the attack and defence coordination of the chosen method.",
+        "requires": [
+          "mission_command_adv_decision_points"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "attrition": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "army_attack": 0.015,
+          "army_defense": 0.015
+        }
+      },
+      {
+        "id": "mission_command_adv_officer_depth",
+        "name": "Depth of the officer reserve",
+        "description": "Restore organisation more effectively, accepting higher formation training costs.",
+        "requires": [
+          "mission_lessons"
+        ],
+        "excludes": [
+          "mission_command_adv_officer_expansion"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "fortress": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "organisation_recovery": 0.05,
+          "recruitment_cost": 0.03
+        }
+      },
+      {
+        "id": "mission_command_adv_officer_expansion",
+        "name": "Expanded junior-officer intake",
+        "description": "Train formations faster and more cheaply, accepting weaker organisation recovery.",
+        "requires": [
+          "mission_lessons"
+        ],
+        "excludes": [
+          "mission_command_adv_officer_depth"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "major_offensive": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "recruitment_speed": 0.04,
+          "recruitment_cost": -0.025,
+          "organisation_recovery": -0.03
+        }
+      },
+      {
+        "id": "mission_command_adv_reserve_mentors",
+        "name": "Officer-reserve mentoring",
+        "description": "Experienced mentors help formations absorb replacements and restore organisation.",
+        "requires": [
+          "mission_command_adv_officer_depth"
+        ],
+        "ai_profiles": {
+          "defensive": 3,
+          "fortress": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "reinforcement_rate": 0.02,
+          "organisation_recovery": 0.02
+        }
+      },
+      {
+        "id": "mission_command_adv_junior_syllabus",
+        "name": "Expanded junior-officer syllabus",
+        "description": "A common syllabus sustains the expanded training and replacement stream.",
+        "requires": [
+          "mission_command_adv_officer_expansion"
+        ],
+        "ai_profiles": {
+          "minor_power": 3,
+          "major_offensive": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  },
+  "joint_logistics": {
+    "append_nodes": [
+      {
+        "id": "joint_logistics_adv_throughput_standards",
+        "name": "Joint throughput standards",
+        "description": "Increase national supply throughput, accepting a slower marching army.",
+        "requires": [
+          "joint_endurance"
+        ],
+        "excludes": [
+          "joint_logistics_adv_responsive_dispatch"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "trading_state": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "supply": 0.055,
+          "army_speed": -0.035
+        }
+      },
+      {
+        "id": "joint_logistics_adv_responsive_dispatch",
+        "name": "Responsive joint dispatch",
+        "description": "Move and restore the army faster, accepting lower regular supply throughput.",
+        "requires": [
+          "joint_endurance"
+        ],
+        "excludes": [
+          "joint_logistics_adv_throughput_standards"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 24,
+        "days": 270,
+        "rush_cost": 68,
+        "modifiers": {
+          "army_speed": 0.035,
+          "organisation_recovery": 0.025,
+          "supply": -0.035
+        }
+      },
+      {
+        "id": "joint_logistics_adv_throughput_audits",
+        "name": "Joint throughput audits",
+        "description": "Routine audits coordinate supply handling and replacement deliveries.",
+        "requires": [
+          "joint_logistics_adv_throughput_standards"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "trading_state": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "supply": 0.025,
+          "reinforcement_rate": 0.015
+        }
+      },
+      {
+        "id": "joint_logistics_adv_dispatch_drills",
+        "name": "Responsive-dispatch drills",
+        "description": "Dispatch drills preserve movement and organisation between successive engagements.",
+        "requires": [
+          "joint_logistics_adv_responsive_dispatch"
+        ],
+        "ai_profiles": {
+          "blitzkrieg": 3,
+          "expeditionary": 2
+        },
+        "cost": 32,
+        "days": 320,
+        "rush_cost": 90,
+        "modifiers": {
+          "army_speed": 0.02,
+          "organisation_recovery": 0.02
+        }
+      },
+      {
+        "id": "joint_logistics_adv_repair_priority",
+        "name": "Joint repair priority",
+        "description": "Restore long-range formations faster, accepting slower training of new formations.",
+        "requires": [
+          "joint_recovery"
+        ],
+        "excludes": [
+          "joint_logistics_adv_expansion_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "support_recovery": 0.065,
+          "recruitment_speed": -0.04
+        }
+      },
+      {
+        "id": "joint_logistics_adv_expansion_priority",
+        "name": "Joint force-expansion priority",
+        "description": "Train new formations faster, accepting a slower long-range recovery service.",
+        "requires": [
+          "joint_recovery"
+        ],
+        "excludes": [
+          "joint_logistics_adv_repair_priority"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "minor_power": 2
+        },
+        "cost": 28,
+        "days": 290,
+        "rush_cost": 79,
+        "modifiers": {
+          "recruitment_speed": 0.065,
+          "support_recovery": -0.035
+        }
+      },
+      {
+        "id": "joint_logistics_adv_repair_exchange",
+        "name": "Joint repair exchange",
+        "description": "Compatible workshop procedures improve long-range recovery and supply handling.",
+        "requires": [
+          "joint_logistics_adv_repair_priority"
+        ],
+        "ai_profiles": {
+          "attrition": 3,
+          "defensive": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "support_recovery": 0.025,
+          "supply": 0.015
+        }
+      },
+      {
+        "id": "joint_logistics_adv_expansion_depots",
+        "name": "Joint force-expansion depots",
+        "description": "The expansion service coordinates new training with replacement deliveries.",
+        "requires": [
+          "joint_logistics_adv_expansion_priority"
+        ],
+        "ai_profiles": {
+          "major_offensive": 3,
+          "minor_power": 2
+        },
+        "cost": 36,
+        "days": 340,
+        "rush_cost": 101,
+        "modifiers": {
+          "recruitment_speed": 0.025,
+          "reinforcement_rate": 0.02
+        }
+      }
+    ]
+  }
+}

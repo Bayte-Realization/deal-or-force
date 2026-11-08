@@ -14,6 +14,10 @@ public partial class DealOrForceGame
     /// </summary>
     private static readonly Dictionary<string, Texture2D> FlagCache = new();
 
+    // One raster per country, keyed by the saved document rather than an ever-growing series
+    // of draft IDs. Campaign designs never enter the shared mod/sprite catalogue.
+    private static readonly Dictionary<int, (string Document, ImageTexture Texture)> CampaignFlagCache = new();
+
     /// <summary>
     /// A country's flag.
     ///
@@ -62,9 +66,27 @@ public partial class DealOrForceGame
     {
         if (string.IsNullOrWhiteSpace(tag)) return null;
         var sprite = FlagSprite(tag, out var nation);
+        if (nation is not null && CampaignFlagTexture(nation) is { } custom) return custom;
         if (nation is not null && ShouldUseDynamicRegionalFlag(nation, sprite))
             return ProvisionalFlag(nation);
         return FlagSpriteTexture(sprite) ?? (nation is null ? null : ProvisionalFlag(nation));
+    }
+
+    private static Texture2D CampaignFlagTexture(Nation nation)
+    {
+        var document = nation.CustomFlagDesignJson ?? "";
+        if (CampaignFlagCache.TryGetValue(nation.Id, out var cached))
+        {
+            if (cached.Document == document) return cached.Texture;
+            CampaignFlagCache.Remove(nation.Id);
+            // Existing HUD/counter controls can still hold the previous resource until
+            // their next refresh. Let reference counting retire it after those users.
+        }
+        if (document.Length == 0) return null;
+        var texture = CampaignCosmetics.ReadFlagDesign(nation) is { } design
+            ? FlagDesignTexture(design, FlagDesignHeight) : null;
+        CampaignFlagCache[nation.Id] = (document, texture);
+        return texture;
     }
 
     private static bool ShouldUseDynamicRegionalFlag(Nation nation, string sprite)
@@ -196,6 +218,31 @@ public partial class DealOrForceGame
     /// pattern comes from the tag, so a country keeps the same flag from one session to the
     /// next, and any file a mod names after it still wins.
     /// </summary>
+    /// <summary>The flat flag colours the world's flags are drawn in (vexillological standards).</summary>
+    private static readonly Color[] FlagPalette =
+    {
+        Colors.White, Colors.Black, Color.FromHtml("#CE1126"), Color.FromHtml("#8D1B3D"), Color.FromHtml("#FF8200"),
+        Color.FromHtml("#FCD116"), Color.FromHtml("#009A44"), Color.FromHtml("#006233"), Color.FromHtml("#75AADB"),
+        Color.FromHtml("#0038A8"), Color.FromHtml("#002868"), Color.FromHtml("#00A3DD"), Color.FromHtml("#5B2C83")
+    };
+
+    /// <summary>The standard flag colour nearest to this one, by hue first and lightness after.</summary>
+    private static Color FlagGrade(Color colour)
+    {
+        var best = FlagPalette[0];
+        var bestScore = float.MaxValue;
+        foreach (var candidate in FlagPalette)
+        {
+            var hue = Mathf.Abs(colour.H - candidate.H);
+            hue = Mathf.Min(hue, 1f - hue);
+            // Greys and near-whites have no hue worth matching: lightness decides them.
+            var chroma = Mathf.Min(colour.S, candidate.S);
+            var score = hue * 3f * chroma + Mathf.Abs(colour.S - candidate.S) * 0.8f + Mathf.Abs(colour.V - candidate.V) * 1.2f;
+            if (score < bestScore) { bestScore = score; best = candidate; }
+        }
+        return best;
+    }
+
     private static Texture2D ProvisionalFlag(Nation nation)
     {
         var religion = nation.DeclaredReligion?.ToLowerInvariant() ?? "";
@@ -214,14 +261,18 @@ public partial class DealOrForceGame
 
         const int width = 300;
         const int height = 200;
-        var baseColour = Color.FromString(nation.Color ?? "#888888", new Color(0.45f, 0.48f, 0.52f));
-        var light = new Color(0.96f, 0.95f, 0.92f);
-        var gold = new Color(0.95f, 0.76f, 0.16f);
-        var dark = baseColour.Darkened(0.52f);
-        var navy = new Color(0.10f, 0.27f, 0.52f);
-        var crimson = new Color(0.74f, 0.13f, 0.18f);
-        var emerald = new Color(0.11f, 0.44f, 0.24f);
-        var charcoal = new Color(0.11f, 0.13f, 0.16f);
+        // Flag colours, not map colours: the country's map colour is muted on purpose so borders
+        // read, and a flag built from it - with a beige "white" - looked printed on old paper beside
+        // the real flags. Every colour here is a flat vexillological standard, and the map colour is
+        // only a choice among them.
+        var baseColour = FlagGrade(Color.FromString(nation.Color ?? "#888888", new Color(0.45f, 0.48f, 0.52f)));
+        var light = Colors.White;
+        var gold = Color.FromHtml("#FCD116");
+        var dark = FlagGrade(baseColour.Darkened(0.5f));
+        var navy = Color.FromHtml("#002868");
+        var crimson = Color.FromHtml("#CE1126");
+        var emerald = Color.FromHtml("#009A44");
+        var charcoal = Colors.Black;
 
         var isMuslim = religion is "sunni" or "shia" or "ibadi" or "sufi";
         var isCommunist = ideology is "communism" or "socialism";
@@ -780,6 +831,9 @@ public partial class DealOrForceGame
         if (FlagsLoading.Remove(sprite, out var loading) &&
             ResourceLoader.LoadThreadedGet(loading) is Texture2D warmed)
             return FlagCache[sprite] = warmed;
+        // A flag described in common/flag_designs is drawn, not loaded: there is no file.
+        if (FlagDesignCatalog.Find(sprite) is { } design)
+            return FlagCache[sprite] = FlagDesignTexture(design, FlagDesignHeight);
         var path = SpriteCatalog.TextureOf(sprite, $"res://game/gfx/flags/{sprite}.png");
         var texture = !string.IsNullOrWhiteSpace(path) && ResourceLoader.Exists(path)
             ? GD.Load<Texture2D>(path)
@@ -797,6 +851,7 @@ public partial class DealOrForceGame
     /// does, so it is kept against the things it was worked out from.
     /// </summary>
     private static Campaign FlagWorld;
+    private FlagClothSettingsPulse _flagClothPulse;
 
     private static readonly Dictionary<string, string> ResolvedFlags = new();
 
@@ -814,6 +869,7 @@ public partial class DealOrForceGame
     /// <summary>Drop the cache when the sprite catalogue changes under it - a mod reload.</summary>
     private static void ForgetFlags()
     {
+        CampaignFlagCache.Clear();
         FlagCache.Clear();
         ResolvedFlags.Clear();
         RetiredFlagLoads.AddRange(FlagsLoading.Values);
@@ -830,6 +886,11 @@ public partial class DealOrForceGame
     /// </summary>
     private Control FlagBadge(string tag, float height, string tooltip = "")
     {
+        if (_flagClothPulse is null)
+        {
+            _flagClothPulse = new FlagClothSettingsPulse();
+            AddChild(_flagClothPulse);
+        }
         var texture = FlagTexture(tag);
         var width = texture is null || texture.GetHeight() <= 0
             ? height * 1.5f
@@ -857,6 +918,7 @@ public partial class DealOrForceGame
         var rect = new TextureRect
         {
             Texture = texture,
+            Material = FlagClothPresentation.Material,
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             // And in its own proportions whatever the frame is given; filtered through its
             // mipmaps, because a flag stored 512 pixels high and drawn 24 high is otherwise a

@@ -1,0 +1,8 @@
+{
+  "map_camera_inertia": {
+    "category": "video", "order": 320, "kind": "toggle",
+    "name": "Camera inertia",
+    "description": "A short, smoothly fading glide after releasing the map. Applies to the globe and flat map immediately. Disable for an immediate stop; dragging remains precise at every zoom.",
+    "default": true
+  }
+}

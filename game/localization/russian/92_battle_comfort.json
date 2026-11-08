@@ -1,0 +1,12 @@
+{
+  "This command is disabled in this campaign.": "Этот приказ отключён в данной кампании.",
+  "Withdraw {0:0} division(s); {1:0} remain in combat.": "Выйдут из боя: {0:0} див. Останутся в бою: {1:0} див.",
+  "Stop this attack without moving or healing the formation.": "Прекратить эту атаку без перемещения и восстановления соединения.",
+  "Retreat destination: {0}.": "Направление отхода: {0}.",
+  "Retreat costs recovery time; it does not restore men or equipment.": "После отхода потребуется отдых. Люди и оснащение не восстанавливаются.",
+  "Hide formations": "Скрыть соединения",
+  "Show formations": "Показать соединения",
+  "Encircled defenders are holding": "Окружённые держатся",
+  "The last combat round continued despite spent organisation. Losses and supply still matter.": "Последний раунд продолжился несмотря на истощённую организацию. Потери и снабжение по-прежнему важны."
+}
+

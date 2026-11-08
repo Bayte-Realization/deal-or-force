@@ -1,0 +1,9 @@
+{
+  // For an event or decision: { "effects": { "use": "open_nuclear_use" } }.
+  "open_nuclear_use": { "feature.nuclear_strikes_set": 1 },
+  // A treaty that takes the weapon off the table - the alert and the red telephone remain.
+  "ban_nuclear_use": { "feature.nuclear_strikes_set": 0 },
+  // Disarmament: the whole age closes. Saved posture and history stay in the save and return
+  // as they were if the age reopens.
+  "close_nuclear_age": { "feature.defcon_set": 0, "feature.nuclear_posture_set": 0, "feature.nuclear_strikes_set": 0 }
+}

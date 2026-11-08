@@ -58,7 +58,12 @@ public partial class DealOrForceGame
     /// <summary>How often the host says what its world looks like, in days.</summary>
     private const int NetworkChecksumEveryDays = 10;
 
-    private int _networkResyncRequestedDay = int.MinValue;
+    private readonly NetworkRecoveryThrottle _networkRecoveryRequests = new();
+    private readonly NetworkCatchUp _networkCatchUp = new();
+    private bool _networkResyncPending;
+    private string _networkSyncNotice = "";
+    private int _networkHostDay;
+    private (int Mode, long Days, int HostDay, string Tag, string Notice)? _networkClientStatus;
     private int _networkLastChecksumDay;
 
     /// <summary>
@@ -75,7 +80,20 @@ public partial class DealOrForceGame
     /// So an order now carries the day it was given, and a client that is behind holds it
     /// until it gets there.
     /// </summary>
-    private readonly List<(int Day, DealOrForce.Simulation.ICampaignCommand Command)> _networkDeferred = new();
+    private readonly NetworkHeldOrders _networkDeferred = new();
+
+    /// <summary>Connected machines that have not yet said which build they are, with when they connected.</summary>
+    private readonly Dictionary<long, double> _networkAwaitingHello = new();
+    private double _networkSessionClock;
+
+    /// <summary>
+    /// How long a peer may go silent before ENet gives up on it, in milliseconds. ENet's own
+    /// floor is five seconds, and a client unpacking a whole world - or a host packing one for
+    /// a late joiner - holds its main thread for longer than that on a slow machine: the
+    /// connection was dropped by the very load that was meant to bring the player in.
+    /// </summary>
+    private const int NetworkTimeoutMinimumMs = 20000;
+    private const int NetworkTimeoutMaximumMs = 60000;
 
     private void BuildNetworkMultiplayerInterface()
     {
@@ -104,9 +122,11 @@ public partial class DealOrForceGame
         explanation.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         rows.AddChild(explanation);
 
+        BuildNetworkScenarioChoice(rows);
+
         rows.AddChild(Title("1 · Connect", 16, Ui.Colour("text.accent")));
         rows.AddChild(Title("Player name", 12, Ui.Colour("text.caption")));
-        _networkPlayerName = NetworkField(Tr("Player name"), "Player");
+        _networkPlayerName = NetworkField("Player name", "Player");
         _networkPlayerName.MaxLength = 32;
         rows.AddChild(_networkPlayerName);
         _networkCountryTag = NetworkField("Country tag", "KOR");
@@ -167,7 +187,7 @@ public partial class DealOrForceGame
         _networkSelection = Title("", 16, Ui.Colour("text.accent"));
         _networkSelection.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         countryRows.AddChild(_networkSelection);
-        _networkSearch = NetworkField(Tr("Country name or tag"), "");
+        _networkSearch = NetworkField("Country name or tag", "");
         _networkSearch.Name = "LobbyCountrySearch";
         _networkSearch.TextChanged += _ => RenderNetworkCountries();
         countryRows.AddChild(_networkSearch);
@@ -183,19 +203,20 @@ public partial class DealOrForceGame
         Multiplayer.ServerDisconnected += OnNetworkServerDisconnected;
     }
 
-    private static LineEdit NetworkField(string placeholder, string value) => new()
+    private static LineEdit NetworkField(string placeholder, string value) => Placeholder(new LineEdit
     {
-        PlaceholderText = placeholder,
         Text = value,
         CustomMinimumSize = new Vector2(0, 38),
         ClearButtonEnabled = true
-    };
+    }, placeholder);
 
     private void OpenNetworkMultiplayer()
     {
         _campaign.IsPaused = true;
         _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        // The picker is lazy-built only on the single-player route. A cold direct
+        // Multiplayer launch must not assume the player visited that screen first.
+        if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
         _hudLayer.Visible = false;
         _networkLayer.Visible = true;
         _networkCountryTag.Text = _campaign.Player?.Tag ?? "KOR";
@@ -209,6 +230,7 @@ public partial class DealOrForceGame
 
     private void HostNetworkGame()
     {
+        if (_isLoading || _networkPeer is not null) return;
         if (!ValidateNetworkPort()) return;
         ShutdownNetworkPeer();
         var nation = RequestedNetworkNation();
@@ -276,10 +298,49 @@ public partial class DealOrForceGame
     private void OnConnectedToNetworkServer()
     {
         _networkConnected = true;
+        LengthenNetworkTimeout(1);
         PlayStrategicCue("network_connected");
-        var nation = RequestedNetworkNation();
-        RpcId(1, nameof(ServerRegisterNetworkPlayer), _networkPlayerName.Text.Trim(), nation?.Tag ?? "");
-        _networkStatus.Text = Tr("Connected. Waiting for the host to start the campaign.");
+        _networkStatus.Text = Tr("Connected. Receiving the host's scenario before country selection.");
+        // Say which build this is before anything else: the host sends its world only to a
+        // machine that can read it and speaks the same messages.
+        RpcId(1, nameof(ServerNetworkHello), NetworkProtocol.Version, SaveSystem.GameVersion, SaveSystem.MapDataVersion);
+    }
+
+    private void LengthenNetworkTimeout(long peerId)
+    {
+        if (_networkPeer is null) return;
+        try { _networkPeer.GetPeer((int)peerId)?.SetTimeout(0, NetworkTimeoutMinimumMs, NetworkTimeoutMaximumMs); }
+        catch (System.Exception exception) { GD.Print($"[net] could not lengthen the timeout of peer {peerId}: {exception.Message}"); }
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ServerNetworkHello(int protocol, string gameVersion, string mapDataVersion)
+    {
+        if (!_networkIsHost) return;
+        long peerId = Multiplayer.GetRemoteSenderId();
+        if (!_networkAwaitingHello.Remove(peerId)) return;
+        var refusal = NetworkProtocol.Refusal(protocol, gameVersion, mapDataVersion);
+        if (refusal is not null)
+        {
+            TurnAwayNetworkPeer(peerId, refusal);
+            return;
+        }
+        NetworkSnapshotDelivery.Send(new[] { peerId },
+            () => SaveSystem.ExportNetworkSnapshot(_campaign, ModFingerprint),
+            (peer, snapshot) => RpcId(peer, nameof(ClientReceiveLobbyScenario), snapshot, _networkScenarioTitle));
+    }
+
+    /// <summary>Tell a machine why it cannot play, then let it go once the message has had time to arrive.</summary>
+    private void TurnAwayNetworkPeer(long peerId, string reason)
+    {
+        GD.Print($"[net] turning away peer {peerId}: {reason}");
+        _networkStatus.Text = Simulation.Loc.Format("A player could not join: {0}", reason);
+        RpcId(peerId, nameof(ClientNetworkLobbyRefusal), reason);
+        var peer = _networkPeer;
+        GetTree().CreateTimer(1.5, true).Timeout += () =>
+        {
+            if (ReferenceEquals(peer, _networkPeer) && _networkPeer is not null) _networkPeer.DisconnectPeer((int)peerId);
+        };
     }
 
     private void OnNetworkConnectionFailed()
@@ -300,15 +361,34 @@ public partial class DealOrForceGame
 
     private void OnNetworkPeerConnected(long peerId)
     {
-        if (_networkIsHost) _networkStatus.Text = Simulation.Loc.Format("Peer {0} connected; waiting for country registration.", peerId);
+        if (!_networkIsHost) return;
+        LengthenNetworkTimeout(peerId);
+        _networkStatus.Text = Simulation.Loc.Format("Peer {0} connected; waiting for country registration.", peerId);
+        // The world goes out once the peer has said which build it is (ServerNetworkHello).
+        _networkAwaitingHello[peerId] = _networkSessionClock;
     }
 
     private void OnNetworkPeerDisconnected(long peerId)
     {
         if (!_networkIsHost) return;
+        _networkAwaitingHello.Remove(peerId);
+        _networkRecoveryRequests.Forget(peerId);
+        var hadCountry = _networkPeerNations.TryGetValue(peerId, out var leftNation);
+        var leftName = _networkNames.GetValueOrDefault(peerId, Simulation.Loc.Format("Player {0}", peerId));
         _networkPeerNations.Remove(peerId);
         _networkNames.Remove(peerId);
         _networkReadyPeers.Clear();
+        if (_networkGameStarted && hadCountry && leftNation != _networkLocalNationId &&
+            !_networkPeerNations.ContainsValue(leftNation))
+        {
+            // A country whose player has gone is run by the AI until somebody takes it again,
+            // on every machine at the same hour - left human, it stood still on the host and,
+            // with nobody to give it orders, simply waited out the war.
+            SetNetworkSeat(leftNation, false);
+            var tag = _campaign?.NationById(leftNation)?.Tag ?? "?";
+            _networkStatus.Text = Simulation.Loc.Format("{0} left; the AI runs {1} until a player takes it again.", leftName, tag);
+            if (_networkHudStatus is not null) _networkHudStatus.Text = _networkStatus.Text;
+        }
         _networkRosterRevision++;
         RefreshNetworkRoster();
     }
@@ -352,8 +432,10 @@ public partial class DealOrForceGame
         if (_networkGameStarted)
         {
             // A late joiner must become a human seat before the authoritative
-            // snapshot is made, otherwise its country would continue to run AI.
-            _campaign.AddHumanSeat(assigned.Id);
+            // snapshot is made, otherwise its country would continue to run AI - and on
+            // every other machine too: told only to the joiner, the others went on running
+            // the country by AI while the host did not, and the worlds parted on the spot.
+            SetNetworkSeat(assigned.Id, true);
             SendNetworkSnapshot(peerId);
         }
     }
@@ -418,13 +500,19 @@ public partial class DealOrForceGame
             return;
         }
         var firstStart = !_networkGameStarted;
+        // Everything held was sent before this world was packed, so it is in it already:
+        // applied again, an order raised a tax twice or bought the same division twice.
+        _networkDeferred.Clear();
+        _networkCatchUp.Clear();
+        _networkResyncPending = false;
+        _networkSyncNotice = "";
         AdoptNetworkCampaign(result.Campaign);
         _globe.CountrySelectionOnly = false;
         _networkGameStarted = true;
         _networkLayer.Visible = false;
         if (firstStart) PlayStrategicCue("campaign_start");
         _menuLayer.Visible = false;
-        _pickerLayer.Visible = false;
+        if (IsInstanceValid(_pickerLayer)) _pickerLayer.Visible = false;
         _pauseMenuLayer.Visible = false;
         _handoverLayer.Visible = false;
         _hudLayer.Visible = true;
@@ -436,6 +524,7 @@ public partial class DealOrForceGame
     {
         if (_campaign is not null) _campaign.Changed -= Refresh;
         _campaign = campaign;
+        BindStepCompletion();
         _campaignSeed = campaign.Seed;
         _pickerScenarioEntry = null;
         if (_pickerSeed is not null) _pickerSeed.Text = _campaignSeed.ToString();
@@ -465,7 +554,7 @@ public partial class DealOrForceGame
             {
                 if (!_networkGameStarted || _applyingNetworkCommand) return false;
                 if (NetworkCommandCodec.TryEncode(command, out var type, out var json))
-                    Rpc(nameof(ClientApplyNetworkCommand), type, json, _campaign.ElapsedDays);
+                    Rpc(nameof(ClientApplyNetworkCommand), type, json, _campaign.ElapsedHours);
                 return false;
             };
         }
@@ -510,27 +599,71 @@ public partial class DealOrForceGame
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void ClientApplyNetworkCommand(string typeName, string json, int hostDay)
+    private void ClientApplyNetworkCommand(string typeName, string json, long hostHours)
     {
-        if (_networkIsHost || _campaign is null ||
+        // A machine still in the lobby has no campaign of the host's yet: whatever the host
+        // does now is in the world it will be sent.
+        if (_networkIsHost || _campaign is null || !_networkGameStarted || _networkResyncPending ||
             !NetworkCommandCodec.TryDecode(typeName, json, out var command)) return;
 
-        // On the day it was given, or held until we get there. Applying it early is the
+        // At the hour it was given, or held until we get there. Applying it early is the
         // silent divergence this whole exchange exists to avoid.
-        if (hostDay > _campaign.ElapsedDays)
-        {
-            _networkDeferred.Add((hostDay, command));
-            return;
-        }
-        ApplyNetworkCommand(command);
+        ApplyAtNetworkBoundary(hostHours, () => ApplyNetworkCommand(command));
+    }
+
+    /// <summary>
+    /// Make a country human or AI on the host, and on every client at the same hour of the
+    /// same world. Who the AI runs is part of the world, not of the lobby.
+    /// </summary>
+    private void SetNetworkSeat(int nationId, bool human)
+    {
+        if (!_networkIsHost || _campaign is null) return;
+        _campaign.FinishStep();
+        var changed = ChangeNetworkSeat(nationId, human);
+        if (!changed) return;
+        Rpc(nameof(ClientSetNetworkSeat), nationId, human, _campaign.ElapsedHours);
+        Refresh();
+    }
+
+    [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+    private void ClientSetNetworkSeat(int nationId, bool human, long hostHours)
+    {
+        if (_networkIsHost || _campaign is null || !_networkGameStarted || _networkResyncPending) return;
+        ApplyAtNetworkBoundary(hostHours, () => ChangeNetworkSeat(nationId, human));
+    }
+
+    /// <summary>
+    /// The seat change itself, keeping this machine's own country. Giving up a seat re-takes
+    /// the active one (Campaign.TakeSeat), which is the hotseat rule: on a client it handed
+    /// the player the host's country the moment somebody else left.
+    /// </summary>
+    private bool ChangeNetworkSeat(int nationId, bool human)
+    {
+        var mine = _networkLocalNationId >= 0 ? _networkLocalNationId : _campaign.Player?.Id ?? -1;
+        // Taking a seat also pauses (it is the hotseat hand-over); here time is the host's.
+        var paused = _campaign.IsPaused;
+        var changed = human ? _campaign.AddHumanSeat(nationId) : _campaign.RemoveHumanSeat(nationId);
+        if (changed && mine >= 0 && _campaign.Player?.Id != mine) _campaign.SetPlayer(mine);
+        _campaign.IsPaused = paused;
+        return changed;
     }
 
     private void ApplyNetworkCommand(DealOrForce.Simulation.ICampaignCommand command)
     {
+        var wasApplying = _applyingNetworkCommand;
         _applyingNetworkCommand = true;
-        _campaign.Commands.Enqueue(command);
-        _campaign.Commands.ApplyAll(_campaign);
-        _applyingNetworkCommand = false;
+        try
+        {
+            _campaign.Commands.Enqueue(command);
+            _campaign.Commands.ApplyAll(_campaign);
+        }
+        finally { _applyingNetworkCommand = wasApplying; }
+    }
+
+    private void ApplyAtNetworkBoundary(long hour, Action apply)
+    {
+        if (_campaign.MidStep) _networkDeferred.Hold(hour, apply);
+        else _networkDeferred.ApplyOrHold(hour, _campaign.ElapsedHours, apply);
     }
 
     /// <summary>
@@ -539,20 +672,26 @@ public partial class DealOrForceGame
     /// </summary>
     private void ApplyDeferredNetworkCommands()
     {
-        if (_networkDeferred.Count == 0 || _campaign is null) return;
-        for (var index = 0; index < _networkDeferred.Count; index++)
-        {
-            var waiting = _networkDeferred[index];
-            if (waiting.Day > _campaign.ElapsedDays) continue;
-            ApplyNetworkCommand(waiting.Command);
-            _networkDeferred.RemoveAt(index);
-            index--;
-        }
+        if (_networkDeferred.Count == 0 || _campaign is null || _campaign.MidStep || _networkResyncPending) return;
+        _networkDeferred.ApplyDue(_campaign.ElapsedHours);
     }
 
     private void NetworkProcess(double delta)
     {
-        if (!_networkConnected || !_networkGameStarted || !_networkIsHost) return;
+        _networkSessionClock += delta;
+        if (_networkIsHost && _networkAwaitingHello.Count > 0)
+        {
+            // A machine that never says which build it is, is an older one: it does not know
+            // the question. It is told so rather than left waiting for a world.
+            foreach (var (peer, since) in _networkAwaitingHello.ToArray())
+            {
+                if (_networkSessionClock - since < NetworkProtocol.HelloSeconds) continue;
+                _networkAwaitingHello.Remove(peer);
+                TurnAwayNetworkPeer(peer, Tr("That game is a different version. Install the same version as the host."));
+            }
+        }
+        if (!_networkConnected || !_networkGameStarted) return;
+        if (!_networkIsHost) { AdvanceNetworkClientFrame(); return; }
         _networkClockAccumulator += delta;
         if (_networkClockAccumulator < 0.50) return;
         _networkClockAccumulator = 0;
@@ -561,54 +700,77 @@ public partial class DealOrForceGame
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void ClientAdvanceNetworkDay(int hostElapsedDays)
+    private void ClientAdvanceNetworkHours(long hostHours, int hostTickHours)
     {
-        if (_networkIsHost || _campaign is null || hostElapsedDays <= _campaign.ElapsedDays) return;
+        if (_networkIsHost || _campaign is null || !_networkGameStarted || _networkResyncPending) return;
+        // Receipt is cheap. All messages in this frame share ONE frame budget below.
+        if (!_networkCatchUp.Offer(hostHours, hostTickHours, _campaign.ElapsedHours))
+            RequestNetworkResync("unreachable clock target or excessive cadence changes");
+    }
 
-        // Hours, not days. A day stopped being the unit a tick advances in: at seventy-two
-        // hours a step overshoots the day it was aiming at, and at six it takes four steps
-        // to move the day counter at all - so a loop that counts days either runs one step
-        // too many or spends its whole budget standing still.
-        var target = hostElapsedDays * 24L;
-
-        // A step at a time, up to a budget, so a client that is momentarily behind catches
-        // up over the next few messages rather than freezing while it replays a month.
-        var ticks = 0;
-        var budget = Math.Max(1, (int)(8 * 24 / Math.Max(1, _campaign.TickHours)));
-        _applyingNetworkCommand = true;
-        while (_campaign.ElapsedHours < target && ticks < budget)
+    private void AdvanceNetworkClientFrame()
+    {
+        var world = _campaign;
+        if (world is null || world.SimulationFault.Length > 0) return;
+        if (_networkCatchUp.NeedsSnapshot(world.ElapsedHours, NetworkResyncGapDays))
+            RequestNetworkResync("client beyond the catch-up horizon");
+        if (_networkResyncPending) { RequestNetworkResync("waiting for recovery"); RefreshNetworkClientStatus(); return; }
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var slice = NetworkCatchUp.FrameBudget(world.Defines.FrameSimulationBudgetMs);
+        var completed = 0;
+        var wasPaused = world.IsPaused;
+        var wasApplying = _applyingNetworkCommand;
+        try
         {
-            _campaign.Tick();
-            // Once a day, for the same reason as the single-player loop: a hook named for a
-            // day that fires on every step multiplies whatever a mod does in it by the number
-            // of steps in a day, and the two loops must not disagree about that or a mod
-            // behaves differently in multiplayer.
-            if (_campaign.StepOpensNewDay) _modLoader.OnDayAdvanced(_campaign);
-            ticks++;
-            // Orders given on the day we have just reached, applied before the next one is
-            // simulated - which is the whole of what lockstep means.
-            _applyingNetworkCommand = false;
-            ApplyDeferredNetworkCommands();
+            world.IsPaused = false; // only the host's reliable targets authorise steps, not the pause heartbeat
             _applyingNetworkCommand = true;
+            while (_networkCatchUp.TryNext(world.ElapsedHours, world.MidStep, out var next))
+            {
+                if (!world.MidStep) world.Defines.HoursPerTick = next.StepHours;
+                var remaining = slice - System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                if (completed > 0 && remaining <= 0) break;
+                if (!world.StepFor(Math.Max(0, remaining))) break;
+                if (world.SimulationFault.Length > 0 || _networkResyncPending) break;
+                if (++completed >= Math.Max(1, world.Defines.MaxDaysPerFrame)) break;
+            }
         }
-        _applyingNetworkCommand = false;
-
-        var behind = hostElapsedDays - _campaign.ElapsedDays;
-        if (behind <= 0) return;
-        if (behind < NetworkResyncGapDays)
+        catch (Exception exception) when (exception is not OutOfMemoryException && exception is not AccessViolationException)
         {
-            _networkHudStatus.Text = Simulation.Loc.Format("CATCHING UP · {0:N0} day(s) behind the host", behind);
-            return;
+            _networkCatchUp.Clear();
+            world.BlockSimulation(exception.Message, exception);
+            DiagnosticLogs.Write("errors", "SIMULATION_STOPPED " + exception);
+            var path = SaveSystem.WriteDiagnosticSnapshot(SaveRoot, world, exception.Message);
+            ShowCampaignFault(Simulation.Loc.Format(
+                "Simulation stopped at {0}. The last good save is unchanged. Load it before continuing.", world.Date.Display()),
+                path, exception.Message);
         }
-        // Too far to replay, and every order arriving now would be applied to the wrong
-        // world. Ask for the world itself instead - and say so, because a player who sees
-        // nothing assumes nothing is wrong.
-        _networkHudStatus.Text = Simulation.Loc.Format("RESYNCHRONISING · {0:N0} day(s) behind", behind);
-        RequestNetworkResync($"{behind:N0} days behind");
+        finally
+        {
+            _applyingNetworkCommand = wasApplying;
+            world.IsPaused = world.SimulationFault.Length > 0 || wasPaused;
+        }
+        RefreshNetworkClientStatus();
+    }
+
+    private void RefreshNetworkClientStatus()
+    {
+        if (_networkHudStatus is null || _campaign is null) return;
+        var behind = Math.Max(0, _networkCatchUp.LatestHours - _campaign.ElapsedHours);
+        var mode = _networkResyncPending ? 2 : _campaign.MidStep || behind > 0 ? 1 : 0;
+        var days = mode == 1 ? Math.Max(1, (behind + 23) / 24) : (behind + 23) / 24;
+        var key = (mode, days, _networkHostDay, _campaign.Player.Tag, _networkSyncNotice);
+        if (_networkClientStatus is { } old && old == key) return;
+        _networkClientStatus = key;
+        if (mode == 2)
+            _networkHudStatus.Text = _networkSyncNotice.Length > 0 ? _networkSyncNotice :
+                Simulation.Loc.Format("RESYNCHRONISING · {0:N0} day(s) behind", days);
+        else if (mode == 1)
+            _networkHudStatus.Text = Simulation.Loc.Format("CATCHING UP · {0:N0} day(s) behind the host", days);
+        else _networkHudStatus.Text = Simulation.Loc.Format("CLIENT · {0} · host day {1:N0}", _campaign.Player.Tag, _networkHostDay);
     }
 
     /// <summary>
-    /// Ask the host for the world again, at most once every few days.
+    /// Ask the host for the world again, at most once per real-time recovery interval.
     ///
     /// Rate-limited because the trigger conditions repeat: a client that is behind is still
     /// behind on the next message, and a snapshot of a world this size is not something to
@@ -616,9 +778,9 @@ public partial class DealOrForceGame
     /// </summary>
     private void RequestNetworkResync(string reason)
     {
-        if (_networkIsHost || _campaign is null) return;
-        if (!NetworkSyncCadence.Due(_campaign.ElapsedDays, _networkResyncRequestedDay, NetworkChecksumEveryDays)) return;
-        _networkResyncRequestedDay = _campaign.ElapsedDays;
+        if (_networkIsHost || !_networkConnected || !_networkGameStarted || _campaign is null) return;
+        _networkResyncPending = true;
+        if (!_networkRecoveryRequests.TryAcquire(1, _networkSessionClock)) return;
         RpcId(1, nameof(ServerRequestNetworkResync), reason ?? "");
     }
 
@@ -628,7 +790,11 @@ public partial class DealOrForceGame
         if (!_networkIsHost || !_networkGameStarted) return;
         var peer = Multiplayer.GetRemoteSenderId();
         if (!_networkPeerNations.ContainsKey(peer)) return;
-        GD.Print($"[net] resynchronising peer {peer}: {reason}");
+        // Enforce before preparing/compressing a snapshot, not after paying its cost.
+        if (!_networkRecoveryRequests.TryAcquire(peer, _networkSessionClock)) return;
+        var summary = reason ?? "";
+        if (summary.Length > 160) summary = summary[..160];
+        GD.Print($"[net] resynchronising peer {peer}: {summary}");
         SendNetworkSnapshot(peer);
     }
 
@@ -644,38 +810,38 @@ public partial class DealOrForceGame
         if (!_networkIsHost || !_networkGameStarted || _campaign is null) return;
         if (!NetworkSyncCadence.Due(_campaign.ElapsedDays, _networkLastChecksumDay, NetworkChecksumEveryDays)) return;
         _networkLastChecksumDay = _campaign.ElapsedDays;
-        Rpc(nameof(ClientCheckNetworkSync), _campaign.ElapsedDays,
+        Rpc(nameof(ClientCheckNetworkSync), _campaign.ElapsedHours,
             CampaignFingerprint.Of(_campaign).ToString());
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-    private void ClientCheckNetworkSync(int hostElapsedDays, string hostFingerprint)
+    private void ClientCheckNetworkSync(long hostHours, string hostFingerprint)
     {
-        if (_networkIsHost || _campaign is null) return;
-        // Only comparable on the same day; a client still catching up is not diverged, and
-        // telling it so would send it a snapshot every ten days for no reason.
-        if (_campaign.ElapsedDays != hostElapsedDays) return;
+        if (_networkIsHost || _campaign is null || !_networkGameStarted || _networkResyncPending) return;
+        ApplyAtNetworkBoundary(hostHours, () => CompareNetworkChecksum(hostHours, hostFingerprint));
+    }
+
+    private void CompareNetworkChecksum(long hostHours, string hostFingerprint)
+    {
+        if (_networkResyncPending || _campaign.MidStep || _campaign.ElapsedHours != hostHours) return;
+        var hostElapsedDays = (int)(hostHours / 24);
         if (CampaignFingerprint.Of(_campaign).ToString() == hostFingerprint) return;
-        _networkHudStatus.Text = Simulation.Loc.Format("DESYNCHRONISED on day {0:N0} · asking the host for the world", hostElapsedDays);
+        _networkSyncNotice = Simulation.Loc.Format("DESYNCHRONISED on day {0:N0} · asking the host for the world", hostElapsedDays);
         RequestNetworkResync($"checksum mismatch on day {hostElapsedDays}");
+        RefreshNetworkClientStatus();
     }
 
     [Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
     private void ClientReceiveNetworkClock(int elapsedDays, bool paused, int speed, int hostTickHours)
     {
         if (_networkIsHost || _campaign is null) return;
-        // The host's step, not this player's. `hours_per_tick` is a preference when playing
-        // alone and a rule when playing together: two worlds stepping different amounts do
-        // different arithmetic, and lockstep survives none of it.
-        if (hostTickHours > 0 && _campaign.Defines.HoursPerTick != hostTickHours)
-        {
-            _campaign.Defines.HoursPerTick = hostTickHours;
-            GD.Print($"[net] adopting the host's step of {hostTickHours} hour(s)");
-        }
+        // A heartbeat may overtake reliable messages. Never let it change a staged step
+        // or an older pending cadence: the reliable target owns the simulation's step size.
+        _networkHostDay = elapsedDays;
         _campaign.IsPaused = paused;
         _speed = Math.Clamp(speed, 1, 5);
         _pause.Text = paused ? "▶" : "II";
-        _networkHudStatus.Text = Simulation.Loc.Format("CLIENT · {0} · host day {1:N0}", _campaign.Player.Tag, elapsedDays);
+        RefreshNetworkClientStatus();
     }
 
     private void UpdateNetworkHud()
@@ -683,11 +849,9 @@ public partial class DealOrForceGame
         if (_networkHud is null) return;
         _networkHud.Visible = _hudLayer.Visible && _networkConnected && _networkGameStarted;
         if (!_networkHud.Visible) return;
-        _networkHudStatus.Text = _networkIsHost
-            ? Simulation.Loc.Format("HOST · {0:N0} PLAYERS · UDP {1}",
-                _networkPeerNations.Count, RequestedNetworkPort())
-            : Simulation.Loc.Format("CLIENT · {0} · {1}",
-                _campaign.Player.Tag, _networkAddress.Text.Trim());
+        if (!_networkIsHost) { _networkClientStatus = null; RefreshNetworkClientStatus(); return; }
+        _networkHudStatus.Text = Simulation.Loc.Format("HOST · {0:N0} PLAYERS · UDP {1}",
+            _networkPeerNations.Count, RequestedNetworkPort());
     }
 
     private void CloseNetworkMultiplayer()
@@ -709,11 +873,17 @@ public partial class DealOrForceGame
         _networkNames.Clear();
         _networkReadyPeers.Clear();
         _networkDeferred.Clear();
+        _networkCatchUp.Clear();
+        _networkResyncPending = false;
+        _networkSyncNotice = "";
+        _networkHostDay = 0;
+        _networkClientStatus = null;
+        _networkAwaitingHello.Clear();
         _networkIsHost = false;
         _networkConnected = false;
         _networkGameStarted = false;
         _networkLocalNationId = -1;
-        _networkResyncRequestedDay = int.MinValue;
+        _networkRecoveryRequests.Clear();
         _networkLastChecksumDay = 0;
         _networkClockAccumulator = 0;
         if (_networkHud is not null) _networkHud.Visible = false;

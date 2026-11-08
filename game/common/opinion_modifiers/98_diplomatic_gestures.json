@@ -7,5 +7,5 @@
   "defaulted_on_loan": { "name": "Defaulted on our loan", "opinion": -30, "days": 3650, "decays": true, "max_stacks": 1 },
   "expelled_diplomats": { "name": "Expelled our diplomats", "opinion": -25, "days": 1095, "decays": true, "max_stacks": 2 },
   "joint_exercises": { "name": "Held exercises with us", "opinion": 15, "days": 730, "decays": true, "max_stacks": 1 },
-  "exercises_against_us": { "name": "Rehearsed a war against us with others", "opinion": -10, "days": 730, "decays": true, "max_stacks": 2 }
+  "exercises_against_us": { "name": "Rehearsed a war against us with others", "opinion": -6, "days": 730, "decays": true, "max_stacks": 2 }
 }

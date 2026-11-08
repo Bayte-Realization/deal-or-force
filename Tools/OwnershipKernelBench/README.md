@@ -1,5 +1,56 @@
 # Ownership component benchmark
 
+`--parallel-reads` additionally runs the independent tools-only trading-read batch
+on seed 777, day 8, at 1/2/4 workers. It interleaves the live sequential view, the
+original allocating snapshot, and a reusable flat value-buffer snapshot. Each worker
+receives copied value inputs, not the live campaign. Every sample is checked bit-for-bit
+against the production sequential view, including supplier and stable row order.
+Timings and all-thread managed allocations include snapshot capture and output construction;
+they do not represent a full tick, frame rate, native memory, or production activation.
+Run: `dotnet run -c Release --project Tools/OwnershipKernelBench -- --parallel-reads`.
+
+The reusable candidate captures quotes and packs incoming routes in two global route
+passes (count, then copy), in the original route order. It retains one set of four flat
+arrays and an ID-to-slot dictionary; buffer capacities grow only when the largest input
+grows, with an eight-element minimum and otherwise at most twice the observed requirement.
+Only the active slices are read after a smaller or empty capture. `Capture` and the
+synchronous `Execute` share an exclusive, fail-fast lease, so the next capture cannot
+overwrite an executing worker's values. Results still own their arrays. Supplier
+materialization mirrors the production direct loop rather than the legacy probe's LINQ
+projection. Nothing enables parallel simulation or introduces a runtime dependency.
+
+Checks cover growing/shrinking and reordered batches, empty inputs, unavailable attribution,
+invalid/duplicate goods and routes, mutation of original quote/route fields after capture,
+failed-capture recovery, lease exclusion, detached results and campaign/RNG neutrality.
+After warm-up, sixteen repeated captures must allocate zero managed bytes on the capturing
+thread. Cold capture time/allocations and retained value-buffer bytes are printed separately:
+steady-state timing does not conceal that initial allocation or the retained storage cost.
+The retained byte figure excludes dictionary backing storage and outputs; it is not an RSS
+or full managed-heap measurement. Benchmarked methods rotate order across 31 samples with
+four warm-up passes each. Correctness comparisons run outside every timed region.
+
+Measured 7 November 2026 in one serialized process, .NET 8, seed 777/day 8, 326 nations,
+20,538 quotes and 8,086 routes (snapshot capture included in every batch):
+
+| Batch | Median ms | p95 ms | Median allocated bytes, all threads |
+| --- | ---: | ---: | ---: |
+| Live sequential | 5.4334 | 9.6970 | 3,741,888 |
+| Legacy snapshot, worker limit 1 | 8.2614 | 13.5707 | 6,081,088 |
+| Legacy snapshot, worker limit 2 | 6.2851 | 11.1117 | 6,082,752 |
+| Legacy snapshot, worker limit 4 | 4.6040 | 10.4910 | 6,083,304 |
+| Reused snapshot, worker limit 1 | 5.0281 | 9.2642 | 3,731,512 |
+| Reused snapshot, worker limit 2 | 2.8333 | 5.2534 | 3,733,240 |
+| Reused snapshot, worker limit 4 | 2.2630 | 5.8608 | 3,733,728 |
+
+Cold reusable capture cost 0.4519 ms and 448,240 all-thread managed bytes; retained
+value buffers totaled 432,160 bytes. Sixteen warm captures allocated zero bytes on the
+capturing thread. Every timed result passed exact parity and the world fingerprint/RNG
+stayed unchanged (`9140BDACFFD8ABB9`, `3932822249`). Reused limit 4 versus reused limit 1
+compares the same capture and calculation, unlike comparing legacy and reused versions
+which also changes allocation/packing. These are one-run local batch measurements, not
+statistical confidence, total tick/frame speed, native RSS, or production readiness.
+The limit-2 p95 was lower than limit-4 here; more workers are not automatically better.
+
 Standalone .NET 8 harness; it compiles the simulation sources and the isolated managed
 experiment under `Tools/GodotLanguages/kernels/ownership/managed` without Godot. Run from
 the repository root so the real map and campaign data are found.

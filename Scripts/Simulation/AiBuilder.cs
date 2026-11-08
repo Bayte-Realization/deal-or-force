@@ -28,7 +28,7 @@ public sealed partial class Defines
     /// this share of its jobs - builds for its shortages but puts up no factory just to have
     /// one. 0: civilian industry whatever the labour, as before.
     /// </summary>
-    public float AiBuildLabourFloor { get; set; } = 0f;
+    public float AiBuildLabourFloor { get; set; } = 0.95f;
 }
 
 /// <summary>
@@ -88,6 +88,7 @@ public static class AiBuilder
             Candidates.Clear();
             foreach (var building in BuildingCatalog.All)
             {
+                if (BuildingRules.Refusal(campaign, nation, building).Length > 0) continue;
                 ProductionChains.RolesOf(building, Makes, Uses);
                 if (Makes.Contains(good)) Candidates.Add((building, Makes.Count));
             }

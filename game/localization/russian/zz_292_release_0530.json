@@ -1,0 +1,13 @@
+{
+  "Founding component {0} secured: {1}/{2}": "Закреплена территория участника {0}: {1}/{2}",
+  "Editing mod: {0}": "Редактируемый мод: {0}",
+  "Create / select mod": "Создать / выбрать мод",
+  "Packages are saved to your Documents mods folder. Enable a new mod in the launcher before starting a new campaign.": "Моды сохраняются в папку mods игры в Документах. Перед новой кампанией включите созданный мод в лаунчере.",
+  "Use selected mod": "Редактировать выбранный мод",
+  "New mod ID": "ID нового мода",
+  "New mod name": "Название нового мода",
+  "Create mod": "Создать мод",
+  "Use a lowercase mod ID: letters, digits and underscores, starting with a letter.": "ID мода: строчные латинские буквы, цифры и подчёркивания; первый символ — буква. Не используйте системные имена Windows.",
+  "Enter a mod name (1–120 characters).": "Введите название мода (1–120 символов).",
+  "This mod folder already exists. Select it instead; nothing was overwritten.": "Такая папка мода уже существует. Выберите её из списка. Файлы не перезаписаны."
+}

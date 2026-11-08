@@ -15,10 +15,12 @@
     "max_stacks": 4
   },
 
+  // Minus fifteen, so that two denunciations still add up to a grievance worth a war
+  // (CasusBelliGrudgeFloor, minus thirty) and one does not; remembered for two years.
   "denounced": {
     "name": "Denounced us publicly",
-    "opinion": -18,
-    "days": 1100,
+    "opinion": -15,
+    "days": 730,
     "decays": true,
     "max_stacks": 3
   },
@@ -96,6 +98,10 @@
     "decays": false
   },
 
+  // Held while it lasts and forgotten the day nobody is refusing any more - lifted by an
+  // organisation's vote, it used never to be forgotten at all. Kept at minus thirty because an
+  // embargo is a direct act against the country embargoed, and exactly the depth of grudge a
+  // war may be declared over (CasusBelliGrudgeFloor).
   "embargoed_us": {
     "name": "Refuses to trade with us",
     "opinion": -30,
@@ -111,12 +117,17 @@
   },
 
   // What the world thinks of a country that keeps taking things. Scaled by how much it has
-  // taken, held while it is still notorious, and forgotten when it is not.
+  // taken, held while it is still notorious, and forgotten when it is not - and scaled again by
+  // how much that appetite concerns the country watching (OpinionWitnesses): its neighbours in
+  // full, its allies hardly, the far side of the world a little. A bystander's grievance, so it
+  // counts towards the ceiling on those (ThirdPartyOpinionFloor). Minus thirty is still exactly
+  // the depth of grudge a neighbour may go to war over (CasusBelliGrudgeFloor).
   "notoriety": {
     "name": "Their appetite worries us",
-    "opinion": -34,
+    "opinion": -30,
     "days": 0,
-    "decays": false
+    "decays": false,
+    "third_party": true
   },
 
   "stood_by_us": {
@@ -164,10 +175,11 @@
     "decays": false
   },
 
-  // Scaled by how much bigger the neighbour is - the same fear, felt harder.
+  // Scaled by how much bigger the neighbour is - the same fear, felt harder - and by how far
+  // away it is (OpinionWitnesses.FearReach): in full next door, hardly at all across the world.
   "fear_of_strength": {
     "name": "They are stronger than us",
-    "opinion": -16,
+    "opinion": -12,
     "days": 0,
     "decays": false
   },

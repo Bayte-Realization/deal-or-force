@@ -3,6 +3,14 @@
 // Granted every week to every country in a war older than PeaceWearinessAfterDays (two years),
 // and the heavier one once it is older than AiWearyDays (four); each lapses a fortnight after the
 // war ends. The same grammar as 00_modifiers.json.
+//
+// ─── The nuclear shadow ─────────────────────────────────────────────────────────
+// Granted IN ADDITION to the long-war weight when BOTH sides of a war hold the
+// deterrent (Deterrence.Briskmanship > 0). It is the home-front half of the Cuba
+// rule (AiPeaceOutcomes.WriteDecisiveSettlement): the same pressure that ends such
+// wars in limited terms is what every household under the shadow lives with.
+// A mod without `common/deterrence` data never triggers this — the spirit is
+// unreachable and harmless in an ordinary world.
 {
   "long_war": {
     "name": "A long war",
@@ -58,6 +66,17 @@
       "stability_weekly": -0.004,
       "output": -0.08,
       "recruitment_speed": -0.25
+    }
+  },
+  "nuclear_shadow": {
+    "name": "The nuclear shadow",
+    "description": "A war nobody can win and nobody can stop: air raid drills in the metro, iodine in the pharmacy, and both capitals one radar ghost away from the end of the world.",
+    "days": 14,
+    "positive": false,
+    "modifiers": {
+      "war_support_weekly": -0.004,
+      "stability_weekly": -0.0015,
+      "research_speed": -0.03
     }
   }
 }

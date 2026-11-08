@@ -7,6 +7,38 @@ namespace DealOrForce.Simulation;
 /// Every tunable constant the simulation reads, in one place, so balance is a data
 /// change rather than a code change. Mods override individual fields; anything they
 /// do not mention keeps the value below.
+///
+/// =====================================================================================
+/// FOR MODDERS - how to change a number without reading the code
+///
+/// Where they live. `game/common/defines/*.json`, read in file-name order, later files winning.
+/// That is why the game's own files are numbered: a mod drops `50_my_balance.json` beside them,
+/// lists the three numbers it wants different, and inherits the rest. It never forks a file.
+///
+/// The key is the property name. `KinAdminDiscovery` here is `"KinAdminDiscovery"` there, spelled
+/// the same, including capitals.
+///
+/// What the units are, because they are the game's own and nobody writes them down twice:
+///   - money is billions, and a week is the natural beat for anything with "Weekly" in the name;
+///   - a share or a chance is 0..1, never a percent - 0.035 is three and a half percent;
+///   - days are days, and a "days" constant is not scaled by the player's tick rate;
+///   - anything called "Score" or "Budget" is in war score, where 100 is a total victory;
+///   - anything called "PerMillion" is per million of the relevant people, and usually has a
+///     "Floor" beside it so a village does not cost nothing.
+///
+/// Defaults are the balance, not a suggestion. Each value here is the one the game was tuned
+/// against, and each one has a comment above it saying what happens if it moves. Read that before
+/// changing it: several of them exist because of a specific defect, and the comment names the
+/// defect so the same fix is not undone by accident.
+///
+/// SimBench checks that what ships in that folder still agrees with the values compiled here. A
+/// stale data file once silently undid an entire combat rebalance, because data wins over code by
+/// design and nothing was watching. If you change a default here, change the shipped file too.
+///
+/// What is *not* here: per-country and per-region numbers (those are content), and anything that
+/// is a rule rather than a quantity. Rules live in the file that owns them, with the reasoning
+/// beside the rule, because a rule without its reason gets "fixed" in a year.
+/// =====================================================================================
 /// </summary>
 public sealed partial class Defines
 {
@@ -971,7 +1003,7 @@ public sealed partial class Defines
 	/// provinces next to it, as before - on a front of small provinces a division whose
 	/// neighbours had all changed hands surrendered whole with its own line two provinces away.
 	/// </summary>
-	public int RetreatSearchDepth { get; set; } = 1;
+	public int RetreatSearchDepth { get; set; } = 3;
 
 	/// <summary>How many provinces out from itself a division is taken to hold ground.</summary>
 	public int FrontCoverageRadius { get; set; } = 2;
@@ -1045,6 +1077,13 @@ public sealed partial class Defines
 	/// <summary>Supply throughput each barracks adds.</summary>
 	public float SupplyPerBarracks { get; set; } = 0.9f;
 
+	/// <summary>
+	/// Supply throughput each rail network adds. Less than a level of infrastructure, which is
+	/// the roads, depots and power an army draws on everywhere; a railway is the trunk line that
+	/// moves the bulk of it to the hub, and until 1 November 2026 it carried none of it.
+	/// </summary>
+	public float SupplyPerRailNetwork { get; set; } = 1.2f;
+
 	/// <summary>Maximum number of friendly provinces a land supply network can trace from home.</summary>
 	public int SupplyTraceRange { get; set; } = 20;
 
@@ -1073,11 +1112,51 @@ public sealed partial class Defines
 	/// <summary>Multiplier for ground never taken. A conference is not a land grab.</summary>
 	public float PeaceCostUnheldFactor { get; set; } = 4.5f;
 
+	/// <summary>
+	/// Multiplier for a province the beneficiary cannot walk to from what it already owns - the
+	/// confetti a map collects when wars are won on points. Priced, not banned: historical islands
+	/// and exclaves exist, and a state reuniting its own territory is never charged this
+	/// (see PeaceLedger.Price and Deals, which already value borders the same way).
+	/// </summary>
+	public float PeaceCostDetachedFactor { get; set; } = 2.2f;
+
 	/// <summary>Discount inside the war goal that was actually declared.</summary>
 	public float PeaceCostWarGoalFactor { get; set; } = 0.65f;
 
 	/// <summary>Multiplier on the region holding the loser's seat of government.</summary>
 	public float PeaceCostCapitalFactor { get; set; } = 2.6f;
+
+	/// <summary>
+	/// Extra price of ground the winner never took, at full resistance (PeaceConference.Resistance):
+	/// a country that still holds its front and has an army does not sign away what nobody took
+	/// from it at the list price a broken one would.
+	/// </summary>
+	public float PeaceResistanceUnheld { get; set; } = 1.5f;
+
+	/// <summary>Share of the loser's people a treaty may take before a country that can still fight charges more.</summary>
+	public float PeaceResistanceShare { get; set; } = 0.25f;
+
+	/// <summary>How steeply the price of ground nobody took rises past PeaceResistanceShare, at full resistance.</summary>
+	public float PeaceResistanceShareWeight { get; set; } = 3f;
+
+	/// <summary>
+	/// Whether a computer government writes regions it does not stand on into a treaty, one ring
+	/// past its line, when its war score pays for them - as a player can.
+	/// </summary>
+	public bool PeaceShapeReachUnheld { get; set; } = true;
+
+	/// <summary>Share of its foundation territory a formable needs held, unless it names its own required_share.</summary>
+	public float FormableRequiredShare { get; set; } = 0.75f;
+
+	/// <summary>
+	/// Whether the fog of war hides a foreign region's public statistics (stability, peoples,
+	/// economy, buildings) as well as the troops in it. Off: only military intelligence is
+	/// hidden, as in the Paradox games.
+	/// </summary>
+	public bool FogHidesRegionStatistics { get; set; } = false;
+
+	/// <summary>The same for a restoration of a vanished country (FormableRestorations).</summary>
+	public float FormableRestorationShare { get; set; } = 0.5f;
 
 	/// <summary>People per province at which the population surcharge reaches one.</summary>
 	public float PeaceCostPopulationScale { get; set; } = 400_000f;
@@ -1293,6 +1372,29 @@ public sealed partial class Defines
 	/// </summary>
 	public int ScenarioWarNegotiationLockDays { get; set; } = 1095;
 	public int AiPeaceProposalInterval { get; set; } = 45;
+
+	/// <summary>
+	/// The fewest days between two settlements a computer government puts to a player in the
+	/// same war, counted from the last offer and from the last refusal. Between computer
+	/// governments AiPeaceProposalInterval alone applies, because there an offer is answered
+	/// the moment it is made; a player has to stop and read each one.
+	/// </summary>
+	public int AiPeaceOfferToPlayerIntervalDays { get; set; } = 60;
+
+	/// <summary>
+	/// After a player refuses a settlement (or lets it lapse), how long the same terms may
+	/// not be put to them again. A materially different offer may come as soon as the
+	/// interval above allows; the same paper only after this many days, when the war may
+	/// have changed enough that asking again is not nagging. 0 or less: never again.
+	/// </summary>
+	public int AiPeaceOfferRepeatRefusedDays { get; set; } = 365;
+
+	/// <summary>
+	/// How much of a written settlement's ground has to change before it counts as a new
+	/// offer rather than the refused one again: the share of the larger province list that
+	/// the two lists do not have in common. At least one province always.
+	/// </summary>
+	public float AiPeaceOfferMaterialProvinceShare { get; set; } = 0.2f;
 	public float AiPeaceMinimumBudget { get; set; } = 35f;
 
 	/// <summary>War score a country needs before an indemnity is worth ending a war for.</summary>

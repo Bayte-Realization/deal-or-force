@@ -34,6 +34,10 @@ internal static class SaveDefaults
     /// </summary>
     private static bool Pinned(JsonTypeInfo info, JsonPropertyInfo property) =>
         info.Type.Name == "CampaignSave" && property.Name is "History" or "ProvinceState" ||
+        // What the save was made with. Left out when it equalled a fresh object's value, it was read
+        // back as whatever this build's value is, so every version check passed: a save of the old
+        // map loaded onto a recut one with every province id pointing somewhere else.
+        property.Name is "FormatVersion" or "GameVersion" or "MapDataVersion" or "ProvinceCount" ||
         property.Name.EndsWith("Id", StringComparison.Ordinal) || property.Name.EndsWith("Tag", StringComparison.Ordinal) ||
         property.Name is "Name" or "A" or "B" or "Kind" or "Day";
 

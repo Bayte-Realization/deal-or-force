@@ -1,0 +1,13 @@
+{
+  "Death and succession: {0}": "Death and succession: {0}",
+  "Remove officeholder: {0}": "Remove officeholder: {0}",
+  "Update officeholder: {0}": "Update officeholder: {0}",
+  "Portrait: {0}": "Portrait: {0}",
+  "Head of state portrait": "Head of state portrait",
+  "Head of government portrait": "Head of government portrait",
+  "Portrait preview": "Portrait preview",
+  "Edit the country, then save to your mod. The editor writes the required files automatically and never changes the base game.": "Edit the country, then save to your mod. The editor writes the required files automatically and never changes the base game.",
+  "Saved {0} files to your mod. Enable it and start a new campaign to use the changes.": "Saved {0} files to your mod. Enable it and start a new campaign to use the changes.",
+  "Event scripts valid. The live campaign has not been changed.": "Event scripts valid. The live campaign has not been changed.",
+  "Choose a portrait from enabled mods. Put PNG/JPEG/WebP images in gfx/leaders; their file names become choices after reloading the mod.": "Choose a portrait from enabled mods. Put PNG/JPEG/WebP images in gfx/leaders; their file names become choices after reloading the mod."
+}

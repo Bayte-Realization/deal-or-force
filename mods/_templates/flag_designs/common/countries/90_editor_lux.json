@@ -1,0 +1,12 @@
+// What LUX is - its name, map colour and capital. Written by the country editor; edit freely.
+// (The country editor writes one file per country per folder, named 90_editor_<tag>, so saving
+// one country never rewrites another's and the files sort after the base game's.)
+{
+  "LUX": {
+    "name": "Luxembourg",
+    "color": "#5e8fd0",
+    "capital_name": "Luxembourg",
+    "capital_latitude": 49.6117,
+    "capital_longitude": 6.13
+  }
+}

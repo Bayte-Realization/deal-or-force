@@ -22,9 +22,11 @@ internal static class Program
         NativeOwnershipKernel native = null;
         try
         {
+            if (args.Contains("--parallel-reads")) return ParallelExposureProbe.Run(MakeWorld(777));
             if (args.Length == 0 || args.Contains("--help"))
             {
                 Console.WriteLine("OwnershipKernelBench --self-test [--native ABSOLUTE_DIRECTORY]");
+                Console.WriteLine("OwnershipKernelBench --parallel-reads (tools-only frozen trading-read A/B at 1/2/4 workers)");
                 Console.WriteLine("OwnershipKernelBench --map [SEED] [--iterations N] [--native ABSOLUTE_DIRECTORY] [--campaign-days N]");
                 Console.WriteLine("OwnershipKernelBench --synthetic [--iterations N] [--native ABSOLUTE_DIRECTORY]");
                 Console.WriteLine("Campaign records are deterministic stdout; redirect each process to its own log for backend comparisons.");

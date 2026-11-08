@@ -1,0 +1,9 @@
+{
+  "id": "example_yaml_opinion",
+  "name": "Example: one value overridden in YAML",
+  "version": "1.0.0",
+  "supported_game_version": "*",
+  "enabled": false,
+  "load_order": 50,
+  "dependencies": []
+}

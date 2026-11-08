@@ -40,8 +40,8 @@ static class ArmyAssaultPresentationTests
             Check(ArmyAssaultPresentation.Description(c, army).Contains("paused"),
                 "Prepare explains a paused plan rather than predicting a battle");
             army.PlanActive = true; army.Organisation = .1f;
-            Check(ArmyAssaultPresentation.Description(c, army).Contains("Waiting for organisation"),
-                "organisation is a different actionable reason");
+            Check(ArmyAssaultPresentation.Description(c, army).Contains("Waiting for morale"),
+                "morale is a different actionable reason, with the legacy simulation field unchanged");
             army.DirectOrder = true;
             Check(ArmyAssaultPresentation.Description(c, army).Contains("explicit order"),
                 "direct risky orders are distinguished from autonomous readiness");

@@ -58,6 +58,16 @@ public static class TerritorialCoherence
         return false;
     }
 
+    private static readonly Dictionary<int, int> NoBorders = new();
+
+    /// <summary>A region's neighbours with the length of the border to each, in province edges.</summary>
+    public static IReadOnlyDictionary<int, int> RegionBorders(Campaign c, int region)
+    {
+        if (c?.ProvinceMap is null) return NoBorders;
+        Ensure(c);
+        return Neighbours.TryGetValue(region, out var next) ? next : NoBorders;
+    }
+
     /// <summary>Read-only region adjacency, shared by administrative packages and treaties.</summary>
     public static IEnumerable<int> AdjacentRegions(Campaign c, int region)
     {

@@ -1,0 +1,21 @@
+{
+  "Country rankings": "Country rankings",
+  "Compare the countries you can inspect. This index is not a prediction of victory.": "Compare the countries you can inspect. This index is not a prediction of victory.",
+  "Country rankings · no visible territorial statistics": "Country rankings · no visible territorial statistics",
+  "Overall rank #{0} · index {1}/100": "World rank #{0} · index {1}/100",
+  "Ranking index": "Index",
+  "Refresh rankings": "Refresh",
+  "Ranking country dossier": "Country dossier",
+  "Open the full country rankings": "Open the full country rankings",
+  "Find a country or tag...": "Find a country or tag...",
+  "Descending": "Descending",
+  "Ascending": "Ascending",
+  "Ground power": "Ground power",
+  "Tech.": "Tech.",
+  "Living std.": "Living std.",
+  "Overall index": "Overall index",
+  "{0} countries · page {1}/{2}": "{0} countries · page {1}/{2}",
+  "Select a country to inspect its position.": "Select a country to inspect its position.",
+  "Index: GDP {0}% · population {1}% · ground power {2}% · technology {3}%.": "Index: GDP {0}% · population {1}% · ground power {2}% · technology {3}%.",
+  "Each component is divided by the largest visible value. Ground power sums existing army power; fleets and aircraft are not included. Living standards are a separate comparison. Hidden and landless countries are not ranked. Weights are moddable in game/interface.": "Each component is divided by the largest visible value. Ground power sums existing army power; fleets and aircraft are not included. Living standards are a separate comparison. Hidden and landless countries are not ranked. Weights are moddable in game/interface."
+}

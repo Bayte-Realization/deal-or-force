@@ -1,5 +1,16 @@
 # Первый мод за пятнадцать минут
 
+Для настройки оформления без кода есть короткий отдельный пример:
+[окно набора войск — шесть чисел вместо изменения C#](RECRUITMENT_UI_MODDING_RU.md).
+Готовая папка: `mods/_templates/recruitment_workbench`.
+
+Для доктрин также доступны [семь параметров физической читаемости](DOCTRINE_UI_MODDING_RU.md):
+текст, кнопки, карточки и каталог; достаточно небольшого `interface/reading.json`.
+Новые статьи добавляются через [append_nodes](DOCTRINE_CONTENT_MODDING_RU.md),
+без копии базовой книги и изменения её сохранённых ID.
+Для оформления только текущего сейва есть [отдельное окно кампании](CAMPAIGN_APPEARANCE_RU.md):
+имя, палитра и флаг не требуют создания мода и не меняют сценарий.
+
 Полный справочник моддера — [MODDING_GUIDE.md](MODDING_GUIDE.md). Он подробный и вам туда
 понадобится. Но не сегодня.
 
@@ -186,7 +197,6 @@ ElectronicsPlant · Shipyard · Port · RailNetwork · ResearchLab
     "name": "Lithium mine",
     "cost": 0.90,
     "days": 200,
-    "gdp_gain": 0.30,
     "capacity_gain": 0.04,
     "description": "Brine extraction and carbonate refining."
   }

@@ -105,7 +105,7 @@ public static class AllianceSystem
         refusal = "";
         if (campaign is null || proposer is null || target is null || proposer.Id == target.Id)
         {
-            refusal = "No such country.";
+            refusal = Loc.Get("No such country.");
             return false;
         }
 
@@ -113,12 +113,12 @@ public static class AllianceSystem
             : CampaignDiplomacy.Get(campaign, proposer.Id, target.Id);
         if (relation.Stance == DiplomaticStance.Allied)
         {
-            refusal = $"{proposer.Tag} and {target.Tag} are already allied.";
+            refusal = Loc.Format("{0} and {1} are already allied.", proposer.Tag, target.Tag);
             return false;
         }
         if (CampaignDiplomacy.AtWar(campaign, proposer.Id, target.Id))
         {
-            refusal = "They are at war with each other.";
+            refusal = Loc.Get("They are at war with each other.");
             return false;
         }
 
@@ -127,13 +127,13 @@ public static class AllianceSystem
         if (proposer.IsSubject)
         {
             var overlord = campaign.NationById(proposer.OverlordId);
-            refusal = $"{proposer.Tag} answers to {overlord?.Tag ?? "somebody"}; its alliances are theirs to make.";
+            refusal = Loc.Format("{0} answers to {1}; its alliances are theirs to make.", proposer.Tag, overlord?.Tag ?? Loc.Get("somebody"));
             return false;
         }
         if (target.IsSubject)
         {
             var overlord = campaign.NationById(target.OverlordId);
-            refusal = $"{target.Tag} answers to {overlord?.Tag ?? "somebody"}; ask them instead.";
+            refusal = Loc.Format("{0} answers to {1}; ask them instead.", target.Tag, overlord?.Tag ?? Loc.Get("somebody"));
             return false;
         }
 
@@ -142,15 +142,29 @@ public static class AllianceSystem
         if (!Expired(campaign, relation))
         {
             refusal = relation.AllianceOfferedBy == proposer.Id
-                ? $"{target.Tag} has not answered the last offer yet."
-                : $"{target.Tag} has an offer on your table; answer that one first.";
+                ? Loc.Format("{0} has not answered the last offer yet.", target.Tag)
+                : Loc.Format("{0} has an offer on your table; answer that one first.", target.Tag);
             return false;
+        }
+
+        // Silence after an offer expires is not an invitation to send the same offer
+        // every month. The stored offer date supplies the cooldown without turning a
+        // read-only eligibility check into an expiry/withdrawal command.
+        if (relation.AllianceOfferedDay >= 0)
+        {
+            var sinceExpiry = (long)campaign.ElapsedDays - relation.AllianceOfferedDay - campaign.Defines.AllianceOfferDays;
+            if (sinceExpiry < campaign.Defines.AllianceRefusalDays)
+            {
+                refusal = Loc.Format("The previous alliance offer expired without an answer; wait {0:N0} more day(s) before asking again.",
+                    campaign.Defines.AllianceRefusalDays - sinceExpiry);
+                return false;
+            }
         }
 
         var since = campaign.ElapsedDays - relation.AllianceRefusedDay;
         if (since < campaign.Defines.AllianceRefusalDays)
         {
-            refusal = $"They refused {since:N0} day(s) ago; asking again this soon is not diplomacy.";
+            refusal = Loc.Format("They refused {0:N0} day(s) ago; asking again this soon is not diplomacy.", since);
             return false;
         }
         return true;
@@ -178,7 +192,7 @@ public static class AllianceSystem
         why?.Add("How we regard them", relation.Opinion / 100f);
         var image = SocialMemory.Esteem(campaign, asked, asking) * defines.SocialAllianceWeight;
         willingness += image;
-        if (MathF.Abs(image) >= 0.001f) why?.Add(Loc.Get("Their standing in our society"), image);
+        why?.Add(Loc.Get("Their standing in our society"), image);
 
         // An alliance with a country already at war is a war, and everybody knows it.
         foreach (var war in campaign.Wars)
@@ -229,7 +243,7 @@ public static class AllianceSystem
         {
             var common = MathF.Min(shared, 3) * defines.AllianceSharedRivalWeight;
             willingness += common;
-            why?.Add($"We fear the same {shared:N0} country(ies)", common);
+            why?.Add(Loc.Format("We fear the same {0:N0} country(ies)", shared), common);
         }
 
         // A country in no state to promise anything does not promise anything.

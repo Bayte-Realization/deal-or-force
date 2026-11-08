@@ -116,6 +116,16 @@ public static class CountryNames
             // spelling preference is about the name, not about the state.
             if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
             if (Loc.Has(key)) return Loc.Get(key);
+            // A form of state with a name and no short form for the map is still that state on
+            // the map: China under the Beiyang Government read "Beiyang Government" in every tab
+            // and "CHINA" on the map, because the map fell through to the country's plain short
+            // name. One state, one name; a mod that wants a shorter label writes the ".map" row.
+            if (map)
+            {
+                var named = key[..^".map".Length] + ".name";
+                if (!string.IsNullOrEmpty(variant) && Loc.Has(named + "." + variant)) return Loc.Get(named + "." + variant);
+                if (Loc.Has(named)) return Loc.Get(named);
+            }
         }
         // No name written for what it has become: the name it had, in the form its new
         // politics give a state - a France gone communist is a People's Republic. Not on the
@@ -148,6 +158,16 @@ public static class CountryNames
             if (parts.Length == 4)
             {
                 var country = Loc.Has($"country.{parts[2]}.name") ? Loc.Get($"country.{parts[2]}.name") : Loc.Get(parts[3]);
+                // A side of a collapse is named for the region it holds as well as the country:
+                // "rising:military_command@sd_ds@South Darfur:SDN:Sudan" reads "South Darfur
+                // Military Command (Sudan)". Several of them rise in one state at once, and a
+                // map of five "National Salvation Fronts of Sudan" tells a player nothing.
+                var template = parts[1].Split('@', 3);
+                if (template.Length == 3)
+                {
+                    var region = Loc.Has($"region.{template[1]}.name") ? Loc.Get($"region.{template[1]}.name") : Loc.Get(template[2]);
+                    return Loc.Format("rising." + template[0], country, region);
+                }
                 return Loc.Format("rising." + parts[1], country);
             }
         }
@@ -308,6 +328,10 @@ public sealed partial class Nation
     public string CustomName = "";
     /// <summary>Optional arbitrary flag sprite override (e.g. flag_rus_communism).</summary>
     public string CustomFlag = "";
+    /// <summary>One campaign-local flag design in the ordinary flag_designs envelope.</summary>
+    public string CustomFlagDesignJson = "";
+    /// <summary>First original map colour while an explicit campaign override is active.</summary>
+    public string MapColorBeforeOverride = "";
 }
 
 public sealed class SetNationalCosmeticsCommand : ICampaignCommand
@@ -316,17 +340,66 @@ public sealed class SetNationalCosmeticsCommand : ICampaignCommand
     public int TargetNationId { get; init; } = -1;
     public string CustomName { get; init; } = "";
     public string CustomFlag { get; init; } = "";
+    /// <summary>Null keeps the campaign design; empty clears it.</summary>
+    public string CustomFlagDesignJson { get; init; }
+    /// <summary>Null keeps the map colour; empty restores the first original colour.</summary>
+    public string MapColor { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string Refusal { get; private set; } = "";
 
     public void Apply(Campaign campaign)
     {
-        if (campaign is null) return;
-        var issuer = campaign.NationById(IssuerId);
-        var target = TargetNationId >= 0 ? campaign.NationById(TargetNationId) : issuer;
-        if (issuer is null || target is null) return;
-        // Player may customize their own nation, a direct subject of theirs, or a political movement
-        if (target.Id != issuer.Id && !target.AnswersTo(issuer.Id) && target.Movement is null) return;
-        target.CustomName = (CustomName ?? "").Trim();
-        target.CustomFlag = (CustomFlag ?? "").Trim();
+        Refusal = "";
+        var issuer = campaign?.NationById(IssuerId);
+        var target = TargetNationId >= 0 ? campaign?.NationById(TargetNationId) : issuer;
+        if (!CampaignCosmetics.CanEdit(campaign, issuer, target))
+        { Refusal = "Choose your own country or one of your direct subjects."; return; }
+        var name = (CustomName ?? "").Trim();
+        var sprite = (CustomFlag ?? "").Trim();
+        if (!CampaignCosmetics.IsPrintableName(CustomName ?? ""))
+        { Refusal = "Country names must contain at most 96 printable characters."; return; }
+        if (sprite.Length > 0 && !CampaignCosmetics.IsSafeSpriteId(sprite))
+        { Refusal = "Choose a flag sprite ID, not a file path."; return; }
+        var document = target.CustomFlagDesignJson ?? "";
+        if (CustomFlagDesignJson is not null && !CampaignCosmetics.TryNormaliseFlagDesign(
+                CustomFlagDesignJson, target.Id, out document, out var designRefusal))
+        { Refusal = designRefusal; return; }
+        var colour = target.Color;
+        var backup = target.MapColorBeforeOverride ?? "";
+        if (MapColor is not null)
+        {
+            if (MapColor.Length == 0)
+            {
+                if (backup.Length > 0)
+                {
+                    if (FlagDesign.Normalise(backup) is null)
+                    { Refusal = "The original map colour is invalid and cannot be restored."; return; }
+                    colour = backup;
+                    backup = "";
+                }
+            }
+            else
+            {
+                colour = FlagDesign.Normalise(MapColor);
+                if (colour is null)
+                { Refusal = "Map colours must be written as #rgb or #rrggbb."; return; }
+                if (backup.Length == 0)
+                {
+                    if (FlagDesign.Normalise(target.Color) is null)
+                    { Refusal = "The current map colour is invalid and cannot be backed up."; return; }
+                    backup = target.Color;
+                }
+            }
+        }
+        // Validate the whole package before the first write: a bad colour must not
+        // leave the name or flag half-applied. Legacy name/sprite defaults stay resets.
+        if (target.CustomName == name && target.CustomFlag == sprite && target.CustomFlagDesignJson == document &&
+            target.Color == colour && target.MapColorBeforeOverride == backup) return;
+        target.CustomName = name;
+        target.CustomFlag = sprite;
+        target.CustomFlagDesignJson = document;
+        target.Color = colour;
+        target.MapColorBeforeOverride = backup;
         campaign.MarkStrategicChange();
         campaign.MarkMapChanged();
     }

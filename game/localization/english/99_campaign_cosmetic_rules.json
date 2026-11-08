@@ -1,0 +1,12 @@
+{
+  "Choose your own country or one of your direct subjects.": "Choose your own country or one of your direct subjects.",
+  "Country names must contain at most 96 printable characters.": "Country names must contain at most 96 printable characters.",
+  "Choose a flag sprite ID, not a file path.": "Choose a flag sprite ID, not a file path.",
+  "Map colours must be written as #rgb or #rrggbb.": "Map colours must be written as #rgb or #rrggbb.",
+  "The original map colour is invalid and cannot be restored.": "The original map colour is invalid and cannot be restored.",
+  "The current map colour is invalid and cannot be backed up.": "The current map colour is invalid and cannot be backed up.",
+  "Custom flag designs must fit within 64 KiB.": "Custom flag designs must fit within 64 KiB.",
+  "A custom flag must contain exactly one design in a flag_designs object.": "A custom flag must contain exactly one design in a flag_designs object.",
+  "The custom flag contains invalid or excessive design elements.": "The custom flag contains invalid or excessive design elements.",
+  "Invalid custom flag design.": "Invalid custom flag design."
+}

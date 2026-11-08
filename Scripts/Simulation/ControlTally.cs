@@ -33,28 +33,38 @@ public static class ControlTally
     /// </summary>
     // ---------------------------------------------------------------- the whole world ----
 
-    private static Campaign _worldCampaign;
-    private static int _worldDay = int.MinValue;
-    private static int _worldRevision = int.MinValue;
-    // Kept per owner AND region, not by region alone. Nine of the world's regions are cut by
-    // a border and hold provinces belonging to two countries; the per-country call counts only
-    // its own, and a tally keyed by region alone would hand both owners the sum. That is three
-    // regions' worth of difference in what rises to defend them, which is a different game
-    // rather than a faster one.
-    //
-    // Held as a slot per region for the first owner met in it, and a dictionary only for the
-    // rest. The dictionary alone cost two hash lookups per province and a third for the
-    // owner's enemies - a hundred thousand of them a day, which made this walk the whole of
-    // the militia pass and eight per cent of a campaign day.
-    private static RegionControl[] _byRegion = Array.Empty<RegionControl>();
-    private static ushort[] _regionOwner = Array.Empty<ushort>();
-    private static readonly Dictionary<long, RegionControl> SplitRegions = new();
+    /// <summary>
+    /// One campaign's tally tables. They used to be static scratch stamped with the last
+    /// campaign that asked, which is correct for exactly one world at a time: a second
+    /// campaign stepping beside the first had its occupations answered from whichever
+    /// tally happened to be warm - rebuilt at a different hour of its own day than the
+    /// solo run would have used, after wars the other world had already seen. Per-world
+    /// tables make "kept until something moves" mean the same thing in both runs.
+    /// </summary>
+    internal sealed class TallyState
+    {
+        internal int Day = int.MinValue;
+        internal int Revision = int.MinValue;
+        // Kept per owner AND region, not by region alone. Nine of the world's regions are cut by
+        // a border and hold provinces belonging to two countries; the per-country call counts only
+        // its own, and a tally keyed by region alone would hand both owners the sum. That is three
+        // regions' worth of difference in what rises to defend them, which is a different game
+        // rather than a faster one.
+        //
+        // Held as a slot per region for the first owner met in it, and a dictionary only for the
+        // rest. The dictionary alone cost two hash lookups per province and a third for the
+        // owner's enemies - a hundred thousand of them a day, which made this walk the whole of
+        // the militia pass and eight per cent of a campaign day.
+        internal RegionControl[] ByRegion = Array.Empty<RegionControl>();
+        internal ushort[] RegionOwner = Array.Empty<ushort>();
+        internal readonly Dictionary<long, RegionControl> SplitRegions = new();
+        internal readonly Dictionary<ushort, HashSet<ushort>> HostileTo = new();
+
+        /// <summary>The same as <see cref="HostileTo"/>, by flag: null for a country nobody is fighting.</summary>
+        internal HashSet<ushort>[] HostileByFlag = Array.Empty<HashSet<ushort>>();
+    }
 
     private static long Key(ushort owner, int region) => ((long)owner << 32) | (uint)region;
-    private static readonly Dictionary<ushort, HashSet<ushort>> HostileTo = new();
-
-    /// <summary>The same as <see cref="HostileTo"/>, by flag: null for a country nobody is fighting.</summary>
-    private static HashSet<ushort>[] _hostileByFlag = Array.Empty<HashSet<ushort>>();
 
     /// <summary>
     /// Every region in the world, counted in one pass and kept until something moves.
@@ -63,10 +73,6 @@ public static class ControlTally
     /// countries, which walks the map once per country per system per day. This walks it
     /// once. The answer is the same in every respect, including the border count: which
     /// flags count as hostile is decided per owner, from the wars, before the walk starts.
-    ///
-    /// Stamped with the campaign as well as the day, because the bench steps two peer
-    /// campaigns side by side and a tally from one of them is a wrong answer in the other -
-    /// the same mistake that once made the army index report another world's divisions.
     /// </summary>
     public static RegionControl World(Campaign campaign, int ownerMapIndex, int region)
     {
@@ -75,42 +81,41 @@ public static class ControlTally
         // last campaign's: the second campaign of a session would have been dealt the first
         // one's occupations.
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null) return default;
-        Refresh(campaign);
-        if (region < 0 || region >= _regionOwner.Length) return default;
+        var tally = campaign.ControlTallyTables ??= new TallyState();
+        Refresh(tally, campaign);
+        if (region < 0 || region >= tally.RegionOwner.Length) return default;
         var owner = (ushort)ownerMapIndex;
-        if (_regionOwner[region] == owner) return _byRegion[region];
-        SplitRegions.TryGetValue(Key(owner, region), out var tally);
-        return tally;
+        if (tally.RegionOwner[region] == owner) return tally.ByRegion[region];
+        tally.SplitRegions.TryGetValue(Key(owner, region), out var split);
+        return split;
     }
 
     /// <summary>Where this owner's count for this region is kept, made if it is not there yet.</summary>
-    private static ref RegionControl Slot(ushort owner, int region)
+    private static ref RegionControl Slot(TallyState tally, ushort owner, int region)
     {
-        ref var first = ref _regionOwner[region];
+        ref var first = ref tally.RegionOwner[region];
         if (first == 0) first = owner;
-        if (first == owner) return ref _byRegion[region];
+        if (first == owner) return ref tally.ByRegion[region];
         return ref System.Runtime.InteropServices.CollectionsMarshal.GetValueRefOrAddDefault(
-            SplitRegions, Key(owner, region), out _);
+            tally.SplitRegions, Key(owner, region), out _);
     }
 
-    private static void Refresh(Campaign campaign)
+    private static void Refresh(TallyState tally, Campaign campaign)
     {
         var topology = campaign?.ProvinceMap;
         var control = campaign?.ProvinceController;
         if (topology is null || control is null) return;
 
-        if (ReferenceEquals(_worldCampaign, campaign) && _worldDay == campaign.ElapsedDays &&
-            _worldRevision == campaign.MapRevision)
+        if (tally.Day == campaign.ElapsedDays && tally.Revision == campaign.MapRevision)
             return;
 
-        _worldCampaign = campaign;
-        _worldDay = campaign.ElapsedDays;
-        _worldRevision = campaign.MapRevision;
+        tally.Day = campaign.ElapsedDays;
+        tally.Revision = campaign.MapRevision;
 
         // Who is at war with whom, by map flag, so the walk below can ask the question
         // about a province's owner without touching the war list again.
-        foreach (var flag in HostileTo.Keys) _hostileByFlag[flag] = null;
-        HostileTo.Clear();
+        foreach (var flag in tally.HostileTo.Keys) tally.HostileByFlag[flag] = null;
+        tally.HostileTo.Clear();
         foreach (var war in campaign.Wars)
         {
             if (war.Ended) continue;
@@ -119,8 +124,8 @@ public static class ControlTally
             foreach (var side in campaign.Nations)
             {
                 if (!war.Involves(side.Id)) continue;
-                if (!HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
-                    HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
+                if (!tally.HostileTo.TryGetValue((ushort)side.MapIndex, out var set))
+                    tally.HostileTo[(ushort)side.MapIndex] = set = new HashSet<ushort>();
                 foreach (var other in campaign.Nations)
                     if (other.Id != side.Id && war.Opposes(side.Id, other.Id))
                         set.Add((ushort)other.MapIndex);
@@ -129,16 +134,16 @@ public static class ControlTally
 
         // Every flag and every region a ushort can name, allocated once: a few hundred
         // kilobytes against a walk of the map every day.
-        if (_regionOwner.Length == 0)
+        if (tally.RegionOwner.Length == 0)
         {
-            _regionOwner = new ushort[ushort.MaxValue + 1];
-            _byRegion = new RegionControl[ushort.MaxValue + 1];
-            _hostileByFlag = new HashSet<ushort>[ushort.MaxValue + 1];
+            tally.RegionOwner = new ushort[ushort.MaxValue + 1];
+            tally.ByRegion = new RegionControl[ushort.MaxValue + 1];
+            tally.HostileByFlag = new HashSet<ushort>[ushort.MaxValue + 1];
         }
-        foreach (var (flag, enemies) in HostileTo) _hostileByFlag[flag] = enemies.Count > 0 ? enemies : null;
-        Array.Clear(_regionOwner);
-        Array.Clear(_byRegion);
-        SplitRegions.Clear();
+        foreach (var (flag, enemies) in tally.HostileTo) tally.HostileByFlag[flag] = enemies.Count > 0 ? enemies : null;
+        Array.Clear(tally.RegionOwner);
+        Array.Clear(tally.ByRegion);
+        tally.SplitRegions.Clear();
 
         for (var province = 1; province <= topology.ProvinceCount && province < control.Length; province++)
         {
@@ -147,11 +152,11 @@ public static class ControlTally
             var owner = topology.ProvinceToNation[province];
             if (owner == 0) continue;
 
-            ref var tally = ref Slot(owner, region);
-            tally.Provinces++;
+            ref var count = ref Slot(tally, owner, region);
+            count.Provinces++;
             if (control[province] != owner) continue;
-            tally.Held++;
-            var enemies = _hostileByFlag[owner];
+            count.Held++;
+            var enemies = tally.HostileByFlag[owner];
             if (enemies is null) continue;
             foreach (var neighbour in topology.Neighbors[province])
             {
@@ -159,7 +164,7 @@ public static class ControlTally
                 var other = control[neighbour];
                 if (other == 0 || other == owner) continue;
                 if (!enemies.Contains(other)) continue;
-                tally.Bordered++;
+                count.Bordered++;
                 break;
             }
         }

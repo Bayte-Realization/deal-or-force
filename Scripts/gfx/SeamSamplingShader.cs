@@ -30,7 +30,11 @@ vec4 seam_sample_MAP(vec2 uv) {
     vec2 wrapped = vec2(fract(uv.x), clamp(uv.y, 0.0, 1.0));
     vec4 mipped = texture(MAP, wrapped);
     float width = max(float(textureSize(MAP, 0).x), 1.0);
-    float span = exp2(max(textureQueryLod(MAP, wrapped).y, 0.0)) * 1.5 / width;
+    // Derivatives are supported by Compatibility too; textureQueryLod is not.
+    // Measure the unwrapped UV so crossing the date line cannot create a huge footprint.
+    vec2 texels = uv * vec2(textureSize(MAP, 0));
+    float footprint = max(length(dFdx(texels)), length(dFdy(texels)));
+    float span = max(footprint, 1.0) * 1.5 / width;
     float along = min(wrapped.x, 1.0 - wrapped.x);
     float at_seam = 1.0 - smoothstep(span * 0.35, max(span, 0.000001), along);
     if (at_seam <= 0.0) return mipped;

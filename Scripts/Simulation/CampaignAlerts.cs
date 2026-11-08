@@ -11,7 +11,7 @@ public sealed partial class Defines
 }
 
 public enum CampaignAlertGroup { Must, Should, Could, Important }
-public enum CampaignAlertRoute { Situation, Event, Elections, Decisions, Battle, War, Research, Personnel, Doctrine, Army }
+public enum CampaignAlertRoute { Situation, Event, Elections, Decisions, Battle, War, Research, Personnel, Doctrine, Army, Defcon }
 public sealed record CampaignAlert(string Id, CampaignAlertGroup Group, string Title, string Summary,
     CampaignAlertRoute Route, int TargetId = -1, SituationItem Situation = null);
 
@@ -83,6 +83,12 @@ public static class CampaignAlerts
         if (c.FeatureEnabled("public_debt") && n.DebtCondition is DebtCondition.Stressed or DebtCondition.Insolvent or DebtCondition.Default)
             result.Add(new("debt_distress", CampaignAlertGroup.Must, Loc.Get("Sovereign debt distress"),
                 Loc.Get("Interest and bond payments are severely straining the state budget."), CampaignAlertRoute.Situation));
+        // A nuclear weapon has struck our forces: the right to answer lapses, and the chronicle
+        // line alone is too easy to miss.
+        if (NuclearPosture.Avenging(c, n) is { } striker && NuclearPosture.Active(c))
+            result.Add(new("nuclear_struck", CampaignAlertGroup.Must, Loc.Get("A nuclear weapon has struck our forces"),
+                Loc.Format("{0} used it. For {1} more day(s) we may answer on its strongest force, wherever it stands.",
+                    striker.DisplayName, c.Defines.NuclearRetaliationDays - (c.ElapsedDays - n.NuclearStruckDay)), CampaignAlertRoute.Defcon, striker.Id));
         foreach (var war in c.Wars.Where(w => !w.Ended && w.Involves(n.Id)).OrderBy(w => w.Id).Take(6))
             result.Add(new("war:" + war.Id, CampaignAlertGroup.Important, Loc.Get("War in progress"),
                 Loc.Get("Review the front, war score and peace terms."), CampaignAlertRoute.War, war.Id));

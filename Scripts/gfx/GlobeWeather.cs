@@ -75,7 +75,22 @@ public sealed partial class GlobePresentation
         _cloudMaterial = new ShaderMaterial { Shader = cloud, RenderPriority = -20 };
         _cloudShadeMaterial = new ShaderMaterial { Shader = cloud, RenderPriority = -22 };
         _cloudShadeMaterial.SetShaderParameter("shade_pass", 1f);
-        _mistMaterial = new ShaderMaterial { Shader = new Shader { Code = MistShader }, RenderPriority = -21 };
+        var mistCode = MistShader;
+        if (_packedLookups is not null)
+        {
+            // Reuse the same live arrays as the ground, not a second 33 MB ID raster.
+            mistCode = mistCode.Replace("uniform sampler2D province_ids : filter_nearest;",
+                    "uniform sampler2DArray packed_ids : filter_nearest, repeat_enable;")
+                .Replace("uniform sampler2D fog_visibility : filter_nearest, repeat_disable;",
+                    "uniform sampler2DArray packed_lookups : filter_nearest, repeat_disable;")
+                .Replace("texture(province_ids,", "mist_province(")
+                .Replace("texture(fog_visibility,", "mist_visibility(")
+                .Replace("textureSize(province_ids, 0)", "textureSize(packed_ids, 0).xy")
+                .Replace("uvec3 scramble(",
+                    "vec4 mist_province(vec2 uv) { return texture(packed_ids, vec3(uv, 1.0)); }\n" +
+                    "vec4 mist_visibility(vec2 uv) { return texture(packed_lookups, vec3(uv, 11.0)); }\nuvec3 scramble(");
+        }
+        _mistMaterial = new ShaderMaterial { Shader = new Shader { Code = mistCode }, RenderPriority = -21 };
 
         _cloudShade = Shell("CloudShadows", GlobeRadius * 1.0016f, _cloudShadeMaterial, 192, 96);
         _mistShell = Shell("FogOfWarMist", GlobeRadius * 1.0026f, _mistMaterial, 256, 128);
@@ -155,7 +170,7 @@ public sealed partial class GlobePresentation
 
         var mistFull = defines?.MistFullDistance ?? 6.0f;
         var mistClear = defines?.MistClearDistance ?? 8.2f;
-        var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionTexture is not null;
+        var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionImage is not null;
         var mist = !allowed || !QualityWeather || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
@@ -164,13 +179,13 @@ public sealed partial class GlobePresentation
         var paused = _campaign is null || _campaign.IsPaused;
         // Except under the ice, where the sky is as still as everything else.
         if (!Simulation.WorldCurses.Frozen(_campaign)) _weatherClock += delta * (paused ? 0.25 : 1.0);
-        var clock = (float)(_weatherClock % 100000.0);
+        var clock = (float)((VerificationWeatherTime ?? _weatherClock) % 100000.0);
         var readability = Simulation.WeatherReadability.Read(defines);
 
         _cloudMaterial.SetShaderParameter("presence", clouds);
         _cloudShadeMaterial.SetShaderParameter("presence", clouds);
-        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
-        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity);
+        _cloudMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
+        _cloudShadeMaterial.SetShaderParameter("opacity", readability.CloudOpacity * _cloudOpacityScale);
         _cloudMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudShadeMaterial.SetShaderParameter("edge_softness", readability.EdgeSoftness);
         _cloudMaterial.SetShaderParameter("detail_strength", readability.DetailStrength);
@@ -188,8 +203,16 @@ public sealed partial class GlobePresentation
         if (mist > 0.001f && _globeMaterial is not null)
         {
             // The ground's own maps, read where the ground reads them.
-            _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
-            _mistMaterial.SetShaderParameter("province_ids", _globeMaterial.GetShaderParameter("province_ids"));
+            if (_packedLookups is not null)
+            {
+                _mistMaterial.SetShaderParameter("packed_ids", _packedIds);
+                _mistMaterial.SetShaderParameter("packed_lookups", _packedLookups);
+            }
+            else
+            {
+                _mistMaterial.SetShaderParameter("fog_visibility", _visionTexture);
+                _mistMaterial.SetShaderParameter("province_ids", _globeMaterial.GetShaderParameter("province_ids"));
+            }
             _mistMaterial.SetShaderParameter("political_map", _globeMaterial.GetShaderParameter("political_map"));
         }
 

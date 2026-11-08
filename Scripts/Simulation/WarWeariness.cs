@@ -130,6 +130,17 @@ public static class WarWeariness
                         ModifierSystem.Grant(campaign, fighting, weight, defines.EconomyTickDays * 2);
             }
 
+            // The nuclear shadow (Deterrence.Brinkmanship): a war both sides could end the
+            // world from is felt at home on both sides of the front line, in both capitals.
+            // It is the home-front half of the Cuba rule: the same pressure that ends such
+            // wars in limited terms is what every household under the shadow lives with.
+            if (Deterrence.Brinkmanship(campaign, war) > 0f)
+            {
+                foreach (var id in war.Side(true).Concat(war.Side(false)))
+                    if (campaign.NationById(id) is { } under && under.Movement is null)
+                        ModifierSystem.Grant(campaign, under, "nuclear_shadow", defines.EconomyTickDays * 2);
+            }
+
             // Anti-war exhaustion & civil pressure when public support collapses
             foreach (var id in war.Side(true).Concat(war.Side(false)))
             {
@@ -226,8 +237,14 @@ public static class WarWeariness
         var age = campaign.ElapsedDays - war.StartedDay;
         if (age >= campaign.Defines.AiNoContactPeaceDays) return true;
         if (campaign.Defines.AiUnreachableWarPeaceDays <= 0 ||
-            age < campaign.Defines.AiUnreachableWarPeaceDays ||
-            war.AttackerFront.Count > 0 || war.DefenderFront.Count > 0) return false;
+            age < campaign.Defines.AiUnreachableWarPeaceDays) return false;
+
+        // Fronts on paper are not a route. A guard used to sit here - any front at all, and the war
+        // was treated as a real one - and an army assigned to a frontier the two sides do not share
+        // waits there forever: no battle, no casualty, no captured province, and the war stayed on
+        // the map for a year. The bench's own alert called it ("no fighting after 181 days") while
+        // the rule that should have ended it was blocked by the troops standing about. Whether the
+        // sides can reach each other at all is what matters, and that is the check below.
 
         // Check every belligerent, not only the two leaders: a coalition member might
         // still have a viable land or amphibious route even when its leader does not.
@@ -255,18 +272,23 @@ public static class WarWeariness
 
     /// <summary>
     /// The peace a deadlock ends in: the status quo when either side holds some of the other's
-    /// ground - the line becomes the border - and a white peace when nobody holds anything.
-    /// Holding is control. A province the army has taken is not handed back because its
-    /// occupation meter has not yet crossed the secure line.
+    /// ground - the line becomes the border - and, when nobody holds anything, the very same
+    /// status quo, because with no ground taken the line today *is* the pre-war border.
+    ///
+    /// It used to answer WhitePeace in that case, which cost wars their only exit: to a country
+    /// that has lost nothing but a few battles, "no terms at all" is refused at 27 % while the
+    /// identical border under the status quo is accepted at 77 %. Ten years of the bench carried
+    /// wars of three years whose every offer was refused for exactly that reason.
     /// </summary>
     public static PeaceTerms StalemateTerms(Campaign campaign, StrategicWar war)
     {
-        var controllers = campaign.ProvinceController;
-        if (controllers is null) return PeaceTerms.WhitePeace;
-        foreach (var pair in war.OriginalController)
-            if (pair.Key > 0 && pair.Key < controllers.Length && controllers[pair.Key] != pair.Value)
-                return PeaceTerms.StatusQuo;
-        return PeaceTerms.WhitePeace;
+        // Nobody draws a border without a map.
+        if (campaign?.ProvinceController is null) return PeaceTerms.WhitePeace;
+        // Whether one side holds ground or nobody has taken any, the settlement is the same: the
+        // line as it stands becomes the border, with a truce. The branch that used to answer
+        // WhitePeace when no ground had changed hands was not a different outcome, only a
+        // different price: 27 % accepted against 77 % for the identical border.
+        return PeaceTerms.StatusQuo;
     }
 
     /// <summary>Whether a country that is not winning, or anyone at all, should ask to stop now.</summary>
@@ -277,7 +299,12 @@ public static class WarWeariness
         // A larger war and a civil war take longer to give up on (Escalation).
         var delay = Escalation.StalemateDelay(campaign, war);
         if (age >= defines.AiWearyDays + delay) return true;
-        return !winning && war.Stalled && age >= defines.AiStalemateDays + delay;
+        // A front that has not moved is the border, whichever side is nominally ahead on points.
+        // Waiting for the weariness date was a hole big enough to lose a decade in: a war at a
+        // hundred points with no ground changing hands and nothing left to demand sat on the map
+        // for five hundred days without a single offer, because only the side that was *behind*
+        // was allowed to call a stalemate a stalemate.
+        return war.Stalled && age >= defines.AiStalemateDays + delay;
     }
 
     /// <summary>The home-front modifier Tick grants a side, or null when the front is holding.</summary>

@@ -214,7 +214,12 @@ public static class FrontDisengagement
             foreach (var unit in c.Armies)
             {
                 // TryAdd preserves Find's first matching entry even in a damaged archive.
-                _units.TryAdd((unit.Id, unit.BattleId), unit);
+                // Totals only asks about the live battles of THIS war. Indexing every
+                // idle or unrelated division rebuilt a world-sized dictionary for each
+                // staff selection. Keep the full scan for occupancy/safety below, but
+                // retain participant references only where they can actually be read.
+                if (_battles.ContainsKey(unit.BattleId))
+                    _units.TryAdd((unit.Id, unit.BattleId), unit);
                 if (!(unit.Divisions >= .1f)) continue;
                 if (unit.NationId == nation) Occupied.Add(unit.ProvinceId);
                 if (war.Opposes(nation, unit.NationId)) _unsafe.Add(unit.ProvinceId);

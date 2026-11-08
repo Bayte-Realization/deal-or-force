@@ -148,6 +148,8 @@ public static class InterfaceSkin
         ("map.terrain_low",     "#3c294f"),
         ("map.terrain_mid",     "#477f73"),
         ("map.terrain_high",    "#d6c45d"),
+        ("map.city_building",   "#394345"),
+        ("map.city_roof",       "#808477"),
         ("resources.none",      "#1c2b35"),
         ("resources.low",       "#304951"),
         ("resources.mid",       "#548677"),
@@ -361,6 +363,9 @@ public static class InterfaceSkin
         ("hud.support_panel",  new PanelRect(0f, 0f, 0f, 1f,      106f, 90f, 712f, -60f)),
         ("modal.research",     new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
         ("modal.doctrines",    new PanelRect(0f, 0.10f, 0.975f, 0.94f, 92f, 0f, 0f, 0f)),
+        // The country rankings board ships its own near-fullscreen frame in
+        // game/gui/71_country_rankings.json - the widest modal the game opens.
+        ("modal.rankings",     new PanelRect(0.05f, 0.07f, 0.95f, 0.93f, 0f, 0f, 0f, 0f)),
 
         // The lobby and the workshop. These three were laid out in game/gui only - named in
         // 22_multiplayer.json and 24_workshop.json and never given a compiled default - so

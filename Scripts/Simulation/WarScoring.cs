@@ -98,7 +98,9 @@ public static class WarScoring
     // morning were eighty scans of a question that does not change between them. The lists
     // below answer "which provinces are in this region" and "which provinces does this flag
     // own". Occupation still reads the live controller. A second campaign never reads the
-    // first one's lists: the key is the campaign, its topology and its map revision.
+    // first one's lists: the key is the campaign, its topology and its ownership revision -
+    // not MapRevision, which fires on every province a battle takes while the ownership
+    // arrays these lists are built from stay exactly as they were.
     private static Campaign _indexCampaign;
     private static ProvinceTopology _indexMap;
     private static int _indexRevision = int.MinValue;
@@ -115,10 +117,10 @@ public static class WarScoring
         var map = campaign.ProvinceMap;
         if (map is null) return;
         if (ReferenceEquals(_indexCampaign, campaign) && ReferenceEquals(_indexMap, map) &&
-            _indexRevision == campaign.MapRevision) return;
+            _indexRevision == campaign.OwnershipRevision) return;
         _indexCampaign = campaign;
         _indexMap = map;
-        _indexRevision = campaign.MapRevision;
+        _indexRevision = campaign.OwnershipRevision;
         StateIndexBuilds++;
         var maxState = 0;
         for (var province = 1; province <= map.ProvinceCount; province++)

@@ -75,6 +75,12 @@ public sealed partial class Defines
     /// </summary>
     public float AiWorthRegions { get; set; } = 4f;
     public float AiWorthFloor { get; set; } = 0.15f;
+    /// <summary>
+    /// What a country is worth holds in full from this many people and shrinks below it with the
+    /// square root: a country of half a million is worth seven tenths, a city state of a few
+    /// hundred a twentieth - not a war's trouble however weak it is (the Vatican).
+    /// </summary>
+    public float AiWorthFloorPopulation { get; set; } = 1_000_000f;
 }
 
 public sealed partial class Nation
@@ -138,8 +144,8 @@ public static partial class AiStatecraft
         var minimumAdvantage = MinimumAdvantageFor(campaign, nation, other, relation);
         if (advantage < minimumAdvantage) return 0f;
         var regionsHeld = refreshAssessment ? RegionsHeldBy(campaign, other.MapIndex) : campaign.States.Count(s => s.NationMapIndex == other.MapIndex);
-        var worth = M.Clamp(regionsHeld / M.Max(1f, defines.AiWorthRegions),
-            defines.AiWorthFloor, 1f);
+        var worth = M.Clamp(regionsHeld / M.Max(1f, defines.AiWorthRegions), defines.AiWorthFloor, 1f) *
+                    M.Clamp(MathF.Sqrt(other.Population / M.Max(1f, defines.AiWorthFloorPopulation)), 0.05f, 1f);
         parts?.Add(($"advantage {advantage:0.00} (ours {mine:0} vs theirs {theirs:0})", 0f));
         // Weakness makes a war possible; it does not make it wanted. A government with no
         // reason it could give - no lost ground, no countrymen across the border, no ally under
@@ -167,6 +173,22 @@ public static partial class AiStatecraft
         // every map the country prints; while the other side holds it, that is a reason.
         value += Part(parts, "revanche", LostLands.Weight(campaign, nation, other) * defines.AiRevancheAppetite);
 
+        // And the other side of revanche: a rump we took ground from wants it back, and a
+        // conqueror that reckons it will be attacked as soon as it looks away is drawn to finish
+        // the job first - the more so the more authoritarian the government (imperialism is a
+        // creed's appetite, not a country's).
+        // Ground taken in THIS campaign - a region that still remembers its old owner - not a
+        // homeland from the history books: Italy does not covet the Papal States' Rome.
+        var taken = 0;
+        if (defines.AiRumpAppetite > 0f)
+            foreach (var region in campaign.StatesOf(nation))
+                if (region.RememberedOwner == other.MapIndex) taken++;
+        value += Part(parts, "finish the rump", M.Min(1f, taken / 3f) * defines.AiRumpAppetite *
+                                               (0.4f + M.Max(0f, PoliticsCore.IdeologyOf(nation).Authority)));
+
+        // And a border nobody can live with: their land inside ours, ours cut off by theirs.
+        value += Part(parts, "borders", BorderShape.Grievance(campaign, nation, other) * defines.AiBorderAppetite);
+
         // And a member of the union we are bringing together, holding out - counted only by a
         // government that wants the union badly enough (Consolidation). It still needs a cause.
         value += Part(parts, "union", Consolidation.WarValue(campaign, nation, other));
@@ -179,6 +201,10 @@ public static partial class AiStatecraft
         // And the old motives, which were the only motives.
         if (relation is not null)
         {
+            // One opinion is kept for the pair, so the weaker side's fear of the stronger reads as
+            // hostility on both sides. Left as it is on purpose: taking it out of the stronger
+            // side's sum halved the world's wars in a 3-year bench (9 against 20) - the strong
+            // eyeing a nervous neighbour is exactly the imperial appetite the game wants.
             value += Part(parts, "hostility", M.Clamp(-relation.Opinion / 100f, 0f, 1f) * defines.AiHostilityAppetite);
             if (relation.Stance == DiplomaticStance.Rival) value += Part(parts, "rivalry", defines.AiRivalryAppetite);
             if (OpinionSystem.Has(relation, "unfinished_war_claim"))
@@ -254,6 +280,13 @@ public static partial class AiStatecraft
             }
         }
 
+        // The game option on the computer's appetite: gains weigh more, restraint less (or the reverse).
+        var aggression = AiTemper.Aggression(campaign);
+        if (aggression != 1f)
+        {
+            var dialled = value > 0f ? value * aggression : value / aggression;
+            value += Part(parts, "aggressiveness setting", dialled - value);
+        }
         return value;
     }
 
@@ -381,6 +414,9 @@ public static partial class AiStatecraft
         // between holders, so a holder's war against anybody else stays an ordinary war.
         var deterrent = Simulation.Deterrence.MutualPrice(campaign, nation, other);
         if (deterrent > 0f) price += Part(parts, "mutual deterrence", deterrent);
+        // And a country under an alarmed holder's umbrella borrows a share of that wall.
+        var umbrella = NuclearPosture.UmbrellaPrice(campaign, nation, other, out _);
+        if (umbrella > 0f) price += Part(parts, "nuclear umbrella", umbrella);
 
         // The state of the country itself. A tired, poor, unstable government has other
         // problems, and the old rule folded this into a multiplier where it could never
@@ -531,17 +567,15 @@ public static partial class AiStatecraft
         return arrangement * M.Max(0f, 1f - campaign.Defines.AiRestraintAuthority * authority);
     }
 
-    private static readonly Dictionary<int, List<int>> FriendsOf = new();
-    private static int _friendsDay = int.MinValue;
-    private static Campaign _friendsFor;
-
     /// <summary>
     /// What attacking this country would mean facing, as the attacker reckons it: its forces
     /// and its friends'. The friends are everybody who would answer an attack - its allies
     /// and guarantors - not the attacker itself, and not a friend it shares with the target:
     /// a country allied to both stays out. Who is whose friend is worked out once a day, not
     /// once a question: the question is asked of every neighbour of every country every
-    /// eleven days.
+    /// eleven days. The day's answer lives in the campaign's own tables - relations change
+    /// the moment a war or a pact is signed, and a shared scratch rebuilt on every switch
+    /// would read a fresher answer than the solo run kept.
     /// </summary>
     internal static float Deterrence(Campaign campaign, Nation attacker, Nation target, bool refreshAssessment = true) =>
         CampaignIntel.EstimatedStrength(campaign, attacker.Id, target, refreshAssessment) +
@@ -549,11 +583,12 @@ public static partial class AiStatecraft
 
     private static float HelpFor(Campaign campaign, Nation attacker, Nation target, bool refreshAssessment = true)
     {
-        if (refreshAssessment && (_friendsFor != campaign || _friendsDay != campaign.ElapsedDays))
+        var tables = TablesOf(campaign);
+        var friendsOf = tables.FriendsOf;
+        if (refreshAssessment && tables.FriendsDay != campaign.ElapsedDays)
         {
-            _friendsFor = campaign;
-            _friendsDay = campaign.ElapsedDays;
-            foreach (var list in FriendsOf.Values) list.Clear();
+            tables.FriendsDay = campaign.ElapsedDays;
+            foreach (var list in friendsOf.Values) list.Clear();
             foreach (var relation in campaign.Relations.Values)
             {
                 var allied = relation.Stance == DiplomaticStance.Allied;
@@ -577,7 +612,7 @@ public static partial class AiStatecraft
         IEnumerable<int> friends;
         if (refreshAssessment)
         {
-            if (!FriendsOf.TryGetValue(target.Id, out var cached)) return help;
+            if (!friendsOf.TryGetValue(target.Id, out var cached)) return help;
             friends = cached;
         }
         else
@@ -605,9 +640,9 @@ public static partial class AiStatecraft
         }
         return help;
 
-        static void Friend(int protectedId, int friendId)
+        void Friend(int protectedId, int friendId)
         {
-            if (!FriendsOf.TryGetValue(protectedId, out var list)) FriendsOf[protectedId] = list = new List<int>();
+            if (!friendsOf.TryGetValue(protectedId, out var list)) friendsOf[protectedId] = list = new List<int>();
             list.Add(friendId);
         }
     }
@@ -775,7 +810,7 @@ public static partial class AiStatecraft
         var mostExposed = 0f;
         foreach (var mapIndex in CampaignDiplomacy.Neighbours(campaign, rival.MapIndex))
         {
-            var small = ByMapIndex(mapIndex);
+            var small = ByMapIndex(campaign, mapIndex);
             if (small is null || small.Id == nation.Id || small.Id == rival.Id) continue;
             if (small.Population <= 0) continue;
             var exposure = CampaignIntel.EstimatedStrength(campaign, nation.Id, rival) / M.Max(0.01f, CampaignIntel.EstimatedStrength(campaign, nation.Id, small));

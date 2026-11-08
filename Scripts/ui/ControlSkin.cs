@@ -160,9 +160,15 @@ internal static class ControlSkin
         sliderFill.SetCornerRadiusAll(3);
         var sliderHighlight = Surface(Ui.Colour("text.accent"), Ui.Colour("text.bright"), 4, 4);
         sliderHighlight.SetCornerRadiusAll(3);
-        theme.SetStylebox("slider", "HSlider", sliderTrack);
-        theme.SetStylebox("grabber_area", "HSlider", sliderFill);
-        theme.SetStylebox("grabber_area_highlight", "HSlider", sliderHighlight);
+        foreach (var type in new[] { "HSlider", "VSlider" })
+        {
+            theme.SetStylebox("slider", type, InstrumentMaterials.Face(sliderTrack, inset: true));
+            theme.SetStylebox("grabber_area", type, InstrumentMaterials.Face(sliderFill));
+            theme.SetStylebox("grabber_area_highlight", type, InstrumentMaterials.Face(sliderHighlight));
+            theme.SetIcon("grabber", type, InstrumentMaterials.SliderHandle(0));
+            theme.SetIcon("grabber_highlight", type, InstrumentMaterials.SliderHandle(1));
+            theme.SetIcon("grabber_disabled", type, InstrumentMaterials.SliderHandle(3));
+        }
 
         var popupPanel = Surface(Ui.Colour("surface.overlay", 0.98f), Ui.Colour("shell.border"), 8, 8);
         popupPanel.BorderWidthTop = 2;
@@ -213,7 +219,7 @@ internal static class ControlSkin
         theme.SetConstant("separation", "VSeparator", 8);
     }
 
-    /// <summary>A recessed track and a solid, subdued brass fill without a glossy gradient.</summary>
+    /// <summary>A recessed track with a raised fill, shared with contextual condition gauges.</summary>
     private static void Gauges(Theme theme, Color accent)
     {
         var track = Surface(Ui.Colour("surface.inset"), Ui.Colour("surface.line_faint"), 4, 2);
@@ -221,8 +227,8 @@ internal static class ControlSkin
         var fillColour = Ui.Colour("text.accent_dim");
         var fill = Surface(fillColour, fillColour.Darkened(0.25f), 4, 2);
         fill.SetCornerRadiusAll(3);
-        theme.SetStylebox("background", "ProgressBar", track);
-        theme.SetStylebox("fill", "ProgressBar", fill);
+        theme.SetStylebox("background", "ProgressBar", InstrumentMaterials.Face(track, inset: true));
+        theme.SetStylebox("fill", "ProgressBar", InstrumentMaterials.Face(fill));
         theme.SetColor("font_color", "ProgressBar", Ui.Colour("text.bright"));
         theme.SetColor("font_outline_color", "ProgressBar", Ui.Colour("surface.background"));
         theme.SetConstant("outline_size", "ProgressBar", 1);

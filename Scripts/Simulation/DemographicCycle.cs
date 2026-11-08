@@ -3,6 +3,41 @@ using System.Collections.Generic;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// The demographic cycle: how a population grows old, moves and changes, and what
+/// that does to everything else.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — what the cycle does and where to bend it:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// Every region has three cohorts — young, working, old — advanced yearly:
+///
+///   YOUNG → WORKING  at MaturationAnnual (default 5.5% a year — ~18 years of childhood)
+///   WORKING → OLD    at AgeingAnnual (default 1.8% — ~55 years of working life)
+///
+/// BIRTHS scale with how the young share compares to the reference (28%): more young
+/// than that, more births; fewer, fewer. FERTILITY by the F# kernel DemographyRules.
+///
+/// DEATHS scale with how the old share compares to its reference (10%): more old
+/// than that, more deaths — and harder, at the MortalityOldWeight.
+///
+/// MIGRATION moves people between regions (and countries) by living standard,
+/// security and brain-drain factors. A flood is more than FloodShare of a
+/// population in a year; it destabilises both ends.
+///
+/// ASSIMILATION: a minority adopts the culture around it at AssimilationAnnual
+/// (default 0.6% a year — generations, not news cycles), weighed by kinship,
+/// size, schooling, a kin state, and the country's policy (see the laws).
+///
+/// WHAT TO CHANGE:
+///   • Faster ageing world → raise AgeingAnnual to 0.025 (retirement at ~40).
+///   • Population boom → lower ReferenceYoungShare to 0.22 and raise fertility weight.
+///   • Rapid assimilation → raise AssimilationAnnual to 0.02 (a generation).
+///   • Age structure off entirely → `DemographyAgeStructureEnabled` to false:
+///     old saves load with nobody young, nobody old, and the cycle stays quiet.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>Where a region's age structure starts when the scenario says nothing: young, working, old.</summary>
@@ -154,25 +189,41 @@ public static class DemographicCycle
         if (!defines.DemographyAgeStructureEnabled) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         var anyChanged = false;
-        // By index and re-checked each time: nothing in a stage adds or removes regions, but a pause
-        // is where something could, and a copy of the list every hour would be garbage for nothing.
-        for (var index = 0; index < campaign.States.Count; index++)
+        // A stage of regions at a time, and the regions of a stage side by side: each region's
+        // cohorts and the assimilation among its own people read the world and write only that
+        // region, so the thread pool works them in any order and the bytes come out the same.
+        // The world's lazily built indexes are built here first, on this thread, so no worker
+        // builds them; the kin-state answers are a per-campaign table safe to fill from several.
+        // By index and re-checked each stage: nothing in a stage adds or removes regions, but a
+        // pause is where something could.
+        var options = new System.Threading.Tasks.ParallelOptions
+            { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) };
+        for (var first = 0; first < campaign.States.Count; first += StageRegions)
         {
-            if (index > 0 && index % StageRegions == 0) yield return 0;
-            if (index >= campaign.States.Count) break;
-            var state = campaign.States[index];
-            if (state is null || state.Unclaimed || state.Population <= 0) continue;
-            if (state.LastDemographyDay == state.LastHouseholdReviewDay) continue;
-            state.LastDemographyDay = state.LastHouseholdReviewDay;
-            anyChanged = true;
-            var stepped = Rules.DemographyRules.StepCohorts(
-                state.Population, state.ReviewBirths, state.ReviewDeaths,
-                state.YoungShare, state.OldShare,
-                defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
-                defines.DemographyMortalityOldWeight, interval);
-            state.YoungShare = stepped.YoungShare;
-            state.OldShare = stepped.OldShare;
-            MoveCultures(campaign, state);
+            if (first > 0) yield return 0;
+            if (first >= campaign.States.Count) break;
+            var last = Math.Min(first + StageRegions, campaign.States.Count);
+            campaign.NationsByMapIndex();
+            if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
+            KinTable(campaign);
+            var changed = 0;
+            System.Threading.Tasks.Parallel.For(first, last, options, index =>
+            {
+                var state = campaign.States[index];
+                if (state is null || state.Unclaimed || state.Population <= 0) return;
+                if (state.LastDemographyDay == state.LastHouseholdReviewDay) return;
+                state.LastDemographyDay = state.LastHouseholdReviewDay;
+                System.Threading.Interlocked.Exchange(ref changed, 1);
+                var stepped = Rules.DemographyRules.StepCohorts(
+                    state.Population, state.ReviewBirths, state.ReviewDeaths,
+                    state.YoungShare, state.OldShare,
+                    defines.DemographyMaturationAnnual, defines.DemographyAgeingAnnual,
+                    defines.DemographyMortalityOldWeight, interval);
+                state.YoungShare = stepped.YoungShare;
+                state.OldShare = stepped.OldShare;
+                MoveCultures(campaign, state);
+            });
+            if (changed != 0) anyChanged = true;
         }
         if (anyChanged) Aggregate(campaign);
     }
@@ -195,10 +246,31 @@ public static class DemographicCycle
         groups.RemoveAll(static group => group.Size <= 0);
     }
 
-    private static readonly Dictionary<string, long> PeopleHere = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Dictionary<(int Owner, string Culture), bool> KinAlive = new();
-    private static Campaign _kinWorld;
-    private static int _kinDay = -1;
+    // One per thread: regions are worked side by side (Stages).
+    [ThreadStatic] private static Dictionary<string, long> _peopleHere;
+    private static Dictionary<string, long> PeopleHere => _peopleHere ??= new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Whether a people has a living state of its own, by owner and culture, for one campaign's one day.</summary>
+    private sealed class KinCache
+    {
+        public int Day = -1;
+        public readonly System.Collections.Concurrent.ConcurrentDictionary<(int Owner, string Culture), bool> Alive = new();
+    }
+    // Per campaign, not one static stamped with the last campaign that asked: two worlds in one
+    // process took turns clearing it (see KinStatecraft's scan, the same trap).
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, KinCache> KinCaches = new();
+
+    /// <summary>The campaign's kin table for today, emptied when the day has moved. Called on the stage's own thread.</summary>
+    private static System.Collections.Concurrent.ConcurrentDictionary<(int Owner, string Culture), bool> KinTable(Campaign campaign)
+    {
+        var cache = KinCaches.GetValue(campaign, _ => new KinCache());
+        if (cache.Day != campaign.ElapsedDays)
+        {
+            cache.Alive.Clear();
+            cache.Day = campaign.ElapsedDays;
+        }
+        return cache.Alive;
+    }
 
     /// <summary>
     /// Assimilation: a minority adopts the culture around it - the country's own where the
@@ -253,12 +325,7 @@ public static class DemographicCycle
         var calm = Math.Clamp(1f - state.Radicalism, 0.05f, 1f);
         var policy = NationalModifiers.Factor(owner, "assimilation");
 
-        if (!ReferenceEquals(_kinWorld, campaign) || _kinDay != campaign.ElapsedDays)
-        {
-            KinAlive.Clear();
-            _kinWorld = campaign;
-            _kinDay = campaign.ElapsedDays;
-        }
+        var kinAlive = KinCaches.GetValue(campaign, _ => new KinCache()).Alive;
 
         var count = groups.Count;
         for (var i = 0; i < count; i++)
@@ -272,8 +339,7 @@ public static class DemographicCycle
             var faith = SharesFaith(group.Religion, targetFaiths) ? 1f : 0.4f;
             var size = Math.Clamp(1f - PeopleHere.GetValueOrDefault(group.Culture) / (float)population, 0.2f, 1f);
             var key = (owner.Id, group.Culture);
-            if (!KinAlive.TryGetValue(key, out var hasKin))
-                KinAlive[key] = hasKin = SecessionEvents.KinState(campaign, owner, group.Culture) is not null;
+            var hasKin = kinAlive.GetOrAdd(key, k => SecessionEvents.KinState(campaign, owner, k.Culture) is not null);
             var rate = annual * interval * kin * faith * size * schooling * calm * (hasKin ? 0.6f : 1f) * policy;
             var moved = Math.Min(group.Size, (long)Math.Round(group.Size * (double)rate));
             if (moved <= 0) continue;

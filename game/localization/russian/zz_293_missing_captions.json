@@ -1,0 +1,19 @@
+{
+  "+5": "+5",
+  "←": "←",
+  "A player could not join: {0}": "Игрок не смог присоединиться: {0}",
+  "DEFCON 5": "DEFCON 5",
+  "Different game version: the host runs {0}, this game {1}. Install the same version as the host.": "Разные версии игры: у хоста {0}, у вас {1}. Установите ту же версию, что и у хоста.",
+  "Different map data: the host has {0}, this game {1}. Install the same version as the host.": "Разные данные карты: у хоста {0}, у вас {1}. Установите ту же версию, что и у хоста.",
+  "Different network protocol: the host speaks {0}, this game {1}. Install the same version as the host.": "Разные сетевые протоколы: хост использует {0}, игра — {1}. Установите ту же версию, что и у хоста.",
+  "JSON / YAML": "JSON / YAML",
+  "That game is a different version. Install the same version as the host.": "У той игры другая версия. Установите ту же версию, что и у хоста.",
+  "{0} days remaining": "Осталось {0} дн.",
+  "{0} left; the AI runs {1} until a player takes it again.": "{0} покинул игру; {1} будет управляться ИИ, пока игрок не вернётся.",
+  "{0} put back together by one of its pieces: the successor that holds most of the old ground takes the name and the flag, and the rump that still calls itself {0} becomes a rival government to be brought in by treaty or by force.": "{0} воссоздана из одного из своих осколков: наследник, удерживающий бо́льшую часть старых земель, берёт имя и флаг, а остаток, всё ещё называющий себя {0}, становится соперничающим правительством, которое надо вернуть договором или силой.",
+  "chronicle.mass_protests": "{0} охвачены массовыми протестами.",
+  "chronicle.military_intervention": "{0} вмешивается в {2} на стороне {1}.",
+  "chronicle.movement_trait_gained": "{0} приобретает новый характер: {2}.",
+  "chronicle.movement_trait_lost": "{0} утрачивает характер «{2}».",
+  "treasury {0}": "казна {0}"
+}

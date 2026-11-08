@@ -210,6 +210,8 @@ public sealed partial class GlobePresentation
     internal string VerificationReadinessPointerTooltip() => _GetTooltip(GetLocalMousePosition());
     internal string VerificationReadinessPopupText()
     {
+        var persistent = TooltipKeeper.VisibleTextFor(this);
+        if (persistent.Length > 0) return persistent;
         // Godot's real tooltip PopupPanel is attached directly to its owner Control.
         // Observe its displayed Label; never create a replacement screenshot overlay.
         foreach (var child in GetChildren())

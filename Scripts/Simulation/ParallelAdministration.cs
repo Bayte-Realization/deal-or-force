@@ -31,8 +31,13 @@ public sealed partial class Defines
     /// </summary>
     public float KinAdminRadicalism { get; set; } = 0.004f;
 
-    /// <summary>The weekly chance the host notices, and what being noticed costs on the day.</summary>
-    public float KinAdminDiscovery { get; set; } = 0.035f;
+    /// <summary>
+    /// The weekly chance the host notices, and what being noticed costs on the day. This is the
+    /// base rate only: <see cref="ParallelAdministration.Watchfulness"/> scales it by how closely
+    /// the host can watch and by how well our people cover the offices. At 3,5 % a week an office
+    /// lived about eight months, so it never outlived the rising it was meant to survive.
+    /// </summary>
+    public float KinAdminDiscovery { get; set; } = 0.008f;
     public float KinAdminGrievance { get; set; } = 6f;
     public float KinAdminCaughtGrievance { get; set; } = 18f;
 
@@ -63,6 +68,11 @@ public sealed partial class ScenarioState
 
     /// <summary>What the offices have taken out of the host so far, for the panel and the report.</summary>
     public float AdministrationTaken;
+
+    /// <summary>Empty means the whole region (legacy saves). Local office coverage
+    /// survives reunion without forcing a second official region to stay on the map.</summary>
+    public List<int> AdministrationProvinces = new();
+    public float AdministrationPopulationShare = 1f;
 }
 
 /// <summary>
@@ -80,6 +90,8 @@ public sealed partial class ScenarioState
 /// </summary>
 public static class ParallelAdministration
 {
+    public static float Coverage(ScenarioState region) => region is not null && float.IsFinite(region.AdministrationPopulationShare)
+        ? M.Clamp01(region.AdministrationPopulationShare) : 0f;
     /// <summary>Whether these offices are ours.</summary>
     public static bool Ours(Campaign campaign, Nation country, ScenarioState region) =>
         campaign is not null && country is not null && region is not null &&
@@ -102,7 +114,7 @@ public static class ParallelAdministration
     {
         if (campaign?.Defines is null || country is null || region is null) return 0f;
         var (ours, _, _) = KinStatecraft.Kin(campaign, country, region);
-        return campaign.Defines.KinAdminUpkeepPerMillion * ours / 1_000_000f;
+        return campaign.Defines.KinAdminUpkeepPerMillion * ours / 1_000_000f * Coverage(region);
     }
 
     /// <summary>What they take from the host every week, net of what they cost us.</summary>
@@ -114,8 +126,30 @@ public static class ParallelAdministration
         if (admin is null) return 0f;
         var (_, _, share) = KinStatecraft.Kin(campaign, admin, region);
         var groundShare = host.Population <= 0 ? 0f : M.Clamp01(region.Population / (float)host.Population);
-        var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * campaign.Defines.KinAdminLevy;
+        var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * campaign.Defines.KinAdminLevy * Coverage(region);
         return levy - WeeklyUpkeep(campaign, admin, region);
+    }
+
+    /// <summary>
+    /// How likely the host's service is to find these offices in a given week.
+    ///
+    /// Not a constant, because a constant turns a foothold into a countdown: with 3,5 % a week
+    /// sixteen offices were opened in ten years of the bench and sixteen were found, so the rung
+    /// that is supposed to outlive a single rising never outlived one. Two things move it, both
+    /// already in the world rather than kept aside for this mechanic:
+    ///
+    /// - A stable state with nothing else on its mind watches; one that is coming apart has other
+    ///   worries. (<see cref="Nation.Stability"/>.)
+    /// - Where our people *are* the region, foreign paperwork has somewhere to hide among its own;
+    ///   where they are a bare quarter of it, every clerk stands out. (The same share that decides
+    ///   whether the region may be worked at all.)
+    /// </summary>
+    public static float Watchfulness(Campaign campaign, Nation host, float share)
+    {
+        if (campaign?.Defines is null || host is null) return 1f;
+        var attention = 0.35f + M.Clamp01(host.Stability);
+        var cover = M.Clamp(1.6f - share, 0.4f, 1.6f);
+        return campaign.Defines.KinAdminDiscovery * attention * cover;
     }
 
     /// <summary>What the panel says about them, in one line, or an empty string when there are none.</summary>
@@ -128,7 +162,8 @@ public static class ParallelAdministration
             ? region.AdministrationTaken.ToString("0.00") + " bn"
             : (region.AdministrationTaken * 1000f).ToString("0.0") + " m";
         return Loc.Format("{0} runs its own offices here: {1} taken so far{2}.", admin.DisplayName, money,
-            region.AdministrationExposed ? Loc.Get(", and everybody knows it") : "");
+            region.AdministrationExposed ? Loc.Get(", and everybody knows it") : "") +
+            (Coverage(region) < .9999f ? " " + Loc.Format("Local coverage: {0:P1} of this region's residents.", Coverage(region)) : "");
     }
 
     /// <summary>Why the offices cannot be opened here, in a sentence, or an empty string when they can.</summary>
@@ -158,6 +193,7 @@ public static class ParallelAdministration
         region.AdministeredSinceDay = campaign.ElapsedDays;
         region.AdministrationExposed = false;
         region.AdministrationTaken = 0f;
+        region.AdministrationProvinces.Clear(); region.AdministrationPopulationShare = 1f;
         country.Treasury -= OpenCost(campaign, country, region);
         country.PoliticalPoints = MathF.Max(0f, country.PoliticalPoints - campaign.Defines.KinAdminPoliticalCost);
         var host = KinStatecraft.HostOf(campaign, region);
@@ -185,6 +221,7 @@ public static class ParallelAdministration
         region.AdministeredById = -1;
         region.AdministeredSinceDay = -1;
         region.AdministrationExposed = false;
+        region.AdministrationProvinces.Clear(); region.AdministrationPopulationShare = 1f;
         campaign.Chronicle.Record(campaign, kind == "shut" ? "administration_shut" : "administration_closed",
             admin?.Id ?? host?.Id ?? -1, host?.Id ?? -1, region.DisplayName, isPublic: kind == "shut");
         campaign.MarkStrategicChange();
@@ -234,17 +271,17 @@ public static class ParallelAdministration
 
             // What the host no longer collects, and what we pay to be the ones people go to.
             var groundShare = host.Population <= 0 ? 0f : M.Clamp01(region.Population / (float)host.Population);
-            var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * defines.KinAdminLevy;
+            var levy = MathF.Max(0f, host.WeeklyTaxIncome) * groundShare * share * defines.KinAdminLevy * Coverage(region);
             var upkeep = WeeklyUpkeep(campaign, admin, region);
             host.Treasury -= levy;
             admin.Treasury = MathF.Max(0f, admin.Treasury + levy - upkeep);
             region.AdministrationTaken += levy;
-            region.Radicalism = M.Clamp01(region.Radicalism + defines.KinAdminRadicalism * (0.5f + share));
+            region.Radicalism = M.Clamp01(region.Radicalism + defines.KinAdminRadicalism * (0.5f + share) * Coverage(region));
 
             if (!region.AdministrationExposed)
             {
                 var roll = MovementRules.Roll(campaign.Seed, admin.Id, campaign.ElapsedDays, region.MapIndex + 7);
-                if (roll < defines.KinAdminDiscovery)
+                if (roll < Watchfulness(campaign, host, share))
                 {
                     region.AdministrationExposed = true;
                     var tie = CampaignDiplomacy.Get(campaign, admin.Id, host.Id);

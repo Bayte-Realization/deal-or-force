@@ -5,6 +5,49 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Subjects and overlords: vassals, satellites, client states, dominions and the
+/// whole range from "we sign what you put in front of us" to "we pay tribute".
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — how subjects work:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// A SUBJECT is a country that answers to another. It keeps its flag and its army,
+/// but the overlord has first call on its foreign policy and a share of its income.
+///
+/// THE KINDS are data, in `game/common/subjects/*.json`:
+///
+///   Satellite    — joins the overlord's wars, pays tribute, cannot declare its own.
+///   Puppet       — the same, with less lip service.
+///   Client state — the money and weapons flow one way; the patron owes nothing back.
+///   Dominion     — largely self-governing, the overlord handles defence and foreign affairs.
+///   Protectorate — the overlord defends it (the one obligation that runs upward).
+///   Personal union — a dynastic claim, dormant for ordinary peace treaties.
+///
+/// EACH KIND STATES:
+///   Tribute       — share of the subject's weekly tax that goes to the overlord.
+///   Manpower      — share of the subject's manpower growth that goes with it.
+///   JoinsWars     — whether the overlord's wars call it to arms.
+///   MayDeclareWar — whether it can start its own.
+///   OverlordDefends — whether the overlord comes when the subject is attacked.
+///   Integration   — what share of it has been absorbed, if the kind allows it.
+///   LibertyDesire  — internal: how much it wants out, driven by opinion, distance,
+///                    own strength and the overlord's behaviour.
+///
+/// WHAT THE OVERLORD CAN DO:
+///   • Subjugate in a peace conference (the terms).
+///   • Grant regions to an existing subject (RegionalAdministration).
+///   • Integrate over time (when the kind allows it — satellite yes, client no).
+///   • Release it (making it sovereign again).
+///
+/// WHAT THE SUBJECT CAN DO:
+///   • Conspire with the overlord's rivals (SubjectInteractions).
+///   • Rise, if liberty desire runs high and a foreign backer funds it.
+///
+/// A mod adds a kind by adding a file to `common/subjects/` with the fields above.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Nation
 {
     /// <summary>

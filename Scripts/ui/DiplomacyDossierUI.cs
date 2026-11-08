@@ -24,7 +24,8 @@ public partial class DealOrForceGame
         parent.AddChild(banner);
         var rows = new VBoxContainer(); rows.AddThemeConstantOverride("separation", 7); banner.AddChild(rows);
         var identity = new HBoxContainer(); identity.AddThemeConstantOverride("separation", 12); rows.AddChild(identity);
-        _diplomacyDossierFlag = FlagBadge("", 44); identity.AddChild(_diplomacyDossierFlag);
+        _diplomacyDossierFlag = FlagBadge("", 44);
+        identity.AddChild(RankedFlag(_diplomacyDossierFlag, "DiplomacyCountryRank", () => _selectedNation));
         _diplomacyLeaderPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         identity.AddChild(_diplomacyLeaderPortraitSlot);
         var words = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; identity.AddChild(words);
@@ -64,6 +65,7 @@ public partial class DealOrForceGame
     private void RefreshDiplomacyDossierChrome(Nation nation, bool canSee)
     {
         SetFlag(_diplomacyDossierFlag, nation.Tag, 44); TintBlankFlag(_diplomacyDossierFlag, nation);
+        RefreshCountryRankBadges();
         if (_diplomacyLeaderPortraitSlot is not null)
         {
             ClearRuntimeChildren(_diplomacyLeaderPortraitSlot);

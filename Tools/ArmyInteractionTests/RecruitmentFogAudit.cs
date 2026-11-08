@@ -77,10 +77,20 @@ static class RecruitmentFogAudit
         own.ProvinceId=start;own.SupportOnly=false;own.BattleId=-1;own.ReadyDay=0;
         enemy.ProvinceId=target;enemy.BattleId=-1;enemy.Divisions=1;
         c.SetProvinceController(target,(ushort)ukr.MapIndex);
-        foreach(var p in map.Neighbors[target]) c.SetProvinceController(p,(ushort)rus.MapIndex);
+        var ringGuards = new System.Collections.Generic.List<Army>();
+        foreach(var p in map.Neighbors[target])
+        {
+            c.SetProvinceController(p,(ushort)rus.MapIndex);
+            if (map.IsWater(p)) continue;
+            // Enemy colour alone is not a sealed ring: a deeper legal, empty corridor
+            // permits a staged breakout. This post-victory test requires an occupied ring.
+            var guard = new Army { Id = 99100 + p, NationId = rus.Id, ProvinceId = p, Divisions = 1, Strength = 1 };
+            ringGuards.Add(guard); c.Armies.Add(guard);
+        }
         capture.Invoke(null,new object[]{c,war,target,rus.Id,new[]{own},new[]{enemy},"retreat-audit"});
         Check(!c.Armies.Contains(enemy) && c.ProvinceController[target]==rus.MapIndex,
             "trapped defeated division is removed instead of remaining on captured ground");
+        foreach (var guard in ringGuards) c.Armies.Remove(guard);
         var fallback=map.Neighbors[target].First(p=>!map.IsWater(p) && map.Neighbors[p].Any(n=>n!=target && !map.IsWater(n)));
         var next=map.Neighbors[fallback].First(n=>n!=target && !map.IsWater(n));
         c.SetProvinceController(target,(ushort)ukr.MapIndex);

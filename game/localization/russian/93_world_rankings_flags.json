@@ -1,0 +1,9 @@
+{
+  "Compare all territorial countries. National ranking statistics are public; unit positions and orders remain hidden.": "Сравнение всех стран с территорией. Сводные показатели рейтинга общедоступны; позиции и приказы войск остаются скрыты.",
+  "Each component is divided by the largest world value. Ground power is a public national aggregate, not a report of unit locations. Fleets and aircraft are not included. Living standards are a separate comparison. Landless countries are excluded. Weights are moddable in game/interface.": "Каждый показатель делится на мировой максимум. Мощь сухопутных войск — общедоступный сводный показатель, не сведения о расположении частей. Флот и авиация не учитываются. Уровень жизни сравнивается отдельно. Страны без территории исключены. Веса меняются в game/interface.",
+  "Flag fabric": "Тканевая фактура флагов",
+  "Subtle woven texture and fold lighting on interface flags. Does not change the flag design.": "Лёгкая фактура ткани и освещение складок на флагах интерфейса. Не изменяет рисунок флага.",
+  "Animated flags": "Анимация флагов",
+  "Gently wave interface flags. Turn off for still flags; fabric shading can remain enabled.": "Плавное колыхание флагов интерфейса. Можно отключить движение, оставив тканевую фактуру."
+}
+

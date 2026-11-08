@@ -73,6 +73,7 @@ public partial class DealOrForceGame
         foreach (var panel in new Control[] { _hudNavigationPanel, _sidePanel, _movementPanel, _armyPanel, _supportLayer is PanelContainer ? _supportLayer : null,
                      _fleetPanel, _resourceAtlasPanel, _deskPanel })
             ShiftHudDock(panel);
+        LayoutCampaignDossier();
         if (_situationLayer is not null) LayoutSituationRoom();
     }
 

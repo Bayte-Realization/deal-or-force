@@ -34,9 +34,61 @@ public sealed partial class DiplomaticRelation
 /// the pot boiling - and a crisis nobody settles for <see cref="Defines.CrisisCompromiseDays"/>
 /// is settled for them: a visible compromise, tensions and grievances halved. The deal
 /// half of the name, at the scale of the world.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ДИПЛОМАТИЧЕСКАЯ ЛЕСТНИЦА И МЕХАНИКА КРИЗИСОВ:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+///   Tension 0..20   : [ Calm ] ────────── Спокойные добрососедские отношения
+///   Tension 21..50  : [ Strained ] ────── Подозрительность, охлаждение торговли
+///   Tension 51..75  : [ Friction ] ────── Инциденты, взаимные дипломатические ноты
+///   Tension 76..90  : [ Crisis ] ──────── ВХОД В КРИЗИС (CrisisOpenedDay)
+///                          │
+///           ┌──────────────┴──────────────┐
+///           ▼                             ▼
+///    [ Посредники (Mediators) ]    [ Покровители (Patrons) ]
+///    Мирные конференции            Разжигание противостояния
+///    (ударное охлаждение при       (+2.5 напряжённости/неделю)
+///     DEFCON <= 2)                        │
+///           │                             ▼
+///           │                      Tension 91..99 : [ Clashes ] (Пограничные бои)
+///           ▼                             │
+///    [ Компромисс через 120 дней ]        ▼
+///    (Напряжённость/обиды / 2)     Tension 100    : [ War ] (Полномасштабная война)
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ДЛЯ МОДДЕРОВ (FOR MODDERS) — Архитектура дипломатических кризисов:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// 1. ВХОД В КРИЗИС:
+///    Когда шкала напряжённости между двумя государствами достигает TensionStage.Crisis
+///    (и они не находятся в состоянии открытой войны), фиксируется CrisisOpenedDay.
+///    В хронику записывается событие "crisis_opened".
+///
+/// 2. РОЛИ ВЕЛИКИХ ДЕРЖАВ (Great Powers Roles):
+///    Каждую неделю (день % 7 == 3) великие державы оценивают участников кризиса:
+///    • Посредник (Mediator): великая держава с мнением &gt;= CrisisMediatorOpinion (15) к
+///      ОБЕИМ сторонам. Созывает мирные конференции, снимающие напряжённость.
+///    • Покровитель (Patron): держава, имеющая высокое мнение к одной стороне (&gt;= 40)
+///      и враждебное к другой (&lt;= -20). Нагнетает давление (CrisisPatronPressure).
+///
+/// 3. СВЯЗКА С DEFCON:
+///    При обострении ядерной готовности (campaign.DefconLevel &lt;= 2) эффект мирных
+///    конференций удваивается (CrisisMediationRelief * 2 = 8.0/неделю), моделируя
+///    экстренное давление мировых правительств перед угрозой глобальной катастрофы.
+///
+/// 4. ПРИНУДИТЕЛЬНЫЙ КОМПРОМИСС (Compromise Timer):
+///    Если кризис не перерос в войну и не был разрешён за CrisisCompromiseDays (120 дней),
+///    великие державы навязывают компромисс: напряжённость и обиды делятся пополам,
+///    а счётчик кризиса сбрасывается.
+/// ═══════════════════════════════════════════════════════════════════════════════
 /// </summary>
 public static class CrisisLadder
 {
+    /// <summary>
+    /// Weekly simulation tick (runs on day remainder 3).
+    /// Updates open diplomatic crises, checks mediator and patron powers,
+    /// applies conferences or escalatory pressure, and enforces compromises.
+    /// </summary>
     public static void Tick(Campaign c)
     {
         if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CrisisLadder)) ||
@@ -72,7 +124,8 @@ public static class CrisisLadder
             }
             if (mediator is not null && Roll(c.Seed, a.Id, b.Id, c.ElapsedDays, 71) < 0.5f)
             {
-                relation.Tension = MathF.Max(0f, relation.Tension - c.Defines.CrisisMediationRelief);
+                var relief = c.Defines.CrisisMediationRelief * (c.DefconLevel <= 2 ? 2f : 1f);
+                relation.Tension = MathF.Max(0f, relation.Tension - relief);
                 c.Chronicle.Record(c, "crisis_conference", a.Id, b.Id, place: mediator.DisplayName);
             }
             else if (patron is not null)
@@ -91,6 +144,10 @@ public static class CrisisLadder
         }
     }
 
+    /// <summary>
+    /// Deterministic 64-bit splitmix-like hash roll yielding a uniform float in [0, 1).
+    /// Used for reproducible crisis mediation and diplomatic events without consuming the shared Campaign.Random state.
+    /// </summary>
     private static float Roll(int seed, int a, int b, int day, int salt)
     {
         var hash = (uint)seed * 2654435761u ^ (uint)a * 2246822519u ^ (uint)b * 3266489917u ^

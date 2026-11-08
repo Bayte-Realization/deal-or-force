@@ -16,7 +16,6 @@
     "supersedes": ["serbia_montenegro"],
     "peaceful_accession": true, "subject_integration": true, "ai_foundation": true
   },
-  "czechoslovakia": {"eligible_cultures": ["czech", "slovak"]},
   "united_korea": {"eligible_cultures": ["korean"]},
   "china_reunified": {"eligible_cultures": ["han", "cantonese", "hakka", "chinese_diaspora"]},
   "iberian_union": {"eligible_cultures": ["spanish", "portuguese", "catalan", "galician", "basque"]},

@@ -4,10 +4,15 @@
 
 For handing the game to somebody who has neither Godot nor the sources.
 
-Current game release: **EntertAlpha 0.3.0.3**. `Tools/Test-ReleaseVersion.ps1`
+Current game release: **EntertAlpha 0.6.2.0**. `Tools/Test-ReleaseVersion.ps1`
 checks the shared game/launcher/rules metadata, engine/export settings and current
 release documentation before export. `SaveSystem.GameVersion` uses `GameBuildInfo`;
 the save format and network protocol are independent of the release label.
+
+Windows export `product_name` and `file_description` must both be **Deal or Force**.
+`Tools/Test-WindowsExecutableIdentity.ps1 -Executable <game.exe>` checks the actual
+native version resource used by Task Manager; both packaging and runtime verification
+run this gate. Changing the window title or renaming an old `.exe` does not repair it.
 
 ## Once: the export templates
 
@@ -30,7 +35,7 @@ not be empty.
 ## Every time: build
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe"
+pwsh -File Tools\build.ps1 -Godot "C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe" -VerifyRenderers
 ```
 
 The script checks C#, exports a separate staging copy to `build\<timestamp>\Deal or Force\`,
@@ -42,11 +47,14 @@ Switches: `-Debug` builds the debug version (it has a console and detailed error
 helps when a tester catches a crash), `-NoZip` skips the archive, `-Godot <path>` if the
 engine moves. `-OutputDirectory` selects a fresh child of `build/`; existing output is
 preserved unless `-ReplaceExistingOutput` is explicitly supplied.
+`-RuntimeVerificationTimeoutSeconds` sets the exported-process deadline (600 seconds
+by default, up to 900). This includes the probe's 420-second cold-world load allowance
+and its subsequent checks; it does not skip verification.
 
 The same thing by hand, if the script does not suit for some reason:
 
 ```powershell
-& "C:\GodotEngineNet 4.8-dev\Godot_v4.8-dev7_mono_win64_console.exe" --headless `
+& "C:\GodotEngineNet 4.8-Beta2\Godot_v4.8-beta2_mono_win64_console.exe" --headless `
     --path "D:\Godot Projects\deal-or-force-godot-4-8\build\<staging-copy>" `
     --export-release "Windows Desktop" "D:\Godot Projects\deal-or-force-godot-4-8\build\<new-build>\Deal or Force\Deal or Force.exe"
 ```
@@ -62,6 +70,24 @@ Verify the actual executable after building:
 This opt-in probe checks the menu, a fresh unsaved campaign, laws and resources.
 Success is `EXPORT_VERIFY failures=0` and exit 0. For screenshots omit `--headless`
 and supply `--verify-build-output <directory>` after `--`.
+
+### GPU release gate (PowerShell 7.4+)
+
+Use `-VerifyRenderers` on the release workstation, or run
+`Tools/verify-renderers.ps1 -Executable <game.exe>` after exporting. This launches
+real OpenGL Compatibility, ANGLE/Direct3D 11 and Forward+ windows, retains map images and both logs,
+and rejects shader/script errors, blank/white surfaces and process failures.
+Each renderer uses a private writable cache/Documents profile; player saves and
+mods are not migrated. Inspect the retained PNGs as well. Headless verification
+alone does **not** prove a shader works. This is a test of the local GPU/driver,
+not a claim of universal hardware support. Compatibility uses the **full** map
+material with twelve texture bindings: lookup tables, lossless geographic ID rasters
+and water tiles share array layers. Terrain, relief, rivers, smoothing and water
+effects remain. `-- --safe-map` explicitly selects a reduced emergency material;
+only that mode skips unused terrain/relief/water preparation and uploads. Gameplay
+terrain and province IDs are unchanged. Android is not certified by these Windows tests: GLES limits,
+large ID rasters, ARM/.NET/native dependencies, memory and touch controls still
+need a real-device export/playtest matrix.
 
 The tracked `export_presets.cfg` supplies the `Windows Desktop` preset. Its export path is
 relative and signing is disabled; do not put credentials in this shared file.
@@ -200,8 +226,8 @@ every pack on disk as owned, which is for testing and should stay `false` anywhe
 
 ## What this build does not have yet
 
-- **An icon.** `application/icon` in `export_presets.cfg` is empty, so the `.exe` will carry
-  Godot's icon. Fine for a test, not fine for a shop window.
+- **Executable identity.** The preset uses the project's `icon.ico`; the packaging
+  gate checks the actual Windows product name, description and version, not just the filename.
 - **A signature.** Windows SmartScreen will warn about an unsigned `.exe` from the internet,
   and the tester will have to press "More info → Run anyway". Warn them in advance or half of
   them simply will not start it.

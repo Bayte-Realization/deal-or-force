@@ -83,6 +83,37 @@ static class BeliefDynamicsTests
         BeliefDynamics.Review(twinA, twinA.Player, twinA.States[0], 7);
         Check(atheist.Size < before, "atheist residents can convert away under the same rules as every other worldview");
         RebelIntegration();
+        DailyMovementPeopleCache();
+    }
+
+    static void DailyMovementPeopleCache()
+    {
+        var c = Fixture(273);
+        var region = c.States[0];
+        var definition = new MovementDefinition { Id = "daily_cache_proof" };
+        definition.Peoples.Add("german"); definition.Faiths.Add("catholic");
+        var start = MovementRules.PeopleOf(c, region, definition, out _);
+        var random = c.Random.State;
+        var stored = CampaignFingerprint.Of(c);
+        _ = MovementRules.PeopleOf(c, region, definition, out _);
+        Check(CampaignFingerprint.Of(c) == stored && c.Random.State == random,
+            "reading a warm movement people cache changes no saved state or random stream");
+        region.PopulationGroups[0].Size += 12345;
+        typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours)).SetValue(c, 24L);
+        var next = MovementRules.PeopleOf(c, region, definition, out _);
+        Check(next == start + 12345, "movement audience refreshes the next day, not only next week");
+        var snapshot = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(c, "daily-cache"), "daily-cache");
+        Check(snapshot.Success && MovementRules.PeopleOf(snapshot.Campaign,
+            snapshot.Campaign.States.First(s => s.MapIndex == region.MapIndex), definition, out _) == next,
+            "a cold reloaded movement cache counts the same current population as the warm running campaign");
+        c.Player.DeclaredReligion = "atheism";
+        var faith = new MovementDefinition { Id = "faith_cache_proof" }; faith.Faiths.Add("catholic");
+        MovementRules.PeopleOf(c, region, faith, out var faithfulBefore);
+        var changed = BeliefDynamics.Review(c, c.Player, region, 7);
+        MovementRules.PeopleOf(c, region, faith, out var faithfulAfter);
+        Check(changed > 0 && faithfulAfter < faithfulBefore && faithfulAfter ==
+            region.PopulationGroups.Where(g => g.Religion == "catholic").Sum(g => g.Size),
+            "belief conversion invalidates movement faith counts immediately within the same day");
     }
 
     static void RebelIntegration()

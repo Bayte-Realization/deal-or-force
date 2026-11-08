@@ -82,11 +82,14 @@ public partial class ExportVerification
             var fp = CampaignFingerprint.Of(c);
             game.VerificationShowOrderBattle(battle);
             await Wait(.4);
+            await SettleBattleDossierControls(game, "orders " + language + size.X);
             Check(CampaignFingerprint.Of(c) == fp, "opening localized battle roster is read-only: " + language + size.X);
             var retreat = game.FindChild("WithdrawFormation_8002", true, false) as Button;
             Check(retreat is not null && retreat.IsVisibleInTree(), "explicit retreat remains reachable: " + language + size.X);
             if (retreat is null) continue;
+            await RevealBattleOrderControl(retreat, language + size.X);
             await Capture("battle-orders-" + language + "-" + size.X);
+            retreat = game.FindChild("WithdrawFormation_8002", true, false) as Button;
             ClickBattleControl(retreat, language + size.X);
             await Wait(.2);
             var dialog = game.GetNodeOrNull<ConfirmationDialog>("ConfirmLastDefenderWithdrawal");
@@ -100,6 +103,8 @@ public partial class ExportVerification
             Check(defender.InBattle && !battle.Ended && CampaignFingerprint.Of(c) == fp && c.ElapsedHours == clock &&
                 c.Random.State == rng && c.IsPaused,
                 "cancel preserves exact authoritative state, clock and pause: " + language + size.X);
+            retreat = game.FindChild("WithdrawFormation_8002", true, false) as Button;
+            await RevealBattleOrderControl(retreat, "confirmed " + language + size.X);
             retreat = game.FindChild("WithdrawFormation_8002", true, false) as Button;
             ClickBattleControl(retreat, "confirm prompt " + language + size.X);
             await Wait(.2);
@@ -171,6 +176,23 @@ public partial class ExportVerification
                 foreach (var pair in neighbors) c.SetProvinceController(pair.Key, pair.Value);
             }
         }
+    }
+
+    private async Task RevealBattleOrderControl(Button button, string caption)
+    {
+        // The pinned footer deliberately does not scroll with the report. Reach the
+        // actual formation action by scrolling it into view, not by clicking its
+        // unclipped rectangle through the footer (which may open the same warning).
+        for (Node parent = button.GetParent(); parent is not null; parent = parent.GetParent())
+            if (parent is ScrollContainer scroll) scroll.EnsureControlVisible(button);
+        await Wait(.2);
+        var rect = button.GetGlobalTransformWithCanvas() * new Rect2(Vector2.Zero, button.Size);
+        Check(GetViewport().GetVisibleRect().Grow(1).Encloses(rect),
+            "scrolled formation action fits the viewport: " + caption);
+        for (Node parent = button.GetParent(); parent is not null; parent = parent.GetParent())
+            if (parent is ScrollContainer scroll)
+                Check((scroll.GetGlobalTransformWithCanvas() * new Rect2(Vector2.Zero, scroll.Size)).Grow(1).Encloses(rect),
+                    "formation action is revealed above the pinned footer: " + caption);
     }
 
     private void BattleH(bool alt = false)

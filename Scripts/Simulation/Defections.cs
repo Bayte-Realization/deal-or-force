@@ -26,6 +26,15 @@ public sealed partial class Defines
 
     /// <summary>The share of a peaceful breakaway's garrison that goes with the new country.</summary>
     public float PeacefulSecessionDefectionShare { get; set; } = 0.35f;
+
+    /// <summary>
+    /// Below this stability a government's army is hollow: in a civil war its formations on the
+    /// line go over to a rising that is winning even when they are not worn out (Defections).
+    /// </summary>
+    public float HollowArmyStability { get; set; } = 0.35f;
+
+    /// <summary>The rising's war score at which a hollow army's defection odds reach their full value.</summary>
+    public float HollowArmyMomentumScore { get; set; } = 30f;
 }
 
 /// <summary>
@@ -59,9 +68,15 @@ public static class Defections
                 continue;
             var nation = campaign.NationById(army.NationId);
             if (nation is null || nation.Population <= 0) continue;
-            if (army.Cohesion > campaign.Defines.DefectionCohesion ||
-                army.SupplyLevel > campaign.Defines.DefectionSupply ||
-                army.Strength > campaign.Defines.DefectionStrength) continue;
+            var exhausted = army.Cohesion <= campaign.Defines.DefectionCohesion &&
+                            army.SupplyLevel <= campaign.Defines.DefectionSupply &&
+                            army.Strength <= campaign.Defines.DefectionStrength;
+            // A hollow army: a government nobody believes in, whose soldiers on the line watch a
+            // rising win. Kabul in 2021, Damascus in December 2024, Goma in January 2025 - armies
+            // many times the size of what came at them, which did not fight. Only in a civil war,
+            // only near the enemy, and only while the rising is ahead.
+            var hollow = !exhausted && nation.Stability < campaign.Defines.HollowArmyStability;
+            if (!exhausted && !hollow) continue;
 
             StrategicWar chosen = null;
             Nation enemy = null;
@@ -98,6 +113,18 @@ public static class Defections
 
             var odds = civil ? campaign.Defines.WartimeDefectionChanceCivil
                 : campaign.Defines.WartimeDefectionChanceInterstate;
+            if (!exhausted)
+            {
+                if (!civil) continue;
+                var rebelScore = chosen.IsAttacking(enemy.Id) ? chosen.WarScore : -chosen.WarScore;
+                var nearEnemy = controllers[army.ProvinceId] == enemy.MapIndex;
+                if (!nearEnemy)
+                    foreach (var next in topology.Neighbors[army.ProvinceId])
+                        if (next > 0 && next < controllers.Length && controllers[next] == enemy.MapIndex) { nearEnemy = true; break; }
+                if (rebelScore <= 0f || !nearEnemy) continue;
+                var weakness = 1f - nation.Stability / MathF.Max(0.01f, campaign.Defines.HollowArmyStability);
+                odds *= M.Clamp01(weakness) * M.Clamp01(rebelScore / MathF.Max(1f, campaign.Defines.HollowArmyMomentumScore));
+            }
             if (odds <= 0f || Roll(campaign.Seed, army.Id, enemy.Id, day / 30) >= odds)
                 continue;
 

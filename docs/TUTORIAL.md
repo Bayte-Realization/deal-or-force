@@ -168,11 +168,14 @@ Construction is how money turns into an economy.
 Take a concrete example. The **agricultural complex** in the base data costs this:
 
 ```
-cost 0.45 · days 120 · gdp_gain 0.22 · capacity_gain 0.05
+cost 0.45 · days 120 · capacity_gain 0.05 · jobs 0.42
 ```
 
-Read that literally: it costs 0.45, takes 120 days to build and afterwards adds 0.22 to the
-region's GDP and 0.05 to its production capacity.
+Read that literally: it costs 0.45, takes 120 days to build at a construction capacity of 1,
+and afterwards adds 0.05 to the country's construction capacity (which makes every later
+site a little faster) and asks for 420,000 workers. Its GDP is the food and fertiliser it
+makes and sells, every week, for as long as it stands - the build list shows it as
+"Output a year, counted in GDP".
 
 From which the arithmetic is simple: it **pays for itself in about two years** and yields
 after that. It is a good investment if you have 120 days and are not expecting a war.

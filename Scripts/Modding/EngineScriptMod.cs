@@ -4,13 +4,30 @@ using Godot;
 
 namespace DealOrForce.Modding;
 
-/// <summary>Opt-in ScriptLanguageExtension mods, separate from process workers.</summary>
+/// <summary>
+/// Luau mods (<c>engine_script_entry</c> in the manifest). This is not the external
+/// worker process and not GDScript. The script must extend <c>RefCounted</c>, live inside
+/// the package as <c>.lua</c> or <c>.luau</c>, and define <c>on_load(api)</c>.
+///
+/// Each hook the script implements must return true. A missing return, a false return, or
+/// a runtime error disables that package's script for the rest of the campaign. The loader
+/// refuses the entry when more than one human seat is in the campaign.
+///
+/// The <c>api</c> table is a fixed set of callables from <see cref="CreateApi"/>. It is not
+/// a sandbox and it is not permission to call arbitrary Godot objects. Gameplay goes through
+/// the same queued operations as GDScript. Adding a callable here without listing it on
+/// <c>ModApi.get_capabilities</c> hides it from scripts that ask what they may call.
+/// </summary>
 public static class EngineScriptMod
 {
     public const string LuauExtension = "res://game/extensions/luau/luau_script.gdextension";
 
-    // Capabilities, not Object.Call: USER Luau threads must not acquire the
-    // adapter's INTERNAL permission just to reach our campaign bridge.
+    /// <summary>
+    /// The dictionary passed into every Luau hook. Keys match <c>ModApi</c>'s snake_case names.
+    /// The dictionary is made read-only so a script cannot replace a callable with its own.
+    /// Callables, not Object.Call: a USER Luau thread must not be given the adapter's INTERNAL
+    /// permission just to reach this bridge.
+    /// </summary>
     public static Godot.Collections.Dictionary CreateApi(ModApi api)
     {
         var bridge = new Godot.Collections.Dictionary
@@ -37,6 +54,10 @@ public static class EngineScriptMod
         return bridge;
     }
 
+    /// <summary>
+    /// Call one hook if the script defined it. No method means the hook is optional and succeeds.
+    /// A defined hook that does not return true is a failed mod, not a quiet skip.
+    /// </summary>
     public static void Invoke(RefCounted instance, string hook, Godot.Collections.Dictionary api)
     {
         if (!instance.HasMethod(hook)) return;
@@ -47,6 +68,10 @@ public static class EngineScriptMod
             throw new InvalidOperationException($"Luau hook {hook} failed or did not return true; engine-script mod disabled.");
     }
 
+    /// <summary>
+    /// Instantiate the package entry. Loads the Luau extension on demand when the class is missing.
+    /// A scene Node is refused: an engine-script mod is not a second copy of the campaign UI.
+    /// </summary>
     public static RefCounted Load(string physicalPath)
     {
         var suffix = Path.GetExtension(physicalPath).ToLowerInvariant();

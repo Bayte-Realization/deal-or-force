@@ -109,6 +109,19 @@ public partial class ExportVerification : Node
                 ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                 return;
             }
+            if (args.Contains("--verify-map-styles") || args.Contains("--verify-player-feedback-only") || args.Contains("--verify-scenario-peer") || args.Contains("--verify-decision-documents-only") || args.Contains("--verify-nuclear-target-only") || args.Contains("--verify-construction-placement-only") || args.Contains("--verify-nuclear-alert-only") || args.Contains("--verify-character-modding-only") || args.Contains("--verify-workshop-materials-only") || args.Contains("--verify-river-continuity-only") || args.Contains("--verify-country-rankings-only"))
+            {
+                if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS")))
+                    throw new InvalidOperationException("Style verification requires an isolated documents profile.");
+                SettingsCatalog.Store("fresh_world_each_game", false);
+            }
+            if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only"))
+            {
+                if (string.IsNullOrEmpty(System.Environment.GetEnvironmentVariable("DOF_VERIFICATION_DOCUMENTS")))
+                    throw new InvalidOperationException("Recruitment/alliance verification requires an isolated documents profile.");
+                SettingsCatalog.Store("fresh_world_each_game", false);
+            }
+            if (args.Contains("--verify-release-0530-only")) MainMenuScene.Wanted = MenuIntent.Multiplayer;
             Check(tree.ChangeSceneToFile("res://Scenes/Main.tscn") == Error.Ok, "campaign scene opens from the pack");
             // How long the world may take to appear before the gate calls it a hang.
             //
@@ -144,7 +157,123 @@ public partial class ExportVerification : Node
             Check(game is not null, "world, loose data and managed campaign finish loading");
             if (game is not null)
             {
+                if (args.Contains("--verify-release-0530-only"))
+                    Check(game.FindChild("NetworkMultiplayer", true, false) is Control { Visible: true },
+                        "real cold main-menu multiplayer intent reaches the lobby without a picker null reference");
                 game.Call("BeginSession");
+                if (args.Contains("--verify-recruitment-placement-only") || args.Contains("--verify-alliance-review-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "recruitment/alliance verification uses a real rendered viewport");
+                    if (args.Contains("--verify-recruitment-placement-only"))
+                    { await VerifyRecruitmentWorkbench(game); await VerifyRecruitmentPlacement(game); }
+                    else { await VerifyDiplomacyComfort(game); await VerifyAllianceProposalReview(game); }
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-country-rankings-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "country rankings verification uses a real rendered viewport");
+                    await VerifyCountryRankings(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-river-continuity-only"))
+                {
+                    await VerifyRiverContinuity(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-workshop-materials-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "workshop/material verification uses a real rendered viewport");
+                    await VerifyWorkshopMaterials(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-character-modding-only"))
+                {
+                    await VerifyCharacterPortraits(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-nuclear-alert-only"))
+                {
+                    await VerifyNuclearAlertLayout(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-construction-placement-only"))
+                {
+                    await VerifyConstructionPlacement(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-nuclear-target-only"))
+                {
+                    await VerifyNuclearTargetSelection(game);
+                    game = null; GC.Collect(); GC.WaitForPendingFinalizers(); await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1); return;
+                }
+                if (args.Contains("--verify-decision-documents-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "decision readability requires a real rendered viewport");
+                    await VerifyDecisionDocuments(game);
+                    game = null;
+                    GC.Collect(); GC.WaitForPendingFinalizers();
+                    await Wait(.3);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-scenario-peer"))
+                {
+                    await VerifyScenarioPeer(game, args);
+                    if (developmentProbe && args.Contains("--verify-network-recovery"))
+                        await VerifyNetworkRecoveryPeer(game, args);
+                    if (developmentProbe && args.Contains("--verify-network-catchup"))
+                        await VerifyNetworkCatchUpPeer(game, args);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (DisplayServer.GetName() != "headless") await VerifyMapSurface(game);
+                if (args.Contains("--verify-player-feedback-only"))
+                {
+                    Check(DisplayServer.GetName() != "headless", "player feedback verification uses a real GPU viewport");
+                    await VerifyPlayerFeedback(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-map-render-only"))
+                {
+                    if (args.Contains("--verify-map-styles")) await VerifyMapStyles(game);
+                    Check(DisplayServer.GetName() != "headless", "map-render verification requires a real GPU viewport");
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (args.Contains("--verify-release-0530-only"))
+                {
+                    await VerifyRelease0530(game, args);
+                    game.Call("OpenScenarioLibrary");
+                    await Wait(.15);
+                    using (var escape = new InputEventKey { Pressed = true, Keycode = Key.Escape }) game._Input(escape);
+                    await Wait(.3);
+                    Check(tree.CurrentScene is MainMenuScene, "workshop Escape returns to the main menu without using a detached viewport");
+                    await Capture("workshop-escape-main-menu");
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-campaign-exit-only"))
                 {
                     VerifyCampaignApplicationExit(game);
@@ -225,6 +354,13 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
+                if (developmentProbe && args.Contains("--verify-pocket-resistance-only"))
+                {
+                    await VerifyPocketResistance(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-military-access-only"))
                 {
                     await VerifyMilitaryAccess(game);
@@ -235,6 +371,20 @@ public partial class ExportVerification : Node
                 if (developmentProbe && args.Contains("--verify-paused-doctrines-only"))
                 {
                     await VerifyPausedDoctrines(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-campaign-identity-only"))
+                {
+                    await VerifyCampaignIdentity(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-research-route-only"))
+                {
+                    await VerifyResearchRoute(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
@@ -321,9 +471,46 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
+                if (developmentProbe && args.Contains("--verify-stability-outlook-only"))
+                {
+                    await VerifyStabilityOutlook(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-soundtrack-player-only"))
+                {
+                    await VerifySoundtrackPlayer(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-player-comfort-only"))
+                {
+                    await VerifyMapLayerGuide(game);
+                    await VerifyEnemyReadiness(game);
+                    await VerifySoundtrackPlayer(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-map-layer-guide-only"))
+                {
+                    await VerifyMapLayerGuide(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
                 if (developmentProbe && args.Contains("--verify-cartography-only"))
                 {
                     await VerifyCartography(game);
+                    GD.Print($"EXPORT_VERIFY failures={_failures}");
+                    ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
+                    return;
+                }
+                if (developmentProbe && args.Contains("--verify-yaml-workbench-only"))
+                {
+                    await VerifyYamlWorkbench(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;

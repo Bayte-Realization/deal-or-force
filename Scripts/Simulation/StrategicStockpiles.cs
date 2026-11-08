@@ -156,13 +156,13 @@ public static class StrategicStockpiles
         nation.StockpilesSeeded = true;
 
         var baseScale = SeedScale(campaign, nation);
-        SetIfMissing(nation, "Arms", baseScale * 4.5f);
-        SetIfMissing(nation, "Ammunition", baseScale * 5.0f);
-        SetIfMissing(nation, "Oil", baseScale * 4.2f);
-        SetIfMissing(nation, "Steel", baseScale * 3.8f);
-        SetIfMissing(nation, "MotorVehicles", baseScale * 2.4f);
-        SetIfMissing(nation, "Electronics", baseScale * 1.8f);
-        SetIfMissing(nation, "Food", baseScale * 6.0f);
+        SetIfMissing(nation, "Arms", baseScale * OpeningFactors["Arms"]);
+        SetIfMissing(nation, "Ammunition", baseScale * OpeningFactors["Ammunition"]);
+        SetIfMissing(nation, "Oil", baseScale * OpeningFactors["Oil"]);
+        SetIfMissing(nation, "Steel", baseScale * OpeningFactors["Steel"]);
+        SetIfMissing(nation, "MotorVehicles", baseScale * OpeningFactors["MotorVehicles"]);
+        SetIfMissing(nation, "Electronics", baseScale * OpeningFactors["Electronics"]);
+        SetIfMissing(nation, "Food", baseScale * OpeningFactors["Food"]);
         SeedArsenal(nation, baseScale);
     }
 
@@ -178,11 +178,28 @@ public static class StrategicStockpiles
 
     private static void SeedArsenal(Nation nation, float baseScale)
     {
-        SetIfMissing(nation, "Tanks", baseScale * 2.0f);
-        SetIfMissing(nation, "Artillery", baseScale * 2.6f);
-        SetIfMissing(nation, "Drones", baseScale * 1.6f);
-        SetIfMissing(nation, "CombatAircraft", baseScale * 1.2f);
-        SetIfMissing(nation, "Missiles", baseScale * 1.4f);
+        SetIfMissing(nation, "Tanks", baseScale * OpeningFactors["Tanks"]);
+        SetIfMissing(nation, "Artillery", baseScale * OpeningFactors["Artillery"]);
+        SetIfMissing(nation, "Drones", baseScale * OpeningFactors["Drones"]);
+        SetIfMissing(nation, "CombatAircraft", baseScale * OpeningFactors["CombatAircraft"]);
+        SetIfMissing(nation, "Missiles", baseScale * OpeningFactors["Missiles"]);
+    }
+
+    private static readonly Dictionary<string, float> OpeningFactors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Arms"] = 4.5f, ["Ammunition"] = 5f, ["Oil"] = 4.2f, ["Steel"] = 3.8f,
+        ["MotorVehicles"] = 2.4f, ["Electronics"] = 1.8f, ["Food"] = 6f,
+        ["Tanks"] = 2f, ["Artillery"] = 2.6f, ["Drones"] = 1.6f, ["CombatAircraft"] = 1.2f, ["Missiles"] = 1.4f
+    };
+
+    /// <summary>Same value Get would return, without seeding depots as a side effect
+    /// of a tooltip, panel or strike forecast. Only the simulation initializes stores.</summary>
+    public static float Peek(Campaign campaign, Nation nation, string goodId)
+    {
+        if (nation is null || string.IsNullOrEmpty(goodId)) return 0f;
+        if (nation.Stockpiles.TryGetValue(goodId, out var stored)) return MathF.Max(0, stored);
+        if (nation.StockpilesSeeded || campaign is null || !OpeningFactors.TryGetValue(goodId, out var factor)) return 0f;
+        return MathF.Max(0, MathF.Round(SeedScale(campaign, nation) * factor, 2));
     }
 
     private static float SeedScale(Campaign campaign, Nation nation)
@@ -318,7 +335,7 @@ public static class StrategicStockpiles
     }
 
     /// <summary>
-    /// Calculates the emergency import surcharge if physical stockpiles do not cover the full bill.
+    /// Read-only emergency import surcharge if physical stockpiles do not cover the full bill.
     /// Allows the player to still mobilise by buying missing equipment on the emergency market at a steep price,
     /// while draining whatever is in the depot to zero.
     /// </summary>
@@ -326,11 +343,10 @@ public static class StrategicStockpiles
     {
         shortages = new List<string>();
         if (campaign is null || nation is null || bill is null) return 0f;
-        if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
         var surcharge = 0f;
         foreach (var (goodId, needed) in bill)
         {
-            var have = Get(campaign, nation, goodId);
+            var have = Peek(campaign, nation, goodId);
             if (have >= needed) continue;
             var missing = needed - have;
             var price = CommodityCatalog.TryParse(goodId, out var comm) && nation.Market.TryGetValue(comm, out var quote) && quote.Price > 0f

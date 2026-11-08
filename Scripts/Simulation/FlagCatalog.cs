@@ -70,6 +70,7 @@ public static partial class FlagCatalog
     private static readonly List<FlagQualifier> Qualifiers = new();
     private static readonly List<string> Fallbacks = new();
     private static bool PreferMovementBase = true;
+    private static bool PreferCountryBase = true;
     private static readonly Dictionary<string, string[]> GenericCultures = new(StringComparer.OrdinalIgnoreCase);
     private static readonly Dictionary<string, string[]> GenericTags = new(StringComparer.OrdinalIgnoreCase);
 
@@ -156,9 +157,12 @@ public static partial class FlagCatalog
         Qualifiers.Clear();
         Fallbacks.Clear();
         PreferMovementBase = true;
+        PreferCountryBase = true;
         GenericCultures.Clear();
         GenericTags.Clear();
         ContextRules.Clear();
+        RegimeFlags.Clear();
+        AutomaticVariantArt.Clear();
         Identities.Clear();
         Aliases.Clear();
         Native.Clear();
@@ -180,6 +184,10 @@ public static partial class FlagCatalog
     {
         if (root.ValueKind != JsonValueKind.Object) return;
         MergeContextRules(root, errors);
+        MergeRegimeFlags(root, errors);
+        if (root.TryGetProperty("prefer_country_base", out var countryBase) &&
+            countryBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            PreferCountryBase = countryBase.GetBoolean();
         if (root.TryGetProperty("prefer_movement_base", out var movementBase) &&
             movementBase.ValueKind is JsonValueKind.True or JsonValueKind.False)
             PreferMovementBase = movementBase.GetBoolean();
@@ -421,6 +429,9 @@ public static partial class FlagCatalog
     /// the real thing.
     /// </summary>
     public static List<string> Candidates(Campaign campaign, Nation nation)
+        => AutomaticCountryVariants(campaign, nation, CollectCandidates(campaign, nation));
+
+    private static List<string> CollectCandidates(Campaign campaign, Nation nation)
     {
         var names = new List<string>();
         if (nation is null) return names;
@@ -432,6 +443,26 @@ public static partial class FlagCatalog
         {
             var custom = Slug(nation.CustomFlag);
             names.Add(custom.StartsWith("flag_", StringComparison.Ordinal) ? custom : "flag_" + custom);
+        }
+
+        AddRegimeFlags(campaign, nation, names);
+
+        // A cabinet change does not erase a country's visual identity. Keep authored
+        // national/formable/restored artwork before regime variants by default. Mods may
+        // opt into the older qualifier-first policy without changing files or save fields.
+        if (PreferCountryBase && nation.Movement is null)
+        {
+            if (FormableRestorations.RestoredTag(nation.FormedNationId) is { } identity)
+                names.Add("flag_" + Slug(identity));
+            else if (!string.IsNullOrEmpty(nation.FormedNationId))
+            {
+                names.Add($"flag_{tag}_{Slug(nation.FormedNationId)}");
+                names.Add("flag_formable_" + Slug(nation.FormedNationId));
+            }
+            else if (nation.FoundNameKind is "tag" or "free_tag" && !string.IsNullOrWhiteSpace(nation.FoundNameId))
+                names.Add("flag_" + Slug(nation.FoundNameId));
+            // Ordinary national artwork comes after exact authored regime variants below,
+            // but before borrowed aliases or generic ideology art. A nation is not frozen.
         }
 
         // A landless organisation's banner is its identity, not the hypothetical regime it
@@ -523,7 +554,7 @@ public static partial class FlagCatalog
         // being - in which case it goes to the very bottom, after everything else has had a
         // chance, because a communist banner over a conservative republic is worse than no
         // flag at all.
-        var ownFlagStillFits = Fits(campaign, nation, tag);
+        var ownFlagStillFits = PreferCountryBase && nation.Movement is null || Fits(campaign, nation, tag);
         if (ownFlagStillFits) names.Add($"flag_{tag}");
         else if (Otherwise.TryGetValue(tag, out var instead) && instead.Length > 0)
             names.Add(instead);

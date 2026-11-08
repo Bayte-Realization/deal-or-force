@@ -55,6 +55,8 @@
     "coup_foiled": 1,
     "regime_change": 4,
     "tension_eased": 2,
+    "homeland_integrated": 2,
+    "homeland_faded": 2,
     "incident": 2,
     "incident_calm": 1,
     "war_major": 2,

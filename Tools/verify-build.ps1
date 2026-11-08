@@ -7,15 +7,28 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ExportDiagnostics.ps1')
 $verificationExecutable = [IO.Path]::GetFullPath($Executable)
 if (-not (Test-Path -LiteralPath $verificationExecutable -PathType Leaf)) { throw "Missing game executable: $verificationExecutable" }
+& (Join-Path $PSScriptRoot 'Test-WindowsExecutableIdentity.ps1') -Executable $verificationExecutable
 if (-not $LogDirectory) {
     $LogDirectory = Join-Path ([IO.Path]::GetTempPath()) ('dof-export-verification-' + [Guid]::NewGuid().ToString('N'))
 }
 New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
+# Evidence may live inside a retained export staging project. Never let a later
+# export import synthetic preferences, diagnostic snapshots or screenshots.
+New-Item -ItemType File -Force -Path (Join-Path $LogDirectory '.gdignore') | Out-Null
 $stdoutPath = Join-Path $LogDirectory 'verification.stdout.log'
 $stderrPath = Join-Path $LogDirectory 'verification.stderr.log'
-$verificationProcess = Start-Process -FilePath $verificationExecutable -ArgumentList '--headless', '--', '--verify-build' `
-    -WorkingDirectory (Split-Path -Parent $verificationExecutable) -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+# A release probe changes UI preferences and creates synthetic campaigns. Keep all
+# writable output away from the player's Documents, even when called on their PC.
+$verificationDocuments = Join-Path $LogDirectory 'profile/documents'
+New-Item -ItemType Directory -Force -Path $verificationDocuments | Out-Null
+$previousDocuments = $env:DOF_VERIFICATION_DOCUMENTS
+try {
+    $env:DOF_VERIFICATION_DOCUMENTS = $verificationDocuments
+    $verificationProcess = Start-Process -FilePath $verificationExecutable -ArgumentList '--headless', '--', '--verify-build' `
+        -WorkingDirectory (Split-Path -Parent $verificationExecutable) -WindowStyle Hidden -PassThru `
+        -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+}
+finally { $env:DOF_VERIFICATION_DOCUMENTS = $previousDocuments }
 # Touch the handle now: a process started with -PassThru and waited on with WaitForExit(ms)
 # reports no exit code at all unless its handle was taken while it was running, and a
 # clean run then fails as "exit ".

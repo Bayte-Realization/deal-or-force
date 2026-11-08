@@ -139,6 +139,41 @@ public static class PeaceConference
     }
 
     /// <summary>
+    /// How much fight the other side still has, from 0 (broken) to 1 (holding its own).
+    ///
+    /// War score says who is ahead; it does not say whether the side behind could go on.
+    /// A country whose front has stopped moving, whose army is still about the size of the
+    /// enemy's, most of whose land nobody has taken and whose people still back the war gives
+    /// up the line it lost and not much more - it does not sign away its provinces because a
+    /// score says it is behind. A country whose army is gone signs what it is handed.
+    /// The same reading prices a player's demand and a computer's.
+    /// </summary>
+    public static float Resistance(Campaign campaign, StrategicWar war, int proposerId)
+    {
+        if (campaign is null || war is null || war.Ended || !war.Involves(proposerId)) return 0f;
+        var attacking = war.IsAttacking(proposerId);
+        var theirs = new HashSet<int>(war.Side(!attacking));
+        var ours = new HashSet<int>(war.Side(attacking));
+        float their = 0f, our = 0f;
+        foreach (var army in campaign.Armies)
+        {
+            var power = army.Divisions * army.Strength * army.Organisation;
+            if (!float.IsFinite(power) || power <= 0f) continue;
+            if (theirs.Contains(army.NationId)) their += power;
+            else if (ours.Contains(army.NationId)) our += power;
+        }
+        var field = their <= 0f ? 0f : M.Clamp01(their / M.Max(0.01f, our));
+        var occupied = attacking ? war.DefenderOccupiedValue : war.AttackerOccupiedValue;
+        var support = attacking ? war.DefenderWarSupport : war.AttackerWarSupport;
+        // Without an army in the field there is nothing to resist with, whatever the map and the
+        // mood say; with one, the land still its own and a people behind it decide how much.
+        var resistance = field * (0.6f * (1f - M.Clamp01(occupied * 2f)) + 0.4f * M.Clamp01(support));
+        // A front that has stopped moving is a front the other side is holding.
+        if (!war.Stalled) resistance *= 0.8f;
+        return M.Clamp01(resistance);
+    }
+
+    /// <summary>
     /// What making them answer to you is worth, in war score.
     ///
     /// The kind sets the base and their size against yours moves it, because the thing
@@ -300,6 +335,25 @@ public static class PeaceConference
     /// standing on, and a demand priced before that is a demand that gets the difference
     /// free. Tidied first, then priced, then refused if the war was not worth it.
     /// </summary>
+    /// <summary>What signed settlements contained, by who wrote them: the --peace bench reads it.</summary>
+    public static readonly Dictionary<string, int> Tally = new();
+
+    private static void Count(string who, PeaceDemand demand, StrategicWar war)
+    {
+        void Add(string key) => Tally[who + ":" + key] = Tally.TryGetValue(who + ":" + key, out var n) ? n + 1 : 1;
+        Add("signed");
+        if (demand.Provinces.Count > 0) Add(demand.ReleaseRegions ? "release" : "land");
+        if (demand.Subjugate.Length > 0) Add("subject_" + demand.Subjugate);
+        if (demand.Reparations) Add("reparations");
+        if (demand.TradeConcessions) Add("trade");
+        if (demand.Demilitarise) Add("demilitarise");
+        if (demand.Humiliate) Add("humiliate");
+        if (demand.LongTruce) Add("long_truce");
+        if (demand.Unconditional) Add("unconditional");
+        if (war.CivilConflict) Add("civil");
+        if (demand.IsEmpty) Add("empty");
+    }
+
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
         // A forged or stale recipient must not change even negotiation metadata, let alone a border.
@@ -322,6 +376,7 @@ public static class PeaceConference
         var beneficiary = Beneficiary(campaign, demand);
         var loser = campaign.NationById(war.EnemyLeaderOf(demand.ProposerId));
         if (winner is null || beneficiary is null || loser is null) return false;
+        Count(winner.IsHuman ? "human" : "ai", demand, war);
 
         // Anything not being kept goes back to whoever held it when the war began.
         if (campaign.ProvinceController is not null)
@@ -436,18 +491,17 @@ public static class PeaceConference
                     OpinionSystem.Remember(campaign, relation, "unfinished_war_claim");
             }
 
-        foreach (var army in campaign.Armies.Where(army => army.AssignedWarId == war.Id))
+        var released = campaign.Armies.Where(army => army.AssignedWarId == war.Id).ToList();
+        foreach (var army in released)
         {
-            army.AssignedWarId = -1;
-            army.OrderKind = ArmyOrder.Manual;
-            army.Route.Clear();
-            army.PlannedRoute.Clear();
-            army.MoveProgress = 0f;
+            PostwarArmyOrders.Release(army);
         }
         foreach (var battle in campaign.Battles.Where(battle => battle.WarId == war.Id && !battle.Ended))
         {
             Warfare.EndBattleWithoutVictory(campaign, battle, "Peace agreement");
         }
+        // A division on the whole front goes back to holding it if another war still has one.
+        BorderFronts.ReturnToWholeFronts(campaign, released);
 
         CapitalCore.Tick(campaign);
         campaign.MarkMapChanged();
@@ -657,6 +711,11 @@ public sealed class PeaceLedger
     private readonly Dictionary<int, Nation> _enemies = new();
     private readonly HashSet<int> _capitalStates = new();
     private bool _surveyed;
+    private float _resistance = -1f;
+
+    /// <summary>How much fight the loser still has (PeaceConference.Resistance), read once per ledger.</summary>
+    public float Resistance => _resistance >= 0f ? _resistance
+        : _resistance = PeaceConference.Resistance(_campaign, _war, _proposer?.Id ?? -1);
 
     public PeaceLedger(Campaign campaign, StrategicWar war, int proposerId, int beneficiaryId = -1)
     {
@@ -747,7 +806,12 @@ public sealed class PeaceLedger
                       _campaign.ProvinceOccupation[province] >= defines.OccupationSecureThreshold;
         if (held && secured) { cost *= defines.PeaceCostSecuredFactor; reason = "occupied and secure"; }
         else if (held) { cost *= defines.PeaceCostHeldFactor; reason = "occupied but not secure"; }
-        else { cost *= defines.PeaceCostUnheldFactor; reason = "never taken"; }
+        else
+        {
+            var resistance = Resistance;
+            cost *= defines.PeaceCostUnheldFactor * (1f + M.Max(0f, defines.PeaceResistanceUnheld) * resistance);
+            reason = resistance >= 0.5f ? "never taken, and they can still fight for it" : "never taken";
+        }
 
         // Its own ground, held by a breakaway or by the rival government in a civil war:
         // the state is reuniting itself, and a peace that writes it back is cheap.
@@ -796,7 +860,32 @@ public sealed class PeaceLedger
             reason += ", the seat of government";
         }
 
+        // A province the beneficiary cannot walk to from its own ground is an enclave: the confetti
+        // a map collects when a war is won on points. Deals already value borders this way
+        // (TerritorialCoherence.Penalty); peace demands did not, so a winner could spend its whole
+        // war score on islands of somebody else's land and call it a victory. Priced, not banned,
+        // and never charged to a state writing back its own territory in a civil war.
+        if (DetachedFromBeneficiary(_campaign, _war, beneficiary, province))
+        {
+            cost *= Math.Max(1f, defines.PeaceCostDetachedFactor);
+            reason += ", detached from our own ground";
+        }
+
         return new PeaceConference.ProvinceCost(province, cost, reason);
+    }
+
+    /// <summary>
+    /// Whether taking this province would leave the beneficiary holding a piece of ground it cannot
+    /// walk to. A country with no land of its own is not detached from it, and a civil war's map is
+    /// meant to be stitched back together patch by patch, so reclaiming is never charged for it.
+    /// </summary>
+    internal static bool DetachedFromBeneficiary(Campaign campaign, StrategicWar war, Nation beneficiary, int province)
+    {
+        var topology = campaign?.ProvinceMap;
+        if (topology is null || beneficiary is null || province <= 0 || province > topology.ProvinceCount) return false;
+        if (!campaign.HasOwnedLand(beneficiary)) return false;
+        if (war is not null && Reintegration.Reclaiming(campaign, war, beneficiary.Id)) return false;
+        return !TerritorialCoherence.TouchesOwnedGround(campaign, beneficiary, topology.ProvinceToState[province]);
     }
 
     public float Cost(PeaceDemand demand)
@@ -812,6 +901,17 @@ public sealed class PeaceLedger
             var price = Price(province, beneficiary).Cost;
             if (heldConquest.Contains(province)) heldBill += price;
             else otherBill += price;
+        }
+        // A country that can still fight gives up a quarter of itself grudgingly and half of
+        // itself not at all for ground nobody took from it: past PeaceResistanceShare of its
+        // people the price of what was not taken climbs with its resistance. What its enemy
+        // already stands on is the line and is not marked up.
+        if (otherBill > 0f && Resistance > 0f)
+        {
+            var taken = PeopleShare(demand);
+            var over = taken - M.Clamp01(defines.PeaceResistanceShare);
+            if (over > 0f)
+                otherBill *= 1f + Resistance * M.Max(0f, defines.PeaceResistanceShareWeight) * over * 4f;
         }
         // Ground the army already holds, joined to the country, has been paid for by the
         // war. Its list price must not be what sends the rest of a finished occupation
@@ -838,6 +938,27 @@ public sealed class PeaceLedger
         if (demand.Subjugate.Length > 0)
             total += PeaceConference.SubjugationCost(_campaign, beneficiary, _loser, demand.Subjugate);
         return total;
+    }
+
+    /// <summary>The share of the losing side's people the demand would take, by region population.</summary>
+    public float PeopleShare(PeaceDemand demand)
+    {
+        EnsureSurveyed();
+        var topology = _campaign.ProvinceMap;
+        if (demand is null || topology is null || _statePopulation.Count == 0) return 0f;
+        var total = 0f;
+        foreach (var population in _statePopulation.Values) total += population;
+        if (total <= 0f) return 0f;
+        var taken = 0f;
+        foreach (var province in demand.Provinces)
+        {
+            if (province <= 0 || province > topology.ProvinceCount) continue;
+            var state = topology.ProvinceToState[province];
+            if (_provincesPerState.TryGetValue(state, out var count) && count > 0 &&
+                _statePopulation.TryGetValue(state, out var population))
+                taken += population / (float)count;
+        }
+        return M.Clamp01(taken / total);
     }
 
     /// <summary>

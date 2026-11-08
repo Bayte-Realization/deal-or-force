@@ -1,9 +1,10 @@
 // A building the base game has never heard of.
 //
 // Same rule as a new good: an id the catalog has not seen is a new building if it says what
-// it costs and how long it takes. It will raise GDP and employ people immediately.
+// it costs and how long it takes. It will employ people as soon as it stands.
 //
-// It will not produce anything until some recipe names it - which is the first thing to check
+// It will not produce anything - and so add nothing to GDP, which is the market value of what
+// a country sells - until some recipe names it, which is the first thing to check
 // when a mod's new works appear to do nothing. See common/production/new_chain.json.
 
 {
@@ -11,7 +12,6 @@
     "name": "Titanium mill",
     "cost": 3.4,
     "days": 320,
-    "gdp_gain": 1.8,
     "capacity_gain": 0.07,
     "description": "Sponge and ingot out of ore, electricity and a great deal of patience."
   }

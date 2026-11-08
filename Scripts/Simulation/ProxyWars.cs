@@ -4,6 +4,40 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Proxy warfare: great powers arming, funding and advising the sides of wars they are
+/// not themselves fighting — the Cold War's answer to the nuclear wall.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the five levels of support and how the system works:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// A SPONSORSHIP is one country backing one side of one war at a level:
+///
+///   1  Advisers    — a handful of officers and money for the client.
+///   2  Weapons     — advisers plus arms and ammunition from the sponsor's depots.
+///   3  At scale    — the sponsor ships a real share of its own depot intake.
+///   4  Volunteers  — "vacationing" citizens arrive as trained men.
+///   5  Expedition  — the sponsor's own formations, deniably.
+///
+/// WHAT ARRIVES: money (ProxyMoneyShare of the cost), equipment (weapons and
+/// ammunition from the sponsor's StrategicStockpiles — a war fought on foreign
+/// shells runs dry when the shells stop), and at higher levels, volunteers.
+///
+/// WHAT IT COSTS: ProxyCostShare of the sponsor's GDP a week, at least
+/// ProxyMinimumCost. Unpaid for ProxyUnpaidWeeks and the support lapses.
+///
+/// THE AI decides: which wars to back (ProxyAiInterest — how interested it must
+/// be in the outcome), when to stop (ProxyAiStopInterest), and how many backers
+/// one side may have (ProxyAiBackersPerSide — no world war by proxy accident).
+///
+/// TO CHANGE THE WORLD:
+///   • Make proxy wars cheaper → lower ProxyCostShare and ProxyMinimumCost.
+///   • Make sponsors more cautious → raise ProxyAiInterest and lower the rebel cap.
+///   • Let the world flood a rebellion with weapons → raise ProxyAiBackersPerSide.
+///   • Cut off all foreign backing → set ProxyAiMinimumGdp to 0 and ProxyAiInterest to 10.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>How often sponsorships deliver, in days.</summary>
@@ -46,6 +80,14 @@ public sealed partial class Defines
     public float ProxyRebelReluctance { get; set; } = 0.6f;
     public float ProxyRebelGreatPowerFear { get; set; } = 0.8f;
     public int ProxyRebelMaximumLevel { get; set; } = 1;
+    /// <summary>
+    /// What it adds to a sponsor's interest that the side it might arm governs by its own
+    /// ideology, professes its declared faith, or is its own people - each only when the enemy
+    /// does not share it (ProxyWars.Kinship). 0 turns that tie off.
+    /// </summary>
+    public float ProxyCreedInterest { get; set; } = 0.35f;
+    public float ProxyFaithInterest { get; set; } = 0.30f;
+    public float ProxyKinInterest { get; set; } = 0.45f;
 }
 
 /// <summary>One country backing one side of somebody else's war, without fighting in it.</summary>
@@ -398,6 +440,35 @@ public static class ProxyWars
         return false;
     }
 
+    /// <summary>
+    /// What a shared creed, faith or people adds to a sponsor's wish to see a side win, when the
+    /// other side does not share it: Iran and the Shia militias, Moscow and the Bolsheviks'
+    /// heirs, Armenia and Karabakh, Russia and the Donbas, Turkey and the Turkmen of Syria. A
+    /// state where a creed rules backs the people who fight for that creed elsewhere - more so
+    /// when the side is a minority rising or a revolution inside a state of another creed,
+    /// because that is the war in which nobody else will. Read off what both sides are right
+    /// now, the same for every country; a sponsor sharing the creed with both sides gains nothing.
+    /// </summary>
+    public static float Kinship(Campaign c, Nation sponsor, Nation client, Nation enemy)
+    {
+        if (c is null || sponsor is null || client is null || enemy is null) return 0f;
+        var d = c.Defines;
+        var bonus = 0f;
+        if (!string.IsNullOrEmpty(sponsor.Ideology) &&
+            string.Equals(sponsor.Ideology, client.Ideology, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(sponsor.Ideology, enemy.Ideology, StringComparison.OrdinalIgnoreCase))
+            bonus += d.ProxyCreedInterest;
+        if (StateIdentity.ShareDeclaredFaith(sponsor, client) && !StateIdentity.ShareDeclaredFaith(sponsor, enemy))
+            bonus += d.ProxyFaithInterest;
+        var ours = DemographyCatalog.PrimaryCulture(sponsor.Tag);
+        var theirs = client.FoundedCultures.Count > 0 ? client.FoundedCultures[0] : DemographyCatalog.PrimaryCulture(client.Tag);
+        var enemies = enemy.FoundedCultures.Count > 0 ? enemy.FoundedCultures[0] : DemographyCatalog.PrimaryCulture(enemy.Tag);
+        if (!string.IsNullOrEmpty(ours) && string.Equals(ours, theirs, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(ours, enemies, StringComparison.OrdinalIgnoreCase))
+            bonus += d.ProxyKinInterest;
+        return float.IsFinite(bonus) ? bonus : 0f;
+    }
+
     /// <summary>How much this sponsor wants that client to beat that enemy.</summary>
     /// <summary>Whether this side of a war is a rebellion against that state: a breakaway, a rising, a faction.</summary>
     public static bool IsRebel(Nation client, Nation state) =>
@@ -442,6 +513,7 @@ public static class ProxyWars
 
         var ideology = PoliticsCore.IdeologicalDistance(sponsor, enemy) - PoliticsCore.IdeologicalDistance(sponsor, client);
         interest += ideology * (war.CivilConflict ? 0.6f : 0.3f);
+        interest += Kinship(c, sponsor, client, enemy);
 
         var near = CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, client.MapIndex) ||
                    CampaignDiplomacy.SharesLandBorder(c, sponsor.MapIndex, enemy.MapIndex) ||

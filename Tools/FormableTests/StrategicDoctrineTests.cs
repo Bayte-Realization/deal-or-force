@@ -49,10 +49,11 @@ static class StrategicDoctrineTests
                 Check(TacticalDoctrineCatalog.Find(doctrine.TacticalBias) is not null,
                     $"'{doctrine.Id}' leans on a tree that is written");
         }
-        // Every tactical tree has a strategic sponsor: the two layers are one system, not two.
+        // A tactical book has a strategic sponsor or an authored AI-character route. New books
+        // need not multiply the country's mutually exclusive grand strategies to be reachable.
         foreach (var branch in TacticalDoctrineCatalog.All)
-            Check(all.Any(doctrine => doctrine.TacticalBias == branch.Id),
-                $"the tactical tree '{branch.Id}' has a strategy that leads to it");
+            Check(all.Any(doctrine => doctrine.TacticalBias == branch.Id) || branch.AiProfiles.Values.Any(weight => weight > 0f),
+                $"the tactical tree '{branch.Id}' has a strategy or character that leads to it");
 
         // A mod writes a strategy in the same shape; a broken one is refused whole, by name.
         var errors = new List<string>();

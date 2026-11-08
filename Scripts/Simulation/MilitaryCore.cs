@@ -539,11 +539,10 @@ public sealed class RaiseArmyCommand : ICampaignCommand
         nation.Treasury -= cost;
         nation.ManpowerReserve -= template.RecruitmentPersonnel * count;
 
-        if (Mode != MobilisationMode.Standard || nation.StockpilesSeeded)
-        {
-            var bill = StrategicStockpiles.DivisionMaterialBill(template, count, Mode);
-            StrategicStockpiles.ConsumeBill(campaign, nation, bill);
-        }
+        // Quoting is read-only. Successful admission is where every posture initializes
+        // and consumes its physical depot bill, including the first standard batch.
+        var bill = StrategicStockpiles.DivisionMaterialBill(template, count, Mode);
+        StrategicStockpiles.ConsumeBill(campaign, nation, bill);
         if (Mode == MobilisationMode.RapidCallUp)
         {
             nation.Stability = M.Clamp(nation.Stability - campaign.Defines.RapidCallUpStabilityPerDivision * count, 0.05f, 1f);
@@ -614,6 +613,11 @@ public sealed class SplitArmyCommand : ICampaignCommand
             SupplyCongestion = army.SupplyCongestion,
             CutOff = army.CutOff,
             DaysCutOff = army.DaysCutOff,
+            // A detachment is still in the same pocket, on the same stores.
+            PocketStores = army.PocketStores,
+            PocketSinceDay = army.PocketSinceDay,
+            HoldoutSinceDay = army.HoldoutSinceDay,
+            ReliefDistance = army.ReliefDistance,
             ReadyDay = army.ReadyDay,
             Latitude = army.Latitude,
             Longitude = army.Longitude
@@ -630,6 +634,15 @@ public static class MilitaryOperations
     /// one use.
     /// </summary>
     private static readonly Dictionary<int, float> ReinforcementWeights = new();
+
+    /// <summary>
+    /// Bench hook for the isolation harness: when set, fires once per march increment for
+    /// the formation named by <see cref="MarchProbeArmyId"/> with every factor of the
+    /// step's speed, so a two-campaign divergence names the multiplier that parted rather
+    /// than only the progress it left behind. Null in the game; allocation only while armed.
+    /// </summary>
+    internal static Action<Campaign, Army, string> MarchProbe;
+    internal static int MarchProbeArmyId = -1;
 
     public static void Tick(Campaign campaign)
     {
@@ -667,7 +680,8 @@ public static class MilitaryOperations
                 var recovery = campaign.Defines.OrganisationRecoveryPerDay * campaign.TickScale *
                     MilitaryDoctrine.Recovery(army.Stance) *
                     M.Clamp(0.20f + army.SupplyLevel * 0.80f, 0.15f, 1f) *
-                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery");
+                    NationalModifiers.Factor(campaign.NationById(army.NationId), "organisation_recovery") *
+                    DefconSystem.ReadinessRecoveryMultiplier(campaign, army.NationId);
                 if (army.OrderKind == ArmyOrder.ReserveFront) recovery *= 1.25f;
                 // A closed pocket is living on what it carried. Rest would put the day's
                 // organisation straight back, and the dry-out would never arrive.
@@ -726,16 +740,23 @@ public static class MilitaryOperations
             }
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
             var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength);
+            var marchSupply = M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f);
+            var cutOffSlow = army.CutOff && army.DaysCutOff > 3 ? (army.DaysCutOff >= 10 ? 0.20f : 0.35f) : 1.0f;
+            var terrainSpeed = topology.TerrainAt(nextProvince).MovementSpeed;
+            var redeploySpeed = StrategicRedeployment.DayOf(campaign, army);
+            var nationSpeed = NationalModifiers.Factor(nation, "army_speed");
+            // And on roads: the march is through friendly ground, and a
+            // region with a network of them is crossed faster than one without.
+            var roadSpeed = MovementPace.Roads(campaign, nextProvince);
+            var doctrineSpeed = MilitaryDoctrine.Movement(army.Stance, campaign.Defines);
             army.MoveProgress += campaign.Defines.MarchProgressPerDay * campaign.TickScale * template.Speed *
-                MilitaryDoctrine.Movement(army.Stance, campaign.Defines) *
-                M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f) * riverMovement *
-                (army.CutOff && army.DaysCutOff > 3 ? (army.DaysCutOff >= 10 ? 0.20f : 0.35f) : 1.0f) *
-                topology.TerrainAt(nextProvince).MovementSpeed *
-                StrategicRedeployment.DayOf(campaign, army) *
-                NationalModifiers.Factor(nation, "army_speed") *
-                // And on roads: the march is through friendly ground, and a
-                // region with a network of them is crossed faster than one without.
-                MovementPace.Roads(campaign, nextProvince);
+                doctrineSpeed * marchSupply * riverMovement * cutOffSlow *
+                terrainSpeed * redeploySpeed * nationSpeed * roadSpeed;
+            if (MarchProbe is not null && army.Id == MarchProbeArmyId)
+                MarchProbe(campaign, army,
+                    $"spd={template.Speed:R}|doc={doctrineSpeed:R}|" +
+                    $"sup={marchSupply:R}|riv={riverMovement:R}|cut={cutOffSlow:R}|ter={terrainSpeed:R}|" +
+                    $"red={redeploySpeed:R}|nat={nationSpeed:R}|road={roadSpeed:R}|mv={army.MoveProgress:R}");
             if (army.MoveProgress < 1f) continue;
             army.MoveProgress -= 1f;
             army.ProvinceId = army.Route[0];
@@ -834,9 +855,11 @@ public static class MilitaryOperations
     /// <summary>
     /// Whether a formation is in a state to receive replacements at all. The weighting and
     /// the payout have to agree on this, or capacity is allotted where it cannot be spent.
+    /// A formation in a pocket takes none: it may be fed from the stores where it stands
+    /// (StrandedGarrisons), which keeps its supply up, but no draft reaches it through the ring.
     /// </summary>
     private static bool CanTakeReplacements(Army army) =>
-        !army.InBattle && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
+        !army.InBattle && !army.CutOff && army.Divisions > 0f && army.Strength < 0.9999f && army.SupplyLevel >= 0.22f;
 
     private static void Reinforce(Campaign campaign, Army army, float totalWeight)
     {
@@ -1186,6 +1209,12 @@ public sealed class SetArmyOrderCommand : ICampaignCommand
                     : heldPost > 0
                         ? PostNear(campaign, army, Order, orderedFront, war.Id, heldPost)
                         : PostOnTheLine(campaign, army, Order, orderedFront, war.Id);
+        // A post on the whole front belongs to the war against whoever it faces, not to the
+        // war nearest where the division happened to be standing when it was told: so the
+        // division is counted, supported and - when that war alone ends - stood down with the
+        // right war. Every other line keeps the war worked out above.
+        if (drawn is { AllEnemies: true } && target > 0 &&
+            BorderFronts.WarAt(campaign, IssuerId, target) is { } facing) war = facing;
         var targetIsHostile = target > 0 && WarCoalition.HostileController(campaign, war, army.NationId, controllers[target]);
         var plannedRoute = target < 0
             ? Array.Empty<int>()

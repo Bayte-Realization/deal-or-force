@@ -108,6 +108,24 @@ static class KinStatecraftTests
         {
             DeclareCatalog();
 
+            // Many cohort rows describe the same culture. Candidate selection must not
+            // depend on whether a mod stores 1 row or 1,500 class/sector/religion rows.
+            var compact = Fixture(out _, out _, out _, out _);
+            var expectedScan = KinStatecraft.ScanSummary(compact);
+            var dense = Fixture(out var denseCountry, out _, out var denseRegion, out _);
+            var english = denseRegion.PopulationGroups.Where(g => g.Culture == "english").ToArray();
+            var people = english.Sum(g => g.Size);
+            foreach (var group in english) denseRegion.PopulationGroups.Remove(group);
+            for (var row = 0; row < 1500; row++)
+                denseRegion.PopulationGroups.Add(new PopulationGroup { Culture = "english",
+                    Size = people / 1500 + (row < people % 1500 ? 1 : 0) });
+            var denseHash = CampaignFingerprint.Of(dense);
+            Check(KinStatecraft.ScanSummary(dense) == expectedScan,
+                "splitting identical cultures into 1500 cohort rows preserves exact candidate order, hosts and shares");
+            Check(KinStatecraft.LastScanKinEvaluations <= 3,
+                "monthly scan evaluates each foreign country/region pair once, not once per cohort");
+            Check(CampaignFingerprint.Of(dense) == denseHash, "dense monthly candidate scan changes no saved state or RNG");
+
         // ---- measuring: ours are ours, theirs are not --------------------------------
         {
             var c = Fixture(out var ours, out var host, out var abroad, out var home);
@@ -251,6 +269,17 @@ static class KinStatecraftTests
             Check(abroad.Radicalism > beforeUnrest, "the ground sours while nobody can see who is doing it");
             Check(abroad.AdministrationTaken > 0f, "and what has been taken is recorded for the panel");
             Check(ParallelAdministration.Describe(c, abroad).Length > 0, "the region can say who runs its paperwork");
+            var fullUpkeep = ParallelAdministration.WeeklyUpkeep(c, ours, abroad);
+            var fullTake = ParallelAdministration.WeeklyTake(c, host, abroad);
+            abroad.AdministrationPopulationShare = .25f;
+            Check(Math.Abs(ParallelAdministration.WeeklyUpkeep(c, ours, abroad) - fullUpkeep * .25f) < .000001f &&
+                Math.Abs(ParallelAdministration.WeeklyTake(c, host, abroad) - fullTake * .25f) < .000001f,
+                "local office upkeep and levy scale with covered residents rather than the whole reunited region");
+            var limitedCash = host.Treasury;
+            c.Defines.KinAdminDiscovery = 0;
+            ParallelAdministration.TickWeek(c);
+            Check(Math.Abs((limitedCash - host.Treasury) - (fullTake + fullUpkeep) * .25f) < .00001f,
+                "the actual weekly office tick charges only its local share");
 
             Check(KinStatecraft.Refusal(c, ours, abroad, "open_administration").Length > 0,
                 "a second administration in the same region is refused");
@@ -258,6 +287,40 @@ static class KinStatecraftTests
             Check(!ParallelAdministration.Any(abroad), "after which the region is the host's paperwork again");
             Check(KinStatecraft.Refusal(c, ours, abroad, "close_administration").Length > 0,
                 "with nothing left to close");
+        }
+
+        // ---- an office is a foothold for years, not a countdown for months -------------
+        // Ten years of the bench opened sixteen offices and had sixteen of them found, because
+        // the weekly chance was one constant. It now moves with two things a player can see:
+        // how closely the host can watch, and how well our own people cover the paperwork.
+        {
+            var c = Fixture(out var ours, out var host, out var abroad, out _, ourShareAbroad: 0.5f,
+                oursTreasury: 20f, ourPoliticalPoints: 40f);
+            var (_, _, share) = KinStatecraft.Kin(c, ours, abroad);
+            host.Stability = 0.9f;
+            var watchful = ParallelAdministration.Watchfulness(c, host, share);
+            host.Stability = 0.15f;
+            var distracted = ParallelAdministration.Watchfulness(c, host, share);
+            Check(watchful > distracted,
+                "a stable host watches our offices more closely than one coming apart");
+            Check(ParallelAdministration.Watchfulness(c, host, 0.85f) < ParallelAdministration.Watchfulness(c, host, 0.26f),
+                "our offices hide better where our people are the region");
+
+            host.Stability = 0.6f;
+            var typical = ParallelAdministration.Watchfulness(c, host, 0.35f);
+            Check(typical > 0f && 1f / typical > 80f,
+                $"a typical office is expected to last years ({1f / typical / 52f:0.0} of them), not months");
+
+            host.Stability = 0.2f;
+            var durable = ParallelAdministration.Watchfulness(c, host, 0.8f);
+            Check(durable > 0f && 1f / durable > 150f,
+                $"and among our own majority under a collapsing host it lasts {(1f / durable) / 52f:0.0} years");
+
+            var before = ParallelAdministration.Watchfulness(c, host, 0.3f);
+            c.Defines.KinAdminDiscovery *= 2f;
+            Check(Math.Abs(ParallelAdministration.Watchfulness(c, host, 0.3f) - before * 2f) < 1e-6f,
+                "the configured base rate is the risk: doubling it in the defines doubles the chance");
+            c.Defines.KinAdminDiscovery /= 2f;
         }
 
         // ---- being caught, and being shut ---------------------------------------------

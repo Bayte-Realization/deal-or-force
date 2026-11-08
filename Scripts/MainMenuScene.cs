@@ -46,6 +46,9 @@ public enum MenuIntent
 /// </summary>
 public partial class MainMenuScene : Control
 {
+    /// <summary>Where the memory is (MemoryReport), for tools that drive the front door.</summary>
+    public string MemoryReport(int top = 25) => DealOrForce.MemoryReport.Build(top);
+
     /// <summary>What the player asked for, read and cleared by the campaign scene.</summary>
     public static MenuIntent Wanted = MenuIntent.None;
 
@@ -75,6 +78,8 @@ public partial class MainMenuScene : Control
         Name = "MainMenu";
         ApplicationExit.Ensure(this);
         WrapGuard.Install(GetTree());
+        ButtonMotion.Install(GetTree());
+        TooltipKeeper.Install(GetTree());
         ControlSkin.Apply();
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         // No campaign here: a campaign option set from this screen is where new ones start.

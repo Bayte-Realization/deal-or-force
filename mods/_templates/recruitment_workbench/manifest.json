@@ -1,0 +1,7 @@
+{
+  "id": "example_recruitment_workbench",
+  "name": "Roomier recruitment workbench",
+  "version": "1.0.0",
+  "enabled": false,
+  "load_order": 100
+}

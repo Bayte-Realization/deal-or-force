@@ -8,6 +8,7 @@ namespace DealOrForce;
 public partial class DealOrForceGame
 {
     private readonly List<StatReadout> _hudStats = new();
+    private Button _defconBadge;
     private VBoxContainer _identityPortraitSlot;
     private string _identityPortraitLeaderKey = "";
 
@@ -28,7 +29,7 @@ public partial class DealOrForceGame
         style.SetCornerRadiusAll(3);
         style.SetContentMarginAll(1);
         panel.AddThemeStyleboxOverride("panel", style);
-        if (panel.GetNodeOrNull<AtlasPanelFinish>("AtlasMaterial") is { } finish) finish.Visible = false;
+        if (panel.GetNodeOrNull<AtlasPanelFinish>("AtlasMaterial") is { } finish) finish.Visible = true;
     }
 
     private static StyleBoxFlat HudButtonStyle(bool primary, int state, bool compact, bool quiet = false)
@@ -68,15 +69,18 @@ public partial class DealOrForceGame
         var iconOnly = button.Icon is not null && string.IsNullOrEmpty(button.Text);
         var above = button.HasMeta("icon_above") && button.GetMeta("icon_above").AsBool();
         var compact = iconOnly || above || button.HasMeta("navigation_short");
-        button.AddThemeStyleboxOverride("normal", HudButtonStyle(primary, 0, compact, quiet));
-        button.AddThemeStyleboxOverride("hover", HudButtonStyle(primary, 1, compact, quiet));
-        button.AddThemeStyleboxOverride("pressed", HudButtonStyle(primary, 2, compact, quiet));
-        button.AddThemeStyleboxOverride("disabled", HudButtonStyle(primary, 3, compact, quiet));
+        var normal = HudButtonStyle(primary, 0, compact, quiet);
+        button.AddThemeStyleboxOverride("normal", quiet && !primary ? normal : InstrumentMaterials.Face(normal));
+        button.AddThemeStyleboxOverride("hover", InstrumentMaterials.Face(HudButtonStyle(primary, 1, compact, quiet)));
+        button.AddThemeStyleboxOverride("pressed", InstrumentMaterials.Face(HudButtonStyle(primary, 2, compact, quiet), inset: true));
+        button.AddThemeStyleboxOverride("hover_pressed", InstrumentMaterials.Face(HudButtonStyle(primary, 2, compact, quiet), inset: true));
+        button.AddThemeStyleboxOverride("disabled", InstrumentMaterials.Face(HudButtonStyle(primary, 3, compact, quiet), disabled: true));
     }
 
     private static void StyleCampaignNavigationButton(Button button, bool selected)
     {
-        StyleHudButton(button, selected, true);
+        // Navigation always looks clickable, including its resting state.
+        StyleHudButton(button, selected, false);
         button.AddThemeColorOverride("font_color", Ui.Colour(selected ? "button.text_hover" : "text.body_soft"));
         button.AddThemeColorOverride("icon_normal_color", Ui.Colour(selected ? "text.accent" : "text.muted"));
         button.AddThemeColorOverride("icon_hover_color", Ui.Colour("text.accent"));
@@ -102,7 +106,19 @@ public partial class DealOrForceGame
 
         // Whose war this is, said in the one way that needs no reading.
         _identityFlag = FlagBadge(_campaign?.Player?.Tag ?? "", 34);
-        row.AddChild(_identityFlag);
+        // The flag takes the map home: the capital, framed - what a player reaches for after
+        // a long look at the other side of the world (also the Home key).
+        _identityFlag.MouseFilter = MouseFilterEnum.Stop;
+        _identityFlag.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _identityFlag.TooltipText = Ui.Tip(Tr("Show my capital on the map (Home)."));
+        _identityFlag.GuiInput += input =>
+        {
+            if (input is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left }) return;
+            PlayStrategicCue("ui_select");
+            FocusOwnCapital();
+            _identityFlag.AcceptEvent();
+        };
+        row.AddChild(RankedFlag(_identityFlag, "HudCountryRank", () => _campaign?.Player));
 
         _identityPortraitSlot = new VBoxContainer { SizeFlagsVertical = SizeFlags.ShrinkCenter };
         row.AddChild(_identityPortraitSlot);
@@ -137,6 +153,14 @@ public partial class DealOrForceGame
         _identityTag.AutowrapMode = TextServer.AutowrapMode.Off;
         _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
+
+        _defconBadge = ActionButton("DEFCON 5", OpenDefconOverview, 84, 28);
+        _defconBadge.Name = "HudDefconBadge";
+        _defconBadge.ClipText = true;
+        _defconBadge.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        _defconBadge.TooltipText = Ui.Tip(Tr("Global Defense Readiness Condition (DEFCON). Click to inspect nuclear posture, active hotspots and readiness effects."));
+        StyleHudButton(_defconBadge, false);
+        row.AddChild(_defconBadge);
 
         var stats = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _hudStatRow = stats;
@@ -285,10 +309,14 @@ public partial class DealOrForceGame
         _identityTag.Text = _observerMode
             ? Tr("Observer mode")
             : !string.IsNullOrEmpty(leader.Name)
-                ? $"{player.Tag} · {leader.Name}"
-                : player.Tag + " · " + Tr("player nation");
-        _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}");
+                ? leader.Name
+                : Tr("player nation");
+        if (SettingsCatalog.Flag("show_country_tags")) _identityTag.Text = player.Tag + " · " + _identityTag.Text;
+        _identityTag.TooltipText = _observerMode ? "" : Ui.Tip($"{Tr(leader.Title)}: {leader.Name}\n{Tr("Trait")}: {Tr(leader.TraitName)}\n" +
+            Loc.Format("Country code (saves and mods): {0}", player.Tag));
+        _identity.TooltipText = Ui.Tip(player.DisplayName + "\n" + Loc.Format("Country code (saves and mods): {0}", player.Tag));
         SetFlag(_identityFlag, player.Tag, 34);
+        RefreshCountryRankBadges();
         if (_identityPortraitSlot is not null)
         {
             var portraitKey = _observerMode ? "obs" : $"{player.Tag}:{leader.Name}:{leader.Age}:{player.Color}";
@@ -314,6 +342,16 @@ public partial class DealOrForceGame
             ? "The calendar. Seasons are switched off, so the roads do not care what month it is."
             : "The season follows the calendar and this capital's latitude. Winter slows roads away from the equator.");
         _date.MouseFilter = MouseFilterEnum.Stop;
+
+        if (_defconBadge is not null && _campaign is not null)
+        {
+            // A scenario without the nuclear age shows no ladder at all, not a DEFCON 5 nobody can change.
+            _defconBadge.Visible = DefconSystem.Enabled(_campaign);
+            var defcon = DefconSystem.CurrentLevel(_campaign);
+            _defconBadge.Text = $"DEFCON {defcon}";
+            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign));
+            _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
+        }
 
         var day = _campaign.ElapsedDays;
         _treasuryTrend.Sample(day, player.Treasury);
@@ -520,8 +558,11 @@ public partial class DealOrForceGame
         if (stat?.Box is null || open is null) return;
         stat.Box.FocusMode = FocusModeEnum.All;
         stat.Box.MouseDefaultCursorShape = CursorShape.PointingHand;
-        stat.Value.MouseFilter = MouseFilterEnum.Pass;
-        stat.Delta.MouseFilter = MouseFilterEnum.Pass;
+        stat.Box.SizeFlagsVertical = SizeFlags.ExpandFill;
+        // One hit target for the whole instrument, including caption, blank
+        // padding and sparkline. A nested Control must not swallow its click.
+        foreach (var child in stat.Box.FindChildren("*", "Control", true, false))
+            if (child is Control control) control.MouseFilter = MouseFilterEnum.Ignore;
         stat.Box.GuiInput += input =>
         {
             if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } ||
@@ -643,11 +684,14 @@ public partial class DealOrForceGame
         stat.Value.Text = compact;
         stat.Exact = exact ?? "";
         stat.Value.TooltipText = Ui.Tip(stat.Exact);
-        stat.Value.MouseFilter = MouseFilterEnum.Stop;
+        stat.Value.MouseFilter = MouseFilterEnum.Ignore;
         stat.FullDelta = delta;
         stat.ShortDelta = shortDelta ?? delta;
         stat.Delta.TooltipText = Ui.Tip(delta);
-        stat.Delta.MouseFilter = MouseFilterEnum.Stop;
+        stat.Delta.MouseFilter = MouseFilterEnum.Ignore;
+        stat.Box.Plain = Tr(stat.CountryCaption) + "\n" + stat.Exact +
+            (string.IsNullOrEmpty(delta) ? "" : "\n" + delta);
+        stat.Box.TooltipText = Ui.Tip(stat.Box.Plain);
         stat.Delta.AddThemeColorOverride("font_color", direction switch
         {
             > 0 => Ui.Colour("state.positive"),

@@ -66,7 +66,7 @@ public static class SaveSystem
     public const int FormatVersion = 2;
     public const string GameVersion = GameBuildInfo.Version;
     // Bumped whenever provinces.png is recut: a save's province ids mean nothing on another cut.
-    public const string MapDataVersion = "2024.10.06-a";
+    public const string MapDataVersion = "2024.11.03-a";
     public const string QuickSlot = "quicksave";
     public const string AutoSlot = "autosave";
 
@@ -178,7 +178,8 @@ public static class SaveSystem
             payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
             payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
             throw new InvalidDataException("Scenario requires a complete political layer for the current map.");
-        _ = new DateTime(payload.Date.Year, payload.Date.Month, payload.Date.Day);
+        if (!HistoricalDate.TryCreate(payload.Date.Year, payload.Date.Month, payload.Date.Day, out _))
+            throw new InvalidDataException("Choose a valid calendar date (astronomical years -9999 to 9999).");
         if (payload.Nations.Count == 0 || !payload.Nations.Any(n => n.Id == payload.PlayerId) ||
             payload.Nations.Select(n => n.Id).Distinct().Count() != payload.Nations.Count ||
             payload.Nations.Select(n => n.MapIndex).Distinct().Count() != payload.Nations.Count ||
@@ -238,6 +239,10 @@ public static class SaveSystem
         // The format is the campaign's own define, so every caller - the save screen, the
         // console, the autosave - writes the same way without each having to be told.
         var text = campaign.Defines.SaveTextFormat;
+        // Every country on its shelves before it is written, as the load will put it: a country
+        // born during the campaign whose doctrine nobody had read yet was saved with the flag
+        // unset and loaded with it set, so a save did not load as the campaign it was.
+        foreach (var n in campaign.Nations) TacticalDoctrines.EnsureShelves(n);
         CampaignSave payload;
         using (SimProfiler.Measure("  save:capture"))
             payload = CampaignSave.Capture(campaign, modFingerprint);
@@ -422,8 +427,8 @@ public static class SaveSystem
         /// <summary>
         /// Write the history and selected format. Safe on any thread: it reads
         /// nothing but its own bytes and its own copy of the history.
-        /// An autosave is compressed for speed rather than for size - a tenth larger, in less
-        /// than half the time - because it is taken every month and read almost never.
+        /// The normal compressor balances speed and size for manual AND automatic saves.
+        /// Thorough compression is an explicit opt-in, never an implicit cost of clicking Save.
         /// </summary>
         public SaveMetadata Commit()
         {
@@ -456,8 +461,7 @@ public static class SaveSystem
             using (var memory = new MemoryStream())
             {
                 memory.Write(System.Text.Encoding.ASCII.GetBytes(brotliMagic));
-                using (var brotli = new BrotliStream(memory,
-                           Metadata.IsAutosave && !_thorough ? CompressionLevel.Optimal : CompressionLevel.SmallestSize, true))
+                using (var brotli = new BrotliStream(memory, StorageCompression(_thorough), true))
                     brotli.Write(json);
                 compressed = memory.ToArray();
             }
@@ -520,7 +524,7 @@ public static class SaveSystem
         }
     }
 
-    public static SaveLoadResult Load(string root, string slot, string activeModFingerprint)
+    public static SaveLoadResult Load(string root, string slot, string activeModFingerprint, int activeProvinceCount = 0)
     {
         slot = SafeSlot(slot);
         var dataPath = ExistingDataPath(root, slot);
@@ -572,6 +576,12 @@ public static class SaveSystem
         if (!string.Equals(payload.MapDataVersion, MapDataVersion, StringComparison.Ordinal))
             return new SaveLoadResult(null, metadata,
                 $"This save uses map data '{payload.MapDataVersion}', but the active map is '{MapDataVersion}'.");
+        // Saves written before the version was always stored read back as the current version;
+        // the province count still tells a save of another map apart.
+        if (activeProvinceCount > 0 && payload.ProvinceCount > 0 && payload.ProvinceCount != activeProvinceCount)
+            return new SaveLoadResult(null, metadata, Loc.Format(
+                "This save was made on another map ({0:N0} provinces; this map has {1:N0}). Start a new campaign.",
+                payload.ProvinceCount, activeProvinceCount));
         if (payload.ProvinceCount <= 0 ||
             payload.ProvinceController.Length != payload.ProvinceCount + 1 ||
             payload.ProvinceOccupation.Length != payload.ProvinceCount + 1)
@@ -591,6 +601,9 @@ public static class SaveSystem
             // must keep the colours that host actually sent, not run its own migration.
             SecessionColours.MigrateLegacy(campaign);
             NationNaming.MigrateLegacy(campaign);
+            // A save written before the world's resources (grain, fabs, potash...) has none of
+            // their deposits; seed them from the 2024 overlay so it does not open in a famine.
+            WorldResourceMigration.Apply(campaign);
             // A save written before the shelves existed carries one book of war; it moves onto
             // the shelf its own service belongs to before anything reads it.
             foreach (var n in campaign.Nations) TacticalDoctrines.EnsureShelves(n);
@@ -746,6 +759,12 @@ public static class SaveSystem
 
     private const string BrotliMagic = "BDF2";
 
+    // Keep this policy independent of autosave metadata. Previously every manual save
+    // selected quality 11 even with SaveCompressionThorough=false: a 2039 campaign
+    // spent 110 seconds in Commit. File format and losslessness are unchanged.
+    internal static CompressionLevel StorageCompression(bool thorough) =>
+        thorough ? CompressionLevel.SmallestSize : CompressionLevel.Optimal;
+
     private static bool IsBrotli(byte[] stored) =>
         stored is { Length: >= 4 } && System.Text.Encoding.ASCII.GetString(stored, 0, 4) == BrotliMagic;
 
@@ -874,6 +893,7 @@ public static class SaveSystem
         public Dictionary<string, string> FeatureCommands;
         public Dictionary<string, string> FeatureScreens;
         public Dictionary<string, string> FeatureSystems;
+        public Dictionary<string, string> FeatureDefines;
         public Dictionary<string, bool> FeatureOverrides = new();
         public Dictionary<string, int[]> ScenarioTerritories = new();
         public GameDate Date;
@@ -902,6 +922,8 @@ public static class SaveSystem
         public bool InitialDeploymentCompleted;
         public List<int> HumanSeats = new();
         public List<Nation> Nations = new();
+        // ScenarioState fields include optional local administration footprints;
+        // omitted fields in older v2 saves retain whole-region coverage defaults.
         public List<ScenarioState> States = new();
         public List<Army> Armies = new();
         public List<RecruitmentOrder> Recruitment = new();
@@ -928,6 +950,9 @@ public static class SaveSystem
         public int NextLeaseOfferId = 1;
         public float WorldLeverage = -1f;
         public int LastFinancialCrisisDay = -100000;
+        public int DefconLevel = 5;
+        public int DefconDaysInStage;
+        public int DefconPeakLevel = 5;
         public List<ForeignAssistanceRequest> AssistanceRequests = new();
         public List<ForeignAssistanceCooldown> AssistanceCooldowns = new();
         public int NextAssistanceRequestId = 1;
@@ -1030,6 +1055,7 @@ public static class SaveSystem
             FeatureCommands = new Dictionary<string, string>(campaign.Defines.FeatureCommands),
             FeatureScreens = new Dictionary<string, string>(campaign.Defines.FeatureScreens),
             FeatureSystems = new Dictionary<string, string>(campaign.Defines.FeatureSystems),
+            FeatureDefines = new Dictionary<string, string>(campaign.Defines.FeatureDefines),
             FeatureOverrides = new Dictionary<string, bool>(campaign.FeatureOverrides),
             IsPaused = campaign.IsPaused,
             RandomState = campaign.Random.State,
@@ -1063,6 +1089,9 @@ public static class SaveSystem
             NextLeaseOfferId = campaign.NextLeaseOfferId,
             WorldLeverage = campaign.WorldLeverage,
             LastFinancialCrisisDay = campaign.LastFinancialCrisisDay,
+            DefconLevel = campaign.DefconLevel,
+            DefconDaysInStage = campaign.DefconDaysInStage,
+            DefconPeakLevel = campaign.DefconPeakLevel,
             AssistanceRequests = campaign.AssistanceRequests.Select(ForeignAssistance.Copy).ToList(),
             AssistanceCooldowns = campaign.AssistanceCooldowns.Select(ForeignAssistance.Copy).ToList(),
             NextAssistanceRequestId = campaign.NextAssistanceRequestId,
@@ -1113,8 +1142,10 @@ public static class SaveSystem
             if (FeatureCommands is not null) campaign.Defines.FeatureCommands = new(FeatureCommands, StringComparer.OrdinalIgnoreCase);
             if (FeatureScreens is not null) campaign.Defines.FeatureScreens = new(FeatureScreens, StringComparer.OrdinalIgnoreCase);
             if (FeatureSystems is not null) campaign.Defines.FeatureSystems = new(FeatureSystems, StringComparer.OrdinalIgnoreCase);
+            if (FeatureDefines is not null) campaign.Defines.FeatureDefines = new(FeatureDefines, StringComparer.OrdinalIgnoreCase);
             foreach (var (id, enabled) in FeatureOverrides ?? new())
                 if (MechanicFeatures.ValidId(id)) campaign.FeatureOverrides[id] = enabled;
+            MechanicFeatures.SyncDefines(campaign);
             Replace(campaign.States, States);
             Replace(campaign.Armies, Armies);
             Replace(campaign.Recruitment, Recruitment);
@@ -1144,6 +1175,9 @@ public static class SaveSystem
                 campaign.LeaseOffers.Count == 0 ? 1 : campaign.LeaseOffers.Max(o => o.Id) + 1);
             campaign.WorldLeverage = WorldLeverage;
             campaign.LastFinancialCrisisDay = LastFinancialCrisisDay;
+            campaign.DefconLevel = DefconLevel > 0 ? DefconLevel : 5;
+            campaign.DefconDaysInStage = DefconDaysInStage;
+            campaign.DefconPeakLevel = DefconPeakLevel > 0 ? DefconPeakLevel : 5;
             campaign.Homelands.Clear();
             foreach (var (id, regions) in Homelands ?? new()) campaign.Homelands[id] = new List<int>(regions ?? new());
             campaign.Fallen.Clear();

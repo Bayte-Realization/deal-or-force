@@ -1,0 +1,5 @@
+// What sending volunteers into somebody else's war leaves behind (Expeditions.cs).
+{
+  "sent_volunteers": { "name": "Sent volunteers to fight beside us", "opinion": 30, "days": 1825, "decays": true, "max_stacks": 2 },
+  "volunteers_against_us": { "name": "Sent volunteers to fight against us", "opinion": -30, "days": 1825, "decays": true, "max_stacks": 2 }
+}

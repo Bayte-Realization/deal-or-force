@@ -388,6 +388,8 @@ public static class CampaignDiplomacy
         // they meant it. They answer with their own declarations, through this same path, so
         // nothing downstream has to learn about wars with more than two sides.
         Statecraft.CallToArms(campaign, war);
+        if (onOwnInitiative && !attacker.IsHuman)
+            WarDeclarationPlanning.InviteAiAllies(campaign, war);
         return war;
     }
 
@@ -405,23 +407,22 @@ public static class CampaignDiplomacy
     // their neighbours for every question, which is fine when a player asks it once and
     // ruinous when an AI asks it twelve thousand times a year. It is built once per change
     // to the map and read from there.
-    private static Dictionary<int, HashSet<int>> _borders;
+    //
+    // The table itself lives on the campaign it describes. It used to be one shared
+    // dictionary stamped with the last campaign that asked, and "at most once a day" then
+    // meant "once per day per process": a second world stepping beside the first got its
+    // borders rebuilt at whatever hour its own tick reached, after captures the first
+    // world had already seen and the solo run had not - the same march-pace divergence
+    // MovementPace had, one floor up.
     private static readonly Dictionary<int, HashSet<int>> UnmappedBorders = new();
-    private static int _borderRevision = -1;
-    private static int _borderDay = -1;
 
     /// <summary>
-    /// Which campaign the cached table belongs to.
-    ///
-    /// It was cached on the day and the map revision alone, which is correct for exactly one
-    /// campaign at a time and silently wrong the moment there are two: a second campaign on
-    /// a different day with a coincidentally equal revision was handed the first one's
-    /// borders, and one that happened to share the day was told nobody borders anybody. That
-    /// is not a theoretical case - it is a multiplayer client rebuilding its world from a
-    /// snapshot while the old one is still being collected, and it is every bench check that
-    /// works on a campaign of its own.
+    /// Bumped whenever the map's nations change shape - a secession, a restoration, a
+    /// partition - so every campaign's table is rebuilt on its next ask. Per-campaign
+    /// tables cannot share one invalidation stamp, so the stamp is global and cheap:
+    /// rebuilding reads live controllers and is always the right answer.
     /// </summary>
-    private static Campaign _borderCampaign;
+    private static long _borderForgetStamp;
 
     public static bool SharesLandBorder(Campaign campaign, int mapA, int mapB) =>
         Borders(campaign).TryGetValue(mapA, out var set) && set.Contains(mapB);
@@ -481,8 +482,7 @@ public static class CampaignDiplomacy
     /// </summary>
     public static void ForgetBorders()
     {
-        _borderDay = -1;
-        _borderRevision = -1;
+        _borderForgetStamp++;
     }
 
     private static Dictionary<int, HashSet<int>> Borders(Campaign campaign)
@@ -498,34 +498,35 @@ public static class CampaignDiplomacy
         //
         // Nothing needs it fresher. Which countries a country touches is an input to
         // decisions it takes weekly and monthly; a day out of date cannot change one.
-        if (_borders is not null && ReferenceEquals(_borderCampaign, campaign))
+        var table = campaign?.BorderSets;
+        if (table is not null && campaign.BorderForgetStamp == _borderForgetStamp)
         {
-            if (_borderDay == campaign.ElapsedDays) return _borders;
-            if (_borderRevision == campaign.MapRevision)
+            if (campaign.BorderDay == campaign.ElapsedDays) return table;
+            if (campaign.BorderRevision == campaign.MapRevision)
             {
-                _borderDay = campaign.ElapsedDays;
-                return _borders;
+                campaign.BorderDay = campaign.ElapsedDays;
+                return table;
             }
         }
 
         // The table and its sets are emptied and refilled rather than thrown away and
         // rebuilt: handing the collector a dictionary of two hundred and sixty fresh hash
         // sets each time was the AI's whole allocation cost.
-        var topology = campaign.ProvinceMap;
-        var controllers = campaign.ProvinceController;
+        var topology = campaign?.ProvinceMap;
+        var controllers = campaign?.ProvinceController;
         // Nothing to build from. Do not stamp the cache - a campaign whose map has not been
         // attached yet would otherwise be told for the rest of the day that it has no
         // neighbours at all, which is exactly the sort of answer nobody thinks to doubt.
         // Bootstrap markets may ask before their world has a map. Never lend them
         // the previous world's real borders; that changes their starting suppliers.
-        if (topology is null || controllers is null) return UnmappedBorders;
+        if (campaign is null || topology is null || controllers is null) return UnmappedBorders;
 
         Rebuilds++;
-        _borders ??= new Dictionary<int, HashSet<int>>();
-        foreach (var set in _borders.Values) set.Clear();
-        _borderCampaign = campaign;
-        _borderRevision = campaign.MapRevision;
-        _borderDay = campaign.ElapsedDays;
+        table ??= campaign.BorderSets = new Dictionary<int, HashSet<int>>();
+        foreach (var set in table.Values) set.Clear();
+        campaign.BorderRevision = campaign.MapRevision;
+        campaign.BorderDay = campaign.ElapsedDays;
+        campaign.BorderForgetStamp = _borderForgetStamp;
 
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
@@ -535,11 +536,11 @@ public static class CampaignDiplomacy
             {
                 var other = controllers[neighbour];
                 if (other == 0 || other == owner) continue;
-                if (!_borders.TryGetValue(owner, out var set)) _borders[owner] = set = new HashSet<int>();
+                if (!table.TryGetValue(owner, out var set)) table[owner] = set = new HashSet<int>();
                 set.Add(other);
             }
         }
-        return _borders;
+        return table;
     }
 }
 
@@ -618,7 +619,9 @@ public sealed class SetEmbargoCommand : ICampaignCommand
         else relation.EmbargoByB = Embargo;
         relation.LastActionDay = campaign.ElapsedDays;
         if (Embargo) OpinionSystem.Remember(campaign, relation, "embargoed_us");
-        else OpinionSystem.Forget(campaign, relation, "embargoed_us");
+        // Only when nobody is refusing any more: the pair shares one reason, and one side
+        // lifting its embargo used to wipe the grievance of the other side's, still in force.
+        else if (!relation.EmbargoByA && !relation.EmbargoByB) OpinionSystem.Forget(campaign, relation, "embargoed_us");
         campaign.Chronicle.Record(campaign, Embargo ? "embargo_started" : "embargo_ended", IssuerId, TargetId);
         campaign.MarkStrategicChange();
     }
@@ -665,10 +668,16 @@ public sealed class DeclareWarCampaignCommand : ICampaignCommand
     public int IssuerId { get; init; }
     public int TargetId { get; init; }
     public int ClaimedStateMapIndex { get; init; } = -1;
+    /// <summary>Optional invitations selected in the declaration review. Old commands remain valid.</summary>
+    public int[] InvitedNationIds { get; init; } = Array.Empty<int>();
     public void Apply(Campaign campaign)
     {
         if (!MechanicFeatures.Allows(campaign, this)) return;
-        CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+        // Create the war once, then recheck invitations against the new coalition. A stale
+        // dialog, duplicate click or forged country id must never create extra wars.
+        var war = CampaignDiplomacy.DeclareWar(campaign, IssuerId, TargetId, ClaimedStateMapIndex);
+        if (war is not null)
+            WarDeclarationPlanning.InviteSelected(campaign, war, IssuerId, InvitedNationIds);
     }
 }
 

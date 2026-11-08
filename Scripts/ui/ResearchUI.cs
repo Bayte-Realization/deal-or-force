@@ -47,7 +47,7 @@ public partial class DealOrForceGame
         var choose = new SetResearchCommand { IssuerId = _campaign.Player.Id, TechnologyId = technologyId };
         _campaign.Commands.Enqueue(choose);
         _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("save_complete");
+        if (choose.Set) PlayStrategicCue("save_complete");
         if (MapSelectionShowing) ShowMapSelectionContent();
         RefreshResearchScreen();
     }
@@ -64,7 +64,15 @@ public partial class DealOrForceGame
         return $"{Tr(technology.Name)}\n{Tr(technology.Description)}\n\n{string.Join("\n", effects)}" +
                "\n" + Simulation.Loc.Format("Effective cost: {0} research points.",
                    ResearchSystem.CostFor(_campaign, _campaign.Player, technology).ToString("0")) +
-               "\n" + ResearchDiffusionText(technology) + needs + time;
+               "\n" + ResearchPracticeText(technology) + needs + time;
+    }
+
+    private string ResearchPracticeText(TechnologyDefinition technology)
+    {
+        var nation = _campaign.Player;
+        if (nation.HasTechnology(technology.Id))
+            return ResearchSystem.FieldUseLine(_campaign, nation, technology, ResearchSystem.WeeklyPoints(_campaign, nation));
+        return ResearchDiffusionText(technology);
     }
 
     private string ResearchDiffusionText(TechnologyDefinition technology)

@@ -112,8 +112,14 @@ public partial class DealOrForceGame
 
         DetailHeading("OUTPUT");
         DetailRow("GDP", Fmt.Money(player.Gdp),
-            "Annual output. It is not a dial - it emerges from what your buildings actually produce " +
-            "and what the world market pays for it.");
+            "The current GDP model follows sold production, worker productivity, staffing, supply and demand, with a scenario calibration. It is not yet a full value-added national account. Buildings add capacity, not a guaranteed instant GDP bonus.");
+        DetailRow("Annualised market output", Fmt.Money((float)Math.Min(float.MaxValue, player.GrossOutput * 52d * player.OutputScale)),
+            "This week's sold output, annualised and multiplied by the scenario's output scale. GDP moves towards this level each economic week. Unsold capacity is not extra income; inputs, workforce and demand matter.");
+        DetailRow("Jobs filled", Fmt.Percent(player.EmployedShare),
+            "A new building needs workers and inputs. Expanding every factory without enough people may redistribute labour instead of increasing total production.");
+        if (_campaign.ElapsedDays < _campaign.Defines.OutputSpinUpDays)
+            DetailRow("Economic calibration", Simulation.Loc.Format("{0} days remaining", _campaign.Defines.OutputSpinUpDays - _campaign.ElapsedDays),
+                "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.");
         DetailRow("Productivity", Fmt.Number(player.Productivity),
             "How much each worker makes. Literacy raises it; shortages, war and heavy taxation lower it.");
         DetailRow("Rise and decline", settled ? Simulation.Loc.Format("{0} a year", (player.SecularDrift >= 0f ? "+" : "−") + Fmt.Percent(MathF.Abs(player.SecularDrift))) : "—",

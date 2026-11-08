@@ -1,3 +1,4 @@
+using static DealOrForce.TerritoryLabelLayout;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -99,6 +100,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         public Node3D Node;
         public Sprite3D Plate;
         public Texture2D FullPlateTexture;
+        public ulong FlagVisualId;
         public Sprite3D Glow;
         public Sprite3D ConditionBars;
         public Label3D Count;
@@ -204,12 +206,46 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private double _militaryVisualAccumulator;
     private double _visualClock;
     private Simulation.ProvinceTopology _provinceTopology;
+
+    /// <summary>The provinces of the map this globe has built, or 0 before it has one.</summary>
+    public int ProvinceCount => _provinceTopology?.ProvinceCount ?? 0;
     private Simulation.Campaign _campaign;
     private bool _mapApplied;
     public bool IsMapPresentationReady => _mapApplied;
-    public bool LoadingInputBlocked { get; set; }
-    public bool MediaLibraryInputBlocked { get; set; }
-    public bool MapLayerDrawerInputBlocked { get; set; }
+    private bool _loadingInputBlocked;
+    public bool LoadingInputBlocked
+    {
+        get => _loadingInputBlocked;
+        set
+        {
+            _loadingInputBlocked = value;
+            if (value) { DismissMapTooltips(); _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero; _dragging = false; }
+        }
+    }
+    private bool _mediaLibraryInputBlocked, _mapLayerDrawerInputBlocked;
+    public bool MediaLibraryInputBlocked
+    {
+        get => _mediaLibraryInputBlocked;
+        set { _mediaLibraryInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+    public bool MapLayerDrawerInputBlocked
+    {
+        get => _mapLayerDrawerInputBlocked;
+        set { _mapLayerDrawerInputBlocked = value; if (value) DismissMapTooltips(); }
+    }
+
+    private void DismissMapTooltips()
+    {
+        // Most tooltips are owned by the persistent keeper at the root, not by
+        // this Control. Its grace for rebuilt rows must not cross modal boundaries.
+        TooltipKeeper.DismissFor(this);
+        // Godot attaches its native tooltip PopupPanel directly to the owner Control.
+        // Stop already-visible popups too: blocking new input alone leaves an old
+        // tooltip above a newly opened modal until the physical pointer moves.
+        // Pending tooltip requests see the blocked _GetTooltip and return empty.
+        foreach (var child in GetChildren())
+            if (child is PopupPanel popup) popup.Hide();
+    }
     public string MapLoadingError { get; private set; } = "";
     public string MapLoadingStage => _pendingMapResult is null
         ? "Reading province and terrain maps"
@@ -219,6 +255,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public double MapLoadingProgress => _mapApplied ? 100 : _pendingMapResult is null ? 45 : 55 + _mapApplyStage * 6;
     private bool _dragging;
     private bool _boxSelecting;
+    /// <summary>The box was begun with Ctrl held: it picks regions, not forces (ProvincesBoxSelected).</summary>
+    private bool _boxRegions;
     private bool _paintBoxing;
     private bool _paintBoxClaims;
     private Vector2 _boxStart;
@@ -245,6 +283,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action<Simulation.SupportFormation> SupportPicked;
     public event Action<Simulation.LandBattle> BattlePicked;
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
+    /// <summary>A box drawn over fleets and no divisions: the player's own fleets inside it.</summary>
+    public event Action<IReadOnlyList<Simulation.Fleet>> FleetsBoxPicked;
+    /// <summary>
+    /// A Ctrl-drawn box over the map, as the provinces under it - an area picked for one order
+    /// to all of it (a building in every region), the way Age of History's selection tool works.
+    /// </summary>
+    public event Action<IReadOnlyList<int>> ProvincesBoxSelected;
     public event Action<GlobePick> ProvinceCommanded;
 
     /// <summary>
@@ -365,12 +410,14 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
 
         _colorByMapIndex.Clear();
+        _nationColourSources.Clear();
         _nationByMapIndex.Clear();
         _stateByMapIndex.Clear();
 
         foreach (var nation in campaign.Nations)
         {
             _colorByMapIndex[nation.MapIndex] = ParseHex(nation.Color, 0x6E7B8BFFu);
+            _nationColourSources[nation.MapIndex] = nation.Color;
             _nationByMapIndex[nation.MapIndex] = nation;
         }
 
@@ -378,6 +425,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _stateByMapIndex[state.MapIndex] = state;
         _stateIndexRevision = campaign.MapRevision;
         _nationIndexCount = campaign.Nations.Count;
+        _nationColourRevision = campaign.MapRevision;
 
         BuildNationPalette();
         ApplyMapSmoothing();
@@ -506,6 +554,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         world.AddChild(sun);
         _daySun = sun;
         ConfigureGlobeGrading();
+        CreateAtlasLighting();
 
         _orbit = new Node3D { Name = "Orbit" };
         world.AddChild(_orbit);
@@ -514,6 +563,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             Current = true,
             Fov = RigFieldOfView,
+            KeepAspect = Camera3D.KeepAspectEnum.Height,
             HOffset = 0f,
             Near = 0.05f,
             Far = 250f
@@ -554,6 +604,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         UpdateSky(delta);
         UpdateCrossoverProjection();
+        PollPlateRepaint();
         if (!LoadingInputBlocked && !MediaLibraryInputBlocked && !MapLayerDrawerInputBlocked)
         {
             if (_freeCamera) UpdateFreeCamera(delta);
@@ -599,6 +650,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var worldDelta = Simulation.WorldCurses.Frozen(_campaign) ? 0.0 : delta;
         UpdateTradeTraffic(worldDelta);
         UpdateEventPulses(worldDelta);
+        UpdateNuclearBlasts();
         KeepAllowedProjection();
         // A capital that moved - by choice, or because its region was ceded - moves its marker.
         if (_mapApplied && _campaign is not null && (_capitalRevision != _campaign.CapitalRevision ||
@@ -659,6 +711,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             using (Simulation.SimProfiler.Measure("f:labels")) UpdateCountryLabelVisibility();
         if (_battleMarkers.Count > 0 && (visualDue || _dragging || _boxSelecting || FlatViewInMotion)) QueueRedraw();
         if (visualDue) { UpdateCityLabels(visualStep); UpdateSettlementModels(visualStep); }
+        KeepRegionIcons(delta);
         UpdateMapModePaletteIfNeeded();
 
         if (!_mapApplied && _pendingMapResult is null && _mapTask is { IsCompletedSuccessfully: true })
@@ -703,37 +756,56 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 using var plate = Image.CreateFromData(MapWidth / PoliticalScale, MapHeight / PoliticalScale,
                     false, Image.Format.Rgba8, result.PoliticalPixels);
                 plate.GenerateMipmaps();
-                _globeMaterial.SetShaderParameter("political_map", ImageTexture.CreateFromImage(plate));
+                _plateTexture = ImageTexture.CreateFromImage(plate);
+                _globeMaterial.SetShaderParameter("political_map", _plateTexture);
+                _platePixels = result.PoliticalPixels;
+                _plateProvinces = result.PlateProvinces;
+                _plateShade = result.PlateShade;
+                _platePainted = null;
                 result.PoliticalPixels = null;
                 break;
             }
             case 1:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.RegionIds);
-                _globeMaterial.SetShaderParameter("region_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("region_ids", img);
                 result.RegionIds = null;
                 break;
             }
             case 2:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.ProvinceIds);
-                _globeMaterial.SetShaderParameter("province_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("province_ids", img);
                 result.ProvinceIds = null;
                 break;
             }
             case 3:
             {
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rg8, result.NationIds);
-                _globeMaterial.SetShaderParameter("nation_ids", ImageTexture.CreateFromImage(img));
+                UploadMapImage("nation_ids", img);
                 result.NationIds = null;
                 break;
             }
             case 4:
             {
                 _crossoverHydrology = null;
+                if (ReducedMap)
+                {
+                    // The lightweight material has no hydrology/river-centre samplers.
+                    // Release worker buffers without allocating invisible GPU copies.
+                    result.HydrologyPixels = null;
+                    result.RiverCentrePixels = null;
+                    break;
+                }
                 using var img = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgb8, result.HydrologyPixels);
                 _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(img));
                 result.HydrologyPixels = null;
+                if (result.RiverCentrePixels is { } centre)
+                {
+                    using var lines = Image.CreateFromData(MapWidth, MapHeight, false, Image.Format.Rgba8, centre);
+                    _globeMaterial.SetShaderParameter("river_centre_map", ImageTexture.CreateFromImage(lines));
+                    result.RiverCentrePixels = null;
+                }
                 break;
             }
             case 5:
@@ -796,6 +868,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     /// <summary>Frames a geographic point exactly as the source globe's country focus does.</summary>
     public void FocusOn(float latitude, float longitude, float distance = 8f)
     {
+        _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         if (_flatMap)
         {
@@ -1346,6 +1419,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
     public override void _Draw()
     {
+        DrawRegionIcons();
         DrawFlatCounterLeaders();
         DrawBattleReadouts();
         if (!_boxSelecting) return;
@@ -1467,8 +1541,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
             {
                 if (province <= 0 || province >= 256 * 256) continue;
                 pixels[province * 4 + 2] = code;
+                // The whole front faces several countries; each post marks the border with
+                // the enemy actually next to it.
                 if (line.Kind == Simulation.FrontLineKind.Defence)
-                    PutBorderTarget(borderTargets, province, line.NationId, line.BorderNationId);
+                    PutBorderTarget(borderTargets, province, line.NationId, line.AllEnemies
+                        ? Simulation.BorderFronts.EnemyAt(_campaign, line.NationId, province) : line.BorderNationId);
             }
         }
         _drawingPlanId = -1;
@@ -1492,17 +1569,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         _frontPreview.Visible = _frontMesh.GetSurfaceCount() > 0;
         UpdateBorderTexture(ref _borderControllerTexture, ref _borderControllerImage, controllers, Image.Format.Rg8, "border_controller_ids");
 
-        if (_frontTexture is null)
-        {
-            _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-            _frontTexture = ImageTexture.CreateFromImage(_frontImage);
-            _globeMaterial.SetShaderParameter("front_membership", _frontTexture);
-        }
-        else
-        {
-            _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-            _frontTexture.Update(_frontImage);
-        }
+        if (_frontImage is null) _frontImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _frontImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("front_membership", _frontImage, ref _frontTexture);
     }
 
     private static byte PlanCode(Simulation.FrontLineKind kind) => kind switch
@@ -1526,12 +1595,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     {
         if (image is null) image = Image.CreateFromData(256, 256, false, format, pixels);
         else image.SetData(256, 256, false, format, pixels);
-        if (texture is null)
-        {
-            texture = ImageTexture.CreateFromImage(image);
-            _globeMaterial.SetShaderParameter(uniform, texture);
-        }
-        else texture.Update(image);
+        UpdateMapImage(uniform, image, ref texture);
     }
 
     /// <summary>
@@ -1659,9 +1723,24 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 if (button.Pressed)
                 {
                     _boxSelecting = true;
+                    _boxRegions = button.CtrlPressed && !CountrySelectionOnly && ProvincesBoxSelected is not null;
                     _boxStart = button.Position;
                     _boxCurrent = button.Position;
                     QueueRedraw();
+                }
+                else if (_boxSelecting && _boxRegions)
+                {
+                    _boxCurrent = button.Position;
+                    _boxSelecting = false;
+                    _boxRegions = false;
+                    var area = RectFromPoints(_boxStart, _boxCurrent);
+                    var provinces = area.Size.Length() >= 8f ? ProvincesInScreenRect(area) : new List<int>();
+                    if (provinces.Count == 0 && TryPick(button.Position, out var single, updateSelection: false) && single.ProvinceId > 0)
+                        provinces.Add(single.ProvinceId);
+                    if (provinces.Count > 0) ProvincesBoxSelected?.Invoke(provinces);
+                    QueueRedraw();
+                    AcceptEvent();
+                    return;
                 }
                 else if (_boxSelecting)
                 {
@@ -1672,7 +1751,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
                     {
                         // Resolve headquarters through the same map GUI input as provinces.
                         // The container consumes this click before child _Input handlers run.
-                        if (_movementLayer is not null && _movementLayer.TryPickAt(button.Position, out var movement))
+                        if (!CountrySelectionOnly && _movementLayer is not null && _movementLayer.TryPickAt(button.Position, out var movement))
                         {
                             MovementPicked?.Invoke(movement);
                         }
@@ -1704,6 +1783,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
                         {
                             var selected = ArmiesInScreenRect(rect);
                             if (!CountrySelectionOnly && selected.Count > 0) ArmiesBoxPicked?.Invoke(selected);
+                            else if (!CountrySelectionOnly && FleetsInScreenRect(rect) is { Count: > 0 } fleets)
+                                FleetsBoxPicked?.Invoke(fleets);
                         }
                     }
                     QueueRedraw();
@@ -1734,6 +1815,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
 
             if (button.ButtonIndex == MouseButton.WheelUp || button.ButtonIndex == MouseButton.WheelDown)
             {
+                _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
                 // A step proportional to the altitude rather than a fixed one. A quarter
                 // of a unit is a nudge from orbit and a lurch from a hundred metres up,
                 // and the whole reason for coming this close is to move one division.
@@ -1784,7 +1866,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
             // decided by what is on the screen now, so dragging while the wheel is still
             // settling moves the ground by the distance the hand moved rather than by the
             // distance it will be worth in a moment.
-            var unitsPerPixel = _flatZoom / Math.Max(1f, Size.Y);
+            var unitsPerPixel = MapPanScale.FlatUnitsPerPixel(_flatZoom, ViewportSize().Y);
             _targetFlatX -= delta.X * unitsPerPixel;
             _targetFlatY += delta.Y * unitsPerPixel;
             ClampFlatCamera();
@@ -1811,9 +1893,20 @@ public sealed partial class GlobePresentation : SubViewportContainer
             _flatY = _targetFlatY;
             return;
         }
-        var scale = Mathf.Lerp(0.22f, 0.65f, (_targetDistance - MinimumDistance) / (MaximumDistance - MinimumDistance));
-        _targetYaw -= delta.X * 0.006f * scale;
-        _targetPitch = Mathf.Clamp(_targetPitch - delta.Y * 0.006f * scale, -MaxPitch, MaxPitch);
+        // One pixel of hand movement should move approximately one pixel of ground at
+        // the view centre. Use the displayed altitude, never a pending wheel/fly-to target.
+        var radians = MapPanScale.OrbitRadiansPerPixel(_distance, GlobeRadius, _camera.Fov, ViewportSize().Y);
+        var longitudeScale = Math.Max(.15f, Mathf.Cos(_pitch));
+        var movement = new Vector2(-delta.X * radians / longitudeScale, -delta.Y * radians);
+        _targetYaw += movement.X;
+        _targetPitch = Mathf.Clamp(_targetPitch + movement.Y, -MaxPitch, MaxPitch);
+        _yaw = _targetYaw;
+        _pitch = _targetPitch;
+        var dragNow = Time.GetTicksUsec();
+        var dragSeconds = Mathf.Clamp((dragNow - _lastFlatDragUsec) / 1_000_000f, .004f, .1f);
+        _lastFlatDragUsec = dragNow;
+        _orbitGlide = _orbitGlide.Lerp(movement / dragSeconds, 1f - Mathf.Exp(-dragSeconds * 24f))
+            .LimitLength(radians * ViewportSize().Y * .9f / longitudeScale);
     }
 
     /// <summary>
@@ -1867,22 +1960,17 @@ public sealed partial class GlobePresentation : SubViewportContainer
         var states = map.ProvinceToState;
         for (var province = 1; province < states.Length && province < _selectedRegionPixels.Length; province++)
             if (states[province] == liveRegion) _selectedRegionPixels[province] = 255;
-        if (_selectedRegionTexture is null)
-        {
-            _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
-            _selectedRegionTexture = ImageTexture.CreateFromImage(_selectedRegionImage);
-            _globeMaterial.SetShaderParameter("selected_region_members", _selectedRegionTexture);
-        }
-        else
-        {
-            _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
-            _selectedRegionTexture.Update(_selectedRegionImage);
-        }
+        if (_selectedRegionImage is null) _selectedRegionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+        else _selectedRegionImage.SetData(256, 256, false, Image.Format.R8, _selectedRegionPixels);
+        UpdateMapImage("selected_region_members", _selectedRegionImage, ref _selectedRegionTexture);
         _globeMaterial.SetShaderParameter("selected_region_live", 1f);
     }
 
     public override string _GetTooltip(Vector2 atPosition)
     {
+        if (LoadingInputBlocked || MediaLibraryInputBlocked || MapLayerDrawerInputBlocked) return "";
+        var badgeTip = RegionBadgeTooltip(atPosition);
+        if (badgeTip.Length > 0) return badgeTip;
         var supportTip = SupportMapTooltip(atPosition);
         if (supportTip.Length > 0) return supportTip;
         var eventTip = EventPulseTooltip(atPosition);
@@ -1993,7 +2081,10 @@ public sealed partial class GlobePresentation : SubViewportContainer
         foreach (var marker in _armyStacks.Values)
         {
             var node = marker.Node;
-            if (!IsInstanceValid(node) || !node.IsVisibleInTree() || !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            // A counter standing behind another country's in the same province is hidden, not
+            // gone: a box drawn over the province takes its divisions too (CoverSharedProvinces).
+            if (!IsInstanceValid(node) || (!node.IsVisibleInTree() && !_coveredCounters.Contains(node)) ||
+                !marker.Plate.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
             if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition)))
                 selected.AddRange((marker.DisplayStack.Count > 0 ? marker.DisplayStack : marker.Stack)
                     .Where(army => Simulation.ArmyInteraction.CanSelect(_campaign, army)));
@@ -2117,6 +2208,9 @@ uniform sampler2D region_ids : filter_nearest;
 uniform sampler2D province_ids : filter_nearest;
 uniform sampler2D nation_ids : filter_nearest;
 uniform sampler2D hydrology_map : filter_linear, repeat_enable;
+// Where the nearest river's real course lies from each texel (RG, 16ths of a texel from 128) and
+// that river's importance (B, 0 = none near). Read texel by texel, never filtered.
+uniform sampler2D river_centre_map : filter_nearest, repeat_enable;
 uniform sampler2D crossover_excavations : filter_nearest, repeat_enable;
 uniform float crossover_excavations_active = 0.0;
 uniform sampler2D lake_surface : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
@@ -2125,6 +2219,11 @@ uniform float river_inset = -0.10;
 uniform float river_curve_filter = 1.0;
 uniform float river_near_opacity = 0.92;
 uniform float river_far_opacity = 0.58;
+// River width on screen, as half-widths in pixels: a headwater's thread and a great river's line.
+// Close in, a river is never wider than water that size is (river_real_half, in map texels).
+uniform float river_thread_px = 0.75;
+uniform float river_great_px = 1.9;
+uniform float river_real_half = 0.11;
 uniform float water_shore_width = 0.75;
 uniform float water_depth_reach = 5.0;
 uniform float water_texture_strength = 0.65;
@@ -2166,7 +2265,10 @@ uniform float terrain_detail = 0.35;
 uniform float relief_shading = 0.9;
 uniform float terrain_ready = 0.0;
 uniform float terrain_mode = 0.0;
-uniform float political_opacity = 0.68;
+uniform float political_opacity = 0.62;
+// The nation palette a little short of full strength, so the paint reads as ink over ground
+// rather than as a poster: the relief under China is a country, not a yellow sheet.
+uniform float political_saturation = 0.86;
 // 1 on the flat map: an atlas sheet read straight on, without the globe's light and curvature
 // to soften it. The terrain tiles showing through the country colours read there as blotches
 // and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
@@ -2693,6 +2795,7 @@ void fragment() {
         ? mix(nation_paint(other_nation), nation_paint(near_nation), nation_share)
         : nation_paint(near_nation);
     vec4 political = mix(political_smooth, political_crisp, detail_mix);
+    political.rgb = mix(vec3(dot(political.rgb, vec3(0.2126, 0.7152, 0.0722))), political.rgb, political_saturation);
     float rim = pow(1.0 - max(dot(normalize(NORMAL), normalize(VIEW)), 0.0), 2.0);
     // The sea has a floor. Deep water keeps the strategic navy it always had; the continental
     // slope lifts it a little, and the shelf along every coast - the North Sea, the Yellow Sea,
@@ -2887,13 +2990,65 @@ void fragment() {
     // Rivers of low importance no longer disappear at a hard intensity threshold.
     vec3 hydrography = texture(hydrology_map, vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0))).rgb;
     float lake_distance = (hydrography.r * 255.0 - 128.0) / 16.0;
-    float river_distance = river_contour(vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)),
-        (hydrography.g * 255.0 - 128.0) / 16.0) + river_inset;
+    // A river is as wide as it is great: a headwater a thread, the Danube a ribbon. One inset
+    // for every river drew brooks as wide as the Rhine and both as pale bands of paint.
+    // The raster paints a river as a corridor one to five cells wide - seven to thirty-five
+    // kilometres - and drawing the corridor drew rivers as fat sausages that swelled as the camera
+    // came down. The line is drawn along the river's real course instead (river_centre_map), as
+    // wide as the screen needs to see it (river_thread_px .. river_great_px) and close in never
+    // wider than water of that size is (river_real_half).
+    ivec2 river_map_size = textureSize(river_centre_map, 0);
+    vec2 river_point = vec2(fract(UV.x), clamp(UV.y, 0.0, 1.0)) * vec2(river_map_size) - 0.5;
+    ivec2 river_cell = ivec2(floor(river_point));
+    float river_centre = 1.0e4;
+    float river_importance = 0.0;
+    vec2 river_course_sum = vec2(0.0);
+    float river_weight = 0.0;
+    float river_importance_sum = 0.0;
+    vec2 river_fraction = fract(river_point);
+    vec2 river_first_course = vec2(0.0);
+    bool river_has_course = false;
+    bool river_coherent = true;
+    for (int ry = 0; ry < 2; ry++) {
+        for (int rx = 0; rx < 2; rx++) {
+            ivec2 at = river_cell + ivec2(rx, ry);
+            ivec2 fetch = ivec2((at.x % river_map_size.x + river_map_size.x) % river_map_size.x,
+                clamp(at.y, 0, river_map_size.y - 1));
+            vec4 entry = texelFetch(river_centre_map, fetch, 0);
+            if (entry.b <= 0.0) continue;
+            vec2 course = vec2(at) + (entry.rg * 255.0 - 128.0) / 16.0;
+            if (!river_has_course) { river_first_course = course; river_has_course = true; }
+            else if (length(course - river_first_course) > 1.6) river_coherent = false;
+            float weight = (rx == 0 ? 1.0 - river_fraction.x : river_fraction.x) *
+                (ry == 0 ? 1.0 - river_fraction.y : river_fraction.y);
+            river_course_sum += course * weight;
+            river_importance_sum += entry.b * weight;
+            river_weight += weight;
+            float reach = length(river_point - course);
+            if (reach < river_centre) { river_centre = reach; river_importance = entry.b; }
+        }
+    }
+    // Interpolate projected POINTS, not scalar distances or extended tangents. A
+    // straight course is reconstructed exactly; bends become one continuous curve,
+    // not a union of tangent spikes or pairwise chords (which draw little ladders).
+    // Large jumps mean unrelated channels: retain bounded point caps there instead
+    // of inventing a third river between them. Same four fetches, no new texture.
+    if (river_coherent && river_weight > 0.0001) {
+        river_centre = length(river_point - river_course_sum / river_weight);
+        river_importance = river_importance_sum / river_weight;
+    }
+    vec2 river_line = vec2(river_centre, river_importance);
+    float river_size = smoothstep(0.55, 0.98, river_importance);
+    vec2 river_texels = UV * vec2(river_map_size);
+    float river_texel_px = max(max(length(dFdx(river_texels)), length(dFdy(river_texels))), 0.0001);
+    float river_half = max(mix(0.25, 1.0, river_size) * river_real_half,
+        mix(river_thread_px, river_great_px, river_size) * river_texel_px);
+    float river_distance = river_line.g > 0.0 ? river_centre - river_half : 1.0e4;
     float lake_edge = max(fwidth(lake_distance) * 0.65, 0.08);
-    float river_edge = max(fwidth(river_distance) * 0.65, 0.08);
+    float river_edge = max(river_texel_px * 0.75, 0.005);
     float lake_water = 1.0 - smoothstep(-lake_edge, lake_edge, lake_distance);
     float river_water = 1.0 - smoothstep(-river_edge, river_edge, river_distance);
-    float prominent_river = smoothstep(0.89, 0.98, hydrography.b);
+    float prominent_river = smoothstep(0.78, 0.88, river_line.g);
     float inland_coverage = max(lake_water, river_water);
     float lake_depth = smoothstep(0.0, water_depth_reach, -lake_distance);
     float lake_bank = (1.0 - smoothstep(0.0, water_shore_width + lake_edge, abs(lake_distance))) * lake_water;
@@ -2903,7 +3058,15 @@ void fragment() {
     vec2 water_motion = vec2(TIME * water_animation_speed, 0.0);
     float water_detail = max(detail_mix, province_detail) * water_texture_strength;
     vec3 inland_water = mix(vec3(0.028, 0.145, 0.185), vec3(0.014, 0.080, 0.125), lake_depth);
-    vec3 river_color = mix(vec3(0.025, 0.130, 0.170), vec3(0.035, 0.205, 0.265), prominent_river);
+    // River water is water: a clear blue that reads against every political colour - thin, but
+    // never the same grey as a border line. The near-black
+    // teal it was drew the Han and the Dnieper exactly like the grey region lines beside them, so
+    // a player could not tell a river from a border. Great channels run lighter, and carry a
+    // brighter current down their middle.
+    vec3 river_color = mix(vec3(0.045, 0.190, 0.330), vec3(0.065, 0.260, 0.430), prominent_river);
+    float river_current = (1.0 - smoothstep(0.0, river_half * 0.45 + river_edge, river_centre)) * prominent_river;
+    river_color = mix(river_color, vec3(0.200, 0.470, 0.620), river_current * 0.55);
+    float river_bank = (1.0 - smoothstep(0.0, river_edge * 2.5, abs(river_distance))) * (1.0 - river_water);
     if (inland_coverage > 0.001 && water_detail > 0.001) {
         vec3 lake_tile = texture(lake_surface, water_uv + water_motion * 0.30).rgb;
         vec3 river_tile = texture(river_surface, water_uv + water_motion).rgb;
@@ -2921,8 +3084,14 @@ void fragment() {
     base = mix(base, inland_water, lake_water);
     base = mix(base, vec3(0.075, 0.175, 0.185), lake_bank * 0.20);
     float river_opacity = mix(river_far_opacity, river_near_opacity, max(detail_mix, province_detail));
+    // A line a pixel or two wide has no width to spare for transparency: drawn at the far opacity
+    // the rivers of a whole continent faded out of the middle zoom.
+    river_opacity = max(river_opacity, 0.85);
     river_opacity = mix(river_opacity, max(river_opacity, 0.92), prominent_river);
     base = mix(base, river_color, river_water * river_opacity * (1.0 - lake_water));
+    // A thin green-brown bank, so the water sits in a valley rather than lying on the land like
+    // paint - and not a black outline, which is what a border is drawn with.
+    base = mix(base, base * vec3(0.78, 0.86, 0.74), river_bank * river_opacity * 0.50 * (1.0 - lake_water));
     // Land relief must not turn a lake into a mountain ridge.
     NORMAL_MAP = mix(NORMAL_MAP, vec3(0.5, 0.5, 1.0), inland_coverage);
     // The region line, the last one still drawn by asking four neighbours whether they
@@ -3037,7 +3206,9 @@ void fragment() {
     base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
-    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.35) * political.a * 0.86);
+    // Full weight on the world map too: at 0.35 the frontier between two states was a hairline
+    // under the province grid, and the strategic view lost the one line it is for.
+    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.62) * political.a * 0.86);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -3106,27 +3277,44 @@ void fragment() {
         plan_color * plan_on * 0.16 +
         vec3(0.095, 0.024, 0.006) * front_edge * front_pulse * front_march +
         inland_water * (lake_water * 0.035 + river_water * 0.025);
-    ROUGHNESS = mix(0.36, mix(0.84, 0.40, inland_coverage), political.a);
+    // Sea glint as a soft sheen rather than a white disc: the open Pacific read as fog at 0.48/0.36.
+    ROUGHNESS = mix(0.56, mix(0.84, 0.40, inland_coverage), political.a);
     METALLIC = 0.0;
-    SPECULAR = mix(0.48, mix(0.12, 0.40, inland_coverage), political.a);
+    SPECULAR = mix(0.26, mix(0.12, 0.40, inland_coverage), political.a);
     // A flat map is a map: under the orthographic camera the sun's glint on the water landed as
     // a white haze across whole seas (the Sea of Japan, the open Pacific). The globe keeps it.
     SPECULAR *= 1.0 - step(0.5, PROJECTION_MATRIX[3][3]);
 }"
         };
+        if (ReducedMap) shader.Code = CompatibilityMapShader.Source;
+        else
+        {
+            shader.Code = MapColorSpaceShader.Build(shader.Code);
+            if (RenderingServer.GetCurrentRenderingMethod() == "gl_compatibility")
+                shader.Code = PackedMapShader.Build(shader.Code);
+        }
         _globeMaterial = new ShaderMaterial { Shader = shader };
+        InitializePackedTextures();
+        ApplyMapVisualStyle();
+        GD.Print("[dof] map material=" + (ReducedMap ? "safe-atlas (reduced visuals)" :
+            _packedLookups is not null ? "full-packed-atlas (12 texture units)" : "full-atlas") + " renderer=" + RenderingServer.GetCurrentRenderingMethod());
         // Until the asynchronous political map has finished, the shader sees transparent
         // political pixels and presents the deliberately flat strategic ocean.
         var transparent = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
         var placeholder = ImageTexture.CreateFromImage(transparent);
         _globeMaterial.SetShaderParameter("political_map", placeholder);
         var emptyIds = ImageTexture.CreateFromImage(Image.CreateEmpty(2, 2, false, Image.Format.Rg8));
-        _globeMaterial.SetShaderParameter("region_ids", emptyIds);
-        _globeMaterial.SetShaderParameter("province_ids", emptyIds);
-        _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
+        if (_packedIds is null)
+        {
+            _globeMaterial.SetShaderParameter("region_ids", emptyIds);
+            _globeMaterial.SetShaderParameter("province_ids", emptyIds);
+            _globeMaterial.SetShaderParameter("nation_ids", emptyIds);
+        }
         var dryWater = Image.CreateEmpty(2, 2, false, Image.Format.Rgb8);
         dryWater.Fill(Colors.White);
         _globeMaterial.SetShaderParameter("hydrology_map", ImageTexture.CreateFromImage(dryWater));
+        if (_packedLookups is null)
+        {
         _globeMaterial.SetShaderParameter("province_owner_colors", placeholder);
         _globeMaterial.SetShaderParameter("province_owner_ids",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
@@ -3137,9 +3325,10 @@ void fragment() {
         _globeMaterial.SetShaderParameter("map_mode_colors",
             ImageTexture.CreateFromImage(Image.CreateEmpty(256, 256, false, Image.Format.Rgba8)));
         _globeMaterial.SetShaderParameter("resource_colors", placeholder);
+        }
         mesh.Material = _globeMaterial;
 
-        _globeNode = new MeshInstance3D { Name = "PoliticalGlobe", Mesh = mesh };
+        _globeNode = new MeshInstance3D { Name = "PoliticalGlobe", Mesh = mesh, Layers = AtlasSurfaceLayers };
         world.AddChild(_globeNode);
     }
 
@@ -3230,6 +3419,7 @@ void fragment() {
     /// </summary>
     private void UpdateFlatGlide(float delta)
     {
+        if (!_cameraInertia) { _flatGlide = Vector2.Zero; return; }
         if (_dragging)
         {
             if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _flatGlide = Vector2.Zero;
@@ -3237,13 +3427,27 @@ void fragment() {
         }
         if (_flatGlide.LengthSquared() < _flatZoom * _flatZoom * 1e-6f) { _flatGlide = Vector2.Zero; return; }
         _flatZoomAnchorActive = false;
-        _targetFlatX += _flatGlide.X * delta;
-        _targetFlatY += _flatGlide.Y * delta;
+        _targetFlatX += CameraInertia.Travel(_flatGlide.X, delta);
+        _targetFlatY += CameraInertia.Travel(_flatGlide.Y, delta);
         ClampFlatCamera();
         _flatX = _targetFlatX;
         _flatY = _targetFlatY;
-        // Down to a twentieth in a second: a flick travels, a nudge settles at once.
-        _flatGlide *= Mathf.Pow(0.05f, delta);
+        _flatGlide *= Mathf.Exp(-CameraInertia.Damping * Math.Clamp(delta, 0, .1f));
+    }
+
+    private void UpdateOrbitGlide(float delta)
+    {
+        if (!_cameraInertia) { _orbitGlide = Vector2.Zero; return; }
+        if (_dragging)
+        {
+            if (Time.GetTicksUsec() - _lastFlatDragUsec > 90_000) _orbitGlide = Vector2.Zero;
+            return;
+        }
+        if (_orbitGlide.LengthSquared() < 1e-9f) { _orbitGlide = Vector2.Zero; return; }
+        _targetYaw += CameraInertia.Travel(_orbitGlide.X, delta);
+        _targetPitch = Mathf.Clamp(_targetPitch + CameraInertia.Travel(_orbitGlide.Y, delta), -MaxPitch, MaxPitch);
+        _yaw = _targetYaw; _pitch = _targetPitch;
+        _orbitGlide *= Mathf.Exp(-CameraInertia.Damping * Math.Clamp(delta, 0, .1f));
     }
 
     /// <summary>The ordinary camera: an orbit rig the player turns, tilts and zooms.</summary>
@@ -3267,6 +3471,7 @@ void fragment() {
         _flatZoom = Mathf.Lerp(_flatZoom, _targetFlatZoom, weight);
         UpdateFlatZoomAnchor();
         if (_flatMap) UpdateFlatGlide((float)delta);
+        else UpdateOrbitGlide((float)delta);
 
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit or TextEdit;
         if (_flatMap && !typing)
@@ -3684,7 +3889,7 @@ void fragment() {
         foreach (var marker in markers)
             if (IsInstanceValid(marker.Node))
             {
-                var visible = marker.Normal.Dot(viewNormal) > horizon;
+                var visible = marker.Normal.Dot(viewNormal) > horizon && !_coveredCounters.Contains(marker.Node);
                 if (marker.Node.Visible != visible) marker.Node.Visible = visible;
             }
     }
@@ -3832,6 +4037,7 @@ void fragment() {
                 InvalidateFlatCounterDensity();
             }
             else if (marker.NationId != nation.Id ||
+                     marker.FlagVisualId != NationalFlagVisualId(nation) ||
                      !string.Equals(marker.TemplateId, templateId, StringComparison.Ordinal))
             {
                 marker.FullPlateTexture = ArmyCounterTexture(nation, templateId);
@@ -3839,6 +4045,7 @@ void fragment() {
                 marker.NationId = nation.Id;
                 marker.TemplateId = templateId;
             }
+            marker.FlagVisualId = NationalFlagVisualId(nation);
             if (marker.Node is null) continue;
 
             var location = ArmyPresentationLocation(marker.Stack);
@@ -3903,8 +4110,61 @@ void fragment() {
         }
 
         PruneArmyCounterTextureCaches();
+        CoverSharedProvinces(campaign);
 
         _armyStructureFingerprint = ArmyStructureFingerprint(campaign);
+    }
+
+    private readonly HashSet<Node3D> _coveredCounters = new();
+    private readonly Dictionary<int, ArmyStackMarker> _provinceLeader = new();
+
+    /// <summary>
+    /// One counter per province on the globe, the way Hearts of Iron draws it.
+    ///
+    /// Counters are bucketed by country and province, so two countries in one province - allies
+    /// side by side, a garrison and a rising - made two counters on the same point. Both are
+    /// billboards drawn without a depth test, and which one came out on top changed from frame
+    /// to frame: two flags flickering through each other. Now the country with the most
+    /// divisions there is drawn and the others stand behind it, hidden; the province, the
+    /// roster and a box selection still reach every division. The flat map fans its counters
+    /// out instead and is left as it is.
+    /// </summary>
+    private void CoverSharedProvinces(Simulation.Campaign campaign)
+    {
+        _coveredCounters.Clear();
+        _provinceLeader.Clear();
+        var playerId = campaign.Player?.Id ?? -1;
+        foreach (var (bucket, marker) in _armyStacks)
+        {
+            if (bucket.Item2 <= 0 || marker.Node is null || marker.Stack.Count == 0) continue;
+            if (!_provinceLeader.TryGetValue(bucket.Item2, out var leader))
+            {
+                _provinceLeader[bucket.Item2] = marker;
+                continue;
+            }
+            var mine = Strength(marker);
+            var theirs = Strength(leader);
+            var wins = mine > theirs + 0.01f ||
+                       (MathF.Abs(mine - theirs) <= 0.01f &&
+                        (marker.Stack[0].NationId == playerId ||
+                         (leader.Stack[0].NationId != playerId && marker.Stack[0].NationId < leader.Stack[0].NationId)));
+            if (wins)
+            {
+                _coveredCounters.Add(leader.Node);
+                _provinceLeader[bucket.Item2] = marker;
+            }
+            else _coveredCounters.Add(marker.Node);
+        }
+        if (_flatMap) _coveredCounters.Clear();
+        foreach (var node in _coveredCounters)
+            if (IsInstanceValid(node) && node.Visible) node.Visible = false;
+
+        static float Strength(ArmyStackMarker stack)
+        {
+            var divisions = 0f;
+            foreach (var army in stack.Stack) divisions += army.Divisions;
+            return divisions;
+        }
     }
 
     private void CreateArmyStackMarker(ArmyStackMarker marker, Simulation.Nation nation,
@@ -4043,6 +4303,8 @@ void fragment() {
     private int ArmyStructureFingerprint(Simulation.Campaign campaign)
     {
         var hash = new HashCode();
+        hash.Add(FlagCatalog.VisualStateHash(campaign));
+        hash.Add(SettingsCatalog.Flag("movement_flags"));
         hash.Add(campaign.Armies.Count);
         foreach (var army in campaign.Armies)
         {
@@ -4099,7 +4361,7 @@ void fragment() {
             };
             marker.AddChild(plate);
             var fleetGlow = AttachSelectionGlow(plate, 160, 96, 3);
-            fleetGlow.Visible = fleet.Id == _selectedFleetId;
+            fleetGlow.Visible = FleetChosen(fleet.Id);
             var strength = new Label3D
             {
                 Name = "FleetHullCount",
@@ -4140,7 +4402,7 @@ void fragment() {
             _fleetUpdateStateKey = int.MinValue;
             BuildFleetMarkers(_campaign);
         }
-        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _flatMap);
+        var stateKey = HashCode.Combine(fingerprint, _campaign.ElapsedHours, _selectedFleetId, _fleetSelectionStamp, _flatMap);
         if (stateKey == _fleetUpdateStateKey) return;
         _fleetUpdateStateKey = stateKey;
 
@@ -4161,7 +4423,7 @@ void fragment() {
             if (!_fleetNodes.TryGetValue(fleet.Id, out var parts)) continue;
             if (IsInstanceValid(parts.Plate) && parts.Plate.GetChildOrNull<Sprite3D>(0) is { } fleetGlow)
             {
-                var chosen = fleet.Id == _selectedFleetId;
+                var chosen = FleetChosen(fleet.Id);
                 if (fleetGlow.Visible != chosen) fleetGlow.Visible = chosen;
                 // Selection changes the frame, never the geometry or click footprint.
                 var lift = Vector3.One;
@@ -4175,7 +4437,7 @@ void fragment() {
                     parts.Count.Text = hulls.ToString();
                 var tint = fleet.InAction
                     ? Ui.Colour("military.battle")
-                    : fleet.Id == _selectedFleetId
+                    : FleetChosen(fleet.Id)
                         ? Ui.Colour("globe.selection")
                         : Ui.Colour("globe.label_province");
                 if (parts.Count.Modulate != tint) parts.Count.Modulate = tint;
@@ -4200,7 +4462,40 @@ void fragment() {
         return fleet is not null;
     }
 
-    public void SelectFleet(int fleetId) => _selectedFleetId = fleetId;
+    public void SelectFleet(int fleetId)
+    {
+        _selectedFleetId = fleetId;
+        _selectedFleetIds.Clear();
+        _fleetSelectionStamp++;
+    }
+
+    /// <summary>Several fleets at once: the first is the one the panel describes.</summary>
+    public void SelectFleets(IEnumerable<int> fleetIds)
+    {
+        _selectedFleetIds.Clear();
+        foreach (var id in fleetIds) _selectedFleetIds.Add(id);
+        _selectedFleetId = _selectedFleetIds.Count > 0 ? _selectedFleetIds.Min() : -1;
+        _fleetSelectionStamp++;
+    }
+
+    private readonly HashSet<int> _selectedFleetIds = new();
+    private int _fleetSelectionStamp;
+
+    private bool FleetChosen(int fleetId) => fleetId == _selectedFleetId || _selectedFleetIds.Contains(fleetId);
+
+    /// <summary>The player's own fleets whose counters lie inside a screen rectangle.</summary>
+    private List<Simulation.Fleet> FleetsInScreenRect(Rect2 rect)
+    {
+        var found = new List<Simulation.Fleet>();
+        if (!IsInstanceValid(_camera) || (!_flatMap && ViewDistance > 13.5f) || _campaign?.Player is null) return found;
+        foreach (var (node, candidate) in _fleetByMarker)
+        {
+            if (!IsInstanceValid(node) || !node.Visible || _camera.IsPositionBehind(node.GlobalPosition)) continue;
+            if (candidate.NationId != _campaign.Player.Id) continue;
+            if (rect.HasPoint(_camera.UnprojectPosition(node.GlobalPosition))) found.Add(candidate);
+        }
+        return found;
+    }
 
     private static Texture2D CreateFleetMarkerTexture()
     {
@@ -4358,21 +4653,32 @@ void fragment() {
     /// </summary>
     private void EnsureNationIndex()
     {
-        if (_campaign is null || _campaign.Nations.Count == _nationIndexCount) return;
+        if (_campaign is null) return;
+        var newCountries = _campaign.Nations.Count != _nationIndexCount;
+        if (!newCountries && _nationColourRevision == _campaign.MapRevision) return;
+        var coloursChanged = false;
         foreach (var nation in _campaign.Nations)
         {
-            if (_nationByMapIndex.ContainsKey(nation.MapIndex)) continue;
-            _colorByMapIndex[nation.MapIndex] = ParseHex(nation.Color, 0x6E7B8BFFu);
             _nationByMapIndex[nation.MapIndex] = nation;
+            if (_nationColourSources.TryGetValue(nation.MapIndex, out var source) && source == nation.Color) continue;
+            _nationColourSources[nation.MapIndex] = nation.Color;
+            _colorByMapIndex[nation.MapIndex] = ParseHex(nation.Color, 0x6E7B8BFFu);
+            coloursChanged = true;
         }
+        _nationColourRevision = _campaign.MapRevision;
         _nationIndexCount = _campaign.Nations.Count;
-        BuildNationPalette();
-        BuildCapitalMarkers(_campaign);
-        GD.Print($"[dof] political map now holds {_nationIndexCount:N0} countries");
+        if (coloursChanged) BuildNationPalette();
+        if (newCountries)
+        {
+            BuildCapitalMarkers(_campaign);
+            GD.Print($"[dof] political map now holds {_nationIndexCount:N0} countries");
+        }
     }
 
     /// <summary>How many countries the colour and name indexes were built for.</summary>
     private int _nationIndexCount;
+    private long _nationColourRevision = -1;
+    private readonly Dictionary<int, string> _nationColourSources = new();
 
     private void BindArmyTopology()
     {
@@ -4446,12 +4752,7 @@ void fragment() {
         WriteUnownedPaletteEntry(pixels);
         if (_nationPaletteImage is null) _nationPaletteImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _nationPaletteImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_nationPaletteTexture is null)
-        {
-            _nationPaletteTexture = ImageTexture.CreateFromImage(_nationPaletteImage);
-            _globeMaterial.SetShaderParameter("nation_palette", _nationPaletteTexture);
-        }
-        else _nationPaletteTexture.Update(_nationPaletteImage);
+        UpdateMapImage("nation_palette", _nationPaletteImage, ref _nationPaletteTexture);
     }
 
     private void RefreshProvinceControllers()
@@ -4509,42 +4810,17 @@ void fragment() {
             }
         }
 
-        if (_controllerTexture is null)
-        {
-            _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-            _controllerTexture = ImageTexture.CreateFromImage(_controlImage);
-            _globeMaterial.SetShaderParameter("province_control_colors", _controllerTexture);
-        }
-        else
-        {
-            _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-            _controllerTexture.Update(_controlImage);
-        }
-
-        if (_ownerTexture is null)
-        {
-            _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-            _ownerTexture = ImageTexture.CreateFromImage(_ownerImage);
-            _globeMaterial.SetShaderParameter("province_owner_colors", _ownerTexture);
-        }
-        else
-        {
-            _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-            _ownerTexture.Update(_ownerImage);
-        }
-
-        if (_ownerIdTexture is null)
-        {
-            _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
-            _ownerIdTexture = ImageTexture.CreateFromImage(_ownerIdImage);
-            _globeMaterial.SetShaderParameter("province_owner_ids", _ownerIdTexture);
-        }
-        else
-        {
-            _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
-            _ownerIdTexture.Update(_ownerIdImage);
-        }
+        if (_controlImage is null) _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("province_control_colors", _controlImage, ref _controllerTexture);
+        if (_ownerImage is null) _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+        else _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
+        UpdateMapImage("province_owner_colors", _ownerImage, ref _ownerTexture);
+        if (_ownerIdImage is null) _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
+        else _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
+        UpdateMapImage("province_owner_ids", _ownerIdImage, ref _ownerIdTexture);
         _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
+        if (ownersMoved) RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();
         _frontRevision = _controlRevision;
@@ -4637,6 +4913,9 @@ void fragment() {
             { BuildCountryLabels(_lastLabelAnchors); return; }
     }
 
+    public void RefreshCountryTagDisplay()
+    { if (_lastLabelAnchors is not null) BuildCountryLabels(_lastLabelAnchors); }
+
     /// <summary>
     /// Put the names back where the borders are now.
     ///
@@ -4716,7 +4995,8 @@ void fragment() {
             if (!_nationByMapIndex.TryGetValue(mapIndex, out var nation) || anchor.Cells < 80)
                 continue;
 
-            var text = nation.MapName.ToUpperInvariant();
+            var text = (Simulation.SettingsCatalog.Flag("show_country_tags")
+                ? nation.MapName + " (" + nation.Tag + ")" : nation.MapName).ToUpperInvariant();
             _lastLabelNames[mapIndex] = nation.MapName;
             if (text.Length == 0) continue;
             // Retain the glyph instances when names or borders change. Replacing every
@@ -4998,6 +5278,7 @@ void fragment() {
         var politicalHeight = MapHeight / PoliticalScale;
         var political = new byte[politicalWidth * politicalHeight * 4];
         var politicalShade = new byte[politicalWidth * politicalHeight];
+        var plateProvinces = new ushort[politicalWidth * politicalHeight];
         var regionIds = new byte[MapWidth * MapHeight * 2];
         var provinceIds = new byte[MapWidth * MapHeight * 2];
         var nationIds = new byte[MapWidth * MapHeight * 2];
@@ -5021,8 +5302,11 @@ void fragment() {
         var seaWork = Task.Run(() => Simulation.SeaLanes.CoastalProvinces(provinces));
         var hydrology = hydrologyWork.GetAwaiter().GetResult();
         provinces.AttachHydrology(hydrology);
+        var centreWork = Task.Run(() => HydrologySurfaceData.BuildCentreline(MapWidth, MapHeight,
+            hydrology.AuthoredRivers ? RasterRiverCourses.Extract(hydrology) : Simulation.HydrologyCatalog.RiverFeatures));
         var surfaceWork = Task.Run(() => HydrologySurfaceData.Build(hydrology,
-            Simulation.TerrainCatalog.Water.RiverProfiles, Simulation.HydrologyCatalog.RiverFeatures,
+            hydrology.AuthoredRivers ? null : Simulation.TerrainCatalog.Water.RiverProfiles,
+            hydrology.AuthoredRivers ? null : Simulation.HydrologyCatalog.RiverFeatures,
             widthReach: Simulation.TerrainCatalog.Water.RiverWidthReach));
         var labelAnchors = anchorWork.GetAwaiter().GetResult();
 
@@ -5072,6 +5356,7 @@ void fragment() {
                 // The darkest land in the block is the one a player reads as a border.
                 if (political[cell * 4 + 3] != 0 && shadeByte >= politicalShade[cell]) continue;
                 politicalShade[cell] = shadeByte;
+                plateProvinces[cell] = (ushort)provinceId;
                 var write = cell * 4;
                 political[write] = (byte)(((packed >> 24) & 0xFF) * shade);
                 political[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
@@ -5092,10 +5377,13 @@ void fragment() {
         return new MapBuildResult
         {
             PoliticalPixels = political,
+            PlateProvinces = plateProvinces,
+            PlateShade = politicalShade,
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
             HydrologyPixels = surfaceWork.GetAwaiter().GetResult(),
+            RiverCentrePixels = centreWork.GetAwaiter().GetResult(),
             Provinces = provinces,
             LabelAnchors = labelAnchors,
             ProvinceRasterLoaded = true,
@@ -5104,141 +5392,6 @@ void fragment() {
         };
     }
 
-    private static Dictionary<int, TerritoryLabelAnchor> BuildTerritoryLabelAnchors(
-        ushort[] control, int width, int height, int scale = 1)
-    {
-        var visited = new System.Collections.BitArray(control.Length);
-        var queue = new List<int>(32768);
-        var anchors = new Dictionary<int, TerritoryLabelAnchor>();
-
-        for (var start = 0; start < control.Length; start++)
-        {
-            var nation = control[start];
-            if (nation == 0 || visited[start]) continue;
-            queue.Clear();
-            queue.Add(start);
-            visited[start] = true;
-            var startX = start % width;
-            long sumX = 0;
-            long sumY = 0;
-
-            for (var head = 0; head < queue.Count; head++)
-            {
-                var cell = queue[head];
-                var x = cell % width;
-                var y = cell / width;
-                var dx = x - startX;
-                if (dx > width / 2) dx -= width;
-                else if (dx < -width / 2) dx += width;
-                sumX += startX + dx;
-                sumY += y;
-                TryAdd(cell - width);
-                TryAdd(cell + width);
-                TryAdd(y * width + (x == 0 ? width - 1 : x - 1));
-                TryAdd(y * width + (x + 1 == width ? 0 : x + 1));
-            }
-
-            if (anchors.TryGetValue(nation, out var old) && old.Cells >= queue.Count) continue;
-            var meanX = (double)sumX / queue.Count;
-            var meanY = (double)sumY / queue.Count;
-            // Principal-component orientation produces the familiar strategy-map
-            // baseline: Russia and Chile follow their long land axis instead of
-            // receiving a detached horizontal nameplate. Sampling caps startup cost
-            // for continental countries while retaining the actual component shape.
-            var sampleStep = Math.Max(1, queue.Count / 8192);
-            double covXX = 0, covXY = 0, covYY = 0;
-            var samples = 0;
-            for (var index = 0; index < queue.Count; index += sampleStep)
-            {
-                var cell = queue[index];
-                var x = cell % width;
-                var y = cell / width;
-                var dx = x - startX;
-                if (dx > width / 2) dx -= width;
-                else if (dx < -width / 2) dx += width;
-                var ux = startX + dx;
-                var px = ux - meanX;
-                var py = y - meanY;
-                covXX += px * px;
-                covXY += px * py;
-                covYY += py * py;
-                samples++;
-            }
-            covXX /= Math.Max(1, samples);
-            covXY /= Math.Max(1, samples);
-            covYY /= Math.Max(1, samples);
-            var angle = 0.5 * Math.Atan2(2.0 * covXY, covXX - covYY);
-            // The old rule pinned every baseline to within seven degrees of horizontal,
-            // because one stretched label cannot rotate its own letters and a steep one
-            // read like a staircase. Each letter is now placed and turned separately, so
-            // the baseline may follow the country the way an atlas does - down Chile, along
-            // Norway - and stop short of vertical, which nobody can read.
-            angle = Math.Clamp(angle, -0.60, 0.60);
-            var axisX = (float)Math.Cos(angle);
-            var axisY = (float)Math.Sin(angle);
-            if (axisX < -0.05f)
-            {
-                axisX = -axisX;
-                axisY = -axisY;
-            }
-
-            var minMajor = double.MaxValue;
-            var maxMajor = double.MinValue;
-            var minMinor = double.MaxValue;
-            var maxMinor = double.MinValue;
-            for (var index = 0; index < queue.Count; index += sampleStep)
-            {
-                var cell = queue[index];
-                var x = cell % width;
-                var y = cell / width;
-                var dx = x - startX;
-                if (dx > width / 2) dx -= width;
-                else if (dx < -width / 2) dx += width;
-                var px = startX + dx - meanX;
-                var py = y - meanY;
-                var major = px * axisX + py * axisY;
-                var minor = -px * axisY + py * axisX;
-                minMajor = Math.Min(minMajor, major);
-                maxMajor = Math.Max(maxMajor, major);
-                minMinor = Math.Min(minMinor, minor);
-                maxMinor = Math.Max(maxMinor, minor);
-            }
-
-            // Where the name will actually fit. The extents above are a bounding box in the
-            // principal frame and are used only to bound the search; what comes back is a
-            // line that lies inside this country and nowhere else.
-            var padMajor = (maxMajor - minMajor) * 0.12;
-            var padMinor = (maxMinor - minMinor) * 0.12;
-            var chord = FindLabelChord(control, width, height, nation, meanX, meanY, angle,
-                minMajor - padMajor, maxMajor + padMajor,
-                minMinor - padMinor, maxMinor + padMinor);
-
-            // The largest piece keeps the name, not the last one scanned.
-            //
-            // This used to assign unconditionally, which is the same thing while a country is
-            // in one piece and stops being the same thing the moment one is not: a China that
-            // has annexed North America has two pieces, and row-major scanning would have
-            // handed the name to whichever of them ended furthest down the raster.
-            var effectiveCells = queue.Count * scale * scale;
-            if (!anchors.TryGetValue(nation, out var existing) || effectiveCells > existing.Cells)
-                anchors[nation] = new TerritoryLabelAnchor(
-                    (float)chord.CentreX * scale,
-                    (float)chord.CentreY * scale,
-                    chord.AxisX,
-                    chord.AxisY,
-                    Math.Max(3f, chord.Length * 0.5f * scale),
-                    Math.Max(2f, chord.Thickness * scale),
-                    effectiveCells);
-
-            void TryAdd(int next)
-            {
-                if (next < 0 || next >= control.Length || visited[next] || control[next] != nation) return;
-                visited[next] = true;
-                queue.Add(next);
-            }
-        }
-        return anchors;
-    }
 
     /// <summary>
     /// What the map worker built, and what it lets go of on the way in.
@@ -5257,10 +5410,13 @@ void fragment() {
     private sealed class MapBuildResult
     {
         public byte[] PoliticalPixels;
+        public ushort[] PlateProvinces;
+        public byte[] PlateShade;
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;
         public byte[] HydrologyPixels;
+        public byte[] RiverCentrePixels;
         public Simulation.ProvinceTopology Provinces;
         public Dictionary<int, TerritoryLabelAnchor> LabelAnchors;
         public bool ProvinceRasterLoaded;
@@ -5268,196 +5424,6 @@ void fragment() {
         public string HydrologySource = "";
     }
 
-    /// <summary>
-    /// Where a country's name goes, and how much room it actually has.
-    ///
-    /// <see cref="HalfSpanPixels"/> and <see cref="ThicknessPixels"/> are measured along a
-    /// line that lies entirely inside the country - see <see cref="FindLabelChord"/> - rather
-    /// than taken from its bounding box. The distinction is the whole of why names used to
-    /// run off into the sea and across their neighbours: the bounding box of Norway is most
-    /// of Scandinavia, and almost none of it is Norway.
-    /// </summary>
-    private readonly record struct TerritoryLabelAnchor(
-        float CenterX,
-        float CenterY,
-        float AxisX,
-        float AxisY,
-        float HalfSpanPixels,
-        float ThicknessPixels,
-        int Cells);
-
-    /// <summary>The longest straight run of one country's own ground, and how thick it is there.</summary>
-    private readonly record struct LabelChord(
-        double CentreX, double CentreY, float AxisX, float AxisY, float Length, float Thickness);
-
-    /// <summary>
-    /// The widest place a name will fit without leaving the country.
-    ///
-    /// A country's name should sit on the country. That sounds too obvious to need code, and
-    /// it needed code: the span came from the bounding box of the largest land component, so
-    /// Chile's name was as wide as Chile is tall, Norway's crossed Sweden, and Indonesia's
-    /// lay mostly on the Java Sea. A bounding box is a statement about extremes, and a
-    /// country is the ground between them.
-    ///
-    /// So the line is searched for instead. Candidate baselines are swept through a range of
-    /// angles around the country's principal axis and a range of parallel offsets across it;
-    /// each is walked cell by cell, and what is measured is the longest **contiguous** run of
-    /// this country's own ground. Contiguity does the work of several special cases at once -
-    /// a run cannot jump a strait, so Java and Sumatra cannot share a baseline, and it cannot
-    /// cross a border, so nothing lands on a neighbour.
-    ///
-    /// The best few runs by length are then measured for thickness, because a name also has
-    /// height: the longest chord across Chile is a hairline, and a name written on it would
-    /// spill into Argentina and the Pacific in the other direction. What comes back is the
-    /// line with the best area of text it could carry.
-    /// </summary>
-    private static LabelChord FindLabelChord(
-        ushort[] control, int width, int height, ushort nation,
-        double meanX, double meanY, double principalAngle,
-        double minMajor, double maxMajor, double minMinor, double maxMinor)
-    {
-        const int angleSteps = 9;
-        const int offsetSteps = 17;
-        const double angleSweep = 0.38;
-        const int keepBest = 10;
-
-        var majorSpan = Math.Max(4.0, maxMajor - minMajor);
-        var minorSpan = Math.Max(2.0, maxMinor - minMinor);
-
-        // Long walks are sampled coarsely. A continental country is thousands of cells
-        // across and the answer does not change for looking at every one of them.
-        var step = Math.Max(1.0, majorSpan / 520.0);
-
-        Span<double> bestLength = stackalloc double[keepBest];
-        Span<double> bestStart = stackalloc double[keepBest];
-        Span<double> bestAngle = stackalloc double[keepBest];
-        Span<double> bestOffset = stackalloc double[keepBest];
-        for (var slot = 0; slot < keepBest; slot++) bestLength[slot] = 0;
-
-        for (var angleIndex = 0; angleIndex < angleSteps; angleIndex++)
-        {
-            var angle = principalAngle +
-                        (angleSteps == 1 ? 0 : (angleIndex / (double)(angleSteps - 1) - 0.5) * 2 * angleSweep);
-            var axisX = Math.Cos(angle);
-            var axisY = Math.Sin(angle);
-
-            for (var offsetIndex = 0; offsetIndex < offsetSteps; offsetIndex++)
-            {
-                var offset = minMinor + minorSpan * (offsetIndex + 0.5) / offsetSteps;
-                var originX = meanX - axisY * offset;
-                var originY = meanY + axisX * offset;
-
-                var runStart = 0.0;
-                var runLength = 0.0;
-                var currentStart = double.NaN;
-                for (var t = minMajor - step; t <= maxMajor + step; t += step)
-                {
-                    var px = originX + axisX * t;
-                    var py = originY + axisY * t;
-                    var cellY = (int)Math.Round(py);
-                    var inside = false;
-                    if (cellY >= 0 && cellY < height)
-                    {
-                        var cellX = ((int)Math.Round(px) % width + width) % width;
-                        inside = control[cellY * width + cellX] == nation;
-                    }
-
-                    if (inside)
-                    {
-                        if (double.IsNaN(currentStart)) currentStart = t;
-                        var length = t - currentStart;
-                        if (length > runLength)
-                        {
-                            runLength = length;
-                            runStart = currentStart;
-                        }
-                    }
-                    else currentStart = double.NaN;
-                }
-                if (runLength <= 0) continue;
-
-                // Keep the best few by length; thickness costs another walk and is only
-                // worth paying for on candidates that could win.
-                for (var slot = 0; slot < keepBest; slot++)
-                {
-                    if (runLength <= bestLength[slot]) continue;
-                    for (var shift = keepBest - 1; shift > slot; shift--)
-                    {
-                        bestLength[shift] = bestLength[shift - 1];
-                        bestStart[shift] = bestStart[shift - 1];
-                        bestAngle[shift] = bestAngle[shift - 1];
-                        bestOffset[shift] = bestOffset[shift - 1];
-                    }
-                    bestLength[slot] = runLength;
-                    bestStart[slot] = runStart;
-                    bestAngle[slot] = angle;
-                    bestOffset[slot] = offset;
-                    break;
-                }
-            }
-        }
-
-        var chord = new LabelChord(meanX, meanY,
-            (float)Math.Cos(principalAngle), (float)Math.Sin(principalAngle),
-            (float)(majorSpan * 0.35), (float)(minorSpan * 0.35));
-        var bestScore = 0.0;
-
-        for (var slot = 0; slot < keepBest && bestLength[slot] > 0; slot++)
-        {
-            var angle = bestAngle[slot];
-            var axisX = Math.Cos(angle);
-            var axisY = Math.Sin(angle);
-            var offset = bestOffset[slot];
-            var originX = meanX - axisY * offset;
-            var originY = meanY + axisX * offset;
-            var middle = bestStart[slot] + bestLength[slot] * 0.5;
-            var centreX = originX + axisX * middle;
-            var centreY = originY + axisY * middle;
-
-            var thickness = Thickness(control, width, height, nation, centreX, centreY, -axisY, axisX,
-                Math.Max(2.0, minorSpan));
-            // Length times height, because what a name needs is area - and a hairline chord
-            // across a long thin country is worse than a shorter one with room to breathe.
-            var score = bestLength[slot] * Math.Min(thickness, bestLength[slot] * 0.5);
-
-            // And a thumb on the scale for the horizontal. A country that is genuinely long
-            // and thin - Chile, Norway, Vietnam - has a diagonal so much better than its
-            // horizontal that this cannot overturn it, which is the point. A roughly square
-            // country like France has several near-equal chords, and an atlas picks the flat
-            // one every time; without this the winner was whichever diagonal happened to be
-            // a few cells longer, and France read as though it were falling over.
-            score *= 1.0 - 0.38 * Math.Abs(Math.Sin(angle));
-            if (score <= bestScore) continue;
-            bestScore = score;
-            chord = new LabelChord(centreX, centreY, (float)axisX, (float)axisY,
-                (float)bestLength[slot], (float)thickness);
-        }
-
-        return chord;
-    }
-
-    /// <summary>How much of the country there is above and below a point, across the baseline.</summary>
-    private static double Thickness(ushort[] control, int width, int height, ushort nation,
-        double centreX, double centreY, double normalX, double normalY, double cap)
-    {
-        var reach = 0.0;
-        for (var side = -1; side <= 1; side += 2)
-        {
-            var walked = 0.0;
-            while (walked < cap)
-            {
-                walked += 1.0;
-                var px = centreX + normalX * walked * side;
-                var py = centreY + normalY * walked * side;
-                var cellY = (int)Math.Round(py);
-                if (cellY < 0 || cellY >= height) break;
-                var cellX = ((int)Math.Round(px) % width + width) % width;
-                if (control[cellY * width + cellX] != nation) break;
-            }
-            reach += walked;
-        }
-        return Math.Max(2.0, reach);
-    }
 
     private static uint ParseHex(string value, uint fallback)
     {

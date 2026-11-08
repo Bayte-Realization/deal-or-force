@@ -229,7 +229,7 @@ public partial class DealOrForceGame
             _touchingGrass = true;
             GetTree().CreateTimer(8.0, true).Timeout += () => ApplicationExit.Request(this);
         }
-        return Simulation.ConsoleVerse.TouchGrass(Loc.Language) + "\n\n" +
+        return Loc.Get("console.touchgrass.verse") + "\n\n" +
                Loc.Get("The game closes in eight seconds. Nothing has been saved.");
     }
 

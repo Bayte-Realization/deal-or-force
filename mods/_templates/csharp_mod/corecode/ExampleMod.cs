@@ -1,10 +1,22 @@
 using DealOrForce.Modding;
+using DealOrForce.Simulation;
 
 namespace ExampleCSharpMod;
 
 public sealed class ExampleMod : IGlobalityMod
 {
-    public void OnLoad(ModContext context) => context.Log("Example corecode mod loaded");
+    private bool _reportedPass;
+    public void OnLoad(ModContext context)
+    {
+        context.Log("Example corecode mod loaded");
+        // A real supported core replacement. Here we preserve the built-in work;
+        // omitting original() would replace it, not run a second construction loop.
+        context.ReplaceSimulationPass(SimulationPass.Construction, (_, original) =>
+        {
+            original();
+            if (!_reportedPass) { context.Log("Construction pass forwarded once"); _reportedPass = true; }
+        });
+    }
 
     public void OnCampaignCreated(ModContext context)
     {

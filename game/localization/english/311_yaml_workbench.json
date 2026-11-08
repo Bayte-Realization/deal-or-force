@@ -1,0 +1,12 @@
+{
+  "Select a file.": "Select a file.",
+  "Content changed outside this editor, or the document already exists. Nothing was overwritten. Reopen it from the file list.": "Content changed outside this editor, or the document already exists. Nothing was overwritten. Reopen it from the file list.",
+  "Content source": "Source",
+  "Property and layout edits reformat the document and remove comments. Edit Source to preserve them.": "Property and layout edits reformat the document and remove comments. Edit Source to preserve them.",
+  "This removes the selected property and its children. Undo is available in the Source tab.": "This removes the selected property and its children. Undo is available in the Source tab.",
+  "Relative path inside the mod, ending in .json, .yaml or .yml": "Relative path inside the mod, ending in .json, .yaml or .yml",
+  "Use JSON or YAML in a declared content folder. Scenario documents remain JSON.": "Use JSON or YAML in a declared content folder. Scenario documents remain JSON.",
+  "Property preview: first 100 array entries, 6 levels. The Source tab exposes the complete document.": "Property preview: first 100 array entries, 6 levels. The Source tab exposes the complete document.",
+  "YAML valid. Domain rules are also checked when the game loads this content.": "YAML valid. Domain rules are also checked when the game loads this content.",
+  "JSON valid. Domain rules are also checked when the game loads this content.": "JSON valid. Domain rules are also checked when the game loads this content."
+}

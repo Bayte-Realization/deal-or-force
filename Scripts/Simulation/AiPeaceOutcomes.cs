@@ -3,9 +3,15 @@ using System.Linq;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Defines governing AI peace negotiation thresholds and decisive war settlement logic.
+/// </summary>
 public sealed partial class Defines
 {
+    /// <summary>War score threshold for an aggressor to enforce decisive total peace terms.</summary>
     public float AiPeaceDecisiveScore { get; set; } = 75f;
+
+    /// <summary>Fraction of enemy national territory that must be secured for decisive annexation.</summary>
     public float AiPeaceDecisiveOccupationShare { get; set; } = .65f;
 
     /// <summary>
@@ -23,11 +29,82 @@ public sealed partial class Defines
     /// lower because a repelled invasion is a verdict the whole world has already watched.
     /// </summary>
     public float AiPeaceRepelledScore { get; set; } = 35f;
+
+    /// <summary>
+    /// Below this share of the beaten country's people being the victor's own (by people, or
+    /// living in regions it holds title to), a decisive victory ends in a partition rather than
+    /// an annexation: the victor takes what it claims and leaves the rest a dependent state.
+    /// 0 turns it off.
+    /// </summary>
+    public float AiPartitionKinShare { get; set; } = 0.35f;
 }
 
+/// <summary>
+/// AI Statecraft peace outcomes, decisive settlements, and truce length calculations.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// PEACE DECISION PIPELINE & 33/33/33 CALIBRATION:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+///                       [ War Under Review ]
+///                                │
+///           ┌────────────────────┴────────────────────┐
+///           ▼                                         ▼
+///    [ Civil / Reclaim ]                       [ Inter-State War ]
+///    Reintegration into one                           │
+///                                    ┌────────────────┴────────────────┐
+///                                    ▼                                 ▼
+///                            [ Nuclear / DEFCON<=2 ]           [ Conventional War ]
+///                            Limited Peace / Cuba Rule                 │
+///                            (No Homeland Annexation)   ┌──────────────┴──────────────┐
+///                                                       ▼                             ▼
+///                                              [ Repelled Defense ]          [ Decisive Offensive ]
+///                                              Score <= -35                  Score >= 75 or 540 Days
+///                                              (Defender wins status quo     (Annexation / Subjugation /
+///                                               + enemy pays reparations)     dynastic union)
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// ДЛЯ МОДДЕРОВ (FOR MODDERS) — Логика завершения войн в Deal or Force:
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// В отличие от механик Paradox, где мирные конференции часто приводят к нереалистичным
+/// «лоскутным» аннексиям или бесконечным войнам с застрявшим счётом 100%, здесь действует
+/// иерархия из 5 реалистичных сценариев завершения войны, откалиброванная по правилу 33/33/33:
+/// (~33% решительных побед агрессора, ~33% отражённой агрессии обороны, ~33% компромиссов):
+///
+/// 1. ВОССТАНОВЛЕНИЕ ГОСУДАРСТВА / ГРАЖДАНСКАЯ ВОЙНА (Reclaiming / Civil War):
+///    Если сторона подавляет мятеж или претендует на верховную власть в расколе, победа
+///    целиком собирает страну воедино (Unconditional = true), как только занята столица
+///    или две трети национальной территории.
+///
+/// 2. ВОССОЕДИНЕНИЕ (Reunification):
+///    Войны национального объединения (общий народ, родина, повод reconquest/unification)
+///    завершаются полным воссоединением без дробления на мелкие провинции.
+///
+/// 3. КУБИНСКОЕ ПРАВИЛО / ЯДЕРНОЕ СДЕРЖИВАНИЕ (The Cuba Rule / DEFCON <= 2):
+///    Державы с ядерным оружием (Deterrence.TierOf >= 1) не могут аннексировать
+///    территорию друг друга. Порог победы снижается пропорционально фактору грани фола
+///    (brink), а условия мира ограничиваются освобождением оккупированных земель и
+///    репарациями. При DEFCON 2 и 1 это правило автоматически распространяется на
+///    все межгосударственные конфликты.
+///
+/// 4. ОТРАЖЁННАЯ АГРЕССИЯ (Repelled Aggression):
+///    Если обороняющийся успешно отразил вторжение и ведёт по очкам (AiPeaceRepelledScore),
+///    война завершается его победой: агрессор выплачивает репарации и уходит со всех
+///    захваченных земель. Обороняющийся не претендует на исконные земли агрессора.
+///
+/// 5. РЕШИТЕЛЬНАЯ ПОБЕДА / ДОЛГОЕ ТЕРПЕНИЕ / КЛИЕНТСКОЕ ГОСУДАРСТВО:
+///    Если победитель удерживает 65%+ территории врага или война затянулась с подавляющим
+///    счётом дольше AiPeaceDecisivePatienceDays (540 дней), враг капитулирует. Если
+///    полная аннексия слишком дорога по бюджету очков, создаётся марионеточное государство
+///    или династическая уния (при dynastic_claim).
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public static partial class AiStatecraft
 {
-    /// <summary>Buy a decade of quiet only when it serves the settlement, not out of habit.</summary>
+    /// <summary>
+    /// Evaluates whether a nation should request a prolonged truce decade instead of an ordinary truce.
+    /// Returns true only when exhaustion outweighs unfinished war claims or when all strategic goals were achieved.
+    /// </summary>
     internal static bool WantsLongTruce(Campaign campaign, Nation nation, StrategicWar war, PeaceDemand demand)
     {
         var map = campaign?.ProvinceMap;
@@ -48,8 +125,87 @@ public static partial class AiStatecraft
                 unresolved.Contains(map.ProvinceToState[p]) && !demand.Provinces.Contains(p)) return false;
         return true;
     }
+    /// <summary>
+    /// A decisive victory over a country that is not the victor's own ends the way such wars end
+    /// in the world this game draws: the victor takes what it holds title to or whose people are
+    /// its own, and the rest stays a state - under a government that answers to it.
+    ///
+    /// The old settlement annexed the whole country whenever the score could pay for it, so a
+    /// won war swallowed a foreign people of thirty million into the map like a province; the
+    /// overstretch and the risings came after. Nothing here names a country: the line is the
+    /// share of the beaten people who are the victor's (AiPartitionKinShare). A beaten country of
+    /// another ideology becomes a satellite (its regime is changed); one of the same, a
+    /// protectorate. Returns false where annexation is the plausible end.
+    /// </summary>
+    private static bool Partition(Campaign campaign, Nation winner, Nation loser, int[] territory, PeaceDemand demand)
+    {
+        var threshold = campaign.Defines.AiPartitionKinShare;
+        if (threshold <= 0f || loser.IsSubject) return false;
+        var map = campaign.ProvinceMap;
+        long people = 0, ours = 0;
+        var claimed = new System.Collections.Generic.HashSet<int>();
+        foreach (var region in campaign.StatesOf(loser))
+        {
+            var title = TerritorialClaims.TitleOf(campaign, winner, region) != TerritorialTitle.None;
+            var kin = 1f - EconomySystem.ForeignShare(region, winner.Tag);
+            people += region.Population;
+            if (title || kin >= 0.5f)
+            {
+                ours += region.Population;
+                claimed.Add(region.MapIndex);
+            }
+            else ours += (long)(region.Population * kin);
+        }
+        if (people <= 0 || ours / (double)people >= threshold) return false;
+        var kind = SubjectCatalog.Imposable.FirstOrDefault(k => k.Id == (loser.Ideology == winner.Ideology ? "protectorate" : "satellite"))
+                   ?? SubjectCatalog.Imposable.OrderByDescending(k => k.DemandCost).ThenBy(k => k.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (kind is null) return false;
+        demand.Provinces.Clear();
+        foreach (var province in territory)
+            if (claimed.Contains(map.ProvinceToState[province])) demand.Provinces.Add(province);
+        demand.Unconditional = false;
+        demand.Subjugate = kind.Id;
+        return true;
+    }
 
-    /// <summary>Compare a complete settlement before spending its budget on a partial border and extras.</summary>
+    /// <summary>
+    /// Unconditional surrender is not a ceasefire. Forty-seven of eighty-six wars in a ten-year
+    /// world ended in a capitulation, and every capitulated country walked away independent, its
+    /// government untouched, with nothing on it but the land the victor's army stood on. The
+    /// victor of a surrender dictates: a beaten country that is not its own people (the same line
+    /// as Partition) and is not too large for the victor to hold (its economy at most twice the
+    /// victor's) becomes a dependent state - a satellite where the regimes differ, a protectorate
+    /// where they agree. The same for a player as for anybody. Off with AiPartitionKinShare 0.
+    /// </summary>
+    internal static void ImposeAfterCapitulation(Campaign campaign, Nation winner, Nation beaten)
+    {
+        if (campaign is null || winner is null || beaten is null || winner.Id == beaten.Id) return;
+        if (campaign.Defines.AiPartitionKinShare <= 0f || winner.IsSubject || beaten.IsSubject) return;
+        if (beaten.Movement is not null || beaten.Population <= 0 || campaign.StatesOf(beaten).Length == 0) return;
+        if (winner.Gdp < beaten.Gdp * 0.5f) return;
+        long people = 0, ours = 0;
+        foreach (var region in campaign.StatesOf(beaten))
+        {
+            people += region.Population;
+            var kin = 1f - EconomySystem.ForeignShare(region, winner.Tag);
+            ours += TerritorialClaims.TitleOf(campaign, winner, region) != TerritorialTitle.None
+                ? region.Population : (long)(region.Population * kin);
+        }
+        if (people <= 0 || ours / (double)people >= campaign.Defines.AiPartitionKinShare) return;
+        var kind = SubjectCatalog.Imposable.FirstOrDefault(k => k.Id == (beaten.Ideology == winner.Ideology ? "protectorate" : "satellite"))
+                   ?? SubjectCatalog.Imposable.OrderByDescending(k => k.DemandCost).ThenBy(k => k.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (kind is null) return;
+        if (SubjectSystem.Subjugate(campaign, winner, beaten, kind.Id, out _))
+            PeaceConference.Tally["capitulation:subject_" + kind.Id] =
+                PeaceConference.Tally.TryGetValue("capitulation:subject_" + kind.Id, out var n) ? n + 1 : 1;
+    }
+
+
+    /// <summary>
+    /// Drafts a decisive settlement treaty (unconditional capitulation, nuclear limited peace,
+    /// repelled aggression settlement, or subjugation client state) before spending war score budget.
+    /// Returns true if a decisive peace treaty was drafted and placed into <paramref name="demand"/>.
+    /// </summary>
     internal static bool WriteDecisiveSettlement(Campaign campaign, Nation winner, StrategicWar war,
         PeaceLedger ledger, PeaceDemand demand)
     {
@@ -113,6 +269,11 @@ public static partial class AiStatecraft
         // cities) is doing the pushing: the decisive bar comes down by the brink, and the
         // settlement is liberation and money, never the aggressor's homeland on the map.
         var brink = global::DealOrForce.Simulation.Deterrence.Brinkmanship(campaign, war);
+        // At DEFCON 2 and 1 a war a nuclear power is fighting is settled in the shadow too, not
+        // only one between two of them. Not every war on earth (NuclearPosture commit).
+        if (campaign.DefconLevel <= 2 && !absorbing && !war.CivilConflict &&
+            war.Side(true).Concat(war.Side(false)).Any(id => NuclearPosture.IsHolder(campaign, campaign.NationById(id))))
+            brink = MathF.Max(brink, (3 - campaign.DefconLevel) * 1.5f);
         if (!absorbing && brink > 0f)
         {
             var bar = MathF.Max(campaign.Defines.AiPeaceRepelledScore,
@@ -186,6 +347,12 @@ public static partial class AiStatecraft
         // must not make an affordable victory impossible. No free territory is created:
         // the ground is already held or the enemy is overrun.
         foreach (var province in territory) demand.Provinces.Add(province);
+        // A war declared to take the country (annexation, conquest, hegemony, empire) ends as declared.
+        if (!absorbing && !annexationWar && Partition(campaign, winner, loser, territory, demand))
+        {
+            WriteTerms(campaign, winner, war, ledger, demand, ledger.Budget);
+            return true;
+        }
         if (fullConquest)
         {
             demand.Unconditional = true;

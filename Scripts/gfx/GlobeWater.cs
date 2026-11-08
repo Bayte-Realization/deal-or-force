@@ -10,12 +10,24 @@ public sealed partial class GlobePresentation
     private void ApplyWaterPresentation(TerrainImages prepared = null)
     {
         var water = TerrainCatalog.Water;
-        _globeMaterial.SetShaderParameter("lake_surface", prepared?.Lake is { } lake
-            ? ImageTexture.CreateFromImage(lake) : LoadWaterTile(water.LakeTexture, water.TileResolution));
-        prepared?.Lake?.Dispose();
-        _globeMaterial.SetShaderParameter("river_surface", prepared?.River is { } river
-            ? ImageTexture.CreateFromImage(river) : LoadWaterTile(water.RiverTexture, water.TileResolution));
-        prepared?.River?.Dispose();
+        using var lake = prepared?.Lake ?? WaterTileImage(water.LakeTexture, water.TileResolution);
+        using var river = prepared?.River ?? WaterTileImage(water.RiverTexture, water.TileResolution);
+        if (_packedLookups is not null)
+        {
+            var layers = new Godot.Collections.Array<Image> { lake, river };
+            var texture = new Texture2DArray();
+            var error = texture.CreateFromImages(layers);
+            if (error != Error.Ok) { texture.Dispose(); throw new InvalidDataException("Packed water tiles: " + error); }
+            var previous = _packedWater;
+            _packedWater = texture;
+            _globeMaterial.SetShaderParameter("packed_water_tiles", texture);
+            previous?.Dispose();
+        }
+        else
+        {
+            _globeMaterial.SetShaderParameter("lake_surface", ImageTexture.CreateFromImage(lake));
+            _globeMaterial.SetShaderParameter("river_surface", ImageTexture.CreateFromImage(river));
+        }
         _globeMaterial.SetShaderParameter("river_inset", water.RiverInset);
         _globeMaterial.SetShaderParameter("river_curve_filter",
             Math.Clamp(InterfaceSkin.Metric("map.river_curve_filter", 1f), 0f, 1f));

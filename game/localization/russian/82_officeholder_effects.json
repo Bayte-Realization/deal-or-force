@@ -1,0 +1,13 @@
+{
+  "Death and succession: {0}": "Смерть и преемник: {0}",
+  "Remove officeholder: {0}": "Снять с должности: {0}",
+  "Update officeholder: {0}": "Изменить должностное лицо: {0}",
+  "Portrait: {0}": "Портрет: {0}",
+  "Head of state portrait": "Портрет главы государства",
+  "Head of government portrait": "Портрет главы правительства",
+  "Portrait preview": "Предпросмотр портрета",
+  "Edit the country, then save to your mod. The editor writes the required files automatically and never changes the base game.": "Измените страну и сохраните её в свой мод. Редактор сам запишет нужные файлы, не затрагивая базовую игру.",
+  "Saved {0} files to your mod. Enable it and start a new campaign to use the changes.": "В мод сохранено файлов: {0}. Включите его и начните новую кампанию, чтобы увидеть изменения.",
+  "Event scripts valid. The live campaign has not been changed.": "Скрипты событий корректны. Текущая кампания не изменена.",
+  "Choose a portrait from enabled mods. Put PNG/JPEG/WebP images in gfx/leaders; their file names become choices after reloading the mod.": "Выберите портрет из включённых модов. Положите PNG/JPEG/WebP в gfx/leaders: после перезагрузки мода имена файлов появятся в списке."
+}

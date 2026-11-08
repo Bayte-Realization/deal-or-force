@@ -200,9 +200,14 @@ public partial class DealOrForceGame
         RefreshConstructionQueue();
         ClearRuntimeChildren(_buildingCatalogRows);
         var player = _campaign.Player;
-        var count = _campaign.Construction.Count(project => project.NationId == player.Id);
         var hasRegion = _selectedState is not null && _selectedState.NationMapIndex == player.MapIndex
             && !LakeRegions.IsWaterState(_selectedState);
+        // What a building would do is a question about a place - what lies under it, whether it
+        // is on the water - so with no region of one's own selected the cards answer for the
+        // capital, and say so.
+        var where = hasRegion ? _selectedState : _campaign.States.FirstOrDefault(state =>
+            state.MapIndex == player.CapitalStateMapIndex && state.NationMapIndex == player.MapIndex);
+        var outputFactor = where is null ? 1f : MarketSystem.RegionOutputFactor(_campaign, player, where);
         foreach (var kind in BuildingCatalog.All)
         {
             var definition = BuildingCatalog.Get(kind);
@@ -236,12 +241,27 @@ public partial class DealOrForceGame
 
             var line = new HBoxContainer();
             rows.AddChild(line);
-            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), definition.Days), 12, Ui.Colour("text.caption"));
+            var cost = Title(Simulation.Loc.Format("{0} · {1} days", Fmt.Money(ConstructionCost.Of(_campaign, player, kind)), ConstructionCost.ExpectedDays(_campaign, player, kind)), 12, Ui.Colour("text.caption"));
             cost.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             cost.AutowrapMode = TextServer.AutowrapMode.Off;
             cost.ClipText = true;
             line.AddChild(cost);
             var captured = kind;
+
+            // What it is for, in one line under the price, and in full under the cursor: the
+            // goods it makes and the jobs it asks for, or its special effect when it makes none.
+            var outlook = where is null ? default : BuildingEffects(where, kind, outputFactor);
+            var outlookTip = Tr(definition.Description) +
+                             (string.IsNullOrEmpty(outlook.Text) ? "" : "\n\n" +
+                              (hasRegion ? "" : Simulation.Loc.Format("In {0}, the capital:", where.DisplayName) + "\n") + outlook.Text);
+            var gist = Title(string.IsNullOrEmpty(outlook.Summary) ? Tr(definition.Description) : outlook.Summary, 12,
+                Ui.Colour("text.body_soft"));
+            gist.AutowrapMode = TextServer.AutowrapMode.Off;
+            gist.ClipText = true;
+            gist.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+            gist.MouseFilter = MouseFilterEnum.Pass;
+            Tip(gist, outlookTip);
+            rows.AddChild(gist);
 
             var remove = ActionButton("−", () => DemolishBuilding(captured), 36, 32);
             remove.Name = "Demolish" + kind;
@@ -254,21 +274,19 @@ public partial class DealOrForceGame
                     Fmt.Money(ConstructionCost.Of(_campaign, player, kind) * _campaign.Defines.DemolitionRefund)));
             line.AddChild(remove);
 
-            var dry = hasRegion
-                ? Waterfront.Refusal(_campaign, _selectedState.MapIndex, kind)
-                : "";
+            var refusal = ConstructionAdmission.Refusal(_campaign, player, hasRegion ? _selectedState : null, kind);
+            var place = ActionButton("On map", () => BeginConstructionPlacement(captured), 76, 32);
+            place.Name = "PlaceBuilding" + BuildingCatalog.IdOf(kind);
+            place.Disabled = BuildingRules.Refusal(_campaign, player, kind).Length > 0 || !_campaign.FeatureEnabled("construction");
+            Tip(place, place.Disabled ? BuildingRules.Refusal(_campaign, player, kind)
+                : Tr("Choose this building, then click the map to place a regional construction project."));
+            line.AddChild(place);
             var add = ActionButton("+", () => QueueBuilding(captured), 36, 32);
             add.Name = "Build" + kind;
             // Mirror admission, not the full project price: the economy pays it over time.
-            var slots = ConstructionCost.Limit(_campaign, player, _campaign.Defines.MaxConstructionProjects);
-            add.Disabled = !hasRegion || dry.Length > 0 || count >= slots ||
-                           player.Treasury < Math.Min(0.05f, ConstructionCost.Of(_campaign, player, kind));
-            Tip(add, !hasRegion ? Tr("Select an owned region.")
-                : dry.Length > 0 ? dry
-                : count >= slots ? Simulation.Loc.Format("Every one of the {0} construction sites is taken.", slots)
-                : add.Disabled ? Tr("Insufficient treasury to start construction.")
-                : Tr(definition.Description) + "\n" +
-                  Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName));
+            add.Disabled = refusal.Length > 0;
+            Tip(add, add.Disabled ? refusal
+                : Simulation.Loc.Format("Queue in {0}", _selectedState.DisplayName) + "\n\n" + outlookTip);
             line.AddChild(add);
         }
         if (_buildingCatalogRows.GetChildCount() == 0)

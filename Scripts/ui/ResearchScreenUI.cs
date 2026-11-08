@@ -67,6 +67,7 @@ public partial class DealOrForceGame
         shade.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _researchLayer.AddChild(shade);
         var panel = TexturedPanel(_researchLayer);
+        panel.Name = "ResearchPanel";
         Ui.Place(panel, "modal.research");
         var rows = PanelRows(panel, 18, 14, 8);
         _researchFocus = ActionButton("Show current research", () => SelectResearchTechnology(_campaign.Player.CurrentResearch, true), 0, 32);
@@ -98,24 +99,6 @@ public partial class DealOrForceGame
         _researchGraphView.SetMeta("atlas_tab_button", true);
         StyleButton(_researchGraphView, false);
         toolbar.AddChild(_researchGraphView);
-        // Zoom by button as well as by gesture: Alt with the wheel is the window manager's on some
-        // layouts, and a tree with no hands on it is a tree nobody reads (TreeViewport).
-        _researchZoomOut = ActionButton("−", () => NudgeResearchZoom(false), 40, 32);
-        _researchZoomOut.Name = "ResearchZoomOut";
-        _researchZoomOut.TooltipText = Ui.Tip(Tr("Further away"));
-        toolbar.AddChild(_researchZoomOut);
-        _researchZoomLabel = Title("100%", 12, Ui.Colour("text.body"));
-        _researchZoomLabel.Name = "ResearchZoomLabel";
-        _researchZoomLabel.CustomMinimumSize = new Vector2(56, 0);
-        _researchZoomLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        toolbar.AddChild(_researchZoomLabel);
-        _researchZoomIn = ActionButton("+", () => NudgeResearchZoom(true), 40, 32);
-        _researchZoomIn.Name = "ResearchZoomIn";
-        _researchZoomIn.TooltipText = Ui.Tip(Tr("Closer"));
-        toolbar.AddChild(_researchZoomIn);
-        _researchZoomReset = ActionButton("100%", ResetResearchZoom, 72, 32);
-        _researchZoomReset.Name = "ResearchZoomReset";
-        toolbar.AddChild(_researchZoomReset);
 
         var filters = new HBoxContainer();
         rows.AddChild(filters);
@@ -229,8 +212,8 @@ public partial class DealOrForceGame
     private ProgressBar ResearchProgressBar(string name, int height)
     {
         var bar = new ProgressBar { Name = name, CustomMinimumSize = new(0, height), ShowPercentage = false, MouseFilter = MouseFilterEnum.Ignore };
-        bar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.overlay") });
-        bar.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("text.accent") });
+        bar.AddThemeStyleboxOverride("background", InstrumentMaterials.Meter("surface.overlay", inset: true));
+        bar.AddThemeStyleboxOverride("fill", InstrumentMaterials.Meter("text.accent"));
         return bar;
     }
 
@@ -339,7 +322,7 @@ public partial class DealOrForceGame
             return result;
         }
         _researchFocus.Disabled = current is null;
-        _researchSearch.PlaceholderText = Tr("Search technologies…");
+        _researchSearch.PlaceholderText = Tr("Search discoveries, effects or IDs…");
         RefreshResearchPickers();
         var points = current is null ? 0 : nation.ResearchProgress.GetValueOrDefault(current.Id);
         var cost = current is null ? 0 : Cost(current).EffectiveCost;
@@ -359,14 +342,13 @@ public partial class DealOrForceGame
         var shown = _researchGraph ? found : found.Skip(_researchPage * ResearchPageSize).Take(ResearchPageSize).ToArray();
         _researchResults.Text = _researchPathOnly ? Tr("Selected project and all prerequisites") : Loc.Format("{0} matching technologies", found.Length);
         _researchPageLabel.Text = _researchGraph
-            ? Loc.Get("Lines connect prerequisites to discoveries") + " · " + TreeViewport.Hint
+            ? Tr("Dependencies · Alt+wheel: zoom")
             : Loc.Format("Page {0} / {1}", _researchPage + 1, pages);
-        _researchPageLabel.TooltipText = Ui.Tip(_researchPageLabel.Text);
+        _researchPageLabel.TooltipText = Ui.Tip(_researchGraph
+            ? Loc.Get("Lines connect prerequisites to discoveries") + " · " + TreeViewport.Hint : _researchPageLabel.Text);
         _researchPrevious.Visible = _researchNext.Visible = !_researchGraph;
         foreach (var control in new Control[] { _researchZoomOut, _researchZoomIn, _researchZoomReset, _researchZoomLabel })
             if (control is not null) control.Visible = _researchGraph;
-        UpdateResearchZoomLabel();
-        _researchZoomOut.Visible = _researchZoomLabel.Visible = _researchZoomIn.Visible = _researchZoomReset.Visible = _researchGraph;
         UpdateResearchZoomLabel();
         _researchPrevious.Disabled = _researchPage == 0;
         _researchNext.Disabled = _researchPage + 1 == pages;
@@ -498,6 +480,16 @@ public partial class DealOrForceGame
         _researchDetails.AddChild(_researchStart);
         _researchDetailReason = Title("", 13, Ui.Colour("state.warning"));
         _researchDetails.AddChild(_researchDetailReason);
+        var showPath = ActionButton("Show dependency path", () =>
+        {
+            ResetResearchFilters(); _researchGraph = true; _researchPathOnly = true;
+            ResetResearchZoom(); RefreshResearchScreen();
+            _researchScroll.ScrollHorizontal = _researchScroll.ScrollVertical = 0;
+            Callable.From(FitResearchRoute).CallDeferred();
+        }, 0, 32);
+        showPath.Name = "ResearchShowPath";
+        _researchDetails.AddChild(showPath);
+        BuildResearchRoute();
         _researchDetails.AddChild(Title(technology.Description, 14, Ui.Colour("text.body")));
         _researchDetails.AddChild(Title("Effects", 12, Ui.Colour("text.caption")));
         foreach (var effect in NationalModifiers.Lines(technology.Effects))
@@ -513,10 +505,6 @@ public partial class DealOrForceGame
             button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
             _researchDetails.AddChild(button); _researchRequirements[id] = button;
         }
-        _researchDetails.AddChild(ActionButton("Show dependency path", () =>
-        {
-            ResetResearchFilters(); _researchGraph = true; _researchPathOnly = true; RefreshResearchScreen();
-        }, 0, 32));
         _researchDetails.AddChild(Title("Leads to", 12, Ui.Colour("text.caption")));
         var children = TechnologyCatalog.All.Where(child => child.Requires.Contains(technology.Id, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (children.Length == 0) _researchDetails.AddChild(Title("None", 13, Ui.Colour("text.muted")));
@@ -552,9 +540,12 @@ public partial class DealOrForceGame
         StyleButton(_researchStart, !_researchStart.Disabled);
         _researchDetailReason.Text = !enabled ? Tr("Research is disabled in this campaign.") : state == ResearchWorkspace.State.Blocked ? Tr("Complete every prerequisite first.") : "";
         _researchDetailReason.Visible = _researchDetailReason.Text.Length > 0;
+        RefreshResearchRoute(technology, pace);
         foreach (var (id, button) in _researchRequirements)
             button.Text = (nation.HasTechnology(id) ? "✓ " : "→ ") + Tr(TechnologyCatalog.Of(id)?.Name ?? id);
-        _researchDetailSpread.Text = known ? "" : Loc.Format("Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
-            Fmt.Percent(diffusion.World), Fmt.Percent(diffusion.Neighbours), Fmt.Percent(diffusion.Partners), Fmt.Percent(diffusion.Total));
+        _researchDetailSpread.Text = known
+            ? ResearchSystem.FieldUseLine(_campaign, nation, technology, pace)
+            : Loc.Format("Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.",
+                Fmt.Percent(diffusion.World), Fmt.Percent(diffusion.Neighbours), Fmt.Percent(diffusion.Partners), Fmt.Percent(diffusion.Total));
     }
 }

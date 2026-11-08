@@ -1,5 +1,9 @@
 {
   "Research pace depends on the economy, literacy, education, universities, laboratories, stability and previous discoveries.": "Темп исследований зависит от экономики, грамотности, расходов на образование, университетов, лабораторий, стабильности и прошлых открытий.",
   "Effective cost: {0} research points.": "Итоговая стоимость: {0} очков исследования.",
-  "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.": "Распространение знаний: мир {0}, соседи {1}, партнёры {2}; общая скидка {3}."
+  "Knowledge spread: world {0}, neighbours {1}, partners {2}; total discount {3}.": "Распространение знаний: мир {0}, соседи {1}, партнёры {2}; общая скидка {3}.",
+  "Field use is off.": "Опыт применения выключен.",
+  "Field use: {0} / {1} points. The ceiling is reached.": "Опыт применения: {0} / {1} очков. Потолок достигнут.",
+  "Field use: {0} / {1} points. It is not in use, so it does not grow.": "Опыт применения: {0} / {1} очков. Она не в деле, поэтому не растёт.",
+  "Field use: {0} / {1} points. In use; this week it takes {2} from the laboratories.": "Опыт применения: {0} / {1} очков. В деле; на этой неделе она берёт {2} у лабораторий."
 }

@@ -102,6 +102,16 @@ public partial class DealOrForceGame
                     _campaign.Defines.EventIntervalDays = Whole("event_interval");
                 break;
 
+            case "ai_aggression":
+                if (_campaign is not null)
+                    _campaign.Defines.AiAggression = Math.Clamp(SettingsCatalog.Number("ai_aggression"), 0.1f, 4f);
+                break;
+
+            case "ai_agreeableness":
+                if (_campaign is not null)
+                    _campaign.Defines.AiAgreeableness = Math.Clamp(SettingsCatalog.Number("ai_agreeableness"), 0.1f, 4f);
+                break;
+
             case "peace_by_provinces":
                 if (_campaign is not null)
                     _campaign.Defines.PeaceWholeRegions = !SettingsCatalog.Flag("peace_by_provinces");
@@ -165,6 +175,9 @@ public partial class DealOrForceGame
                 RefreshMapVisualToggles();
                 break;
 
+            case "map_region_icons":
+                if (_globe is not null) _globe.RegionIconsEnabled = SettingsCatalog.Flag("map_region_icons");
+                break;
             case "city_names":
                 if (_globe is not null) _globe.CityLabelsEnabled = SettingsCatalog.Flag("city_names");
                 RefreshMapVisualToggles();
@@ -224,6 +237,20 @@ public partial class DealOrForceGame
                 break;
 
             // ---- what it looks like --------------------------------------------------
+            case "map_camera_inertia":
+                if (_globe is not null) _globe.CameraInertiaEnabled = SettingsCatalog.Flag("map_camera_inertia");
+                break;
+            case "show_country_tags":
+                _globe?.RefreshCountryTagDisplay();
+                Refresh();
+                if (_mapSelectionOpen) ShowMapSelectionContent();
+                break;
+            case "map_visual_style":
+            case "map_cloud_opacity":
+            case "map_consistent_lighting":
+                _globe?.ApplyMapVisualStyle();
+                break;
+
             case "window_mode":
             case "window_size":
                 ApplyWindowMode(SettingsCatalog.Chosen("window_mode"));

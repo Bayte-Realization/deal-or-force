@@ -33,7 +33,7 @@
     "name": "Civic mediation service",
     "description": "A standing corps that talks to an angry region before the army has to, and is cheaper than either.",
     "category": "society", "cost": 420, "requires": ["civic_resilience_education"], "icon": "icon_laws",
-    "effects": { "stability_weekly": 0.07, "movement_activity": -0.10 }
+    "effects": { "stability_weekly": 0.0035, "movement_activity": -0.10 }
   },
   "open_statistics_office": {
     "name": "Open statistics office",
@@ -45,7 +45,7 @@
     "name": "Pandemic readiness corps",
     "description": "Reservists, stockpiles and drills kept current in the years when nothing is happening.",
     "category": "society", "cost": 460, "requires": ["public_health_networks"], "icon": "icon_building_hospital",
-    "effects": { "output": 0.012, "stability_weekly": 0.05 }
+    "effects": { "output": 0.012, "stability_weekly": 0.0025 }
   },
 
   // ---------------------------------------------------------------- military

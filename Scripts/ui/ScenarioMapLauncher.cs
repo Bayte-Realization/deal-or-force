@@ -33,12 +33,14 @@ public partial class DealOrForceGame
     {
         var editor = GD.Load<PackedScene>("res://Scenes/ScenarioMapEditor.tscn").Instantiate<ScenarioMapEditor>();
         editor.Draft = draft; editor.Topology = _campaign.ProvinceMap; editor.ModRoot = AuthorRoot;
+        // Over the map editor rather than instead of it: its draft stays open and unsaved work survives.
+        editor.OpenFlagEditor = OpenFlagEditorWindow;
         editor.ExitRequested = () =>
         {
             if (draft.HasSavedVersion) _authorScenarioId = draft.Id;
             OpenScenarioLibrary();
         };
-        var rows = AuthorWindow("Map & scenario editor", editor.RequestClose, "Back to scenarios");
+        var rows = AuthorWindow("Map & scenario editor", () => editor.ExitRequested?.Invoke(), "Back to scenarios");
         _authorMap = editor;
         editor.SizeFlagsVertical = SizeFlags.ExpandFill; editor.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         rows.AddChild(editor);

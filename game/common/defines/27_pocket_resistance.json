@@ -1,0 +1,8 @@
+{
+  // No new unit state: keep fighting in the actual battle instead of surrendering
+  // at the organisation threshold solely because no legal retreat exists.
+  // Losses, stores and hunger still use their existing systems and daily rates.
+  "PocketResistanceEnabled": true,
+  "PocketResistanceMinStrength": 0.25,
+  "PocketResistanceMinSupply": 0.10
+}

@@ -36,6 +36,20 @@ public sealed partial class Defines
 
 public static class RecruitmentSystem
 {
+    /// <summary>The command's moddable feature binding, without the command-side refusal log.</summary>
+    public static bool Enabled(Campaign c) => c is not null &&
+        (!c.Defines.FeatureCommands.TryGetValue(nameof(RaiseArmyCommand), out var feature) ||
+         string.IsNullOrWhiteSpace(feature) || c.FeatureEnabled(feature));
+
+    /// <summary>
+    /// What a barracks does for recruitment: divisions one order may raise in its own region,
+    /// and anywhere in the country; and divisions the national queue holds, at peace and at war.
+    /// </summary>
+    public const int BatchPerLocalBarracks = 4;
+    public const float BatchPerBarracks = 1.5f;
+    public const int QueuePerBarracks = 2;
+    public const int QueuePerBarracksAtWar = 3;
+
     /// <summary>
     /// Maximum divisions in one order is a training-throughput figure, not a fixed political
     /// ceiling. It grows with the region's barracks, the country's barracks and its people;
@@ -51,7 +65,7 @@ public static class RecruitmentSystem
             nationalBarracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
 
         var popMillions = MathF.Max(1f, (state?.Population ?? nation.Population) / 1_000_000f);
-        var dynamicCap = 2 + barracks * 4 + nationalBarracks * 1.5f + popMillions * 1.2f;
+        var dynamicCap = 2 + barracks * BatchPerLocalBarracks + nationalBarracks * BatchPerBarracks + popMillions * 1.2f;
         if (mode == MobilisationMode.RapidCallUp) dynamicCap *= 1.5f;
         else if (mode == MobilisationMode.TotalMobilisation) dynamicCap *= 2.25f;
         return Math.Clamp((int)MathF.Ceiling(dynamicCap), 1, 400);
@@ -71,7 +85,7 @@ public static class RecruitmentSystem
         var barracks = 0;
         foreach (var st in c.StatesOf(nation))
             barracks += st.Buildings.GetValueOrDefault(BuildingKind.Barracks);
-        var bonus = barracks * (atWar ? 3 : 2);
+        var bonus = barracks * (atWar ? QueuePerBarracksAtWar : QueuePerBarracks);
         if (mode == MobilisationMode.RapidCallUp) bonus += 12;
         else if (mode == MobilisationMode.TotalMobilisation) bonus += 36;
         return baseCap + bonus;
@@ -80,6 +94,8 @@ public static class RecruitmentSystem
     public static string Validate(Campaign c, int issuer, int stateId, string templateId, int count,
         bool allowDeficit = false, MobilisationMode mode = MobilisationMode.Standard)
     {
+        if (c is null) return "Campaign map is not ready.";
+        if (!Enabled(c)) return Loc.Get("Recruitment is disabled in this campaign.");
         var nation = c.NationById(issuer);
         var state = c.States.Find(s => s.MapIndex == stateId);
         var template = UnitTypeCatalog.All.FirstOrDefault(t => t.Id == templateId);
@@ -124,6 +140,7 @@ public static class RecruitmentSystem
         return template.RecruitmentCost * NationalModifiers.Factor(nation, "recruitment_cost") * mult;
     }
 
+    /// <summary>Read-only procurement quote; admission consumes the physical bill in RaiseArmyCommand.</summary>
     public static float TotalBatchCost(Campaign c, Nation nation, UnitTypeDefinition template, int count,
         MobilisationMode mode, out float stockpileSurcharge)
     {
@@ -134,7 +151,6 @@ public static class RecruitmentSystem
             // The depot bill is part of every posture, not a special wartime extra. A country
             // that has no ammunition or vehicles can still raise the division, but it pays
             // the emergency-procurement premium and drains what is physically in the depot.
-            StrategicStockpiles.EnsureSeeded(c, nation);
             var bill = StrategicStockpiles.DivisionMaterialBill(template, count, mode);
             stockpileSurcharge = StrategicStockpiles.SurchargeForMissingStockpile(c, nation, bill, out _);
         }
@@ -158,10 +174,15 @@ public static class RecruitmentSystem
         var nation = c.NationById(issuer);
         var map = c.ProvinceMap;
         if (nation is null || map is null) return -1;
-        if (!c.States.Any(s => s.MapIndex == stateId && s.NationMapIndex == nation.MapIndex)) return -1;
+        // The state must be the nation's own: training pauses under occupation and
+        // does not deploy into ground merely controlled.
+        var state = c.States.FirstOrDefault(s => s.MapIndex == stateId);
+        if (state is null || state.NationMapIndex != nation.MapIndex) return -1;
+        // The state→provinces index turns a 35 000-province scan into a read of the
+        // handful of provinces that state actually has.
         var controllers = c.ProvinceController ?? map.ProvinceToNation;
-        for (var p = 1; p <= map.ProvinceCount; p++)
-            if (map.ProvinceToState[p] == stateId && controllers[p] == nation.MapIndex) return p;
+        foreach (var p in map.ProvincesOfState(stateId))
+            if (controllers[p] == nation.MapIndex) return p;
         return -1;
     }
 

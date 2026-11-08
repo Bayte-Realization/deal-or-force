@@ -102,11 +102,20 @@ public static class Statecraft
     }
 
     /// <summary>
-    /// Everybody who has an opinion of a notorious country revises it.
+    /// Everybody who has an opinion of a notorious country revises it - by as much as its
+    /// appetite concerns them.
     ///
     /// Only relations that already exist are touched, deliberately: creating one for every
     /// pair in the world would leave sixty-eight thousand relationships to settle weekly,
     /// and a country nobody has ever dealt with has no opinion to revise.
+    ///
+    /// The weight used to be the same for everybody: a country that had taken a province on
+    /// the far side of the world was minus sixty-eight with every capital it had ever spoken
+    /// to, its own allies included. Now it is scaled by what the bystander has at stake
+    /// (OpinionWitnesses.Concern): the neighbours, who could be next, mind in full; its allies
+    /// and friends hardly at all; a country an ocean away with no tie to it notes it and little
+    /// more. The cap stays at one and a half times the declared weight, because a bad name is
+    /// a bystander's grievance and not a victim's.
     /// </summary>
     private static void RememberNotoriety(Campaign campaign)
     {
@@ -116,8 +125,13 @@ public static class Statecraft
             var b = campaign.NationById(relation.B);
             if (a is null || b is null) continue;
             var worst = MathF.Max(a.Notoriety, b.Notoriety);
-            if (worst < 8f) OpinionSystem.Forget(campaign, relation, "notoriety");
-            else OpinionSystem.Remember(campaign, relation, "notoriety", M.Clamp(worst / 60f, 0.1f, 2.0f));
+            if (worst < 8f) { OpinionSystem.Forget(campaign, relation, "notoriety"); continue; }
+            var notorious = a.Notoriety >= b.Notoriety ? a : b;
+            var observer = notorious == a ? b : a;
+            var concern = OpinionWitnesses.Concern(campaign, observer, notorious, null);
+            var scale = M.Clamp(worst / 60f, 0.1f, 1.5f) * MathF.Min(1f, concern);
+            if (scale < campaign.Defines.WitnessThreshold) OpinionSystem.Forget(campaign, relation, "notoriety");
+            else OpinionSystem.Remember(campaign, relation, "notoriety", scale);
         }
     }
 
@@ -442,6 +456,28 @@ public static class Statecraft
     /// Paradox rule and the more interesting outcome: the promise that is never tested is
     /// worth nothing, and the one that is broken is worth less than nothing.
     /// </summary>
+    /// <summary>The same automatic defensive promises for execution and forecasting.
+    /// Subjects' JoinsWars and DraggedIntoWars are deliberately different charter rules.</summary>
+    public static IReadOnlyList<int> DefensiveCallIds(Campaign c, StrategicWar war)
+    {
+        var ids = new HashSet<int>();
+        if (!war.CivilConflict && !war.Limited)
+        {
+            ids.UnionWith(InternationalOrganizations.DefencePartners(c, war.DefenderId));
+            foreach (var relation in c.Relations.Values)
+            {
+                if (relation.A != war.DefenderId && relation.B != war.DefenderId) continue;
+                var friend = relation.Other(war.DefenderId);
+                if (relation.Stance == DiplomaticStance.Allied || relation.GuaranteedBy(friend)) ids.Add(friend);
+            }
+            if (CoalitionAgainst(c, war.AttackerId) is { } coalition) ids.UnionWith(coalition.MemberIds);
+        }
+        foreach (var nation in c.Nations)
+            if (nation.AnswersTo(war.DefenderId) && SubjectCatalog.Of(nation.SubjectType) is { JoinsWars: true }) ids.Add(nation.Id);
+        ids.Remove(war.AttackerId); ids.Remove(war.DefenderId);
+        return ids.OrderBy(id => id).ToArray();
+    }
+
     public static int CallToArms(Campaign campaign, StrategicWar war)
     {
         if (campaign is null || war is null || war.Ended || _answering) return 0;
@@ -449,50 +485,7 @@ public static class Statecraft
         var defender = campaign.NationById(war.DefenderId);
         if (attacker is null || defender is null) return 0;
 
-        Candidates.Clear();
-        if (!war.CivilConflict && !war.Limited)
-            foreach (var partner in InternationalOrganizations.DefencePartners(campaign, defender.Id))
-                if (partner != attacker.Id && !Candidates.Contains(partner)) Candidates.Add(partner);
-        // A civil war is not what an alliance is for. The friends of either side back it -
-        // money, weapons, volunteers (ProxyWars) - and only a state the side answers to, or
-        // that answers to it, fights in it: the United States was not at war in Sudan, and a
-        // Sudan that made peace by becoming an American client state was the alliance table
-        // fighting somebody else's civil war for them.
-        foreach (var relation in war.CivilConflict || war.Limited ? Enumerable.Empty<DiplomaticRelation>() : campaign.Relations.Values)
-        {
-            if (relation.A != defender.Id && relation.B != defender.Id) continue;
-            var friendId = relation.Other(defender.Id);
-            if (friendId == attacker.Id) continue;
-            if (relation.Stance != DiplomaticStance.Allied && !relation.GuaranteedBy(friendId)) continue;
-            Candidates.Add(friendId);
-        }
-
-        // Every dependency of the defender that is obliged to come. Checked here rather
-        // than in SubjectSystem because this is the list of everybody who answers a war, and
-        // a dependency answering one is not a special case.
-        //
-        // The attacker's own subjects are NOT in this list, and the reason is worth writing
-        // down: everybody in it declares war on the attacker. A subject dragged along by its
-        // overlord declares on the overlord's enemy instead, which is the opposite direction
-        // and is done at the end of this method.
-        foreach (var nation in campaign.Nations)
-        {
-            if (!nation.AnswersTo(defender.Id) || nation.Id == attacker.Id) continue;
-            if (SubjectCatalog.Of(nation.SubjectType) is not { JoinsWars: true }) continue;
-            if (!Candidates.Contains(nation.Id)) Candidates.Add(nation.Id);
-        }
-
-        // And the coalition, if the attacker is what it was formed about.
-        var coalition = war.CivilConflict || war.Limited ? null : CoalitionAgainst(campaign, attacker.Id);
-        if (coalition is not null)
-            foreach (var memberId in coalition.MemberIds)
-                if (memberId != defender.Id && !Candidates.Contains(memberId))
-                    Candidates.Add(memberId);
-
-        Candidates.Sort();
-        // The list is a shared buffer and the declarations below re-enter this method's
-        // neighbours; copy it before anything else is allowed to touch it.
-        var summoned = Candidates.ToArray();
+        var summoned = DefensiveCallIds(campaign, war).ToArray();
         var joined = 0;
         _answering = true;
         try
@@ -693,15 +686,25 @@ public static class Statecraft
     /// </summary>
     private static bool WillAnswer(Campaign campaign, Nation friend, Nation defender, Nation attacker,
         DiplomaticRelation bond, bool favour = false)
+        => AssessCall(campaign, friend, defender, attacker, bond, favour, refreshAssessment: true).WouldJoin;
+
+    /// <summary>The actual deterministic decision, also used by the declaration preview.
+    /// A score is willingness, NOT a random percentage; opening a preview consumes no RNG.</summary>
+    public static WarCallAssessment AssessCall(Campaign campaign, Nation friend, Nation defender, Nation attacker,
+        DiplomaticRelation bond, bool favour = false, bool refreshAssessment = false)
     {
-        if (friend.IsHuman) return false;
-        if (CampaignDiplomacy.AtWar(campaign, friend.Id, attacker.Id)) return false;
-        if (!CampaignDiplomacy.CanDeclareWar(campaign, friend.Id, attacker.Id, out _)) return false;
+        if (CampaignDiplomacy.AtWar(campaign, friend.Id, attacker.Id))
+            return new(false, false, 0, "Already fighting this opponent in another war.");
+        if (!CampaignDiplomacy.CanDeclareWar(campaign, friend.Id, attacker.Id, out var refusal))
+            return new(false, false, 0, refusal);
+        if (friend.IsHuman) return new(true, false, 0, "A player must decide.");
 
         // Already fighting a war of its own is the commonest and most honest excuse.
         foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(friend.Id)) return false;
-        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Insolvent) return false;
+            if (!war.Ended && war.Involves(friend.Id))
+                return new(false, false, 0, "Already committed to another war.");
+        if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Insolvent)
+            return new(false, false, 0, "Insolvency prevents a military commitment.");
 
         var willingness = bond.Opinion / 100f;
         if (campaign.FeatureEnabled("public_debt") && friend.DebtCondition >= DebtCondition.Default) willingness -= 0.35f;
@@ -713,14 +716,16 @@ public static class Statecraft
 
         // And the arithmetic. Nobody honours a promise into a war they cannot survive.
         var mine = AiStatecraft.StrengthOf(campaign, friend);
-        var theirs = CampaignIntel.EstimatedStrength(campaign, friend.Id, attacker);
+        var theirs = CampaignIntel.EstimatedStrength(campaign, friend.Id, attacker, refreshAssessment);
         willingness += M.Clamp(mine / MathF.Max(0.01f, theirs) - 0.75f, -0.8f, 0.8f);
 
         // A coalition member answers more readily; that is what it joined for.
         if (CoalitionAgainst(campaign, attacker.Id) is { } coalition && coalition.MemberIds.Contains(friend.Id))
             willingness += 0.35f;
 
-        return willingness > 0.5f;
+        return new(true, willingness > 0.5f, willingness,
+            willingness > .5f ? "Relations, readiness and the balance of forces favour joining."
+                : "Relations, readiness or the balance of forces discourage joining.");
     }
 
     private static Nation NationByMapIndex(Campaign campaign, int mapIndex)

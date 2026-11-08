@@ -32,12 +32,7 @@ public sealed partial class GlobePresentation
             if (vision.Sees(p)) _visionPixels[p] = 255;
         if (_visionImage is null) _visionImage = Image.CreateFromData(256, 256, false, Image.Format.R8, _visionPixels);
         else _visionImage.SetData(256, 256, false, Image.Format.R8, _visionPixels);
-        if (_visionTexture is null)
-        {
-            _visionTexture = ImageTexture.CreateFromImage(_visionImage);
-            _globeMaterial.SetShaderParameter("fog_visibility", _visionTexture);
-        }
-        else _visionTexture.Update(_visionImage);
+        UpdateMapImage("fog_visibility", _visionImage, ref _visionTexture);
         _battleMarkerDay = -1;
     }
 }

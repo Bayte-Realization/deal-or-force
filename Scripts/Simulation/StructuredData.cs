@@ -16,8 +16,12 @@ namespace DealOrForce.Simulation;
 /// No object deserialization, executable tags, alias expansion or implicit date objects.
 /// Save files, protocol messages and package manifests deliberately do not use this reader.
 /// </summary>
-public static class StructuredData
+public static partial class StructuredData
 {
+    // МОДДЕРАМ: этот слой меняет формат, но не смысл содержимого. После YAML -> JSON
+    // работают те же каталоги и Merge/Validate, что и для .json. Новую игровую механику
+    // добавляют в соответствующий каталог, а не отдельной веткой YAML-парсера.
+    // Карта входных точек и проверяемые примеры: docs/MODDER_CODE_MAP_RU.md.
     public const int MaxYamlBytes = 32 * 1024 * 1024;
     private const int MaxDepth = 64;
     private const int MaxNodes = 1_000_000;
@@ -27,6 +31,32 @@ public static class StructuredData
 
     public static bool IsDocument(string path) => Path.GetExtension(path).ToLowerInvariant()
         is ".json" or ".yaml" or ".yml";
+
+    public static bool IsYaml(string path) => Path.GetExtension(path).ToLowerInvariant() is ".yaml" or ".yml";
+
+    /// <summary>The same safe reader for an editor draft and a file on disk.</summary>
+    public static string ToJson(string path, string text)
+    {
+        if (!IsDocument(path)) throw new InvalidDataException($"Unsupported data format: {path}");
+        if (!IsYaml(path)) return text;
+        try { return YamlToJson(text); }
+        catch (YamlException exception)
+        {
+            // YamlDotNet keeps where the mistake is in Start and leaves it out of Message, so
+            // without this a typo in a mod read "did not find expected ',' or ']'" with no line
+            // to look at. Written the same way as the rejections below, which carry their place.
+            throw new InvalidDataException($"{path}: {exception.Message} At {exception.Start}.", exception);
+        }
+        catch (InvalidDataException exception)
+        { throw new InvalidDataException($"{path}: {exception.Message}", exception); }
+    }
+
+    public static JsonDocument ParseDocument(string path, string text)
+    {
+        try { return JsonDocument.Parse(ToJson(path, text), GameDataLoader.ForgivingJson); }
+        catch (JsonException exception)
+        { throw new InvalidDataException($"{path}: {exception.Message}", exception); }
+    }
 
     /// <summary>
     /// True for a #rgb or #rrggbb colour, which is what a colour written in data has to be.
@@ -55,22 +85,16 @@ public static class StructuredData
     public static string ReadJson(string path)
     {
         if (!IsDocument(path)) throw new InvalidDataException($"Unsupported data format: {path}");
-        if (Path.GetExtension(path).Equals(".json", StringComparison.OrdinalIgnoreCase))
-            return File.ReadAllText(path);
-        try
-        {
-            if (new FileInfo(path).Length > MaxYamlBytes)
-                throw new InvalidDataException($"YAML exceeds {MaxYamlBytes} bytes.");
-            return YamlToJson(File.ReadAllText(path));
-        }
-        catch (Exception exception) when (exception is YamlException or InvalidDataException)
-        {
-            throw new InvalidDataException($"{path}: {exception.Message}", exception);
-        }
+        if (IsYaml(path) && new FileInfo(path).Length > MaxYamlBytes)
+            throw new InvalidDataException($"{path}: YAML exceeds {MaxYamlBytes} bytes.");
+        return ToJson(path, File.ReadAllText(path));
     }
 
     public static string YamlToJson(string text)
     {
+        // Это граница доверия к данным: не заменять на Deserialize<object>(). Такие
+        // десериализаторы могут вводить свои типы/теги/даты и расширять алиасы, тогда
+        // одинаковые документы будут вести себя по-разному в редакторе и симуляции.
         if (Encoding.UTF8.GetByteCount(text) > MaxYamlBytes)
             throw new InvalidDataException($"YAML exceeds {MaxYamlBytes} bytes.");
         var parser = new Parser(new StringReader(text));
@@ -108,6 +132,8 @@ public static class StructuredData
             parser.Consume<MappingStart>();
             writer.WriteStartObject();
             var keys = new HashSet<string>(StringComparer.Ordinal);
+            // Дубли одного ключа здесь — ошибка, не система переопределения. Для
+            // переопределений используют отдельные файлы/пакеты в порядке загрузки.
             while (!parser.Accept<MappingEnd>(out _))
             {
                 if (!parser.Accept<Scalar>(out var key))
@@ -115,7 +141,8 @@ public static class StructuredData
                 ValidateNode(key, "str");
                 parser.Consume<Scalar>();
                 if (++nodes > MaxNodes) throw Reject(key, "YAML node limit exceeded.");
-                if (key.Value == "<<") throw Reject(key, "YAML merge keys are not supported; use overlay files instead.");
+                if (key.Value == "<<" && key.Style == ScalarStyle.Plain)
+                    throw Reject(key, "YAML merge keys are not supported; use overlay files instead.");
                 if (!keys.Add(key.Value)) throw Reject(key, $"Duplicate YAML key '{key.Value}'.");
                 writer.WritePropertyName(key.Value);
                 WriteNode(parser, writer, depth + 1, ref nodes);

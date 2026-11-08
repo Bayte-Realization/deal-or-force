@@ -63,7 +63,10 @@ public static class WarCoalition
     {
         if (c.ProvinceMap is null || c.ProvinceController is null || c.NationById(nationId) is not { } own)
             return Array.Empty<int>();
-        var stamp = ((long)c.ElapsedDays << 24) ^ (uint)c.MapRevision;
+        // Wars join and leave without touching the map, so the stamp carries the war
+        // revision too: a side change mid-day invalidates the allowed set in the solo run
+        // exactly as it does in a run sharing the cache with another campaign.
+        var stamp = ((long)c.ElapsedDays << 24) ^ (uint)c.MapRevision ^ ((long)c.WarRevision << 40);
         if (!ReferenceEquals(_routeCacheFor, c) || _routeCacheStamp != stamp)
         {
             RouteCache.Clear();
@@ -207,9 +210,8 @@ public static class WarCoalition
 
     /// <summary>
     /// A beaten formation with no friendly ground next to it breaks out towards its own line: the
-    /// nearest province its side holds and no enemy stands in, reached through provinces no enemy
-    /// stands in, at most this many steps away. Breadth first, lowest province first at each step,
-    /// so the answer is the same on every machine. 0 when there is none: a pocket.
+    /// nearest province its side holds and no enemy stands in, through a legal, undefended
+    /// corridor. Return only its FIRST step, never teleport across the whole corridor.
     /// </summary>
     private static int DeepRetreatProvince(Campaign c, StrategicWar war, Army army, int from, int depth)
     {
@@ -218,18 +220,28 @@ public static class WarCoalition
         var own = c.NationById(army.NationId);
         var seen = new HashSet<int> { from };
         var ring = new List<int> { from };
+        var firstStep = new Dictionary<int, int>();
+        var allowed = MilitaryAccess.Controllers(c, army.NationId);
+        if (war is not null && !war.Ended && war.Involves(army.NationId))
+        {
+            FillControllers(c, war, true, allowed);
+            FillControllers(c, war, false, allowed);
+        }
         for (var step = 1; step <= depth && ring.Count > 0; step++)
         {
             var next = new List<int>();
             foreach (var at in ring)
                 foreach (var p in map.Neighbors[at])
                 {
-                    if (map.IsWater(p) || !seen.Add(p) || EnemyStandsIn(c, war, army.NationId, p)) continue;
+                    if (map.IsWater(p) || !allowed.Contains(controls[p]) || !seen.Add(p) ||
+                        EnemyStandsIn(c, war, army.NationId, p)) continue;
+                    firstStep[p] = at == from ? p : firstStep[at];
                     next.Add(p);
                 }
             next.Sort();
             foreach (var p in next)
-                if (controls[p] == own.MapIndex || FriendlyController(c, war, army.NationId, controls[p])) return p;
+                if (controls[p] == own.MapIndex || FriendlyController(c, war, army.NationId, controls[p]))
+                    return firstStep[p];
             ring = next;
         }
         return 0;

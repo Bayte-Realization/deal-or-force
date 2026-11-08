@@ -1,0 +1,5 @@
+{
+  "shaders": {
+    "flag_cloth": "res://game/gfx/interface/shaders/flag_cloth.gdshader"
+  }
+}

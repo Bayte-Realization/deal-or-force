@@ -125,7 +125,8 @@ public static class ThreatPosture
         {
             if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
             if (army.InBattle || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0) continue;
-            if (army.DirectOrder || army.AssignedWarId >= 0 || army.FrontLineId >= 0 || army.PlanActive) continue;
+            if (army.DirectOrder || army.AssignedWarId >= 0 || army.FrontLineId >= 0 ||
+                army.PlanActive && army.OrderKind != ArmyOrder.Manual) continue;
             Free.Add(army);
         }
         if (Free.Count == 0) return;
@@ -145,9 +146,19 @@ public static class ThreatPosture
             count = Math.Min(count, onBorders - given);
             var border = BorderWith(map, controllers, ours, (ushort)neighbour.MapIndex);
             if (border.Count == 0) continue;
+            var strategicPost = -1;
+            var importance = 0f;
+            if (defines.ExclaveDefenceWeight > 0f)
+                foreach (var post in border)
+                {
+                    var value = StrategicExclaves.Importance(campaign, post);
+                    if (value <= importance) continue;
+                    importance = value; strategicPost = post;
+                }
             for (var index = 0; index < count; index++)
             {
-                var post = border[(int)((index + 0.5f) * border.Count / count) % border.Count];
+                var post = index == 0 && strategicPost > 0 ? strategicPost :
+                    border[(int)((index + 0.5f) * border.Count / count) % border.Count];
                 Desired.Add(post);
                 DesiredSet.Add(post);
             }
@@ -178,6 +189,7 @@ public static class ThreatPosture
             var target = map.CenterOf(post);
             foreach (var army in Free)
             {
+                if (army.Route.Count > 0 || army.ReadyDay > campaign.ElapsedDays || army.LentById >= 0) continue;
                 var at = army.OrderProvinceId > 0 && army.Route.Count > 0 ? army.OrderProvinceId : army.ProvinceId;
                 if (DesiredSet.Contains(at)) continue;
                 var distance = NavalOperations.Distance(army.Latitude, army.Longitude, target.Latitude, target.Longitude);
@@ -228,7 +240,7 @@ public static class ThreatPosture
     private static bool AtWar(Campaign campaign, Nation nation)
     {
         foreach (var war in campaign.Wars)
-            if (!war.Ended && !war.Limited && war.Involves(nation.Id)) return true;
+            if (!war.Ended && war.Involves(nation.Id)) return true;
         return false;
     }
 

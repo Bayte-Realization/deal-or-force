@@ -6,20 +6,27 @@ namespace DealOrForce.Simulation;
 
 /// <summary>
 /// Strategic high-tech resources and commodity leverage between trade partners.
-/// Measures reliance on critical inputs (Rare Earths, Electronics, Machinery, Uranium, Energy/Hydrocarbons)
-/// and calculates economic leverage one nation exerts over another through trade routes.
+/// Measures reliance on critical inputs and calculates economic leverage one nation exerts
+/// over another through trade routes. Which goods count, and how much, is the good's own
+/// `leverage` field in common/goods (CommodityDefinition.Leverage): rare earths and machinery
+/// as ever, and now advanced chips, chipmaking tools, gallium, grain, potash and the rest -
+/// whatever a file says can be withheld.
 /// </summary>
 public static class CommodityLeverage
 {
     public static bool IsHighTech(Commodity c) =>
-        c is Commodity.RareEarths or Commodity.Electronics or Commodity.Machinery or Commodity.Uranium;
+        CommodityCatalog.Get(c).Leverage == CommodityLeverageTier.HighTech;
 
     public static bool IsStrategic(Commodity c) =>
-        IsHighTech(c) || c is Commodity.Chemicals or Commodity.Oil or Commodity.NaturalGas or Commodity.Arms;
+        CommodityCatalog.Get(c).Leverage != CommodityLeverageTier.None;
 
     /// <summary>
     /// Computes the strategic commodity leverage that seller holds over buyer in range [0, 1].
     /// Reflects what share of buyer's strategic imports comes from seller, weighted by import reliance.
+    ///
+    /// One walk over the buyer's routes, summing every good's imports and the seller's part of
+    /// them, rather than one walk per strategic good: with twenty-odd levers the per-good walk
+    /// cost twenty passes over the same list for every pair of countries the AI weighs.
     /// </summary>
     public static float Calculate(Campaign c, Nation seller, Nation buyer)
     {
@@ -30,12 +37,31 @@ public static class CommodityLeverage
         var routes = TradeNetwork.RoutesTouching(c, buyer.Id);
         if (routes.Count == 0) return 0f;
 
+        var size = 0;
+        foreach (var commodity in CommodityCatalog.All) size = Math.Max(size, (int)commodity + 1);
+        Span<float> totalVolume = size <= 256 ? stackalloc float[size] : new float[size];
+        Span<float> sellerVolume = size <= 256 ? stackalloc float[size] : new float[size];
+        totalVolume.Clear();
+        sellerVolume.Clear();
+        var any = false;
+        for (var i = 0; i < routes.Count; i++)
+        {
+            var r = routes[i];
+            if (r.BuyerId != buyer.Id) continue;
+            var index = (int)r.Commodity;
+            if (index < 0 || index >= size || !float.IsFinite(r.Volume) || r.Volume <= 0f) continue;
+            totalVolume[index] += r.Volume;
+            if (r.SellerId == seller.Id) { sellerVolume[index] += r.Volume; any = true; }
+        }
+        if (!any) return 0f;
+
         var totalWeightedLeverage = 0f;
         var totalWeight = 0f;
 
         foreach (var commodity in CommodityCatalog.All)
         {
-            if (!IsStrategic(commodity)) continue;
+            var tier = CommodityCatalog.Get(commodity).Leverage;
+            if (tier == CommodityLeverageTier.None) continue;
 
             buyer.Market.TryGetValue(commodity, out var quote);
             var demand = quote?.Demand ?? 0f;
@@ -43,27 +69,14 @@ public static class CommodityLeverage
 
             if (demand <= 0.001f && imports <= 0.001f) continue;
 
-            var weight = IsHighTech(commodity) ? 2.0f : 1.0f;
+            var weight = tier == CommodityLeverageTier.HighTech ? 2.0f : 1.0f;
             totalWeight += weight;
 
-            var sellerVolume = 0f;
-            var totalVolume = 0f;
+            var fromSeller = sellerVolume[(int)commodity];
+            if (fromSeller <= 0.001f) continue;
 
-            for (var i = 0; i < routes.Count; i++)
-            {
-                var r = routes[i];
-                if (r.BuyerId != buyer.Id || r.Commodity != commodity) continue;
-                if (!float.IsFinite(r.Volume) || r.Volume <= 0f) continue;
-
-                totalVolume += r.Volume;
-                if (r.SellerId == seller.Id)
-                    sellerVolume += r.Volume;
-            }
-
-            if (sellerVolume <= 0.001f) continue;
-
-            var effectiveImports = MathF.Max(imports, totalVolume);
-            var supplierShare = effectiveImports > 0.001f ? Math.Clamp(sellerVolume / effectiveImports, 0f, 1f) : 1f;
+            var effectiveImports = MathF.Max(imports, totalVolume[(int)commodity]);
+            var supplierShare = effectiveImports > 0.001f ? Math.Clamp(fromSeller / effectiveImports, 0f, 1f) : 1f;
 
             var effectiveDemand = MathF.Max(demand, effectiveImports);
             var importReliance = effectiveDemand > 0.001f ? Math.Clamp(effectiveImports / effectiveDemand, 0f, 1f) : 1f;

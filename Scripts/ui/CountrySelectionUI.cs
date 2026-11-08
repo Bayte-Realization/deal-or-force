@@ -320,6 +320,8 @@ public partial class DealOrForceGame
         if (nation is null) return;
         _pickerNation = nation;
         _selectedNation = nation;
+        _globe.ClearSelection();
+        _globe.HighlightNation(nation.MapIndex);
 
         var rank = 1 + _campaign.Nations.Count(other => other.Gdp > nation.Gdp);
         var tier = Tr(rank <= 8 ? "great power"

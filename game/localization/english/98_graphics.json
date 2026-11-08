@@ -5,5 +5,5 @@
   "Vulkan": "Vulkan",
   "OpenGL": "OpenGL",
   "OpenGL (ANGLE)": "OpenGL (ANGLE)",
-  "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or awkward graphics drivers.": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or awkward graphics drivers."
+  "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or non-standard graphics drivers.": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or non-standard graphics drivers."
 }

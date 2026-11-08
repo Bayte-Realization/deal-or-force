@@ -100,6 +100,7 @@ public partial class DealOrForceGame
                 Modulate = ArtColour("icon_" + icon, "text.accent")
             });
             var headLabel = Title(Tr(caption), 11, Ui.Colour("text.caption"));
+            headLabel.Name = "DoctrineCurrencyHead_" + icon;
             headLabel.AutowrapMode = TextServer.AutowrapMode.Off;
             head.AddChild(headLabel);
             box.AddChild(head);
@@ -108,7 +109,8 @@ public partial class DealOrForceGame
             valueLabel.AddThemeFontOverride("font", PresentationFonts.Tabular());
             box.AddChild(valueLabel);
             var noteLabel = Title(note, 11, Ui.Colour("text.body_soft"));
-            noteLabel.AutowrapMode = TextServer.AutowrapMode.Off;
+            noteLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            noteLabel.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             box.AddChild(noteLabel);
             line.AddChild(box);
         }
@@ -225,7 +227,9 @@ public partial class DealOrForceGame
             rows.AddChild(shelf);
             if (book is null)
             {
-                PolicyText(rows, Loc.Get("Shelf empty. The first article of any book costs nothing political; abandoning one later does."));
+                var empty = Title("No doctrine adopted.", 14, Ui.Colour("text.body_soft"));
+                Tip(empty, "Shelf empty. The first article of any book costs nothing political; abandoning one later does.");
+                rows.AddChild(empty);
                 continue;
             }
             PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(book.Name), track.Known.Count, book.Nodes.Count),
@@ -239,12 +243,33 @@ public partial class DealOrForceGame
                 PolicyText(rows, "· " + Tr(node.Name) + (string.IsNullOrEmpty(effects) ? "" : " — " + effects));
             }
             if (written == 0) PolicyText(rows, Loc.Get("Nothing of it is drilled in yet."));
+            var companion = track.Companion;
+            var second = companion is { Branch.Length: > 0 } ? TacticalDoctrineCatalog.Find(companion.Branch) : null;
+            if (second is null) continue;
+            PolicyText(rows, Loc.Format("{0} · {1}/{2}", Tr(second.Name), companion.Known.Count, second.Nodes.Count),
+                "text.accent");
+            var drilled = 0;
+            foreach (var node in second.Nodes)
+            {
+                if (!companion.Known.Contains(node.Id)) continue;
+                drilled++;
+                var effects = NationalModifiers.Block(node.Modifiers);
+                PolicyText(rows, "· " + Tr(node.Name) + (string.IsNullOrEmpty(effects) ? "" : " — " + effects));
+            }
+            if (drilled == 0) PolicyText(rows, Loc.Get("Nothing of it is drilled in yet."));
         }
         // A country's very first article is already being studied before it has a book in
         // force. Its progress belongs here too, on every shelf that is studying something.
         foreach (var slot in DoctrineSlots.All)
         {
             var track = n.TacticalDoctrine.Track(slot);
+            if (track.Companion is { LearningNode.Length: > 0 } extra)
+            {
+                var other = TacticalDoctrineCatalog.Find(extra.LearningBranch)?.Find(extra.LearningNode);
+                PolicyText(rows, Loc.Format("{0}: {1} days left.",
+                    other is null ? extra.LearningNode : Tr(other.Name),
+                    Math.Max(0, extra.LearningDoneDay - _campaign.ElapsedDays)));
+            }
             if (track.LearningNode.Length == 0) continue;
             var studying = TacticalDoctrineCatalog.Find(track.LearningBranch)?.Find(track.LearningNode);
             PolicyText(rows, Loc.Format("{0}: {1} days left.",

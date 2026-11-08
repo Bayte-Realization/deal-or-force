@@ -74,6 +74,27 @@ static class FrontDisengagementPerformanceTests
         FreshContextAfterMutation();
         RoutingWorkIsShared();
         FallbackCrowdingRemainsLive();
+        UnrelatedArmiesStayOutOfParticipantIndex();
+    }
+
+    static void UnrelatedArmiesStayOutOfParticipantIndex()
+    {
+        var c = Fixture(false);
+        // The friendly/hostile occupancy sets contain just the same two provinces.
+        // Only a mistaken world-sized participant dictionary grows with this roster.
+        for (var i = 0; i < 12000; i++) AddUnit(c, 1000 + i, 2, 8, 1, .8f, false);
+        using (var warm = new FrontDisengagement.SelectionContext(c, c.Wars[0], 0, 6)) { }
+        var hash = CampaignFingerprint.Of(c); var rng = c.Random.State;
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        using (var context = new FrontDisengagement.SelectionContext(c, c.Wars[0], 0, 6))
+        {
+            var bytes = GC.GetAllocatedBytesForCurrentThread() - before;
+            Check(bytes < 16384, "12000 unrelated divisions do not grow participant index (" + bytes + " bytes)");
+            Check(context.Totals(c.Battles[0], true).OwnDivisions > 0,
+                "filtered index still sees the actual battle participants");
+        }
+        Check(CampaignFingerprint.Of(c) == hash && c.Random.State == rng,
+            "bounded index leaves the world and random stream untouched");
     }
 
     static void FallbackCrowdingRemainsLive()

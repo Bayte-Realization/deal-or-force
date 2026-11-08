@@ -1,0 +1,8 @@
+{
+  "Show calculation": "Show calculation",
+  "Hide calculation": "Hide calculation",
+  "How the target is calculated": "How the target is calculated",
+  "Target under current conditions: {0}": "Target under current conditions: {0}",
+  "{0:+0.0;-0.0;0.0} pp": "{0:+0.0;-0.0;0.0} pp",
+  "Read the stability calculation without hovering. This does not change policy.": "Read the stability calculation without hovering. This does not change policy."
+}

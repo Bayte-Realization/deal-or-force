@@ -17,6 +17,13 @@ public partial class ExportVerification
         // Exercise Godot's real hit test and press/release route, not just a signal.
         var point = button.GetGlobalTransformWithCanvas() * (button.Size * .5f);
         GetViewport().PushInput(new InputEventMouseMotion { Position = point }, true);
+        if (GetViewport().GuiGetHoveredControl() != button)
+        {
+            GD.Print($"DOCTRINE_HIT requested={button.Name} rect={button.GetGlobalRect()} point={point} hovered={GetViewport().GuiGetHoveredControl()?.Name}");
+            for (var ancestor = button.GetParent(); ancestor is not null; ancestor = ancestor.GetParent())
+                if (ancestor is ScrollContainer scroll)
+                    GD.Print($"DOCTRINE_HIT scroll={scroll.Name} rect={scroll.GetGlobalRect()} vertical={scroll.ScrollVertical} min={scroll.GetVScrollBar().MinValue} max={scroll.GetVScrollBar().MaxValue} page={scroll.GetVScrollBar().Page}");
+        }
         Check(GetViewport().GuiGetHoveredControl() == button, "doctrine mouse hit reaches its button: " + label);
         GetViewport().PushInput(new InputEventMouseButton
             { Position = point, ButtonIndex = MouseButton.Left, ButtonMask = MouseButtonMask.Left, Pressed = true }, true);
@@ -56,6 +63,9 @@ public partial class ExportVerification
             NationalModifiers.Invalidate(n);
             game.VerificationOpenPausedDoctrines(branch.Id);
             await Wait(.25);
+            await VerifyDoctrineComfort(game, root.Id, language, size.X);
+            await VerifyDoctrineServices(game, language, size.X);
+            game.VerificationOpenPausedDoctrines(branch.Id); await Wait(.2);
 
             var study = PausedDoctrineButton(game, "StudyArticle_" + root.Id);
             Check(study is { Disabled: false } && study.IsVisibleInTree(),
@@ -111,11 +121,20 @@ public partial class ExportVerification
 
             game.VerificationOpenPausedDoctrines(branch.Id, course: true);
             await Wait(.25);
+            var courseScroll = game.FindChild("DoctrineCourseScroll", true, false) as ScrollContainer;
+            var bodyScroll = game.FindChild("DoctrineBodyScroll", true, false) as ScrollContainer;
+            var bookScroll = game.FindChild("DoctrineBookScroll", true, false) as ScrollContainer;
+            Check(courseScroll is not null && bodyScroll is not null &&
+                courseScroll.GetGlobalRect().End.Y <= bodyScroll.GetGlobalRect().End.Y + 1,
+                "strategic course viewport fits the visible outer workspace: " + label);
+            Check(bookScroll is not null && bookScroll.GetGlobalRect().End.Y <= bodyScroll.GetGlobalRect().End.Y + 1,
+                "service-filtered catalogue stays inside its independent viewport: " + label);
             var adopt = PausedDoctrineButton(game, "AdoptStrategy_" + course.Id);
             Check(adopt is { Disabled: false }, "real strategic-course button is available on pause: " + label);
             if (adopt is null || adopt.Disabled) continue;
             game.VerificationRevealDoctrineButton(adopt);
             await Wait(.2);
+            await Capture("paused-doctrine-before-adopt-" + language + "-" + size.X);
             ClickPausedDoctrine(adopt, label + " strategic course");
             var inForce = PausedDoctrineButton(game, "AdoptStrategy_" + course.Id);
             Check(n.StrategicDoctrine.Id == course.Id && n.PoliticalPoints == 1000 &&
@@ -140,6 +159,8 @@ public partial class ExportVerification
                 "redrawing an adopted strategic course is read-only: " + label);
             await Capture("paused-doctrine-strategy-" + language + "-" + size.X);
         }
+        await VerifyDoctrineOperationalReading(game);
+        await VerifyAdvancedDoctrineMouse(game);
         await VerifyPausedDoctrineBindings(game, n);
     }
 
@@ -214,7 +235,7 @@ public partial class DealOrForceGame
         _campaign.ObserverMode = false;
         _campaign.IsPaused = true;
         OpenDoctrineScreen();
-        _doctrineBook = book;
+        SelectDoctrineBook(book);
         SetDoctrineView(course ? "course" : "tactical");
     }
 
@@ -226,7 +247,7 @@ public partial class DealOrForceGame
         OpenArmyDoctrinePage();
     }
 
-    internal void VerificationRevealDoctrineButton(Button button)
+    internal void VerificationRevealDoctrineButton(Control button)
     {
         for (var parent = button?.GetParent(); parent is not null; parent = parent.GetParent())
             if (parent is ScrollContainer scroll)

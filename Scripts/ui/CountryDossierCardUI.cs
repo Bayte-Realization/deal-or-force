@@ -117,10 +117,13 @@ public partial class DealOrForceGame
             }
         }
         _countryFactsScroll.Visible = _countryDossierTab != "Actions" || nation == _campaign.Player;
+        if (_countryCardFlagEdit is not null)
+            _countryCardFlagEdit.Visible = nation == _campaign.Player && CampaignCosmetics.CanEdit(_campaign, _campaign.Player, nation);
         _countryOrdersScroll.Visible = _countryDossierTab == "Actions" && nation != _campaign.Player;
         // Opening actions does not execute them. This is still the one shared action block.
         _countryCardCaption.TooltipText = Ui.Tip(nation.DisplayName + "\n" +
-            Tr(PoliticsCore.GovernmentOf(nation).Name) + " · " + Tr(PoliticsCore.IdeologyOf(nation).Name));
+            Tr(PoliticsCore.GovernmentOf(nation).Name) + " · " + Tr(PoliticsCore.IdeologyOf(nation).Name) + "\n" +
+            Loc.Format("Country code (saves and mods): {0}", nation.Tag));
         if (!_countryDossierChangingPage && _countryDossierTab != "Actions")
         {
             var y = _countryFactsScroll.ScrollVertical;
@@ -142,6 +145,13 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Subjects", string.Join(", ", subjects.Select(s => s.DisplayName)));
         foreach (var war in _campaign.Wars.Where(w => !w.Ended && w.Involves(nation.Id)))
             CardRow(_countryCardRows, "At war", WarNames.Of(_campaign, war));
+        // The deterrent a country holds is the one fact that redraws every other row here:
+        // what it may do, what may be done to it, and what its wars can end in.
+        var deterrentTier = Deterrence.TierOf(_campaign, nation);
+        if (deterrentTier > 0)
+            CardRow(_countryCardRows, "Nuclear deterrent",
+                deterrentTier >= 2 ? Loc.Format("Tier {0} · second strike", deterrentTier) : Loc.Get("Mutual assured destruction"),
+                Loc.Get("A holder of the deterrent is not attacked directly by another holder, and its wars with other holders end in limited terms: liberation and money, never conquest. Acquisition is research, not decree."));
         if (_campaign.FeatureEnabled("organizations"))
             foreach (var organization in InternationalOrganizations.Memberships(_campaign, nation.Id))
                 CardRow(_countryCardRows, "Organizations", InternationalOrganizations.DisplayName(_campaign, organization));

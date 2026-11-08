@@ -1,0 +1,23 @@
+// The nuclear age in three layers, each closed at the start and opened by its own rule.
+{
+  "Features": {
+    "defcon": false,
+    "nuclear_posture": false,
+    "nuclear_strikes": false
+  },
+  "FeatureUnlocks": {
+    // The ladder opens with the first bomb anywhere in the world.
+    "defcon": "first_bomb",
+    // Alerts, tests and the red telephone open once two countries hold one.
+    "nuclear_posture": "second_bomb",
+    // Using one has no automatic rule here: an event or decision opens it with
+    // "feature.nuclear_strikes_set": 1 (see scripted_effects). Remove this line's comment marks
+    // and name a trigger to open it automatically instead.
+    // "nuclear_strikes": "doctrine_of_first_use"
+    "nuclear_strikes": ""
+  },
+  // Rules of the ladder stay ordinary defines a mod may tune: how long the right to answer a
+  // strike lasts, how outlawed a first user becomes, how readily the computer answers.
+  "NuclearRetaliationDays": 90,
+  "NuclearFirstUseNotoriety": 60
+}

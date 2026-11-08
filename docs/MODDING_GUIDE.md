@@ -1,5 +1,7 @@
 # The modding guide
 
+[0.5.3.0: choosing editor packages and what code/data replacement actually supports](MOD_WORKSPACES_0530.md).
+
 *Русская версия: [MODDING_GUIDE_RU.md](MODDING_GUIDE_RU.md)*
 
 Scenario mechanic switches (`Features` / `FeatureUnlocks`), scripted activation,
@@ -346,7 +348,6 @@ difference is that the name does not exist yet:
     "name": "Titanium mill",
     "cost": 3.4,
     "days": 320,
-    "gdp_gain": 1.8,
     "capacity_gain": 0.07,
     "description": "Sponge and ingot out of ore, electricity and a great deal of patience."
   }
@@ -508,8 +509,12 @@ JSON in `common/buildings` overrides buildings. Seventeen stable IDs: `Agricultu
 }
 ```
 
-Fields you do not name keep their base values. `gdp_gain` is output, `capacity_gain` is
-construction capacity, that is, the speed of the next project.
+Fields you do not name keep their base values. `capacity_gain` is construction capacity:
+the speed every one of the country's sites works at, a day of work a day at capacity 1 and
+faster above it with diminishing returns (defines `ConstructionPaceCeiling`,
+`ConstructionPaceHalfway`). There is no GDP field: a building's GDP is the market value of
+what it makes and sells, every week it stands. An old `gdp_gain` key still loads and is
+ignored.
 
 Two buildings are not industry at all. A **port** and a **rail network** set *reach*: how much
 of its own shortfall a country is physically able to bring in, regardless of how many friends

@@ -1,0 +1,12 @@
+{
+  "This command is disabled in this campaign.": "This command is disabled in this campaign.",
+  "Withdraw {0:0} division(s); {1:0} remain in combat.": "Withdraw {0:0} division(s); {1:0} remain in combat.",
+  "Stop this attack without moving or healing the formation.": "Stop this attack without moving or healing the formation.",
+  "Retreat destination: {0}.": "Retreat destination: {0}.",
+  "Retreat costs recovery time; it does not restore men or equipment.": "Retreat costs recovery time; it does not restore men or equipment.",
+  "Hide formations": "Hide formations",
+  "Show formations": "Show formations",
+  "Encircled defenders are holding": "Encircled defenders are holding",
+  "The last combat round continued despite spent organisation. Losses and supply still matter.": "The last combat round continued despite spent organisation. Losses and supply still matter."
+}
+

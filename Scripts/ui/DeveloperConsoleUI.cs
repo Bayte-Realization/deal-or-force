@@ -600,7 +600,7 @@ public partial class DealOrForceGame
             $"{_campaign.ArmyGroups.Count(group => group.NationId == nation.Id)} headquarters\n" +
             $"  fighting {divisions.Count(army => army.InBattle)} · marching {divisions.Count(army => army.IsMoving)} · " +
             $"cut off {divisions.Count(army => army.CutOff)} · recovering {divisions.Count(army => army.Recovering > 0f)}\n" +
-            $"  average organisation {divisions.Average(army => army.Organisation):P0} · " +
+            $"  average morale {divisions.Average(army => army.Organisation):P0} · " +
             $"strength {divisions.Average(army => army.Strength):P0} · " +
             $"supply {divisions.Average(army => army.SupplyLevel):P0}\n" +
             "  heaviest regions:\n" + string.Join("\n", byRegion));

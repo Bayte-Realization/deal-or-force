@@ -1,0 +1,20 @@
+{
+  "Choose training region on map": "Выбрать регион обучения на карте",
+  "Keep this template, batch size and posture, then click an owned training region on the map.": "Сохраните шаблон, численность партии и режим набора, затем выберите собственный регион обучения на карте.",
+  "Place recruitment: {0}": "Разместить набор: {0}",
+  "Hover over an owned region to inspect training. Click to queue one batch; Escape or right-click finishes placement.": "Наведите курсор на собственный регион для оценки обучения. Щелчок ставит одну партию в очередь; Escape или правая кнопка завершают размещение.",
+  "Move the pointer over the map. Training belongs to a region; completed divisions deploy in a controlled province of that region.": "Наведите курсор на карту. Обучение привязано к региону; готовые дивизии появятся в одной из его подконтрольных провинций.",
+  "Recruitment catalogue": "Окно набора",
+  "Rapid call-up placement": "Ускоренный призыв",
+  "Emergency mobilisation placement": "Чрезвычайная мобилизация",
+  "Standard training placement": "Обычное обучение",
+  "{0} × {1} · {2}\nPay now: {3} · {4:N0} recruits · {5} training days\nTraining batches {6}/{7}": "{0} × {1} · {2}\nОплата сразу: {3} · {4:N0} новобранцев · {5} дней обучения\nПартий на обучении: {6}/{7}",
+  "Click to begin training here": "Нажмите, чтобы начать обучение здесь",
+  "Depot {0}: need {1:0.#}, have {2:0.#}": "Склад — {0}: нужно {1:0.#}, имеется {2:0.#}",
+  "Regional batch limit: {0}\nMissing depot stock procurement: {1}\n{2}": "Предел партии в регионе: {0}\nЗакупка недостающего снаряжения: {1}\n{2}",
+  "Posture effects: stability −{0:P1}; regional unrest +{1:P1}; living standard −{2:P1}.": "Последствия режима: стабильность −{0:P1}; недовольство в регионе +{1:P1}; уровень жизни −{2:P1}.",
+  "Wait for the current world update before choosing a training region.": "Дождитесь завершения текущего обновления мира, прежде чем выбирать регион обучения.",
+  "Training queued in {0}: {1} × {2}, paid {3}, {4} training days. Click another region or finish placement.": "В регионе {0} поставлено на обучение: {1} × {2}, оплачено {3}, срок — {4} дней. Выберите ещё один регион или завершите размещение.",
+  "Recruitment order submitted. The host will validate this training region.": "Приказ о наборе отправлен. Хост проверит выбранный регион обучения.",
+  "Recruitment is disabled in this campaign.": "Набор войск отключён в этой кампании."
+}

@@ -1,12 +1,13 @@
 param(
     [string]$ProjectPath = (Join-Path $PSScriptRoot '../..'),
-    [ValidateRange(16,512)][int]$Points = 180
+    [ValidateRange(16,512)][int]$Points = 180,
+    [string]$Inventory = 'game/presentation/10_atlas_library.json'
 )
 $ErrorActionPreference = 'Stop'
 $mediaRoot = (Resolve-Path -LiteralPath $ProjectPath).Path
-$inventory = Get-Content -LiteralPath (Join-Path $mediaRoot 'game/presentation/10_atlas_library.json') -Raw | ConvertFrom-Json
+$inventoryData = Get-Content -LiteralPath (Join-Path $mediaRoot $Inventory) -Raw | ConvertFrom-Json
 $measurements = [ordered]@{}
-foreach ($entry in $inventory.assets.PSObject.Properties) {
+foreach ($entry in $inventoryData.assets.PSObject.Properties) {
     if ($entry.Value.kind -notin @('music','sound')) { continue }
     $mediaFile = Join-Path (Join-Path $mediaRoot 'game') $entry.Value.file
     $durationText = & ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 $mediaFile

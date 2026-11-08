@@ -1,0 +1,11 @@
+{
+  "Consistent atlas lighting": "Consistent atlas lighting",
+  "Avoid overbright shadow blending on the map in Compatibility. Mountain relief, cloud shadows and shadows on 3D objects remain. Disable to restore scenery shadows projected onto the map surface; Forward+ keeps its original lighting either way.": "Avoid overbright shadow blending on the map in Compatibility. Mountain relief, cloud shadows and shadows on 3D objects remain. Disable to restore scenery shadows projected onto the map surface; Forward+ keeps its original lighting either way.",
+  "Map visual style": "Map visual style",
+  "The same styles on every graphics renderer. Balanced keeps the original palette; Vivid strengthens country colours; Relief emphasises mountain shading. Changes immediately, without reducing detail or changing gameplay.": "The same styles on every graphics renderer. Balanced keeps the original palette; Vivid strengthens country colours; Relief emphasises mountain shading. Changes immediately, without reducing detail or changing gameplay.",
+  "map.style.balanced": "Balanced",
+  "map.style.vivid": "Vivid",
+  "map.style.relief": "Relief",
+  "Cloud veil strength": "Cloud veil strength",
+  "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not.": "Keep the moving sky but make it more transparent for a clearer political map. Only decorative clouds and their shadows change; fog of war and intelligence do not."
+}

@@ -21,12 +21,130 @@ static class TacticalDoctrineTests
     public static void Run()
     {
         ShippedTree();
+        OperationalChoices();
         StudyAndRewrite();
         FourShelves();
         ExperienceSources();
         AiChooses();
         ContentSpeaks();
         MenuSpeaks();
+    }
+
+    static void OperationalChoices()
+    {
+        var ids = new[] { "elastic_defence", "dispersed_warfare", "air_shield", "convoy_service", "mission_command", "joint_logistics" };
+        Check(TacticalDoctrineCatalog.All.Count() >= 18 && ids.All(id => TacticalDoctrineCatalog.Find(id) is not null),
+            "six operational books expand the existing twelve without replacing their ids");
+        var c = Campaign.CreateBootstrap(1710);
+        var n = c.NationByTag("ROU");
+        c.ConfigureSinglePlayer(n.Id); n.IsHuman = true;
+        var region = c.StatesOf(n).First();
+        c.AttachProvinceTopology(ProvinceTopology.Build(Enumerable.Repeat((ushort)region.MapIndex, 8192).ToArray(),
+            Enumerable.Repeat((ushort)n.MapIndex, 8192).ToArray(), 128, 64, _ => false));
+        var rng = c.Random.State;
+        void Issue(string branch, string node)
+        {
+            var command = new StudyDoctrineCommand { IssuerId = n.Id, BranchId = branch, NodeId = node, Rush = true };
+            c.Commands.Enqueue(command); c.Commands.ApplyAll(c);
+            Check(command.Refusal.Length == 0 && TacticalDoctrines.Known(n, node), branch + "/" + node + " adopted through the command queue");
+        }
+        foreach (var id in ids)
+        {
+            n.TacticalDoctrine = new TacticalDoctrineMemory();
+            n.ArmyExperience = n.AirExperience = n.NavalExperience = n.PoliticalPoints = 2000;
+            NationalModifiers.Invalidate(n);
+            var branch = TacticalDoctrineCatalog.Find(id);
+            var root = branch.Nodes.Single(node => node.Requires.Count == 0);
+            var a = branch.Nodes.First(node => node.Excludes.Count > 0);
+            var b = branch.Find(a.Excludes.Single());
+            Check(a.Modifiers.Values.Any(value => value < 0f) && b.Modifiers.Values.Any(value => value < 0f),
+                id + " offers two subdoctrines with real costs, not only bonuses");
+            Check(TacticalDoctrines.Refusal(c, n, id, a.Id, true).Length > 0,
+                id + " specialisation waits for its prerequisite");
+            Issue(id, root.Id);
+            Check(TacticalDoctrines.Available(n, id).Any(node => node.Id == a.Id) &&
+                  TacticalDoctrines.Available(n, id).Any(node => node.Id == b.Id), id + " opens both alternatives before choosing");
+            var before = a.Modifiers.Keys.ToDictionary(key => key, key => NationalModifiers.Of(n, key));
+            Issue(id, a.Id);
+            Check(a.Modifiers.All(effect => MathF.Abs(NationalModifiers.Of(n, effect.Key) - before[effect.Key] - effect.Value) < 0.0001f),
+                id + " applies the positive and negative modifiers exactly");
+            var print = CampaignFingerprint.Of(c);
+            var refusal = new StudyDoctrineCommand { IssuerId = n.Id, BranchId = id, NodeId = b.Id, Rush = true };
+            c.Commands.Enqueue(refusal); c.Commands.ApplyAll(c);
+            Check(refusal.Refusal.Length > 0 && CampaignFingerprint.Of(c) == print &&
+                  !TacticalDoctrines.Available(n, id).Any(node => node.Id == b.Id),
+                id + " opposite choice is locked without spending or changing the fingerprint");
+            // Follow reachable articles, including later data-authored extensions. Never
+            // force an article whose own alternative/prerequisite has not been chosen.
+            for (var step = 0; step < branch.Nodes.Count && TacticalDoctrines.Available(n, id).FirstOrDefault() is { } next; step++)
+                Issue(id, next.Id);
+            Check(TacticalDoctrines.Available(n, id).Count == 0 && !TacticalDoctrines.Known(n, b.Id),
+                id + " chosen path reaches the end without learning its alternative");
+        }
+        Check(c.Random.State == rng && c.ElapsedHours == 0, "operational choices do not consume randomness or advance the paused clock");
+
+        // All six books fit the existing four shelves, two ground and two general companions.
+        n.TacticalDoctrine = new TacticalDoctrineMemory();
+        n.ArmyExperience = n.AirExperience = n.NavalExperience = n.PoliticalPoints = 5000;
+        foreach (var id in ids)
+        {
+            var branch = TacticalDoctrineCatalog.Find(id);
+            Issue(id, branch.Nodes.Single(node => node.Requires.Count == 0).Id);
+            Issue(id, branch.Nodes.First(node => node.Excludes.Count > 0).Id);
+        }
+        Check(TacticalDoctrines.Books(n).Count() == 6 && DoctrineSlots.All.Length == 4,
+            "six books reuse four shelves and the existing companion slots");
+        var restored = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(c, "operational-choices"), "operational-choices");
+        Check(restored.Success, "the actual campaign snapshot reloads operational choices: " + restored.Warning);
+        var loaded = restored.Campaign.NationByTag("ROU");
+        Check(ids.All(id => TacticalDoctrines.TrackFor(loaded, TacticalDoctrineCatalog.Find(id)) is { } track &&
+            track.Branch == id && track.Known.SequenceEqual(TacticalDoctrines.TrackFor(n, TacticalDoctrineCatalog.Find(id)).Known)),
+            "all six book ids and chosen article ids survive real save/reload");
+        foreach (var id in ids)
+        {
+            var branch = TacticalDoctrineCatalog.Find(id);
+            var chosen = branch.Nodes.First(node => node.Excludes.Count > 0);
+            Check(TacticalDoctrines.Refusal(restored.Campaign, loaded, id, chosen.Excludes.Single(), true).Length > 0,
+                id + " alternative remains locked after loading");
+        }
+
+        // Modders may declare the exclusion on either side. Bad references and numeric weights
+        // are diagnosed before a partial book can replace working content.
+        var errors = new List<string>();
+        using (var doc = JsonDocument.Parse("""
+            {"mod_choice":{"experience":"army","ai_profiles":{"custom_character":2},"nodes":[
+              {"id":"choice_a","cost":10,"days":10,"excludes":["choice_b"]},
+              {"id":"choice_b","cost":10,"days":10}]}}
+            """)) TacticalDoctrineCatalog.Merge(doc.RootElement, errors);
+        Check(errors.Count == 0 && TacticalDoctrineCatalog.Find("mod_choice").Find("choice_b").Excludes.Contains("choice_a"),
+            "one-sided mod data becomes a symmetric exclusion and accepts custom character ids");
+        foreach (var invalid in new[] { "-1", "\"NaN\"", "1e1000" })
+        {
+            errors.Clear();
+            using var doc = JsonDocument.Parse("{\"invalid_weight\":{\"experience\":\"army\",\"ai_profiles\":{\"default\":" + invalid +
+                "},\"nodes\":[{\"id\":\"invalid_weight_root\",\"cost\":10,\"days\":10}]}}");
+            TacticalDoctrineCatalog.Merge(doc.RootElement, errors);
+            Check(errors.Count == 1 && TacticalDoctrineCatalog.Find("invalid_weight") is null,
+                "invalid AI weight " + invalid + " is diagnosed and the book is not loaded");
+        }
+        errors.Clear();
+        using (var doc = JsonDocument.Parse("""
+            {"impossible_choice":{"experience":"army","nodes":[
+              {"id":"impossible_a","cost":10,"days":10,"excludes":["impossible_b"]},
+              {"id":"impossible_b","cost":10,"days":10,"requires":["impossible_a"]}]}}
+            """)) TacticalDoctrineCatalog.Merge(doc.RootElement, errors);
+        Check(errors.Count == 1 && TacticalDoctrineCatalog.Find("impossible_choice") is null,
+            "excluding a required ancestor is diagnosed in either declaration order");
+        TacticalDoctrineCatalog.ResetCatalog();
+        var language = Loc.Language;
+        try
+        {
+            Loc.Language = "russian";
+            Check(ids.Select(TacticalDoctrineCatalog.Find).All(book => Loc.Get(book.Name) != book.Name &&
+                Loc.Get(book.Description) != book.Description && book.Nodes.All(node => Loc.Get(node.Name) != node.Name &&
+                    Loc.Get(node.Description) != node.Description)), "all operational names and descriptions have Russian text");
+        }
+        finally { Loc.Language = language; }
     }
 
     static void ShippedTree()
@@ -157,6 +275,8 @@ static class TacticalDoctrineTests
         Check(MathF.Abs(nation.ArmyExperience - 30f) < 0.01f, "the crash course cost the rush price");
         Check(NationalModifiers.Of(nation, "supply") > 0.02f, "the rushed article counts at once");
 
+        // One book on the shelf: a different Doctrine replaces it.
+        campaign.Defines.DoctrineBooksPerShelf = 1;
         // Rewriting: another Doctrine on the same shelf, sold to the government and paid for in retraining.
         var before = NationalModifiers.Of(nation, "army_speed");
         Check(TacticalDoctrines.Refusal(campaign, nation, "fire", "fire_concentrated", false).Length > 0,
@@ -234,6 +354,8 @@ static class TacticalDoctrineTests
             "all three books reach the country at once");
         Check(TacticalDoctrines.Books(nation).Count() == 3, "the country is reading three books");
 
+        // One book on the shelf: changing the army's mind replaces that book and leaves the others.
+        campaign.Defines.DoctrineBooksPerShelf = 1;
         // Rewriting one shelf leaves the others untouched.
         Check(TacticalDoctrines.Study(campaign, nation, "fortress", "fortress_dig", true),
             "the ground shelf may change its mind");
@@ -306,8 +428,19 @@ static class TacticalDoctrineTests
         // it must not become a fourth tactical book.
         if (fifth.Length == 0)
             TacticalDoctrines.Study(full, reader, "sea_denial", "sub_boats", true);
+        var seaShelf = reader.TacticalDoctrine.Track(DoctrineSlots.Sea);
+        Check(seaShelf.Branch == "coast" && seaShelf.Companion?.Branch == "sea_denial",
+            "the second naval book stands beside the first");
         Check(TacticalDoctrines.BooksHeld(reader, false) == 3,
-            "a further tactical doctrine does not open a fourth tactical slot");
+            "a second book on the sea shelf does not open a fourth tactical slot");
+        var another = TacticalDoctrineCatalog.OnShelf(DoctrineSlots.Sea)
+            .FirstOrDefault(book => book.Id != "coast" && book.Id != "sea_denial");
+        if (another is not null)
+        {
+            var root = another.Nodes.First(node => node.Requires.Count == 0);
+            Check(TacticalDoctrines.Refusal(full, reader, another.Id, root.Id, true).Length > 0,
+                "a third book on the same shelf is refused");
+        }
 
         var tight = Campaign.CreateBootstrap(1708);
         tight.Defines.DoctrineTacticalSlots = 2;

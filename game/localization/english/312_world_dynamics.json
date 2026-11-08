@@ -1,0 +1,9 @@
+{
+  "chronicle.civil_war_third_front": "{0} turns on {1}: a new front opens in the war inside {2}.",
+  "A war inside the war: {0} against {1}": "A war inside the war: {0} against {1}",
+  "chronicle.movement_merged": "{1} has joined {0}: one front where there were two.",
+  "chronicle.movement_absorbed": "{1} has gone over to {0}: its people and fighters now serve that state.",
+  "It has joined {0}: one front instead of two.": "It has joined {0}: one front instead of two.",
+  "{0} has joined us: its people, money and fighters are ours now.": "{0} has joined us: its people, money and fighters are ours now.",
+  "Its people and its fighters have gone over to {0}.": "Its people and its fighters have gone over to {0}."
+}

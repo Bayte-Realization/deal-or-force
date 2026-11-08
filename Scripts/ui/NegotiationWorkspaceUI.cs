@@ -77,6 +77,7 @@ public partial class DealOrForceGame
         _diplomacyActionSearch = Placeholder(new LineEdit { Name = "DiplomacyActionSearch",
             ClearButtonEnabled = true, CustomMinimumSize = new Vector2(0, 32) }, "Find an action…");
         _diplomacyActionSearch.TooltipText = Ui.Tip(Tr("Search action names. Unavailable actions keep their explanations."));
+        _diplomacyActionSearch.TooltipText += "\n" + Tr("Ctrl+Shift+F focuses diplomatic action search.");
         column.AddChild(_diplomacyActionSearch);
         _diplomacyActionMatches = Title("", 11, Ui.Colour("text.muted"));
         column.AddChild(_diplomacyActionMatches);
@@ -158,10 +159,22 @@ public partial class DealOrForceGame
 
     // A 1080-unit canvas must not reduce small document text to eight physical pixels.
     // Re-run only after rebuild/resize, never traverse every UI tree each frame.
-    private void FitNegotiationTypography(Control root)
+    private readonly System.Collections.Generic.Dictionary<ulong, bool> _negotiationFitCompact = new();
+
+    private void FitNegotiationTypography(Control root, bool full = true)
     {
         if (root is null) return;
+        if (root == _diplomacyLayer) { FitDiplomacyComfort(full); return; }
         var compact = GetWindow().Size.Y < 900 || GetWindow().Size.X < 1600;
+        // The walk of every control is for new controls or a changed window, not for a list that
+        // only repainted its rows: opening diplomacy spent 40-60 ms on it every time.
+        if (!full && _negotiationFitCompact.TryGetValue(root.GetInstanceId(), out var was) && was == compact)
+        {
+            if (root == _diplomacyLayer)
+                foreach (var row in _diplomacyRows) FitDiplomacyName(row);
+            return;
+        }
+        _negotiationFitCompact[root.GetInstanceId()] = compact;
         if (root == _diplomacyLayer && _diplomacyCountryColumn is not null)
         {
             _diplomacyCountryColumn.CustomMinimumSize = new Vector2(compact ? 400 : 360, 0);

@@ -33,39 +33,42 @@ public static partial class AiStatecraft
 
     private static void Count(string what) => Tally[what] = Tally.GetValueOrDefault(what) + 1;
 
-    /// <summary>Military strength and a map-index lookup, both good for exactly one day.</summary>
-    private static readonly Dictionary<int, float> StrengthCache = new();
-    private static readonly Dictionary<int, Nation> NationByMapIndex = new();
+    /// <summary>
+    /// One campaign's daily statecraft tables - military strength, a map-index lookup,
+    /// regions held, the great powers and who has signed what.
+    ///
+    /// They used to be static scratch stamped with the last campaign that asked, which is
+    /// correct for exactly one world at a time: a second campaign stepping beside the first
+    /// flipped the stamp every time it ticked, so the first world's tables were rebuilt
+    /// from its own mid-day state every hour where the solo run kept the morning's answer.
+    /// Same inputs, different freshness, different wars - the march-pace divergence one
+    /// table over. Per-campaign tables make "worked out once a day" mean the same thing in
+    /// both runs.
+    /// </summary>
+    internal sealed class DailyTables
+    {
+        internal int Day = int.MinValue;
+        /// <summary>False until the first <see cref="EnsureDailyTables"/> has filled the maps.</summary>
+        internal bool Built;
+        internal readonly Dictionary<int, float> StrengthCache = new();
+        internal readonly Dictionary<int, Nation> NationByMapIndex = new();
+        internal readonly Dictionary<int, int> RegionCount = new();
+        internal readonly List<Nation> GreatPowers = new();
+        internal readonly Dictionary<int, List<int>> SignedWith = new();
+        internal readonly Dictionary<int, (int Hulls, List<int> Targets)> Overseas = new();
+        internal int OverseasNationCount = -1;
+        internal readonly Dictionary<int, List<int>> FriendsOf = new();
+        internal int FriendsDay = int.MinValue;
+    }
 
-    /// <summary>Regions each country holds, by map index. Rebuilt with the strength table.</summary>
-    private static readonly Dictionary<int, int> RegionCount = new();
+    private static DailyTables TablesOf(Campaign campaign) =>
+        campaign.AiStatecraftTables ??= new DailyTables();
 
     /// <summary>
-    /// The countries everybody has an opinion about, and who has already signed what.
-    ///
-    /// Both are here rather than worked out inside the weekly pass because both are
-    /// questions about the whole world: the great powers are one sort over three hundred
-    /// countries, and the signatures are one walk of every relationship there is. Asked once
-    /// a day they are free; asked by each country for each of its neighbours they were the
-    /// most expensive thing the AI did, which is the mistake the tables above already fixed
-    /// once.
+    /// The countries everybody has an opinion about, and who has already signed what, are
+    /// part of <see cref="DailyTables"/> - questions about the whole world that are free
+    /// once a day and ruinous asked by each country for each of its neighbours.
     /// </summary>
-    private static readonly List<Nation> GreatPowers = new();
-    private static readonly Dictionary<int, List<int>> SignedWith = new();
-    private static int _cacheDay = -1;
-
-    /// <summary>
-    /// Which campaign the caches below describe.
-    ///
-    /// They were stamped with the day alone, which is correct for exactly one world at a
-    /// time. Two are not a hypothetical: a multiplayer client rebuilding itself from a host
-    /// snapshot holds the new campaign and the old one at once, and whichever ticks first
-    /// stamps the day - after which the other reads a table of some other world's armies and
-    /// some other world's map indices, agrees with nobody, and desynchronises without an
-    /// error anywhere. The same is true of every bench check that works on a campaign of its
-    /// own, which is how this was found.
-    /// </summary>
-    private static Campaign _cacheCampaign;
 
     public static void Tick(Campaign campaign)
     {
@@ -114,53 +117,60 @@ public static partial class AiStatecraft
     /// </summary>
     private static void EnsureDailyTables(Campaign campaign)
     {
-        if (_cacheDay == campaign.ElapsedDays && ReferenceEquals(_cacheCampaign, campaign)) return;
-        _cacheDay = campaign.ElapsedDays;
-        _cacheCampaign = campaign;
-        StrengthCache.Clear();
-        NationByMapIndex.Clear();
-        OverseasCache.Clear();
-        RegionCount.Clear();
+        var tables = TablesOf(campaign);
+        if (tables.Day == campaign.ElapsedDays) return;
+        tables.Day = campaign.ElapsedDays;
+        tables.Built = true;
+        tables.Overseas.Clear();
+        tables.OverseasNationCount = -1;
+        var strength = tables.StrengthCache;
+        var byMapIndex = tables.NationByMapIndex;
+        var regions = tables.RegionCount;
+        strength.Clear();
+        byMapIndex.Clear();
+        regions.Clear();
         foreach (var candidate in campaign.Nations)
         {
-            NationByMapIndex[candidate.MapIndex] = candidate;
-            StrengthCache[candidate.Id] = candidate.Gdp * campaign.Defines.AiEconomicWeight;
+            byMapIndex[candidate.MapIndex] = candidate;
+            strength[candidate.Id] = candidate.Gdp * campaign.Defines.AiEconomicWeight;
         }
         foreach (var state in campaign.States)
-            RegionCount[state.NationMapIndex] = RegionCount.GetValueOrDefault(state.NationMapIndex) + 1;
+            regions[state.NationMapIndex] = regions.GetValueOrDefault(state.NationMapIndex) + 1;
         foreach (var army in campaign.Armies)
-            if (StrengthCache.ContainsKey(army.NationId))
-                StrengthCache[army.NationId] += army.Divisions * army.Strength *
+            if (strength.ContainsKey(army.NationId))
+                strength[army.NationId] += army.Divisions * army.Strength *
                                                 M.Max(0.15f, army.Organisation);
 
-        GreatPowers.Clear();
+        var powers = tables.GreatPowers;
+        powers.Clear();
         foreach (var candidate in campaign.Nations)
         {
             if (candidate.Population <= 0) continue;
-            GreatPowers.Add(candidate);
+            powers.Add(candidate);
         }
-        GreatPowers.Sort((left, right) =>
+        powers.Sort((left, right) =>
         {
-            var difference = StrengthCache.GetValueOrDefault(right.Id)
-                .CompareTo(StrengthCache.GetValueOrDefault(left.Id));
+            var difference = strength.GetValueOrDefault(right.Id)
+                .CompareTo(strength.GetValueOrDefault(left.Id));
             return difference != 0 ? difference : left.Id.CompareTo(right.Id);
         });
-        if (GreatPowers.Count > campaign.Defines.AiGreatPowers)
-            GreatPowers.RemoveRange(campaign.Defines.AiGreatPowers,
-                GreatPowers.Count - campaign.Defines.AiGreatPowers);
+        if (powers.Count > campaign.Defines.AiGreatPowers)
+            powers.RemoveRange(campaign.Defines.AiGreatPowers,
+                powers.Count - campaign.Defines.AiGreatPowers);
 
-        SignedWith.Clear();
+        var signed = tables.SignedWith;
+        signed.Clear();
         foreach (var relation in campaign.Relations.Values)
         {
-            var signed = relation.Stance == DiplomaticStance.Allied ||
+            var isSigned = relation.Stance == DiplomaticStance.Allied ||
                          relation.NonAggressionPact || relation.TradeAgreement ||
                          relation.GuaranteeByA || relation.GuaranteeByB;
-            if (!signed) continue;
-            if (!SignedWith.TryGetValue(relation.A, out var forA))
-                SignedWith[relation.A] = forA = new List<int>();
+            if (!isSigned) continue;
+            if (!signed.TryGetValue(relation.A, out var forA))
+                signed[relation.A] = forA = new List<int>();
             forA.Add(relation.B);
-            if (!SignedWith.TryGetValue(relation.B, out var forB))
-                SignedWith[relation.B] = forB = new List<int>();
+            if (!signed.TryGetValue(relation.B, out var forB))
+                signed[relation.B] = forB = new List<int>();
             forB.Add(relation.A);
         }
     }
@@ -181,6 +191,7 @@ public static partial class AiStatecraft
         Circle.Clear();
         CircleSeen.Clear();
         CircleSeen.Add(nation.Id);
+        EnsureDailyTables(campaign);
 
         void Consider(Nation other)
         {
@@ -188,12 +199,13 @@ public static partial class AiStatecraft
             Circle.Add(other);
         }
 
-        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex)) Consider(ByMapIndex(mapIndex));
+        var tables = TablesOf(campaign);
+        foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex)) Consider(ByMapIndex(campaign, mapIndex));
         foreach (var org in InternationalOrganizations.Memberships(campaign, nation.Id))
             foreach (var member in org.Members) Consider(campaign.NationById(member));
-        if (SignedWith.TryGetValue(nation.Id, out var partners))
+        if (tables.SignedWith.TryGetValue(nation.Id, out var partners))
             foreach (var partner in partners) Consider(campaign.NationById(partner));
-        foreach (var power in GreatPowers) Consider(power);
+        foreach (var power in tables.GreatPowers) Consider(power);
         if (worstRival is not null)
             foreach (var war in campaign.Wars)
             {
@@ -207,7 +219,7 @@ public static partial class AiStatecraft
     {
         if (campaign is null) return 0;
         EnsureDailyTables(campaign);
-        return RegionCount.GetValueOrDefault(mapIndex);
+        return TablesOf(campaign).RegionCount.GetValueOrDefault(mapIndex);
     }
 
     private static IEnumerable<int> ThinkAboutTheNeighbours(Campaign campaign)
@@ -271,10 +283,6 @@ public static partial class AiStatecraft
     // two hundred and sixty distance tests and a linear search of a list of the same
     // length for each of them - was measured at a millisecond and a quarter per country in
     // the running game, which is most of what a campaign day cost.
-    private static Campaign _overseasCampaign;
-    private static int _overseasNationCount = -1;
-    private static readonly Dictionary<int, (int Hulls, List<int> Targets)> OverseasCache = new();
-
     /// <summary>
     /// Countries this one could actually fight: everyone it can walk to, and - if it has a
     /// navy and its enemies' shores are within that navy's reach - the ones it could sail
@@ -287,11 +295,11 @@ public static partial class AiStatecraft
     /// </summary>
     private static IReadOnlyList<int> Reachable(Campaign campaign, Nation nation)
     {
-        if (!ReferenceEquals(_overseasCampaign, campaign) || _overseasNationCount != campaign.Nations.Count)
+        var tables = TablesOf(campaign);
+        if (tables.OverseasNationCount != campaign.Nations.Count)
         {
-            OverseasCache.Clear();
-            _overseasCampaign = campaign;
-            _overseasNationCount = campaign.Nations.Count;
+            tables.Overseas.Clear();
+            tables.OverseasNationCount = campaign.Nations.Count;
         }
         ReachableTargets.Clear();
         ReachableSeen.Clear();
@@ -320,7 +328,7 @@ public static partial class AiStatecraft
         // one, so merely thinking about the world was allocating a relation with all of it.
         // A country contemplates its nearest overseas neighbours, which is also all its
         // navy could reach in a reasonable time.
-        if (!OverseasCache.TryGetValue(nation.Id, out var cached) || cached.Hulls != hulls)
+        if (!tables.Overseas.TryGetValue(nation.Id, out var cached) || cached.Hulls != hulls)
         {
             var targets = cached.Targets ?? new List<int>();
             targets.Clear();
@@ -344,7 +352,7 @@ public static partial class AiStatecraft
             if (targets.Count > wanted) targets.RemoveRange(wanted, targets.Count - wanted);
             OverseasDistance.Clear();
             cached = (hulls, targets);
-            OverseasCache[nation.Id] = cached;
+            tables.Overseas[nation.Id] = cached;
         }
 
         foreach (var mapIndex in cached.Targets)
@@ -405,7 +413,16 @@ public static partial class AiStatecraft
             else OpinionSystem.Forget(campaign, relation, "shared_state_faith");
 
             var strength = CampaignIntel.EstimatedStrength(campaign, nation.Id, other) / M.Max(0.01f, Strength(campaign, nation));
-            var fear = M.Clamp(strength - 1f, 0f, 2f);
+            // And only as far as the stronger one can reach. Fear of strength was the same at
+            // every distance, so the strongest country in the world was feared at full weight
+            // by every government in its circle - France and Brazil held minus thirty-two
+            // against China for being large - and that one line was most of everything the
+            // world held against anybody. A neighbour fears it in full, a region less, the far
+            // side of the world hardly at all; an ally a quarter as much, because a strong
+            // friend is a worry and not a threat.
+            var reach = OpinionWitnesses.FearReach(campaign, nation, other);
+            if (relation.Stance == DiplomaticStance.Allied) reach *= 0.25f;
+            var fear = M.Clamp(strength - 1f, 0f, 2f) * reach;
             // The pair shares one relation, and only the weaker of the two is afraid. The
             // stronger one leaves the entry alone: when each wrote its own view in turn, the
             // weaker remembered the fear and the stronger forgot it, every week, and the
@@ -675,13 +692,21 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Warmaking(Campaign campaign, Nation nation)
     {
-        // By hand: Find's predicate closes over `nation`, so asking whether we are already
-        // at war allocated a closure and a delegate every time we asked - which is once a
-        // week for every country in the world.
-        StrategicWar ownWar = null;
-        foreach (var candidate in campaign.Wars)
-            if (!candidate.Ended && candidate.Involves(nation.Id)) { ownWar = candidate; break; }
-        if (ownWar is not null) { Negotiate(campaign, nation, ownWar); return; }
+        // Every war it is in, not just the first one in the world's list. A country fighting three
+        // wars asked about whichever war the enumeration happened to reach first and never spoke
+        // about the other two: the bench found them at minus twenty with LastNegotiation empty and
+        // no offer ever made, for years, while the same country's first war was negotiated normally.
+        // A snapshot, because a settlement can end a war and a list being read must not change.
+        var negotiating = false;
+        foreach (var existing in campaign.Wars.ToArray())
+        {
+            if (existing.Ended || !existing.Involves(nation.Id)) continue;
+            // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
+            SeekRescue(campaign, nation, existing);
+            Negotiate(campaign, nation, existing);
+            negotiating = true;
+        }
+        if (negotiating) return;
         if (!campaign.Defines.AiMayDeclareWar) return;
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
@@ -709,7 +734,7 @@ public static partial class AiStatecraft
         var bestJudgement = float.MinValue;
         foreach (var mapIndex in Reachable(campaign, nation))
         {
-            var other = ByMapIndex(mapIndex);
+            var other = ByMapIndex(campaign, mapIndex);
             if (other is null || other.Id == nation.Id) continue;
             Count("considered");
             if (other.IsHuman && !defines.AiMayAttackPlayer) continue;
@@ -762,34 +787,6 @@ public static partial class AiStatecraft
         // word the declaration carries.
         var annexation = AnnexationAmbition.Aim(campaign, nation, target);
 
-        // Deal or force: before a war it has no reason it could give for, a government asks
-        // for what it wants. A neighbour that cannot face it hands the region over; one that
-        // refuses has handed it the reason (Statecraft.CasusBelli, "ultimatum_refusal").
-        if (annexation is null && TryUltimatumFirst(campaign, nation, target))
-        {
-            // Not a death - a different act on the same day. Counted so the funnel closes: a
-            // nation that asked is a nation that has not yet been refused, and its war is still
-            // coming, with a reason attached.
-            Count("asked_before_war");
-            return;
-        }
-
-        // And no war without a reason a government could give. China looked at Mongolia, an
-        // army a two-hundredth of its own and nobody behind it, and went in in the first year:
-        // weakness counted for less without a cause, but never for nothing. Without one the war
-        // stays a plan - built for, its friends worked on, an ultimatum put - until there is.
-        if (annexation is null && defines.AiNeedsCauseForWar &&
-            string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
-        {
-            if (nation.WarPlanTargetId != target.Id)
-            {
-                nation.WarPlanTargetId = target.Id;
-                nation.WarPlanSinceDay = campaign.ElapsedDays;
-            }
-            Count("no_cause");
-            return;
-        }
-
         // Worth having, but not yet worth having now. A government that reaches this point
         // does not forget the idea - it keeps the target, builds, and starts prising the
         // target's friends away. That is the whole of the difference between an AI that is
@@ -835,6 +832,26 @@ public static partial class AiStatecraft
         // the plan book - which is precisely the question AI-05 asks first.
         if (roll > defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression)
         { Count("rolled_down"); return; }
+
+        // An ultimatum threatens the same war, so it needs the same considered appetite,
+        // preparation and seeded commitment. Previously this ran before all three gates:
+        // every fresh world handed over the same weak neighbours on their first AI day,
+        // even when the government would never have committed to the threatened war.
+        // A player's own papers and the recipient's assessment are unchanged.
+        if (annexation is null && TryUltimatumFirst(campaign, nation, target))
+        {
+            Count("asked_before_war");
+            return;
+        }
+
+        // A legitimate territorial demand may supply a cause if refused, but merely
+        // preparing to threaten somebody still does not permit an unjustified declaration.
+        if (annexation is null && defines.AiNeedsCauseForWar &&
+            string.IsNullOrEmpty(Statecraft.CasusBelli(campaign, nation, target)))
+        {
+            Count("no_cause");
+            return;
+        }
 
         // A country that has been preparing for this one goes sooner; the preparation is the
         // point of having made the plan.
@@ -970,6 +987,54 @@ public static partial class AiStatecraft
     }
 
     /// <summary>
+    /// How much fight the other side of this war still has, as far as its own score lets us measure.
+    ///
+    /// The simulation does not read an opponent's internal morale on purpose, but the score is the
+    /// measure of exactly that: a side a hundred points down has nothing left to hold out with. The
+    /// constant that used to stand here (0,5, "their morale is not ours to read") was above every
+    /// capitulation threshold, so the indemnity branch that tested it could never fire at any score.
+    /// </summary>
+    internal static float OpponentMoraleEstimate(StrategicWar war, int ourId)
+    {
+        if (war is null) return 1f;
+        var lead = MathF.Max(0f, war.IsAttacking(ourId) ? war.WarScore : -war.WarScore);
+        return M.Clamp01(1f - lead / 100f);
+    }
+
+    /// <summary>
+    /// Whether this country has lost the war on points, whatever its untouched home front still
+    /// says. Waiting for the home front to agree is how a defender at -100 sat out nine hundred
+    /// days with the fighting long decided.
+    /// </summary>
+    internal static bool DecisivelyBeaten(Campaign campaign, StrategicWar war, int nationId)
+    {
+        if (campaign?.Defines is null || war is null || war.Ended) return false;
+        var score = war.IsAttacking(nationId) ? war.WarScore : -war.WarScore;
+        return score <= -campaign.Defines.AiDecisiveWarScore;
+    }
+
+    /// <summary>
+    /// Whether a civil war that has stood still may be offered the status quo now.
+    ///
+    /// Civil wars wait longer than other wars before a deadlock is called: seven hundred and
+    /// thirty days on top of the ordinary stalemate, and a government does not hand its own
+    /// country back because the score says so. That is what kept a moving reconquest alive.
+    /// Signing those on points cost the bench eleven of fifteen recoveries. The same wait left
+    /// a war on the map whose status quo the signature would already accept, and nobody asked.
+    ///
+    /// Once the front has not moved and that acceptance already clears, the extra wait has
+    /// nothing left to protect. A front that is still moving is not this, whatever the score.
+    /// </summary>
+    internal static bool CivilFrozenOfferReady(Campaign campaign, StrategicWar war, int nationId)
+    {
+        if (campaign?.Defines is null || war is null || war.Ended || !war.CivilConflict || !war.Stalled)
+            return false;
+        if (!war.Involves(nationId)) return false;
+        if (campaign.ElapsedDays - war.StartedDay < campaign.Defines.AiStalemateDays) return false;
+        return PeaceNegotiation.BlockReason(campaign, war, nationId, PeaceTerms.StatusQuo).Length == 0;
+    }
+
+    /// <summary>
     /// A country at war asks, periodically, whether it is done. Winning it writes a peace
     /// out of the ground it actually holds - through the same conference a player uses -
     /// and losing it offers to stop.
@@ -1020,6 +1085,17 @@ public static partial class AiStatecraft
         // winning, and it is also how a player gets three modal dialogs in a row.
         if (war.PendingOfferFromId >= 0) return;
 
+        // Asked before the reclaiming return below. That return keeps a government fighting
+        // for the rest of its own country, and it is also how a stalled civil war never put
+        // a paper down: the side that was ahead left, and the side that was behind was still
+        // inside the extra civil delay. The status quo is the term the acceptance already
+        // priced. It is not a white peace, and it is not a surrender on points.
+        if (CivilFrozenOfferReady(campaign, war, nation.Id))
+        {
+            PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.StatusQuo);
+            return;
+        }
+
         var ledger = new PeaceLedger(campaign, war, nation.Id);
         if (ledger.Budget < WarAims.PeaceFloor(campaign, nation))
         {
@@ -1034,6 +1110,20 @@ public static partial class AiStatecraft
                                               (war.Stalled && duration >= defines.AiStalemateDays) ||
                                               (duration >= defines.AiWearyDays));
             if (ownScore > 0f && reclaiming && !staleReclaim) return;
+            // Beaten on points, not merely tired. A government that is eighty points down has lost
+            // the war by every measure its own army has, whatever its untouched home front still
+            // says; waiting for its morale to fall is how a defender at -100 sat out nine hundred
+            // days with the fighting long decided (WarWeariness.AiDecisiveWarScore).
+            //
+            // Not for a civil war: a state does not concede its own ground by points, and the
+            // breakaway rules (Reintegration, CivilWarPersistence) already carry that case with
+            // their own resolve. Ending those here cost the bench eleven of fifteen recoveries.
+            if (!war.CivilConflict && DecisivelyBeaten(campaign, war, nation.Id) &&
+                duration > defines.AiMinimumWarDays)
+            {
+                PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
+                return;
+            }
             // Not winning - which is not the same as wanting to stop. A country only walks
             // away from a war it started or is defending when the country itself has had
             // enough, and that takes years rather than a bad season. Otherwise the map
@@ -1046,7 +1136,10 @@ public static partial class AiStatecraft
                 // A government tired of its civil war cannot ask the side that is winning it to
                 // hand the ground back: it concedes the line, and the line is the de facto border.
                 PeaceOffers.Put(campaign, war, nation, opponent,
-                    war.CivilConflict ? WarWeariness.StalemateTerms(campaign, war) : PeaceTerms.WhitePeace);
+                    // Any tired government, not only a civil war's: the line is the border. A white
+                    // peace handed back everything the war had changed - Russia, worn down after three
+                    // years, gave Ukraine back the Donbas it had held since 2014.
+                    WarWeariness.StalemateTerms(campaign, war));
             else if (WarWeariness.TimeToStop(campaign, war, winning: false) || staleReclaim ||
                 (nation.Parliament is { PeaceMandateActive: true } && campaign.ElapsedDays - war.StartedDay > defines.AiMinimumWarDays))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
@@ -1072,18 +1165,32 @@ public static partial class AiStatecraft
         {
             // Ahead on points and holding none of their ground. A country in that position
             // does not stop - it pushes, because stopping converts a war it is winning into
-            // nothing at all. Only a genuinely broken opponent is worth an indemnity.
-            var opponentSupport = 0.5f; // Unknown; do not read the opponent's internal morale.
+            // nothing at all. Only a genuinely broken opponent is worth an indemnity - and
+            // "genuinely broken" is not unknowable: the score is the measure of it. The constant
+            // that stood here (0,5, "their morale is not ours to read") was above every
+            // capitulation threshold, so the branch could never fire: a war won on points and
+            // holding no ground could not be cashed in at all, it ran to nine hundred days.
+            var opponentSupport = OpponentMoraleEstimate(war, nation.Id);
             if (ledger.Budget >= defines.AiPeaceIndemnityBudget &&
                 opponentSupport <= defines.AiCapitulationWarSupport)
                 PeaceOffers.Put(campaign, war, nation, opponent, PeaceTerms.WarReparations);
             // Ahead on points for years and holding nothing: it is over, and it is time to say so.
             else if (WarWeariness.TimeToStop(campaign, war, winning: true))
                 PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
+            // Nothing to take and nothing moving. A front that has stood still for a year and a
+            // half is the border whatever the escalation ladder thinks about giving up: waiting
+            // for the weariness date is how a war ahead on points and holding nothing stayed on
+            // the map for two years with no offer ever made.
+            else if (war.Stalled && campaign.ElapsedDays - war.StartedDay >= defines.AiStalemateDays)
+                PeaceOffers.Put(campaign, war, nation, opponent, WarWeariness.StalemateTerms(campaign, war));
             return;
         }
 
-        if (!decisive && ShouldPressWarAim(campaign, nation, war, demand)) return;
+        // Pressing a war needs a front that can move. A demand that has stood unchanged on a front
+        // that has not moved for a year and a half is not a plan, it is a war nobody is fighting:
+        // the line is the answer, whatever the local balance says.
+        var frozenFront = war.Stalled && campaign.ElapsedDays - war.StartedDay >= defines.AiStalemateDays;
+        if (!decisive && !frozenFront && ShouldPressWarAim(campaign, nation, war, demand)) return;
         PeaceOffers.Put(campaign, war, nation, opponent, demand);
     }
 
@@ -1255,7 +1362,7 @@ public static partial class AiStatecraft
             spent += defines.PeaceCostDemilitarise;
         }
 
-        var opponentSupport = 0.5f; // Unknown under first-stage fog of war.
+        var opponentSupport = OpponentMoraleEstimate(war, nation.Id);
         if (opponentSupport <= defines.AiCapitulationWarSupport && Afford(defines.PeaceCostHumiliate))
             demand.Humiliate = true;
     }
@@ -1289,16 +1396,25 @@ public static partial class AiStatecraft
     internal static float CachedStrength(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return 0f;
-        if (ReferenceEquals(_cacheCampaign, campaign) && _cacheDay == campaign.ElapsedDays &&
-            StrengthCache.TryGetValue(nation.Id, out var value)) return value;
+        var tables = TablesOf(campaign);
+        if (tables.Day == campaign.ElapsedDays &&
+            tables.StrengthCache.TryGetValue(nation.Id, out var value)) return value;
         return StrengthOf(campaign, nation);
     }
 
     private static float Strength(Campaign campaign, Nation nation) => CachedStrength(campaign, nation);
 
     /// <summary>A nation by its map index, without walking the whole list to find it.</summary>
-    private static Nation ByMapIndex(int mapIndex) =>
-        NationByMapIndex.TryGetValue(mapIndex, out var nation) ? nation : null;
+    private static Nation ByMapIndex(Campaign campaign, int mapIndex)
+    {
+        var tables = TablesOf(campaign);
+        // Readers like Threatened run before the AI's own daily build - on a campaign
+        // adopted from a snapshot the tables are still empty there, where a live world
+        // answers from yesterday's. NationByMapIndex does not change inside a day, so
+        // building it on first read is the same answer the host gives.
+        if (!tables.Built) EnsureDailyTables(campaign);
+        return tables.NationByMapIndex.TryGetValue(mapIndex, out var nation) ? nation : null;
+    }
 
     /// <summary>
     /// A deterministic value in [0, 1) for one country on one day. Same campaign, same
@@ -1475,7 +1591,7 @@ public static partial class AiStatecraft
     {
         foreach (var mapIndex in NeighboursOf(campaign, nation.MapIndex))
         {
-            var other = ByMapIndex(mapIndex);
+            var other = ByMapIndex(campaign, mapIndex);
             if (other is null) continue;
             foreach (var war in campaign.Wars)
                 if (!war.Ended && war.Involves(other.Id)) return true;

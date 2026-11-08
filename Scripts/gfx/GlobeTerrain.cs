@@ -136,6 +136,9 @@ public sealed partial class GlobePresentation
     /// </summary>
     private void StartTerrainImages()
     {
+        // The reduced atlas has no terrain/relief/water samplers. Do not decode,
+        // mipmap and upload those pictures just to bind nonexistent uniforms.
+        if (ReducedMap) return;
         if (_terrainImages is not null) return;
         var definitions = TerrainCatalog.All.ToArray();
         _terrainImages = Task.Run(() => PrepareTerrainImages(definitions));
@@ -146,7 +149,7 @@ public sealed partial class GlobePresentation
     {
         var water = TerrainCatalog.Water;
         return string.Join("|", definitions.Select(d => d.Id + "=" + d.Texture + "#" + d.Color)) +
-               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|" +
+               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|{TerrainCatalog.ReliefColorOpacity > 0f}|" +
                $"{TerrainCatalog.BathymetryPath}|{water.LakeTexture}|{water.RiverTexture}|{water.TileResolution}";
     }
 
@@ -157,7 +160,13 @@ public sealed partial class GlobePresentation
         var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(System.Environment.ProcessorCount - 2, 1, 6) };
         Parallel.For(0, definitions.Count, options, index => prepared.Tiles[index] = PrepareTerrainTile(definitions[index]));
         prepared.Height = ReliefImage(TerrainCatalog.HeightPath, new Color(.5f, .5f, .5f));
-        prepared.Colour = ReliefImage(TerrainCatalog.ReliefColorPath, new Color(.57f, .58f, .47f));
+        // The relief's own colours are drawn at relief_color_opacity, and the shipped map draws
+        // them at nought: the 5760-wide picture was decoded, given mipmaps and uploaded - 63 MB of
+        // video memory and a second of loading - to be multiplied by zero. A map that shows them
+        // (a mod raising the opacity) loads them; one that does not gets a texel of the fallback.
+        prepared.Colour = TerrainCatalog.ReliefColorOpacity > 0f
+            ? ReliefImage(TerrainCatalog.ReliefColorPath, new Color(.57f, .58f, .47f))
+            : ReliefImage("", new Color(.57f, .58f, .47f));
         prepared.Floor = ReliefImage(TerrainCatalog.BathymetryPath, new Color(0f, 0f, 0f));
         var water = TerrainCatalog.Water;
         prepared.Lake = WaterTileImage(water.LakeTexture, water.TileResolution);
@@ -207,6 +216,14 @@ public sealed partial class GlobePresentation
     private void ApplyTerrainPresentation(ProvinceTopology topology)
     {
         _crossoverGroundPixels = null;
+        if (ReducedMap)
+        {
+            // Province terrain data stays intact for combat/marching. This byte
+            // raster is only the optional visual tile surface, not province identity.
+            topology.TerrainSurfaceSlots = Array.Empty<byte>();
+            GD.Print("[dof] compatibility atlas: unused terrain/relief/water images were not decoded or uploaded");
+            return;
+        }
         if (TerrainCatalog.LoadError.Length > 0) GD.PushWarning("[dof] terrain catalog: " + TerrainCatalog.LoadError);
         var definitions = TerrainCatalog.All;
         var prepared = TakeTerrainImages(definitions);
@@ -230,7 +247,7 @@ public sealed partial class GlobePresentation
         for (var province = 1; province <= topology.ProvinceCount; province++)
             lookup[province] = slots[topology.TerrainAt(province).Id];
         using (var lookupImg = Image.CreateFromData(256, 256, false, Image.Format.R8, lookup))
-            _globeMaterial.SetShaderParameter("province_terrain", ImageTexture.CreateFromImage(lookupImg));
+            UploadMapImage("province_terrain", lookupImg);
         _globeMaterial.SetShaderParameter("relief_height", ImageTexture.CreateFromImage(prepared.Height));
         prepared.Height?.Dispose();
         _globeMaterial.SetShaderParameter("relief_color", ImageTexture.CreateFromImage(prepared.Colour));
@@ -248,6 +265,7 @@ public sealed partial class GlobePresentation
         _globeMaterial.SetShaderParameter("relief_strength", TerrainCatalog.ReliefStrength);
         _globeMaterial.SetShaderParameter("relief_color_opacity", TerrainCatalog.ReliefColorOpacity);
         _globeMaterial.SetShaderParameter("terrain_ready", 1f);
+        ApplyMapVisualStyle();
         ApplyWaterPresentation(prepared);
         GD.Print($"[dof] terrain ready: {definitions.Count} types, {topology.ProvinceCount} provinces; {TerrainCatalog.TerrainPath}");
     }

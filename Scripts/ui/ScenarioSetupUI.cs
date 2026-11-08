@@ -44,7 +44,11 @@ public partial class ScenarioMapEditor
             var box = new SpinBox { Name = id, MinValue = min, MaxValue = max, Step = 1, Value = value,
                 SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(120, 34) }; grid.AddChild(box); return box;
         }
-        var year = Number("ScenarioYear", "Year", settings.Year, 1, 9999);
+        grid.AddChild(FieldCaption("Calendar era"));
+        var era = new OptionButton { Name = "ScenarioEra", SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        era.AddItem(Loc.Get("Common Era (CE)")); era.AddItem(Loc.Get("Before Common Era (BCE)"));
+        era.Select(settings.Year <= 0 ? 1 : 0); grid.AddChild(era);
+        var year = Number("ScenarioYear", "Year", settings.Year <= 0 ? 1 - settings.Year : settings.Year, 1, 10000);
         var month = Number("ScenarioMonth", "Month", settings.Month, 1, 12);
         var day = Number("ScenarioDay", "Day", settings.Day, 1, 31);
         var hour = Number("ScenarioHour", "Hour", settings.Hour, 0, 23);
@@ -63,7 +67,8 @@ public partial class ScenarioMapEditor
             {
                 if (!int.TryParse(seed.Text.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSeed) || parsedSeed <= 0)
                     throw new InvalidOperationException(Loc.Get("Seed must be a whole number from 1 to 2147483647."));
-                Draft.UpdateSettings(new(name.Text, description.Text, (int)year.Value, (int)month.Value, (int)day.Value, (int)hour.Value, parsedSeed));
+                var astronomicalYear = era.Selected == 1 ? 1 - (int)year.Value : (int)year.Value;
+                Draft.UpdateSettings(new(name.Text, description.Text, astronomicalYear, (int)month.Value, (int)day.Value, (int)hour.Value, parsedSeed));
                 RefreshStatus(); window.QueueFree();
             }
             catch (Exception e) { error.Text = Loc.Get("Could not apply changes") + ": " + Loc.Get(e.Message); }

@@ -88,5 +88,7 @@
   "Only a recognized Great Power can intervene in crises.": "Only a recognized Great Power can intervene in crises.",
   "Great Power intervention is already active.": "Great Power intervention is already active.",
   "Relations are not in crisis.": "Relations are not in crisis.",
-  "The last mediation ended too recently: {0} days to wait.": "The last mediation ended too recently: {0} days to wait."
+  "The last mediation ended too recently: {0} days to wait.": "The last mediation ended too recently: {0} days to wait.",
+  "chronicle.homeland_integrated": "{3} is now part of {0}'s homeland: a generation has grown up there under its flag.",
+  "chronicle.homeland_faded": "{0} no longer counts {3} as its homeland, only as a claim: a lifetime under {1}, and hardly any of its people left there."
 }

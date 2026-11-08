@@ -121,6 +121,9 @@ static class CivicCampaignTests
                 ambazonia.Treasury = 1f;
                 ambazonia.Movement.Cadres = 15000f;
                 ambazonia.Movement.Support[spark.MapIndex] = 0.85f;
+                // The whole zone when nothing defends it: a Cameroonian garrison in the second region keeps it
+                // (CanCarry), and where the deployment puts one depends on how the map is cut.
+                c.Armies.RemoveAll(a => a.NationId == cameroon.Id && a.ProvinceId > 0 && c.ProvinceMap.ProvinceToState[a.ProvinceId] == second.MapIndex);
                 var takenArmed = MovementRules.TakeZone(c, ambazonia, spark, cameroon);
                 Check(takenArmed == 2, $"armed uprising liberated whole homeland zone of interest ({takenArmed} regions)");
                 Check(spark.NationMapIndex == ambazonia.MapIndex && second.NationMapIndex == ambazonia.MapIndex,

@@ -92,6 +92,7 @@ public sealed class AuthoredMinisterEntry
     public int Age = 55;
     public string Trait = "";
     public string Option = "";
+    public string Portrait = "";
 }
 
 public sealed class AuthoredRulerEntry
@@ -102,6 +103,8 @@ public sealed class AuthoredRulerEntry
     public int GovAge = 52;
     public string StateTrait = "";
     public string GovTrait = "";
+    public string StatePortrait = "";
+    public string GovPortrait = "";
     public readonly Dictionary<string, AuthoredMinisterEntry> Ministers = new(StringComparer.OrdinalIgnoreCase);
 }
 
@@ -113,7 +116,8 @@ public readonly record struct LeaderProfile(
     string TraitId,
     string TraitName,
     int PortraitSeed,
-    bool IsHeadOfState);
+    bool IsHeadOfState,
+    string PortraitId = "");
 
 public static class Rulers
 {
@@ -270,27 +274,36 @@ public static class Rulers
         {
             if (entry.Value.ValueKind != JsonValueKind.Object) continue;
             var v = entry.Value;
+            Authored.TryGetValue(entry.Name, out var previous);
             var authored = new AuthoredRulerEntry
             {
-                HeadOfState = Text(v, "head_of_state"),
-                HeadOfGovernment = Text(v, "head_of_government"),
-                StateAge = Int(v, "state_age", 58),
-                GovAge = Int(v, "gov_age", 52),
-                StateTrait = Text(v, "state_trait"),
-                GovTrait = Text(v, "gov_trait")
+                HeadOfState = Text(v, "head_of_state", previous?.HeadOfState ?? ""),
+                HeadOfGovernment = Text(v, "head_of_government", previous?.HeadOfGovernment ?? ""),
+                StateAge = Int(v, "state_age", previous?.StateAge ?? 58),
+                GovAge = Int(v, "gov_age", previous?.GovAge ?? 52),
+                StateTrait = Text(v, "state_trait", previous?.StateTrait ?? ""),
+                GovTrait = Text(v, "gov_trait", previous?.GovTrait ?? ""),
+                StatePortrait = Text(v, "state_portrait", previous?.StatePortrait ?? ""),
+                GovPortrait = Text(v, "gov_portrait", previous?.GovPortrait ?? "")
             };
+            // A one-photo mod must inherit the names/ages/other ministers it did
+            // not mention, just like the rest of the game's key-based overlays.
+            if (previous is not null)
+                foreach (var minister in previous.Ministers) authored.Ministers[minister.Key] = minister.Value;
             if (v.TryGetProperty("ministers", out var minObj) && minObj.ValueKind == JsonValueKind.Object)
             {
                 foreach (var minProp in minObj.EnumerateObject())
                 {
                     if (minProp.Value.ValueKind != JsonValueKind.Object) continue;
                     var mv = minProp.Value;
+                    authored.Ministers.TryGetValue(minProp.Name, out var former);
                     authored.Ministers[minProp.Name] = new AuthoredMinisterEntry
                     {
-                        Name = Text(mv, "name"),
-                        Age = Int(mv, "age", 55),
-                        Trait = Text(mv, "trait"),
-                        Option = Text(mv, "option")
+                        Name = Text(mv, "name", former?.Name ?? ""),
+                        Age = Int(mv, "age", former?.Age ?? 55),
+                        Trait = Text(mv, "trait", former?.Trait ?? ""),
+                        Option = Text(mv, "option", former?.Option ?? ""),
+                        Portrait = Text(mv, "portrait", former?.Portrait ?? "")
                     };
                 }
             }
@@ -344,30 +357,37 @@ public static class Rulers
         {
             name = nation.HeadOfStateName;
             traitId = nation.HeadOfStateTrait;
-            birthYear = nation.HeadOfStateBirthYear > 0
+            birthYear = nation.HeadOfStateBirthYear != 0
                 ? nation.HeadOfStateBirthYear
                 : Authored.TryGetValue(nation.Tag ?? "", out var authState) &&
                   string.Equals(authState.HeadOfState, name, StringComparison.OrdinalIgnoreCase)
-                    ? 2024 - Math.Clamp(authState.StateAge, 18, 99)
-                    : 2024 - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(name, 17));
+                    ? Rulers.CalendarOriginYear(campaign) - Math.Clamp(authState.StateAge, 18, 99)
+                    : Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(name, 17));
         }
         else if (Authored.TryGetValue(nation.Tag ?? "", out var authored) && authored.HeadOfState.Length > 0)
         {
             name = authored.HeadOfState;
             traitId = authored.StateTrait;
-            birthYear = 2024 - Math.Clamp(authored.StateAge, 18, 99);
+            birthYear = Rulers.CalendarOriginYear(campaign) - Math.Clamp(authored.StateAge, 18, 99);
         }
         else
         {
             name = GenerateName(nation, 0, isState: true, campaignSeed: campaign?.Seed ?? 0);
             traitId = DefaultTraitFor(nation, 0, isState: true);
-            birthYear = 2024 - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(nation.Tag, 17));
+            birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(nation.Tag, 17));
         }
         var trait = TraitOf(traitId) ?? TraitOf(DefaultTraitFor(nation, 0, isState: true));
         var age = Math.Max(0, year - birthYear);
         var seed = StableHash(name, birthYear);
-        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "reformer", trait?.Name ?? "Institutional Reformer", seed, true);
+        var portrait = Authored.TryGetValue(nation.Tag ?? "", out var authoredPhoto) && authoredPhoto.HeadOfState == name ? authoredPhoto.StatePortrait : "";
+        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "reformer", trait?.Name ?? "Institutional Reformer", seed, true,
+            OfficeholderEffect.PortraitFor(nation, name, birthYear, portrait));
     }
+
+    // Authored ages refer to the scenario's calendar origin, not invariably 2024.
+    // Negative birth years are real dates; only the legacy zero sentinel is unknown.
+    internal static int CalendarOriginYear(Campaign campaign) => campaign is null ? 2024 :
+        new HistoricalDate(campaign.Date.Year, campaign.Date.Month, campaign.Date.Day).AddDays(-campaign.ElapsedDays).Year;
 
     public static LeaderProfile HeadOfGovernment(Campaign campaign, Nation nation)
     {
@@ -385,29 +405,31 @@ public static class Rulers
         {
             name = nation.HeadOfGovernmentName;
             traitId = nation.HeadOfGovernmentTrait;
-            birthYear = nation.HeadOfGovernmentBirthYear > 0
+            birthYear = nation.HeadOfGovernmentBirthYear != 0
                 ? nation.HeadOfGovernmentBirthYear
                 : Authored.TryGetValue(nation.Tag ?? "", out var authGov) &&
                   string.Equals(authGov.HeadOfGovernment, name, StringComparison.OrdinalIgnoreCase)
-                    ? 2024 - Math.Clamp(authGov.GovAge, 18, 99)
-                    : 2024 - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(name, 31));
+                    ? Rulers.CalendarOriginYear(campaign) - Math.Clamp(authGov.GovAge, 18, 99)
+                    : Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(name, 31));
         }
         else if (Authored.TryGetValue(nation.Tag ?? "", out var authored) && authored.HeadOfGovernment.Length > 0)
         {
             name = authored.HeadOfGovernment;
             traitId = authored.GovTrait;
-            birthYear = 2024 - Math.Clamp(authored.GovAge, 18, 99);
+            birthYear = Rulers.CalendarOriginYear(campaign) - Math.Clamp(authored.GovAge, 18, 99);
         }
         else
         {
             name = GenerateName(nation, 1, isState: false, campaignSeed: campaign?.Seed ?? 0);
             traitId = DefaultTraitFor(nation, 1, isState: false);
-            birthYear = 2024 - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, 31));
+            birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, 31));
         }
         var trait = TraitOf(traitId) ?? TraitOf(DefaultTraitFor(nation, 1, isState: false));
         var age = Math.Max(0, year - birthYear);
         var seed = StableHash(name, birthYear ^ 0x5A5A);
-        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "technocrat", trait?.Name ?? "Fiscal Technocrat", seed, false);
+        var portrait = Authored.TryGetValue(nation.Tag ?? "", out var authoredPhoto) && authoredPhoto.HeadOfGovernment == name ? authoredPhoto.GovPortrait : "";
+        return new LeaderProfile(name, title, age, birthYear, trait?.Id ?? "technocrat", trait?.Name ?? "Fiscal Technocrat", seed, false,
+            OfficeholderEffect.PortraitFor(nation, name, birthYear, portrait));
     }
 
     public static LeaderProfile PrimaryLeader(Campaign campaign, Nation nation) => HeadOfState(campaign, nation);
@@ -442,11 +464,11 @@ public static class Rulers
         EnsureLoaded();
         var year = campaign?.Date.Year ?? 2024;
         if (nation is null) return year - 52;
-        if (nation.CabinetPeople.TryGetValue(portfolioId, out var serving) && serving.BirthYear > 0)
+        if (nation.CabinetPeople.TryGetValue(portfolioId, out var serving) && serving.BirthYear != 0)
             return serving.BirthYear;
         if (AuthoredMinister(nation.Tag, portfolioId) is { Age: > 0 } authMin)
-            return 2024 - Math.Clamp(authMin.Age, 18, 99);
-        return 2024 - GeneratedMinisterAge(nation, portfolioId);
+            return Rulers.CalendarOriginYear(campaign) - Math.Clamp(authMin.Age, 18, 99);
+        return Rulers.CalendarOriginYear(campaign) - GeneratedMinisterAge(nation, portfolioId);
     }
 
     public static int MinisterPersonAge(Campaign campaign, Nation nation, string portfolioId)
@@ -999,7 +1021,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
             : Rulers.GenerateName(nation, Rulers.StableHash(PortfolioId + ":" + OptionId, campaign.ElapsedDays),
                 false, campaign.Seed);
         var appointedBirthYear = authoredMin is { Age: > 0 }
-            ? 2024 - Math.Clamp(authoredMin.Age, 18, 99)
+            ? Rulers.CalendarOriginYear(campaign) - Math.Clamp(authoredMin.Age, 18, 99)
             : campaign.Date.Year - Rulers.GeneratedMinisterAge(nation, PortfolioId + ":" + OptionId + ":" + campaign.ElapsedDays);
         nation.CabinetPeople[PortfolioId] = new MinisterPerson
         {

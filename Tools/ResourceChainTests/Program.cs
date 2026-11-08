@@ -22,9 +22,13 @@ static class Program
         ProductionChains.ResetCatalog(errors); ProductionProgramme.ResetCatalog(errors);
         Check(errors.Count == 0, "shipped recipes and production pools validate: " + string.Join("; ", errors));
         Check(ids.All(id => CommodityCatalog.TryParse(id, out _)), "14 strategic goods registered with stable data IDs");
+        // Semiconductors are the one manufactured good with a map of their own: the foundries of
+        // Taiwan, Korea and the rest are written as clusters in the 2024 deposits
+        // (zz_world_resources.json), so the atlas shows where the fabs stand.
         Check(ids.Take(8).All(id => ProductionChains.ResourceGoods.Contains(Good(id))) &&
-            ids.Skip(8).All(id => !ProductionChains.ResourceGoods.Contains(Good(id))),
-            "resource selector discovers all raw materials from recipes, excluding finished goods");
+            ids.Skip(8).Where(id => id != "Semiconductors").All(id => !ProductionChains.ResourceGoods.Contains(Good(id))) &&
+            ProductionChains.ResourceGoods.Contains(Good("Semiconductors")),
+            "resource selector discovers all raw materials and industrial clusters from recipes, excluding other finished goods");
         SurveyTests();
         var copperPrice = CommodityCatalog.Get(Good("Copper")).BasePrice;
         Check(!CommodityCatalog.Override("Copper", "corrupted", null, float.PositiveInfinity, null, null) &&
@@ -57,15 +61,54 @@ static class Program
         ProductionChains.RunRegion(n, s, 1);
         Check(n.Market[Good("Batteries")].Production > 0 && n.Market[Good("Batteries")].Production < full,
             "lithium shortage reduces battery output without poisoning the economy");
+        // What the build list says one more building does, worked out by the market's own arithmetic.
+        Clear(n);
+        var made = new List<(Commodity Good, float Amount)>(); var burned = new List<(Commodity Good, float Amount)>();
+        var needed = new List<Commodity>();
+        var smelterValue = ProductionChains.Marginal(n, s, BuildingKind.Smelter, 1f, made, burned, needed);
+        float Of(List<(Commodity Good, float Amount)> list, string id) => list.Where(e => e.Good == Good(id)).Sum(e => e.Amount);
+        Check(Near(Of(made, "Steel"), 2f) && Near(Of(made, "Aluminium"), 1.9f) && Near(Of(made, "IndustrialMaterials"), 1.15f) &&
+              smelterValue > 0f, "a smelter's marginal output is its recipe weights at full staffing and supply");
+        // Since 1 November 2026 a smelter buys its power (energy_household's Smelter term) rather
+        // than only slowing without it, so energy is on the bill and not repeated as a bare need.
+        Check(Near(Of(burned, "Bauxite"), 2.542f) && Near(Of(burned, "IronOre"), .605f) && Near(Of(burned, "Energy"), 1.6f) &&
+              !needed.Contains(Good("Energy")) && !needed.Contains(Good("IronOre")),
+              $"a smelter's bill names what it buys, energy included (energy {Of(burned, "Energy"):0.###})");
+        ProductionChains.Marginal(n, s, BuildingKind.Refinery, 1f, made, burned, needed);
+        Check(Near(Of(burned, "Oil"), 1f) && Near(Of(burned, "NaturalGas"), .2f) && Near(Of(made, "Energy"), 2.3f) &&
+              Near(Of(made, "Chemicals"), .8f) && Near(Of(made, "Sulfur"), .3f),
+              $"a refinery burns crude and some gas for its energy, chemicals and sulphur (oil {Of(burned, "Oil"):0.###}, gas {Of(burned, "NaturalGas"):0.###})");
+        ProductionChains.Marginal(n, s, BuildingKind.ElectronicsPlant, 1f, made, burned, needed);
+        Check(Near(Of(burned, "RareEarths"), .75f) && Near(Of(burned, "Energy"), .6f),
+              $"an electronics plant buys the rare earths and energy it cannot work without (rare earths {Of(burned, "RareEarths"):0.###})");
+        var fullRefinery = 0f;
+        Clear(n); ProductionChains.RunRegion(n, s, 1); fullRefinery = n.Market[Good("Energy")].Production;
+        s.Buildings[BuildingKind.Refinery] = 2;
+        Clear(n); ProductionChains.RunRegion(n, s, 1); var withRefinery = n.Market[Good("Energy")].Production;
+        Clear(n); n.Market[Good("Oil")].Satisfaction = 0; ProductionChains.RunRegion(n, s, 1);
+        var starved = n.Market[Good("Energy")].Production;
+        s.Buildings.Remove(BuildingKind.Refinery);
+        Check(Near(withRefinery - fullRefinery, 4.6f) && Near(starved - fullRefinery, 4.6f * .4f),
+              $"a refinery without crude keeps only its floor of output ({(starved - fullRefinery):0.###} of {(withRefinery - fullRefinery):0.###})");
+        Clear(n);
+        ProductionChains.Marginal(n, s, BuildingKind.ExtractionIndustry, 1f, made, burned, needed);
+        Check(Near(Of(made, "Copper"), 7.2f) && Of(made, "Bauxite") == 0f, "one more mine digs only what lies under the region");
+        ProductionChains.Marginal(n, s, BuildingKind.Smelter, .5f, made, burned, needed);
+        Check(Near(Of(made, "Steel"), 1f), "half-staffed plant makes half as much");
+        Check(Near(MarketSystem.JobsDemanded(s), 2 * .85f + .55f + .60f + .60f), "jobs come from the buildings catalogue");
+        Check(BuildingCatalog.Get(BuildingKind.Refinery).Jobs > 0f && BuildingCatalog.Get(BuildingKind.University).Jobs == 0f,
+              "common/buildings declares the jobs every building asks for");
         Clear(n);
         new SetProductionProgrammeCommand { IssuerId = n.Id, ConvertedCivilianUnits = 0,
             Lines = new() { new() { Good = Good("MotorVehicles"), Units = 10 }, new() { Good = Good("Ammunition"), Units = 5 } } }.Apply(c);
         ProductionChains.RunRegion(n, s, 1, ProductionProgramme.Allocate(c, n));
-        Check(Near(n.Market[Good("MotorVehicles")].Production, .65f) && Near(n.Market[Good("Ammunition")].Production, .75f),
-            "ten civilian units and five military units make the proportional line output");
+        // Ammunition: five military units are half an arms plant, at 2.75 a plant (20_military_industry overrides the base 1.5).
+        Check(Near(n.Market[Good("MotorVehicles")].Production, .65f) && Near(n.Market[Good("Ammunition")].Production, 1.375f),
+            $"ten civilian units and five military units make the proportional line output (vehicles {n.Market[Good("MotorVehicles")].Production:0.###}, ammunition {n.Market[Good("Ammunition")].Production:0.###})");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, false);
         var peace = n.Market[Good("Ammunition")].Demand;
-        Check(Near(n.Market[Good("Steel")].Demand, .58f), "construction projects demand steel");
+        // Two projects at 0.342 steel each (10_strategic_industry construction_steel_bill).
+        Check(Near(n.Market[Good("Steel")].Demand, .684f), $"construction projects demand steel ({n.Market[Good("Steel")].Demand:0.###})");
         Clear(n); ProductionChains.RunNation(n, 2, 10, 0, true);
         Check(n.Market[Good("Ammunition")].Demand > peace * 3, "war increases army ammunition demand");
         var makes = new List<Commodity>(); var uses = new List<Commodity>();
@@ -144,6 +187,100 @@ static class Program
         for (var day = 0; day < 14; day++) { MarketSystem.Tick(world); }
         Check(world.Nations.All(country => country.Market.Values.All(q => float.IsFinite(q.Price) && float.IsFinite(q.Production) && float.IsFinite(q.Demand))),
             "repeated market clearing stays finite across all countries and goods");
+        WorldResourceMigrationTests();
+    }
+
+    /// <summary>
+    /// A save made before history/states/2024/zz_world_resources.json existed has none of its
+    /// deposits. Loading one must seed them (WorldResourceMigration) so the world's grain, fabs
+    /// and mines are where a new game has them, and a month later it must be feeding itself
+    /// about as well as a new game does.
+    /// </summary>
+    static void WorldResourceMigrationTests()
+    {
+        var overlay = WorldResourceMigration.ReadOverlay();
+        var goods = overlay.Values.SelectMany(table => table.Keys).ToHashSet();
+        Check(overlay.Count > 900 && goods.Contains(Good("Grain")) && goods.Contains(Good("AdvancedChips")),
+            "world resource overlay reads back (" + overlay.Count + " regions, " + goods.Count + " goods)");
+
+        const int seed = 20241111;
+        // A save needs the tactical map and a player; both worlds get the same, so the month
+        // after is compared like with like.
+        static Campaign World()
+        {
+            var world = Campaign.CreateBootstrap(seed);
+            HydrologyCatalog.ResetCatalog();
+            if (MapRasterCatalog.TryBuildProvinceTopology(WorldMapSource.States, WorldMapSource.Control,
+                    WorldMapSource.Width, WorldMapSource.Height, out var topology, out var problem))
+                world.AttachProvinceTopology(topology);
+            else throw new Exception("province map unavailable: " + problem);
+            world.ConfigureSinglePlayer(world.NationByTag("EGY").Id);
+            return world;
+        }
+        var fresh = World();
+        Check(WorldResourceMigration.Apply(fresh, overlay) == 0, "a new campaign is never migrated");
+        var expected = fresh.States.ToDictionary(state => state.MapIndex,
+            state => state.ResourceDeposits.Where(pair => goods.Contains(pair.Key)).ToDictionary(pair => pair.Key, pair => pair.Value));
+        fresh.IsPaused = false;
+        for (var day = 0; day < 30; day++) fresh.TickDay();
+        var freshGrain = fresh.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Market[Good("Grain")].Production);
+
+        // What an old save holds: the same world, without any of the new deposits.
+        var old = World();
+        foreach (var state in old.States)
+            foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        var folder = Path.Combine(Path.GetTempPath(), "dof_world_resource_migration_" + Environment.ProcessId);
+        Directory.CreateDirectory(folder);
+        try
+        {
+            SaveSystem.Save(folder, "pre_resources", old, "");
+            var loaded = SaveSystem.Load(folder, "pre_resources", "");
+            Check(loaded.Success, "a save without the world's resources loads: " + loaded.Warning);
+            var restored = loaded.Campaign;
+            var differing = restored.States.Where(state => expected.TryGetValue(state.MapIndex, out var want) &&
+                (want.Count != state.ResourceDeposits.Count(pair => goods.Contains(pair.Key)) ||
+                 want.Any(pair => Math.Abs(state.ResourceDeposits.GetValueOrDefault(pair.Key) - pair.Value) > 0.001f)))
+                .Select(state => $"{state.Id} (parent {state.ParentMapIndex}): " +
+                    string.Join(" ", expected[state.MapIndex].Select(pair => $"{CommodityCatalog.IdOf(pair.Key)} {pair.Value:0.###}->{state.ResourceDeposits.GetValueOrDefault(pair.Key):0.###}")))
+                .ToList();
+            Check(differing.Count == 0, $"every region gets back the deposits a new game gives it ({differing.Count} differ: {string.Join("; ", differing)})");
+            Check(WorldResourceMigration.Apply(restored, overlay) == 0, "a migrated campaign is not migrated twice");
+            restored.IsPaused = false;
+            for (var day = 0; day < 30; day++) restored.TickDay();
+            var loadedGrain = restored.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Market[Good("Grain")].Production);
+            Check(freshGrain > 0 && Math.Abs(loadedGrain / freshGrain - 1) < 0.05,
+                $"30 days on, the migrated world grows as much grain as a new one ({loadedGrain:0.0} against {freshGrain:0.0})");
+        }
+        finally
+        {
+            try { Directory.Delete(folder, true); } catch (IOException) { }
+        }
+
+        // A region cut out of another in play shares its original's deposits with the rest of
+        // the family, by the people in each piece.
+        var cut = Campaign.CreateBootstrap(seed);
+        foreach (var state in cut.States)
+            foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        var original = cut.States.First(state => state.Id == "ua_65");
+        var piece = new ScenarioState
+        {
+            MapIndex = cut.States.Max(state => state.MapIndex) + 1, NationMapIndex = original.NationMapIndex,
+            Id = original.Id + "_9001", Iso = original.Iso + "-9001", ParentMapIndex = original.MapIndex,
+            Population = original.Population / 3
+        };
+        original.Population -= piece.Population;
+        cut.States.Add(piece);
+        WorldResourceMigration.Apply(cut, overlay);
+        var whole = overlay["ua_65"][Good("Grain")];
+        Check(piece.ResourceDeposits.GetValueOrDefault(Good("Grain")) > 0 &&
+              Math.Abs(piece.ResourceDeposits[Good("Grain")] + original.ResourceDeposits[Good("Grain")] - whole) < 0.001f &&
+              piece.ResourceDeposits[Good("Grain")] < original.ResourceDeposits[Good("Grain")],
+            "a region cut from another shares its original's grain by population");
+
+        // An authored scenario is not the 2024 bookmark and keeps its own ground.
+        cut.ScenarioId = "authored";
+        foreach (var state in cut.States) foreach (var good in goods) state.ResourceDeposits.Remove(good);
+        Check(WorldResourceMigration.Apply(cut, overlay) == 0, "authored scenarios are never seeded from the 2024 overlay");
     }
 
     static void SurveyTests()

@@ -28,6 +28,9 @@ public partial class DealOrForceGame
     {
         _publicDebt.Box.FocusMode = FocusModeEnum.All;
         _publicDebt.Box.MouseDefaultCursorShape = CursorShape.PointingHand;
+        _publicDebt.Box.SizeFlagsVertical = SizeFlags.ExpandFill;
+        foreach (var child in _publicDebt.Box.FindChildren("*", "Control", true, false))
+            if (child is Control control) control.MouseFilter = MouseFilterEnum.Ignore;
         _publicDebt.Box.GuiInput += input =>
         {
             if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } ||
@@ -54,8 +57,8 @@ public partial class DealOrForceGame
             overdue > .000001f || nation.DebtCondition >= DebtCondition.Default ? -1 : 0,
             overdue > .000001f ? Tr("hud.footer.overdue") : caption);
         _publicDebt.Box.TooltipText = Ui.Tip(explanation);
-        _publicDebt.Value.MouseFilter = MouseFilterEnum.Pass;
-        _publicDebt.Delta.MouseFilter = MouseFilterEnum.Pass;
+        _publicDebt.Value.MouseFilter = MouseFilterEnum.Ignore;
+        _publicDebt.Delta.MouseFilter = MouseFilterEnum.Ignore;
         _publicDebt.Delta.TooltipText = Ui.Tip(explanation);
     }
 
@@ -219,8 +222,8 @@ public partial class DealOrForceGame
         FinanceRow(parent, caption, key, "Gradually reflects stability, inflation, debt burden and unpaid obligations; affects lending capacity and the risk premium.");
         var gauge = new ProgressBar { Name = "FinanceGauge_" + key, MinValue = 0, MaxValue = 1,
             ShowPercentage = false, CustomMinimumSize = new Vector2(0, 6) };
-        gauge.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = Ui.Colour("text.accent") });
-        gauge.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = Ui.Colour("surface.overlay") });
+        gauge.AddThemeStyleboxOverride("fill", InstrumentMaterials.Meter("text.accent"));
+        gauge.AddThemeStyleboxOverride("background", InstrumentMaterials.Meter("surface.overlay", inset: true));
         parent.AddChild(gauge); _financeGauges[key] = gauge;
     }
 

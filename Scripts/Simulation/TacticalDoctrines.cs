@@ -31,6 +31,12 @@ public sealed partial class Defines
 
     /// <summary>General-staff books held at once. The staff's book does not spend a tactical slot.</summary>
     public int DoctrineGeneralSlots { get; set; } = 1;
+
+    /// <summary>
+    /// Books standing on one shelf at once. The second is learned beside the first.
+    /// One keeps the older rule: a different book on that shelf replaces it.
+    /// </summary>
+    public int DoctrineBooksPerShelf { get; set; } = 2;
 }
 
 /// <summary>
@@ -38,12 +44,21 @@ public sealed partial class Defines
 /// and what it gives. `rush_cost` is the price of learning it now instead of over `days`.
 /// </summary>
 public sealed record DoctrineNode(string Id, string Name, string Description, int Days, float Cost,
-    float RushCost, IReadOnlyList<string> Requires, IReadOnlyDictionary<string, float> Modifiers);
+    float RushCost, IReadOnlyList<string> Requires, IReadOnlyDictionary<string, float> Modifiers)
+{
+    /// <summary>Alternative articles in this book. Catalogue loading makes exclusions reciprocal.</summary>
+    public IReadOnlyList<string> Excludes { get; init; } = Array.Empty<string>();
+    /// <summary>Optional priorities by AI character; an absent character keeps ordinary study order.</summary>
+    public IReadOnlyDictionary<string, float> AiProfiles { get; init; } = new Dictionary<string, float>();
+}
 
 /// <summary>A branch of the war Doctrine: one philosophy of war, learned as a tree.</summary>
 public sealed record DoctrineBranch(string Id, string Name, string Description, string Experience,
     string Slot, IReadOnlyList<DoctrineNode> Nodes)
 {
+    /// <summary>Optional data-authored preference by AI character. No country tags or saved state.</summary>
+    public IReadOnlyDictionary<string, float> AiProfiles { get; init; } = new Dictionary<string, float>();
+
     public DoctrineNode Find(string nodeId) =>
         nodeId is null ? null : Nodes.FirstOrDefault(node => string.Equals(node.Id, nodeId, StringComparison.Ordinal));
 }
@@ -99,11 +114,25 @@ public sealed class DoctrineTrack
     public int LearningDoneDay = -1;
     public int LastRewriteDay = -9999;
 
-    public DoctrineTrack Clone() => new()
+    /// <summary>The other book on this same shelf. Null until a second book is opened. Not a third shelf.</summary>
+    public DoctrineTrack Companion;
+
+    public DoctrineTrack Clone()
     {
-        Branch = Branch, Known = new List<string>(Known), LearningBranch = LearningBranch,
-        LearningNode = LearningNode, LearningDoneDay = LearningDoneDay, LastRewriteDay = LastRewriteDay
-    };
+        var copy = new DoctrineTrack
+        {
+            Branch = Branch, Known = new List<string>(Known), LearningBranch = LearningBranch,
+            LearningNode = LearningNode, LearningDoneDay = LearningDoneDay, LastRewriteDay = LastRewriteDay
+        };
+        if (Companion is not null)
+            copy.Companion = new DoctrineTrack
+            {
+                Branch = Companion.Branch, Known = new List<string>(Companion.Known),
+                LearningBranch = Companion.LearningBranch, LearningNode = Companion.LearningNode,
+                LearningDoneDay = Companion.LearningDoneDay, LastRewriteDay = Companion.LastRewriteDay
+            };
+        return copy;
+    }
 }
 
 /// <summary>
@@ -167,8 +196,18 @@ public static class TacticalDoctrineCatalog
 
     private static readonly Dictionary<string, DoctrineBranch> Entries = new(StringComparer.Ordinal);
     private static readonly Dictionary<string, DoctrineBranch> ByNode = new(StringComparer.Ordinal);
+    private static DoctrineBranch[] _ordered;
     public static int Revision { get; private set; }
-    public static IEnumerable<DoctrineBranch> All => Entries.Values.OrderBy(branch => branch.Id, StringComparer.Ordinal);
+    // Keep sorting out of each country's AI review. The index is private: callers cannot
+    // reorder it, and deferred enumeration still reads the catalogue current at MoveNext.
+    public static IEnumerable<DoctrineBranch> All
+    {
+        get
+        {
+            _ordered ??= Entries.Values.OrderBy(branch => branch.Id, StringComparer.Ordinal).ToArray();
+            foreach (var branch in _ordered) yield return branch;
+        }
+    }
     public static DoctrineBranch Find(string id) => id is null ? null : Entries.GetValueOrDefault(id);
     public static bool KnowsExperience(string kind) =>
         kind is MilitaryExperience.Army or MilitaryExperience.Air or MilitaryExperience.Navy or MilitaryExperience.Command;
@@ -185,7 +224,7 @@ public static class TacticalDoctrineCatalog
 
     public static void ResetCatalog()
     {
-        Entries.Clear(); ByNode.Clear(); Revision++;
+        Entries.Clear(); ByNode.Clear(); _ordered = null; Revision++;
         foreach (var doc in GameDataLoader.DataDocuments("common", "tactical_doctrines")) using (doc) Merge(doc.RootElement);
     }
 
@@ -200,6 +239,12 @@ public static class TacticalDoctrineCatalog
                 if (!MechanicFeatures.ValidId(entry.Name) || entry.Value.ValueKind != JsonValueKind.Object)
                     throw new ArgumentException("invalid Doctrine branch");
                 var e = entry.Value;
+                var append = e.TryGetProperty("append_nodes", out var additions);
+                var previous = append ? Entries.GetValueOrDefault(entry.Name) : null;
+                if (append && previous is null)
+                    throw new ArgumentException("append_nodes needs an existing Doctrine branch");
+                if (append && e.TryGetProperty("nodes", out _))
+                    throw new ArgumentException("use nodes or append_nodes, not both");
                 string Text(string key, string fallback) => e.TryGetProperty(key, out var v)
                     ? v.ValueKind == JsonValueKind.String ? v.GetString()
                         : throw new ArgumentException(key + " must be a string")
@@ -213,22 +258,42 @@ public static class TacticalDoctrineCatalog
                         throw new ArgumentException(key + " must be a number");
                     return parsed;
                 }
-                var experience = Text("experience", "").Trim().ToLowerInvariant();
+                Dictionary<string, float> AiProfiles(JsonElement item)
+                {
+                    var weights = new Dictionary<string, float>(StringComparer.Ordinal);
+                    if (!item.TryGetProperty("ai_profiles", out var block)) return weights;
+                    if (block.ValueKind != JsonValueKind.Object)
+                        throw new ArgumentException("ai_profiles must be an object of non-negative weights");
+                    foreach (var profile in block.EnumerateObject())
+                    {
+                        if (!MechanicFeatures.ValidId(profile.Name) || profile.Value.ValueKind != JsonValueKind.Number ||
+                            !profile.Value.TryGetSingle(out var weight) || !float.IsFinite(weight) || weight < 0f)
+                            throw new ArgumentException($"ai_profiles.{profile.Name} must be a finite non-negative number");
+                        weights[profile.Name] = weight;
+                    }
+                    return weights;
+                }
+                var experience = Text("experience", previous?.Experience ?? "").Trim().ToLowerInvariant();
                 if (!KnowsExperience(experience))
                     throw new ArgumentException("experience must be army, air, navy or command");
                 // A book's shelf follows from the purse that pays for it unless the data says
                 // otherwise; a book that says otherwise has to be payable on the shelf it names.
-                var slot = Text("slot", "").Trim().ToLowerInvariant();
+                var slot = Text("slot", previous?.Slot ?? "").Trim().ToLowerInvariant();
                 if (slot.Length == 0) slot = DoctrineSlots.ForExperience(experience);
                 if (!DoctrineSlots.Knows(slot))
                     throw new ArgumentException("slot must be ground, air, sea or general");
                 if (!string.Equals(slot, DoctrineSlots.ForExperience(experience), StringComparison.Ordinal))
                     throw new ArgumentException($"slot '{slot}' cannot be paid for in {experience} experience");
-                if (!e.TryGetProperty("nodes", out var list) || list.ValueKind != JsonValueKind.Array ||
+                if (append && (experience != previous.Experience || slot != previous.Slot))
+                    throw new ArgumentException("append_nodes cannot change a Doctrine's service or currency");
+                var list = append ? additions : e.TryGetProperty("nodes", out var ordinary) ? ordinary : default;
+                if (list.ValueKind != JsonValueKind.Array ||
                     list.GetArrayLength() == 0)
                     throw new ArgumentException("a Doctrine with no nodes is not a Doctrine");
-                var nodes = new List<DoctrineNode>();
-                var seen = new HashSet<string>(StringComparer.Ordinal);
+                // A sparse extension keeps every earlier save ID and definition. Validation
+                // stays transactional: no index is changed until the complete graph is sound.
+                var nodes = previous?.Nodes.ToList() ?? new List<DoctrineNode>();
+                var seen = nodes.Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
                 foreach (var item in list.EnumerateArray())
                 {
                     if (item.ValueKind != JsonValueKind.Object)
@@ -251,6 +316,18 @@ public static class TacticalDoctrineCatalog
                     if (item.TryGetProperty("requires", out var needs) && needs.ValueKind == JsonValueKind.Array)
                         foreach (var need in needs.EnumerateArray())
                             requires.Add(need.ValueKind == JsonValueKind.String ? need.GetString() : "");
+                    var excludes = new List<string>();
+                    if (item.TryGetProperty("excludes", out var alternatives))
+                    {
+                        if (alternatives.ValueKind != JsonValueKind.Array)
+                            throw new ArgumentException($"node '{id}' excludes must be an array of article ids");
+                        foreach (var alternative in alternatives.EnumerateArray())
+                        {
+                            if (alternative.ValueKind != JsonValueKind.String)
+                                throw new ArgumentException($"node '{id}' excludes must contain article ids");
+                            excludes.Add(alternative.GetString());
+                        }
+                    }
                     var local = new List<string>();
                     var modifiers = item.TryGetProperty("modifiers", out var block)
                         ? NationalModifiers.Read(block, $"Doctrine.{entry.Name}.{id}", local)
@@ -260,18 +337,49 @@ public static class TacticalDoctrineCatalog
                         ? nameValue.GetString() : id;
                     var description = item.TryGetProperty("description", out var text) && text.ValueKind == JsonValueKind.String
                         ? text.GetString() : "";
-                    nodes.Add(new DoctrineNode(id, name, description, days, cost, rush, requires, modifiers));
+                    nodes.Add(new DoctrineNode(id, name, description, days, cost, rush, requires, modifiers)
+                    { Excludes = excludes, AiProfiles = AiProfiles(item) });
                 }
                 // Prerequisites are checked once the whole branch is read, so a mod may write its
                 // tree in whatever order reads best and a missing node is refused by name.
                 foreach (var node in nodes)
+                {
                     foreach (var need in node.Requires)
                         if (!seen.Contains(need))
                             throw new ArgumentException($"node '{node.Id}' requires '{need}', which this branch does not hold");
-                var branch = new DoctrineBranch(entry.Name, Text("name", entry.Name),
-                    Text("description", ""), experience, slot, nodes);
+                    foreach (var alternative in node.Excludes)
+                        if (!seen.Contains(alternative) || alternative == node.Id || node.Requires.Contains(alternative))
+                            throw new ArgumentException($"node '{node.Id}' excludes invalid or required article '{alternative}'");
+                }
+                // One declaration is enough for a mod: neither study order may learn both sides.
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var node = nodes[i];
+                    nodes[i] = node with { Excludes = nodes.Where(other =>
+                        node.Excludes.Contains(other.Id) || other.Excludes.Contains(node.Id))
+                        .Select(other => other.Id).OrderBy(id => id, StringComparer.Ordinal).ToArray() };
+                }
+                foreach (var node in nodes)
+                {
+                    var ancestors = new HashSet<string>(StringComparer.Ordinal);
+                    var pending = new Stack<string>(node.Requires);
+                    while (pending.Count > 0)
+                    {
+                        var ancestor = pending.Pop();
+                        if (ancestor == node.Id)
+                            throw new ArgumentException($"node '{node.Id}' has a cyclic prerequisite");
+                        if (!ancestors.Add(ancestor)) continue;
+                        foreach (var earlier in nodes.First(other => other.Id == ancestor).Requires) pending.Push(earlier);
+                    }
+                    if (node.Excludes.Any(ancestors.Contains))
+                        throw new ArgumentException($"node '{node.Id}' excludes an earlier required article");
+                }
+                var branch = new DoctrineBranch(entry.Name, Text("name", previous?.Name ?? entry.Name),
+                    Text("description", previous?.Description ?? ""), experience, slot, nodes)
+                { AiProfiles = append && !e.TryGetProperty("ai_profiles", out _) ? previous.AiProfiles : AiProfiles(e) };
                 Entries[entry.Name] = branch;
                 foreach (var node in nodes) ByNode[node.Id] = branch;
+                _ordered = null;
                 Revision++;
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException)
@@ -390,7 +498,44 @@ public static class TacticalDoctrines
     {
         if (nation is null || branch is null) return null;
         EnsureShelves(nation);
-        return nation.TacticalDoctrine.Track(branch.Slot);
+        var primary = nation.TacticalDoctrine.Track(branch.Slot);
+        if (primary.Companion is { } companion &&
+            (string.Equals(companion.Branch, branch.Id, StringComparison.Ordinal) ||
+             string.Equals(companion.LearningBranch, branch.Id, StringComparison.Ordinal)))
+            return companion;
+        return primary;
+    }
+
+    private enum ShelfHome { Primary, Companion, Open, Rewrite, Full }
+
+    /// <summary>
+    /// Where a book would be written. Does not open the second book: a refusal must not
+    /// leave an empty companion behind.
+    /// </summary>
+    private static ShelfHome Decide(Campaign campaign, Nation nation, DoctrineBranch branch, out DoctrineTrack track)
+    {
+        track = null;
+        if (nation is null || branch is null) return ShelfHome.Full;
+        EnsureShelves(nation);
+        var primary = nation.TacticalDoctrine.Track(branch.Slot);
+        track = primary;
+        if (primary.Branch.Length == 0 ||
+            string.Equals(primary.Branch, branch.Id, StringComparison.Ordinal) ||
+            string.Equals(primary.LearningBranch, branch.Id, StringComparison.Ordinal))
+            return ShelfHome.Primary;
+        if (primary.Companion is { } companion &&
+            (companion.Branch.Length == 0 ||
+             string.Equals(companion.Branch, branch.Id, StringComparison.Ordinal) ||
+             string.Equals(companion.LearningBranch, branch.Id, StringComparison.Ordinal)))
+        {
+            track = companion;
+            return ShelfHome.Companion;
+        }
+        var cap = Math.Max(1, campaign.Defines.DoctrineBooksPerShelf);
+        var held = 1 + (primary.Companion is { Branch.Length: > 0 } ? 1 : 0);
+        if (held < cap) return ShelfHome.Open;
+        if (cap <= 1) return ShelfHome.Rewrite;
+        return ShelfHome.Full;
     }
 
     /// <summary>The book in force on one shelf, or null while the shelf is empty.</summary>
@@ -407,7 +552,12 @@ public static class TacticalDoctrines
     {
         if (nation is null) yield break;
         foreach (var slot in DoctrineSlots.All)
+        {
             if (BookOn(nation, slot) is { } branch) yield return (slot, branch);
+            var extra = nation.TacticalDoctrine.Tracks.GetValueOrDefault(slot)?.Companion;
+            if (extra is { Branch.Length: > 0 } && TacticalDoctrineCatalog.Find(extra.Branch) is { } second)
+                yield return (slot, second);
+        }
     }
 
     /// <summary>Whether this node has been learned under the book in force on its shelf.</summary>
@@ -441,6 +591,7 @@ public static class TacticalDoctrines
         foreach (var node in branch.Nodes)
         {
             if (inForce && track.Known.Contains(node.Id)) continue;
+            if (inForce && node.Excludes.Any(track.Known.Contains)) continue;
             var ready = true;
             foreach (var need in node.Requires)
                 if (!inForce || !track.Known.Contains(need)) { ready = false; break; }
@@ -478,23 +629,29 @@ public static class TacticalDoctrines
         if (branch is null) return Loc.Get("No such Doctrine is written.");
         var node = branch.Find(nodeId);
         if (node is null) return Loc.Get("No such article of the Doctrine is written.");
-        var track = TrackFor(nation, branch);
+        var home = Decide(campaign, nation, branch, out var track);
         if (track is null) return Loc.Get("No such Doctrine is written.");
-        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal) && track.Known.Contains(node.Id))
+        if (home == ShelfHome.Full)
+            return Loc.Format("This shelf already holds {0} doctrines.",
+                Math.Max(1, campaign.Defines.DoctrineBooksPerShelf));
+        var writingThis = home is ShelfHome.Primary or ShelfHome.Companion &&
+            string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
+        if (writingThis && track.Known.Contains(node.Id))
             return Loc.Get("This article has already been learned.");
-        if (track.LearningNode.Length > 0) return Loc.Get("This service is already learning an article.");
-        if (string.Equals(track.Branch, branch.Id, StringComparison.Ordinal))
+        if (writingThis && node.Excludes.FirstOrDefault(track.Known.Contains) is { } excluded)
+            return Loc.Format("This subdoctrine excludes {0}.", Loc.Get(branch.Find(excluded).Name));
+        if (home != ShelfHome.Open && track.LearningNode.Length > 0)
+            return Loc.Get("This service is already learning an article.");
+        if (writingThis)
         {
             foreach (var need in node.Requires)
                 if (!track.Known.Contains(need)) return Loc.Get("The earlier articles of this Doctrine come first.");
         }
-        // A shelf with no book, or another book, starts at the roots: a tree is climbed from
-        // the bottom whether the service is beginning it or beginning it again.
+        // A shelf with no book, a second book, or a replacement starts at the roots.
         else if (node.Requires.Count > 0)
             return Loc.Get("The earlier articles of this Doctrine come first.");
-        var sameBook = string.Equals(track.Branch, branch.Id, StringComparison.Ordinal);
-        var rewriting = Rewriting(nation, branch);
-        if (!sameBook)
+        var rewriting = home == ShelfHome.Rewrite;
+        if (home == ShelfHome.Primary && track.Branch.Length == 0)
         {
             var generalShelf = branch.Slot == DoctrineSlots.General;
             var held = BooksHeld(nation, generalShelf);
@@ -533,8 +690,14 @@ public static class TacticalDoctrines
         var branch = TacticalDoctrineCatalog.Find(branchId);
         var node = branch?.Find(nodeId);
         if (branch is null || node is null || Refusal(campaign, nation, branchId, nodeId, rush).Length > 0) return false;
-        var track = TrackFor(nation, branch);
-        if (Rewriting(nation, branch))
+        var home = Decide(campaign, nation, branch, out var track);
+        if (home == ShelfHome.Open)
+        {
+            var primary = nation.TacticalDoctrine.Track(branch.Slot);
+            primary.Companion ??= new DoctrineTrack();
+            track = primary.Companion;
+        }
+        if (home == ShelfHome.Rewrite)
         {
             nation.PoliticalPoints = MathF.Max(0f, nation.PoliticalPoints - campaign.Defines.DoctrineRewritePoliticalCost);
             track.Branch = branch.Id;
@@ -554,7 +717,7 @@ public static class TacticalDoctrines
         Spend(nation, branch.Experience, rush ? node.RushCost : node.Cost);
         if (rush)
         {
-            Learn(campaign, nation, branch, node);
+            Learn(campaign, nation, branch, node, track);
         }
         else
         {
@@ -567,9 +730,8 @@ public static class TacticalDoctrines
         return true;
     }
 
-    private static void Learn(Campaign campaign, Nation nation, DoctrineBranch branch, DoctrineNode node)
+    private static void Learn(Campaign campaign, Nation nation, DoctrineBranch branch, DoctrineNode node, DoctrineTrack track)
     {
-        var track = TrackFor(nation, branch);
         // Whose article has just landed is whose book is in force: a crash course taken from
         // nothing must start the Doctrine, not leave the service with a known article and no book.
         track.Branch = branch.Id;
@@ -584,10 +746,28 @@ public static class TacticalDoctrines
         if (Delegation.RunByAi(nation)) Count("doctrine_adopted");
     }
 
+    private static void FinishCourse(Campaign campaign, Nation nation, DoctrineTrack track, int day)
+    {
+        if (track.LearningNode.Length == 0 || day < track.LearningDoneDay) return;
+        var branch = TacticalDoctrineCatalog.Find(track.LearningBranch);
+        var node = branch?.Find(track.LearningNode);
+        if (branch is null || node is null)
+        {
+            track.LearningBranch = ""; track.LearningNode = ""; track.LearningDoneDay = -1;
+            return;
+        }
+        Learn(campaign, nation, branch, node, track);
+        campaign.MarkStrategicChange();
+    }
+
     private static void SyncLegacyFields(Nation nation, DoctrineTrack activeTrack)
     {
         var memory = nation?.TacticalDoctrine;
         if (memory is null || activeTrack is null) return;
+        var primary = false;
+        foreach (var slot in DoctrineSlots.All)
+            if (ReferenceEquals(memory.Tracks.GetValueOrDefault(slot), activeTrack)) { primary = true; break; }
+        if (!primary) return;
         memory.Branch = activeTrack.Branch;
         memory.Known = new List<string>(activeTrack.Known);
         memory.LearningBranch = activeTrack.LearningBranch;
@@ -618,20 +798,14 @@ public static class TacticalDoctrines
         {
             EnsureShelves(nation);
             var memory = nation.TacticalDoctrine;
+            // FinishCourse edits track fields, legacy mirrors and modifier caches, never
+            // the shelf dictionary. AiStudy may add shelves, but runs AFTER this loop.
+            // Preserve insertion order, including legacy/modded slots, without an hourly
+            // snapshot allocation for every country. No shared scratch buffer is needed.
             foreach (var track in memory.Tracks.Values)
             {
-                if (track.LearningNode.Length == 0 || day < track.LearningDoneDay) continue;
-                var branch = TacticalDoctrineCatalog.Find(track.LearningBranch);
-                var node = branch?.Find(track.LearningNode);
-                if (branch is null || node is null)
-                {
-                    track.LearningBranch = ""; track.LearningNode = ""; track.LearningDoneDay = -1;
-                }
-                else
-                {
-                    Learn(campaign, nation, branch, node);
-                    campaign.MarkStrategicChange();
-                }
+                FinishCourse(campaign, nation, track, day);
+                if (track.Companion is not null) FinishCourse(campaign, nation, track.Companion, day);
             }
             if (!runAi || !Delegation.RunByAi(nation)) continue;
             if ((day + nation.Id) % 7 != 0) continue;
@@ -658,10 +832,37 @@ public static class TacticalDoctrines
             if (Rewriting(nation, branch) && track.Known.Count > 0 &&
                 campaign.ElapsedDays - track.LastRewriteDay <
                 Math.Max(30, campaign.Defines.DoctrineAiRewriteCooldownDays)) continue;
+            var available = Available(nation, branch.Id);
+            var character = AiStrategyCatalog.Of(campaign, nation).Id;
+            // A strategic course still chooses the first book. Once its usable articles are
+            // learned, an authored character preference may fill the existing companion slot.
+            // This gives new/modded specialisms a real AI route without deleting a learned book.
+            if (available.Count == 0 && track.Known.Count > 0 && campaign.Defines.DoctrineBooksPerShelf > 1)
+            {
+                var companion = track.Companion;
+                if (companion is { LearningNode.Length: > 0 }) continue;
+                var additional = companion is { Branch.Length: > 0 }
+                    ? TacticalDoctrineCatalog.Find(companion.Branch)
+                    : TacticalDoctrineCatalog.OnShelf(slot)
+                        .Where(book => book.Id != branch.Id && book.AiProfiles.GetValueOrDefault(character) > 0f)
+                        .OrderByDescending(book => book.AiProfiles.GetValueOrDefault(character))
+                        .ThenBy(book => book.Id, StringComparer.Ordinal).FirstOrDefault();
+                if (additional is null) continue;
+                branch = additional;
+                available = Available(nation, branch.Id);
+            }
             var have = Experience(nation, branch.Experience);
             DoctrineNode choice = null;
             var rush = false;
-            foreach (var node in Available(nation, branch.Id))
+            if (available.Any(node => node.AiProfiles.ContainsKey(character)))
+            {
+                choice = available.Where(node => node.AiProfiles.GetValueOrDefault(character, 1f) > 0f &&
+                    have + 0.001f >= node.Cost)
+                    .OrderByDescending(node => node.AiProfiles.GetValueOrDefault(character, 1f))
+                    .ThenBy(node => node.Cost).ThenBy(node => node.Id, StringComparer.Ordinal).FirstOrDefault();
+                rush = choice is not null && atWar && have + 0.001f >= choice.RushCost;
+            }
+            else foreach (var node in available)
             {
                 if (atWar && have + 0.001f >= node.RushCost) { choice = node; rush = true; break; }
                 if (have + 0.001f < node.Cost) continue;
@@ -685,6 +886,12 @@ public static class TacticalDoctrines
         if (bias.Length > 0 && TacticalDoctrineCatalog.Find(bias) is { } leaning &&
             string.Equals(leaning.Slot, slot, StringComparison.Ordinal)) return bias;
         var character = AiStrategyCatalog.Of(campaign, nation).Id;
+        // New/modded books opt into character-driven selection; old data keeps its exact fallback.
+        var authored = TacticalDoctrineCatalog.OnShelf(slot)
+            .Where(book => book.AiProfiles.GetValueOrDefault(character) > 0f)
+            .OrderByDescending(book => book.AiProfiles.GetValueOrDefault(character))
+            .ThenBy(book => book.Id, StringComparer.Ordinal).FirstOrDefault();
+        if (authored is not null) return authored.Id;
         var table = slot switch
         {
             DoctrineSlots.Air => CharacterAir,
@@ -729,6 +936,24 @@ public static class TacticalDoctrines
                     totals[effect.Key] = totals.GetValueOrDefault(effect.Key) + effect.Value;
             }
             if (totals.Count > 0) yield return (book.Name, totals);
+            var companion = track.Companion;
+            if (companion is not { Branch.Length: > 0 } || companion.Known.Count == 0) continue;
+            var other = TacticalDoctrineCatalog.Find(companion.Branch);
+            if (other is null) continue;
+            var key = slot + "#2";
+            if (!cache.TryGetValue(key, out var secondTotals))
+            {
+                secondTotals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                cache[key] = secondTotals;
+            }
+            secondTotals.Clear();
+            foreach (var node in other.Nodes)
+            {
+                if (!companion.Known.Contains(node.Id)) continue;
+                foreach (var effect in node.Modifiers)
+                    secondTotals[effect.Key] = secondTotals.GetValueOrDefault(effect.Key) + effect.Value;
+            }
+            if (secondTotals.Count > 0) yield return (other.Name, secondTotals);
         }
     }
 }

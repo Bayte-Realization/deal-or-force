@@ -23,6 +23,17 @@ public static class GamePaths
     private static bool _resolved;
     private static bool _prepared;
 
+    /// <summary>Opt-in only for the built-in test runner, never ordinary launches.</summary>
+    private static string VerificationDocuments
+    {
+        get
+        {
+            if (Array.IndexOf(OS.GetCmdlineUserArgs(), "--verify-build") < 0) return null;
+            var path = OS.GetEnvironment("DOF_VERIFICATION_DOCUMENTS");
+            return !string.IsNullOrWhiteSpace(path) && Path.IsPathRooted(path) ? Path.GetFullPath(path) : null;
+        }
+    }
+
     /// <summary>The engine's own folder, which is where the game lived before this file existed.</summary>
     public static string EngineRoot => ProjectSettings.GlobalizePath("user://");
 
@@ -37,7 +48,7 @@ public static class GamePaths
         {
             if (_resolved) return _folders;
             _resolved = true;
-            var documents = OS.GetSystemDir(OS.SystemDir.Documents);
+            var documents = VerificationDocuments ?? OS.GetSystemDir(OS.SystemDir.Documents);
             _folders = GameFolders.For(documents);
             return _folders;
         }
@@ -77,7 +88,10 @@ public static class GamePaths
         var legacyDocuments = string.IsNullOrWhiteSpace(documents)
             ? null
             : Path.Combine(documents, GameFolders.GameFolder);
-        folders.Prepare(EngineRoot, legacyDocuments);
+        // Explicit verification processes own a disposable profile. Never migrate a
+        // player's settings, DLC, mods or saves into (or out of) that test profile.
+        if (VerificationDocuments is not null) folders.Prepare();
+        else folders.Prepare(EngineRoot, legacyDocuments);
 
         // Said out loud once, in the log: which folder the player owns, whether the engine's
         // folder is the same one, and how many files came across from the old places. Without

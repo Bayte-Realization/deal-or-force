@@ -84,5 +84,80 @@ static class AiDoctrineTests
             "a character's numbers are clamped to a range the simulation can live with");
 
         AiStrategyCatalog.ResetCatalog();
+        OperationalBooks();
+    }
+
+    static void OperationalBooks()
+    {
+        var choices = new[]
+        {
+            ("defensive", "elastic_defence", "elastic_mobile"),
+            ("minor_power", "dispersed_warfare", "dispersed_partisans"),
+            ("fortress", "air_shield", "shield_front"),
+            ("trading_state", "convoy_service", "convoy_assembly"),
+            ("blitzkrieg", "mission_command", "mission_initiative"),
+            ("major_offensive", "joint_logistics", "joint_lean")
+        };
+        try
+        {
+            foreach (var (profile, id, specialisation) in choices)
+            {
+                // The same country can use every book by changing authored character data:
+                // the production selector has no country/era allowlist.
+                AiStrategyCatalog.Load("{\"country_profiles\":{\"ROU\":\"" + profile + "\"}}", new List<string>());
+                var c = Campaign.CreateBootstrap(1730);
+                var n = c.NationByTag("ROU");
+                foreach (var other in c.Nations) other.IsHuman = other != n;
+                n.ArmyExperience = n.AirExperience = n.NavalExperience = n.PoliticalPoints = 5000;
+                n.StrategicDoctrine.Id = "";
+                var branch = TacticalDoctrineCatalog.Find(id);
+                Check(TacticalDoctrines.PreferredBranch(c, n, branch.Slot) == id,
+                    profile + " selects the data-authored " + id + " book");
+                var random = c.Random.State;
+                for (var day = 1; day <= 500; day++)
+                {
+                    typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(c, (long)day * 24);
+                    TacticalDoctrines.Tick(c);
+                }
+                var track = TacticalDoctrines.TrackFor(n, branch);
+                Check(track is not null && track.Branch == id && track.Known.Contains(specialisation),
+                    profile + " actually pays for and learns " + specialisation + " through the normal AI tick");
+                var selected = branch.Find(specialisation);
+                Check(selected.Excludes.All(alternative => !track.Known.Contains(alternative)),
+                    profile + " never learns the mutually exclusive alternative");
+                Check(c.Random.State == random && TacticalDoctrines.Experience(n, branch.Experience) < 5000,
+                    id + " spends experience but consumes no extra RNG");
+            }
+
+            // A grand strategy remains authoritative for the primary book, but completing it
+            // must not make authored new books unreachable to a normal AI campaign.
+            AiStrategyCatalog.Load("{\"country_profiles\":{\"ROU\":\"defensive\"}}", new List<string>());
+            var campaign = Campaign.CreateBootstrap(1731);
+            var nation = campaign.NationByTag("ROU");
+            foreach (var other in campaign.Nations) other.IsHuman = other != nation;
+            nation.ArmyExperience = 5000;
+            nation.PoliticalPoints = 5000;
+            nation.StrategicDoctrine.Id = "attrition_war";
+            var first = TacticalDoctrineCatalog.Find("fire");
+            var primary = nation.TacticalDoctrine.Track(DoctrineSlots.Ground);
+            primary.Branch = first.Id;
+            primary.Known = new List<string>();
+            // A complete reachable path, not contradictory knowledge of both sides of
+            // a new data-authored specialisation. The AI may then open a companion.
+            for (var step = 0; step < first.Nodes.Count && TacticalDoctrines.Available(nation, first.Id).FirstOrDefault() is { } next; step++)
+                primary.Known.Add(next.Id);
+            var completedArticles = primary.Known.Count;
+            Check(TacticalDoctrines.PreferredBranch(campaign, nation) == "fire",
+                "the written strategic bias still wins for the primary ground book");
+            for (var day = 1; day <= 500; day++)
+            {
+                typeof(Campaign).GetProperty(nameof(Campaign.ElapsedHours))!.SetValue(campaign, (long)day * 24);
+                TacticalDoctrines.Tick(campaign);
+            }
+            Check(primary.Branch == "fire" && primary.Known.Count == completedArticles &&
+                  primary.Companion is { Branch: "elastic_defence" } second && second.Known.Contains("elastic_mobile"),
+                "an AI completes its strategic book then learns an authored companion without deleting prior knowledge");
+        }
+        finally { AiStrategyCatalog.ResetCatalog(); }
     }
 }

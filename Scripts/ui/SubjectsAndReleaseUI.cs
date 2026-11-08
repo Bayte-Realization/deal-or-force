@@ -819,6 +819,8 @@ public partial class DealOrForceGame
             var active = Rulers.ActiveMinister(nation, portfolio.Id);
             var personName = Rulers.MinisterPersonName(nation, portfolio.Id);
             var minAge = Rulers.MinisterPersonAge(_campaign, nation, portfolio.Id);
+            if (active is not null)
+                pBox.AddChild(BuildLeaderPortraitBadge(OfficeholderEffect.MinisterProfile(_campaign, nation, portfolio.Id), nation.Color, 40, 48));
             pBox.AddChild(Title(Tr(portfolio.Name).ToUpperInvariant(), 10, Ui.Colour("text.caption")));
             pBox.AddChild(Title(active is null
                 ? (!string.IsNullOrEmpty(personName)
@@ -1035,7 +1037,8 @@ public partial class DealOrForceGame
                 IssuerId = nation.Id,
                 TargetNationId = nation.Id,
                 CustomName = _customCountryNameInput.Text,
-                CustomFlag = chosenFlag
+                CustomFlag = chosenFlag,
+                CustomFlagDesignJson = chosenFlag != (nation.CustomFlag ?? "") ? "" : null
             });
             _campaign.Commands.ApplyAll(_campaign);
             _rulersCabinetFeedback.Text = Tr("Updated national name and banner.");
@@ -1051,7 +1054,8 @@ public partial class DealOrForceGame
                 IssuerId = nation.Id,
                 TargetNationId = nation.Id,
                 CustomName = "",
-                CustomFlag = ""
+                CustomFlag = "",
+                CustomFlagDesignJson = ""
             });
             _campaign.Commands.ApplyAll(_campaign);
             _rulersCabinetFeedback.Text = Tr("Restored automatic historical name and flag.");

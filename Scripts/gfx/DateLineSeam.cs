@@ -14,6 +14,17 @@ public static class DateLineSeam
 {
     public readonly record struct Run(int Start, int Count);
 
+    /// <summary>The same geographic point on the sheet nearest the reference.
+    /// A change of sheet is a coordinate rebase, never twenty map units of travel.</summary>
+    public static float NearestCopy(float coordinate, float reference, float width)
+    {
+        if (!float.IsFinite(coordinate) || !float.IsFinite(reference) ||
+            !float.IsFinite(width) || width <= 0) return coordinate;
+        var delta = (double)reference - coordinate;
+        if (Math.Abs(delta) <= width * .5d) return coordinate;
+        return (float)(coordinate + Math.Floor(delta / width + .5d) * width);
+    }
+
     /// <summary>
     /// Splits a polyline where consecutive points leap more than half the sheet.
     /// Runs shorter than two points are omitted: one cross-section is two

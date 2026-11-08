@@ -1,0 +1,8 @@
+{
+  "Hover over a region to inspect it before building. Click to queue one project; Escape or right-click finishes placement.": "Hover over a region to inspect it before building. Click to queue one project; Escape or right-click finishes placement.",
+  "Move the pointer over the map to compare sites. This is a regional project, not an exact building footprint.": "Move the pointer over the map to compare sites. This is a regional project, not an exact building footprint.",
+  "Contract {0} · {1} working days · sites {2}/{3}": "Contract {0} · {1} working days · sites {2}/{3}",
+  "The contract is paid over time. Working days exclude waiting for a free site or funding; materials and future conditions can change the result.": "The contract is paid over time. Working days exclude waiting for a free site or funding; materials and future conditions can change the result.",
+  "Click to build here": "Click to build here",
+  "Estimate at current prices, staffing and supply, not guaranteed GDP or profit.": "Estimate at current prices, staffing and supply, not guaranteed GDP or profit."
+}

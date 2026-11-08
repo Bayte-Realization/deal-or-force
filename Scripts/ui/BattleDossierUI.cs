@@ -21,6 +21,15 @@ public partial class DealOrForceGame
         };
         _battleDetailControls.AddThemeConstantOverride("separation", 9);
         parent.AddChild(_battleDetailControls);
+        _battleActions = new VBoxContainer { Name = "BattleActions", Visible = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        _battleActions.AddThemeConstantOverride("separation", 6);
+        _dossierScroll.GetParent().AddChild(_battleActions);
+        _battleDetailControls.VisibilityChanged += () =>
+        {
+            _battleActions.Visible = _battleDetailControls.Visible;
+            LayoutCampaignDossier();
+        };
     }
 
     private LandBattle SelectedBattle() => _campaign?.Battles.FirstOrDefault(battle => battle.Id == _selectedBattleId);
@@ -61,6 +70,11 @@ public partial class DealOrForceGame
             battle.AttackerLosses, battle.DefenderLosses, _campaign.ElapsedDays, Loc.Language);
         hash = HashCode.Combine(hash, battle.Attackers.Count, battle.Defenders.Count,
             _campaign.ElapsedHours, _campaign.Player.Id, _campaign.Player.IsHuman);
+        var commandEnabled = !_campaign.Defines.FeatureCommands.TryGetValue(nameof(WithdrawArmyFromBattleCommand), out var feature) ||
+            string.IsNullOrWhiteSpace(feature) || _campaign.FeatureEnabled(feature);
+        hash = HashCode.Combine(hash, _campaign.MapRevision, _campaign.WarRevision,
+            GetWindow().Size, SettingsCatalog.Number("interface_scale"), _battleRosterExpanded, commandEnabled,
+            BattlePixelScale());
         if (hash == _battleDossierFingerprint) return;
         _battleDossierFingerprint = hash;
         foreach (var child in _battleDetailControls.GetChildren())
@@ -68,13 +82,22 @@ public partial class DealOrForceGame
             _battleDetailControls.RemoveChild(child);
             child.QueueFree();
         }
+        foreach (var child in _battleActions.GetChildren())
+        {
+            _battleActions.RemoveChild(child);
+            child.QueueFree();
+        }
+        LayoutCampaignDossier();
         _sideTitle.Text = Tr(battle.Ended ? "BATTLE REPORT" : "BATTLE IN PROGRESS");
         _sideBody.Text = Loc.Format("{0} · day {1}", BattlePlaceName(battle.ProvinceId),
             Math.Max(1, (battle.Rounds.LastOrDefault()?.Day ?? _campaign.ElapsedDays) - battle.StartedDay + 1));
         var attacker = _campaign.NationById(battle.AttackerId);
         var defender = _campaign.NationById(battle.DefenderId);
+        var armies = _campaign.Armies.ToDictionary(army => army.Id);
+        var ownAttack = battle.Attackers.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == _campaign.Player.Id);
+        var ownDefence = battle.Defenders.Any(id => armies.TryGetValue(id, out var unit) && unit.NationId == _campaign.Player.Id);
         var detailed = !_campaign.Player.IsHuman || battle.AttackerId == _campaign.Player.Id ||
-                       battle.DefenderId == _campaign.Player.Id;
+                       battle.DefenderId == _campaign.Player.Id || ownAttack || ownDefence;
         if (!detailed)
         {
             _battleDetailControls.AddChild(BattleText(Loc.Format("{0} vs {1}",
@@ -90,12 +113,14 @@ public partial class DealOrForceGame
                 AddObservedBattleSide(observed, false, defender, ResolveBattleSide(battle.Defenders, byId));
             }
             AddBattleNavigation(battle);
+            FitBattleReading();
             return;
         }
         var assessment = BattleReadout.Assess(battle, _campaign.Defines.BattleBreakOrganisation);
-        var playerAttacks = !_campaign.Player.IsHuman || battle.AttackerId == _campaign.Player.Id;
+        var playerAttacks = !_campaign.Player.IsHuman || battle.AttackerId == _campaign.Player.Id || ownAttack;
+        var resisting = !battle.Ended && battle.Rounds.LastOrDefault()?.Note == PocketResistance.BattleNote;
         var share = assessment.ShareFor(playerAttacks);
-        var tone = !assessment.Known ? "text.muted" : share > .55f ? "state.positive" :
+        var tone = resisting ? "state.warning" : !assessment.Known ? "text.muted" : share > .55f ? "state.positive" :
             share < .45f ? "state.negative" : "state.warning";
         var heroPanel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         heroPanel.SetMeta("atlas_section_ground", "surface.inset");
@@ -113,12 +138,14 @@ public partial class DealOrForceGame
         if (icon is not null) hero.AddChild(icon);
         var headline = BattleText(battle.Ended ? Loc.Format("Winner: {0}",
             _campaign.NationById(battle.WinnerId)?.DisplayName ?? Tr("Unknown")) :
-            Tr(assessment.StatusFor(playerAttacks)), 18, tone);
+            Tr(resisting ? "Encircled defenders are holding" : assessment.StatusFor(playerAttacks)), 18, tone);
         headline.Name = "BattleStatus";
         hero.AddChild(headline);
         if (!battle.Ended)
         {
-            var caption = BattleText(assessment.Known
+            var caption = BattleText(resisting
+                ? Tr("The last combat round continued despite spent organisation. Losses and supply still matter.")
+                : assessment.Known
                 ? Loc.Format(_campaign.Player.IsHuman ? "Our endurance balance: {0:P0}" : "Attacker endurance balance: {0:P0}", share)
                 : Tr("The first combat round has not resolved yet."),
                 12, "text.body_soft");
@@ -126,15 +153,17 @@ public partial class DealOrForceGame
             caption.TooltipText = Ui.Tip(Tr(BattleBalanceExplanation));
             caption.MouseFilter = MouseFilterEnum.Stop;
             heroBox.AddChild(caption);
-            var balance = BattleGauge(assessment.Known ? share : .5f, tone, "BattleEndurance");
-            balance.TooltipText = caption.TooltipText;
-            heroBox.AddChild(balance);
+            if (!resisting)
+            {
+                var balance = BattleGauge(assessment.Known ? share : .5f, tone, "BattleEndurance");
+                balance.TooltipText = caption.TooltipText;
+                heroBox.AddChild(balance);
+            }
         }
         var sideRow = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         sideRow.AddThemeConstantOverride("separation", 12);
         _battleDetailControls.AddChild(sideRow);
         // Resolve ids once per displayed report, not on every frame or once per row.
-        var armies = _campaign.Armies.ToDictionary(army => army.Id);
         var attacking = ResolveBattleSide(battle.Attackers, armies);
         var defending = ResolveBattleSide(battle.Defenders, armies);
         if (!battle.Ended)
@@ -197,7 +226,23 @@ public partial class DealOrForceGame
         if (latest is not null)
         {
             SectionRule(_battleDetailControls, "Combat log", Loc.Format("{0} d.", battle.Rounds.Count));
-            _battleDetailControls.AddChild(BattleText(Tr(latest.Note), 12, "text.accent_dim"));
+            var combatNote = BattleText(Tr(latest.Note), 12, "text.accent_dim");
+            if (latest.Note == PocketResistance.BattleNote)
+            {
+                // The reason a spent garrison is still fighting must remain legible at 720p.
+                var pixelScale = (GetViewport().GetStretchTransform() *
+                    _battleDetailControls.GetGlobalTransformWithCanvas()).Scale.Abs();
+                var fontSize = DecisionReadability.FontSize(12, MathF.Min(pixelScale.X, pixelScale.Y),
+                    Math.Clamp(SettingsCatalog.Number("interface_scale"), .5f, 2.5f),
+                    Ui.Metric("decision.minimum_font_pixels", 14));
+                if (combatNote.LabelSettings is not null)
+                {
+                    combatNote.LabelSettings = (LabelSettings)combatNote.LabelSettings.Duplicate();
+                    combatNote.LabelSettings.FontSize = fontSize;
+                }
+                else combatNote.AddThemeFontSizeOverride("font_size", fontSize);
+            }
+            _battleDetailControls.AddChild(combatNote);
             var history = string.Join("\n", battle.Rounds.TakeLast(3).Reverse().Select(round =>
                 Loc.Format("Day {0}: losses {1:N0}/{2:N0} · organisation {3:P0}/{4:P0}",
                     round.Day - battle.StartedDay + 1, round.AttackerLosses, round.DefenderLosses,
@@ -209,6 +254,7 @@ public partial class DealOrForceGame
         AddBattleNavigation(battle);
         if (_battleWithdrawalFeedback.Length > 0)
             _battleDetailControls.AddChild(BattleText(_battleWithdrawalFeedback, 12, "state.warning"));
+        FitBattleReading();
     }
 
     private static List<Army> ResolveBattleSide(IEnumerable<int> ids, Dictionary<int, Army> armies)
@@ -259,7 +305,7 @@ public partial class DealOrForceGame
         }
         column.AddChild(BattleText(Loc.Format("Losses: {0:N0}", attacking ? battle.AttackerLosses : battle.DefenderLosses),
             12, "state.warning"));
-        if (battle.Ended) return;
+        if (battle.Ended || !_battleRosterExpanded) return;
         var limit = Math.Clamp((int)InterfaceSkin.Metric("combat.roster_rows", 6), 1, 30);
         foreach (var army in armies.Take(limit))
         {
@@ -289,19 +335,23 @@ public partial class DealOrForceGame
                 var actions = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
                 card.AddChild(actions);
                 var armyId = army.Id;
-                var withdrawBtn = ActionButton(Tr("Retreat"), () =>
+                var quote = BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id);
+                var withdrawBtn = ActionButton(quote.Attacking ? "Stop attack" : "Retreat", () =>
                 {
                     WithdrawBattleFormation(armyId, 1f);
                 }, 0, 20);
                 withdrawBtn.Name = "WithdrawFormation_" + army.Id;
-                withdrawBtn.TooltipText = Ui.Tip(Tr("Withdraw only this formation from the battle to a friendly province."));
+                withdrawBtn.TooltipText = Ui.Tip(WithdrawalTip(quote));
+                withdrawBtn.Disabled = !quote.Available;
                 withdrawBtn.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                 actions.AddChild(withdrawBtn);
                 if (army.Divisions >= 2f)
                 {
                     var half = ActionButton("Withdraw half", () => WithdrawBattleFormation(armyId, .5f), 0, 20);
                     half.Name = "WithdrawHalf_" + army.Id;
-                    half.TooltipText = Ui.Tip(Tr("Split off half the divisions to friendly ground; the rest keep fighting. No healing or free equipment."));
+                    var halfQuote = BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id, .5f);
+                    half.TooltipText = Ui.Tip(WithdrawalTip(halfQuote));
+                    half.Disabled = !halfQuote.Available;
                     half.SizeFlagsHorizontal = SizeFlags.ExpandFill;
                     actions.AddChild(half);
                 }
@@ -347,6 +397,7 @@ public partial class DealOrForceGame
         AddBattleMeter(column, "Equipment", condition.Equipment, "combat.equipment", "equipment");
         column.AddChild(BattleText(Tr("Observed formations only; unseen reinforcements are not included."),
             11, "text.muted"));
+        if (!_battleRosterExpanded) return;
         var limit = Math.Clamp((int)InterfaceSkin.Metric("combat.roster_rows", 6), 1, 30);
         var shown = 0;
         foreach (var army in armies)
@@ -439,14 +490,31 @@ public partial class DealOrForceGame
                 });
             }, 160, 32);
             leave.Name = "WithdrawBattleSide";
-            leave.TooltipText = Ui.Tip(Tr("Withdraw our participants only. Defenders without a friendly retreat route remain in combat."));
-            _battleDetailControls.AddChild(leave);
+            var quotes = _campaign.Armies.Where(army => army.BattleId == battle.Id &&
+                army.NationId == _campaign.Player.Id).Select(army => BattleWithdrawalPreview.Read(_campaign, _campaign.Player.Id, army.Id)).ToArray();
+            leave.Disabled = !quotes.Any(quote => quote.Available);
+            leave.TooltipText = Ui.Tip(Tr("Withdraw our participants only. Defenders without a friendly retreat route remain in combat.") +
+                (leave.Disabled ? "\n" + Tr(quotes.FirstOrDefault().Refusal ?? "Not in battle") : ""));
+            _battleActions.AddChild(leave);
+            if (leave.Disabled)
+            {
+                var refusal = BattleText(Tr(quotes.FirstOrDefault().Refusal ?? "Not in battle"), 12, "state.warning");
+                refusal.Name = "BattleWithdrawalRefusal";
+                _battleActions.AddChild(refusal);
+            }
         }
-        var row = new HBoxContainer();
-        row.AddThemeConstantOverride("separation", 5);
-        _battleDetailControls.AddChild(row);
+        var row = new HFlowContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        row.AddThemeConstantOverride("h_separation", 5);
+        row.AddThemeConstantOverride("v_separation", 5);
+        _battleActions.AddChild(row);
         row.AddChild(ActionButton("Focus battle", () => FocusProvince(battle.ProvinceId, 6.5f), 130, 30, true));
         row.AddChild(ActionButton("War dossier", () => OpenScreen("Wars"), 130, 30));
+        if (!battle.Ended)
+        {
+            var roster = ActionButton(_battleRosterExpanded ? "Hide formations" : "Show formations", ToggleBattleRoster, 150, 30);
+            roster.Name = "BattleRosterToggle";
+            row.AddChild(roster);
+        }
     }
 }
 

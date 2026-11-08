@@ -49,6 +49,9 @@ public sealed partial class GlobePresentation
         ["organization_expelled"] = new("alliance", new Color(0.86f, 0.42f, 0.32f), 40),
         ["organization_dissolved"] = new("alliance", new Color(0.62f, 0.62f, 0.66f), 40),
         ["organization_left"] = new("alliance", new Color(0.7f, 0.68f, 0.62f), 30),
+        ["organization_expelled_vote"] = new("alliance", new Color(0.86f, 0.42f, 0.32f), 40),
+        ["organization_suspended_aggression"] = new("alliance", new Color(0.86f, 0.52f, 0.32f), 35),
+        ["organization_rival_bloc"] = new("alliance", new Color(0.45f, 0.62f, 0.86f), 45),
         ["alliance_ended"] = new("alliance", new Color(0.78f, 0.5f, 0.38f), 30),
         ["spy_network_exposed"] = new("search", new Color(0.62f, 0.72f, 0.82f), 25),
         ["covert_sabotage_exposed"] = new("search", new Color(0.86f, 0.5f, 0.36f), 35),
@@ -67,6 +70,12 @@ public sealed partial class GlobePresentation
         ["peaceful_independence"] = new("nation", new Color(0.7f, 0.82f, 0.5f), 60),
         ["accession_signed"] = new("treaty", new Color(0.82f, 0.76f, 0.5f), 30),
         ["peace_signed"] = new("treaty", new Color(0.62f, 0.82f, 0.58f), 45),
+        // The nuclear alert (NuclearPosture): a weapon used stays news for a year.
+        ["nuclear_strike"] = new("war", new Color(1f, 0.92f, 0.7f), 365),
+        ["nuclear_retaliation"] = new("war", new Color(1f, 0.92f, 0.7f), 365),
+        ["nuclear_devastation"] = new("war", new Color(1f, 0.85f, 0.6f), 730),
+        ["nuclear_test"] = new("alert_battle", new Color(0.95f, 0.78f, 0.35f), 45),
+        ["nuclear_incident"] = new("alert_battle", new Color(0.95f, 0.5f, 0.25f), 30),
     };
 
     private const int PulseLimit = 48;

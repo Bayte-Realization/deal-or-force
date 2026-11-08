@@ -212,7 +212,7 @@ public static class StatePartition
         {
             if (index == parentIndex) continue;
             var piece = pieces[index];
-            var share = piece.Count / (float)total;
+            var share = PeopleShare(campaign, topology, state, piece, provinces);
             var owner = topology.ProvinceToNation[piece[0]];
             var carved = Carve(campaign, state, piece, share, owner,
                 Unique(campaign, Name(state.Name, Centre(topology, piece), parentCentre, index)));
@@ -286,8 +286,45 @@ public static class StatePartition
         return created;
     }
 
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ProvinceTopology, Tuple<int[], long[]>> Weights = new();
+
     /// <summary>
-    /// Put back together every region whose pieces are all under one flag again.
+    /// What share of a region's people live in this piece of it: the townspeople by the towns
+    /// that stand in it, the rest by the ground it covers.
+    ///
+    /// It used to be the share of its provinces, and provinces are cut by ground, not people: a
+    /// border province of Lebanon's three that the map gave to Israel took a third of Lebanon's
+    /// people with it, and the half of a city's oblast a front line cut off was as populous as
+    /// the half with the city in it.
+    /// </summary>
+    internal static float PeopleShare(Campaign campaign, ProvinceTopology topology, ScenarioState state,
+        IReadOnlyCollection<int> piece, IReadOnlyCollection<int> whole)
+    {
+        var weights = Weights.GetValue(topology, map =>
+        {
+            var cells = new int[map.ProvinceCount + 1];
+            foreach (var province in map.CellToProvince)
+                if (province > 0 && province <= map.ProvinceCount) cells[province]++;
+            var towns = new long[map.ProvinceCount + 1];
+            var cities = CityCatalog.All;
+            var under = CityCatalog.ProvincesOf(map);
+            for (var index = 0; index < cities.Count && index < under.Length; index++)
+                if (under[index] > 0 && under[index] <= map.ProvinceCount) towns[under[index]] += Math.Max(0, cities[index].Population);
+            return Tuple.Create(cells, towns);
+        });
+        long Sum(IEnumerable<int> provinces, long[] values) { long total = 0; foreach (var p in provinces) total += values[p]; return total; }
+        long Count(IEnumerable<int> provinces) { long total = 0; foreach (var p in provinces) total += weights.Item1[p]; return total; }
+        var ground = Count(whole);
+        var groundShare = ground > 0 ? Count(piece) / (double)ground : piece.Count / (double)Math.Max(1, whole.Count);
+        var town = Sum(whole, weights.Item2);
+        if (town <= 0) return (float)groundShare;
+        var townShare = Sum(piece, weights.Item2) / (double)town;
+        var urban = Math.Clamp(state.Urbanization, 0f, 1f);
+        return (float)Math.Clamp(urban * townShare + (1 - urban) * groundShare, 0, 1);
+    }
+
+    /// <summary>
+    /// Put back together pieces of the same original region under the same flag.
     ///
     /// A border that goes away should leave the map as it found it. Without this a region
     /// cut in half by a war stayed two regions for the rest of the campaign even after one
@@ -328,26 +365,26 @@ public static class StatePartition
             var parent = campaign.States.Find(candidate => candidate.MapIndex == parentIndex);
             if (parent is null) continue;
 
-            // One flag over every piece, the parent's own ground included. A piece with no
-            // ground left has no opinion: it is an empty shell the merge will absorb.
-            ushort? flag = null;
-            var agreed = true;
-            foreach (var piece in children.Prepend(parent))
+            // Reunion is not all-or-nothing. Orientale may have one recovered piece and
+            // two still abroad: the recovered piece joins home NOW, without taking the
+            // foreign ones with it. Keep the original identity where possible, otherwise
+            // the lowest map id, so peers and repeated loads choose the same survivor.
+            var survivors = new List<(ScenarioState State, ushort Owner)>();
+            foreach (var piece in children.Prepend(parent).OrderBy(s => s == parent ? 0 : 1).ThenBy(s => s.MapIndex))
             {
-                if (!provincesOf.TryGetValue(piece.MapIndex, out var owned) || owned.Count == 0) continue;
-                var owner = topology.ProvinceToNation[owned[0]];
-                foreach (var province in owned)
-                    if (topology.ProvinceToNation[province] != owner) { agreed = false; break; }
-                if (!agreed) break;
-                if (flag is null) flag = owner;
-                else if (flag != owner) { agreed = false; break; }
+                provincesOf.TryGetValue(piece.MapIndex, out var owned);
+                var owner = owned is { Count: > 0 } ? topology.ProvinceToNation[owned[0]] : (ushort)piece.NationMapIndex;
+                // RepartitionWorld/Annex normally settle this first. Never let an
+                // inconsistent legacy piece silently transfer another country's land.
+                if (owned is not null && owned.Any(p => topology.ProvinceToNation[p] != owner)) continue;
+                var match = survivors.FindIndex(s => s.Owner == owner && MayAbsorb(campaign, s.State, piece));
+                if (match < 0) { survivors.Add((piece, owner)); continue; }
+                var survivor = survivors[match].State;
+                Absorb(campaign, topology, survivor, piece, provincesOf);
+                survivor.NationMapIndex = owner;
+                survivor.NationId = campaign.Nations.Find(n => n.MapIndex == owner)?.Tag ?? survivor.NationId;
+                merged++;
             }
-            if (!agreed || flag is null) continue;
-
-            foreach (var child in children) Absorb(campaign, topology, parent, child, provincesOf);
-            parent.NationMapIndex = flag.Value;
-            parent.NationId = campaign.Nations.Find(nation => nation.MapIndex == flag.Value)?.Tag ?? parent.NationId;
-            merged += children.Count;
         }
 
         if (merged > 0)
@@ -359,12 +396,41 @@ public static class StatePartition
         return merged;
     }
 
+    private static bool MayAbsorb(Campaign c, ScenarioState a, ScenarioState b)
+    {
+        // A merge must not enlarge a foreign occupation, office, colony or lease.
+        // Those distinctions are real, unlike a leftover name from an old partition.
+        if (a.HeldById != b.HeldById || (a.AdministeredById >= 0 && b.AdministeredById >= 0 && a.AdministeredById != b.AdministeredById) ||
+            a.ColonistMapIndex != b.ColonistMapIndex || a.Unclaimed != b.Unclaimed ||
+            (a.Displaced.Count > 0 && b.Displaced.Count > 0 && a.DisplacedOwner != b.DisplacedOwner)) return false;
+        foreach (var agreement in c.LandArrangements)
+            if (agreement.Regions.Contains(a.MapIndex) != agreement.Regions.Contains(b.MapIndex)) return false;
+        // A pending territorial paper must keep the exact footprint its recipient saw.
+        foreach (var paper in c.UltimatumPapers)
+            if (paper.Pending && (paper.Regions.Contains(a.MapIndex) != paper.Regions.Contains(b.MapIndex) ||
+                paper.Liberate && (paper.LiberateRegion == a.MapIndex || paper.LiberateRegion == b.MapIndex))) return false;
+        foreach (var offer in c.DealOffers)
+            if (offer.Pending && (offer.From.Regions.Contains(a.MapIndex) != offer.From.Regions.Contains(b.MapIndex) ||
+                offer.To.Regions.Contains(a.MapIndex) != offer.To.Regions.Contains(b.MapIndex))) return false;
+        return true;
+    }
+
     /// <summary>One piece back into the region it was cut from.</summary>
     private static void Absorb(Campaign campaign, ProvinceTopology topology, ScenarioState parent,
         ScenarioState child, Dictionary<int, List<int>> provincesOf)
     {
+        provincesOf.TryGetValue(parent.MapIndex, out var parentGround);
+        provincesOf.TryGetValue(child.MapIndex, out var childGround);
+        ParallelAdministrationFootprint.Merge(campaign, parent, child, parentGround, childGround, parent.Population, child.Population);
         if (provincesOf.TryGetValue(child.MapIndex, out var owned))
+        {
             foreach (var province in owned) topology.ProvinceToState[province] = (ushort)parent.MapIndex;
+            if (!provincesOf.TryGetValue(parent.MapIndex, out var combined))
+                provincesOf[parent.MapIndex] = combined = new List<int>();
+            combined.AddRange(owned);
+            provincesOf.Remove(child.MapIndex);
+            campaign.InvalidateStateIndex();
+        }
 
         var here = parent.Population;
         var there = child.Population;
@@ -378,6 +444,26 @@ public static class StatePartition
         parent.StandardOfLiving = Blend(parent.StandardOfLiving, child.StandardOfLiving);
         parent.Radicalism = Blend(parent.Radicalism, child.Radicalism);
         parent.Urbanization = Blend(parent.Urbanization, child.Urbanization);
+        parent.Stability = Blend(parent.Stability, child.Stability);
+        parent.SecessionPressure = Blend(parent.SecessionPressure, child.SecessionPressure);
+        parent.WarDamage = Blend(parent.WarDamage, child.WarDamage);
+        parent.YoungShare = Blend(parent.YoungShare, child.YoungShare);
+        parent.OldShare = Blend(parent.OldShare, child.OldShare);
+        parent.BasicNeedsCoverage = Blend(parent.BasicNeedsCoverage, child.BasicNeedsCoverage);
+        parent.EmploymentTarget = Blend(parent.EmploymentTarget, child.EmploymentTarget);
+        parent.LivelihoodStress = Blend(parent.LivelihoodStress, child.LivelihoodStress);
+        parent.BrainDrainPressure = Blend(parent.BrainDrainPressure, child.BrainDrainPressure);
+        parent.ReviewBirths += child.ReviewBirths; parent.ReviewDeaths += child.ReviewDeaths;
+        parent.ReviewNetMigration += child.ReviewNetMigration;
+        parent.ReviewInternalMigration += child.ReviewInternalMigration;
+        parent.LastDemographyDay = Math.Max(parent.LastDemographyDay, child.LastDemographyDay);
+        parent.LastHouseholdReviewDay = Math.Max(parent.LastHouseholdReviewDay, child.LastHouseholdReviewDay);
+        parent.LastFoughtDay = Math.Max(parent.LastFoughtDay, child.LastFoughtDay);
+        parent.RebuildingUntilDay = Math.Max(parent.RebuildingUntilDay, child.RebuildingUntilDay);
+        parent.AdministrationTaken += child.AdministrationTaken;
+        if (parent.Displaced.Count == 0) parent.DisplacedOwner = child.DisplacedOwner;
+        foreach (var (culture, count) in child.Displaced)
+            parent.Displaced[culture] = parent.Displaced.GetValueOrDefault(culture) + count;
         parent.NonBuildingJobs = parent.NonBuildingJobs < 0 || child.NonBuildingJobs < 0 ? -1 : parent.NonBuildingJobs + child.NonBuildingJobs;
         parent.Population = total;
         foreach (var tag in child.CoreTags)
@@ -410,6 +496,7 @@ public static class StatePartition
             parent.ResourceDeposits[deposit] = parent.ResourceDeposits.TryGetValue(deposit, out var had)
                 ? had + amount : amount;
 
+        RegionReunionReferences.Move(campaign, parent, child, here, there);
         campaign.States.Remove(child);
     }
 
@@ -548,8 +635,10 @@ public static class StatePartition
             carved.ResourceDeposits[deposit] = moved;
         }
 
+        ParallelAdministrationFootprint.Carve(campaign, parent, carved, piece);
         var topology = campaign.ProvinceMap;
         foreach (var province in piece) topology.ProvinceToState[province] = (ushort)mapIndex;
+        campaign.InvalidateStateIndex();
         return carved;
     }
 

@@ -1,0 +1,11 @@
+{
+  "metrics": {
+    "doctrine.card_width_pixels": 380,
+    "doctrine.card_height_pixels": 208,
+    "doctrine.book_height_pixels": 80,
+    "doctrine.minimum_target_pixels": 32,
+    "doctrine.minimum_font_pixels": 14,
+    "doctrine.minimum_caption_pixels": 12,
+    "doctrine.minimum_heading_pixels": 20
+  }
+}

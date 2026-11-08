@@ -62,27 +62,15 @@ public static partial class Warfare
         int targetProvinceId = -1)
     {
         result = "Not in battle";
-        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
-        if (battle is null || !float.IsFinite(army.Divisions) || army.Divisions < 2f)
-        { result = "Too small to split"; return false; }
         if (!float.IsFinite(share) || share <= 0 || share >= 1f)
         { result = "Invalid withdrawal share"; return false; }
-        var attacking = battle.Attackers.Contains(army.Id);
-        if (!attacking && !battle.Defenders.Contains(army.Id)) return false;
-
-        var leaving = M.Clamp(MathF.Floor(army.Divisions * share + .0001f), 1f, army.Divisions - 1f);
-        var remaining = army.Divisions - leaving;
-        if (remaining < 1f || leaving < 1f) { result = "Too small to split"; return false; }
-
-        // Resolve the defender's line of retreat before anything mutates, so a refusal
-        // leaves both the battle and the formation exactly as they were.
-        var retreat = 0;
-        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
-        if (!attacking)
-        {
-            retreat = WithdrawalProvince(campaign, war, army, targetProvinceId);
-            if (retreat == 0) { result = "No friendly line of retreat"; return false; }
-        }
+        var quote = AssessWithdrawal(campaign, army, share, targetProvinceId);
+        if (!quote.Available) { result = quote.Refusal; return false; }
+        var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
+        var attacking = quote.Attacking;
+        var leaving = quote.Leaving;
+        var remaining = quote.Remaining;
+        var retreat = quote.Destination;
 
         var fraction = leaving / army.Divisions;
         var personnel = (int)MathF.Floor(army.Personnel * fraction);
@@ -170,20 +158,12 @@ public static partial class Warfare
     internal static bool Withdraw(Campaign campaign, Army army, out string result, int targetProvinceId = -1)
     {
         result = "Not in battle";
+        var quote = AssessWithdrawal(campaign, army, 1, targetProvinceId);
+        if (!quote.Available) { result = quote.Refusal; return false; }
         var battle = campaign.Battles.Find(candidate => candidate.Id == army.BattleId && !candidate.Ended);
-        if (battle is null || army.Divisions < .1f) return false;
         var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
-        var attacking = battle.Attackers.Contains(army.Id);
-        if (!attacking && !battle.Defenders.Contains(army.Id)) return false;
-
-        var retreat = 0;
-        if (!attacking)
-        {
-            retreat = WithdrawalProvince(campaign, war, army, targetProvinceId);
-            // A trapped defender cannot cancel enemy fire by pressing a button. No
-            // state changes precede this check, and no surrender is hidden in the order.
-            if (retreat == 0) { result = "No friendly line of retreat"; return false; }
-        }
+        var attacking = quote.Attacking;
+        var retreat = quote.Destination;
 
         var participants = attacking ? battle.Attackers : battle.Defenders;
         participants.Remove(army.Id);
@@ -213,6 +193,7 @@ public static partial class Warfare
         }
         // Do not heal strength, organisation, equipment or reset the battle's losses.
         _provinceIndexStale = true;
+        UseBattleBuckets(campaign);
         EnsureIndexed(campaign);
         var attackers = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);
         if (attackers.Count == 0) Close(campaign, battle, battle.DefenderId, "Attackers withdrew");

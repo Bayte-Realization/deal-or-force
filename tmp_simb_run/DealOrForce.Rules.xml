@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8"?>
+<doc>
+<assembly><name>DealOrForce.Rules</name></assembly>
+<members>
+<member name="T:DealOrForce.Rules.AssaultRules">
+<summary>
+ Deterministic game rules. No Godot, IO, RNG or reference to the mutable campaign.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.Assessment">
+<summary>
+ Value-only result. Singles preserve the existing simulation&apos;s float32 arithmetic.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.Reason">
+<summary>
+ Explicit values mirror the existing C# readout; this library owns no campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.CatalogueWindow">
+<summary>
+ Shared value-only window calculation for bounded presentation lists.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.CatalogueSlice">
+<summary>
+ An overflow-safe slice of a catalogue. No collection or UI state is retained.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.WarScoreRules">
+<summary>
+ Pure deterministic war score rules. No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.WarScoreOutcome">
+<summary>
+ Value-only result for war score evaluation and collapse determination.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.StalemateDiscount(System.Int32,System.Boolean,System.Boolean,System.Single,System.Single)">
+<summary>
+ The stalemate discount a long, tiring or already-stalled war applies to the winner&apos;s
+ resolve over an achievable war aim.
+
+ Pulled out of `PeaceNegotiation.WarAimResolve` as a pure function of five numbers,
+ because that is what it always was: time since the war began, whether the term on the
+ table is a return to the status quo, whether the front has stalled, how weary both
+ sides are, and how much of the responder&apos;s ground is occupied. The surrounding method
+ still decides *whether* the penalty applies at all - that needs the campaign - but the
+ arithmetic is here, where a wrong sign or a missing clamp is a compile-time absence
+ rather than a number nobody notices for a year.
+
+ Float32 throughout, in the same order as the C# it replaces: a differential harness
+ compares the two over a grid and requires exact equality, so the order matters.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.IsPocket(System.Int64,System.Int64,System.Single)">
+<summary>
+ Determines whether an isolated pocket of ground is small enough relative to the main
+ national body that it should fall together with the surrounding land.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.IsLeaf(System.Func{System.Int32,System.Collections.Generic.IEnumerable{System.Int32}},System.Collections.Generic.ISet{System.Int32},System.Collections.Generic.ISet{System.Int32},System.Int32)">
+<summary>
+ Tests whether removing a region from a chosen set leaves all remaining regions
+ still connected to the winner&apos;s anchors.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.FindParts(System.Func{System.Int32,System.Collections.Generic.IEnumerable{System.Int32}},System.Collections.Generic.IEnumerable{System.Int32})">
+<summary>
+ Identifies the connected components of a subset of nodes in a graph.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.EvaluateRegionValue(System.Int64,System.Int32,System.Single,System.Single,System.Boolean,System.Boolean,System.Boolean,System.Boolean,System.Int32,System.Int32,System.Boolean,System.Single,System.Boolean,System.Single)">
+<summary>
+ Evaluates the strategic desirability of claiming a region in peace demands.
+ aim: 0 = People, 1 = Sea, 2 = Buffer, 3 = Wealth.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PeaceRules.CompactnessScore(System.Int32,System.Int32,System.Single)">
+<summary>
+ Computes the compactness factor for adding a region to a treaty.
+ Broad shared borders yield compact frontiers, while single-point connections are penalized.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.PeaceRules">
+<summary>
+ Pure deterministic peace boundary, territorial recovery and graph arbitration rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.WarRhythmRules.OffensivePulse(System.Single,System.Single,System.Single,System.Int32)">
+<summary>
+ How much of its army a side sends forward today, as a factor on its usual share: its own
+ cycle of 90 to 180 days (periodRoll), at its own phase (phaseRoll), a third of it on the
+ offensive at 1 + strength and a quarter of it resting at 1 - 0.4 strength (never below 0.3).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.WarRhythmRules.GuerrillaCover(System.Single,System.Single,System.Single)">
+<summary>
+ How much ground a side fighting the war of the weak can hide in, 0 to 1: how lopsided
+ the war is against it (asymmetry), how rough the province is (roughness), and whether it
+ is fighting among its own people (homeGround) - each 0 to 1. The Hussites behind their
+ wagons, the Taliban in the valleys: neither term alone, both together.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.WarRhythmRules.FightingSpirit(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ A side&apos;s fighting spirit in one year of a war: steady at 1 +/- spread, triangular - and,
+ for a few, the year it turns out to be something nobody counted on. surpriseChance of
+ them fight far above their weight (Finland in 1939, Ukraine in 2022) by surpriseSwing;
+ collapseChance of them break (the Afghan army in 2021, Iraq&apos;s in Mosul in 2014) by
+ collapseSwing. tailRoll decides which, once per side and year.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.WarRhythmRules.DesertionRate(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ The share of a formation&apos;s soldiers who desert in a week, 0 to cap: base times the square
+ of the pressure on them - a war nobody at home believes in (1 - warSupport), a unit that
+ has stopped being one (1 - cohesion), hunger below half supply, the shock of a broken
+ line below 0.3 organisation, pay that has stopped (unpaid, 0 or 1), and a side whose
+ spirit has gone below its own weight. A well-fed army in a popular war loses nobody.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.WarRhythmRules.BattleFortune(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ One side&apos;s fortune for a day of a battle: the day&apos;s, triangular 1 +/- daySpread, times the
+ battle&apos;s own, triangular 1 +/- battleSpread, and - for decisiveChance of battles - the one
+ moment it turns on, up or down by swing.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.WarRhythmRules">
+<summary>
+ The rhythm and the fortune of war: when a side throws its weight forward, and how a battle&apos;s
+ luck falls. Pure and deterministic - every random number arrives as a roll in [0, 1) drawn by
+ the caller from the campaign seed, so the same inputs always give the same answer.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.EconomyRules.EvaluateCreditTerms(System.Single,System.Single,System.Single,System.Single,System.Single,System.Single,System.Boolean,System.Single,System.Single,System.Single)">
+<summary>
+ Evaluates sovereign credit confidence and annual borrowing spread (SovereignFinance.Prepare).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.EconomyRules.DebtCapacity(System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Sovereign debt capacity given GDP, credit confidence and national modifier factor.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.EconomyRules.AvailableCredit(System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Weekly borrowing headroom remaining for a solvent state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.EconomyRules">
+<summary>
+ Pure deterministic sovereign finance and macroeconomic rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.SovereignCreditTerms">
+<summary>
+ Value-only result for sovereign credit confidence and annual borrowing spread.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DemographyRules.WorkingShare(System.Single,System.Single)">
+<summary>
+ Share of a region&apos;s population of working age, clamped to [0.05, 0.95].
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DemographyRules.StepCohorts(System.Single,System.Int64,System.Int64,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Advances young, working and old cohort shares over one demographic review interval.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DemographyRules.MortalityFactor(System.Single,System.Single,System.Single)">
+<summary>
+ Old-age mortality multiplier above the reference old cohort share.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DemographyRules.FertilityFactor(System.Single)">
+<summary>
+ Fertility multiplier from young cohort share relative to the 0.28 reference share.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.DemographyRules">
+<summary>
+ Pure deterministic demographic cohort and vital multiplier rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.AgeCohortStep">
+<summary>
+ Value-only result of stepping a region&apos;s age cohorts over one review interval.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomacyRules.ConsolidationWarValue(System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Computes the war-judgement value of a union member holding out (Consolidation.WarValue).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomacyRules.ConsolidationAmbition(System.Single,System.Boolean,System.Single,System.Single)">
+<summary>
+ Computes a government&apos;s ambition [0..1] to pursue a national union project (Consolidation.Ambition).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomacyRules.BuyPeaceOffer(System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Computes the cash offer a weaker nation puts on the table to buy a non-aggression pact (AiStatecraft.BuyPeace).
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.DiplomacyRules">
+<summary>
+ Pure deterministic statecraft, union consolidation, and peace-purchase rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.CombatTempoRules.EnvelopmentFactor(System.Boolean,System.Int32,System.Int32,System.Single)">
+<summary>
+ Multi-directional envelopment multiplier for attackers striking from multiple adjacent provinces.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.CombatTempoRules.EncirclementFactor(System.Boolean,System.Boolean,System.Int32,System.Single,System.Int32)">
+<summary>
+ Cauldron / encirclement combat multiplier (0.15..1.00).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.CombatTempoRules.Counterattack(System.Boolean,System.Single,System.Single,System.Single,System.Single,System.Single,System.Boolean,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Evaluates counterattack fraction [0..1] from defender superiority or attacker exhaustion.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.CombatTempoRules.Breakthrough(System.Boolean,System.Single,System.Single,System.Single,System.Single,System.Int32,System.Single,System.Single,System.Single,System.Single,System.Single,System.Single)">
+<summary>
+ Evaluates breakthrough fraction [0..1] when an attack has superiority, planning, and supply.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.CombatTempoRules">
+<summary>
+ Pure deterministic combat tempo, encirclement, envelopment, breakthrough, and counterattack rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomaticActRules.Willingness(System.Single,System.Int32,System.Int32)">
+<summary>
+ AI willingness score for accepting a diplomatic act.
+ stance: 0 = Neutral, 1 = Friendly, 2 = Allied, 3 = Rival, 4 = AtWar
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomaticActRules.Price(System.Int32,System.Single,System.Single)">
+<summary>
+ Treasury cost of an act for the proposing country.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomaticActRules.MinimumOpinion(System.Int32)">
+<summary>
+ Minimum opinion required for a partner to receive a diplomatic act proposal.
+ actKind matches DealOrForce.Simulation.DiplomaticAct integer values (0..16).
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.DiplomaticActRules.EvaluateRefusal(System.Boolean,System.Boolean,System.Boolean,System.Int32,System.Int32,System.Int32,System.Boolean,System.Int32,System.Single,System.Single,System.Single)">
+<summary>
+ Pure eligibility gate for proposing a diplomatic act.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.DiplomaticActRules">
+<summary>
+ Pure deterministic diplomatic act pricing, willingness, and refusal rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.DiplomaticActRefusal">
+<summary>
+ Refusal codes for bilateral diplomatic acts, evaluated purely without mutating campaign state.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PoliticalPolicyRules.GoalMet(System.Int32,System.Single,System.Single,System.Single,System.Single,System.Int32,System.Boolean,System.Single)">
+<summary>
+ Compatibility overload for callers of the original pure-rule API.
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PoliticalPolicyRules.GoalMet(System.Int32,System.Single,System.Single,System.Single,System.Single,System.Int32,System.Boolean,System.Single,System.Int32)">
+<summary>
+ Evaluates whether a political agenda&apos;s goal is currently satisfied.
+ goalKind: 0 = stability (default), 1 = living, 2 = debt_ratio, 3 = peace
+</summary>
+</member>
+<member name="M:DealOrForce.Rules.PoliticalPolicyRules.GoalKind(System.String)">
+<summary>
+ Catalogue identifiers remain case-sensitive; unknown or absent goals retain
+ the historical stability fallback. No localised text enters the rule.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.PoliticalPolicyRules">
+<summary>
+ Pure deterministic political policy &amp; agenda evaluation rules.
+ No Godot, IO, RNG or reference to mutable campaign state.
+</summary>
+</member>
+<member name="T:DealOrForce.Rules.PolicyAdoptRefusal">
+<summary>
+ Refusal codes for political policy / law and agenda adoption, evaluated purely.
+</summary>
+</member>
+</members>
+</doc>

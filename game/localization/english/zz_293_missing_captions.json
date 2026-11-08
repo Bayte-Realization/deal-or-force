@@ -1,0 +1,19 @@
+{
+  "+5": "+5",
+  "←": "←",
+  "A player could not join: {0}": "A player could not join: {0}",
+  "DEFCON 5": "DEFCON 5",
+  "Different game version: the host runs {0}, this game {1}. Install the same version as the host.": "Different game version: the host runs {0}, this game {1}. Install the same version as the host.",
+  "Different map data: the host has {0}, this game {1}. Install the same version as the host.": "Different map data: the host has {0}, this game {1}. Install the same version as the host.",
+  "Different network protocol: the host speaks {0}, this game {1}. Install the same version as the host.": "Different network protocol: the host speaks {0}, this game {1}. Install the same version as the host.",
+  "JSON / YAML": "JSON / YAML",
+  "That game is a different version. Install the same version as the host.": "That game is a different version. Install the same version as the host.",
+  "{0} days remaining": "{0} days remaining",
+  "{0} left; the AI runs {1} until a player takes it again.": "{0} left; the AI runs {1} until a player takes it again.",
+  "{0} put back together by one of its pieces: the successor that holds most of the old ground takes the name and the flag, and the rump that still calls itself {0} becomes a rival government to be brought in by treaty or by force.": "{0} put back together by one of its pieces: the successor that holds most of the old ground takes the name and the flag, and the rump that still calls itself {0} becomes a rival government to be brought in by treaty or by force.",
+  "chronicle.mass_protests": "{0} is convulsed by mass protests.",
+  "chronicle.military_intervention": "{0} intervenes in {2} alongside {1}.",
+  "chronicle.movement_trait_gained": "{0} takes on a new character: {2}.",
+  "chronicle.movement_trait_lost": "{0} is no longer {2}.",
+  "treasury {0}": "treasury {0}"
+}

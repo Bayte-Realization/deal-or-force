@@ -53,6 +53,7 @@ public partial class DealOrForceGame
         shade.OffsetLeft = InterfaceSkin.Metric("shell.navigation_size", 82);
         _doctrineLayer.AddChild(shade);
         var panel = TexturedPanel(_doctrineLayer);
+        _doctrineScreenPanel = panel; panel.Name = "DoctrineWorkbench";
         Ui.Place(panel, "modal.doctrines");
         var rows = PanelRows(panel, 18, 14, 8);
 
@@ -79,8 +80,10 @@ public partial class DealOrForceGame
         close.Name = "CloseDoctrineScreen";
         close.TooltipText = Ui.Tip(Tr("Close"));
         ScreenHeader(rows, "BOOK OF WAR",
-            "What each service is taught to be, what it costs to change its mind, and what the country pays it in.",
-            right: new Control[] { _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView, toMilitary, close });
+            "What each service is taught to be, what it costs to change its mind, and what the country pays it in.");
+        var tabs = TabStrip(rows, "DoctrineViewTabs");
+        foreach (var button in new[] { _doctrineTacticalView, _doctrineCourseView, _doctrineGeneralsView, toMilitary, close })
+            tabs.AddChild(button);
 
         _doctrineScreenSummary = Title("", (int)Ui.Metric("ui.font.body", 12), Ui.Colour("text.body"));
         _doctrineScreenSummary.Name = "DoctrineScreenSummary";
@@ -90,6 +93,7 @@ public partial class DealOrForceGame
         _doctrineScreenSummary.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         _doctrineScreenSummary.ClipText = true;
         rows.AddChild(_doctrineScreenSummary);
+        BuildDoctrineServices(rows);
 
         var bodyScroll = new ScrollContainer
         {
@@ -109,13 +113,31 @@ public partial class DealOrForceGame
 
         // Left: the six books, each saying how much of it is written down, and the four currencies
         // the books are paid in.
-        var left = new VBoxContainer { CustomMinimumSize = new Vector2(266, 0) };
+        var left = new VBoxContainer { Name = "DoctrineCatalogueColumn", CustomMinimumSize = new Vector2(266, 0) };
+        _doctrineCatalogueColumn = left;
         left.AddThemeConstantOverride("separation", 6);
         body.AddChild(left);
-        left.AddChild(Title(Tr("BOOKS"), 13, Ui.Colour("text.caption")));
-        _doctrineBookList = new VBoxContainer { Name = "DoctrineBookList" };
+        _doctrineCatalogueHeading = Title("", 13, Ui.Colour("text.accent"));
+        _doctrineCatalogueHeading.Name = "DoctrineCatalogueHeading";
+        left.AddChild(_doctrineCatalogueHeading);
+        // A growing/modded catalogue must not determine the height of all three columns.
+        // Otherwise the course scroller is taller than its clipped outer viewport and
+        // EnsureControlVisible/keyboard navigation can leave its buttons below the screen.
+        var bookScroll = new ScrollContainer
+        {
+            Name = "DoctrineBookScroll",
+            SizeFlagsVertical = SizeFlags.ExpandFill,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            FollowFocus = true
+        };
+        left.AddChild(bookScroll);
+        _doctrineBookList = new VBoxContainer
+        {
+            Name = "DoctrineBookList", SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         _doctrineBookList.AddThemeConstantOverride("separation", 4);
-        left.AddChild(_doctrineBookList);
+        bookScroll.AddChild(_doctrineBookList);
         _doctrineScreenCurrencies = new VBoxContainer { Name = "DoctrineScreenCurrencies" };
         left.AddChild(_doctrineScreenCurrencies);
 
@@ -131,6 +153,7 @@ public partial class DealOrForceGame
 
         // Right: what the army is reading now, and what buys it.
         var side = new VBoxContainer { Name = "DoctrineSideColumn", CustomMinimumSize = new Vector2(368, 0) };
+        _doctrinePreviewColumn = side;
         body.AddChild(side);
         _doctrineSide = PolicyColumn(side, "DoctrineSide", true);
     }
@@ -174,11 +197,22 @@ public partial class DealOrForceGame
         var n = _campaign.Player;
         var weekly = _campaign.Defines.PoliticalPointsPerWeek +
             _campaign.Defines.PoliticalPointsStabilityWeight * n.Stability;
+        var countryName = n.DisplayName;
+        if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
+            _doctrineBook = n.TacticalDoctrine.Branch.Length > 0
+                ? n.TacticalDoctrine.Branch
+                : TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
+        var state = DoctrinePresentation(n);
+        var geometryChanged = UpdateDoctrineComfortGeometry();
+        if (_doctrineScreenDay == _campaign.ElapsedDays && _doctrineScreenState == state && !geometryChanged &&
+            _doctrineSummaryWeekly == weekly && _doctrineSummaryCountryName == countryName) return;
+        _doctrineScreenDay = _campaign.ElapsedDays;
+        _doctrineScreenState = state;
+        _doctrineSummaryWeekly = weekly; _doctrineSummaryCountryName = countryName;
         var summary = Loc.Format(
-            "{0} · army experience {1}, air {2}, sea {3} · political credit {4} ({5} a week) · {6}",
-            n.DisplayName, Fmt.Number(n.ArmyExperience), Fmt.Number(n.AirExperience),
-            Fmt.Number(n.NavalExperience), Fmt.Number(n.PoliticalPoints), Fmt.Number(weekly),
-            TreeViewport.Hint);
+            "{0} · army {1} · air {2} · navy {3} · political credit {4} ({5}/week)",
+            countryName, Fmt.Number(n.ArmyExperience), Fmt.Number(n.AirExperience),
+            Fmt.Number(n.NavalExperience), Fmt.Number(n.PoliticalPoints), Fmt.Number(weekly));
         // This runs every frame while the screen is open, so the string is rebuilt only when a
         // number in it actually changed - the same rule the retained HUD labels follow.
         if (summary != _doctrineScreenSummary.Text)
@@ -190,21 +224,13 @@ public partial class DealOrForceGame
         StyleButton(_doctrineCourseView, _doctrineView == "course");
         StyleButton(_doctrineGeneralsView, _doctrineView == "generals");
         UpdateDoctrineZoomLabel();
-        if (_doctrineBook.Length == 0 || TacticalDoctrineCatalog.Find(_doctrineBook) is null)
-            _doctrineBook = n.TacticalDoctrine.Branch.Length > 0
-                ? n.TacticalDoctrine.Branch
-                : TacticalDoctrineCatalog.All.FirstOrDefault()?.Id ?? "";
-        var state = DoctrinePresentation(n);
-        if (_doctrineScreenDay == _campaign.ElapsedDays && _doctrineScreenState == state) return;
-        _doctrineScreenDay = _campaign.ElapsedDays;
-        _doctrineScreenState = state;
-
         ClearPolicyRows(_doctrineScreenCurrencies);
         // Three services while a tactical book is open, and political credit added the moment the
         // strategic courses are: a course is bought with credit, so the number it is bought with
         // belongs on the screen that spends it.
         CurrencyStrip(_doctrineScreenCurrencies, n, _doctrineView == "course", columns: 2);
         RebuildDoctrineBookList(n);
+        RefreshDoctrineServices();
 
         ClearPolicyRows(_doctrineCentre);
         if (_doctrineView == "generals")
@@ -253,49 +279,57 @@ public partial class DealOrForceGame
         ClearPolicyRows(_doctrineSide);
         if (_doctrineView == "generals") GeneralsSide(_doctrineSide);
         else ShowDoctrinePreview(n, _doctrineSide);
+        FitDoctrineTypography(_doctrineLayer);
     }
 
     /// <summary>The books as a column, shelf by shelf: what each is, and how much of it is written down.</summary>
     private void RebuildDoctrineBookList(Nation n)
     {
         if (_doctrineBookList is null) return;
-        ClearPolicyRows(_doctrineBookList);
+        var books = TacticalDoctrineCatalog.All.ToArray();
+        var live = books.Select(book => book.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var id in _doctrineBookButtons.Keys.Where(id => !live.Contains(id)).ToArray())
+        {
+            var old = _doctrineBookButtons[id].GetParent(); old.GetParent()?.RemoveChild(old);
+            old.QueueFree(); _doctrineBookButtons.Remove(id);
+        }
         TacticalDoctrines.EnsureShelves(n);
-        foreach (var branch in TacticalDoctrineCatalog.All)
+        foreach (var branch in books)
         {
             var id = branch.Id;
             var track = TacticalDoctrines.TrackFor(n, branch);
             var inForce = track is not null && string.Equals(track.Branch, id, StringComparison.Ordinal);
             var written = inForce ? track.Known.Count : 0;
-            var button = ActionButton("", () => SelectDoctrineBook(id), 0, 46, inForce);
+            if (!_doctrineBookButtons.TryGetValue(id, out var button))
+            {
+                button = ActionButton("", () => SelectDoctrineBook(id), 0, 46, inForce);
+                var retainedRow = new HBoxContainer { Name = "BookRow_" + id };
+                retainedRow.AddThemeConstantOverride("separation", 6);
+                var retainedEdge = new Panel { Name = "StatusEdge", CustomMinimumSize = new Vector2(3, 0), MouseFilter = MouseFilterEnum.Ignore };
+                retainedRow.AddChild(retainedEdge); retainedRow.AddChild(button);
+                _doctrineBookList.AddChild(retainedRow); _doctrineBookButtons[id] = button;
+            }
             button.Name = "ScreenBook_" + id;
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
             button.ClipText = true;
-            button.AutowrapMode = TextServer.AutowrapMode.Off;
-            button.Text = Loc.Format("{0}: {1}\n{2} of {3} · paid for in {4}", Tr(DoctrineSlots.Name(branch.Slot)),
-                Tr(branch.Name), written, branch.Nodes.Count,
-                Loc.Get(TacticalDoctrines.ServiceName(branch.Experience)));
-            button.AddThemeFontSizeOverride("font_size", 12);
-            button.TooltipText = Ui.Tip(Tr(branch.Description));
+            button.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+            button.Text = Tr(branch.Name) + "\n" + Loc.Format("{0} · {1}/{2} articles", Tr(DoctrineSlots.Name(branch.Slot)), written, branch.Nodes.Count);
+            if (!button.HasMeta("doctrine_base_font")) button.AddThemeFontSizeOverride("font_size", 14);
+            button.TooltipText = Ui.Tip(Tr(branch.Name) + "\n" + Tr(branch.Description) + "\n" +
+                Loc.Format("Paid for in {0}.", Loc.Get(TacticalDoctrines.ServiceName(branch.Experience))));
+            StyleButton(button, branch.Id == _doctrineBook);
             // A status edge: brass for the book in force, blue for one being read, a hairline
             // for a shelf that is still empty. A list of equal buttons says nothing about
             // which of them is the country's own.
-            var row = new HBoxContainer { Name = "BookRow_" + id };
-            row.AddThemeConstantOverride("separation", 6);
-            var edge = new Panel
-            {
-                CustomMinimumSize = new Vector2(3, 0),
-                MouseFilter = MouseFilterEnum.Ignore
-            };
+            var row = button.GetParent() as HBoxContainer;
+            var edge = row.GetNode<Panel>("StatusEdge");
             var edgeStyle = new StyleBoxFlat
             {
                 BgColor = Ui.Colour(inForce ? "text.accent" : written > 0 ? "state.info" : "surface.line_faint")
             };
             edgeStyle.SetCornerRadiusAll(1);
             edge.AddThemeStyleboxOverride("panel", edgeStyle);
-            row.AddChild(edge);
-            row.AddChild(button);
-            _doctrineBookList.AddChild(row);
+            _doctrineBookList.MoveChild(row, Array.IndexOf(books, branch));
         }
     }
 

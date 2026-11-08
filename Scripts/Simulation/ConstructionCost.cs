@@ -34,6 +34,22 @@ public sealed partial class Defines
     /// out and labour never runs short, so capacity compounded without limit.
     /// </summary>
     public float ConstructionParallelPerEconomy { get; set; } = 0.7f;
+
+    /// <summary>
+    /// The fastest a country's construction capacity can make its sites work, as days of work
+    /// done per calendar day (ConstructionCost.Pace). 1.5 means a country with all the capacity in
+    /// the world finishes a 240-day factory in 160 days, and never sooner. 1 turns the bonus off
+    /// and gives back the rule before 1 November 2026, when capacity above one did nothing.
+    /// </summary>
+    public float ConstructionPaceCeiling { get; set; } = 1.5f;
+
+    /// <summary>
+    /// How much capacity above one buys half of the way to ConstructionPaceCeiling. At 1, a country
+    /// with capacity 2 builds at 1.25 days a day, one with capacity 3 at about 1.33: every point of
+    /// capacity is worth less than the one before it, so the stat stays worth having without ever
+    /// letting a country with a long building history pour concrete at three times the speed.
+    /// </summary>
+    public float ConstructionPaceHalfway { get; set; } = 1f;
 }
 
 /// <summary>
@@ -116,4 +132,55 @@ public static class ConstructionCost
 
     public static int Limit(Campaign campaign, Nation nation, int perEconomy) =>
         Math.Max(perEconomy, (int)MathF.Round(perEconomy * Size(campaign, nation)));
+
+    /// <summary>
+    /// How many days of work each of a country's working sites does in one calendar day, and so
+    /// also how many days' worth of its price the treasury pays for each site that day.
+    ///
+    /// Construction capacity is the country's builders: the cranes, contractors and crews every
+    /// finished building adds a little to (BuildingDefinition.CapacityGain) and wear, war and
+    /// demolition take away. Until 1 November 2026 it only scaled the daily payment, and a site's
+    /// work clock still counted one day a day - so above one it paid the bill sooner and finished
+    /// on the same date, which made the stat every building raised do nothing for most of the
+    /// world. Now it is the speed of the work itself:
+    ///
+    ///   - below one, a site works that fraction of a day each day, never less than a quarter
+    ///     (a country that has lost its builders still builds, slowly);
+    ///   - at one, a day a day - the catalogue's build time;
+    ///   - above one, faster, with diminishing returns towards ConstructionPaceCeiling: the first
+    ///     point above one buys ConstructionPaceHalfway's half of the way there, the next a third
+    ///     of what is left, and so on.
+    ///
+    /// The money follows the work: a site that works 1.25 days a day is paid 1.25 days of its price
+    /// a day, so faster building costs exactly the same in total, only sooner. Every country runs on
+    /// the same curve; nothing here asks who is playing it.
+    /// </summary>
+    public static float Pace(Defines defines, float capacity)
+    {
+        if (!float.IsFinite(capacity)) return 1f;
+        if (capacity <= 1f) return MathF.Max(0.25f, capacity);
+        var ceiling = MathF.Max(1f, defines?.ConstructionPaceCeiling ?? 1f);
+        var halfway = MathF.Max(0.01f, defines?.ConstructionPaceHalfway ?? 1f);
+        var above = capacity - 1f;
+        return 1f + (ceiling - 1f) * above / (above + halfway);
+    }
+
+    /// <summary>The pace this country's sites work at today (Pace of its construction capacity).</summary>
+    public static float Pace(Campaign campaign, Nation nation) =>
+        nation is null ? 1f : Pace(campaign?.Defines, nation.ConstructionCapacity);
+
+    /// <summary>
+    /// The calendar days a new building of this kind would take this country at today's pace: the
+    /// catalogue time, shortened by the construction_speed modifier as a queued site is
+    /// (QueueConstructionCommand), then divided by Pace. What the build list says, so the number a
+    /// player reads is the number the site will actually take while capacity stays where it is.
+    /// </summary>
+    public static int ExpectedDays(Campaign campaign, Nation nation, BuildingKind kind)
+    {
+        var definition = BuildingCatalog.Get(kind);
+        var speed = nation is null ? 1f : NationalModifiers.Factor(nation, "construction_speed");
+        if (!float.IsFinite(speed) || speed <= 0f) speed = 1f;
+        var work = Math.Max(1, (int)MathF.Round(definition.Days / speed));
+        return Math.Max(1, (int)MathF.Ceiling(work / Pace(campaign, nation) - 0.001f));
+    }
 }

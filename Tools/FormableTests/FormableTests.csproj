@@ -9,9 +9,16 @@
   </PropertyGroup>
   <ItemGroup><Compile Include="../../Scripts/Simulation/**/*.cs"/><Compile Include="../../Scripts/Modding/ModCodePaths.cs"/><Compile Include="../../Scripts/Modding/WorkerModBackend.cs"/><Compile Include="../../Scripts/Modding/ModOperations.cs"/><Compile Include="../../Scripts/Modding/ModContracts.cs"/></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/gfx/HydrologySurfaceData.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/gfx/RasterRiverCourses.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/gfx/DateLineSeam.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/StartupTimeline.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Presentation/ApplicationExitState.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/CompatibilityMapShader.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/PackedMapShader.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/MapColorSpaceShader.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/MapPanScale.cs" /><Compile Include="../../Scripts/Presentation/TerritoryLabelLayout.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/CameraInertia.cs" /></ItemGroup>
+  <ItemGroup><Compile Include="../../Scripts/Presentation/DecisionReadability.cs" /></ItemGroup>
   <ItemGroup><Compile Include="../../Scripts/Modding/ModScalarAccess.cs" /></ItemGroup>
   <Import Project="../../Scripts/Simulation/StructuredData.Dependencies.props" />
   <ItemGroup><Compile Include="../Shared/ArmyOrderObservation.cs" /></ItemGroup>

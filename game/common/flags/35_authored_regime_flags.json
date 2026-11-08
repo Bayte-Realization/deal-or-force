@@ -1,0 +1,676 @@
+// Deliberate country-specific exceptions. Ordinary cabinet/ideology changes keep national artwork.
+// requires terms are AND; lists within one term are OR. First matching existing sprite wins.
+{
+  "regime_flags": {
+    "AFG": [
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_afg_theocratic_rule",
+        "kind": "historical",
+        "source": "https://mfa.gov.af/en/"
+      },
+      {
+        "requires": {
+          "government": [
+            "absolute_monarchy",
+            "constitutional_monarchy"
+          ]
+        },
+        "sprite": "flag_afg_absolute_monarchy",
+        "kind": "historical-inspired",
+        "source": "https://www.iranicaonline.org/articles/flags-ii/"
+      },
+      {
+        "requires": {
+          "ideology": "communism"
+        },
+        "sprite": "flag_afg_communism",
+        "kind": "historical",
+        "source": "https://www.iranicaonline.org/articles/flags-ii/"
+      }
+    ],
+    "USA": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_usa_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_usa_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "CAN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_can_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_can_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "MEX": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_mex_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_mex_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "BRA": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_bra_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_bra_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "ARG": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_arg_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_arg_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "CHL": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_chl_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_chl_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "POL": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_pol_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_pol_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "UKR": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_ukr_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_ukr_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "FIN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_fin_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_fin_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "SWE": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_swe_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_swe_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "NOR": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_nor_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_nor_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "DNK": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_dnk_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_dnk_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "DEU": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_deu_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_deu_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "FRA": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_fra_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_fra_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "GBR": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_gbr_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_gbr_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "KOR": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_kor_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national colour-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_kor_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "RUS": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_rus_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_rus_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "ITA": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_ita_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_ita_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "ESP": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_esp_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_esp_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "PRT": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_prt_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_prt_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "GRC": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_grc_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_grc_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "TUR": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_tur_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_tur_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "AUS": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_aus_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_aus_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "NZL": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_nzl_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_nzl_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "IND": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_ind_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_ind_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "PAK": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_pak_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_pak_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "IDN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_idn_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_idn_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "JPN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_jpn_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_jpn_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "CHN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_chn_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_chn_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "TWN": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_twn_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_twn_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "ZAF": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_zaf_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_zaf_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ],
+    "ROU": [
+      {
+        "requires": {
+          "government": "military_junta",
+          "ideology": "despotism"
+        },
+        "sprite": "flag_rou_defence_council",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; national palette-inspired original"
+      },
+      {
+        "requires": {
+          "government": "theocracy",
+          "ideology": "theocratic_rule"
+        },
+        "sprite": "flag_rou_covenant",
+        "kind": "alternate-history-original",
+        "source": "Bayte Realization, 2026; fictional political outcome, not a historical claim"
+      }
+    ]
+  }
+}

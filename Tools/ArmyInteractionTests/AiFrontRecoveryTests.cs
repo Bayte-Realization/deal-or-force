@@ -23,6 +23,7 @@ static class AiFrontRecoveryTests
         RecoveryKeepsItsRepostingBudget();
         ReserveFillsBeforeAnAdvanceIsPulled();
         UnorderedDivisionIsCalledUp();
+        UnreachablePaperPostDoesNotHideAHole();
     }
 
     static void ReserveCanRecoverAnEmptyFront()
@@ -52,6 +53,21 @@ static class AiFrontRecoveryTests
             "the reserve actually marches to its recovered post through MilitaryOperations");
         Check(reserve.OrderIssuedDay == issued && FrontManager.Reposts == reposts,
             "reviews leave the recovering column's order and progress alone");
+    }
+
+    static void UnreachablePaperPostDoesNotHideAHole()
+    {
+        var c = Fixture(); var war = c.Wars[0];
+        war.AttackerFront.Add(4); war.DefenderFront.Add(5);
+        var trapped = Unit(c, 0, 0, 2, ArmyOrder.DefendFront);
+        trapped.OrderProvinceId = 4; // failed route left an assignment, not a column en route
+        var reserve = Unit(c, 1, 0, 12, ArmyOrder.ReserveFront);
+        Unit(c, 2, 1, 5, ArmyOrder.Manual, 4f);
+        var before = Snapshot(trapped);
+        FrontManager.Balance(c, war);
+        Check(reserve.OrderProvinceId == 4 && reserve.Route.Count > 0,
+            "an unreachable paper assignment does not hide an empty post from a reachable reserve");
+        Check(Snapshot(trapped) == before, "recovering the real hole does not fake a march out of the pocket");
     }
 
     static void ReachableDonorIsNotStarvedByNearbyPockets()

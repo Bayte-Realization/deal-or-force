@@ -222,6 +222,14 @@ public partial class DealOrForceGame
         draw.AddThemeConstantOverride("h_separation", 4);
         draw.AddThemeConstantOverride("v_separation", 4);
         plansPage.AddChild(draw);
+        // The default way to man a war: one front against everybody at once. A border front
+        // against a single country (the button after it) is still there for a player who
+        // wants a separate army group on each enemy.
+        var wholeFront = ArmyIconButton("Whole front", AssignWholeFront, 118, 30, true, "plan_front");
+        wholeFront.Name = "WholeFront";
+        ArmyCommandTip(wholeFront, "Whole front",
+            "One front along every land border with every country at war with you: all wars, their allies and occupied ground. It grows and shrinks by itself as the line moves and as enemies join the war or make peace, and the selection spreads along all of it. Pressing it for another army group adds that group to the same front.");
+        draw.AddChild(wholeFront);
         AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
             "Draw the line to hold. The selection spreads along its length and digs in.");
         AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
@@ -665,11 +673,13 @@ public partial class DealOrForceGame
             TooltipText = tooltipMeasure > 0 ? Ui.Tip(tooltip, Mathf.Min(Ui.TooltipMeasure, tooltipMeasure)) : Ui.Tip(tooltip)
         };
 
-        var back = new ColorRect { Color = Ui.Colour("surface.inset"), MouseFilter = MouseFilterEnum.Ignore };
+        var back = new Panel { MouseFilter = MouseFilterEnum.Ignore };
+        back.AddThemeStyleboxOverride("panel", InstrumentMaterials.Meter("surface.inset", inset: true));
         back.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         frame.AddChild(back);
 
-        var fill = new ColorRect { Color = Ui.Colour(fillToken), MouseFilter = MouseFilterEnum.Ignore };
+        var fill = new Panel { MouseFilter = MouseFilterEnum.Ignore, Visible = value > 0f };
+        fill.AddThemeStyleboxOverride("panel", InstrumentMaterials.Meter(fillToken));
         fill.AnchorLeft = 0f;
         fill.AnchorTop = 0f;
         fill.AnchorBottom = 1f;

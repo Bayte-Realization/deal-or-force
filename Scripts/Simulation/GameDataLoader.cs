@@ -36,6 +36,8 @@ public static class GameDataLoader
     /// </summary>
     public static IReadOnlyList<string> DataFiles(params string[] relativeFolder)
     {
+        // Порядок только внутри одной категории. Номер 90_... не позволяет файлу
+        // раннего пакета обойти более поздний мод: порядок пакетов задаёт ModLoader.
         var folder = DataFolder(relativeFolder);
         if (folder is null) return Array.Empty<string>();
         try
@@ -57,6 +59,9 @@ public static class GameDataLoader
     /// </summary>
     public static IEnumerable<JsonDocument> DataDocuments(params string[] relativeFolder)
     {
+        // Владение документом передаётся вызывающему каталогу: его нужно Dispose/using.
+        // JsonElement живёт не дольше документа; для хранения вне using нужен Clone
+        // или собственная типизированная запись. Это важно при добавлении каталога.
         foreach (var file in DataFiles(relativeFolder))
         {
             JsonDocument document;
@@ -98,6 +103,9 @@ public static class GameDataLoader
 
     public static void ApplyDefines(Defines defines)
     {
+        // Defines принадлежат конкретной кампании; каталоги обычно process-wide.
+        // Новый модификатор не должен прятать состояние страны в static-поле каталога:
+        // сохранение и другая кампания этого поля не получат.
         var properties = typeof(Defines).GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(property => property.CanWrite)
             .ToDictionary(property => property.Name, StringComparer.OrdinalIgnoreCase);

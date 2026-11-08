@@ -1,0 +1,13 @@
+{
+  "Founding component {0} secured: {1}/{2}": "Founding component {0} secured: {1}/{2}",
+  "Editing mod: {0}": "Editing mod: {0}",
+  "Create / select mod": "Create / select mod",
+  "Packages are saved to your Documents mods folder. Enable a new mod in the launcher before starting a new campaign.": "Packages are saved to your Documents mods folder. Enable a new mod in the launcher before starting a new campaign.",
+  "Use selected mod": "Use selected mod",
+  "New mod ID": "New mod ID",
+  "New mod name": "New mod name",
+  "Create mod": "Create mod",
+  "Use a lowercase mod ID: letters, digits and underscores, starting with a letter.": "Use a lowercase mod ID: letters, digits and underscores, starting with a letter.",
+  "Enter a mod name (1–120 characters).": "Enter a mod name (1–120 characters).",
+  "This mod folder already exists. Select it instead; nothing was overwritten.": "This mod folder already exists. Select it instead; nothing was overwritten."
+}

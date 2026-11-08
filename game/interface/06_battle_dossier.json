@@ -1,0 +1,9 @@
+{
+  // Physical pixel floors; ordinary non-battle dossiers keep their own layout.
+  "metrics": {
+    "combat.dossier_minimum_width_pixels": 640,
+    "combat.minimum_font_pixels": 14,
+    "combat.minimum_target_pixels": 32
+  }
+}
+

@@ -1,0 +1,21 @@
+{
+  "Plan strike on armed forces": "Удар по войскам: выбрать цель",
+  "Plan strike on cities": "Удар по городам: выбрать цель",
+  "Nuclear strike planning": "Планирование ядерного удара",
+  "Choose the country explicitly. No order is sent while you are choosing or reviewing.": "Выберите конкретную страну. Выбор цели и проверка плана не отправляют приказ.",
+  "Nuclear target country": "Страна-цель",
+  "Choose a target country…": "Выберите страну-цель…",
+  "Only opponents in active interstate wars are listed. Selecting a country does not start a war or bypass readiness, cost or cooldown.": "В списке — противники в действующих межгосударственных войнах. Выбор страны не объявляет войну и не отменяет требования к готовности, стоимости и сроку между ударами.",
+  "Type of strike": "Тип удара",
+  "Enemy armed forces": "Войска противника",
+  "Enemy cities": "Города противника",
+  "Review nuclear strike": "Проверить план удара",
+  "Choose a target country before reviewing the order.": "Перед проверкой приказа выберите страну-цель.",
+  "Target country: {0}\nTarget region: {1}\nOrder cost: {2:0} political credit": "Страна-цель: {0}\nРегион цели: {1}\nСтоимость приказа: {2:0} политических очков",
+  "No eligible target": "Нет подходящей цели",
+  "Give the order against {0}": "Отдать приказ: {0}",
+  "Check the named country and strike type. Confirming gives the order; Escape cancels.": "Проверьте указанную страну и тип удара. Подтверждение отправит приказ; Escape отменит его.",
+  "Order sent to the host. Awaiting confirmation.": "Приказ отправлен хосту. Ожидается подтверждение.",
+  "The selected country is not an opponent in an active interstate war.": "Выбранная страна не является противником в действующей межгосударственной войне.",
+  "No eligible city target exists in the selected country.": "В выбранной стране нет подходящей цели для удара по городам."
+}

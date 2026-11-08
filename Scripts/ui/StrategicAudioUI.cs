@@ -92,12 +92,12 @@ public partial class DealOrForceGame
 
         foreach (var cue in SoundCatalog.All)
         {
-            if (!ResourceLoader.Exists(cue.File))
+            if (!AudioAssets.Exists(cue.File))
             {
                 GD.PushWarning($"[dof] sound cue '{cue.Name}' points at {cue.File}, which is not there");
                 continue;
             }
-            var stream = GD.Load<AudioStream>(cue.File);
+            var stream = AudioAssets.Load(cue.File);
             if (stream is not null) _strategicCues[cue.Name] = stream;
         }
     }

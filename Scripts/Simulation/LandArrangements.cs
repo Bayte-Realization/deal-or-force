@@ -593,7 +593,9 @@ public static class LandArrangementSystem
             if (other.Id == holder.Id || other.Id == owner.Id || other.Movement is not null || c.StatesOf(other).Length == 0) continue;
             var tie = CampaignDiplomacy.Get(c, other.Id, owner.Id);
             if (tie is null || (tie.Stance != DiplomaticStance.Allied && tie.Opinion < 50f && !tie.GuaranteedBy(other.Id))) continue;
-            OpinionSystem.Remember(c, CampaignDiplomacy.Get(c, other.Id, holder.Id), "troops_on_friends_land");
+            // A friend of the owner's, so a witness rather than the victim: as much as it
+            // concerns it, which for an ally next door is all of it (OpinionWitnesses).
+            OpinionWitnesses.Witness(c, other, holder, owner, "troops_on_friends_land");
         }
     }
 
@@ -709,6 +711,8 @@ public static class LandArrangementSystem
         born.StartGovernment = born.Government;
         born.StartIdeology = born.Ideology;
         born.SecededFromId = owner.Id;
+        // Recorded at birth, as every other founding path does, so a save/load does not add it later.
+        if (born.RevoltParentId < 0) born.RevoltParentId = owner.Id;
         born.IdentityChangedDay = c.ElapsedDays;
         RegionalResourcePartition.Transfer(owner, born, M.Clamp(people / (float)ownerPeople, 0.01f, 0.9f));
         StatePartition.Annex(c, provinces, born, asConquest: false);
@@ -942,8 +946,14 @@ public static class LandArrangementSystem
         if (regions.Count == 0) return;
         var kind = Text("kind") is Presence ? Presence : Lease;
         var until = entry.TryGetProperty("until", out var year) && year.TryGetInt32(out var y) ? y : -1;
-        var endDay = until <= 0 ? -1
-            : (int)(new DateTime(until, 1, 1) - new DateTime(c.Defines.StartYear, Math.Clamp(c.Defines.StartMonth, 1, 12), Math.Clamp(c.Defines.StartDay, 1, 28))).TotalDays;
+        var origin = new HistoricalDate(c.Date.Year, c.Date.Month, c.Date.Day).AddDays(-c.ElapsedDays);
+        var endDay = until <= 0 ? -1 : new HistoricalDate(until, 1, 1).DayNumber - origin.DayNumber;
+        if (Text("until_date").Length > 0)
+        {
+            if (!HistoricalDate.TryParse(Text("until_date"), out var end))
+            { errors?.Add("An arrangement's until_date must be a valid calendar date."); return; }
+            endDay = end.DayNumber - origin.DayNumber;
+        }
         var arrangement = new LandArrangement
         {
             Id = c.NextLandArrangementId++, Kind = kind, OwnerId = owner.Id, HolderId = holder.Id,
@@ -958,7 +968,7 @@ public static class LandArrangementSystem
     /// <summary>The calendar date of a campaign day.</summary>
     internal static string DateOfDay(Campaign c, int day)
     {
-        var start = new DateTime(c.Defines.StartYear, Math.Clamp(c.Defines.StartMonth, 1, 12), Math.Clamp(c.Defines.StartDay, 1, 28));
+        var start = new HistoricalDate(c.Date.Year, c.Date.Month, c.Date.Day).AddDays(-c.ElapsedDays);
         var date = start.AddDays(Math.Clamp(day, -36500, 365000));
         return new GameDate(date.Year, date.Month, date.Day).ToString();
     }

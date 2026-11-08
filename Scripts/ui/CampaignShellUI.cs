@@ -148,7 +148,7 @@ public partial class DealOrForceGame
         foreach (var other in new[]
         {
             _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _diplomacyLayer, _policyLayer,
-            _doctrineLayer, _tradeScreenLayer, _productionLayer, _researchLayer, _conflictsLayer
+              _doctrineLayer, _tradeScreenLayer, _productionLayer, _researchLayer, _conflictsLayer, _recruitmentLayer
         })
         {
             if (other is not null && other != layer) other.Visible = false;
@@ -158,7 +158,40 @@ public partial class DealOrForceGame
         layer.Visible = true;
         layer.MoveToFront();
         _hudNavigationPanel?.MoveToFront();
+        FitWorkspaceNavigationInset(layer);
         if (_handbookLayer is { Visible: true }) _handbookLayer.MoveToFront();
+    }
+
+    // The navigation rail has a physical-pixel width floor at 720p, whereas the
+    // authored ledger rectangle follows the stretched canvas. Reserve its actual
+    // footprint, not the reference-resolution width. Reapply the mod's rectangle
+    // before clamping so repeated opening/resizing never accumulates an inset.
+    private void FitWorkspaceNavigationInset(Control layer)
+    {
+        if (layer is not { Visible: true } || _hudNavigationPanel is null) return;
+        var local = layer.GetGlobalTransformWithCanvas().AffineInverse();
+        var railEnd = local * (_hudNavigationPanel.GetGlobalTransformWithCanvas() * _hudNavigationPanel.Size);
+        foreach (var child in layer.GetChildren())
+        {
+            if (child is not PanelContainer panel || !panel.HasMeta("skin_layout")) continue;
+            var key = panel.GetMeta("skin_layout").AsString();
+            if (key is not ("modal.ledger" or "modal.diplomacy" or "hud.support_panel")) continue;
+            Ui.Place(panel, key);
+            var gutter = 12f;
+            if (key == "modal.diplomacy")
+            {
+                var pixels = (GetViewport().GetStretchTransform() * layer.GetGlobalTransformWithCanvas()).Scale.Abs();
+                gutter /= MathF.Max(.01f, MathF.Min(pixels.X, pixels.Y));
+            }
+            var shift = MathF.Max(0, railEnd.X + gutter - panel.Position.X);
+            panel.OffsetLeft += shift;
+            if (key == "hud.support_panel")
+            {
+                panel.OffsetRight += shift; // A dock moves intact; a ledger keeps its right edge.
+                var headerEnd = local * (_hudTopPanel.GetGlobalTransformWithCanvas() * _hudTopPanel.Size);
+                panel.OffsetTop += MathF.Max(0, headerEnd.Y + 8 - panel.Position.Y);
+            }
+        }
     }
 
     private void LayoutCampaignShell()
@@ -171,6 +204,10 @@ public partial class DealOrForceGame
         LayoutMapControls();
         LayoutMapSelectionCards();
         LayoutPickerActions();
+        foreach (var layer in new[] { _ledgerLayer, _warLedgerLayer, _stateAffairsLayer, _supportLayer,
+                     _diplomacyLayer, _policyLayer, _doctrineLayer, _tradeScreenLayer,
+                     _productionLayer, _researchLayer, _conflictsLayer, _recruitmentLayer })
+            FitWorkspaceNavigationInset(layer);
         // Baseline rectangles remain moddable in game/gui. Only the short outliner is
         // clamped to available height; it must not cover the map toolbar at 720p.
         if (_outliner is not null)

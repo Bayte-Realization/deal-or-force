@@ -1,0 +1,156 @@
+// More books, not extra shelves: ground/air/sea/general still hold two books each.
+// excludes is reciprocal even when a mod declares only one side. The selected article
+// stays in the ordinary Known save list. Rewrite rules are unchanged.
+// ai_profiles weights name AI characters, never countries; absent characters keep the old fallback.
+{
+  "elastic_defence": {
+    "name": "Doctrine of elastic defence",
+    "description": "Yield space or hold every position: a defensive army must choose where its reserves matter most.",
+    "experience": "army", "ai_profiles": { "defensive": 2, "garrison_state": 1.5 },
+    "nodes": [
+      { "id": "elastic_depth", "name": "Defence in depth", "description": "Prepare successive positions rather than stake the army on the first trench.",
+        "cost": 20, "days": 120, "rush_cost": 55, "modifiers": { "army_defense": 0.04, "organisation_recovery": 0.03 } },
+      { "id": "elastic_reserves", "name": "Reserve timetables", "description": "Keep replacements organised before the line asks for them.", "requires": ["elastic_depth"],
+        "cost": 26, "days": 150, "rush_cost": 72, "modifiers": { "reinforcement_rate": 0.06 } },
+      { "id": "elastic_mobile", "name": "Mobile counterstroke", "description": "Faster marching and recovery, but less effort spent digging permanent positions. Alternative to positional resistance.",
+        "requires": ["elastic_depth"], "excludes": ["elastic_fixed"], "ai_profiles": { "defensive": 3, "garrison_state": 1 },
+        "cost": 30, "days": 170, "rush_cost": 85, "modifiers": { "army_speed": 0.07, "organisation_recovery": 0.06, "entrenchment_speed": -0.08 } },
+      { "id": "elastic_fixed", "name": "Positional resistance", "description": "Stronger defence and faster entrenchment at the expense of marching speed. Alternative to the mobile counterstroke.",
+        "requires": ["elastic_depth"], "excludes": ["elastic_mobile"], "ai_profiles": { "defensive": 1, "garrison_state": 3 },
+        "cost": 30, "days": 170, "rush_cost": 85, "modifiers": { "army_defense": 0.08, "entrenchment_speed": 0.10, "army_speed": -0.05 } },
+      { "id": "elastic_assembly", "name": "Counterstroke assembly areas", "description": "Practise restoring the mobile reserve after each engagement.", "requires": ["elastic_mobile"],
+        "cost": 42, "days": 210, "rush_cost": 115, "modifiers": { "organisation_recovery": 0.05, "army_attack": 0.03 } },
+      { "id": "elastic_sectors", "name": "Independent defensive sectors", "description": "Train threatened districts to reinforce their prepared positions.", "requires": ["elastic_fixed"],
+        "cost": 42, "days": 210, "rush_cost": 115, "modifiers": { "army_defense": 0.04, "militia_readiness": 0.07 } },
+      { "id": "elastic_relief", "name": "Relief behind the line", "description": "Supply and replacements share a timetable instead of competing for it.", "requires": ["elastic_reserves"],
+        "cost": 50, "days": 240, "rush_cost": 140, "modifiers": { "supply": 0.04, "reinforcement_rate": 0.04 } },
+      { "id": "elastic_endurance", "name": "Operational endurance", "description": "An organised defensive campaign recovers strength without abandoning its chosen method.", "requires": ["elastic_relief"],
+        "cost": 70, "days": 290, "rush_cost": 195, "modifiers": { "army_defense": 0.04, "organisation_recovery": 0.05 } }
+    ]
+  },
+  "dispersed_warfare": {
+    "name": "Doctrine of dispersed warfare",
+    "description": "Small formations and local reserves trade concentrated striking power for cheaper mobilisation and resilience.",
+    "experience": "army", "ai_profiles": { "minor_power": 2, "isolated": 1.5 },
+    "nodes": [
+      { "id": "dispersed_cadres", "name": "Local cadres", "description": "Train small permanent cadres to organise the wider reserve.",
+        "cost": 18, "days": 110, "rush_cost": 50, "modifiers": { "recruitment_cost": -0.04, "militia_readiness": 0.05 } },
+      { "id": "dispersed_stores", "name": "Distributed stores", "description": "Many smaller depots improve the country's supply throughput.", "requires": ["dispersed_cadres"],
+        "cost": 24, "days": 150, "rush_cost": 65, "modifiers": { "supply": 0.05 } },
+      { "id": "dispersed_partisans", "name": "Territorial resistance", "description": "Ready local militia and defensive positions, accepting weaker attacks. Alternative to raiding columns; these are national modifiers, not a new partisan unit.",
+        "requires": ["dispersed_cadres"], "excludes": ["dispersed_raiders"], "ai_profiles": { "minor_power": 3, "isolated": 3 },
+        "cost": 28, "days": 160, "rush_cost": 78, "modifiers": { "militia_readiness": 0.12, "army_defense": 0.05, "army_attack": -0.04 } },
+      { "id": "dispersed_raiders", "name": "Raiding columns", "description": "Faster marching and recovery, accepting weaker defence. Alternative to territorial resistance.",
+        "requires": ["dispersed_cadres"], "excludes": ["dispersed_partisans"], "ai_profiles": { "minor_power": 1, "isolated": 1 },
+        "cost": 28, "days": 160, "rush_cost": 78, "modifiers": { "army_speed": 0.08, "organisation_recovery": 0.04, "army_defense": -0.04 } },
+      { "id": "dispersed_network", "name": "Territorial reserve network", "description": "Local cadres keep a replacement stream ready for the regular army.", "requires": ["dispersed_partisans"],
+        "cost": 38, "days": 200, "rush_cost": 105, "modifiers": { "reinforcement_rate": 0.06, "militia_readiness": 0.05 } },
+      { "id": "dispersed_rendezvous", "name": "Raiding rendezvous", "description": "Columns regroup and recover before their next march.", "requires": ["dispersed_raiders"],
+        "cost": 38, "days": 200, "rush_cost": 105, "modifiers": { "army_speed": 0.03, "organisation_recovery": 0.05 } },
+      { "id": "dispersed_workshops", "name": "Field repair workshops", "description": "Repair support formations from an organised chain of small workshops.", "requires": ["dispersed_stores"],
+        "cost": 46, "days": 230, "rush_cost": 125, "modifiers": { "support_recovery": 0.06, "supply": 0.03 } },
+      { "id": "dispersed_continuity", "name": "Continuity of resistance", "description": "Cadres preserve training and replacement routines throughout a long campaign.", "requires": ["dispersed_workshops"],
+        "cost": 65, "days": 280, "rush_cost": 180, "modifiers": { "organisation_recovery": 0.04, "reinforcement_rate": 0.05 } }
+    ]
+  },
+  "air_shield": {
+    "name": "Doctrine of the air shield",
+    "description": "Preserve long-range formations or concentrate on ground defence: a defensive support service cannot do everything equally well.",
+    "experience": "air", "ai_profiles": { "defensive": 2, "fortress": 2, "garrison_state": 2, "isolated": 1.5 },
+    "nodes": [
+      { "id": "shield_watch", "name": "Continuous air watch", "description": "Organised warning reduces the losses of long-range formations.",
+        "cost": 12, "days": 100, "rush_cost": 35, "modifiers": { "support_losses": -0.05 } },
+      { "id": "shield_repair", "name": "Protected repair rotation", "description": "Support formations rotate through maintained repair facilities.", "requires": ["shield_watch"],
+        "cost": 18, "days": 140, "rush_cost": 50, "modifiers": { "support_recovery": 0.05 } },
+      { "id": "shield_preservation", "name": "Force preservation", "description": "Reduce long-range losses and improve recovery, accepting less army attack. Alternative to front-line protection.",
+        "requires": ["shield_watch"], "excludes": ["shield_front"], "ai_profiles": { "defensive": 3, "fortress": 1, "isolated": 3 },
+        "cost": 24, "days": 165, "rush_cost": 68, "modifiers": { "support_losses": -0.10, "support_recovery": 0.04, "army_attack": -0.03 } },
+      { "id": "shield_front", "name": "Front-line protection", "description": "Improve division defence at the expense of long-range recovery. Alternative to force preservation.",
+        "requires": ["shield_watch"], "excludes": ["shield_preservation"], "ai_profiles": { "defensive": 1, "fortress": 3, "garrison_state": 3 },
+        "cost": 24, "days": 165, "rush_cost": 68, "modifiers": { "army_defense": 0.07, "support_losses": -0.04, "support_recovery": -0.04 } },
+      { "id": "shield_shelters", "name": "Dispersed support shelters", "description": "Protected support facilities sustain recovery over a longer campaign.", "requires": ["shield_preservation"],
+        "cost": 32, "days": 195, "rush_cost": 90, "modifiers": { "support_recovery": 0.05, "support_losses": -0.03 } },
+      { "id": "shield_liaison", "name": "Defensive ground liaison", "description": "The support service rehearses defending the army's threatened sectors.", "requires": ["shield_front"],
+        "cost": 32, "days": 195, "rush_cost": 90, "modifiers": { "army_defense": 0.04 } },
+      { "id": "shield_crews", "name": "Relief support crews", "description": "A planned crew rotation restores long-range formations faster.", "requires": ["shield_repair"],
+        "cost": 40, "days": 230, "rush_cost": 110, "modifiers": { "support_recovery": 0.05 } },
+      { "id": "shield_endurance", "name": "The sustained shield", "description": "A defensive support service keeps its formations ready without changing its specialisation.", "requires": ["shield_crews"],
+        "cost": 55, "days": 270, "rush_cost": 150, "modifiers": { "support_losses": -0.04, "army_defense": 0.02 } }
+    ]
+  },
+  "convoy_service": {
+    "name": "Doctrine of convoy service",
+    "description": "A fleet organised around supply: choose deliberate convoy assembly or fast sailing, with national supply and fleet-speed effects.",
+    "experience": "navy", "ai_profiles": { "trading_state": 2, "expeditionary": 2 },
+    "nodes": [
+      { "id": "convoy_schedules", "name": "Common sailing schedules", "description": "Organise the fleet and supply service around the same calendar.",
+        "cost": 12, "days": 100, "rush_cost": 35, "modifiers": { "supply": 0.03, "naval_speed": 0.02 } },
+      { "id": "convoy_maintenance", "name": "Escort maintenance cycle", "description": "A regular maintenance and replacement cycle accelerates ship construction.", "requires": ["convoy_schedules"],
+        "cost": 18, "days": 140, "rush_cost": 50, "modifiers": { "shipbuilding_speed": 0.06 } },
+      { "id": "convoy_assembly", "name": "Deliberate convoy assembly", "description": "More supply throughput but slower fleet movement. Alternative to fast sailing; no separate convoy-loss mechanic is implied.",
+        "requires": ["convoy_schedules"], "excludes": ["convoy_fast"], "ai_profiles": { "trading_state": 3, "expeditionary": 1 },
+        "cost": 24, "days": 165, "rush_cost": 68, "modifiers": { "supply": 0.08, "naval_speed": -0.05 } },
+      { "id": "convoy_fast", "name": "Fast sailing groups", "description": "Faster fleet movement but less supply throughput. Alternative to deliberate convoy assembly.",
+        "requires": ["convoy_schedules"], "excludes": ["convoy_assembly"], "ai_profiles": { "trading_state": 1, "expeditionary": 3 },
+        "cost": 24, "days": 165, "rush_cost": 68, "modifiers": { "naval_speed": 0.10, "supply": -0.03 } },
+      { "id": "convoy_hubs", "name": "Convoy supply hubs", "description": "Standardise handling routines throughout the supply service.", "requires": ["convoy_assembly"],
+        "cost": 32, "days": 195, "rush_cost": 90, "modifiers": { "supply": 0.04 } },
+      { "id": "convoy_relays", "name": "Fast sailing relays", "description": "Fleet groups practise maintaining their marching rhythm between bases.", "requires": ["convoy_fast"],
+        "cost": 32, "days": 195, "rush_cost": 90, "modifiers": { "naval_speed": 0.04 } },
+      { "id": "convoy_standards", "name": "Standard replacement hulls", "description": "Common hull specifications keep the yards working to one plan.", "requires": ["convoy_maintenance"],
+        "cost": 40, "days": 230, "rush_cost": 110, "modifiers": { "shipbuilding_speed": 0.08 } },
+      { "id": "convoy_continuity", "name": "Continuity at sea", "description": "The service sustains its supply schedules and replacement programme together.", "requires": ["convoy_standards"],
+        "cost": 55, "days": 270, "rush_cost": 150, "modifiers": { "supply": 0.03, "shipbuilding_speed": 0.04 } }
+    ]
+  },
+  "mission_command": {
+    "name": "Doctrine of mission command",
+    "description": "Delegate execution or retain staff control: initiative and coordination offer different strengths and costs.",
+    "experience": "command", "ai_profiles": { "blitzkrieg": 2, "irredentist": 1.5 },
+    "nodes": [
+      { "id": "mission_intent", "name": "Commander's intent", "description": "Officers learn the purpose of an order as well as its wording.",
+        "cost": 8, "days": 120, "rush_cost": 25, "modifiers": { "organisation_recovery": 0.03 } },
+      { "id": "mission_schools", "name": "Practical officer schools", "description": "Training institutions keep divisions organised through changing orders.", "requires": ["mission_intent"],
+        "cost": 10, "days": 150, "rush_cost": 30, "modifiers": { "recruitment_speed": 0.04, "organisation_recovery": 0.02 } },
+      { "id": "mission_initiative", "name": "Delegated initiative", "description": "Faster marching and recovery, but weaker prepared defence. Alternative to coordinated control.",
+        "requires": ["mission_intent"], "excludes": ["mission_control"], "ai_profiles": { "blitzkrieg": 3, "irredentist": 3 },
+        "cost": 12, "days": 170, "rush_cost": 36, "modifiers": { "army_speed": 0.06, "organisation_recovery": 0.05, "army_defense": -0.03 } },
+      { "id": "mission_control", "name": "Coordinated control", "description": "Stronger prepared attacks and defence, but slower marching. Alternative to delegated initiative.",
+        "requires": ["mission_intent"], "excludes": ["mission_initiative"], "ai_profiles": { "blitzkrieg": 1, "irredentist": 1 },
+        "cost": 12, "days": 170, "rush_cost": 36, "modifiers": { "army_attack": 0.04, "army_defense": 0.04, "army_speed": -0.04 } },
+      { "id": "mission_rehearsal", "name": "Independent command rehearsals", "description": "Subordinate headquarters practise recovering their own formations.", "requires": ["mission_initiative"],
+        "cost": 16, "days": 210, "rush_cost": 48, "modifiers": { "organisation_recovery": 0.04 } },
+      { "id": "mission_sync", "name": "Coordinated staff exercises", "description": "Headquarters practise supporting the same deliberate attack.", "requires": ["mission_control"],
+        "cost": 16, "days": 210, "rush_cost": 48, "modifiers": { "army_attack": 0.03, "supply": 0.02 } },
+      { "id": "mission_lessons", "name": "Lessons between campaigns", "description": "Keep training and recovery routines current without rewriting the chosen command method.", "requires": ["mission_schools"],
+        "cost": 20, "days": 240, "rush_cost": 60, "modifiers": { "reinforcement_rate": 0.04 } },
+      { "id": "mission_continuity", "name": "Continuity of command", "description": "Headquarters maintain the army's organisation through a sustained campaign.", "requires": ["mission_lessons"],
+        "cost": 26, "days": 290, "rush_cost": 78, "modifiers": { "organisation_recovery": 0.04, "army_attack": 0.02 } }
+    ]
+  },
+  "joint_logistics": {
+    "name": "Doctrine of joint logistics",
+    "description": "A common support service must choose throughput and reserves or a lighter, faster army.",
+    "experience": "command", "ai_profiles": { "major_offensive": 2, "attrition": 2, "trading_state": 1.5, "expeditionary": 1.5 },
+    "nodes": [
+      { "id": "joint_inventory", "name": "Common service inventory", "description": "The services count their supplies using compatible records.",
+        "cost": 8, "days": 120, "rush_cost": 25, "modifiers": { "supply": 0.03 } },
+      { "id": "joint_workshops", "name": "Joint repair depots", "description": "Long-range formations share a planned repair service.", "requires": ["joint_inventory"],
+        "cost": 10, "days": 150, "rush_cost": 30, "modifiers": { "support_recovery": 0.04 } },
+      { "id": "joint_reserve", "name": "Reserve-heavy logistics", "description": "More supply throughput and replacements, but slower marching. Alternative to a lean support train.",
+        "requires": ["joint_inventory"], "excludes": ["joint_lean"], "ai_profiles": { "attrition": 3, "major_offensive": 2, "trading_state": 3, "expeditionary": 1 },
+        "cost": 12, "days": 170, "rush_cost": 36, "modifiers": { "supply": 0.07, "reinforcement_rate": 0.05, "army_speed": -0.04 } },
+      { "id": "joint_lean", "name": "Lean support train", "description": "Faster marching and recovery, but less supply throughput. Alternative to reserve-heavy logistics.",
+        "requires": ["joint_inventory"], "excludes": ["joint_reserve"], "ai_profiles": { "attrition": 1, "major_offensive": 3, "trading_state": 1, "expeditionary": 3 },
+        "cost": 12, "days": 170, "rush_cost": 36, "modifiers": { "army_speed": 0.07, "organisation_recovery": 0.03, "supply": -0.04 } },
+      { "id": "joint_buffers", "name": "Operational supply buffers", "description": "The reserve service rehearses delivering replacements without disrupting supply.", "requires": ["joint_reserve"],
+        "cost": 16, "days": 210, "rush_cost": 48, "modifiers": { "supply": 0.03, "reinforcement_rate": 0.03 } },
+      { "id": "joint_relay", "name": "Mobile support relays", "description": "Light support groups practise restoring the marching army between engagements.", "requires": ["joint_lean"],
+        "cost": 16, "days": 210, "rush_cost": 48, "modifiers": { "army_speed": 0.03, "organisation_recovery": 0.03 } },
+      { "id": "joint_recovery", "name": "Shared recovery schedules", "description": "Replacement and repair schedules no longer compete for the same resources.", "requires": ["joint_workshops"],
+        "cost": 20, "days": 240, "rush_cost": 60, "modifiers": { "support_recovery": 0.04, "reinforcement_rate": 0.03 } },
+      { "id": "joint_endurance", "name": "Joint campaign sustainment", "description": "The common service sustains the army without undoing its chosen logistics compromise.", "requires": ["joint_recovery"],
+        "cost": 26, "days": 290, "rush_cost": 78, "modifiers": { "supply": 0.03, "support_recovery": 0.03 } }
+    ]
+  }
+}

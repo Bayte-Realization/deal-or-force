@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -76,18 +77,64 @@ public sealed partial class Defines
 /// </summary>
 public static class FrontManager
 {
-    private static readonly Dictionary<int, float> EnemyPower = new();
-    private static readonly Dictionary<int, List<Army>> Allocated = new();
-    private static readonly Stack<List<Army>> Spare = new();
-    private static readonly List<Army> Loose = new();
-    private static readonly List<Army> BattleCandidates = new();
-    private static readonly List<int> Posts = new();
-    private static readonly HashSet<int> PostSet = new();
-    private static readonly Dictionary<int, float> Need = new();
-    private static readonly HashSet<int> Refused = new();
-    private static readonly Dictionary<int, int> DonorComponents = new();
-    private static readonly Queue<int> DonorFrontier = new();
-    private static readonly List<DrawnFrontLine> Lines = new();
+    // Posting scratch, reused across fronts of ONE campaign. These lists used to be one
+    // set for the process: the next campaign's look cleared the first campaign's posts,
+    // army buckets and front rows, then read whatever it had just written. The live tick
+    // stays single-threaded. `Active` only names the board of the look now running.
+    private sealed class Scratch
+    {
+        public readonly Dictionary<int, float> EnemyPower = new();
+        public readonly Dictionary<int, List<Army>> Allocated = new();
+        public readonly Stack<List<Army>> Spare = new();
+        public readonly List<Army> Loose = new();
+        public readonly List<Army> BattleCandidates = new();
+        public readonly List<int> Posts = new();
+        public readonly HashSet<int> PostSet = new();
+        public readonly Dictionary<int, float> Need = new();
+        public readonly HashSet<int> Refused = new();
+        public readonly Dictionary<int, int> DonorComponents = new();
+        public readonly Queue<int> DonorFrontier = new();
+        public readonly List<DrawnFrontLine> Lines = new();
+        public readonly HashSet<int> LineEnemies = new();
+        public readonly List<Army> Idle = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
+    private static Scratch Active;
+
+    private static Dictionary<int, float> EnemyPower => Active.EnemyPower;
+    private static Dictionary<int, List<Army>> Allocated => Active.Allocated;
+    private static Stack<List<Army>> Spare => Active.Spare;
+    private static List<Army> Loose => Active.Loose;
+    private static List<Army> BattleCandidates => Active.BattleCandidates;
+    private static List<int> Posts => Active.Posts;
+    private static HashSet<int> PostSet => Active.PostSet;
+    private static Dictionary<int, float> Need => Active.Need;
+    private static HashSet<int> Refused => Active.Refused;
+    private static Dictionary<int, int> DonorComponents => Active.DonorComponents;
+    private static Queue<int> DonorFrontier => Active.DonorFrontier;
+    private static List<DrawnFrontLine> Lines => Active.Lines;
+    private static HashSet<int> LineEnemies => Active.LineEnemies;
+    private static List<Army> Idle => Active.Idle;
+
+    /// <summary>
+    /// Provinces the last staff look posted in this campaign, in the order that look left them.
+    /// Empty when this world has not looked. Reading does not look and does not write the world.
+    /// </summary>
+    internal static IReadOnlyList<int> PostedProvinces(Campaign campaign) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) ? board.Posts : Array.Empty<int>();
+
+    /// <summary>Armies the last look counted on one post in this campaign. Empty when it counted none.</summary>
+    internal static IReadOnlyList<Army> PostedArmies(Campaign campaign, int province) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) &&
+        board.Allocated.TryGetValue(province, out var armies) ? armies : Array.Empty<Army>();
+
+    /// <summary>
+    /// Drawn lines the last look walked in this campaign. Empty when this world has not looked.
+    /// The next look of this same campaign reuses the list; another campaign cannot clear it.
+    /// </summary>
+    internal static IReadOnlyList<DrawnFrontLine> FrontRows(Campaign campaign) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) ? board.Lines : Array.Empty<DrawnFrontLine>();
 
     /// <summary>Re-postings made since the campaign began, for the bench and the console.</summary>
     public static int Reposts { get; private set; }
@@ -97,6 +144,7 @@ public static class FrontManager
     {
         if (!MechanicFeatures.SystemEnabled(campaign, nameof(FrontManager))) return;
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        Active = Boards.GetOrCreateValue(campaign);
         CallUpIdle(campaign);
         // Defensive copy to prevent InvalidOperationException if Wars list is modified during iteration.
         var wars = campaign.Wars.ToList();
@@ -107,21 +155,17 @@ public static class FrontManager
         }
         // A full withdrawal may detach the last formation and prune empty plans.
         // Walk this look's roster, not the live list that those commands can edit.
+        // The roster stays on this campaign's board until its next look reuses the list.
+        // Another campaign has its own roster and cannot drop these rows.
         Lines.Clear();
         Lines.AddRange(campaign.FrontLines);
-        try
+        foreach (var line in Lines)
         {
-            foreach (var line in Lines)
-            {
-                if (!campaign.FrontLines.Contains(line)) continue;
-                if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
-                else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
-            }
+            if (!campaign.FrontLines.Contains(line)) continue;
+            if (line.Kind is FrontLineKind.Defence or FrontLineKind.AreaDefence or FrontLineKind.Offensive) BalanceLine(campaign, line);
+            else if (line.Kind == FrontLineKind.Fallback) DefensivePlanning.Maintain(campaign, line);
         }
-        finally { Lines.Clear(); }
     }
-
-    private static readonly List<Army> Idle = new();
 
     /// <summary>
     /// Divisions of a country at war that serve no war at all, handed to one.
@@ -179,6 +223,7 @@ public static class FrontManager
     public static void Balance(Campaign campaign, StrategicWar war)
     {
         if (war.Ended || campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        Active = Boards.GetOrCreateValue(campaign);
         for (var side = 0; side < 2; side++)
         {
             var attacking = side == 0;
@@ -209,14 +254,22 @@ public static class FrontManager
     private static void BalanceLine(Campaign campaign, DrawnFrontLine line)
     {
         var nation = campaign.NationById(line.NationId);
-        if (nation is null || line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
+        if (nation is null) return;
+        // The whole front moves with the map and with the list of enemies; bring it up to date
+        // before it is read, as a division asking for its line would.
+        if (line.AllEnemies) BorderFronts.Refresh(campaign, line);
+        if (line.IsEmpty || line.Cohesion == PlanCohesion.Immobile) return;
         var war = campaign.Wars.Find(candidate => !candidate.Ended && candidate.Involves(nation.Id) &&
             (line.BorderNationId < 0 || candidate.Opposes(nation.Id, line.BorderNationId)));
+        // The whole front is under pressure from everybody it faces, in every war - not only
+        // from the other side of whichever war happens to be first in the list.
+        if (line.AllEnemies) BorderFronts.FillEnemies(campaign, nation.Id, LineEnemies);
         EnemyPower.Clear();
         foreach (var army in campaign.Armies)
         {
             if (army.ProvinceId <= 0 || army.EmbarkedFleetId >= 0 || army.NationId == nation.Id) continue;
-            if (war is null || !war.Opposes(army.NationId, nation.Id)) continue;
+            if (line.AllEnemies ? !LineEnemies.Contains(army.NationId)
+                : war is null || !war.Opposes(army.NationId, nation.Id)) continue;
             EnemyPower[army.ProvinceId] = EnemyPower.GetValueOrDefault(army.ProvinceId) + army.Power;
         }
         Posts.Clear();
@@ -279,7 +332,11 @@ public static class FrontManager
             if (!Holds(campaign, army, nation, war, line, defines.FrontStaffMovesAdvances)) continue;
             holders++;
             power += army.Power;
-            var post = PostSet.Contains(army.OrderProvinceId) ? army.OrderProvinceId
+            // An assignment without a march is not cover: a failed route can leave a
+            // trapped formation's target on the other side of a neutral/enemy corridor.
+            // Count real positions or columns actually marching to their assigned post.
+            var inbound = army.Route.Count > 0 && army.Route[^1] == army.OrderProvinceId;
+            var post = inbound && PostSet.Contains(army.OrderProvinceId) ? army.OrderProvinceId
                 : PostSet.Contains(army.ProvinceId) ? army.ProvinceId : -1;
             if (post < 0) { if (!army.InBattle) Loose.Add(army); continue; }
             if (!Allocated.TryGetValue(post, out var there)) Allocated[post] = there = Take();
@@ -315,7 +372,10 @@ public static class FrontManager
             var pressure = 0f;
             foreach (var neighbour in topology.Neighbors[post])
                 pressure += EnemyPower.GetValueOrDefault(neighbour);
-            var need = 1f + pressure / typical;
+            var homeImportance = topology.ProvinceToNation[post] == nation.MapIndex
+                ? StrategicExclaves.Importance(campaign, post) : 0f;
+            var need = (1f + pressure / typical) *
+                (1f + homeImportance * M.Clamp(defines.ExclaveDefenceWeight, 0f, 2f));
             Need[post] = need;
             totalNeed += need;
         }
@@ -453,8 +513,8 @@ public static class FrontManager
     /// A failed route reveals a disconnected pocket, not a reason to test every division
     /// inside it. Components are labelled lazily, visiting each friendly land province at
     /// most once in this arrangement; a successful first donor needs no extra search. The
-    /// scratch is cleared at the next arrangement, so captured or reopened corridors and
-    /// other campaigns cannot reuse stale controller information.
+    /// labels belong to this campaign and are cleared at its next arrangement, so a
+    /// captured or reopened corridor is not treated as still open on the next look.
     /// </summary>
     private static void RefuseDisconnectedDonors(Campaign campaign, Nation nation, int hole)
     {

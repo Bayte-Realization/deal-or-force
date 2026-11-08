@@ -25,7 +25,12 @@ static class ApplicationExitTests
             Check(error.Request(first) && !error.Request(0) && error.ExitCode == first,
                 "initial nonzero exit code is retained: " + first);
         }
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        // The game root is the working directory every suite runs from; failing that, above the
+        // test output (a build folder inside the checkout). A build folder kept beside the
+        // checkout has no sources above it, and the whole FormableTests run stopped here.
+        var directory = File.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Scripts/MainMenuScene.cs"))
+            ? new DirectoryInfo(Directory.GetCurrentDirectory())
+            : new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Scripts/MainMenuScene.cs")))
             directory = directory.Parent;
         var root = directory?.FullName ?? throw new Exception("Game sources not found above test output");

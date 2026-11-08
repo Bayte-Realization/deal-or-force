@@ -59,6 +59,22 @@ public static class Program
             return contentFailures == 0 ? 0 : 1;
         }
 
+        // `--creation-profile`: where creating the world goes, phase by phase, cold and then warm -
+        // the loading screen's longest stage, measured where nothing else is running.
+        if (args.Contains("--creation-profile"))
+        {
+            foreach (var pass in new[] { "cold", "warm" })
+            {
+                ScenarioCatalog.BuildTimings = new List<(string Phase, double Milliseconds)>();
+                var clock = Stopwatch.StartNew();
+                Campaign.CreateBootstrap(seed);
+                Console.WriteLine($"CREATION {pass}: {clock.ElapsedMilliseconds:N0} ms");
+                foreach (var (phase, ms) in ScenarioCatalog.BuildTimings.OrderByDescending(row => row.Milliseconds))
+                    Console.WriteLine($"  {phase,-22} {ms,8:N1} ms");
+            }
+            ScenarioCatalog.BuildTimings = null;
+            return 0;
+        }
         var setup = Stopwatch.StartNew();
         var campaign = Campaign.CreateBootstrap(seed);
         // The roster contract covers the world the bookmark opens with. Countries the
@@ -77,6 +93,16 @@ public static class Program
             if (loaded.Campaign is null) { Console.WriteLine("  load: " + loaded.Warning); return 1; }
             campaign = loaded.Campaign;
             Console.WriteLine($"  loaded {args[loadAt + 2]}: day {campaign.ElapsedDays}, {campaign.Date}");
+        }
+        // Calendar stress only: this does NOT turn the modern roster/economy into a
+        // historical scenario. Actual ancient worlds are authored through the editor.
+        var calendarAt = Array.IndexOf(args, "--calendar");
+        if (calendarAt >= 0)
+        {
+            if (calendarAt + 1 >= args.Length || !HistoricalDate.TryParse(args[calendarAt + 1], out var calendar))
+            { Console.WriteLine("--calendar requires YYYY-MM-DD, optionally followed by BCE/CE inside the quoted value."); return 1; }
+            campaign.Date = new GameDate(calendar.Year, calendar.Month, calendar.Day);
+            Console.WriteLine("  calendar stress origin: " + campaign.Date);
         }
         setup.Stop();
         Console.WriteLine($"Campaign created in {setup.ElapsedMilliseconds} ms: " +
@@ -222,7 +248,7 @@ public static class Program
         if (isolationAt >= 0)
             return Check("two worlds in one process do not read each other's notes",
                 TwoWorldsDoNotShareNotes(isolationAt + 1 < args.Length && int.TryParse(args[isolationAt + 1], out var isolationDays)
-                    ? Math.Clamp(isolationDays,1,45) : 45));
+                    ? Math.Clamp(isolationDays,1,400) : 45));
         if (diagnoseWarAt >= 0 && diagnoseWarAt + 1 < args.Length)
             return mapped ? WarDiagnosisReport.Run(campaign, args[diagnoseWarAt + 1],
                 diagnoseWarAt + 2 < args.Length && int.TryParse(args[diagnoseWarAt + 2], out var replayDays) ? replayDays : 0) : 2;
@@ -266,7 +292,67 @@ public static class Program
         }
         if (Array.IndexOf(args, "--radicalism") >= 0) return RadicalismReport.Run(campaign, days);
         if (Array.IndexOf(args, "--kin") >= 0) return mapped ? KinBenchReport.Run(campaign, days) : 2;
+        if (Array.IndexOf(args, "--wars") >= 0) return mapped ? WarStuckReport.Run(campaign, days) : 2;
         if (Array.IndexOf(args, "--ai-wars") >= 0) return AiWarReport.Run(campaign, days);
+        // `--opinion [days] [--provoke TAG]`: how negative the world gets, and which reasons carry it.
+        if (Array.IndexOf(args, "--opinion") >= 0)
+        {
+            var provokeAt = Array.IndexOf(args, "--provoke");
+            return OpinionReport.Run(campaign, days, provokeAt >= 0 && provokeAt + 1 < args.Length ? args[provokeAt + 1] : "");
+        }
+        // `--survival`: what a country losing a war does about it (SurvivalReport).
+        if (Array.IndexOf(args, "--survival") >= 0) return SurvivalReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--protests") >= 0) return ProtestReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--traits") >= 0) return ProtestReport.Traits(campaign, days);
+        if (Array.IndexOf(args, "--peace") >= 0) return PeaceReport.Run(campaign, days);
+        if (Array.IndexOf(args, "--navy") >= 0) return PeaceReport.Navy(campaign, days);
+        // `--trace TAG`: one country every fifteen days - people, ground, money - where a player
+        // saw a country lose a fifth of its people and nine tenths of its treasury in four months.
+        if (OpeningOccupation.LastScaled.Count > 0)
+            Console.WriteLine("  opening occupation: kept the written figure over the regions still held by " +
+                              string.Join(" | ", OpeningOccupation.LastScaled.Select(row => $"{row.Tag} x{row.Scale:0.00} [{row.Lost}]")));
+        // `--fingerprint N`: the world's fingerprint after N days, and every 30 - for comparing two
+        // builds that must agree to the bit (a pass made parallel, a cache made per campaign).
+        var fingerprintAt = Array.IndexOf(args, "--fingerprint");
+        if (fingerprintAt >= 0)
+        {
+            var fingerprintDays = fingerprintAt + 1 < args.Length && int.TryParse(args[fingerprintAt + 1], out var fd) ? fd : 60;
+            campaign.IsPaused = false;
+            for (var day = 1; day <= fingerprintDays; day++)
+            {
+                campaign.TickDay();
+                if (day % 30 == 0 || day == fingerprintDays)
+                    Console.WriteLine($"FINGERPRINT day {day}: {CampaignFingerprint.Of(campaign)}");
+            }
+            return 0;
+        }
+        var traceAt = Array.IndexOf(args, "--trace");
+        if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
+        {
+            campaign.IsPaused = false;
+            void Line(int day)
+            {
+                var regions = campaign.StatesOf(traced);
+                var people = regions.Sum(r => r.Population);
+                var held = campaign.States.Where(r => r.HeldById == traced.Id || r.NationMapIndex == traced.MapIndex).Sum(r => r.Population);
+                var occupied = regions.Sum(r => (long)(r.Population * StabilityCore.OccupiedShare(campaign, r, traced)));
+                var deaths = regions.Sum(r => r.ReviewDeaths); var births = regions.Sum(r => r.ReviewBirths);
+                var migration = regions.Sum(r => r.ReviewNetMigration);
+                Console.WriteLine($"TRACE day {day,4} {campaign.Date}: pop {traced.Population:N0} (regions {regions.Length}, their people {people:N0}, occupied {occupied:N0}) " +
+                                  $"births {births:N0} deaths {deaths:N0} net migration {migration:N0} | treasury {traced.Treasury:0.00} bn, weekly {traced.WeeklyBalance:0.000} " +
+                                  $"(tax {traced.WeeklyTaxIncome:0.000}, spend {traced.WeeklyExpenses:0.000}), inflation {traced.Inflation:P1}, stability {traced.Stability:0.00}, " +
+                                  $"wars {campaign.Wars.Count(w => !w.Ended && w.Involves(traced.Id))}");
+            }
+            Line(0);
+            for (var day = 1; day <= days; day++)
+            {
+                campaign.TickDay();
+                if (day % 15 == 0 || day == days) Line(day);
+            }
+            return 0;
+        }
+        var whyAt = Array.IndexOf(args, "--why");
+        if (whyAt >= 0 && whyAt + 1 < args.Length) return PeaceReport.Why(campaign, days, args[whyAt + 1]);
         // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
         // added up across every neighbouring pair in the world, term by term (AiAppetiteReport).
         if (Array.IndexOf(args, "--ai-appetite") >= 0) return AiAppetiteReport.Run(campaign, days);
@@ -615,6 +701,111 @@ public static class Program
         // `--growth <days> [every]`: whether the world grows richer - world output, people and output
         // per head, year by year, with the ten largest economies and the mean secular drift. Run it
         // with --define SecularFrontierGrowth=0 for the world as it was before the frontier moved.
+        // `--goods-probe [Good,Good...] [days]`: who makes each good and who sells it abroad - the
+        // world's production against its demand, the eight largest producers with their share of
+        // world output, the eight largest exporters with their share of world exports and the
+        // eight largest importers. Without a list, every good. What the deposits in
+        // history/states and the recipes in common/production add up to, read before tuning them.
+        var probeGoodsAt = Array.IndexOf(args, "--goods-probe");
+        if (probeGoodsAt >= 0)
+        {
+            var wanted = probeGoodsAt + 1 < args.Length && !args[probeGoodsAt + 1].StartsWith("--", StringComparison.Ordinal) &&
+                         !int.TryParse(args[probeGoodsAt + 1], out _)
+                ? args[probeGoodsAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                : null;
+            var probeDays = args.Skip(probeGoodsAt + 1).Take(2).Select(a => int.TryParse(a, out var d) ? d : -1).FirstOrDefault(d => d >= 0);
+            campaign.IsPaused = false;
+            for (var day = 0; day < probeDays; day++) campaign.TickDay();
+            var goods = wanted is null
+                ? CommodityCatalog.All.OrderBy(CommodityCatalog.IdOf).ToList()
+                : wanted.Select(id => CommodityCatalog.TryParse(id, out var g) ? g : (Commodity?)null).Where(g => g is not null).Select(g => g.Value).ToList();
+            var living = campaign.Nations.Where(n => n.Population > 0).ToList();
+            foreach (var good in goods)
+            {
+                double Made(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Production : 0;
+                double Asked(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Demand : 0;
+                double Sold(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Exports : 0;
+                double Bought(Nation n) => n.Market.TryGetValue(good, out var q) ? q.Imports : 0;
+                var made = living.Sum(Made);
+                var asked = living.Sum(Asked);
+                var sold = Math.Max(1e-6, living.Sum(Sold));
+                var bought = Math.Max(1e-6, living.Sum(Bought));
+                var paid = living.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                var price = asked > 1e-6 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0;
+                var shortOf = living.Count(n => n.Market.TryGetValue(good, out var q) && q.Demand > 0.01f && q.IsShortage);
+                var importPrice = living.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports * q.Price : 0) / bought / CommodityCatalog.Get(good).BasePrice;
+                Console.WriteLine($"GOODS {CommodityCatalog.IdOf(good)} day {campaign.ElapsedDays}: made {made:0.00} asked {asked:0.00} ratio {made / Math.Max(1e-6, asked):0.00}; " +
+                                  $"price x{price:0.00}, importers pay x{importPrice:0.00}; traded {sold / Math.Max(1e-6, made):P0} of output; {shortOf} countries short");
+                // What the exporters could have sold and did not: a surplus nobody could reach, which is
+                // what lets one exporter's loss be made good by another's without a shortage anywhere.
+                var surplus = living.Sum(n => Math.Max(0, Made(n) - Asked(n)));
+                Console.WriteLine($"   surplus {surplus:0.0}, exported {sold:0.0} ({sold / Math.Max(1e-6, surplus):P0} of it), imported {bought:0.0}");
+                Console.WriteLine("   makers: " + string.Join(", ", living.OrderByDescending(Made).Take(8).Select(n => $"{n.Tag} {Made(n) / Math.Max(1e-6, made):P0}")));
+                Console.WriteLine("   exporters: " + string.Join(", ", living.OrderByDescending(Sold).Take(8).Where(n => Sold(n) > 0).Select(n => $"{n.Tag} {Sold(n) / sold:P0}")));
+                Console.WriteLine("   importers: " + string.Join(", ", living.OrderByDescending(Bought).Take(8).Where(n => Bought(n) > 0).Select(n => $"{n.Tag} {Bought(n) / bought:P0}")));
+                Console.WriteLine("   supplied (largest economies): " + string.Join(", ", living.OrderByDescending(n => n.Gdp).Take(12)
+                    .Select(n => n.Market.TryGetValue(good, out var q) ? $"{n.Tag} {q.Satisfaction:P0}" : n.Tag)));
+            }
+            return 0;
+        }
+
+        // `--goods-shock <TAG,TAG> <share> <days> [Good,Good...]`: what a war in one place does to
+        // the world's markets. The 2024 world is played four weeks to settle; then the named
+        // countries lose the given share of everything under their ground and in their clusters
+        // (fields burnt or mined, fabs shut, ports blockaded: every deposit times one minus the
+        // share) and take the same war damage, and the world is played on for the given days.
+        // Run it twice, once with a share of 0, and compare: each campaign in its own process,
+        // because two live campaigns side by side share static caches. Printed for each good: world
+        // output, the demand-weighted price against the base, countries short, and a watch list's
+        // supply and price (DOF_SHOCK_WATCH), and world GDP.
+        var shockAt = Array.IndexOf(args, "--goods-shock");
+        if (shockAt >= 0 && shockAt + 3 < args.Length)
+        {
+            var struck = args[shockAt + 1].Split(',', StringSplitOptions.RemoveEmptyEntries);
+            var share = M.Clamp01(float.Parse(args[shockAt + 2], System.Globalization.CultureInfo.InvariantCulture));
+            var shockDays = int.Parse(args[shockAt + 3]);
+            var shockGoods = (shockAt + 4 < args.Length && !args[shockAt + 4].StartsWith("--", StringComparison.Ordinal)
+                    ? args[shockAt + 4].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    : new[] { "Food", "Grain", "Oilseeds", "Semiconductors", "AdvancedChips", "Electronics", "ConsumerGoods" })
+                .Select(id => CommodityCatalog.TryParse(id, out var g) ? g : (Commodity?)null).Where(g => g is not null).Select(g => g.Value).ToList();
+            var watch = (Environment.GetEnvironmentVariable("DOF_SHOCK_WATCH") ?? "EGY,TUR,IDN,CHN,USA,DEU,JPN,KOR,IND")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries);
+            campaign.IsPaused = false;
+            for (var day = 0; day < 28; day++) campaign.TickDay();
+            if (share > 0f)
+                foreach (var tag in struck)
+                {
+                    var nation = campaign.NationByTag(tag.Trim());
+                    if (nation is null) continue;
+                    foreach (var state in campaign.StatesOf(nation))
+                    {
+                        foreach (var good in state.ResourceDeposits.Keys.ToArray()) state.ResourceDeposits[good] *= 1f - share;
+                        state.WarDamage = Math.Max(state.WarDamage, share);
+                    }
+                }
+            for (var day = 0; day < shockDays; day++) campaign.TickDay();
+            var alive = campaign.Nations.Where(n => n.Population > 0).ToList();
+            Console.WriteLine($"SHOCK {string.Join("+", struck)} share {share:0.00} after {shockDays} days: world GDP {alive.Sum(n => (double)n.Gdp):N0} bn");
+            foreach (var good in shockGoods)
+            {
+                var asked = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand : 0);
+                var paid = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                var made = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Production : 0);
+                var shortOf = alive.Count(n => n.Market.TryGetValue(good, out var q) && q.Demand > 0.01f && q.IsShortage);
+                // What the world's buyers pay: the price weighted by imports rather than by demand,
+                // which the self-sufficient giants would otherwise drown.
+                var imported = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports : 0);
+                var importPrice = imported > 1e-6 ? alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Imports * q.Price : 0) / imported / CommodityCatalog.Get(good).BasePrice : 0;
+                var exported = Math.Max(1e-6, alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Exports : 0));
+                Console.WriteLine($"   {CommodityCatalog.IdOf(good)}: made {made:0.0}, price x{(asked > 1e-6 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0):0.00}, importers pay x{importPrice:0.00}, " +
+                                  $"world exports {exported:0.0} ({string.Join(", ", alive.OrderByDescending(n => n.Market.TryGetValue(good, out var q) ? q.Exports : 0).Take(5).Select(n => $"{n.Tag} {n.Market[good].Exports / exported:P0}"))}), {shortOf} countries short; " +
+                                  string.Join(" ", watch.Select(tag => campaign.NationByTag(tag) is { } n && n.Market.TryGetValue(good, out var q)
+                                      ? $"{tag} {q.Satisfaction:P0}/x{q.Price / CommodityCatalog.Get(good).BasePrice:0.00}" : "")));
+            }
+            Console.WriteLine($"   GDP: " + string.Join(" ", watch.Select(tag => campaign.NationByTag(tag) is { } n ? $"{tag} {n.Gdp:N0}" : "")));
+            return 0;
+        }
+
         var growthAt = Array.IndexOf(args, "--growth");
         if (growthAt >= 0)
         {
@@ -636,6 +827,7 @@ public static class Program
                 Console.WriteLine($"GROWTH day {campaign.ElapsedDays}: world {gdp:N0} bn ({(Math.Pow(gdp / startGdp, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"{people / 1e9:0.000} bn people, {perHead:N0} per head ({(Math.Pow(perHead / startPerHead, 1 / years) - 1) * 100:+0.00;-0.00}%/yr), " +
                                   $"mean drift {(alive.Count == 0 ? 0 : alive.Average(n => n.SecularDrift)) * 100:+0.00;-0.00}%");
+                Console.WriteLine("   " + WorldMarketLine(campaign));
                 // How much of its workforce each country's buildings ask for (MarketSystem.CapitalReturns).
                 var intensities = alive.Select(n => (n.Tag, Jobs: campaign.StatesOf(n).Sum(MarketSystem.JobsDemanded),
                         Workers: campaign.StatesOf(n).Sum(MarketSystem.WorkersAvailable)))
@@ -645,6 +837,23 @@ public static class Program
                                   string.Join(", ", intensities.Take(12).Select(x => $"{x.Tag} {x.Ratio:0.00}")));
                 Console.WriteLine("   top: " + string.Join(", ", alive.OrderByDescending(n => n.Gdp).Take(10)
                     .Select(n => $"{n.Tag} {n.Gdp:N0} ({n.Gdp * 1e9 / Math.Max(1, n.Population):N0}/head)")));
+                // The world market at a glance: how many country-and-good pairs are short, how many
+                // countries feel it, and for every good what the world makes against what it asks for
+                // and what it pays against the base price (demand-weighted). So a new good that the
+                // world cannot supply, or one that floods to the floor price, shows up here at once.
+                var shortPairs = alive.Sum(n => n.Market.Values.Count(q => q.Demand > 0.01f && q.IsShortage));
+                var pairs = alive.Sum(n => n.Market.Values.Count(q => q.Demand > 0.01f));
+                var alivePeople = (double)Math.Max(1L, alive.Sum(n => n.Population));
+                Console.WriteLine($"   market: {shortPairs} of {pairs} demanded pairs short; {alive.Count(n => n.ShortageIndex > 0.05f)} countries with shortage index over 5%; " +
+                                  $"population-weighted shortage index {alive.Sum(n => (double)n.ShortageIndex * n.Population) / alivePeople:0.0000}; goods {CommodityCatalog.All.Count()}");
+                Console.WriteLine("   goods (made/asked, price x base): " + string.Join(", ", CommodityCatalog.All.OrderBy(CommodityCatalog.IdOf).Select(good =>
+                {
+                    var made = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Production : 0);
+                    var asked = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand : 0);
+                    var paid = alive.Sum(n => n.Market.TryGetValue(good, out var q) ? (double)q.Demand * q.Price : 0);
+                    var price = asked > 0.001 ? paid / asked / CommodityCatalog.Get(good).BasePrice : 0;
+                    return $"{CommodityCatalog.IdOf(good)} {made / Math.Max(0.001, asked):0.00} x{price:0.00}";
+                })));
                 // What a country's output is made of: GDP = gross output x 52 x output scale, the
                 // scale drifting with the secular cycle and the output with productivity and work.
                 foreach (var tag in (Environment.GetEnvironmentVariable("DOF_GROWTH_TAGS") ?? "USA,CHN,IND,ITA,FRA,DEU,JPN,RUS")
@@ -703,6 +912,49 @@ public static class Program
                                   $"{CivilWarOutbreak.EligibilityReason(campaign, nation)}");
             return 0;
         }
+        // `--migration <days>`: who has settled where across borders - every region's peoples
+        // that were not there at the start and now count a million or a tenth of it, and the
+        // countries that gained and lost the most.
+        // `--memory`: where the managed memory of this world goes - the heap after a full
+        // collection, and the counts of the collections that grow with a campaign's age.
+        if (args.Contains("--memory"))
+        {
+            GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+            var heap = GC.GetTotalMemory(true);
+            var groups = campaign.States.Sum(s => (long)s.PopulationGroups.Count);
+            Console.WriteLine($"MEMORY heap {heap / 1048576.0:0} MB; process {Environment.WorkingSet / 1048576.0:0} MB");
+            Console.WriteLine($"MEMORY states {campaign.States.Count}, population groups {groups:N0} (largest region {campaign.States.Max(s => s.PopulationGroups.Count):N0}), " +
+                              $"distinct cultures {campaign.States.SelectMany(s => s.PopulationGroups).Select(g => g.Culture).Distinct().Count()}");
+            Console.WriteLine($"MEMORY nations {campaign.Nations.Count}, relations {campaign.Relations.Count:N0}, armies {campaign.Armies.Count}, wars {campaign.Wars.Count} " +
+                              $"(ended {campaign.Wars.Count(w => w.Ended)}), battles {campaign.Battles.Count}, chronicle {campaign.Chronicle.Entries.Count}");
+            foreach (var s in campaign.States.OrderByDescending(s => s.PopulationGroups.Count).Take(5))
+                Console.WriteLine($"MEMORY   {s.DisplayName}: {s.PopulationGroups.Count:N0} groups, {s.PopulationGroups.Select(g => g.Culture).Distinct().Count()} cultures");
+            return 0;
+        }
+        var migrationAt = Array.IndexOf(args, "--migration");
+        if (migrationAt >= 0)
+        {
+            var migrationDays = migrationAt + 1 < args.Length && int.TryParse(args[migrationAt + 1], out var md) ? md : 3650;
+            var before = campaign.States.ToDictionary(s => s.MapIndex, s => s.PopulationGroups
+                .GroupBy(g => g.Culture ?? "").ToDictionary(g => g.Key, g => g.Sum(x => x.Size)));
+            campaign.IsPaused = false;
+            for (var day = 1; day <= migrationDays; day++) campaign.TickDay();
+            foreach (var state in campaign.States.OrderByDescending(s => s.Population))
+            {
+                var was = before.GetValueOrDefault(state.MapIndex) ?? new Dictionary<string, long>();
+                foreach (var group in state.PopulationGroups.GroupBy(g => g.Culture ?? ""))
+                {
+                    var now = group.Sum(g => g.Size);
+                    var gained = now - was.GetValueOrDefault(group.Key);
+                    if (gained >= 1_000_000 || gained >= 100_000 && gained >= state.Population / 10)
+                        Console.WriteLine($"MIGRATION {state.DisplayName} ({campaign.NationsByMapIndex().GetValueOrDefault((ushort)state.NationMapIndex)?.Tag}): " +
+                                          $"{group.Key} {was.GetValueOrDefault(group.Key):N0} -> {now:N0} of {state.Population:N0}");
+                }
+            }
+            foreach (var n in campaign.Nations.Where(n => n.CumulativeNetMigration != 0).OrderByDescending(n => Math.Abs(n.CumulativeNetMigration)).Take(15))
+                Console.WriteLine($"MIGRATION net {n.Tag}: {n.CumulativeNetMigration:N0} of {n.Population:N0}");
+            return 0;
+        }
         var pulseAt = Array.IndexOf(args, "--pulse");
         if (pulseAt >= 0)
         {
@@ -715,15 +967,45 @@ public static class Program
             var covert = new Dictionary<string, int>();
             var largest = 0;
             var bornFrom = campaign.Nations.Count;
+            // How long the world spends at each alert, and why it moved: a DEFCON 1 inside the
+            // first months of 2024 was a player's report before it was a number here.
+            var defconDays = new int[6];
+            var holderWars = new HashSet<string>();
+            var lastDefcon = campaign.DefconLevel;
             for (var day = 1; day <= pulseDays; day++)
             {
                 campaign.TickDay();
+                defconDays[Math.Clamp(campaign.DefconLevel, 1, 5)]++;
+                // Two deterrent holders on opposite sides of one war: who, in which war, and since when.
+                foreach (var war in campaign.Wars)
+                {
+                    if (war.Ended || war.CivilConflict) continue;
+                    var holdersA = war.Side(true).Where(id => Deterrence.TierOf(campaign, campaign.NationById(id)) >= 1).ToList();
+                    var holdersD = war.Side(false).Where(id => Deterrence.TierOf(campaign, campaign.NationById(id)) >= 1).ToList();
+                    if (holdersA.Count == 0 || holdersD.Count == 0) continue;
+                    var key = $"{war.Id}:{string.Join(",", holdersA)}:{string.Join(",", holdersD)}";
+                    if (!holderWars.Add(key)) continue;
+                    string Tags(IEnumerable<int> ids) => string.Join("+", ids.Select(id => campaign.NationById(id)?.Tag));
+                    Console.WriteLine($"   HOLDERS AT WAR day {day}: {campaign.NationById(war.AttackerId)?.Tag} -> {campaign.NationById(war.DefenderId)?.Tag} " +
+                                      $"(started day {war.StartedDay}, {war.BelligerentCount} in it): {Tags(holdersA)} vs {Tags(holdersD)}; attackers {Tags(war.Side(true))}; defenders {Tags(war.Side(false))}");
+                }
+                if (campaign.DefconLevel != lastDefcon)
+                {
+                    DefconSystem.EvaluateTarget(campaign, out var why);
+                    Console.WriteLine($"   DEFCON day {day}: {lastDefcon} -> {campaign.DefconLevel} ({why})");
+                    lastDefcon = campaign.DefconLevel;
+                }
                 var entries = campaign.Chronicle.Read(-1, -1, true);
                 foreach (var entry in entries.Where(e => e.Sequence > pulseSeen))
                 {
                     year[entry.Kind] = year.GetValueOrDefault(entry.Kind) + 1;
                     total[entry.Kind] = total.GetValueOrDefault(entry.Kind) + 1;
                     if (entry.Kind == "war_started") Console.WriteLine($"   WAR day {entry.Day}: {entry.ActorName} -> {entry.TargetName}");
+                    if (entry.Kind is "civil_war_third_front" or "movement_merged" or "movement_absorbed" or "movement_dissolved" or "movement_emerged" or "coup")
+                        Console.WriteLine($"   {entry.Kind.ToUpperInvariant()} day {entry.Day}: {entry.ActorName} -> {entry.TargetName} {entry.Subject}");
+                    if (entry.Kind == "volunteers_sent") Console.WriteLine($"   VOLUNTEERS day {entry.Day}: {entry.ActorName} -> {entry.TargetName} ({entry.Place})");
+                    if (entry.Kind is "nuclear_strike" or "nuclear_retaliation" or "organization_sanction" or "sanctions_imposed")
+                        Console.WriteLine($"   NUCLEAR day {entry.Day}: {entry.Kind} {entry.ActorName} -> {entry.TargetName} ({entry.Subject}{entry.Place})");
                 }
                 if (entries.Length > 0) pulseSeen = Math.Max(pulseSeen, entries.Max(e => e.Sequence));
                 // Covert operations are mostly private: counted from the whole chronicle.
@@ -741,8 +1023,20 @@ public static class Program
                 year.Clear();
                 largest = 0;
             }
+            Console.WriteLine($"PULSE defcon days: 5={defconDays[5]} 4={defconDays[4]} 3={defconDays[3]} 2={defconDays[2]} 1={defconDays[1]}; peak {campaign.DefconPeakLevel}");
+            Console.WriteLine($"PULSE world GDP {campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp):N0} bn; " + WorldMarketLine(campaign));
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            Console.WriteLine($"PULSE army: formations lost {campaign.Nations.Sum(n => n.FormationsLost)}, surrendered {WarLosses.SurrenderedFormations}, " +
+                              $"starved in pockets {Attrition.StarvedInPockets}; outcomes " +
+                              string.Join(", ", Warfare.OutcomeTally.OrderByDescending(p => p.Value).ThenBy(p => p.Key).Take(8).Select(p => $"{p.Key} {p.Value}")));
+            Console.WriteLine("PULSE garrisons: " + string.Join(", ", StrandedGarrisons.Tally.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key} {p.Value}")) +
+                              $"; in pockets now {campaign.Armies.Count(a => a.CutOff)} (holding out {campaign.Armies.Count(a => a.HoldoutSinceDay >= 0)}), " +
+                              $"below 75% strength {campaign.Armies.Count(a => a.Strength < 0.75f)} of {campaign.Armies.Count}");
             Console.WriteLine("PULSE covert (private): " + string.Join(", ", covert.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
+            // State failure: collapses and their sides, revolutions, and pieces gone home (StateFailure).
+            Console.WriteLine("PULSE failure: " + string.Join(", ", StateFailure.Tally.OrderBy(entry => entry.Key, StringComparer.Ordinal).Select(entry => $"{entry.Key} {entry.Value}")) +
+                              $"; born in play alive {campaign.Nations.Skip(bornFrom).Count(n => !campaign.Fallen.Contains(n.Id) && n.Population > 0 && n.Movement is null)} of {campaign.Nations.Count - bornFrom}");
+            foreach (var line in StateFailure.Log) Console.WriteLine("PULSE failure " + line);
             // Leases and troops in without a war: what stands now and what happened on the way.
             Console.WriteLine($"PULSE land: leased={LandArrangementSystem.Leased} entered={LandArrangementSystem.Entered} " +
                               $"annexed={LandArrangementSystem.Annexed} fought={LandArrangementSystem.Fought} stayed={LandArrangementSystem.Stayed} " +
@@ -756,6 +1050,14 @@ public static class Program
                               $"top-20 treasury/GDP min {treasuries.FirstOrDefault():0.00} median {treasuries.ElementAtOrDefault(treasuries.Count / 2):0.00} max {treasuries.LastOrDefault():0.00}; " +
                               string.Join(", ", campaign.Nations.Where(n => n.Movement is null && n.Gdp > 0f).OrderByDescending(n => n.Gdp).Take(8)
                                   .Select(n => $"{n.Tag} {n.Treasury:0}/{n.Gdp:0}")));
+            // The deep-strike war (LongRangeStrikes): salvos, what the screens stopped, what landed and where.
+            Console.WriteLine($"PULSE long-range: salvos={LongRangeStrikes.Salvos} dry={LongRangeStrikes.DryLaunches} " +
+                              $"launched={LongRangeStrikes.LaunchedPoints:0} intercepted={LongRangeStrikes.InterceptedPoints:0} " +
+                              $"landed={LongRangeStrikes.LandedPoints:0} procured={LongRangeStrikes.Procured}; targets " +
+                              string.Join(" ", LongRangeStrikes.ByTarget.OrderBy(p => p.Key).Select(p => $"{p.Key}={p.Value}")) +
+                              "; on strike now " + campaign.SupportFormations.Count(f => f.Mission == SupportCore.MissionStrike) +
+                              " of " + campaign.SupportFormations.Count + " formations; missions " +
+                              string.Join(" ", campaign.SupportFormations.GroupBy(f => f.Mission).OrderBy(g => g.Key).Select(g => $"{g.Key}={g.Count()}")));
             Console.WriteLine("PULSE land restraint: " + string.Join(", ", new[] { "RUS", "CHN", "TUR", "USA", "IND", "ISR", "AZE", "ARM", "SRB", "IRN", "PRK", "DEU", "FRA", "GBR", "VEN", "HUN", "BLR", "SAU", "EGY", "PAK" }
                 .Select(tag => campaign.NationByTag(tag)).Where(n => n is not null).Select(n => $"{n.Tag} {AiStatecraft.Restraint(campaign, n):0.00} ({n.Government}/{n.Ideology})")));
             foreach (var ended in LandArrangementSystem.EndedLog) Console.WriteLine("PULSE land ended " + ended);
@@ -765,9 +1067,65 @@ public static class Program
                 Console.WriteLine($"PULSE born {born.Tag} \"{born.DisplayName}\" from {campaign.NationById(born.SecededFromId)?.Tag ?? "-"} " +
                                   $"people {string.Join("/", born.FoundedCultures.Take(2))} regions {campaign.StatesOf(born).Length}" +
                                   (born.Movement is not null ? " movement" : ""));
+            Console.WriteLine($"PULSE borders: reviews={BorderDiplomacy.Reviews} swaps={BorderDiplomacy.Swaps} purchases={BorderDiplomacy.Purchases} " +
+                              $"sales={BorderDiplomacy.Sales} ultimatums={BorderDiplomacy.Ultimatums} (yielded {BorderDiplomacy.UltimatumsYielded}) disputes={BorderDiplomacy.Disputes}");
             Console.WriteLine("PULSE land pairs: " + string.Join("; ", LandArrangementSystem.PassedPairs.OrderBy(p => p.Key).Select(p => $"{p.Key} {p.Value}")));
             foreach (var entry in campaign.Chronicle.Entries.Where(e => e.Kind is "lease_voided_by_war" or "troops_without_war" or "annexed_by_referendum" or "republic_proclaimed" or "presence_became_war" or "lease_overstayed" or "lease_granted"))
                 Console.WriteLine($"PULSE land event day {entry.Day}: {entry.Kind} {campaign.NationById(entry.ActorId)?.Tag} -> {campaign.NationById(entry.TargetId)?.Tag} {entry.Place} {entry.Subject}");
+            return 0;
+        }
+
+        // `--border-deals <days>`: ugly borders and what governments do about them (BorderDiplomacy) -
+        // the grievance pairs at the start and at the end, and each year's swaps, purchases, sales,
+        // ultimatums, disputes, and wars between countries with a border grievance between them.
+        var bordersAt = Array.IndexOf(args, "--border-deals");
+        if (bordersAt >= 0)
+        {
+            var borderDays = bordersAt + 1 < args.Length && int.TryParse(args[bordersAt + 1], out var bd) ? bd : 3650;
+            campaign.IsPaused = false;
+            BorderDiplomacy.ResetCounters();
+            string Tag(int mapIndex) => campaign.NationsByMapIndex().GetValueOrDefault((ushort)mapIndex)?.Tag ?? mapIndex.ToString();
+            void ShowPairs(string when)
+            {
+                var pairs = BorderShape.Pairs(campaign);
+                Console.WriteLine($"BORDERS {when}: {pairs.Count} grievance pairs, {pairs.Count(pair => pair.Grievance >= campaign.Defines.BorderDealMinGrievance)} at or above the review line; worst: " +
+                                  string.Join(", ", pairs.Take(16).Select(pair => $"{Tag(pair.Nation)}>{Tag(pair.Other)} {pair.Grievance:0.00}")));
+            }
+            ShowPairs("at start");
+            var counts = new Dictionary<string, int>();
+            var year = new Dictionary<string, int>();
+            long borderSeen = 0;
+            for (var day = 1; day <= borderDays; day++)
+            {
+                campaign.TickDay();
+                var entries = campaign.Chronicle.Read(-1, -1, true);
+                foreach (var entry in entries.Where(e => e.Sequence > borderSeen).OrderBy(e => e.Sequence))
+                {
+                    var kind = entry.Kind;
+                    if (kind == "war_started")
+                    {
+                        var a = campaign.NationById(entry.ActorId); var b = campaign.NationById(entry.TargetId);
+                        if (a is null || b is null || BorderShape.Grievance(campaign, a, b) <= 0f && BorderShape.Grievance(campaign, b, a) <= 0f) continue;
+                        // A rising against its own government is a civil war, not a border war.
+                        if (!campaign.Wars.Any(w => !w.Ended && !w.CivilConflict && w.AttackerId == a.Id && w.DefenderId == b.Id)) continue;
+                        kind = "border_war";
+                    }
+                    else if (!kind.StartsWith("border_", StringComparison.Ordinal) && kind is not ("ultimatum_accepted" or "ultimatum_refused")) continue;
+                    counts[kind] = counts.GetValueOrDefault(kind) + 1;
+                    year[kind] = year.GetValueOrDefault(kind) + 1;
+                    if (kind.StartsWith("border_", StringComparison.Ordinal))
+                        Console.WriteLine($"   {kind.ToUpperInvariant()} day {entry.Day}: {entry.ActorName} / {entry.TargetName} {entry.Subject}");
+                }
+                if (entries.Length > 0) borderSeen = Math.Max(borderSeen, entries.Max(e => e.Sequence));
+                if (day % 365 != 0 && day != borderDays) continue;
+                Console.WriteLine($"BORDERS year to day {campaign.ElapsedDays}: " + string.Join(", ", year.OrderBy(e => e.Key).Select(e => $"{e.Key} {e.Value}")));
+                year.Clear();
+            }
+            ShowPairs("at end");
+            Console.WriteLine($"BORDERS total: " + string.Join(", ", counts.OrderBy(e => e.Key).Select(e => $"{e.Key} {e.Value}")));
+            Console.WriteLine($"BORDERS counters: reviews={BorderDiplomacy.Reviews} swaps={BorderDiplomacy.Swaps} purchases={BorderDiplomacy.Purchases} " +
+                              $"sales={BorderDiplomacy.Sales} offered-to-players={BorderDiplomacy.Offered} ultimatums={BorderDiplomacy.Ultimatums} " +
+                              $"(yielded {BorderDiplomacy.UltimatumsYielded}) disputes={BorderDiplomacy.Disputes}");
             return 0;
         }
 
@@ -796,6 +1154,9 @@ public static class Program
                 Console.WriteLine($"ORGS day {campaign.ElapsedDays} ({campaign.Date}): {active.Count} active, {active.Sum(o => o.Members.Count)} memberships, " +
                                   $"mean cohesion {(active.Count == 0 ? 0 : active.Average(o => o.Cohesion)):0.00}; " +
                                   string.Join(", ", counts.OrderBy(entry => entry.Key).Select(entry => $"{entry.Key.Substring(13)} {entry.Value}")));
+                foreach (var org in active.Where(o => o.Suspended.Count > 0))
+                    Console.WriteLine($"   SUSPENDED in {InternationalOrganizations.DisplayName(campaign, org)}: " +
+                                      string.Join(", ", org.Suspended.Select(s => $"{campaign.NationById(s.Key)?.Tag} since day {s.Value} ({org.SuspendedFor.GetValueOrDefault(s.Key)})")));
                 foreach (var org in active.Where(o => o.Members.Count >= 3).OrderByDescending(o => o.Members.Count).Take(8))
                     Console.WriteLine($"   {InternationalOrganizations.DisplayName(campaign, org)}: {org.Members.Count} members, cohesion {org.Cohesion:0.00} (target {OrganizationDynamics.Target(campaign, org):0.00}), " +
                                       $"least belonging {org.Members.Select(campaign.NationById).Where(n => n is not null).Select(n => (n.Tag, OrganizationDynamics.Belonging(campaign, org, n))).OrderBy(x => x.Item2).Take(2).Select(x => $"{x.Tag} {x.Item2:0.00}").DefaultIfEmpty("-").Aggregate((a, b) => a + " " + b)}");
@@ -1538,6 +1899,8 @@ public static class Program
         SimProfiler.Reset();
         GC.Collect();
         var allocatedBefore = GC.GetTotalAllocatedBytes(true);
+        var gcBefore = (GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
+        var pauseBefore = GC.GetTotalPauseDuration();
         var run = Stopwatch.StartNew();
         // Step by step rather than a day at a time, timing each: what a player feels is not the
         // mean but the worst frame, and a frame at the top speed is twelve steps.
@@ -1584,6 +1947,23 @@ public static class Program
             Console.WriteLine($"Steps: {steps.Count:N0} of {campaign.TickHours}h; median {At(0.5):0.00} ms, p95 {At(0.95):0.00}, " +
                               $"p99 {At(0.99):0.00}, worst {sorted[^1]:0.0}; worst {frame} steps together (a frame at the top speed) {worstFrame:0.0} ms.");
         }
+        // Report this phase BEFORE the two additional 30-day probes. Mixing their
+        // profiler totals into a denominator of only `days` overstated every share.
+        Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
+                          $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
+                          $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +
+                          $"{campaign.Armies.Count:N0} division(s).");
+        Console.WriteLine($"GC phase: gen0={GC.CollectionCount(0) - gcBefore.Item1} gen1={GC.CollectionCount(1) - gcBefore.Item2} " +
+                          $"gen2={GC.CollectionCount(2) - gcBefore.Item3} pause_ms={(GC.GetTotalPauseDuration() - pauseBefore).TotalMilliseconds:0.000} " +
+                          $"managed_bytes={GC.GetTotalMemory(false)} resident_bytes={Environment.WorkingSet}; no forced collection inside measurement.");
+        var total = Math.Max(0.001, run.Elapsed.TotalMilliseconds);
+        foreach (var sample in SimProfiler.All.OrderByDescending(entry => entry.TotalMilliseconds))
+            Console.WriteLine($"  {sample.Name,-20} {sample.TotalMilliseconds,10:N0} ms  " +
+                              $"{sample.TotalMilliseconds / total,6:P1}  " +
+                              $"{sample.MeanMilliseconds,8:0.000} ms/run  ×{sample.Runs:N0}  " +
+                              $"{sample.AllocatedBytes / 1_048_576.0,8:0.0} MB");
+        // Headless simulation slices, NOT rendered frame times: rendering, UI, GPU
+        // waits and OS scheduling require the native in-game frame capture as well.
         // And what a frame feels with smooth time on, which is how the game runs: the simulation
         // given its budget a frame (Campaign.StepFor) for thirty more days. A frame's cost is the
         // budget plus the one stage it could not cut short - the number that is a hitch.
@@ -1624,16 +2004,6 @@ public static class Program
             foreach (var (ms, day, parts) in pieces.OrderByDescending(piece => piece.Ms).Take(10))
                 Console.WriteLine($"  indivisible {ms:0.0} ms on day {day}: {parts}");
         }
-        Console.WriteLine($"Profile: {days} day(s) in {run.ElapsedMilliseconds:N0} ms, " +
-                          $"{run.Elapsed.TotalMilliseconds / days:0.00} ms a day, " +
-                          $"{allocated / days / 1024.0:N0} kB a day; {campaign.Wars.Count(war => !war.Ended)} war(s) open, " +
-                          $"{campaign.Armies.Count:N0} division(s).");
-        var total = Math.Max(0.001, run.Elapsed.TotalMilliseconds);
-        foreach (var sample in SimProfiler.All.OrderByDescending(entry => entry.TotalMilliseconds))
-            Console.WriteLine($"  {sample.Name,-20} {sample.TotalMilliseconds,10:N0} ms  " +
-                              $"{sample.TotalMilliseconds / total,6:P1}  " +
-                              $"{sample.MeanMilliseconds,8:0.000} ms/run  ×{sample.Runs:N0}  " +
-                              $"{sample.AllocatedBytes / 1_048_576.0,8:0.0} MB");
         // The world it ended in, as one number: an optimisation that is meant to change how
         // fast the world runs and nothing else has to end in the same one.
         Console.WriteLine($"  world fingerprint after {campaign.ElapsedDays} day(s): {CampaignFingerprint.Of(campaign):X16}");
@@ -5153,6 +5523,35 @@ public static class Program
         return "";
     }
 
+    /// <summary>
+    /// One line on the goods the building audit of 1 November 2026 touched: for each, what the
+    /// world makes against what it asks for, how many countries are short of it, and its price
+    /// against the base price, weighted by how much each country asks for. Printed by --growth
+    /// every report and by --pulse at the end, so a before/after pair can be read side by side.
+    /// </summary>
+    internal static string WorldMarketLine(Campaign campaign)
+    {
+        var parts = new List<string>();
+        foreach (var id in new[] { "Oil", "NaturalGas", "RareEarths", "Energy", "Coal", "Steel", "Aluminium", "Electronics", "Chemicals" })
+        {
+            if (!CommodityCatalog.TryParse(id, out var good)) continue;
+            double made = 0, wanted = 0, weightedPrice = 0;
+            var shortOf = 0;
+            var basePrice = Math.Max(0.0001f, CommodityCatalog.Get(good).BasePrice);
+            foreach (var nation in campaign.Nations)
+            {
+                if (nation.Population <= 0 || !nation.Market.TryGetValue(good, out var quote)) continue;
+                made += quote.Production;
+                wanted += quote.Demand;
+                weightedPrice += quote.Demand * (quote.Price / basePrice);
+                if (quote.Demand > 0.001f && quote.IsShortage) shortOf++;
+            }
+            var price = wanted > 0 ? weightedPrice / wanted : 1;
+            parts.Add($"{id} {made:0.0}/{wanted:0.0} ({(wanted > 0 ? made / wanted : 0):0.00}x, {shortOf} short, price x{price:0.00})");
+        }
+        return "MARKET " + string.Join("; ", parts);
+    }
+
     private static string TheWorldMakesWhatItNeeds(Campaign campaign)
     {
         var worst = "";
@@ -8203,8 +8602,14 @@ public static class Program
             // both branches of a ternary. They must not leak raw chronicle.* IDs.
             foreach (System.Text.RegularExpressions.Match call in System.Text.RegularExpressions.Regex.Matches(source,
                          @"Chronicle\.Record\([^,]+,\s*([^,]+),"))
+            {
+                // A ternary's condition is not a kind: `kind == "shut" ? "a" : "b"`
+                // records "a" or "b", never "shut". Only the branches are captions.
+                var expression = call.Groups[1].Value;
+                var branch = expression.IndexOf('?');
+                if (branch >= 0) expression = expression[(branch + 1)..];
                 foreach (System.Text.RegularExpressions.Match kind in System.Text.RegularExpressions.Regex.Matches(
-                             call.Groups[1].Value, "\"([a-z_]+)\""))
+                             expression, "\"([a-z_]+)\""))
                 {
                     var id = kind.Groups[1].Value;
                     // A kind assembled at run time - "covert_" + operation + "_done" - hands the
@@ -8214,6 +8619,7 @@ public static class Program
                     if (id.StartsWith("_", StringComparison.Ordinal) || id.EndsWith("_", StringComparison.Ordinal)) continue;
                     result.Add("chronicle." + id);
                 }
+            }
         }
         var common = Path.Combine(Path.GetDirectoryName(scripts)!, "game", "common");
         foreach (var folder in new[] { "budget", "government_focus", "trade_policies", "governments", "ideologies", "countries",
@@ -8298,6 +8704,18 @@ public static class Program
                 var before = at > 0 ? source[at - 1] : ' ';
                 at += call.Length;
                 if (char.IsLetterOrDigit(before) || before == '_') continue;
+
+                // `new Line(...)` constructs a record whose first member is a routing id
+                // (StrategicHudBrief.Line), not a caption; only the bare `Line(...)`
+                // helper takes one.
+                if (call == "Line(")
+                {
+                    var head = source.Substring(0, at - call.Length).TrimEnd();
+                    if (head.EndsWith("new", StringComparison.Ordinal) &&
+                        (head.Length == 3 ||
+                         !(char.IsLetterOrDigit(head[head.Length - 4]) || head[head.Length - 4] == '_')))
+                        continue;
+                }
 
                 // ScenarioMapEditor has ActionButton(nodeName, caption, action), while
                 // campaign widgets use ActionButton(caption, action, ...). Two literal
@@ -8495,7 +8913,7 @@ public static class Program
                 return "the catalog refused a complete new good";
             if (!CommodityCatalog.TryParse(GoodId, out var alloy))
                 return "the catalog accepted a new good and then could not find it by name";
-            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 1.0f, 0.1f, "A building no enum names."))
+            if (!BuildingCatalog.Declare(BuildingId, "Bench works", 2.0f, 200, 0.1f, "A building no enum names."))
                 return "the catalog refused a complete new building";
             if (!BuildingCatalog.TryParse(BuildingId, out var works))
                 return "the catalog accepted a new building and then could not find it by name";
@@ -8638,7 +9056,7 @@ public static class Program
             float? Number(string key) => value.TryGetProperty(key, out var e) && e.TryGetSingle(out var n) ? n : null;
             int? Integer(string key) => value.TryGetProperty(key, out var e) && e.TryGetInt32(out var n) ? n : null;
             BuildingCatalog.Declare(name, Text("name"), Number("cost"), Integer("days"),
-                Number("gdp_gain"), Number("capacity_gain"), Text("description"));
+                Number("capacity_gain"), Text("description"), jobs: Number("jobs"));
         });
 
         void Declare(string folder, Action<string, System.Text.Json.JsonElement> apply)
@@ -9023,7 +9441,7 @@ public static class Program
         if (checkedNames.Count == 0) return "the shipped defines file sets nothing the code recognises";
         if (drifted.Count > 0)
             return $"{drifted.Count} shipped define(s) disagree with the code: " +
-                   string.Join("; ", drifted.Take(6));
+                   string.Join("; ", drifted);
         Console.WriteLine($"  {checkedNames.Count:N0} effective shipped defines all agree with the compiled values.");
         return "";
     }
@@ -11984,7 +12402,9 @@ public static class Program
         MediaLibraryCatalog.Load();
         Coups.ResetCatalog();
         Coups.GovernmentRisk(new Nation());
-        if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
+        // Console prose belongs to the normal moddable language tables, not common/console.
+        if (Loc.Get("console.touchgrass.verse") is "" or "console.touchgrass.verse")
+            return "the console's localized verse came back empty";
 
         var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);
         if (asked.Count == 0) return "nothing has asked the loader for any data at all";
@@ -12449,7 +12869,9 @@ public static class Program
         // Now the round trip. One building placed by hand, then pulled down, and everything
         // back where it started bar the scrap value.
         state.Buildings[BuildingKind.CivilianIndustry] = standing + 1;
-        nation.Gdp = gdp + definition.GdpGain * yield;
+        // No GDP step on completion any more (the market counts a building's output), so GDP
+        // must come back to exactly where it was.
+        nation.Gdp = gdp;
         nation.ConstructionCapacity = capacity + definition.CapacityGain * yield;
         nation.Treasury = treasury;
 
@@ -13284,6 +13706,58 @@ public static class Program
         {
             if (hourly) { host.Tick(); client.Tick(); } else { host.TickDay(); client.TickDay(); }
             if (CampaignFingerprint.Of(host) == CampaignFingerprint.Of(client)) continue;
+            if (Environment.GetEnvironmentVariable("SNAP_ARMIES") == "1")
+            {
+                var theirs = client.Armies.Select(a => a.Id).ToHashSet();
+                var ours = host.Armies.Select(a => a.Id).ToHashSet();
+                foreach (var army in host.Armies.Where(a => !theirs.Contains(a.Id)))
+                    Console.WriteLine($"  host-only army {army.Id}: {army.Name} nation={army.NationId} " +
+                                      $"tpl={army.TemplateId} prov={army.ProvinceId} men={army.Personnel} " +
+                                      $"order={army.OrderKind} stance={army.Stance} div={army.Divisions:0.##} " +
+                                      $"group={army.ArmyGroupId} war={army.AssignedWarId}");
+                foreach (var army in client.Armies.Where(a => !ours.Contains(a.Id)))
+                    Console.WriteLine($"  client-only army {army.Id}: {army.Name} nation={army.NationId} " +
+                                      $"tpl={army.TemplateId} prov={army.ProvinceId} men={army.Personnel} " +
+                                      $"order={army.OrderKind} stance={army.Stance} div={army.Divisions:0.##} " +
+                                      $"group={army.ArmyGroupId} war={army.AssignedWarId}");
+                foreach (var nation in host.Nations)
+                {
+                    var twin = client.NationById(nation.Id);
+                    if (twin is null) continue;
+                    var a = nation.MilitiaReadiness.OrderBy(p => p.Key).ToArray();
+                    var b = twin.MilitiaReadiness.OrderBy(p => p.Key).ToArray();
+                    if (a.Length != b.Length || a.Where((p, i) => p.Key != b[i].Key || MathF.Abs(p.Value - b[i].Value) > 0.0001f).Any())
+                        Console.WriteLine($"  militia readiness differs for nation {nation.Id} ({nation.Tag}): " +
+                                          $"host {a.Length} entries, client {b.Length}");
+                }
+                var hostOrderIds = host.Recruitment.Select(o => o.Id).ToHashSet();
+                foreach (var order in host.Recruitment)
+                {
+                    var twin = client.Recruitment.Find(o => o.Id == order.Id);
+                    var deployHost = DealOrForce.Simulation.RecruitmentSystem.DeploymentProvince(host, order.NationId, order.StateMapIndex);
+                    var deployClient = twin is null ? -999 : DealOrForce.Simulation.RecruitmentSystem.DeploymentProvince(client, twin.NationId, twin.StateMapIndex);
+                    Console.WriteLine($"  host order {order.Id}: nation={order.NationId} state={order.StateMapIndex} " +
+                                      $"trained={order.TrainedDays}/{order.DurationDays} last={order.LastProcessedDay} " +
+                                      $"deploy={deployHost} | client trained={(twin?.TrainedDays ?? -1)}/{(twin?.DurationDays ?? -1)} " +
+                                      $"last={twin?.LastProcessedDay ?? -1} deploy={deployClient}");
+                }
+                foreach (var order in client.Recruitment.Where(o => !hostOrderIds.Contains(o.Id)))
+                {
+                    var deployClient = DealOrForce.Simulation.RecruitmentSystem.DeploymentProvince(client, order.NationId, order.StateMapIndex);
+                    var nation = client.NationById(order.NationId);
+                    var state = client.States.FirstOrDefault(s => s.MapIndex == order.StateMapIndex);
+                    Console.WriteLine($"  client-only order {order.Id}: nation={order.NationId}({nation?.Tag}) state={order.StateMapIndex} " +
+                                      $"trained={order.TrainedDays}/{order.DurationDays} last={order.LastProcessedDay} deploy={deployClient} " +
+                                      $"stateNation={(state?.NationMapIndex ?? -1)} nationMap={(nation?.MapIndex ?? -1)} " +
+                                      $"capState={nation?.CapitalStateMapIndex ?? -1}");
+                }
+                Console.WriteLine($"  recruitment queues: host={host.Recruitment.Count} client={client.Recruitment.Count}; " +
+                                  $"JOR armies host={host.Armies.Count(a => a.NationId == 143)} client={client.Armies.Count(a => a.NationId == 143)}");
+                foreach (var army in host.Armies.Where(a => a.NationId == 143).OrderBy(a => a.Id))
+                    Console.WriteLine($"  host JOR army {army.Id}: {army.Name} prov={army.ProvinceId} tpl={army.TemplateId} men={army.Personnel} plan={army.PlanActive}");
+                foreach (var army in client.Armies.Where(a => a.NationId == 143).OrderBy(a => a.Id))
+                    Console.WriteLine($"  client JOR army {army.Id}: {army.Name} prov={army.ProvinceId} tpl={army.TemplateId} men={army.Personnel} plan={army.PlanActive}");
+            }
             // The first day they part, and where: the saved worlds compared field by field.
             return $"the two worlds agreed at the moment of the snapshot and diverged on {(hourly ? "step" : "day")} {day + 1}, " +
                    "so something the simulation reads is not in it: " + WhatDiffers(host, client) +
@@ -13298,15 +13772,29 @@ public static class Program
     }
 
     /// <summary>The first few paths at which two worlds' network snapshots differ.</summary>
-    private static string SnapshotDifferences(Campaign one, Campaign other)
+    private static string SnapshotDifferences(Campaign one, Campaign other) =>
+        SnapshotDifferences(ReadSnapshot(one), ReadSnapshot(other));
+
+    /// <summary>The same diff against a snapshot taken earlier, at the moment it diverged.</summary>
+    private static string SnapshotDifferences(Campaign one, byte[] wire) =>
+        SnapshotDifferences(ReadSnapshot(one), ReadWire(wire));
+
+    private static System.Text.Json.Nodes.JsonNode ReadSnapshot(Campaign campaign)
     {
-        static System.Text.Json.Nodes.JsonNode Read(Campaign campaign)
-        {
-            var wire = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
-            using var input = new MemoryStream(wire);
-            using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
-            return System.Text.Json.Nodes.JsonNode.Parse(gzip);
-        }
+        var wire = SaveSystem.ExportNetworkSnapshot(campaign, "bench");
+        return ReadWire(wire);
+    }
+
+    private static System.Text.Json.Nodes.JsonNode ReadWire(byte[] wire)
+    {
+        using var input = new MemoryStream(wire);
+        using var gzip = new System.IO.Compression.GZipStream(input, System.IO.Compression.CompressionMode.Decompress);
+        return System.Text.Json.Nodes.JsonNode.Parse(gzip);
+    }
+
+    private static string SnapshotDifferences(System.Text.Json.Nodes.JsonNode rootA,
+        System.Text.Json.Nodes.JsonNode rootB)
+    {
         var found = new List<string>();
         void Walk(System.Text.Json.Nodes.JsonNode a, System.Text.Json.Nodes.JsonNode b, string path)
         {
@@ -13327,7 +13815,7 @@ public static class Program
             var right = b?.ToJsonString() ?? "null";
             found.Add($"{path}: {left[..Math.Min(60, left.Length)]} vs {right[..Math.Min(60, right.Length)]}");
         }
-        Walk(Read(one), Read(other), "");
+        Walk(rootA, rootB, "");
         return found.Count == 0 ? "none in the snapshot itself" : string.Join("; ", found);
     }
 
@@ -13381,10 +13869,33 @@ public static class Program
         IsolationTrace.Print(firstAlone, "first-mapped");
         firstAlone.IsPaused = false;
         secondAlone.IsPaused = false;
-        for (var day = 0; day < days; day++) firstAlone.TickDay();
+        // Day-by-day fingerprints of the solo runs, so a mismatch can name the first day the
+        // shared-process world stopped agreeing with the single-world one instead of only the
+        // last field that still carries the difference.
+        var aloneFirst = new List<ulong>(days);
+        var aloneSecond = new List<ulong>(days);
+        var unseenFirst = new List<ulong>(days);
+        var unseenSecond = new List<ulong>(days);
+        var probeSubs = Environment.GetEnvironmentVariable("DOF_ISOLATION_PROBE") == "1";
+        var probeFirst = new List<ulong[]>(days);
+        var probeSecond = new List<ulong[]>(days);
+        var probeSame = new List<ulong[]>(days);
+        var probeOther = new List<ulong[]>(days);
+        for (var day = 0; day < days; day++)
+        {
+            firstAlone.TickDay();
+            aloneFirst.Add(CampaignFingerprint.Of(firstAlone));
+            unseenFirst.Add(UnseenWorldHash(firstAlone));
+            if (probeSubs) probeFirst.Add(SubsystemProbe(firstAlone));
+        }
+        for (var day = 0; day < days; day++)
+        {
+            secondAlone.TickDay();
+            aloneSecond.Add(CampaignFingerprint.Of(secondAlone));
+            unseenSecond.Add(UnseenWorldHash(secondAlone));
+            if (probeSubs) probeSecond.Add(SubsystemProbe(secondAlone));
+        }
         IsolationTrace.Print(firstAlone, "first-finished");
-        for (var day = 0; day < days; day++) secondAlone.TickDay();
-        IsolationTrace.Print(firstAlone, "after-second-finished");
         var expectedFirst = CampaignFingerprint.Of(firstAlone);
         var expectedSecond = CampaignFingerprint.Of(secondAlone);
 
@@ -13397,11 +13908,75 @@ public static class Program
         IsolationTrace.Print(same, "repeat-mapped");
         same.IsPaused = false;
         other.IsPaused = false;
+        var divergedDay = -1;
+        var divergedWhich = "";
+        var unseenDay = -1;
+        var unseenWhich = "";
+        byte[] divergedWire = null;
         for (var day = 0; day < days; day++)
         {
             same.TickDay();
             IsolationTrace.Print(same, "repeat-ticked");
             other.TickDay();
+            if (probeSubs) { probeSame.Add(SubsystemProbe(same)); probeOther.Add(SubsystemProbe(other)); }
+            if (unseenDay < 0)
+            {
+                if (UnseenWorldHash(same) != unseenFirst[day]) { unseenDay = day; unseenWhich = "first"; }
+                else if (UnseenWorldHash(other) != unseenSecond[day]) { unseenDay = day; unseenWhich = "second"; }
+            }
+            if (divergedDay < 0)
+            {
+                if (CampaignFingerprint.Of(same) != aloneFirst[day])
+                {
+                    divergedDay = day;
+                    divergedWhich = "first";
+                    divergedWire = SaveSystem.ExportNetworkSnapshot(same, "bench");
+                }
+                else if (CampaignFingerprint.Of(other) != aloneSecond[day])
+                {
+                    divergedDay = day;
+                    divergedWhich = "second";
+                    divergedWire = SaveSystem.ExportNetworkSnapshot(other, "bench");
+                }
+            }
+        }
+        if (unseenDay >= 0)
+        {
+            Console.WriteLine($"ISOLATION_UNSEEN first unfingerprinted-field divergence day={unseenDay} world={unseenWhich} " +
+                              $"(fingerprint first diverged day={divergedDay})");
+            // Name the regions and building kinds that parted, not just the day: replay both
+            // sides to that morning and diff their building tables directly.
+            var replayA = Campaign.CreateBootstrap(20250303);
+            var replayB = Campaign.CreateBootstrap(19991231);
+            if (AttachMap(replayA) && AttachMap(replayB))
+            {
+                Halve(replayB);
+                replayA.IsPaused = false;
+                replayB.IsPaused = false;
+                var sharedWorld = unseenWhich == "first" ? replayA : replayB;
+                for (var step = 0; step <= unseenDay; step++) { replayA.TickDay(); replayB.TickDay(); }
+                var soloReplay = Campaign.CreateBootstrap(unseenWhich == "first" ? 20250303 : 19991231);
+                if (AttachMap(soloReplay))
+                {
+                    if (unseenWhich == "second") Halve(soloReplay);
+                    soloReplay.IsPaused = false;
+                    for (var step = 0; step <= unseenDay; step++) soloReplay.TickDay();
+                    DiffBuildings(sharedWorld, soloReplay, unseenDay);
+                }
+            }
+        }
+
+        if (probeSubs)
+        {
+            var names = new[] { "relations", "market", "stability", "tradepartners", "nationalcourse" };
+            for (var slot = 0; slot < names.Length; slot++)
+            {
+                var firstDiff = -1;
+                for (var day = 0; day < days; day++)
+                    if (probeSame[day][slot] != probeFirst[day][slot] ||
+                        probeOther[day][slot] != probeSecond[day][slot]) { firstDiff = day; break; }
+                Console.WriteLine($"ISOLATION_PROBE {names[slot]} firstdiff={(firstDiff < 0 ? "none" : firstDiff.ToString())}");
+            }
         }
 
         var leaderMatches = CampaignFingerprint.Of(same) == expectedFirst;
@@ -13410,8 +13985,34 @@ public static class Program
         {
             Console.WriteLine("ISOLATION_DIFF " + SnapshotDifferences(leaderMatches ? secondAlone : firstAlone,
                 leaderMatches ? other : same));
+            if (divergedDay >= 0 && divergedWire is not null)
+            {
+                Console.WriteLine($"ISOLATION_FIRST_DIVERGENCE day={divergedDay} world={divergedWhich}");
+                // Replay the diverged world alone up to that day, so the field-level diff is
+                // taken at the moment of divergence rather than after the residue has healed.
+                var probeSeed = divergedWhich == "first" ? 20250303 : 19991231;
+                var probe = Campaign.CreateBootstrap(probeSeed);
+                if (AttachMap(probe))
+                {
+                    if (divergedWhich == "second") Halve(probe);
+                    probe.IsPaused = false;
+                    for (var step = 0; step <= divergedDay; step++) probe.TickDay();
+                    Console.WriteLine($"ISOLATION_DAY{divergedDay}_DIFF " +
+                                      SnapshotDifferences(probe, divergedWire));
+                }
+                if (Environment.GetEnvironmentVariable("DOF_ISOLATION_STAGE_TRACE") == "1")
+                {
+                    StageBisect(divergedWhich == "first" ? 20250303 : 19991231,
+                        divergedWhich == "first" ? 19991231 : 20250303, divergedDay);
+                    if (unseenDay >= 0)
+                        UnseenStageBisect(unseenWhich == "first" ? 20250303 : 19991231,
+                            unseenWhich == "first" ? 19991231 : 20250303, unseenDay);
+                }
+            }
             return $"the campaign that ticked {(leaderMatches ? "second" : "first")} came out " +
-                   $"different when run beside another one for {days} day(s) - something cached is " +
+                   $"different when run beside another one for {days} day(s)" +
+                   (divergedDay >= 0 ? $" - first divergence on day {divergedDay} of the {divergedWhich} world" : "") +
+                   " - something cached is " +
                    "stamped with the day, the map revision or the country count rather than the " +
                    "campaign, and a multiplayer client rebuilding from a snapshot will " +
                    "desynchronise on it";
@@ -13420,6 +14021,677 @@ public static class Program
         Console.WriteLine($"  isolation: a campaign ticked beside a different one for {days} day(s) " +
                           "and came out identical to the bit.");
         return "";
+    }
+
+    /// <summary>
+    /// Re-run the diverging day with the profiler's stage probe armed, once beside the
+    /// other world and once alone, and name the first measured pass whose army fields
+    /// stop agreeing. Only runs when DOF_ISOLATION_STAGE_TRACE=1.
+    /// </summary>
+    private static void StageBisect(int probeSeed, int otherSeed, int divergedDay)
+    {
+        // Creation and attach order mirrors the interleaved run: 20250303 first.
+        var first = Campaign.CreateBootstrap(20250303);
+        var second = Campaign.CreateBootstrap(19991231);
+        var probeWorld = probeSeed == 20250303 ? first : second;
+        var contaminator = probeSeed == 20250303 ? second : first;
+        if (!AttachMap(first) || !AttachMap(second))
+        {
+            Console.WriteLine("ISOLATION_STAGE no province map");
+            return;
+        }
+        Halve(second);
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++)
+        {
+            first.TickDay();
+            second.TickDay();
+        }
+
+        var sharedTrace = new List<(string Stage, ulong[][] Groups)>();
+        // The real loop ticks 20250303 before 19991231 every day; keep that order so the
+        // probe sees the same static-cache history the failing run did.
+        if (probeSeed == 20250303)
+        {
+            Arm(sharedTrace, probeWorld);
+            try { probeWorld.TickDay(); } finally { SimProfiler.StageProbe = null; }
+            contaminator.TickDay();
+        }
+        else
+        {
+            contaminator.TickDay();
+            Arm(sharedTrace, probeWorld);
+            try { probeWorld.TickDay(); } finally { SimProfiler.StageProbe = null; }
+        }
+
+        var solo = Campaign.CreateBootstrap(probeSeed);
+        if (!AttachMap(solo))
+        {
+            Console.WriteLine("ISOLATION_STAGE solo got no province map");
+            return;
+        }
+        if (probeSeed == 19991231) Halve(solo);
+        solo.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) solo.TickDay();
+        var soloTrace = new List<(string Stage, ulong[][] Groups)>();
+        Arm(soloTrace, solo);
+        try { solo.TickDay(); } finally { SimProfiler.StageProbe = null; }
+
+        var limit = Math.Min(soloTrace.Count, sharedTrace.Count);
+        var firstDiff = -1;
+        var diffGroup = -1;
+        for (var i = 0; i < limit; i++)
+        {
+            if (soloTrace[i].Stage != sharedTrace[i].Stage) { firstDiff = i; diffGroup = -2; break; }
+            for (var g = 0; g < ArmyFieldGroups; g++)
+                if (!soloTrace[i].Groups[g].SequenceEqual(sharedTrace[i].Groups[g]))
+                {
+                    firstDiff = i;
+                    diffGroup = g;
+                    break;
+                }
+            if (firstDiff >= 0) break;
+        }
+        if (firstDiff < 0 && soloTrace.Count != sharedTrace.Count) { firstDiff = limit; diffGroup = -2; }
+        if (firstDiff < 0)
+        {
+            Console.WriteLine($"ISOLATION_STAGE {soloTrace.Count} measured passes agree - " +
+                              "the divergence is written outside a measured stage");
+            return;
+        }
+        Console.WriteLine($"ISOLATION_STAGE first-diff index={firstDiff} " +
+                          $"stage='{(firstDiff < soloTrace.Count ? soloTrace[firstDiff].Stage : "-")}' " +
+                          $"group={(diffGroup >= 0 ? ArmyGroupNames[diffGroup] : "stage-name")}");
+        // Walk the whole armed day for the differing group: the first index where the two
+        // series part is the hour the field was written, not just the day it was noticed.
+        if (diffGroup >= 0)
+        {
+            var g = diffGroup;
+            var groupFirst = -1;
+            for (var i = 0; i < limit; i++)
+                if (!soloTrace[i].Groups[g].SequenceEqual(sharedTrace[i].Groups[g])) { groupFirst = i; break; }
+            Console.WriteLine($"ISOLATION_STAGE group '{ArmyGroupNames[g]}' first differs at trace index {groupFirst} " +
+                              $"of {limit} (stage '{(groupFirst >= 0 && groupFirst < soloTrace.Count ? soloTrace[groupFirst].Stage : "-")}')");
+            var differing = new List<int>();
+            if (groupFirst >= 0)
+                for (var a = 0; a < soloTrace[groupFirst].Groups[g].Length; a++)
+                    if (soloTrace[groupFirst].Groups[g][a] != sharedTrace[groupFirst].Groups[g][a]) differing.Add(a);
+            Console.WriteLine($"ISOLATION_STAGE armies differing in '{ArmyGroupNames[g]}' at that stage: {differing.Count} " +
+                              $"(first ids: {string.Join(",", differing.Take(8).Select(i => solo.Armies[i].Id))})");
+            DumpGroupSeries(soloTrace, sharedTrace, g, differing);
+            var wanted = differing.Count > 0 ? solo.Armies[differing[0]].Id : -1;
+            var rawEnv = Environment.GetEnvironmentVariable("DOF_ISOLATION_ARMY");
+            if (int.TryParse(rawEnv, out var rawId)) wanted = rawId;
+            if (wanted >= 0) RawArmyTrace(probeSeed, otherSeed, divergedDay, wanted);
+        }
+    }
+
+    /// <summary>
+    /// The same bisect as <see cref="StageBisect"/>, but over the fields the campaign
+    /// fingerprint does not mix: march progress, routes, order bookkeeping, supply detail.
+    /// The first fingerprint-visible divergence can sit weeks downstream of the write that
+    /// caused it; this names the stage and formation at the day the invisible state parts.
+    /// </summary>
+    private static void UnseenStageBisect(int probeSeed, int otherSeed, int divergedDay)
+    {
+        var first = Campaign.CreateBootstrap(20250303);
+        var second = Campaign.CreateBootstrap(19991231);
+        var probeWorld = probeSeed == 20250303 ? first : second;
+        var contaminator = probeSeed == 20250303 ? second : first;
+        if (!AttachMap(first) || !AttachMap(second))
+        {
+            Console.WriteLine("ISOLATION_UNSEEN_STAGE no province map");
+            return;
+        }
+        Halve(second);
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++)
+        {
+            first.TickDay();
+            second.TickDay();
+        }
+
+        var sharedTrace = new List<(string Stage, ulong[][] Groups)>();
+        if (probeSeed == 20250303)
+        {
+            SimProfiler.StageProbe = name => sharedTrace.Add((name, UnseenFieldsGroups(probeWorld)));
+            try { probeWorld.TickDay(); } finally { SimProfiler.StageProbe = null; }
+            contaminator.TickDay();
+        }
+        else
+        {
+            contaminator.TickDay();
+            SimProfiler.StageProbe = name => sharedTrace.Add((name, UnseenFieldsGroups(probeWorld)));
+            try { probeWorld.TickDay(); } finally { SimProfiler.StageProbe = null; }
+        }
+
+        var solo = Campaign.CreateBootstrap(probeSeed);
+        if (!AttachMap(solo))
+        {
+            Console.WriteLine("ISOLATION_UNSEEN_STAGE solo got no province map");
+            return;
+        }
+        if (probeSeed == 19991231) Halve(solo);
+        solo.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) solo.TickDay();
+        var soloTrace = new List<(string Stage, ulong[][] Groups)>();
+        SimProfiler.StageProbe = name => soloTrace.Add((name, UnseenFieldsGroups(solo)));
+        try { solo.TickDay(); } finally { SimProfiler.StageProbe = null; }
+
+        var limit = Math.Min(soloTrace.Count, sharedTrace.Count);
+        var firstDiff = -1;
+        var diffGroup = -1;
+        for (var i = 0; i < limit; i++)
+        {
+            if (soloTrace[i].Stage != sharedTrace[i].Stage) { firstDiff = i; diffGroup = -2; break; }
+            for (var g = 0; g < UnseenFieldGroups; g++)
+                if (!soloTrace[i].Groups[g].SequenceEqual(sharedTrace[i].Groups[g]))
+                {
+                    firstDiff = i;
+                    diffGroup = g;
+                    break;
+                }
+            if (firstDiff >= 0) break;
+        }
+        if (firstDiff < 0 && soloTrace.Count != sharedTrace.Count) { firstDiff = limit; diffGroup = -2; }
+        if (firstDiff < 0)
+        {
+            Console.WriteLine($"ISOLATION_UNSEEN_STAGE {soloTrace.Count} measured passes agree - " +
+                              "the unseen fields parted outside a measured stage");
+            return;
+        }
+        Console.WriteLine($"ISOLATION_UNSEEN_STAGE first-diff index={firstDiff} " +
+                          $"stage='{(firstDiff < soloTrace.Count ? soloTrace[firstDiff].Stage : "-")}' " +
+                          $"group={(diffGroup >= 0 ? UnseenGroupNames[diffGroup] : "stage-name")}");
+        if (diffGroup < 0) return;
+        var g2 = diffGroup;
+        var groupFirst = -1;
+        for (var i = 0; i < limit; i++)
+            if (!soloTrace[i].Groups[g2].SequenceEqual(sharedTrace[i].Groups[g2])) { groupFirst = i; break; }
+        var differing = new List<int>();
+        if (groupFirst >= 0)
+            for (var a = 0; a < soloTrace[groupFirst].Groups[g2].Length; a++)
+                if (soloTrace[groupFirst].Groups[g2][a] != sharedTrace[groupFirst].Groups[g2][a]) differing.Add(a);
+        Console.WriteLine($"ISOLATION_UNSEEN_STAGE group '{UnseenGroupNames[g2]}' first differs at trace index {groupFirst} " +
+                          $"of {limit} (stage '{(groupFirst >= 0 && groupFirst < soloTrace.Count ? soloTrace[groupFirst].Stage : "-")}')");
+        Console.WriteLine($"ISOLATION_UNSEEN_STAGE armies differing: {differing.Count} " +
+                          $"(first ids: {string.Join(",", differing.Take(8).Select(i => solo.Armies[i].Id))})");
+        if (differing.Count > 0)
+        {
+            var tracedId = solo.Armies[differing[0]].Id;
+            UnseenRawTrace(probeSeed, otherSeed, divergedDay, tracedId);
+            FactorTrace(probeSeed, otherSeed, divergedDay, tracedId);
+        }
+    }
+
+    private const int UnseenFieldGroups = 4;
+    private static readonly string[] UnseenGroupNames = { "march/route", "order", "supply", "condition" };
+
+    /// <summary>Per formation, the unfingerprinted fields in four mixes: the march itself, the order it carries, its supply detail, and its condition.</summary>
+    private static ulong[][] UnseenFieldsGroups(Campaign campaign)
+    {
+        var march = new ulong[campaign.Armies.Count];
+        var order = new ulong[campaign.Armies.Count];
+        var supply = new ulong[campaign.Armies.Count];
+        var condition = new ulong[campaign.Armies.Count];
+        for (var i = 0; i < march.Length; i++)
+        {
+            var army = campaign.Armies[i];
+            var m = 14695981039346656037UL;
+            m = ArmyMix(m, (uint)army.Id);
+            m = ArmyMix(m, BitConverter.SingleToUInt32Bits(army.MoveProgress));
+            m = ArmyMix(m, (uint)army.PlannedRoute.Count);
+            foreach (var step in army.PlannedRoute) m = ArmyMix(m, (uint)step);
+            m = ArmyMix(m, (uint)army.Route.Count);
+            m = ArmyMix(m, (uint)army.LastMoveResult);
+            m = ArmyMix(m, (uint)army.LastMoveResultDay);
+            m = ArmyMix(m, BitConverter.SingleToUInt32Bits(army.LastReinforced));
+            march[i] = m;
+
+            var o = 14695981039346656037UL;
+            o = ArmyMix(o, (uint)army.Id);
+            o = ArmyMix(o, (uint)army.OrderKind);
+            o = ArmyMix(o, (uint)army.OrderProvinceId);
+            o = ArmyMix(o, (uint)army.OrderStateMapIndex);
+            o = ArmyMix(o, (uint)army.ObjectiveStateMapIndex);
+            o = ArmyMix(o, army.DirectOrder ? 1u : 0u);
+            o = ArmyMix(o, (uint)army.OrderRouteSteps);
+            o = ArmyMix(o, (uint)army.OrderStepsCompleted);
+            o = ArmyMix(o, (uint)army.OrderIssuedDay);
+            o = ArmyMix(o, army.PlanActive ? 1u : 0u);
+            o = ArmyMix(o, BitConverter.SingleToUInt32Bits(army.Planning));
+            o = ArmyMix(o, (uint)army.ReadyDay);
+            o = ArmyMix(o, (uint)army.FrontLineId);
+            o = ArmyMix(o, (uint)army.StateMapIndex);
+            order[i] = o;
+
+            var s = 14695981039346656037UL;
+            s = ArmyMix(s, (uint)army.Id);
+            s = ArmyMix(s, BitConverter.SingleToUInt32Bits(army.SupplyLevel));
+            s = ArmyMix(s, (uint)army.SupplyDistance);
+            s = ArmyMix(s, (uint)army.SupplySourceStateMapIndex);
+            s = ArmyMix(s, BitConverter.SingleToUInt32Bits(army.SupplyCongestion));
+            supply[i] = s;
+
+            var c = 14695981039346656037UL;
+            c = ArmyMix(c, (uint)army.Id);
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Divisions));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Recovering));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Experience));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Cohesion));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Recon));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Engineers));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Artillery));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Latitude));
+            c = ArmyMix(c, BitConverter.SingleToUInt32Bits(army.Longitude));
+            condition[i] = c;
+        }
+        return new[] { march, order, supply, condition };
+    }
+
+    /// <summary>Field-level unseen trace for one formation across the diverging day.</summary>
+    private static void UnseenRawTrace(int probeSeed, int otherSeed, int divergedDay, int armyId)
+    {
+        var first = Campaign.CreateBootstrap(20250303);
+        var second = Campaign.CreateBootstrap(19991231);
+        var probeWorld = probeSeed == 20250303 ? first : second;
+        var contaminator = probeSeed == 20250303 ? second : first;
+        if (!AttachMap(first) || !AttachMap(second)) return;
+        Halve(second);
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) { first.TickDay(); second.TickDay(); }
+
+        var sharedRaw = new List<string>();
+        ArmUnseenRaw(sharedRaw, probeWorld, armyId);
+        try
+        {
+            if (probeSeed == 20250303) { probeWorld.TickDay(); contaminator.TickDay(); }
+            else { contaminator.TickDay(); probeWorld.TickDay(); }
+        }
+        finally { SimProfiler.StageProbe = null; }
+
+        var solo = Campaign.CreateBootstrap(probeSeed);
+        if (!AttachMap(solo)) return;
+        if (probeSeed == 19991231) Halve(solo);
+        solo.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) solo.TickDay();
+        var soloRaw = new List<string>();
+        ArmUnseenRaw(soloRaw, solo, armyId);
+        try { solo.TickDay(); } finally { SimProfiler.StageProbe = null; }
+
+        var limit = Math.Min(soloRaw.Count, sharedRaw.Count);
+        var firstDiff = -1;
+        for (var i = 0; i < limit; i++)
+            if (soloRaw[i] != sharedRaw[i]) { firstDiff = i; break; }
+        Console.WriteLine($"ISOLATION_UNSEEN_RAW army={armyId} stages={limit} firstDiff={firstDiff}");
+        if (firstDiff < 0) return;
+        var lo = Math.Max(0, firstDiff - 6);
+        var hi = Math.Min(limit, firstDiff + 10);
+        for (var i = lo; i < hi; i++)
+        {
+            if (i == firstDiff || soloRaw[i] != sharedRaw[i])
+                Console.WriteLine($"ISOLATION_UNSEEN_RAW [{i}] {(i == firstDiff ? ">>" : "  ")} solo='{soloRaw[i]}' shared='{sharedRaw[i]}'");
+        }
+    }
+
+    /// <summary>
+    /// Names the march multiplier that parted: replays the unseen-divergence day with
+    /// MilitaryOperations.MarchProbe armed on one formation, once beside the other world
+    /// and once alone, and prints the first step whose factor string differs.
+    /// </summary>
+    private static void FactorTrace(int probeSeed, int otherSeed, int divergedDay, int armyId)
+    {
+        var first = Campaign.CreateBootstrap(20250303);
+        var second = Campaign.CreateBootstrap(19991231);
+        var probeWorld = probeSeed == 20250303 ? first : second;
+        var contaminator = probeSeed == 20250303 ? second : first;
+        if (!AttachMap(first) || !AttachMap(second)) return;
+        Halve(second);
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) { first.TickDay(); second.TickDay(); }
+
+        var sharedTrace = new List<string>();
+        MilitaryOperations.MarchProbeArmyId = armyId;
+        MilitaryOperations.MarchProbe = (c, army, factors) =>
+        {
+            if (c.ElapsedDays == divergedDay) sharedTrace.Add($"h{c.ElapsedHours}:{factors}");
+        };
+        try
+        {
+            if (probeSeed == 20250303) { probeWorld.TickDay(); contaminator.TickDay(); }
+            else { contaminator.TickDay(); probeWorld.TickDay(); }
+        }
+        finally { MilitaryOperations.MarchProbe = null; MilitaryOperations.MarchProbeArmyId = -1; }
+
+        var solo = Campaign.CreateBootstrap(probeSeed);
+        if (!AttachMap(solo)) return;
+        if (probeSeed == 19991231) Halve(solo);
+        solo.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) solo.TickDay();
+        var soloTrace = new List<string>();
+        MilitaryOperations.MarchProbeArmyId = armyId;
+        MilitaryOperations.MarchProbe = (c, army, factors) =>
+        {
+            if (c.ElapsedDays == divergedDay) soloTrace.Add($"h{c.ElapsedHours}:{factors}");
+        };
+        try { solo.TickDay(); } finally { MilitaryOperations.MarchProbe = null; MilitaryOperations.MarchProbeArmyId = -1; }
+
+        var limit = Math.Min(soloTrace.Count, sharedTrace.Count);
+        var firstDiff = -1;
+        for (var i = 0; i < limit; i++)
+            if (soloTrace[i] != sharedTrace[i]) { firstDiff = i; break; }
+        Console.WriteLine($"ISOLATION_FACTOR army={armyId} day={divergedDay} steps={limit} firstDiff={firstDiff}");
+        if (firstDiff < 0) return;
+        var lo = Math.Max(0, firstDiff - 4);
+        var hi = Math.Min(limit, firstDiff + 6);
+        for (var i = lo; i < hi; i++)
+            Console.WriteLine($"ISOLATION_FACTOR [{i}] {(i == firstDiff ? ">>" : "  ")} solo='{soloTrace[i]}' shared='{sharedTrace[i]}'");
+    }
+
+    private static void ArmUnseenRaw(List<string> trace, Campaign world, int armyId)
+    {
+        SimProfiler.StageProbe = name =>
+        {
+            var army = world.Armies.Find(a => a.Id == armyId);
+            trace.Add(army is null ? "absent" :
+                $"{name}|mv={army.MoveProgress:R}|pr={army.PlannedRoute.Count}[{string.Join(',', army.PlannedRoute.Take(4))}]|" +
+                $"rt={army.Route.Count}[{string.Join(',', army.Route.Take(4))}]|ok={(int)army.OrderKind}|op={army.OrderProvinceId}|" +
+                $"os={army.OrderStateMapIndex}|obj={army.ObjectiveStateMapIndex}|dir={army.DirectOrder}|" +
+                $"ors={army.OrderRouteSteps}|osc={army.OrderStepsCompleted}|oid={army.OrderIssuedDay}|" +
+                $"sl={army.SupplyLevel:R}|sd={army.SupplyDistance}|sss={army.SupplySourceStateMapIndex}|sc={army.SupplyCongestion:R}|" +
+                $"rd={army.ReadyDay}|fl={army.FrontLineId}|sm={army.StateMapIndex}|plan={army.PlanActive}|pl={army.Planning:R}|" +
+                $"lmr={(int)army.LastMoveResult}|lmrd={army.LastMoveResultDay}|lr={army.LastReinforced:R}");
+        };
+    }
+
+    /// <summary>
+    /// Third pass: replay the diverging day once more and print the target formation's raw
+    /// fields at every measured stage, so a transient route or battle assignment shows as
+    /// the hours it covered instead of a single end-of-day number.
+    /// </summary>
+    private static void RawArmyTrace(int probeSeed, int otherSeed, int divergedDay, int armyId)
+    {
+        var first = Campaign.CreateBootstrap(20250303);
+        var second = Campaign.CreateBootstrap(19991231);
+        var probeWorld = probeSeed == 20250303 ? first : second;
+        var contaminator = probeSeed == 20250303 ? second : first;
+        if (!AttachMap(first) || !AttachMap(second)) return;
+        Halve(second);
+        first.IsPaused = false;
+        second.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) { first.TickDay(); second.TickDay(); }
+
+        var sharedRaw = new List<string>();
+        ArmRaw(sharedRaw, probeWorld, armyId);
+        try
+        {
+            if (probeSeed == 20250303) { probeWorld.TickDay(); contaminator.TickDay(); }
+            else { contaminator.TickDay(); probeWorld.TickDay(); }
+        }
+        finally { SimProfiler.StageProbe = null; }
+
+        var solo = Campaign.CreateBootstrap(probeSeed);
+        if (!AttachMap(solo)) return;
+        if (probeSeed == 19991231) Halve(solo);
+        solo.IsPaused = false;
+        for (var day = 0; day < divergedDay; day++) solo.TickDay();
+        var soloRaw = new List<string>();
+        ArmRaw(soloRaw, solo, armyId);
+        try { solo.TickDay(); } finally { SimProfiler.StageProbe = null; }
+
+        var limit = Math.Min(soloRaw.Count, sharedRaw.Count);
+        var firstDiff = -1;
+        for (var i = 0; i < limit; i++)
+            if (soloRaw[i] != sharedRaw[i]) { firstDiff = i; break; }
+        Console.WriteLine($"ISOLATION_RAW army={armyId} stages={limit} firstDiff={firstDiff}");
+        if (firstDiff < 0) return;
+        var lo = Math.Max(0, firstDiff - 6);
+        var hi = Math.Min(limit, firstDiff + 10);
+        for (var i = lo; i < hi; i++)
+            Console.WriteLine($"ISOLATION_RAW [{i}] {(i == firstDiff ? ">>" : "  ")} solo='{soloRaw[i]}' shared='{sharedRaw[i]}'");
+    }
+
+    private static void ArmRaw(List<string> trace, Campaign world, int armyId)
+    {
+        SimProfiler.StageProbe = name =>
+        {
+            var army = world.Armies.Find(a => a.Id == armyId);
+            trace.Add(army is null ? "absent" :
+                $"{name}|prov={army.ProvinceId}|route={army.Route.Count}|plan={army.PlannedRoute.Count}|" +
+                $"move={army.MoveProgress:R}|battle={army.BattleId}|order={(int)army.OrderKind}|" +
+                $"stance={(int)army.Stance}|ent={army.Entrenchment:R}|supply={army.SupplyLevel:R}");
+        };
+    }
+
+    private const int ArmyFieldGroups = 3;
+    private static readonly string[] ArmyGroupNames = { "position/order", "attrition", "entrenchment" };
+
+    /// <summary>For each differing army, the stage-by-stage values of the group's fields.</summary>
+    private static void DumpGroupSeries(List<(string Stage, ulong[][] Groups)> solo,
+        List<(string Stage, ulong[][] Groups)> shared, int group, List<int> armies)
+    {
+        // Reconstruct per-stage per-army field detail is not stored; instead print, for the
+        // first differing army, its hash series around the first difference so the eye can
+        // see whether it flips once or drifts.
+        foreach (var a in armies.Take(3))
+        {
+            var flips = 0;
+            var firstAt = -1;
+            for (var i = 0; i < Math.Min(solo.Count, shared.Count); i++)
+            {
+                var d = solo[i].Groups[group][a] != shared[i].Groups[group][a];
+                if (d && firstAt < 0) firstAt = i;
+                if (d) flips++;
+            }
+            Console.WriteLine($"ISOLATION_SERIES armyIdx={a} group='{ArmyGroupNames[group]}' firstDiffStage={firstAt} " +
+                              $"stagesDiffering={flips}/{Math.Min(solo.Count, shared.Count)}");
+        }
+    }
+
+    private static void Arm(List<(string Stage, ulong[][] Groups)> trace, Campaign world)
+    {
+        SimProfiler.StageProbe = name => trace.Add((name, ArmyFieldsGroups(world)));
+    }
+
+    /// <summary>
+    /// Per formation, three independent mixes so a divergence names its field group:
+    /// where it stands and what it was told to do, what the fighting did to it, and the
+    /// digging - the field the failing snapshot happened to show.
+    /// </summary>
+    private static ulong[][] ArmyFieldsGroups(Campaign campaign)
+    {
+        var position = new ulong[campaign.Armies.Count];
+        var attrition = new ulong[campaign.Armies.Count];
+        var entrenchment = new ulong[campaign.Armies.Count];
+        for (var i = 0; i < position.Length; i++)
+        {
+            var army = campaign.Armies[i];
+            var p = 14695981039346656037UL;
+            p = ArmyMix(p, (uint)army.Id);
+            p = ArmyMix(p, (uint)army.ProvinceId);
+            p = ArmyMix(p, (uint)army.Route.Count);
+            p = ArmyMix(p, (uint)army.PlannedRoute.Count);
+            p = ArmyMix(p, BitConverter.SingleToUInt32Bits(army.MoveProgress));
+            p = ArmyMix(p, army.InBattle ? 1u : 0u);
+            p = ArmyMix(p, (uint)army.BattleId);
+            p = ArmyMix(p, (uint)(int)army.Stance);
+            p = ArmyMix(p, army.CutOff ? 1u : 0u);
+            p = ArmyMix(p, (uint)army.DaysCutOff);
+            p = ArmyMix(p, (uint)army.OrderKind);
+            position[i] = p;
+
+            var a = 14695981039346656037UL;
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Organisation));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Strength));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.SupplyLevel));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Planning));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Experience));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Cohesion));
+            a = ArmyMix(a, BitConverter.SingleToUInt32Bits(army.Equipment));
+            a = ArmyMix(a, (uint)army.Personnel);
+            attrition[i] = a;
+
+            entrenchment[i] = ArmyMix(14695981039346656037UL, BitConverter.SingleToUInt32Bits(army.Entrenchment));
+        }
+        return new[] { position, attrition, entrenchment };
+    }
+
+    private static ulong ArmyMix(ulong hash, uint value) => (hash ^ value) * 1099511628211UL;
+
+    /// <summary>
+    /// The formation fields the campaign fingerprint deliberately does not mix - march
+    /// progress, planned routes, supply detail, order bookkeeping. Two worlds can agree on
+    /// every fingerprinted byte and still be marching differently; this hash is how the
+    /// isolation bench sees that before it reaches a visible field.
+    /// </summary>
+    /// <summary>
+    /// Everything the campaign fingerprint does not mix that can still move the world:
+    /// the formation fields of <see cref="UnseenArmyHash"/> plus every region's building
+    /// counts - the fingerprint never reads Buildings, so a construction divergence sits
+    /// invisible until roads, supply or taxes carry it into a mixed field weeks later.
+    /// </summary>
+    /// <summary>Prints every region whose building counts differ between two same-seed worlds.</summary>
+    private static void DiffBuildings(Campaign shared, Campaign solo, int day)
+    {
+        var soloByIndex = new Dictionary<int, ScenarioState>();
+        foreach (var state in solo.States) soloByIndex[state.MapIndex] = state;
+        var printed = 0;
+        foreach (var state in shared.States.OrderBy(s => s.MapIndex))
+        {
+            if (!soloByIndex.TryGetValue(state.MapIndex, out var other)) continue;
+            var kinds = state.Buildings.Keys.Union(other.Buildings.Keys).Distinct().OrderBy(k => (int)k);
+            foreach (var kind in kinds)
+            {
+                var a = state.Buildings.GetValueOrDefault(kind);
+                var b = other.Buildings.GetValueOrDefault(kind);
+                if (a == b) continue;
+                var owner = shared.Nations.FirstOrDefault(n => n.MapIndex == state.NationMapIndex);
+                Console.WriteLine($"ISOLATION_BUILDING day={day} state={state.MapIndex}({state.Id}) kind={kind} " +
+                                  $"shared={a} solo={b} owner={owner?.Tag ?? "?"}");
+                if (++printed >= 20) return;
+            }
+        }
+        if (printed == 0) Console.WriteLine($"ISOLATION_BUILDING day={day} building tables identical - divergence is elsewhere");
+    }
+
+    /// <summary>
+    /// Per-subsystem world hashes for DOF_ISOLATION_PROBE: which derived table first stops
+    /// agreeing between a solo world and the same world ticked beside another. Slots:
+    /// relations, market, stability, tradepartners, nationalcourse.
+    /// </summary>
+    private static ulong[] SubsystemProbe(Campaign campaign)
+    {
+        var relations = 14695981039346656037UL;
+        foreach (var relation in campaign.Relations.Values)
+        {
+            relations = ArmyMix(relations, (uint)relation.A);
+            relations = ArmyMix(relations, (uint)relation.B);
+            relations = ArmyMix(relations, BitConverter.SingleToUInt32Bits(relation.Opinion));
+            relations = ArmyMix(relations, (uint)relation.Stance);
+            relations = ArmyMix(relations, (uint)relation.Reasons.Count);
+        }
+        var market = 14695981039346656037UL;
+        foreach (var nation in campaign.Nations)
+            foreach (var quote in nation.Market.Values)
+            {
+                market = ArmyMix(market, (uint)quote.Commodity);
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Production));
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Demand));
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Imports));
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Exports));
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Price));
+                market = ArmyMix(market, BitConverter.SingleToUInt32Bits(quote.Satisfaction));
+            }
+        var stability = 14695981039346656037UL;
+        foreach (var nation in campaign.Nations)
+        {
+            stability = ArmyMix(stability, BitConverter.SingleToUInt32Bits(nation.Stability));
+            stability = ArmyMix(stability, BitConverter.SingleToUInt32Bits(nation.StabilityDrivers?.Total ?? 0f));
+            stability = ArmyMix(stability, BitConverter.SingleToUInt32Bits(nation.IncomeFactor));
+            stability = ArmyMix(stability, BitConverter.SingleToUInt32Bits(nation.Gdp));
+        }
+        var trade = 14695981039346656037UL;
+        foreach (var nation in campaign.Nations)
+            foreach (var (partner, value) in nation.TradePartners)
+            {
+                trade = ArmyMix(trade, (uint)nation.Id);
+                trade = ArmyMix(trade, (uint)partner);
+                trade = ArmyMix(trade, BitConverter.SingleToUInt32Bits(value));
+            }
+        var course = 14695981039346656037UL;
+        foreach (var nation in campaign.Nations)
+            foreach (var (id, conviction) in nation.NationalCourse.Convictions)
+            {
+                course = ArmyMix(course, (uint)nation.Id);
+                foreach (var character in id) course = ArmyMix(course, character);
+                course = ArmyMix(course, BitConverter.SingleToUInt32Bits(conviction));
+            }
+        return new[] { relations, market, stability, trade, course };
+    }
+
+    private static ulong UnseenWorldHash(Campaign campaign)
+    {
+        var hash = UnseenArmyHash(campaign);
+        var states = campaign.States.ToArray();
+        Array.Sort(states, static (a, b) => a.MapIndex.CompareTo(b.MapIndex));
+        foreach (var state in states)
+        {
+            hash = ArmyMix(hash, (uint)state.MapIndex);
+            var kinds = new List<BuildingKind>(state.Buildings.Keys);
+            kinds.Sort(static (a, b) => ((int)a).CompareTo((int)b));
+            foreach (var kind in kinds)
+            {
+                hash = ArmyMix(hash, (uint)kind);
+                hash = ArmyMix(hash, (uint)state.Buildings[kind]);
+            }
+        }
+        return hash;
+    }
+
+    private static ulong UnseenArmyHash(Campaign campaign)
+    {
+        var hash = 14695981039346656037UL;
+        foreach (var army in campaign.Armies)
+        {
+            hash = ArmyMix(hash, (uint)army.Id);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.MoveProgress));
+            hash = ArmyMix(hash, (uint)army.PlannedRoute.Count);
+            foreach (var step in army.PlannedRoute) hash = ArmyMix(hash, (uint)step);
+            hash = ArmyMix(hash, (uint)army.OrderKind);
+            hash = ArmyMix(hash, (uint)army.OrderProvinceId);
+            hash = ArmyMix(hash, (uint)army.OrderStateMapIndex);
+            hash = ArmyMix(hash, (uint)army.ObjectiveStateMapIndex);
+            hash = ArmyMix(hash, army.DirectOrder ? 1u : 0u);
+            hash = ArmyMix(hash, (uint)army.OrderRouteSteps);
+            hash = ArmyMix(hash, (uint)army.OrderStepsCompleted);
+            hash = ArmyMix(hash, (uint)army.OrderIssuedDay);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.SupplyLevel));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Planning));
+            hash = ArmyMix(hash, (uint)army.SupplyDistance);
+            hash = ArmyMix(hash, (uint)army.SupplySourceStateMapIndex);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.SupplyCongestion));
+            hash = ArmyMix(hash, (uint)army.ReadyDay);
+            hash = ArmyMix(hash, (uint)army.FrontLineId);
+            hash = ArmyMix(hash, (uint)army.StateMapIndex);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Divisions));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Recovering));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Experience));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Cohesion));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Recon));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Engineers));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Artillery));
+            hash = ArmyMix(hash, army.PlanActive ? 1u : 0u);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Latitude));
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.Longitude));
+            hash = ArmyMix(hash, (uint)army.LastMoveResult);
+            hash = ArmyMix(hash, (uint)army.LastMoveResultDay);
+            hash = ArmyMix(hash, BitConverter.SingleToUInt32Bits(army.LastReinforced));
+        }
+        return hash;
     }
 
     /// <summary>Take half the world's formations away, deterministically.</summary>

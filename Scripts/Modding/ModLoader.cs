@@ -12,6 +12,13 @@ using Godot;
 
 namespace DealOrForce.Modding;
 
+/// <summary>
+/// <c>manifest.json</c> at the root of one package. Data mods usually set only id, name, and enabled.
+/// Code is optional and mutually independent: <c>gdscript_entry</c>, <c>engine_script_entry</c> (Luau),
+/// <c>corecode_assembly</c> or the older <c>csharp_assembly</c> (C# or F#), and <c>worker_executable</c>.
+/// Folders whose names start with <c>_</c> are templates and are never discovered.
+/// A data overlay does not need any of the code fields. Naming a code file does not make the package a sandbox.
+/// </summary>
 public sealed class ModManifest
 {
     [JsonPropertyName("id")] public string Id { get; set; } = "";
@@ -45,8 +52,21 @@ public sealed class ModPackage
 }
 
 /// <summary>
-/// Paradox-style layered loader. Later packages override earlier JSON values. Code is
-/// optional: most balance/content mods only need manifest.json and common/**/*.json.
+/// How a package lands on a campaign. Discovery reads manifests only. <see cref="ApplyCampaignData"/>
+/// is the overlay pass, once per campaign, never per frame and never per day.
+///
+/// Order is base game, then content packs, then enabled mods. Inside that list, later wins.
+/// Each category is reset to the base game first, then every package's files in that category
+/// are merged. JSON, YAML, and YML share one reader (<c>StructuredData</c>): the format does not
+/// add keys. Name only the keys you change. A forked copy of a whole base file goes stale on the next patch.
+///
+/// Scripted effects are parsed while the event or decision is read, from the libraries loaded
+/// earlier in the same package loop. A trigger that matches does not grant permission to write
+/// a field. Unknown effect keys are reported and skipped; they do not run.
+///
+/// Code starts in <see cref="StartCode"/>: compiled mods (C# and F# via <see cref="IGlobalityMod"/>),
+/// then GDScript, then Luau, then an external worker. Workers and Luau are single-player.
+/// A mod extends the economy, the war, and the diplomacy that already tick. It does not ship a second one.
 /// </summary>
 public sealed class ModLoader
 {
@@ -105,6 +125,10 @@ public sealed class ModLoader
         }
     }
 
+    /// <summary>
+    /// Find packages on disk and decide which are enabled. Does not read common/ and does not touch a campaign.
+    /// user://mods with the same id replaces the copy that shipped beside the game. <c>_</c> folders are skipped.
+    /// </summary>
     public void Discover()
     {
         _frontendActions.ResetDeclarations(Array.Empty<(string, IEnumerable<ModFrontendActionDeclaration>)>());
@@ -123,6 +147,10 @@ public sealed class ModLoader
         foreach (var root in GameDataLoader.InstallFolders("mods"))
             DiscoverRoot(root, "res://mods", candidates);
         DiscoverRoot(ProjectSettings.GlobalizePath("user://mods"), "user://mods", candidates);
+        // The workshop writes to the public Documents folder, not a possibly unrelated
+        // Godot user-dir fallback. Prefer that same canonical location as the launcher.
+        if (!string.Equals(Path.GetFullPath(GamePaths.Mods), Path.GetFullPath(ProjectSettings.GlobalizePath("user://mods")), StringComparison.OrdinalIgnoreCase))
+            DiscoverRoot(GamePaths.Mods, "user://mods", candidates);
 
         var selection = LauncherSelection.Read();
         var orderedMods = candidates.Values
@@ -165,6 +193,9 @@ public sealed class ModLoader
 
     public void ApplyCampaignData(Campaign campaign)
     {
+        // МОДДЕРАМ: это загрузка содержимого для кампании, не её ежедневный tick.
+        // Каталоги сбрасываются перед оверлеями; перенос ResetCatalog внутрь OnFrame
+        // обнулит чужие переопределения и заново распарсит данные на каждом кадре.
         // Reset mutable catalogues before every campaign so disabling a mod cannot
         // leak its map overrides into the next session in the same process.
         //
@@ -190,6 +221,7 @@ public sealed class ModLoader
         TechnologyCatalog.ResetCatalog();
         SeaPassageCatalog.ResetCatalog();
         ProvinceOwnership.ResetCatalog();
+        CountryMerges.ResetCatalog();
         BuildingCatalog.ResetCatalog();
         CommodityCatalog.ResetCatalog();
         ProductionChains.ResetCatalog();
@@ -218,6 +250,9 @@ public sealed class ModLoader
         var reseed = false;
         foreach (var package in _packages)
         {
+            // Скриптовые эффекты раскрываются при Parse, не при каждом Apply.
+            // Поздняя замена библиотеки не переписывает уже разобранный эффект старого
+            // события: при необходимости переопределите и запись события/решения.
             ApplyScriptLibraries(package);
             ApplyDefines(package, campaign.Defines);
             ApplyUnits(package);
@@ -277,7 +312,7 @@ public sealed class ModLoader
                 // building, provided it says what it costs and how long it takes. Without
                 // those it is a typo, and refusing typos is most of what a catalog is for.
                 if (!BuildingCatalog.Declare(entry.Name, Text("name"), Number("cost"), Integer("days"),
-                        Number("gdp_gain"), Number("capacity_gain"), Text("description")))
+                        Number("capacity_gain"), Text("description"), jobs: Number("jobs")))
                     package.Errors.Add($"Building '{entry.Name}' in {Path.GetFileName(path)} is neither a " +
                                        "valid change to an existing one nor a complete new one " +
                                        "(a new building needs name, cost and days)");
@@ -367,6 +402,9 @@ public sealed class ModLoader
         ("secession", () => SecessionCore.ResetCatalog(), SecessionCore.Merge),
         ("settings", () => SettingsCatalog.ResetCatalog(), SettingsCatalog.Merge),
         ("flags", () => FlagCatalog.ResetCatalog(), FlagCatalog.Merge),
+        // Flags written as data (background, stripes, emblems) rather than painted - the
+        // in-game flag editor writes these, and a modder can type one by hand.
+        ("flag_designs", () => FlagDesignCatalog.ResetCatalog(), FlagDesignCatalog.Merge),
         ("editor", () => ScenarioInspectorCatalog.ResetCatalog(), ScenarioInspectorCatalog.Merge),
         ("governance", () => GovernanceEvents.ResetCatalog(), GovernanceEvents.Merge),
         ("formable_nations", () => FormableNations.ResetCatalog(), FormableNations.Merge),
@@ -603,12 +641,14 @@ public sealed class ModLoader
         }
     }
 
+    /// <summary>Drop compiled mods, scripts, and workers before the next campaign. Safe to call when nothing was started.</summary>
     public void StopCode()
     {
         _frontendActions.StopRuntime();
         // A managed mod may own a local bridge or worker; release it before unloading its assembly.
         foreach (var plugin in _csharp)
         {
+            plugin.Context.ReleaseSimulationPasses();
             plugin.Context.FrontendActions?.Dispose();
             if (plugin.Instance is IDisposable disposable) Try(plugin.Context.ModId, disposable.Dispose);
         }
@@ -627,6 +667,10 @@ public sealed class ModLoader
         _api = null;
     }
 
+    /// <summary>
+    /// Construct code mods after <see cref="ApplyCampaignData"/>. Each package may load all four kinds.
+    /// A throw inside one package is recorded on that package and does not cancel the next package.
+    /// </summary>
     public void StartCode(ModApi api, Campaign campaign)
     {
         StopCode();
@@ -648,6 +692,7 @@ public sealed class ModLoader
     public Action<CrossoverWork[]> PresentCrossoverWorks { get; set; }
     public Action<bool> SetCrossoverPresentation { get; set; }
 
+    /// <summary>UI-thread heartbeat for compiled mods only. Must not be used to re-read data files. A frame is not a campaign day.</summary>
     public void OnFrame(Campaign campaign, double delta)
     {
         foreach (var plugin in _csharp)
@@ -661,6 +706,10 @@ public sealed class ModLoader
         }
     }
 
+    /// <summary>
+    /// One campaign day, after the simulation has advanced it. Workers first, then compiled mods, GDScript, Luau.
+    /// A Luau hook that fails is removed so it cannot throw again every day. The others stay loaded and log the error.
+    /// </summary>
     public void OnDayAdvanced(Campaign campaign)
     {
         foreach (var worker in _workers) worker.Hook(campaign, "day_advanced");
@@ -696,7 +745,7 @@ public sealed class ModLoader
 
         foreach (var directory in Directory.GetDirectories(physicalRoot).OrderBy(path => path, StringComparer.OrdinalIgnoreCase))
         {
-            if (Path.GetFileName(directory).StartsWith("_", StringComparison.Ordinal)) continue;
+            if (Path.GetFileName(directory).StartsWith("_", StringComparison.Ordinal) || Path.GetFileName(directory).StartsWith(".", StringComparison.Ordinal)) continue;
             var manifestPath = Path.Combine(directory, "manifest.json");
             if (!File.Exists(manifestPath)) continue;
             try
@@ -716,6 +765,10 @@ public sealed class ModLoader
                     PhysicalRoot = directory,
                     VirtualRoot = $"{virtualRoot}/{folder}"
                 };
+                var scripts = Path.Combine(directory, "Scripts");
+                if (Directory.Exists(scripts) && Directory.EnumerateFiles(scripts, "*.cs", new EnumerationOptions
+                    { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, MaxRecursionDepth = 16 }).Any())
+                    Write($"[{manifest.Id}] Scripts/*.cs are source files, not host replacements. Compile an IGlobalityMod assembly under corecode/ and declare corecode_assembly. Use game data IDs or feature-system gates to replace existing behavior.");
             }
             catch (Exception exception)
             {
@@ -747,6 +800,13 @@ public sealed class ModLoader
         return result;
     }
 
+    /// <summary>
+    /// Overlay <c>common/defines</c> onto the live <see cref="Defines"/> object. A key must already
+    /// exist as a public property. Unknown keys are package errors, not new mechanics.
+    /// Feature tables merge by key. A file that omits a key leaves the compiled value, which is
+    /// why a balance mod lists three numbers and does not fork the folder.
+    /// Later files in name order, and later packages, win.
+    /// </summary>
     private void ApplyDefines(ModPackage package, Defines defines)
     {
         foreach (var path in DataFiles(package, "common", "defines"))
@@ -779,6 +839,12 @@ public sealed class ModLoader
         }
     }
 
+    /// <summary>
+    /// Overlay <c>common/countries</c> by tag onto countries that already exist.
+    /// This does not found a nation: an unknown tag is an error. New countries come from history
+    /// and from the systems that already create them (secession, formables), not from a parallel list.
+    /// The fields here are the same aggregates <see cref="ModScalarAccess"/> can write later.
+    /// </summary>
     private void ApplyCountries(ModPackage package, Campaign campaign)
     {
         foreach (var path in DataFiles(package, "common", "countries"))
@@ -825,6 +891,7 @@ public sealed class ModLoader
                     float? Number(string key) => value.TryGetProperty(key, out var element) && element.TryGetSingle(out var number) ? number : null;
                     if (!CommodityCatalog.Override(good.Name, Text("name"), Text("icon"), Number("base_price"), Number("essential_weight"), Text("description")))
                         package.Errors.Add($"Unknown good '{good.Name}' in {Path.GetFileName(path)}");
+                    else { CommodityCatalog.ReadLeverage(good.Name, value); CommodityCatalog.ReadWorldPrice(good.Name, value); }
                 }
             }
             catch (Exception exception)
@@ -906,6 +973,13 @@ public sealed class ModLoader
             case "name" when value.ValueKind == JsonValueKind.String: nation.Name = value.GetString() ?? nation.Name; return true;
             case "color" when value.ValueKind == JsonValueKind.String: nation.Color = value.GetString() ?? nation.Color; return true;
             case "capitalname" when value.ValueKind == JsonValueKind.String: nation.CapitalName = value.GetString() ?? nation.CapitalName; return true;
+            // The base game's common/countries reads these two (CountryDefinitions); a mod's copy
+            // of the same folder reported them as unknown fields and dropped them, so a mod could
+            // rename a capital but never move one.
+            case "capitallatitude" when value.TryGetSingle(out var latitude) && float.IsFinite(latitude):
+                nation.CapitalLatitude = Math.Clamp(latitude, -90f, 90f); return true;
+            case "capitallongitude" when value.TryGetSingle(out var longitude) && float.IsFinite(longitude):
+                nation.CapitalLongitude = Math.Clamp(longitude, -180f, 180f); return true;
             case "population" when value.TryGetInt64(out var population): nation.Population = Math.Max(0, population); return true;
             case "treasury" when value.TryGetSingle(out var treasury): nation.Treasury = treasury; return true;
             case "publicdebt" when value.TryGetSingle(out var debt) && float.IsFinite(debt): nation.PublicDebt = Math.Max(0, debt); return true;
@@ -922,6 +996,12 @@ public sealed class ModLoader
         }
     }
 
+    /// <summary>
+    /// Load a C# or F# assembly that implements <see cref="IGlobalityMod"/>.
+    /// Each concrete type is constructed, then <c>OnLoad</c> and <c>OnCampaignCreated</c> run.
+    /// A type that throws is disposed and not kept. The load context is collectible.
+    /// Compiled mods are not refused in multiplayer; a mod that is not deterministic will desync.
+    /// </summary>
     private void LoadCsharp(ModPackage package, Campaign campaign)
     {
         string relative;
@@ -940,7 +1020,10 @@ public sealed class ModLoader
             var loadContext = new ManagedModLoadContext(path);
             _managedContexts.Add(loadContext);
             var assembly = loadContext.LoadFromAssemblyPath(path);
-            var types = assembly.GetTypes().Where(type => !type.IsAbstract && typeof(IGlobalityMod).IsAssignableFrom(type));
+            var types = assembly.GetTypes().Where(type => !type.IsAbstract && !type.IsInterface && !type.ContainsGenericParameters &&
+                typeof(IGlobalityMod).IsAssignableFrom(type)).OrderBy(type => type.FullName, StringComparer.Ordinal).ToArray();
+            if (types.Length == 0)
+                throw new InvalidDataException("Code assembly contains no concrete IGlobalityMod entry point. Copying or renaming a game class does not replace the host script.");
             foreach (var type in types)
             {
                 if (Activator.CreateInstance(type) is not IGlobalityMod instance) continue;
@@ -955,6 +1038,7 @@ public sealed class ModLoader
                 {
                     instance.OnLoad(context);
                     instance.OnCampaignCreated(context);
+                    context.SealSimulationPasses();
                     _csharp.Add((instance, context));
                     retained = true;
                 }
@@ -962,6 +1046,7 @@ public sealed class ModLoader
                 {
                     if (!retained)
                     {
+                        context.ReleaseSimulationPasses();
                         context.FrontendActions.Dispose();
                         if (instance is IDisposable disposable) Try(package.Manifest.Id, disposable.Dispose);
                     }
@@ -970,6 +1055,11 @@ public sealed class ModLoader
         });
     }
 
+    /// <summary>
+    /// Instantiate <c>gdscript_entry</c> from inside the package. Optional hooks are
+    /// <c>on_load</c>, <c>on_campaign_created</c>, and later <c>on_day_advanced</c>, each given <see cref="ModApi"/>.
+    /// A path that leaves the package is refused. The script is not a second campaign.
+    /// </summary>
     private void LoadGdscript(ModPackage package, Campaign campaign)
     {
         if (string.IsNullOrWhiteSpace(package.Manifest.GdscriptEntry)) return;
@@ -993,6 +1083,10 @@ public sealed class ModLoader
         });
     }
 
+    /// <summary>
+    /// Luau via <see cref="EngineScriptMod"/>. Refused when more than one human seat is seated.
+    /// The script must stay inside the package. A failed hook removes this entry on the next day.
+    /// </summary>
     private void LoadEngineScript(ModPackage package, Campaign campaign)
     {
         if (string.IsNullOrWhiteSpace(package.Manifest.EngineScriptEntry)) return;
@@ -1026,6 +1120,11 @@ public sealed class ModLoader
         });
     }
 
+    /// <summary>
+    /// Start one external worker (Go, Rust, or anything that speaks protocol 1 on stdin).
+    /// The executable and the optional script must both sit inside the package.
+    /// The worker is not a lockstep peer: the first multiplayer seat disables it.
+    /// </summary>
     private void LoadWorker(ModPackage package, Campaign campaign)
     {
         if (string.IsNullOrWhiteSpace(package.Manifest.WorkerExecutable)) return;
@@ -1041,6 +1140,11 @@ public sealed class ModLoader
         worker.Hook(campaign, "campaign_created");
     }
 
+    /// <summary>
+    /// Every JSON, YAML, and YML file under one category folder, all directories.
+    /// <c>StructuredData</c> turns YAML into the same JSON the catalogue already parses.
+    /// File name order is the catalogue's concern; this only lists the files.
+    /// </summary>
     private static IEnumerable<string> DataFiles(ModPackage package, params string[] parts)
     {
         var directory = parts.Aggregate(package.PhysicalRoot, Path.Combine);

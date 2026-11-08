@@ -5,6 +5,38 @@ using System.Text.Json;
 
 namespace DealOrForce.Simulation;
 
+/// <summary>
+/// Escalation: the ladder from peace to war, climbed and descended, between every pair
+/// of countries in the world.
+///
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// FOR MODDERS — the escalation ladder explained:
+/// ═══════════════════════════════════════════════════════════════════════════════
+///
+/// Every pair of countries has a tension number from 0 to 100 and a stage:
+///   0–24  Peace      — nothing happens.
+///  25–49 Friction   — border incidents, spy exposure, words at the UN.
+///  50–69 Crisis     — ambassadors recalled, mobilisation on the news.
+///  70+   Armed clashes — shooting on the border, casualties, rally.
+///
+/// Each stage begins at the defines below and, once entered, requires tension to
+/// fall BELOW (stage threshold − hysteresis) to leave: a crisis does not end
+/// because tension dipped to 49 for a week.
+///
+/// WHAT PUSHES TENSION UP: hostility, grievances (lost land, lost people), rivalry
+/// stance, proxy wars against each other, opposing ideologies. Neighbours feel all
+/// of it; countries an ocean apart feel half. Allies feel almost none.
+///
+/// WHAT PUSHES IT DOWN: time (the fall rate), a non-aggression pact, trade, and
+/// the peace negotiations the situation room offers.
+///
+/// WHAT TO CHANGE:
+///   • `common/escalation/*.json` — incidents (what happens at friction/crisis).
+///   • The defines below — every threshold, rate and weight.
+///   • To make the world calmer: raise TensionFallRate, lower IncidentChance.
+///   • To make it hair-trigger: raise TensionCrisisAt to 40 and IncidentChance to 0.15.
+/// ═══════════════════════════════════════════════════════════════════════════════
+/// </summary>
 public sealed partial class Defines
 {
     /// <summary>How often the tension between two countries is weighed, in days.</summary>
@@ -407,12 +439,19 @@ public static class Escalation
         // at all, and Ukraine, fighting for its life against Russia, does not open a second front
         // on Belarus. A standoff in which neither side would fire first stays a crisis however
         // bad it gets.
-        var deterred = relation.Tension >= defines.TensionClashesAt && StageOf(relation) < TensionStage.Clashes &&
+        // Clashes already under way are held to the same test: an exchange of fire nobody is
+        // willing to open is a crisis by next week - the scenario opened the United States and
+        // Russia at "border clashes" and nothing ever asked again who was shooting.
+        var deterred = relation.Tension >= defines.TensionClashesAt && StageOf(relation) <= TensionStage.Clashes &&
                        Deterred(c, a, b);
         if (deterred) relation.Tension = defines.TensionClashesAt - 0.5f;
 
         var border = CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
-        SetStage(c, relation, a, b, StageFor(defines, relation));
+        var stage = StageFor(defines, relation);
+        // Hysteresis keeps a stage until tension is well below its line; nobody shooting is not
+        // a matter of degree.
+        if (deterred && stage >= TensionStage.Clashes) stage = TensionStage.Crisis;
+        SetStage(c, relation, a, b, stage);
 
         if (StageOf(relation) >= TensionStage.Clashes) Clash(c, relation, a, b, border, days);
         MaybeIncident(c, relation, a, b, border, days);
@@ -793,6 +832,12 @@ public static class Escalation
     {
         if (!CanFace(c, shooter, target, refreshAssessment)) return false;
         if (AiStatecraft.Restraint(c, shooter) >= c.Defines.AiDemocraticPeaceRestraint) return false;
+        // Two deterrent holders shoot at each other only across a border they share - Galwan,
+        // the Line of Control, the Ussuri. Without one, opening fire is a decision to fight a
+        // nuclear power far from home, and no government has taken it: the United States and
+        // Russia used to reach "border clashes" in the first week of 2024.
+        if (Deterrence.TierOf(c, shooter) >= 1 && Deterrence.TierOf(c, target) >= 1 &&
+            !CampaignDiplomacy.SharesLandBorder(c, shooter.MapIndex, target.MapIndex)) return false;
         foreach (var war in c.Wars)
             if (!war.Ended && war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
         return true;

@@ -90,7 +90,7 @@ public sealed partial class StrategicLineChart : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
-        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
+        DrawStyleBox(InstrumentMaterials.Meter("surface.overlay", inset: true), new Rect2(Vector2.Zero, Size));
         DrawLine(new Vector2(1, 1), new Vector2(Size.X - 1, 1), Ui.Colour("surface.edge_top"), 1f);
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
         DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
@@ -117,7 +117,7 @@ public sealed partial class StrategicLineChart : Control
         const float captionHeight = 40f;
         _plot = new Rect2(58, 56, MathF.Max(40, Size.X - 74),
             MathF.Max(36, Size.Y - 64f - legendHeight - captionHeight));
-        DrawRect(_plot, Ui.Colour("surface.inset"), true);
+        DrawStyleBox(InstrumentMaterials.Meter("surface.inset", inset: true), _plot);
         if (_days.Count == 0 || _series.Count == 0 || _series.All(series => series.Values.Count == 0))
         {
             DrawString(font, _plot.GetCenter(), "History will appear after the first simulation week.",
@@ -363,7 +363,7 @@ public sealed partial class StrategicBarChart : Control
     public override void _Draw()
     {
         var font = ThemeDB.FallbackFont;
-        DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.overlay"), true);
+        DrawStyleBox(InstrumentMaterials.Meter("surface.overlay", inset: true), new Rect2(Vector2.Zero, Size));
         DrawRect(new Rect2(Vector2.Zero, Size), Ui.Colour("surface.line"), false, 1f);
         DrawString(font, new Vector2(15, 24), _title, HorizontalAlignment.Left, -1, 16, Ui.Colour("text.accent"));
         DrawString(font, new Vector2(15, 43), _subtitle, HorizontalAlignment.Left, MathF.Max(40f, Size.X - 180f), 12, Ui.Colour("text.caption"));
@@ -383,10 +383,11 @@ public sealed partial class StrategicBarChart : Control
             DrawString(font, new Vector2(14, y + 17), entry.Name, HorizontalAlignment.Left, labelWidth - 18, 14,
                 index == _hover ? Ui.Colour("chart.row_hover") : Ui.Colour("text.body"));
             var background = new Rect2(labelWidth, y + 5, barWidth, 16);
-            DrawRect(background, Ui.Colour("surface.inset"), true);
+            DrawStyleBox(InstrumentMaterials.Meter("surface.inset", inset: true), background);
             var fill = new Rect2(background.Position, new Vector2(background.Size.X * MathF.Abs(entry.Value) / maximum,
                 background.Size.Y));
-            DrawRect(fill, index == _hover ? entry.Color.Lightened(0.16f) : entry.Color, true);
+            if (fill.Size.X > 0)
+                DrawStyleBox(InstrumentMaterials.Meter(index == _hover ? entry.Color.Lightened(0.16f) : entry.Color), fill);
             DrawString(font, new Vector2(background.End.X + 8, y + 17), StrategicLineChart.Format(entry.Value, _format),
                 HorizontalAlignment.Left, 68, 13, Ui.Colour("text.body_soft"));
             _barRects.Add(new Rect2(8, y, Size.X - 16, RowHeight));

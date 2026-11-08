@@ -268,8 +268,26 @@ public static class CapitalCore
     {
         var province = EffectiveProvinceId(campaign, nation);
         if (province <= 0) return "";
-        if (province == nation.CapitalProvinceId) return CountryNames.Capital(nation);
+        if (province == nation.CapitalProvinceId && !SeatNameLost(campaign, nation)) return CountryNames.Capital(nation);
         return campaign.States.Find(state => state.MapIndex == campaign.ProvinceMap.ProvinceToState[province])?.DisplayName ?? "";
+    }
+
+    /// <summary>
+    /// Whether the city the capital is named after stands on somebody else's ground: a faction
+    /// that took a fallen state's name inherits "Damascus" with it, but its seat is wherever it
+    /// actually rules, and it must not be told that it sits in a city it does not hold.
+    /// </summary>
+    private const float SeatNameLostKm = 120f;
+
+    public static bool SeatNameLost(Campaign campaign, Nation nation)
+    {
+        var map = campaign?.ProvinceMap;
+        if (map is null || nation is null || nation.CapitalProvinceId <= 0) return false;
+        var named = CityCatalog.AnchorOnLand(map, nation.CapitalLatitude, nation.CapitalLongitude).ProvinceId;
+        // Far away, not merely across a line: Rome's centre falls in the Vatican's province and
+        // Nicosia's on the Green Line, and both are still the capitals they are named after.
+        return named > 0 && named != nation.CapitalProvinceId && map.ProvinceToNation[named] != nation.MapIndex &&
+               SupportCore.DistanceKm(campaign, named, nation.CapitalProvinceId) > SeatNameLostKm;
     }
 
     public static float EffectiveLatitude(Campaign campaign, Nation nation)

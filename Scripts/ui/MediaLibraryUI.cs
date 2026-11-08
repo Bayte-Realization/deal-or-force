@@ -52,7 +52,7 @@ public partial class DealOrForceGame
         var rows = PanelRows(panel, 22, 16, 10);
         var close = ActionButton("×", CloseMediaLibrary, 38, 32); close.Name = "CloseMediaLibrary";
         ScreenHeader(rows, "SOUND AND ARTWORK",
-            "Audition without changing the campaign. Volume follows your audio settings.",
+            "Choose music for the campaign or audition individual materials. Volume follows your audio settings.",
             false, close);
         var filters = new HFlowContainer(); filters.AddThemeConstantOverride("h_separation", 6); rows.AddChild(filters);
         foreach (var kind in new LibraryMediaKind?[] { null, LibraryMediaKind.Music, LibraryMediaKind.Sound, LibraryMediaKind.Image, LibraryMediaKind.Video })
@@ -66,6 +66,7 @@ public partial class DealOrForceGame
             filters.AddChild(button);
             _mediaFilterButtons[filterKey] = button;
         }
+        BuildSoundtrackPlayer(rows);
         var body = new HBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 16); rows.AddChild(body);
         var left = new VBoxContainer { CustomMinimumSize = new(280, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill,
@@ -120,12 +121,21 @@ public partial class DealOrForceGame
         _mediaLoop.SetMeta(LocAppliedMeta, _mediaLoop.Text);
         Tip(_mediaLoop, "Off by default. Repeat only the recording you selected, not the campaign.");
         actions.AddChild(_mediaPlay); actions.AddChild(_mediaPause); actions.AddChild(_mediaStop); actions.AddChild(_mediaLoop);
+        _soundtrackPlaySelected = ActionButton("Use as soundtrack", PlaySelectedSoundtrack, 0, 36, true);
+        _soundtrackPlaySelected.Name = "PlaySelectedSoundtrack"; actions.AddChild(_soundtrackPlaySelected);
         _mediaAudio = new AudioStreamPlayer { Name = "MediaAudition", ProcessMode = ProcessModeEnum.Always }; AddChild(_mediaAudio);
         _mediaAudio.Finished += FinishMediaPreview; _mediaVideo.Finished += FinishMediaPreview;
         ApplyAtlasHeading(panel);
     }
     private static string MediaKindName(LibraryMediaKind? kind) => kind switch
     { LibraryMediaKind.Music => "Music", LibraryMediaKind.Sound => "Sound effects", LibraryMediaKind.Image => "Artwork", LibraryMediaKind.Video => "Video", _ => "All materials" };
+    private void OpenSoundtrackLibrary()
+    {
+        _mediaKind = LibraryMediaKind.Music;
+        OpenMediaLibrary();
+        RebuildMediaList();
+    }
+
     private void OpenMediaLibrary()
     {
         if (_mediaLibraryLayer is { Visible: true }) return;
@@ -133,13 +143,16 @@ public partial class DealOrForceGame
         if (_globe is not null) _globe.MediaLibraryInputBlocked = true;
         _mediaReturnFocus = GetViewport().GuiGetFocusOwner(); _mediaLibraryLayer.Show(); _mediaLibraryLayer.MoveToFront();
         RebuildMediaList(); _mediaLibraryLayer.FocusMode = FocusModeEnum.All; _mediaLibraryLayer.GrabFocus();
+        RefreshSoundtrackPlayer();
     }
     private void CloseMediaLibrary()
     {
+        // The audition player belongs to this window. The campaign decks do not.
         StopMediaPreview(); _mediaLibraryLayer?.Hide();
         if (_globe is not null) _globe.MediaLibraryInputBlocked = false;
-        if (IsInstanceValid(_mediaReturnFocus) && _mediaReturnFocus.IsVisibleInTree()) _mediaReturnFocus.GrabFocus();
-        _mediaReturnFocus = null;
+        // Input-modality styling hides a pointer focus ring, not the keyboard's
+        // return position. Escape/Tab users retain their visible focus path.
+        RestoreDecisionFocus(ref _mediaReturnFocus);
     }
     private void RebuildMediaList()
     {
@@ -176,7 +189,8 @@ public partial class DealOrForceGame
         _mediaWave.ShowRecording(item?.Peaks);
         _mediaWaveCaption.Text = Tr(item?.Peaks is { Count: > 0 } ? "Audio waveform" : "This package supplies no waveform.");
         _mediaWaveCaption.TooltipText = Tr("Measured mono amplitude, not a live spectrum.");
-        var available = item is not null && ResourceLoader.Exists(item.File);
+        var available = item is not null && (item.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound
+            ? AudioAssets.Exists(item.File) : ResourceLoader.Exists(item.File));
         if (available && item.Kind == LibraryMediaKind.Image) _mediaPicture.Texture = GD.Load<Texture2D>(item.File);
         _mediaPlay.Visible = item is { Kind: LibraryMediaKind.Music or LibraryMediaKind.Sound or LibraryMediaKind.Video };
         _mediaPlay.Disabled = !available; _mediaStop.Visible = _mediaPlay.Visible;
@@ -186,12 +200,14 @@ public partial class DealOrForceGame
         UpdateMediaTimeline(0);
         _mediaPreviewStatus.Text = item is null ? "" : !available ? Tr("Local file is unavailable. Check the package path.") :
             item.Kind == LibraryMediaKind.Image ? Tr("Static artwork preview; it does not represent geographic data.") : Tr("Ready for manual preview.");
+        RefreshSoundtrackPlayer();
         if (refreshButtons) foreach (var child in _mediaLibraryList.GetChildren())
             if (child is Button button) ApplyLedgerButtonState(button, button.Name == "MediaAsset_" + item?.Id);
     }
     private void StartMediaPreview()
     {
-        if (_mediaSelected is not { } item || !ResourceLoader.Exists(item.File)) return;
+        if (_mediaSelected is not { } item || !(item.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound
+            ? AudioAssets.Exists(item.File) : ResourceLoader.Exists(item.File))) return;
         if (_audioChannels.Any(pair => pair.Value.Playing && SoundCatalog.GetChannel(pair.Key).Priority >= Ui.Metric("media.preview_interrupt_priority", 2)))
         { _mediaPreviewStatus.Text = Tr("Wait for the priority alert before auditioning."); return; }
         StopMediaPreview();
@@ -206,7 +222,7 @@ public partial class DealOrForceGame
         }
         else if (item.Kind is LibraryMediaKind.Music or LibraryMediaKind.Sound)
         {
-            var stream = GD.Load<AudioStream>(item.File);
+            var stream = AudioAssets.Load(item.File);
             if (stream is null) { _mediaPreviewStatus.Text = Tr("This format cannot be previewed by the engine."); return; }
             // The score director may loop its cached resource. A manual audition owns its own copy.
             stream = (AudioStream)stream.Duplicate();

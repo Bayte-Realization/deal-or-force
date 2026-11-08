@@ -54,6 +54,11 @@ public sealed class FactionDefinition
     public int Militia;
     /// <summary>Fighters under arms of its own, stood up as formations of the parent's size: the parent's order of battle never counted them.</summary>
     public int Fighters;
+    /// <summary>
+    /// The people who live under the faction, when the data knows it better than the regions it
+    /// is cut out of do ("population"). Zero: whatever its carved regions hold.
+    /// </summary>
+    public long Population;
     /// <summary>Additional wartime formations stood up for the parent government when this civil war opens.</summary>
     public int ParentFighters;
     /// <summary>Factions against which this faction joins its parent's active war as a co-belligerent (e.g. STC fighting HTH alongside YEM).</summary>
@@ -114,6 +119,7 @@ public sealed class FactionDefinition
 ///     "holds_regions": ["sd_kh"], "holds": [...],
 ///     "relation": "war", "war_name": "Sudanese Civil War", "truce_days": 365,
 ///     "army_share": 0.4, "militia": 4, "stability": 0.4, "war_support": 0.8,
+///     "population": 1900000,   // optional: the people under it; its regions are scaled to it, the parent gives the difference
 ///     "overlord": "TUR", "subject_type": "client", "patrons": ["ARE"]
 ///   }],
 ///   "tensions": [...], "sponsorships": [...]   (as history/conflicts, applied once the factions exist)
@@ -224,6 +230,7 @@ public static class Factions
             if (row.TryGetProperty("militia", out var militia) && militia.TryGetInt32(out var count)) definition.Militia = Math.Max(0, count);
             if (Number(row, "army_share") is { } share) definition.ArmyShare = M.Clamp01(share);
             if (row.TryGetProperty("fighters", out var fighters) && fighters.TryGetInt32(out var men)) definition.Fighters = Math.Max(0, men);
+            if (row.TryGetProperty("population", out var people) && people.TryGetInt64(out var living)) definition.Population = Math.Max(0, living);
             if (row.TryGetProperty("parent_fighters", out var parentFighters) && parentFighters.TryGetInt32(out var parentMen)) definition.ParentFighters = Math.Max(0, parentMen);
             definition.CoBelligerentAgainst = Strings(row, "co_belligerent_against").Select(tag => tag.ToUpperInvariant()).ToList();
             if (Number(row, "stability") is { } stability) definition.Stability = M.Clamp01(stability);
@@ -250,6 +257,7 @@ public static class Factions
             if (born is not null) founded.Add(born);
         }
         if (founded.Count == 0) return 0;
+        foreach (var born in founded) SettlePopulation(campaign, born);
 
         campaign.LocateCapitals(preserveExisting: true);
         // The tensions and the backers that name a faction, which could not be read before it existed.
@@ -262,6 +270,47 @@ public static class Factions
         campaign.MarkStrategicChange();
         campaign.MarkMapChanged();
         return founded.Count;
+    }
+
+    /// <summary>
+    /// A faction's written population over the regions it was cut from, the difference taken from
+    /// (or given back to) the country it was cut out of, so the country and its factions together
+    /// keep the people the scenario wrote for them.
+    ///
+    /// The regions of a civil war are authored as their provinces were before it, and a faction's
+    /// piece is cut by ground: the strip of northern Aleppo the Syrian Interim Government holds took
+    /// a share of Aleppo's towns, two and a half times its real people, while Idlib - where three and
+    /// a half million live, most of them displaced from elsewhere - was left with a third of a million.
+    /// Every group is scaled alike on both sides, within bounds.
+    /// </summary>
+    private static void SettlePopulation(Campaign campaign, Nation born)
+    {
+        if (Of(born) is not { Population: > 0 } definition) return;
+        var parent = campaign.NationById(born.SecededFromId) ?? campaign.NationByTag(definition.Parent);
+        if (parent is null) return;
+        var mine = campaign.StatesOf(born);
+        var theirs = campaign.StatesOf(parent);
+        var have = mine.Sum(state => state.Population);
+        var parentHave = theirs.Sum(state => state.Population);
+        if (have <= 0 || parentHave <= 0) return;
+        var target = Math.Clamp(definition.Population, have / 5, have * 8);
+        var delta = target - have;
+        // The parent gives at most a quarter of what it has.
+        if (delta > parentHave / 4) { delta = parentHave / 4; target = have + delta; }
+        Scale(mine, (double)target / have);
+        Scale(theirs, (double)(parentHave - delta) / parentHave);
+        born.Population = mine.Sum(state => state.Population);
+        parent.Population = theirs.Sum(state => state.Population);
+
+        static void Scale(ScenarioState[] regions, double factor)
+        {
+            foreach (var region in regions)
+            {
+                if (region.PopulationGroups.Count == 0) { region.Population = (long)Math.Round(region.Population * factor); continue; }
+                foreach (var group in region.PopulationGroups) group.Size = (long)Math.Round(group.Size * factor);
+                region.Population = region.PopulationGroups.Sum(group => group.Size);
+            }
+        }
     }
 
     // ------------------------------------------------------------------ the fall of a capital
@@ -348,8 +397,9 @@ public static class Factions
         faction.CustomName = NationNaming.TakeoverName(campaign, faction, parent);
         faction.Name = parent.Name;
         faction.NameProclaimed = true;
-        faction.FoundNameKind = "";
-        faction.FoundNameId = "";
+        // It is that country now: its name, and its flag in whatever form its politics give it.
+        faction.FoundNameKind = "tag";
+        faction.FoundNameId = parent.Tag;
         faction.FoundNameBase = "";
         faction.NameSettledDay = campaign.ElapsedDays;
         faction.Color = parent.Color;
@@ -434,8 +484,9 @@ public static class Factions
                     participant.Name = parent.Name;
                     participant.NameProclaimed = true;
                     participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
-                    participant.FoundNameKind = "";
-                    participant.FoundNameId = "";
+                    // It is that country now: its name, and its flag in whatever form its politics give it.
+                    participant.FoundNameKind = "tag";
+                    participant.FoundNameId = parent.Tag;
                     participant.FoundNameBase = "";
                     participant.NameSettledDay = campaign.ElapsedDays;
                     participant.Color = parent.Color;
@@ -473,8 +524,9 @@ public static class Factions
                 participant.CustomName = NationNaming.TakeoverName(campaign, participant, parent);
                 participant.Name = parent.Name;
                 participant.NameProclaimed = true;
-                participant.FoundNameKind = "";
-                participant.FoundNameId = "";
+                // It is that country now: its name, and its flag in whatever form its politics give it.
+                participant.FoundNameKind = "tag";
+                participant.FoundNameId = parent.Tag;
                 participant.FoundNameBase = "";
                 participant.NameSettledDay = campaign.ElapsedDays;
                 participant.Color = parent.Color;
@@ -911,6 +963,31 @@ public static class Factions
                          areas.Any(ring => Inside(ring, centre.Longitude, centre.Latitude));
             if (!inside || except.Any(ring => Inside(ring, centre.Longitude, centre.Latitude))) continue;
             result.Add(province);
+        }
+        // A ring smaller than a province holds no province's centre, and which it holds changes
+        // at every recut of the map: the Wa hills and Djugu came out with nothing. Such a ring
+        // takes the parent's province nearest its middle, within a degree.
+        foreach (var ring in areas)
+        {
+            if (ring is null || ring.Length < 3) continue;
+            if (result.Any(province => Inside(ring, topology.CenterOf(province).Longitude, topology.CenterOf(province).Latitude))) continue;
+            float midLon = 0f, midLat = 0f;
+            foreach (var (lon, lat) in ring) { midLon += lon; midLat += lat; }
+            midLon /= ring.Length; midLat /= ring.Length;
+            var nearest = -1;
+            var best = 1f;
+            for (var province = 1; province <= topology.ProvinceCount; province++)
+            {
+                if (topology.ProvinceToNation[province] != (ushort)parent.MapIndex || topology.IsWater(province)) continue;
+                var centre = topology.CenterOf(province);
+                var dLat = centre.Latitude - midLat;
+                var dLon = (centre.Longitude - midLon) * MathF.Cos(midLat * MathF.PI / 180f);
+                var distance = MathF.Sqrt(dLat * dLat + dLon * dLon);
+                if (distance >= best || except.Any(cut => Inside(cut, centre.Longitude, centre.Latitude))) continue;
+                best = distance;
+                nearest = province;
+            }
+            if (nearest > 0 && !result.Contains(nearest)) result.Add(nearest);
         }
         return result;
     }

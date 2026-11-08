@@ -1,0 +1,8 @@
+{
+  "Hover over a region to inspect it before building. Click to queue one project; Escape or right-click finishes placement.": "Наведите курсор на регион, чтобы оценить строительство. Щелчок добавляет один проект; Escape или правая кнопка завершают размещение.",
+  "Move the pointer over the map to compare sites. This is a regional project, not an exact building footprint.": "Наведите курсор на карту для сравнения мест. Проект строится в регионе, а не в конкретной точке провинции.",
+  "Contract {0} · {1} working days · sites {2}/{3}": "Контракт {0} · {1} рабочих дней · проекты {2}/{3}",
+  "The contract is paid over time. Working days exclude waiting for a free site or funding; materials and future conditions can change the result.": "Контракт оплачивается постепенно. Рабочие дни не включают ожидание свободной площадки или денег; материалы и будущие условия могут изменить результат.",
+  "Click to build here": "Нажмите, чтобы строить здесь",
+  "Estimate at current prices, staffing and supply, not guaranteed GDP or profit.": "Оценка при нынешних ценах, занятости и снабжении, а не гарантированный ВВП или прибыль."
+}

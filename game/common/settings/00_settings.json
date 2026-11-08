@@ -40,6 +40,19 @@
     "labels": ["Never", "Rarely", "Normally", "Often"],
     "default": "125"
   },
+  // Two dials on the computer's governments, per campaign (AiTemper). 100% is the game as tuned.
+  "ai_aggression": {
+    "category": "game", "scope": "campaign", "order": 102, "kind": "slider",
+    "name": "Aggressiveness of other governments",
+    "description": "How readily the governments you do not play go to war. Lower makes cautious cabinets that need a strong reason; higher makes adventurers who take their chances. Every reason behind a war still counts - only the appetite moves.",
+    "minimum": 0.25, "maximum": 2.0, "step": 0.05, "default": 1.0, "unit": "percent"
+  },
+  "ai_agreeableness": {
+    "category": "game", "scope": "campaign", "order": 103, "kind": "slider",
+    "name": "Agreeableness of other governments",
+    "description": "How readily the governments you do not play say yes - to treaties, peace offers, aid and pleas to join a war. Lower makes them stubborn bargainers; higher makes them easy to persuade.",
+    "minimum": 0.25, "maximum": 2.0, "step": 0.05, "default": 1.0, "unit": "percent"
+  },
   "civil_wars_players": {
     "category": "game", "scope": "campaign", "order": 104, "kind": "toggle",
     "name": "Civil-war outbreaks in player countries",
@@ -113,10 +126,24 @@
     "labels": ["Ours, allies and wars", "All", "Ours only"],
     "default": "relevant"
   },
+  "headline_popups": {
+    "category": "interface", "order": 233, "kind": "choice",
+    "name": "Headlines as they happen",
+    "description": "News that comes up on the screen the moment it happens, with why it concerns you: everything about your own country, what happens to your allies, neighbours and enemies, and the world's news only when a great power is in it. A few cards at a time, never a dialog - the full feed is always in the reports.",
+    "values": ["important", "mine", "all", "off"],
+    "labels": ["Important to me", "My country only", "Everything notable", "Off"],
+    "default": "important"
+  },
   "city_names": {
     "category": "interface", "order": 235, "kind": "toggle",
     "name": "Cities on the map",
     "description": "Mark the cities with a dot and their name: the capitals and the great cities from far out, the towns as you come closer. Names never overlap.",
+    "default": true
+  },
+  "map_region_icons": {
+    "category": "interface", "order": 236, "kind": "toggle",
+    "name": "Region icons on the map",
+    "description": "Close in, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages.",
     "default": true
   },
   "map_smoothing": {
@@ -192,11 +219,19 @@
     "labels": ["Whatever"],
     "default": "whatever"
   },
+  "country_name_kgz": {
+    "category": "interface", "order": 262, "kind": "choice",
+    "name": "What Kyrgyzstan is called",
+    "description": "I have an acquaintance from Lipetsk Who was nearly lynched by Kyrgyz people because in one of His videos He referred to Kyrgyzstan as \"Kirgizia\", so...",
+    "values": ["kyrgyzstan"],
+    "labels": ["country.KGZ.name.kyrgyzstan"],
+    "default": "kyrgyzstan"
+  },
 
   // A movement flies a banner in its colours unless this is on, and then the flag it really
   // flies - `gfx/flags/flag_<tag>_insignia.png`, for any tag that has one, a mod's included.
   "movement_flags": {
-    "category": "interface", "order": 262, "kind": "toggle",
+    "category": "interface", "order": 263, "kind": "toggle",
     "name": "Movements fly their own flags",
     "description": "Show authored movement insignia when available. Disable to use their alternate plain banners.",
     "default": true
@@ -214,7 +249,7 @@
   "renderer": {
     "category": "video", "order": 305, "kind": "choice", "needs_restart": true,
     "name": "Graphics renderer",
-    "description": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or awkward graphics drivers.",
+    "description": "What draws the game. Automatic uses the best the machine has and, if the picture stays black, steps down by itself at the next start. OpenGL draws on nearly anything; OpenGL through Direct3D 11 (ANGLE) is for old or non-standard graphics drivers.",
     "values": ["auto", "d3d12", "vulkan", "opengl3", "opengl3_angle"],
     "labels": ["Automatic", "Direct3D 12", "Vulkan", "OpenGL", "OpenGL (ANGLE)"],
     "default": "auto"

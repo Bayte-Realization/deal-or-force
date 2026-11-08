@@ -1,0 +1,6 @@
+{
+  "cues": {
+    "ui_select": { "file": "audio/comfort/felt_map_select.mp3", "channel": "interface", "cooldown_ms": 120, "volume_db": -5 },
+    "map_select": { "file": "audio/comfort/felt_map_select.mp3", "channel": "interface", "cooldown_ms": 140, "volume_db": -6 }
+  }
+}

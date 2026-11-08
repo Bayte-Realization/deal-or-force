@@ -46,6 +46,10 @@ public readonly record struct HistoricalDate(int Year, int Month, int Day)
         date = default;
         if (string.IsNullOrWhiteSpace(text)) return false;
         text = text.Trim();
+        bool? beforeEra = null;
+        foreach (var suffix in new[] { " BCE", " BC", " CE", " AD" })
+            if (text.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            { beforeEra = suffix is " BCE" or " BC"; text = text[..^suffix.Length].TrimEnd(); break; }
         var negative = text.StartsWith("-", StringComparison.Ordinal);
         if (negative) text = text[1..];
         var parts = text.Split('-');
@@ -54,9 +58,34 @@ public readonly record struct HistoricalDate(int Year, int Month, int Day)
             !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var month) ||
             !int.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var day))
             return false;
-        if (negative) year = -year;
+        if (beforeEra.HasValue)
+        {
+            if (negative || year <= 0 || year > (beforeEra.Value ? 10000 : 9999)) return false;
+            year = beforeEra.Value ? 1 - year : year;
+        }
+        else if (negative) year = -year;
         return TryCreate(year, month, day, out date);
     }
+
+    /// <summary>Inverse of DayNumber, including astronomical year 0 (1 BCE).</summary>
+    public static HistoricalDate FromDayNumber(int number)
+    {
+        var z = (long)number + 719468;
+        var era = (z >= 0 ? z : z - 146096) / 146097;
+        var dayOfEra = z - era * 146097;
+        var yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+        var year = yearOfEra + era * 400;
+        var dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+        var mp = (5 * dayOfYear + 2) / 153;
+        var day = dayOfYear - (153 * mp + 2) / 5 + 1;
+        var month = mp + (mp < 10 ? 3 : -9);
+        year += month <= 2 ? 1 : 0;
+        if (year < -9999 || year > 9999 || !TryCreate((int)year, (int)month, (int)day, out var result))
+            throw new ArgumentOutOfRangeException(nameof(number), "Date is outside the supported campaign calendar.");
+        return result;
+    }
+
+    public HistoricalDate AddDays(int days) => FromDayNumber(checked(DayNumber + days));
 
     public static bool TryCreate(int year, int month, int day, out HistoricalDate date)
     {

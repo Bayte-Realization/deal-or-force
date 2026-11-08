@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -78,10 +79,81 @@ public static partial class Warfare
     private static readonly Dictionary<int, StrategicWar> WarById = new();
     private static readonly List<StrategicWar> Stale = new();
     private static readonly HashSet<int> Moved = new();
-    private static readonly List<Army> Present = new();
-    private static readonly List<Army> AttackingSide = new();
-    private static readonly List<Army> DefendingSide = new();
     private static readonly HashSet<ushort> BelligerentMaps = new();
+
+    // Battle buckets, reused across the battles of ONE campaign. These lists used to be
+    // one set for the process: the next campaign's battle cleared the first campaign's
+    // sides, line, reserve, presence and reinforcements, then read what it had just
+    // written. The live tick stays single-threaded. ActiveBuckets only names the buckets
+    // of the battle path now running. The army index above is still one set, rebuilt
+    // when the campaign asking is not the one it was filled from.
+    private sealed class BattleBuckets
+    {
+        public readonly List<Army> Present = new();
+        public readonly List<Army> Attacking = new();
+        public readonly List<Army> Defending = new();
+        public readonly List<Army> Reinforcements = new();
+        public readonly List<Army> LineCandidates = new();
+        public readonly List<Army> AttackerLine = new();
+        public readonly List<Army> AttackerReserve = new();
+        public readonly List<Army> DefenderLine = new();
+        public readonly List<Army> DefenderReserve = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, BattleBuckets> BattleBoards = new();
+    private static BattleBuckets ActiveBuckets;
+
+    private static void UseBattleBuckets(Campaign campaign) =>
+        ActiveBuckets = BattleBoards.GetOrCreateValue(campaign);
+
+    private static BattleBuckets Board(Campaign campaign) =>
+        campaign is not null && BattleBoards.TryGetValue(campaign, out var board) ? board : null;
+
+    private static List<Army> Present => ActiveBuckets.Present;
+    private static List<Army> AttackingSide => ActiveBuckets.Attacking;
+    private static List<Army> DefendingSide => ActiveBuckets.Defending;
+    private static List<Army> Reinforcements => ActiveBuckets.Reinforcements;
+    private static List<Army> LineCandidates => ActiveBuckets.LineCandidates;
+    private static List<Army> AttackerLine => ActiveBuckets.AttackerLine;
+    private static List<Army> AttackerReserve => ActiveBuckets.AttackerReserve;
+    private static List<Army> DefenderLine => ActiveBuckets.DefenderLine;
+    private static List<Army> DefenderReserve => ActiveBuckets.DefenderReserve;
+
+    /// <summary>Armies the last battle look found standing against the attacker in this campaign. Empty when it has not looked.</summary>
+    internal static IReadOnlyList<Army> BattlePresent(Campaign campaign) =>
+        Board(campaign) is { } board ? board.Present : Array.Empty<Army>();
+
+    /// <summary>Armies the last battle look placed on the attacking side. Empty when it has not looked.</summary>
+    internal static IReadOnlyList<Army> BattleAttackers(Campaign campaign) =>
+        Board(campaign) is { } board ? board.Attacking : Array.Empty<Army>();
+
+    /// <summary>Armies the last battle look placed on the defending side. Empty when it has not looked.</summary>
+    internal static IReadOnlyList<Army> BattleDefenders(Campaign campaign) =>
+        Board(campaign) is { } board ? board.Defending : Array.Empty<Army>();
+
+    /// <summary>Armies the last battle look found waiting in the province, not yet in the battle.</summary>
+    internal static IReadOnlyList<Army> BattleReinforcements(Campaign campaign) =>
+        Board(campaign) is { } board ? board.Reinforcements : Array.Empty<Army>();
+
+    /// <summary>The last side the frontage split sorted. Empty when this campaign has not split a side.</summary>
+    internal static IReadOnlyList<Army> BattleLineCandidates(Campaign campaign) =>
+        Board(campaign) is { } board ? board.LineCandidates : Array.Empty<Army>();
+
+    /// <summary>Attackers standing in the line on the last split. The next battle of this campaign reuses the list.</summary>
+    internal static IReadOnlyList<Army> BattleAttackerLine(Campaign campaign) =>
+        Board(campaign) is { } board ? board.AttackerLine : Array.Empty<Army>();
+
+    /// <summary>Attackers waiting behind that line. Another campaign cannot clear the list.</summary>
+    internal static IReadOnlyList<Army> BattleAttackerReserve(Campaign campaign) =>
+        Board(campaign) is { } board ? board.AttackerReserve : Array.Empty<Army>();
+
+    /// <summary>Defenders standing in the line on the last split.</summary>
+    internal static IReadOnlyList<Army> BattleDefenderLine(Campaign campaign) =>
+        Board(campaign) is { } board ? board.DefenderLine : Array.Empty<Army>();
+
+    /// <summary>Defenders waiting behind that line.</summary>
+    internal static IReadOnlyList<Army> BattleDefenderReserve(Campaign campaign) =>
+        Board(campaign) is { } board ? board.DefenderReserve : Array.Empty<Army>();
 
     /// <summary>
     /// Set whenever a province changes hands, because taking one moves the formations that
@@ -293,6 +365,7 @@ public static partial class Warfare
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
+        UseBattleBuckets(campaign);
 
         // Whose ground counts as the enemy's, per side. In a war with allies in it this is
         // a set rather than one country, and it is the same set for every formation on a
@@ -310,9 +383,12 @@ public static partial class Warfare
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
-                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army) ||
-                StaffReasons.SupplyHoldsAttack(campaign, army))
+                !war.Involves(army.NationId) || MilitaryAccess.MustReturn(campaign, army))
                 continue;
+            // A cut-off or stranded formation does not begin an attack on its own (StaffReasons),
+            // but it still marches into ground nobody holds: that is how a pocket breaks out, and
+            // holding it still there froze its escape.
+            var heldBack = StaffReasons.SupplyHoldsAttack(campaign, army);
 
             var enemyMaps = war.IsAttacking(army.NationId) ? DefenderMaps : AttackerMaps;
             var friendlyMaps = war.IsAttacking(army.NationId) ? AttackerMaps : DefenderMaps;
@@ -320,7 +396,8 @@ public static partial class Warfare
             var enemy = campaign.NationById(enemyId);
             if (enemy is null || army.ProvinceId <= 0) continue;
             bool routed;
-            using (SimProfiler.Measure("      adv:route")) routed = PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
+            using (SimProfiler.Measure("      adv:route"))
+                routed = !heldBack && PrepareOperationalRoute(campaign, war, army, controllers, friendlyMaps);
             if (routed) continue;
             var target = ChooseAssaultTarget(campaign, topology, war, army, controllers, enemyMaps);
             if (target < 0) continue;
@@ -332,6 +409,7 @@ public static partial class Warfare
             Present.Clear();
             foreach (var other in InProvince(target))
                 if (war.Opposes(army.NationId, other.NationId) && other.Divisions >= 0.1f) Present.Add(other);
+            if (heldBack && Present.Count > 0) continue;
 
             if (Present.Count == 0)
             {
@@ -451,6 +529,7 @@ public static partial class Warfare
         var controllers = campaign.ProvinceController;
         if (controllers is null) return "no map";
 
+        UseBattleBuckets(campaign);
         EnsureIndexed(campaign);
         var invaderId = landed[0].NationId;
 
@@ -501,6 +580,7 @@ public static partial class Warfare
 
     private static void ResolveBattles(Campaign campaign)
     {
+        UseBattleBuckets(campaign);
         foreach (var battle in campaign.Battles)
         {
             if (battle.Ended) continue;
@@ -855,8 +935,12 @@ public static partial class Warfare
             });
             if (battle.Rounds.Count > 90) battle.Rounds.RemoveAt(0);
 
-            if (defenderOrg <= campaign.Defines.BattleBreakOrganisation &&
-                !DefenderReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation))
+            var defendersSpent = defenderOrg <= campaign.Defines.BattleBreakOrganisation &&
+                !DefenderReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation);
+            var pocketResists = defendersSpent &&
+                PocketResistance.CanContinue(campaign, war, battle.ProvinceId, defending);
+            if (pocketResists) battle.Rounds[^1].Note = PocketResistance.BattleNote;
+            if (defendersSpent && !pocketResists)
             {
                 var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
                     "won the battle");
@@ -904,8 +988,6 @@ public static partial class Warfare
         }
     }
 
-    private static readonly List<Army> Reinforcements = new();
-
     /// <summary>Everyone standing in one province who could still join the fight next door.</summary>
     private static void Consider(Campaign campaign, LandBattle battle, int provinceId)
     {
@@ -918,11 +1000,55 @@ public static partial class Warfare
         }
     }
 
+    // Strongest first, and by id where two are equally strong: a battle joined in a
+    // different order on two machines is a battle that ends differently on them.
+    private static void GatherReinforcements(Campaign campaign, LandBattle battle)
+    {
+        Reinforcements.Clear();
+        Consider(campaign, battle, battle.ProvinceId);
+        Reinforcements.Sort(static (left, right) =>
+        {
+            var byPower = right.Power.CompareTo(left.Power);
+            return byPower != 0 ? byPower : left.Id.CompareTo(right.Id);
+        });
+    }
+
+    /// <summary>
+    /// Fills this campaign's battle buckets for one battle. It does not join, shoot, or
+    /// write the battle. The day's fighting uses the same lists and then goes on to the
+    /// losses. A second campaign's look cannot clear these lists.
+    /// </summary>
+    internal static void FillBattleBuckets(Campaign campaign, LandBattle battle)
+    {
+        if (campaign is null || battle is null) return;
+        UseBattleBuckets(campaign);
+        var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
+        if (war is null) return;
+        EnsureIndexed(campaign);
+
+        Present.Clear();
+        foreach (var other in InProvince(battle.ProvinceId))
+            if (war.Opposes(battle.AttackerId, other.NationId) && other.Divisions >= 0.1f) Present.Add(other);
+
+        GatherReinforcements(campaign, battle);
+        var attacking = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);
+        var defending = Side(war, battle.Defenders, battle.DefenderId, DefendingSide);
+        var defines = campaign.Defines;
+        var terrain = campaign.ProvinceMap?.TerrainAt(battle.ProvinceId) ?? TerrainCatalog.Get("plains");
+        var baseWidth = defines.CombatWidth * terrain.CombatWidth;
+        var directions = attacking.Select(army => army.ProvinceId).Distinct().Count();
+        var usableWidth = baseWidth + defines.CombatWidthPerDirection * terrain.CombatWidth *
+            M.Clamp(directions - 1, 0, M.Max(0, defines.MaxAttackDirections - 1));
+        FrontageReady(attacking, usableWidth, AttackerLine, AttackerReserve, defines.BattleBreakOrganisation, campaign, battle, true);
+        FrontageReady(defending, baseWidth, DefenderLine, DefenderReserve, defines.BattleBreakOrganisation, campaign, battle, false);
+    }
+
     private static void ReinforceBattle(Campaign campaign, LandBattle battle)
     {
         if (campaign.ProvinceMap is null) return;
         var war = campaign.Wars.Find(candidate => candidate.Id == battle.WarId && !candidate.Ended);
         if (war is null) return;
+        UseBattleBuckets(campaign);
         EnsureIndexed(campaign);
         var attackerAdded = 0;
         var defenderAdded = 0;
@@ -939,16 +1065,7 @@ public static partial class Warfare
         // there, which is the road the attacker has to take as well. What is gone is the free
         // passage into somebody else's battle. It also keeps this pass cheap - one province
         // index instead of the province and each of its neighbours.
-        Reinforcements.Clear();
-        Consider(campaign, battle, battle.ProvinceId);
-
-        // Strongest first, and by id where two are equally strong: a battle joined in a
-        // different order on two machines is a battle that ends differently on them.
-        Reinforcements.Sort(static (left, right) =>
-        {
-            var byPower = right.Power.CompareTo(left.Power);
-            return byPower != 0 ? byPower : left.Id.CompareTo(right.Id);
-        });
+        GatherReinforcements(campaign, battle);
 
         foreach (var army in Reinforcements)
         {

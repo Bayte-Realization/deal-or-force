@@ -14,8 +14,10 @@ public sealed partial class Defines
 {
     /// <summary>How many great powers a war must hold, all sides together, to be a world war (at least one on each side).</summary>
     public int WorldWarMinimumPowers { get; set; } = 3;
-    /// <summary>Or how many countries in it, with a great power on each side.</summary>
+    /// <summary>Or how many countries in it, with at least two great powers on each side.</summary>
     public int WorldWarMinimumBelligerents { get; set; } = 10;
+    /// <summary>A strong army counts as a world power only with a deterrent or an economy among this many largest.</summary>
+    public int WorldWarEconomyRank { get; set; } = 10;
     /// <summary>The world tension (0..100) from which an incident between the blocs can happen.</summary>
     public float WorldIncidentTension { get; set; } = 45f;
     /// <summary>The weekly chance of an incident at that tension; it doubles towards a tension of 100.</summary>
@@ -70,13 +72,37 @@ public static class WorldWar
         {
             if (war.Ended || war.CivilConflict || war.WorldWarDay >= 0) continue;
             if (war.BelligerentCount < 2) continue;
-            powers ??= AllianceSystem.GreatPowers(c);
+            powers ??= WorldPowers(c);
             var attackers = war.Side(true).Count(powers.Contains);
             var defenders = war.Side(false).Count(powers.Contains);
             if (attackers == 0 || defenders == 0) continue;
-            if (attackers + defenders < c.Defines.WorldWarMinimumPowers && war.BelligerentCount < c.Defines.WorldWarMinimumBelligerents) continue;
+            // Two great powers and a crowd is a regional war with friends - Russia and a mobilised
+            // Ukraine ranked among the strongest armies made the 2024 war a "world war" by spring,
+            // whose declaration then called in thirty countries. A world war has powers in the
+            // plural: three in all, or a crowd with at least two on each side.
+            var plural = attackers + defenders >= c.Defines.WorldWarMinimumPowers;
+            var crowd = war.BelligerentCount >= c.Defines.WorldWarMinimumBelligerents && attackers >= 2 && defenders >= 2;
+            if (!plural && !crowd) continue;
             Declare(c, war, powers);
         }
+    }
+
+    /// <summary>
+    /// The powers a world war is fought between: among the strongest armies (GreatPowers), and
+    /// of a weight beyond them - a deterrent of its own, or one of the largest economies. A
+    /// strong army alone is a country at war, not a pole of the world: mobilised Ukraine and
+    /// North Korea's million men both rank among the strongest, and with Russia made three
+    /// "great powers" in one regional war.
+    /// </summary>
+    internal static HashSet<int> WorldPowers(Campaign c)
+    {
+        var strong = AllianceSystem.GreatPowers(c);
+        var rich = new HashSet<int>(c.Nations.Where(n => n.Population > 0 && n.Gdp > 0)
+            .OrderByDescending(n => n.Gdp).ThenBy(n => n.Id).Take(Math.Max(1, c.Defines.WorldWarEconomyRank)).Select(n => n.Id));
+        var powers = new HashSet<int>();
+        foreach (var id in strong)
+            if (rich.Contains(id) || Deterrence.TierOf(c, c.NationById(id)) >= 1) powers.Add(id);
+        return powers;
     }
 
     private static void Declare(Campaign c, StrategicWar war, HashSet<int> powers)

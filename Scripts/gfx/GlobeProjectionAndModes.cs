@@ -80,7 +80,14 @@ public sealed partial class GlobePresentation
     /// letting go leaves nothing to carry.
     /// </summary>
     private Vector2 _flatGlide;
+    private Vector2 _orbitGlide;
     private ulong _lastFlatDragUsec;
+    private bool _cameraInertia = true;
+    public bool CameraInertiaEnabled
+    {
+        get => _cameraInertia;
+        set { _cameraInertia = value; if (!value) { _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero; } }
+    }
 
     private void BeginCameraDrag(Vector2 pixel, MouseButton button)
     {
@@ -89,8 +96,15 @@ public sealed partial class GlobePresentation
         _dragDistance = 0f;
         _previousPointer = pixel;
         _flatGlide = Vector2.Zero;
+        _orbitGlide = Vector2.Zero;
         _lastFlatDragUsec = Time.GetTicksUsec();
-        if (!_flatMap) return;
+        if (!_flatMap)
+        {
+            _targetYaw = _yaw;
+            _targetPitch = _pitch;
+            _targetDistance = _distance;
+            return;
+        }
         _flatZoomAnchorActive = false;
         // Taking hold of the map cancels an unfinished fly-to/zoom. Starting a drag
         // from a pending target used to jump the map before it followed the hand.
@@ -167,9 +181,7 @@ public sealed partial class GlobePresentation
             }
         if (_resourceImage is null) _resourceImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _resourceImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(_resourceImage);
-        else _resourceTexture.Update(_resourceImage);
-        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        UpdateMapImage("resource_colors", _resourceImage, ref _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
     }
@@ -195,6 +207,7 @@ public sealed partial class GlobePresentation
             {
                 Name = $"WorldCopy_{copy:+0;-0;0}",
                 Mesh = quad,
+                Layers = AtlasSurfaceLayers,
                 Position = new Vector3(copy * FlatMapWidth, 0f, 0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
             };
@@ -210,6 +223,7 @@ public sealed partial class GlobePresentation
     public void SetFlatMap(bool enabled)
     {
         if (_flatMap == enabled || !IsInstanceValid(_camera) || !ProjectionAllowed(enabled)) return;
+        _flatGlide = Vector2.Zero; _orbitGlide = Vector2.Zero;
         _flatZoomAnchorActive = false;
         if (enabled)
         {
@@ -524,12 +538,7 @@ public sealed partial class GlobePresentation
 
         if (_mapModeImage is null) _mapModeImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _mapModeImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_mapModeTexture is null)
-        {
-            _mapModeTexture = ImageTexture.CreateFromImage(_mapModeImage);
-            _globeMaterial.SetShaderParameter("map_mode_colors", _mapModeTexture);
-        }
-        else _mapModeTexture.Update(_mapModeImage);
+        UpdateMapImage("map_mode_colors", _mapModeImage, ref _mapModeTexture);
         _globeMaterial.SetShaderParameter("map_mode", 1f);
     }
 
@@ -621,10 +630,8 @@ public sealed partial class GlobePresentation
                 pixels[i + 3] = 255;
             }
         }
-        var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
-        if (_resourceTexture is null) _resourceTexture = ImageTexture.CreateFromImage(image);
-        else _resourceTexture.Update(image);
-        _globeMaterial.SetShaderParameter("resource_colors", _resourceTexture);
+        using var image = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("resource_colors", image, ref _resourceTexture);
         _globeMaterial.SetShaderParameter("map_mode", 0f);
         _globeMaterial.SetShaderParameter("resource_mode", map is null ? 0f : 1f);
     }

@@ -42,6 +42,7 @@ public partial class DealOrForceGame
     private void OnArmyPicked(Army army)
     {
         if (!_hudLayer.Visible || !ArmyInteraction.CanSelect(_campaign, army)) return;
+        CancelConstructionPlacement();
         CloseFleetPanel();
         if (_supportLayer is { Visible: true }) CloseSupportScreen();
         _globe.SelectSupportFormation(-1);
@@ -85,6 +86,7 @@ public partial class DealOrForceGame
         if (!_hudLayer.Visible) return;
         var playerArmies = armies.Where(army => ArmyInteraction.CanSelect(_campaign, army)).Distinct().ToArray();
         if (playerArmies.Length == 0) return;
+        CancelConstructionPlacement();
         // Aggregated-card clicks arrive here too, not through OnArmyPicked.
         // They must replace the previous military inspector just like a single click.
         CloseFleetPanel();
@@ -738,8 +740,21 @@ public partial class DealOrForceGame
         var armies = (selected.Length > 0 ? selected : _campaign.Armies.Where(army => army.NationId == _campaign.Player.Id))
             .OrderByDescending(army => army.Power).ThenBy(army => army.Id).ToArray();
         if (armies.Length == 0) return;
-        var war = _campaign.Wars.FirstOrDefault(candidate => !candidate.Ended && candidate.Involves(_campaign.Player.Id));
-        var front = war?.FriendlyFront(_campaign.Player.Id).OrderBy(value => value).ToArray() ?? System.Array.Empty<int>();
+        // Every war's stretch of our own front, not only the first war's: a country fighting an
+        // alliance in two wars spreads the selection over both, and each division is told which
+        // war its sector belongs to so the order does not snap it back to the nearest one.
+        var player = _campaign.Player;
+        var controllers = _campaign.ProvinceController;
+        var sectorWar = new Dictionary<int, StrategicWar>();
+        foreach (var candidate in _campaign.Wars)
+        {
+            if (candidate.Ended || !candidate.Involves(player.Id)) continue;
+            foreach (var province in candidate.FriendlyFront(player.Id))
+                if (controllers is not null && province < controllers.Length &&
+                    controllers[province] == player.MapIndex) sectorWar.TryAdd(province, candidate);
+        }
+        var front = sectorWar.Keys.OrderBy(value => value).ToArray();
+        var war = front.Length > 0 ? sectorWar[front[0]] : null;
         if (war is null || front.Length == 0)
         {
             ShowSelectedArmies();
@@ -756,6 +771,7 @@ public partial class DealOrForceGame
         {
             var targetIndex = System.Math.Min(front.Length - 1,
                 (int)System.MathF.Floor((index + 0.5f) / armies.Length * front.Length));
+            var sector = sectorWar[front[targetIndex]];
             var order = index < spearheads ? ArmyOrder.Spearhead :
                 index < advances ? ArmyOrder.AdvanceFront :
                 index < defenders ? ArmyOrder.DefendFront : ArmyOrder.ReserveFront;
@@ -763,7 +779,8 @@ public partial class DealOrForceGame
             {
                 IssuerId = _campaign.Player.Id,
                 ArmyId = armies[index].Id,
-                ObjectiveStateMapIndex = war.ClaimedStateMapIndex,
+                WarId = sector.Id,
+                ObjectiveStateMapIndex = sector.ClaimedStateMapIndex,
                 PreferredProvinceId = front[targetIndex],
                 Order = order
             });
@@ -785,6 +802,30 @@ public partial class DealOrForceGame
         _campaign.Commands.ApplyAll(_campaign);
         _globe.SelectArmies(armies.Select(army => army.Id));
         ShowSelectedArmies();
+    }
+
+    /// <summary>
+    /// Ctrl+X: halve what is selected. Several formations: the first half by strength stays
+    /// selected and takes the next order, the rest stay where they are. One formation of two
+    /// or more divisions is cut in two. A fleet is split by its own panel's rule.
+    /// </summary>
+    private void SplitSelectionInHalf()
+    {
+        var mine = SelectedPlayerDivisions();
+        if (mine.Length >= 2)
+        {
+            var kept = mine.OrderByDescending(army => army.Divisions * army.Strength).ThenBy(army => army.Id)
+                .Where((_, index) => index % 2 == 0).ToList();
+            _selectedArmies.Clear();
+            _selectedArmies.AddRange(kept);
+            _selectedArmy = kept[0];
+            _globe.SelectArmies(kept.Select(army => army.Id));
+            ShowSelectedArmies();
+            SetArmyFeedback(Simulation.Loc.Format("Split in half: {0:N0} formations selected, {1:N0} left where they stand.",
+                kept.Count, mine.Length - kept.Count));
+            return;
+        }
+        if (mine.Length == 1) { _selectedArmy = mine[0]; SplitSelectedArmy(); }
     }
 
     private void SplitSelectedArmy()

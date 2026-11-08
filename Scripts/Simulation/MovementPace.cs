@@ -45,36 +45,58 @@ public sealed partial class Defines
 /// </summary>
 public static class MovementPace
 {
-    private static Campaign _campaign;
-    private static int _day = -1;
-    private static float[] _roads = Array.Empty<float>();
+    private static readonly bool TraceRoads = Environment.GetEnvironmentVariable("DOF_ROADS_TRACE") == "1";
+    private static readonly HashSet<int> TraceProvinces = ParseTraceProvinces();
+
+    private static HashSet<int> ParseTraceProvinces()
+    {
+        var set = new HashSet<int>();
+        var raw = Environment.GetEnvironmentVariable("DOF_ROADS_PROV");
+        if (string.IsNullOrEmpty(raw)) return set;
+        foreach (var part in raw.Split(','))
+            if (int.TryParse(part.Trim(), out var p)) set.Add(p);
+        return set;
+    }
 
     /// <summary>The multiplier roads give a march into this province.</summary>
     public static float Roads(Campaign campaign, int province)
     {
         var map = campaign?.ProvinceMap;
         if (map is null || province <= 0 || province > map.ProvinceCount) return 1f;
-        if (!ReferenceEquals(campaign, _campaign) || _day != campaign.ElapsedDays) Refresh(campaign);
+        // The table lives on the campaign and turns over once per campaign day. It used to be
+        // one static array stamped with the last campaign that asked: every switch rebuilt it
+        // from whatever the buildings happened to be at that hour, so an interleaved second
+        // world re-read mid-day construction and marched the same army at a different pace.
+        if (campaign.PaceRoads is null || campaign.PaceRoadsDay != campaign.ElapsedDays)
+            Refresh(campaign);
         var region = map.ProvinceToState[province];
-        return region < _roads.Length ? _roads[region] : 1f;
+        var roads = campaign.PaceRoads;
+        var road = region < roads.Length ? roads[region] : 1f;
+        if (TraceRoads && TraceProvinces.Contains(province))
+            Console.WriteLine($"ROADS_CALL id={campaign.GetHashCode()} seed={campaign.Seed} day={campaign.ElapsedDays} " +
+                              $"hour={campaign.ElapsedHours} prov={province} region={region} road={road}");
+        return road;
     }
 
-    /// <summary>Once a day: roads are built over months, and a march asks every hour.</summary>
+    /// <summary>Once a day per campaign: roads are built over months, and a march asks every hour.</summary>
     private static void Refresh(Campaign campaign)
     {
-        _campaign = campaign;
-        _day = campaign.ElapsedDays;
         var top = 0;
         foreach (var state in campaign.States) top = Math.Max(top, state.MapIndex);
-        if (_roads.Length != top + 1) _roads = new float[top + 1];
-        Array.Fill(_roads, 1f);
+        var roads = campaign.PaceRoads;
+        if (roads is null || roads.Length != top + 1) roads = campaign.PaceRoads = new float[top + 1];
+        Array.Fill(roads, 1f);
         var defines = campaign.Defines;
         foreach (var state in campaign.States)
         {
             if (state.MapIndex <= 0) continue;
             var level = state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure);
-            _roads[state.MapIndex] = 1f + M.Clamp(level * defines.RoadSpeedPerInfrastructure, 0f,
+            roads[state.MapIndex] = 1f + M.Clamp(level * defines.RoadSpeedPerInfrastructure, 0f,
                 MathF.Max(0f, defines.RoadSpeedCap));
         }
+        campaign.PaceRoadsDay = campaign.ElapsedDays;
+        if (TraceRoads)
+            Console.WriteLine($"ROADS_REFRESH id={campaign.GetHashCode()} seed={campaign.Seed} day={campaign.ElapsedDays} " +
+                              $"hour={campaign.ElapsedHours} states={campaign.States.Count} roads_len={roads.Length}");
     }
 }

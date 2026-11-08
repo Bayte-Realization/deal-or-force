@@ -6,7 +6,9 @@
 //                      CovertOppositionFundingCap of the target's own output),
 //                      "theft" (a large part of research the country has, carried home),
 //                      "separatism" (one region drifts further from its centre and thinks worse
-//                      of that centre's government and laws - the civic road, not unrest)
+//                      of that centre's government and laws - the civic road, not unrest),
+//                      "coup" (officers we paid take power in a government already falling, and
+//                      bring our creed with them - only below 1.25 x CoupStabilityThreshold)
 //   minimum_strength   the network strength it needs, 0 to 1
 //   days               how long it takes to prepare
 //   cost               what it costs, in multiples of founding a network
@@ -50,5 +52,10 @@
     "name": "Cyber blackout",
     "description": "Coordinated cyber assault targeting power grids, traffic networks, and municipal supervisory systems in the region. Disables infrastructure and temporarily blinds military logistics.",
     "effect": "cyber_blackout", "minimum_strength": 0.40, "days": 28, "cost": 2.2, "risk": 0.05
+  },
+  "coup": {
+    "name": "Back a coup",
+    "description": "Money, promises and a guarantee of recognition for officers ready to take power in a government that is already failing. If they move, the new rulers owe us - and tend to share our view of the world.",
+    "effect": "coup", "minimum_strength": 0.55, "days": 70, "cost": 4.0, "risk": 0.15
   }
 }

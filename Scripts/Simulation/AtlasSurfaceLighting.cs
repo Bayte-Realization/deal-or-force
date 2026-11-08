@@ -21,4 +21,15 @@ public static class AtlasSurfaceLighting
         hash = unchecked((hash ^ (hash >> 13)) * 1274126177u);
         return ((hash ^ (hash >> 16)) & 65535) / 65535f * 2 - 1;
     }
+
+    /// <summary>Bounded face lighting, separate from the stronger one-pixel bevel.
+    /// No moving noise, clock, random stream or simulation dependency.</summary>
+    public static float MaterialShade(float u, float v, bool inset, float relief)
+    {
+        u = float.IsFinite(u) ? Math.Clamp(u, 0, 1) : .5f;
+        v = float.IsFinite(v) ? Math.Clamp(v, 0, 1) : .5f;
+        var depth = Relief(relief);
+        return (inset ? -.065f * (1 - v) + .012f * v
+            : .048f * (1 - v) + .008f * (1 - u) - .045f * v) * depth;
+    }
 }

@@ -43,7 +43,10 @@ static class StageBudgetTests
             Stepped(budget);
             var bytes = GC.GetAllocatedBytesForCurrentThread() - start;
             Console.WriteLine($"STAGE_BUDGET budget={budget} iterations={count} iterator_bytes={iteratorBytes} total_bytes={bytes} overhead_bytes={bytes - iteratorBytes}");
-            if (enforce) Check(bytes == iteratorBytes, "budget timing adds no heap object, budget=" + budget);
+            // Tiered JIT can eliminate a one-time allocation in the measured path
+            // after Bare was sampled. Fewer bytes is valid; additional heap work
+            // (including a single timing object) must still fail this guard.
+            if (enforce) Check(bytes <= iteratorBytes, "budget timing adds no heap object, budget=" + budget);
         }
         Check(c.ElapsedHours == 0 && !c.MidStep, "allocation probe never advances a paused campaign");
     }
@@ -75,5 +78,30 @@ static class StageBudgetTests
             Check(completed == i + 1, "completion is emitted once on day " + (i + 1));
         }
         StagedStepBoundaryTests.Run();
+        HourlySlices();
+    }
+
+    private static void HourlySlices()
+    {
+        var whole = Campaign.CreateBootstrap(61047);
+        whole.Defines.HoursPerTick = 1; whole.IsPaused = false;
+        var expected = new ulong[48];
+        var random = new ulong[48];
+        for (var i = 0; i < expected.Length; i++)
+        {
+            whole.Tick(); expected[i] = CampaignFingerprint.Of(whole); random[i] = whole.Random.State;
+        }
+        var sliced = Campaign.CreateBootstrap(61047);
+        sliced.Defines.HoursPerTick = 1; sliced.IsPaused = false;
+        var completed = 0; sliced.StepCompleted += _ => completed++;
+        for (var i = 0; i < expected.Length; i++)
+        {
+            var frames = 0;
+            while (!sliced.StepFor(0))
+                if (++frames > 1000) throw new Exception("Sliced hour did not terminate.");
+            Check(CampaignFingerprint.Of(sliced) == expected[i] && sliced.Random.State == random[i],
+                "hourly extra yield points preserve exact state/RNG at hour " + (i + 1));
+        }
+        Check(completed == expected.Length && !sliced.MidStep, "hourly slices publish exactly one completion per hour");
     }
 }

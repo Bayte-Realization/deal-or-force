@@ -1850,5 +1850,10 @@
   "region.aq_pal.name": "Palmer Land",
   "region.aq_coa.name": "Coats Land",
   "region.aq_doa.name": "Dome Argus",
-  "region.aq_vos.name": "Vostok"
+  "region.aq_vos.name": "Vostok",
+  "il_jm": "Jerusalem",
+  "il_m": "Central",
+  "il_ta": "Tel Aviv",
+  "il_ha": "Haifa",
+  "il_z": "Northern"
 }

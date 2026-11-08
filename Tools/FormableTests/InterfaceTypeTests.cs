@@ -54,7 +54,7 @@ static class InterfaceTypeTests
                      "Scripts/ui/WarLedgerUI.cs",
                      "Scripts/ui/SituationRoomUI.cs",
                      "Scripts/ui/SupportScreenUI.cs",
-                     "Scripts/ui/RecruitmentUI.cs",
+                     "Scripts/ui/RecruitmentWorkbenchUI.cs",
                      "Scripts/ui/SubjectsAndReleaseUI.cs",
                      "Scripts/ui/PeaceConferenceUI.cs",
                      "Scripts/ui/PeaceOfferUI.cs",

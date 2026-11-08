@@ -172,7 +172,9 @@ public partial class DealOrForceGame
             ClearButtonEnabled = true
         }, "Find a country...");
         _diplomacySearch.Name = "DiplomacySearch";
+        _diplomacySearch.TooltipText = Ui.Tip(Tr("Find a country by name or tag. Ctrl+F focuses this field; Enter opens the first result."));
         _diplomacySearch.TextChanged += _ => RebuildDiplomacyList();
+        _diplomacySearch.TextSubmitted += _ => OpenFirstDiplomacySearchResult();
         list.AddChild(_diplomacySearch);
 
         var filters = new HBoxContainer();
@@ -356,6 +358,8 @@ public partial class DealOrForceGame
             if (_diplomacyLayer.Visible) FitNegotiationTypography(_diplomacyLayer);
             if (_peaceLayer is { Visible: true }) FitNegotiationTypography(_peaceWorkspacePanel);
         };
+        panel.Resized += () => { if (_diplomacyLayer.Visible) FitDiplomacyComfort(); };
+        _hudNavigationPanel.Resized += () => FitWorkspaceNavigationInset(_diplomacyLayer);
     }
 
     private readonly HashSet<string> _diplomacyActionSections = new();
@@ -432,6 +436,9 @@ public partial class DealOrForceGame
     {
         var player = _campaign.Player;
         if (nation.Id == player.Id) return false;
+        // A reef, a glacier or a base area the map source drew as a country is not one, and
+        // nobody can be written to there (common/country_merges).
+        if (Simulation.CountryMerges.IsArtefact(_campaign, nation)) return false;
         if (_diplomacyFilter == DiplomacyFilter.All) return true;
         var relation = CampaignDiplomacy.Peek(_campaign, player.Id, nation.Id);
         return _diplomacyFilter switch
@@ -482,17 +489,21 @@ public partial class DealOrForceGame
             .OrderByDescending(nation => nation.Gdp)
             .ToArray();
 
-        while (_diplomacyRows.Count > matches.Length)
+        // Keep the warmed row pool through search/filter changes. Recreating hundreds
+        // of flag controls every time the query is cleared makes typing hitch.
+        for (var spareIndex = matches.Length; spareIndex < _diplomacyRows.Count; spareIndex++)
         {
-            var spare = _diplomacyRows[^1];
-            _diplomacyRows.RemoveAt(_diplomacyRows.Count - 1);
-            if (GodotObject.IsInstanceValid(spare.Select)) spare.Select.QueueFree();
+            var spare = _diplomacyRows[spareIndex];
+            spare.Nation = null;
+            spare.Select.Visible = false;
         }
+        var added = false;
         for (var index = 0; index < matches.Length; index++)
         {
-            if (index >= _diplomacyRows.Count) _diplomacyRows.Add(BuildDiplomacyRow());
+            if (index >= _diplomacyRows.Count) { _diplomacyRows.Add(BuildDiplomacyRow()); added = true; }
             // A stable name per place in the list, for tests and tours to press.
             _diplomacyRows[index].Select.Name = "DiplomacyRow" + index;
+            _diplomacyRows[index].Select.Visible = true;
             RepaintDiplomacyRow(_diplomacyRows[index], matches[index]);
             _diplomacyListRows.MoveChild(_diplomacyRows[index].Select, index);
         }
@@ -500,7 +511,23 @@ public partial class DealOrForceGame
         _diplomacySummary.Text = Simulation.Loc.Format("Countries shown: {0:N0}", (float)matches.Length) +
                                  (query.Length > 0 ? " · " + Tr("found by name") : "");
         _diplomacyCountryEmpty.Visible = matches.Length == 0;
-        FitNegotiationTypography(_diplomacyLayer);
+        FitNegotiationTypography(_diplomacyLayer, full: added);
+    }
+
+    /// <summary>
+    /// The country list's rows, made before the screen is first opened (PrebuildScreens): the
+    /// list keeps and repaints its rows, and building the first two hundred was half of the
+    /// 0.65 s the first open of diplomacy froze the game for. The layer is hidden until then, and
+    /// the first open repaints every row it shows and frees the rest.
+    /// </summary>
+    private void WarmDiplomacyRows()
+    {
+        if (_diplomacyListRows is null || _campaign is null) return;
+        var wanted = _campaign.Nations.Count(nation => DiplomacyListShows(nation, null));
+        while (_diplomacyRows.Count < wanted)
+        {
+            _diplomacyRows.Add(BuildDiplomacyRow());
+        }
     }
 
     private DiplomacyRow BuildDiplomacyRow()
@@ -516,6 +543,7 @@ public partial class DealOrForceGame
         row.Select.AddThemeStyleboxOverride("hover", ShellRowStyle(true));
         row.Select.AddThemeStyleboxOverride("pressed", ShellRowStyle(true));
         row.Select.AddThemeStyleboxOverride("focus", ShellRowStyle(false));
+        ButtonFocusPresentation.Style(row.Select, false);
 
         var inner = new HBoxContainer();
         inner.AddThemeConstantOverride("separation", 8);
@@ -567,14 +595,20 @@ public partial class DealOrForceGame
         text.MinimumSizeChanged += FitRowHeight;
         row.Identity.MinimumSizeChanged += FitRowHeight;
         row.Stance = Title("", 11, Ui.Colour("text.caption"));
-        Fixed(row.Stance, 64);
+        row.Stance.Name = "DiplomacyCountryStance";
+        row.Stance.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        row.Stance.AutowrapMode = TextServer.AutowrapMode.WordSmart;
         row.Stance.VerticalAlignment = VerticalAlignment.Center;
-        inner.AddChild(row.Stance);
+        var relationship = new HBoxContainer();
+        relationship.AddThemeConstantOverride("separation", 6);
+        text.AddChild(relationship);
+        relationship.AddChild(row.Stance);
         row.Opinion = Title("", 13, Ui.Colour("text.bright"));
+        row.Opinion.Name = "DiplomacyCountryOpinion";
         Fixed(row.Opinion, 44);
         row.Opinion.HorizontalAlignment = HorizontalAlignment.Right;
         row.Opinion.VerticalAlignment = VerticalAlignment.Center;
-        inner.AddChild(row.Opinion);
+        relationship.AddChild(row.Opinion);
 
         float lastNameWidth = -1, lastIdentityWidth = -1;
         row.Name.Resized += () =>
@@ -627,9 +661,8 @@ public partial class DealOrForceGame
             opinion > 20 ? Ui.Colour("state.positive") :
             opinion < -20 ? Ui.Colour("state.negative") : Ui.Colour("text.caption"));
         row.Stance.Text = relation is null ? "" : Tr(DiplomaticVocabulary.StanceName(relation.Stance));
-        row.Select.Modulate = nation.Id == _diplomacySelectedId
-            ? new Color(1.15f, 1.10f, 0.9f)
-            : Colors.White;
+        ((Control)row.Stance.GetParent()).Visible = row.Stance.Text.Length > 0 || opinion != 0;
+        StyleDiplomacyCountrySelection(row);
     }
 
     // Use the label's shaped lines, not a separate font estimate: fallback glyphs,
@@ -685,7 +718,7 @@ public partial class DealOrForceGame
     {
         foreach (var row in _diplomacyRows)
             if (row.Nation is not null && GodotObject.IsInstanceValid(row.Select))
-                row.Select.Modulate = row.Nation.Id == _diplomacySelectedId ? new Color(1.15f, 1.10f, 0.9f) : Colors.White;
+                StyleDiplomacyCountrySelection(row);
     }
 
     /// <summary>The war page for a war, from wherever the war was mentioned.</summary>
@@ -1304,25 +1337,7 @@ public partial class DealOrForceGame
             _diplomacyAllianceButton.Text = Tr("Propose alliance");
             var can = AllianceSystem.CanPropose(_campaign, player, nation, out var refusal, preview: true);
             _diplomacyAllianceButton.Disabled = !can;
-            if (!can)
-            {
-                _diplomacyAllianceButton.TooltipText = Ui.Tip(refusal);
-            }
-            else
-            {
-                var why = new Simulation.Breakdown();
-                var willingness = AllianceSystem.Willingness(_campaign, nation, player, why, refreshAssessment: false);
-                var needed = _campaign.Defines.AllianceWillingness;
-                var parts = why.Entries
-                    .OrderByDescending(entry => Math.Abs(entry.Value))
-                    .Take(3)
-                    .Select(entry => $"{entry.Source} {entry.Value:+0.00;-0.00;0.00}");
-                _diplomacyAllianceButton.TooltipText = Ui.Tip(
-                    (willingness > needed
-                        ? Simulation.Loc.Format("They would sign: {0:0.00} against {1:0.00} needed.", willingness, needed)
-                        : Simulation.Loc.Format("They would refuse: {0:0.00} against {1:0.00} needed.", willingness, needed)) +
-                    "\n" + string.Join("\n", parts));
-            }
+            _diplomacyAllianceButton.TooltipText = AllianceProposalTooltip(nation);
         }
 
         var guaranteed = relation.GuaranteedBy(player.Id);
@@ -1341,9 +1356,8 @@ public partial class DealOrForceGame
         var canDeclare = CampaignDiplomacy.CanDeclareWar(_campaign, player.Id, nation.Id, out var reason);
         _diplomacyWarButton.Disabled = !canDeclare;
         if (!canDeclare) _diplomacyWarButton.TooltipText = Ui.Tip(reason);
-        _diplomacyWarButton.Text = _diplomacyPendingWarTarget == nation.Id
-            ? Simulation.Loc.Format("CONFIRM WAR ON {0}", nation.Tag)
-            : Tr("Declare war");
+        _diplomacyWarButton.Text = Tr("Declare war");
+        if (canDeclare) _diplomacyWarButton.TooltipText = Ui.Tip(Tr("Review allies and intervention risks before declaring war."));
 
         _diplomacyUltimatumButton.Disabled = !canDeclare || nation.IsHuman;
         _diplomacyUltimatumButton.TooltipText = Ui.Tip(!canDeclare ? reason : nation.IsHuman
@@ -1414,7 +1428,7 @@ public partial class DealOrForceGame
         if (!ValidDiplomacyTarget()) return;
         var player = _campaign.Player;
         var target = DiplomacyTarget();
-        var relation = CampaignDiplomacy.Get(_campaign, player.Id, target.Id);
+        var relation = CampaignDiplomacy.ReadOrNeutral(_campaign, player.Id, target.Id);
 
         if (relation.Stance == DiplomaticStance.Allied)
         {
@@ -1428,17 +1442,14 @@ public partial class DealOrForceGame
             _campaign.Commands.ApplyAll(_campaign);
             _diplomacyFeedback.Text = Simulation.Loc.Format("Allied with {0}.", target.DisplayName);
         }
-        else if (!AllianceSystem.CanPropose(_campaign, player, target, out var refusal))
+        else if (!AllianceSystem.CanPropose(_campaign, player, target, out var refusal, preview: true))
         {
             _diplomacyFeedback.Text = refusal;
         }
         else
         {
-            _campaign.Commands.Enqueue(new ProposeAllianceCommand { IssuerId = player.Id, TargetId = target.Id });
-            _campaign.Commands.ApplyAll(_campaign);
-            _diplomacyFeedback.Text = relation.Stance == DiplomaticStance.Allied
-                ? Simulation.Loc.Format("{0} accepted.", target.DisplayName)
-                : Simulation.Loc.Format("{0} declined.", target.DisplayName);
+            OpenAllianceProposalReview(target);
+            return;
         }
         ForceDiplomacyRefresh();
     }
@@ -1466,31 +1477,7 @@ public partial class DealOrForceGame
     {
         if (!ValidDiplomacyTarget()) return;
         var target = DiplomacyTarget();
-        if (!CampaignDiplomacy.CanDeclareWar(_campaign, _campaign.Player.Id, target.Id, out var reason))
-        {
-            _diplomacyFeedback.Text = reason;
-            return;
-        }
-        if (_diplomacyPendingWarTarget != target.Id)
-        {
-            _diplomacyPendingWarTarget = target.Id;
-            _diplomacyFeedback.Text = Tr("This begins an immediate land war. Click the highlighted button again to confirm.");
-            ForceDiplomacyRefresh();
-            return;
-        }
-        _campaign.Commands.Enqueue(new DeclareWarCampaignCommand
-        {
-            IssuerId = _campaign.Player.Id,
-            TargetId = target.Id,
-            ClaimedStateMapIndex = _selectedState?.NationMapIndex == target.MapIndex
-                ? _selectedState.MapIndex
-                : -1
-        });
-        _campaign.Commands.ApplyAll(_campaign);
-        PlayStrategicCue("war_declared");
-        _diplomacyPendingWarTarget = -1;
-        _diplomacyFeedback.Text = Simulation.Loc.Format("War declared on {0}.", target.DisplayName);
-        ForceDiplomacyRefresh();
+        OpenWarDeclaration(target, _selectedState?.NationMapIndex == target.MapIndex ? _selectedState.MapIndex : -1);
     }
 
     private void ConfirmOrIssueUltimatum() => OpenUltimatumComposer(DiplomacyTarget());

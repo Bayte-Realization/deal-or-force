@@ -14,6 +14,13 @@ public sealed partial class Defines
     public int DiplomaticMissionLimit { get; set; } = 3;
     public float DiplomaticMissionWeeklyOpinion { get; set; } = 1.2f;
     public float DiplomaticMissionOpinionCap { get; set; } = 24;
+    /// <summary>
+    /// What each paid week of a mission forgives of the grievances between the two (OpinionWitnesses.Forgive):
+    /// this share of the relation's own fading grievances, and the larger share of those held as a bystander -
+    /// over other countries' quarrels - which patient diplomacy is best at talking down.
+    /// </summary>
+    public float DiplomaticMissionWeeklyForgiveness { get; set; } = 0.03f;
+    public float DiplomaticMissionWeeklyThirdPartyForgiveness { get; set; } = 0.08f;
 }
 
 /// <summary>Two bounded, directional assignments per existing relation. Prices are
@@ -43,7 +50,10 @@ public static class DiplomaticOutreach
         if (!active) return Of(relation, issuer) is null ? Loc.Get("There is no diplomatic mission to recall.") : "";
         if (Of(relation, issuer) is not null) return Loc.Get("A diplomatic mission is already working here.");
         if (CampaignDiplomacy.AtWar(c, issuer, target)) return Loc.Get("End the war before sending a goodwill mission.");
-        if (relation is not null && (relation.EmbargoBy(issuer) || relation.EmbargoBy(target)))
+        // Only our own embargo stands in the way. Theirs used to as well, which closed the one
+        // patient road back to exactly the countries that had turned against us: a mission is
+        // how a government talks its way out of a sanction, not something a sanction forbids.
+        if (relation is not null && relation.EmbargoBy(issuer))
             return Loc.Get("An active embargo blocks a goodwill mission.");
         if (relation is not null && c.ElapsedDays - relation.LastActionDay < 14)
             return Loc.Get("Diplomatic action is still on cooldown.");
@@ -76,7 +86,8 @@ public static class DiplomaticOutreach
         return Loc.Format("A {0}-day mission, not an instant opinion boost. Start: {1:0.##} political credit and {2}. Weekly: {3:0.##} political credit and {4}. Goodwill ceiling: +{5:0.#}; tension and political distance slow progress. At most {6} concurrent missions.",
             Math.Clamp(d.DiplomaticMissionDays, 14, 730), d.DiplomaticMissionPoliticalCost, Fmt.Money(d.DiplomaticMissionStartCash),
             d.DiplomaticMissionWeeklyPoliticalCost, Fmt.Money(d.DiplomaticMissionWeeklyCash), d.DiplomaticMissionOpinionCap,
-            Math.Clamp(d.DiplomaticMissionLimit, 1, 12));
+            Math.Clamp(d.DiplomaticMissionLimit, 1, 12)) + " " +
+            Loc.Get("Every week it also wears down old grievances between us, most of all those held over other countries' quarrels.");
     }
 
     internal static bool Set(Campaign c, int issuer, int target, bool active)
@@ -112,7 +123,7 @@ public static class DiplomaticOutreach
         var n = c.NationById(issuer); var other = c.NationById(r.Other(issuer));
         var ended = !c.Defines.DiplomaticMissionsEnabled || n is null || other is null || c.Fallen.Contains(issuer) ||
             n.Population<=0 || other.Population<=0 ||
-            c.Fallen.Contains(other.Id) || CampaignDiplomacy.AtWar(c,r.A,r.B) || r.EmbargoByA || r.EmbargoByB ||
+            c.Fallen.Contains(other.Id) || CampaignDiplomacy.AtWar(c,r.A,r.B) || r.EmbargoBy(issuer) ||
             c.ElapsedDays >= mission.EndsDay;
         if (!ended && c.ElapsedDays - mission.LastPaidDay < 7) return true;
         ended |= n is null || !Valid(n.PoliticalPoints) || !Valid(n.Treasury) ||
@@ -131,6 +142,11 @@ public static class DiplomaticOutreach
             var amount = Math.Min(mission.OpinionCap, (held is null ? 0 : OpinionSystem.Weight(c,held)) + mission.WeeklyOpinion * friction);
             if (amount > 0) OpinionSystem.Remember(c,r,reason.Id,amount / reason.Opinion);
         }
+        // And the old grievances wear down while the diplomats work: a little of the relation's
+        // own every week, more of what the two hold over other countries' quarrels. A mission of
+        // half a year leaves about a tenth of a bystander's grudge and half of a real one.
+        OpinionWitnesses.Forgive(c, r, c.Defines.DiplomaticMissionWeeklyForgiveness * friction,
+            c.Defines.DiplomaticMissionWeeklyThirdPartyForgiveness * friction);
         if (r.Opinion >= 35 && r.Stance is DiplomaticStance.Neutral or DiplomaticStance.Rival) r.Stance= DiplomaticStance.Friendly;
         c.MarkStrategicChange(); return true;
     }

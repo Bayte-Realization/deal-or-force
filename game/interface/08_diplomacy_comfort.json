@@ -1,0 +1,8 @@
+{
+  "metrics": {
+    "diplomacy.minimum_font_pixels": 14,
+    "diplomacy.minimum_caption_pixels": 12,
+    "diplomacy.minimum_heading_pixels": 20,
+    "diplomacy.minimum_target_pixels": 32
+  }
+}

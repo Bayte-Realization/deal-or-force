@@ -1,0 +1,5 @@
+// Idle guests return by ordinary legal land movement, within DispositionMovesPerWeek.
+// False disables voluntary homecoming, not compulsory repatriation after access revocation.
+{
+  "ArmyHomecomingEnabled": true
+}

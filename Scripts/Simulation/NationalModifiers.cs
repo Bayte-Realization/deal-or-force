@@ -77,7 +77,16 @@ public static class NationalModifiers
     public static float Of(Nation nation, string key)
     {
         if (nation is null) return 0f;
-        var totals = nation.ModifierTotals ??= Build(nation);
+        var totals = nation.ModifierTotals;
+        if (totals is null)
+        {
+            // The fill keeps-and-refills the country's own source dictionaries as it goes, so
+            // two workers building the same country aside at once would clear a table the
+            // other is halfway through copying. One builder a country at a time; whoever
+            // waited reads the table that was published.
+            lock (nation.ModifierGate)
+                totals = nation.ModifierTotals ??= BuildAside(nation);
+        }
         return totals.TryGetValue(key, out var value) ? value : 0f;
     }
 
@@ -124,6 +133,27 @@ public static class NationalModifiers
         // the sum is exactly what a new dictionary would have held.
         var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         totals.Clear();
+        Fill(totals, nation);
+        return totals;
+    }
+
+    /// <summary>
+    /// The lazy path a parallel region can reach. <see cref="Build"/> refills the country's
+    /// own dictionary in place, which is fine on the daily pass's thread and wrong on a
+    /// worker's: another region of the same country asking mid-fill would read a table that
+    /// says 'no such modifier' for everything not reached yet - a different world, not a
+    /// slower one. This builds aside and the caller publishes the finished table whole;
+    /// two racers publish identical complete tables, so either answer is the same numbers.
+    /// </summary>
+    private static Dictionary<string, float> BuildAside(Nation nation)
+    {
+        var totals = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        Fill(totals, nation);
+        return totals;
+    }
+
+    private static void Fill(Dictionary<string, float> totals, Nation nation)
+    {
         static void Add(Dictionary<string, float> totals, IReadOnlyDictionary<string, float> modifiers)
         {
             if (modifiers is null || modifiers.Count == 0) return;
@@ -157,7 +187,6 @@ public static class NationalModifiers
         if (GovernmentCatalog.Of(nation.Government) is { } government) Add(totals, government.Modifiers);
         if (IdeologyCatalog.Of(nation.Ideology) is { } ideology) Add(totals, ideology.Modifiers);
         if (GovernmentFocusCatalog.Of(nation.GovernmentFocus) is { } focus) Add(totals, focus.Modifiers);
-        return totals;
     }
 
     /// <summary>
@@ -256,4 +285,12 @@ public sealed partial class Nation
 {
     /// <summary>What <see cref="NationalModifiers"/> added up for this country, until a source changes. Not saved.</summary>
     internal Dictionary<string, float> ModifierTotals;
+
+    /// <summary>
+    /// Serialises the aside build a parallel region can reach first. The fill keeps-and-refills
+    /// the country's own modifier dictionaries as it goes, so two builders at once would clear
+    /// a table the other is halfway through copying; one builder a country, everyone else reads
+    /// the published table. Not saved.
+    /// </summary>
+    internal readonly object ModifierGate = new();
 }

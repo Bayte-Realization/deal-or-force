@@ -1,0 +1,20 @@
+{
+  "Choose training region on map": "Choose training region on map",
+  "Keep this template, batch size and posture, then click an owned training region on the map.": "Keep this template, batch size and posture, then click an owned training region on the map.",
+  "Place recruitment: {0}": "Place recruitment: {0}",
+  "Hover over an owned region to inspect training. Click to queue one batch; Escape or right-click finishes placement.": "Hover over an owned region to inspect training. Click to queue one batch; Escape or right-click finishes placement.",
+  "Move the pointer over the map. Training belongs to a region; completed divisions deploy in a controlled province of that region.": "Move the pointer over the map. Training belongs to a region; completed divisions deploy in a controlled province of that region.",
+  "Recruitment catalogue": "Recruitment catalogue",
+  "Rapid call-up placement": "Rapid call-up",
+  "Emergency mobilisation placement": "Emergency mobilisation",
+  "Standard training placement": "Standard training",
+  "{0} × {1} · {2}\nPay now: {3} · {4:N0} recruits · {5} training days\nTraining batches {6}/{7}": "{0} × {1} · {2}\nPay now: {3} · {4:N0} recruits · {5} training days\nTraining batches {6}/{7}",
+  "Click to begin training here": "Click to begin training here",
+  "Depot {0}: need {1:0.#}, have {2:0.#}": "Depot {0}: need {1:0.#}, have {2:0.#}",
+  "Regional batch limit: {0}\nMissing depot stock procurement: {1}\n{2}": "Regional batch limit: {0}\nMissing depot stock procurement: {1}\n{2}",
+  "Posture effects: stability −{0:P1}; regional unrest +{1:P1}; living standard −{2:P1}.": "Posture effects: stability −{0:P1}; regional unrest +{1:P1}; living standard −{2:P1}.",
+  "Wait for the current world update before choosing a training region.": "Wait for the current world update before choosing a training region.",
+  "Training queued in {0}: {1} × {2}, paid {3}, {4} training days. Click another region or finish placement.": "Training queued in {0}: {1} × {2}, paid {3}, {4} training days. Click another region or finish placement.",
+  "Recruitment order submitted. The host will validate this training region.": "Recruitment order submitted. The host will validate this training region.",
+  "Recruitment is disabled in this campaign.": "Recruitment is disabled in this campaign."
+}

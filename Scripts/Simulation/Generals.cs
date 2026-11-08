@@ -35,7 +35,7 @@ public sealed partial class Defines
     /// Whether governments the computer runs relieve the commander who keeps losing: defeats at
     /// least this many, and at least twice the victories plus one.
     /// </summary>
-    public bool AiRelievesFailedCommanders { get; set; } = false;
+    public bool AiRelievesFailedCommanders { get; set; } = true;
     public int AiCommanderReliefDefeats { get; set; } = 3;
 }
 

@@ -39,10 +39,11 @@ internal static class ScenarioEditorTheme
         theme.SetFont("font", "CodeEdit", PresentationFonts.For("ui.code"));
         foreach (var type in new[] { "Button", "OptionButton", "ColorPickerButton" })
         {
-            theme.SetStylebox("normal", type, Surface("button.fill", "button.border"));
-            theme.SetStylebox("hover", type, Surface("button.fill_hover", "button.border_hover"));
-            theme.SetStylebox("pressed", type, Surface("button.fill_pressed", "button.border_pressed"));
-            theme.SetStylebox("disabled", type, Surface("button.fill_disabled", "button.border_disabled"));
+            theme.SetStylebox("normal", type, InstrumentMaterials.Face(Surface("button.fill", "button.border")));
+            theme.SetStylebox("hover", type, InstrumentMaterials.Face(Surface("button.fill_hover", "button.border_hover")));
+            theme.SetStylebox("pressed", type, InstrumentMaterials.Face(Surface("button.fill_pressed", "button.border_pressed"), inset: true));
+            theme.SetStylebox("hover_pressed", type, InstrumentMaterials.Face(Surface("button.fill_pressed", "button.border_pressed"), inset: true));
+            theme.SetStylebox("disabled", type, InstrumentMaterials.Face(Surface("button.fill_disabled", "button.border_disabled"), disabled: true));
             var focus = Surface("button.fill", "text.accent"); focus.DrawCenter = false;
             theme.SetStylebox("focus", type, focus);
             theme.SetColor("font_color", type, Ui.Colour("button.text"));

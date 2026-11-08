@@ -38,7 +38,7 @@ public sealed partial class Defines
 /// </summary>
 public static class ArmyDisposition
 {
-    public static int Relieved, Garrisoned;
+    public static int Relieved, Garrisoned, Homeward;
 
     private static readonly List<Army> Free = new();
     private static readonly Dictionary<int, float> Load = new();
@@ -64,13 +64,18 @@ public static class ArmyDisposition
         {
             if (army.NationId != nation.Id || army.TemplateId == MilitiaCore.TemplateId) continue;
             if (army.InBattle || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || army.Route.Count > 0) continue;
-            if (army.DirectOrder || army.AssignedWarId >= 0 || army.FrontLineId >= 0 || army.PlanActive) continue;
+            if (army.DirectOrder || army.AssignedWarId >= 0 || army.FrontLineId >= 0 ||
+                army.PlanActive && army.OrderKind != ArmyOrder.Manual) continue;
             Free.Add(army);
         }
         if (Free.Count == 0) return;
+        var atWar = AtWar(campaign, nation);
+        var moves = atWar ? 0 : ArmyHomecoming.OrderReturns(campaign, nation, Free, d.DispositionMovesPerWeek);
+        Homeward += moves;
+        if (Free.Count == 0 || moves >= d.DispositionMovesPerWeek) return;
         Measure(campaign, nation);
-        var moves = Relieve(campaign, nation, d.DispositionMovesPerWeek);
-        if (moves < d.DispositionMovesPerWeek && !AtWar(campaign, nation))
+        moves += Relieve(campaign, nation, d.DispositionMovesPerWeek - moves);
+        if (moves < d.DispositionMovesPerWeek && !atWar)
             Garrison(campaign, nation, d.DispositionMovesPerWeek - moves);
     }
 
@@ -81,9 +86,7 @@ public static class ArmyDisposition
         Load.Clear();
         Capacity.Clear();
         foreach (var state in campaign.StatesOf(nation))
-            Capacity[state.MapIndex] = d.BaseStateSupplyThroughput +
-                state.Buildings.GetValueOrDefault(BuildingKind.Infrastructure) * d.SupplyPerInfrastructure +
-                state.Buildings.GetValueOrDefault(BuildingKind.Barracks) * d.SupplyPerBarracks;
+            Capacity[state.MapIndex] = d.BaseStateSupplyThroughput + LogisticsSystem.BuildingThroughput(d, state);
         foreach (var army in campaign.Armies)
             if (army.NationId == nation.Id && army.SupplySourceStateMapIndex > 0)
                 Load[army.SupplySourceStateMapIndex] = Load.GetValueOrDefault(army.SupplySourceStateMapIndex) + Demand(campaign, army);
@@ -220,7 +223,7 @@ public static class ArmyDisposition
     private static bool AtWar(Campaign campaign, Nation nation)
     {
         foreach (var war in campaign.Wars)
-            if (!war.Ended && !war.Limited && war.Involves(nation.Id)) return true;
+            if (!war.Ended && war.Involves(nation.Id)) return true;
         return false;
     }
 }

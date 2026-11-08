@@ -25,8 +25,33 @@ static class DateLineSeamTests
         ShoreContinuesAcrossTheCut();
         RibbonBreaksInsteadOfStreaking();
         WaveMeetsItself();
+        MarkersDoNotCrossTheWholeSheet();
         Check(CampaignFingerprint.Of(campaign) == before, "reading the seam does not change the fingerprint");
         Check(SaveSystem.FormatVersion == 2, "save format stays 2");
+    }
+
+    static void MarkersDoNotCrossTheWholeSheet()
+    {
+        Check(Math.Abs(DateLineSeam.NearestCopy(9.98f, -9.99f, 20) + 10.02f) < .00001f,
+            "eastward wrap rebases a moving counter instead of easing a twenty-unit leap");
+        Check(Math.Abs(DateLineSeam.NearestCopy(-9.98f, 9.99f, 20) - 10.02f) < .00001f,
+            "westward wrap is symmetric");
+        Check(DateLineSeam.NearestCopy(2f, 2.2f, 20) == 2f,
+            "ordinary movement keeps its original position for smooth interpolation");
+        Check(Math.Abs(DateLineSeam.NearestCopy(409.98f, -9.99f, 20) + 10.02f) < .0001f,
+            "multiple revolutions use the same periodic coordinate");
+        Check(DateLineSeam.NearestCopy(2f, float.NaN, 20) == 2f &&
+            DateLineSeam.NearestCopy(2f, 3f, 0) == 2f, "invalid wrap inputs cannot poison a valid counter");
+        var largest = 0f;
+        for (var step = -400; step <= 400; step++)
+        {
+            var reference = step * .05f;
+            var projected = DateLineSeam.NearestCopy(9.98f, reference, 20);
+            var previous = DateLineSeam.NearestCopy(9.96f, reference - .05f, 20);
+            var aligned = DateLineSeam.NearestCopy(previous, projected, 20);
+            largest = Math.Max(largest, Math.Abs(projected - aligned));
+        }
+        Check(largest < .0201f, "an 801-step horizontal pan never turns local movement into a cross-world journey");
     }
 
     static void ShoreContinuesAcrossTheCut()

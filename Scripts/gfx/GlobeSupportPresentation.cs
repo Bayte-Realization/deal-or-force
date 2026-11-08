@@ -576,7 +576,7 @@ public sealed partial class GlobePresentation
     {
         var accent = arm ?? Ui.Colour("support.standby");
         var flagSprite = nation is not null ? FlagSpriteFor(nation) : "";
-        var key = path + "|" + selected + "|" + accent.ToHtml() + "|" + (nation is null ? "" : nation.Color) + "|" + flagSprite;
+        var key = path + "|" + selected + "|" + accent.ToHtml() + "|" + (nation is null ? "" : nation.Color) + "|" + flagSprite + "|" + NationalFlagVisualId(nation);
         if (_supportPlates.TryGetValue(key, out var cached)) return cached;
         const int width = 96, height = 56;
         const int s = 3;

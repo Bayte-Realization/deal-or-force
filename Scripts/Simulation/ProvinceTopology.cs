@@ -25,6 +25,15 @@ public sealed class ProvinceTopology
     /// </summary>
     public const int MinimumProvinceCells = 24;
 
+    /// <summary>Latitude past which a province grows with the real ground it covers (Build).</summary>
+    public const float PolarFromLatitude = 60f;
+
+    /// <summary>The narrowest raster read as the whole world for the latitude rule (Build).</summary>
+    public const int WorldRasterWidth = 2048;
+
+    /// <summary>Province size below PolarFromLatitude, as a share of CellsPerProvince: the provinces the poles give up.</summary>
+    public const float PopulatedShare = 0.72f;
+
     /// <summary>
     /// Which province each cell of the source raster belongs to.
     ///
@@ -60,6 +69,43 @@ public sealed class ProvinceTopology
     public int Height { get; }
     public int EdgeCount { get; }
     public int ProvinceCount => ProvinceToState.Length - 1;
+
+    // ─── The state→provinces index ─────────────────────────────────────────────
+    // Built lazily the first time anybody asks for a state's provinces, and kept for
+    // the life of the topology. The map does not change states under a running campaign
+    // (only ownership and control do), so the index never goes stale.
+    //
+    // Before this index, DeploymentProvince (Recruitment) scanned every province in the
+    // world to find the ones belonging to one state — 35 000 comparisons per call, per
+    // recruitment order, per day. With the index it reads the handful of provinces that
+    // state actually has, typically five to twenty.
+    private int[][] _provincesByState;
+    /// <summary>
+    /// The provinces of one state, or an empty span for a state the map does not hold.
+    /// The array is the topology's own; do not write to it.
+    /// </summary>
+    public ReadOnlySpan<int> ProvincesOfState(int stateMapIndex)
+    {
+        if (_provincesByState is null)
+        {
+            var stateCount = 0;
+            for (var p = 1; p < ProvinceToState.Length; p++)
+                if (ProvinceToState[p] > stateCount) stateCount = ProvinceToState[p];
+            var buckets = new List<int>[stateCount + 1];
+            for (var p = 1; p < ProvinceToState.Length; p++)
+            {
+                var state = ProvinceToState[p];
+                buckets[state] ??= new List<int>(16);
+                buckets[state].Add(p);
+            }
+            _provincesByState = new int[stateCount + 1][];
+            for (var s = 0; s <= stateCount; s++)
+                _provincesByState[s] = buckets[s]?.ToArray() ?? Array.Empty<int>();
+        }
+        return (uint)stateMapIndex < (uint)_provincesByState.Length
+            ? _provincesByState[stateMapIndex]
+            : ReadOnlySpan<int>.Empty;
+    }
     public byte[] RiverIntensityByProvince { get; private set; }
     public bool[] LakeAccessByProvince { get; private set; }
 
@@ -150,6 +196,17 @@ public sealed class ProvinceTopology
             provinceToState.Add(state);
             provinceToNation.Add(control[start]);
             var baseline = disputedStates.Contains(state) ? DisputedCellsPerProvince : CellsPerProvince;
+            // The raster is equirectangular: a cell at 72 degrees covers a third of the ground a
+            // cell at the equator does, so provinces of a fixed cell count put three times as many
+            // provinces on Greenland per square kilometre as on the Ukraine steppe, and six times as
+            // many on Antarctica. Past PolarFromLatitude a province grows with the ground it covers;
+            // the provinces the ice gives up are spread over everywhere else (PopulatedShare), so
+            // the map keeps its count and spends it where people live and fight.
+            var seedLatitude = MathF.Abs(90f - (start / width + 0.5f) * 180f / height);
+            // Only the world raster: a test grid of sixty-four cells has no latitudes to speak of.
+            var ground = width < WorldRasterWidth ? 1f : seedLatitude <= PolarFromLatitude ? PopulatedShare
+                : MathF.Cos(PolarFromLatitude * MathF.PI / 180f) / MathF.Max(0.1f, MathF.Cos(seedLatitude * MathF.PI / 180f));
+            baseline = Math.Max(MinimumProvinceCells + 6, (int)MathF.Round(baseline * Math.Clamp(ground, 0.5f, 5f)));
             // Keep neighbouring provinces recognisably different without turning
             // their borders into tendrils.  The resulting cells are a relaxed,
             // irregular Voronoi-like layer: mostly convex, occasionally elongated,

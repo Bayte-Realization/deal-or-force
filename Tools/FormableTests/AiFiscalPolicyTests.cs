@@ -184,7 +184,11 @@ static class AiFiscalPolicyTests
         c.Construction.Add(new ConstructionProject { Id = 1, NationId = n.Id, Cost = 4, Paid = 1, DurationDays = 200 });
         c.Construction.Add(new ConstructionProject { Id = 2, NationId = 1, Cost = 400, DurationDays = 1 });
         var fiscal = AiFiscalPolicy.Assess(c, n, .02f);
-        var expected = MathF.Min(3, 4 / 200f * 2 * 7 * c.Defines.AiFiscalReserveWeeks);
+        // A site is paid at the country's construction pace: capacity 2 works 1.25 days a day
+        // (ConstructionCost.Pace), not twice the rate, since capacity became the speed of the work.
+        var expected = MathF.Min(3, 4 / 200f * ConstructionCost.Pace(c, n) * 7 * c.Defines.AiFiscalReserveWeeks);
+        Check(MathF.Abs(ConstructionCost.Pace(c, n) - 1.25f) < .00001f,
+            "construction capacity 2 works sites at 1.25 days a day by default");
         Check(MathF.Abs(fiscal.ConstructionPayments - expected) < .00001f,
             "the envelope protects the owner's remaining queued capital payments, not another country's projects");
         c.Construction[0].Paid = 4;

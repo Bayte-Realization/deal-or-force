@@ -67,7 +67,9 @@ static class MediaLibraryTests
         MediaLibraryCatalog.Merge("""{"assets":{"fixture":{"remove":true}}}""", "res://mod", "remove", errors);
         Check(MediaLibraryCatalog.Find("fixture") is null, "mod can remove one inventory entry");
         MediaLibraryCatalog.Load(); SoundCatalog.Load(); MusicCatalog.Load();
-        Check(SoundCatalog.Get("ui_select").File.EndsWith("atlas_tap.wav") && SoundCatalog.Get("action_denied").File.EndsWith("atlas_decline.wav"),
+        Check(SoundCatalog.Get("ui_select").File.EndsWith("felt_map_select.mp3") && SoundCatalog.Get("action_denied").File.EndsWith("atlas_decline.wav") &&
+              SoundCatalog.Get("map_select").File == SoundCatalog.Get("ui_select").File &&
+              SoundCatalog.Get("map_select").CooldownMs >= 140 && SoundCatalog.Get("map_select").VolumeDb < 0,
             "ordinary and unavailable actions have different declared cues");
         Check(SoundCatalog.Get("situation_alert").CooldownMs >= 12000 && SoundCatalog.Get("situation_alert").Yielding && SoundCatalog.Get("situation_alert").VolumeDb < 0,
             "critical cue retains quietness, throttling and priority discipline");
@@ -81,7 +83,7 @@ static class MediaLibraryTests
         Check(MusicCatalog.For(MusicCatalog.Moment.Menu, MusicMood.Calm).Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal)
                   .SequenceEqual(new[] { "menu_theme_atlas", "quiet_current" }) &&
               MusicCatalog.For(MusicCatalog.Moment.Campaign, MusicMood.Recovery, "europe").Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal)
-                  .SequenceEqual(new[] { "after_ceasefire", "quiet_current" }),
+                  .SequenceEqual(new[] { "after_ceasefire", "atlas_lamplight", "quiet_current" }),
             "soft peace alternative covers the menus and recovery as well as ordinary calm, beside the menu's own theme and the ceasefire piece");
         Check(!MusicCatalog.All.Any(t => t.Name is "frayed_civic" or "afterimage_republic") &&
               MediaLibraryCatalog.Find("frayed_civic") is { Kind: LibraryMediaKind.Music } &&

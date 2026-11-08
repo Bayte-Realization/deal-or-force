@@ -1,0 +1,10 @@
+{
+  "metrics": {
+    "recruitment.two_card_width_pixels": 440,
+    "recruitment.card_height_pixels": 66,
+    "recruitment.target_pixels": 32,
+    "recruitment.minimum_font_pixels": 14,
+    "recruitment.minimum_caption_pixels": 12,
+    "recruitment.minimum_heading_pixels": 20
+  }
+}
