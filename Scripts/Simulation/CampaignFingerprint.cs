@@ -53,6 +53,14 @@ public static class CampaignFingerprint
         // worlds can agree on the date and still be a step apart - which is a divergence
         // that would otherwise be invisible until it had grown into a real one.
         Mix(campaign.ElapsedHours);
+        // Homelands that moved in play (HomelandIntegration); nothing mixed while none has, so
+        // older worlds keep their fingerprints.
+        if (campaign.HomelandChanges > 0)
+        {
+            MixText("homeland_changes"); Mix(campaign.HomelandChanges);
+            foreach (var (id, regions) in campaign.Homelands.OrderBy(p => p.Key))
+            { Mix(id); Mix(regions.Count); foreach (var region in regions.OrderBy(r => r)) Mix(region); }
+        }
         if (!campaign.Defines.BeliefConversionEnabled || campaign.Defines.BeliefConversionAnnual != .008f)
         {
             MixText("belief_conversion"); Mix(campaign.Defines.BeliefConversionEnabled ? 1 : 0);

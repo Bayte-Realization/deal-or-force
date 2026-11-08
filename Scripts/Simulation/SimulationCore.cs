@@ -1201,6 +1201,8 @@ public sealed partial class Campaign
 
             // And whether a country played by somebody has ground it lost that it could take back.
             using (SimProfiler.Measure("lost lands")) LostLands.Tick(this);
+            // And what a generation under one flag makes of a region: home, or a memory (HomelandIntegration).
+            using (SimProfiler.Measure("homelands")) HomelandIntegration.Tick(this);
             yield return 0;
 
             // Pieces of one region that have come back under one flag become one region again
@@ -1443,6 +1445,18 @@ public sealed partial class Campaign
         // learning it afterwards would change a country's target on day zero.
         // Never re-baseline a restored or network-adopted world's territorial memory.
         if (!InitialDeploymentCompleted) MovementFall.RememberHomelands(this);
+        // A country is the people of its regions. The scenario writes each country's figure
+        // before the map says who holds what, and the map then hands occupied regions to their
+        // holder: Ukraine opened at 25 million and was 20 million on the first morning, which
+        // read to a player as five million people lost overnight. A new world only - a save
+        // keeps the figures it was saved with.
+        if (!InitialDeploymentCompleted && ElapsedDays == 0)
+            foreach (var nation in Nations)
+            {
+                if (nation.Movement is not null) continue;
+                var regions = StatesOf(nation);
+                if (regions.Length > 0) nation.Population = regions.Sum(region => region.Population);
+            }
         if (!StabilityCore.IsCalibrated(this)) StabilityCore.Calibrate(this);
 
         // The countries without land: founded on a new world once its regions exist, and put
