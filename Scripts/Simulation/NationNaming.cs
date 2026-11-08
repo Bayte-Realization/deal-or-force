@@ -108,6 +108,13 @@ public static class NationNaming
         // 2. Foreign core / homeland tag: if ground has homeland cores of a distinct country
         // (e.g. Ukraine, Belarus, Poland, Georgia, Kazakhstan) not belonging to the parent.
         var foreignCore = ForeignCoreTag(campaign, parent, regions);
+        // A core is a claim, not a people: the ground is named for that country only where its
+        // people are the ones living there, or are the ones rising. A Russian rising in southern
+        // Siberia, on ground Kazakhstan's data claims, called itself the "Kazakh Republic".
+        if (foreignCore is not null && DemographyCatalog.PrimaryCulture(foreignCore) is { Length: > 0 } coreOwnPeople &&
+            !string.Equals(coreOwnPeople, culture, StringComparison.OrdinalIgnoreCase) &&
+            !IsPeoplesGround(campaign, regions, coreOwnPeople))
+            foreignCore = null;
         if (foreignCore is not null)
         {
             var alive = campaign.NationByTag(foreignCore);

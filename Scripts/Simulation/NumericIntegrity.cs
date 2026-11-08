@@ -110,14 +110,11 @@ public static class NumericIntegrity
                 foreach (var support in movement.Support)
                     if (!float.IsFinite(support.Value)) return "support " + n.Tag + "[" + support.Key + "]";
         }
-        foreach (var s in c.States)
-        {
-            var issue = ScalarIssue(s, "region ", s.Id);
-            if (issue is not null) return issue;
-            foreach (var p in s.PopulationGroups)
-                if (!float.IsFinite(p.Employment) || !float.IsFinite(p.Wealth) ||
-                    !float.IsFinite(p.StandardOfLiving) || !float.IsFinite(p.Radicalism)) return "population " + s.Id;
-        }
+        // The regions and their people are most of the walk - two thousand regions, eighty
+        // thousand groups, read through reflection - and reading is all it does, so they are read
+        // side by side. The answer is the first bad region in list order, exactly as one at a time.
+        var regionIssue = FirstRegionIssue(c.States);
+        if (regionIssue is not null) return regionIssue;
         foreach (var a in c.Armies) { var issue = ScalarIssue(a, "army ", a.Id); if (issue is not null) return issue; }
         foreach (var b in c.Battles) { var issue = ScalarIssue(b, "battle ", b.Id); if (issue is not null) return issue; }
         foreach (var w in c.Wars) { var issue = ScalarIssue(w, "war ", w.Id); if (issue is not null) return issue; }
@@ -132,6 +129,38 @@ public static class NumericIntegrity
             if (issue is not null) return issue;
         }
         return null;
+    }
+
+    private static string RegionIssue(ScenarioState s)
+    {
+        var issue = ScalarIssue(s, "region ", s.Id);
+        if (issue is not null) return issue;
+        foreach (var p in s.PopulationGroups)
+            if (!float.IsFinite(p.Employment) || !float.IsFinite(p.Wealth) ||
+                !float.IsFinite(p.StandardOfLiving) || !float.IsFinite(p.Radicalism)) return "population " + s.Id;
+        return null;
+    }
+
+    private static string FirstRegionIssue(List<ScenarioState> states)
+    {
+        if (states.Count < 256)
+        {
+            foreach (var s in states) { var issue = RegionIssue(s); if (issue is not null) return issue; }
+            return null;
+        }
+        var first = int.MaxValue;
+        string found = null;
+        var gate = new object();
+        System.Threading.Tasks.Parallel.For(0, states.Count,
+            new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = Math.Max(1, Math.Min(Environment.ProcessorCount - 1, 8)) },
+            index =>
+            {
+                if (index > System.Threading.Volatile.Read(ref first)) return;
+                var issue = RegionIssue(states[index]);
+                if (issue is null) return;
+                lock (gate) if (index < first) { first = index; found = issue; }
+            });
+        return found;
     }
 
     /// <summary>The first non-finite number on an object, named by what it is and which one, or null. The name is built only when there is something wrong.</summary>

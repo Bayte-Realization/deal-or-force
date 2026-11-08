@@ -255,6 +255,8 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public double MapLoadingProgress => _mapApplied ? 100 : _pendingMapResult is null ? 45 : 55 + _mapApplyStage * 6;
     private bool _dragging;
     private bool _boxSelecting;
+    /// <summary>The box was begun with Ctrl held: it picks regions, not forces (ProvincesBoxSelected).</summary>
+    private bool _boxRegions;
     private bool _paintBoxing;
     private bool _paintBoxClaims;
     private Vector2 _boxStart;
@@ -283,6 +285,11 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public event Action<IReadOnlyList<Simulation.Army>> ArmiesBoxPicked;
     /// <summary>A box drawn over fleets and no divisions: the player's own fleets inside it.</summary>
     public event Action<IReadOnlyList<Simulation.Fleet>> FleetsBoxPicked;
+    /// <summary>
+    /// A Ctrl-drawn box over the map, as the provinces under it - an area picked for one order
+    /// to all of it (a building in every region), the way Age of History's selection tool works.
+    /// </summary>
+    public event Action<IReadOnlyList<int>> ProvincesBoxSelected;
     public event Action<GlobePick> ProvinceCommanded;
 
     /// <summary>
@@ -1711,9 +1718,24 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 if (button.Pressed)
                 {
                     _boxSelecting = true;
+                    _boxRegions = button.CtrlPressed && !CountrySelectionOnly && ProvincesBoxSelected is not null;
                     _boxStart = button.Position;
                     _boxCurrent = button.Position;
                     QueueRedraw();
+                }
+                else if (_boxSelecting && _boxRegions)
+                {
+                    _boxCurrent = button.Position;
+                    _boxSelecting = false;
+                    _boxRegions = false;
+                    var area = RectFromPoints(_boxStart, _boxCurrent);
+                    var provinces = area.Size.Length() >= 8f ? ProvincesInScreenRect(area) : new List<int>();
+                    if (provinces.Count == 0 && TryPick(button.Position, out var single, updateSelection: false) && single.ProvinceId > 0)
+                        provinces.Add(single.ProvinceId);
+                    if (provinces.Count > 0) ProvincesBoxSelected?.Invoke(provinces);
+                    QueueRedraw();
+                    AcceptEvent();
+                    return;
                 }
                 else if (_boxSelecting)
                 {

@@ -20,5 +20,14 @@
   "Jobs filled": "Рабочие места заняты",
   "A new building needs workers and inputs. Expanding every factory without enough people may redistribute labour instead of increasing total production.": "Новому зданию нужны работники и сырьё. Если людей не хватает, расширение заводов может лишь перераспределить труд, а не увеличить общий выпуск.",
   "Economic calibration": "Калибровка экономики",
-  "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.": "В начале сценария, пока рынок устаканивается, коэффициент выпуска подстраивается под стартовый ВВП. Поэтому калибровка может поглощать ранние изменения выпуска. В модах длительность задаёт OutputSpinUpDays."
+  "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.": "В начале сценария, пока рынок устаканивается, коэффициент выпуска подстраивается под стартовый ВВП. Поэтому калибровка может поглощать ранние изменения выпуска. В модах длительность задаёт OutputSpinUpDays.",
+  "Build in {0} of your regions": "Стройка в ваших регионах: {0}",
+  " and {0} more": " и ещё {0}",
+  "Each button orders one building in every region of the selection that can take it.": "Каждая кнопка заказывает по одному зданию в каждом выделенном регионе, где его можно построить.",
+  "{0} · {1} each": "{0} · {1} за каждое",
+  "Build in {0}": "Построить в {0}",
+  "Queued {0} × {1} for {2}.": "Заказано: {1} × {0} на {2}.",
+  "Order submitted. The host will validate the construction sites.": "Приказ отправлен. Хост проверит места строительства.",
+  "Every selected region can take it.": "Подходит каждый выделенный регион.",
+  "{0} of the {1} regions can take it.": "Подходит регионов: {0} из {1}."
 }

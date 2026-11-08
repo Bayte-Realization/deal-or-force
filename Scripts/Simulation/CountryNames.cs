@@ -116,6 +116,16 @@ public static class CountryNames
             // spelling preference is about the name, not about the state.
             if (!string.IsNullOrEmpty(variant) && Loc.Has(key + "." + variant)) return Loc.Get(key + "." + variant);
             if (Loc.Has(key)) return Loc.Get(key);
+            // A form of state with a name and no short form for the map is still that state on
+            // the map: China under the Beiyang Government read "Beiyang Government" in every tab
+            // and "CHINA" on the map, because the map fell through to the country's plain short
+            // name. One state, one name; a mod that wants a shorter label writes the ".map" row.
+            if (map)
+            {
+                var named = key[..^".map".Length] + ".name";
+                if (!string.IsNullOrEmpty(variant) && Loc.Has(named + "." + variant)) return Loc.Get(named + "." + variant);
+                if (Loc.Has(named)) return Loc.Get(named);
+            }
         }
         // No name written for what it has become: the name it had, in the form its new
         // politics give a state - a France gone communist is a People's Republic. Not on the

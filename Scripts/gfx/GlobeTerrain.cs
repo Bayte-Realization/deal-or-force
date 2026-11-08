@@ -149,7 +149,7 @@ public sealed partial class GlobePresentation
     {
         var water = TerrainCatalog.Water;
         return string.Join("|", definitions.Select(d => d.Id + "=" + d.Texture + "#" + d.Color)) +
-               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|" +
+               $"|{TerrainCatalog.TileResolution}|{TerrainCatalog.SeamlessTiles}|{TerrainCatalog.HeightPath}|{TerrainCatalog.ReliefColorPath}|{TerrainCatalog.ReliefColorOpacity > 0f}|" +
                $"{TerrainCatalog.BathymetryPath}|{water.LakeTexture}|{water.RiverTexture}|{water.TileResolution}";
     }
 
@@ -160,7 +160,13 @@ public sealed partial class GlobePresentation
         var options = new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(System.Environment.ProcessorCount - 2, 1, 6) };
         Parallel.For(0, definitions.Count, options, index => prepared.Tiles[index] = PrepareTerrainTile(definitions[index]));
         prepared.Height = ReliefImage(TerrainCatalog.HeightPath, new Color(.5f, .5f, .5f));
-        prepared.Colour = ReliefImage(TerrainCatalog.ReliefColorPath, new Color(.57f, .58f, .47f));
+        // The relief's own colours are drawn at relief_color_opacity, and the shipped map draws
+        // them at nought: the 5760-wide picture was decoded, given mipmaps and uploaded - 63 MB of
+        // video memory and a second of loading - to be multiplied by zero. A map that shows them
+        // (a mod raising the opacity) loads them; one that does not gets a texel of the fallback.
+        prepared.Colour = TerrainCatalog.ReliefColorOpacity > 0f
+            ? ReliefImage(TerrainCatalog.ReliefColorPath, new Color(.57f, .58f, .47f))
+            : ReliefImage("", new Color(.57f, .58f, .47f));
         prepared.Floor = ReliefImage(TerrainCatalog.BathymetryPath, new Color(0f, 0f, 0f));
         var water = TerrainCatalog.Water;
         prepared.Lake = WaterTileImage(water.LakeTexture, water.TileResolution);

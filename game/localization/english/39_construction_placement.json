@@ -20,5 +20,14 @@
   "Jobs filled": "Jobs filled",
   "A new building needs workers and inputs. Expanding every factory without enough people may redistribute labour instead of increasing total production.": "A new building needs workers and inputs. Expanding every factory without enough people may redistribute labour instead of increasing total production.",
   "Economic calibration": "Economic calibration",
-  "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.": "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays."
+  "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.": "During the scenario's initial market settling period, output scale is recalibrated to its starting GDP. Early changes in output can therefore be absorbed by calibration. Modders can change OutputSpinUpDays.",
+  "Build in {0} of your regions": "Build in {0} of your regions",
+  " and {0} more": " and {0} more",
+  "Each button orders one building in every region of the selection that can take it.": "Each button orders one building in every region of the selection that can take it.",
+  "{0} · {1} each": "{0} · {1} each",
+  "Build in {0}": "Build in {0}",
+  "Queued {0} × {1} for {2}.": "Queued {0} × {1} for {2}.",
+  "Order submitted. The host will validate the construction sites.": "Order submitted. The host will validate the construction sites.",
+  "Every selected region can take it.": "Every selected region can take it.",
+  "{0} of the {1} regions can take it.": "{0} of the {1} regions can take it."
 }

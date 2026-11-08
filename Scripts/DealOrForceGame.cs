@@ -326,6 +326,8 @@ public partial class DealOrForceGame : Control
             return;
         }
         if (HandleConstructionPlacementInput(inputEvent)) return;
+        if (IsInstanceValid(_regionGroupBuild) && inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        { CloseRegionGroupBuild(); GetViewport().SetInputAsHandled(); return; }
         if (IsInstanceValid(_authorCanvas))
         {
             // Child inspectors and confirmation dialogs own their Escape key.
@@ -806,6 +808,7 @@ public partial class DealOrForceGame : Control
             _globe.SupportBoxPicked += OnSupportBoxPicked;
             _globe.BattlePicked += ShowBattleDetails;
             _globe.ArmiesBoxPicked += OnArmiesBoxPicked;
+            _globe.ProvincesBoxSelected += OnRegionsBoxSelected;
             _globe.FleetsBoxPicked += OnFleetsBoxPicked;
             _globe.ProvinceCommanded += OnProvinceCommanded;
             AddChild(_globe);
