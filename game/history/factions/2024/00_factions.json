@@ -76,7 +76,7 @@
       "claims_state": true,
       "relation": "war", "war_name": "Syrian Civil War",
       "parent_modifier": "syrian_army_overstretched",
-      "army_share": 0.0, "fighters": 50000, "parent_fighters": 30000, "militia": 4,
+      "army_share": 0.0, "fighters": 50000, "parent_fighters": 30000, "militia": 4, "population": 1900000,
       "stability": 0.42, "war_support": 0.82,
       "overlord": "TUR", "subject_type": "client"
     },
@@ -96,7 +96,7 @@
       "claims_state": true,
       "relation": "war", "war_name": "Syrian Civil War",
       "parent_modifier": "syrian_army_overstretched",
-      "army_share": 0.0, "fighters": 65000, "parent_fighters": 30000, "militia": 5,
+      "army_share": 0.0, "fighters": 65000, "parent_fighters": 30000, "militia": 5, "population": 3400000,
       "stability": 0.52, "war_support": 0.92,
       "patrons": ["TUR", "QAT"], "listed_by": ["USA", "GBR", "TUR", "RUS", "CAN", "FRA", "DEU", "ARE", "SAU"]
     },
@@ -114,7 +114,7 @@
       ],
       "relation": "war", "war_name": "Syrian Civil War",
       "parent_modifier": "syrian_army_overstretched",
-      "army_share": 0.0, "fighters": 85000, "parent_fighters": 30000, "militia": 4,
+      "army_share": 0.0, "fighters": 85000, "parent_fighters": 30000, "militia": 4, "population": 3000000,
       "stability": 0.5, "war_support": 0.6,
       "patrons": ["USA"], "listed_by": ["TUR"]
     },
