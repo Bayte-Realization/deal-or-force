@@ -1350,6 +1350,10 @@ public sealed partial class Campaign
     public void AttachProvinceTopology(ProvinceTopology topology)
     {
         ProvinceMap = topology;
+        // Who the scenario gave each region to, and each country's figure, before the map says
+        // who actually holds what (OpeningOccupation). A new world only.
+        var opening = _pendingProvinceController is null && !InitialDeploymentCompleted && ElapsedDays == 0
+            ? new OpeningOccupation(this) : null;
 
         // The political map is data. The raster says where the provinces are; this says who
         // owns them, and a mod that moves one border only has to name that one province.
@@ -1423,6 +1427,7 @@ public sealed partial class Campaign
         // before regions could be split heals here instead of staying wrong for ever.
         StatePartition.RepartitionWorld(this);
         StatePartition.Reunify(this);
+        opening?.KeepControlledFigures(this);
 
         if (savedTopologyMatches && RepairDiminishedRestorationsAfterAttach)
             FormableRestorations.RepairDiminishedIdentities(this);

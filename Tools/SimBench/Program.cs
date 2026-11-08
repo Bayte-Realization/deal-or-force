@@ -292,6 +292,9 @@ public static class Program
         if (Array.IndexOf(args, "--navy") >= 0) return PeaceReport.Navy(campaign, days);
         // `--trace TAG`: one country every fifteen days - people, ground, money - where a player
         // saw a country lose a fifth of its people and nine tenths of its treasury in four months.
+        if (OpeningOccupation.LastScaled.Count > 0)
+            Console.WriteLine("  opening occupation: kept the written figure over the regions still held by " +
+                              string.Join(" | ", OpeningOccupation.LastScaled.Select(row => $"{row.Tag} x{row.Scale:0.00} [{row.Lost}]")));
         var traceAt = Array.IndexOf(args, "--trace");
         if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
         {

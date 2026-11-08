@@ -347,6 +347,9 @@ public partial class DealOrForceGame
         // ------------------------------------------------------------------------- the rest --
         //
         // One joke, kept on purpose: it takes its own advice. The rest of the console is tools.
+        Add("memory", "DIAGNOSTICS", "memory [count]",
+            "Where the game's memory is: the process, the managed heap, the renderer and the largest textures.",
+            args => DealOrForce.MemoryReport.Build(int.TryParse((args ?? "").Trim(), out var count) ? Math.Clamp(count, 1, 200) : 25));
         Add("touchgrass", "FUN", "touchgrass",
             "A verse, and eight seconds later the game closes. It does not save first. " +
             "The text is in game/localization.",

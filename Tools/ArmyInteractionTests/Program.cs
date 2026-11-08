@@ -144,6 +144,7 @@ static class Program
         }
         if (args.Contains("--save-seed-only")) { SaveAndSeedTests.Run(c); return; }
         if (args.Contains("--quiet-war-only")) { QuietWarTests.Run(c); return; }
+        if (args.Contains("--opening-population-only")) { OpeningPopulationTests.Run(c); return; }
         if (args.Contains("--peace-tidy-only")) { PeaceTidyTests.Run(c); return; }
         if (args.Contains("--peace-maritime-only")) { MaritimePeaceTests.Run(c); return; }
         if (args.Contains("--peace-real-only")) { PeaceCoalitionTests.RunReal(c); return; }

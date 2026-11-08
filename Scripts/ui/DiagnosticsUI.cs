@@ -84,6 +84,9 @@ public partial class DealOrForceGame
     /// and the engine's own allocator were a tenth of it in a long 2046 campaign; the rest is the
     /// renderer and the driver, so the log carries their counters beside it to show which grows.
     /// </summary>
+    /// <summary>Where the memory is (MemoryReport); for tools that drive the game, and the console's `memory`.</summary>
+    public string MemoryReport(int top = 25) => DealOrForce.MemoryReport.Build(top);
+
     private static long PrivateBytes()
     {
         using var process = System.Diagnostics.Process.GetCurrentProcess();

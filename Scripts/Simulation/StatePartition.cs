@@ -212,7 +212,7 @@ public static class StatePartition
         {
             if (index == parentIndex) continue;
             var piece = pieces[index];
-            var share = piece.Count / (float)total;
+            var share = PeopleShare(campaign, topology, state, piece, provinces);
             var owner = topology.ProvinceToNation[piece[0]];
             var carved = Carve(campaign, state, piece, share, owner,
                 Unique(campaign, Name(state.Name, Centre(topology, piece), parentCentre, index)));
@@ -284,6 +284,43 @@ public static class StatePartition
         campaign.InvalidateStateIndex();
         campaign.MarkMapChanged();
         return created;
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ProvinceTopology, Tuple<int[], long[]>> Weights = new();
+
+    /// <summary>
+    /// What share of a region's people live in this piece of it: the townspeople by the towns
+    /// that stand in it, the rest by the ground it covers.
+    ///
+    /// It used to be the share of its provinces, and provinces are cut by ground, not people: a
+    /// border province of Lebanon's three that the map gave to Israel took a third of Lebanon's
+    /// people with it, and the half of a city's oblast a front line cut off was as populous as
+    /// the half with the city in it.
+    /// </summary>
+    internal static float PeopleShare(Campaign campaign, ProvinceTopology topology, ScenarioState state,
+        IReadOnlyCollection<int> piece, IReadOnlyCollection<int> whole)
+    {
+        var weights = Weights.GetValue(topology, map =>
+        {
+            var cells = new int[map.ProvinceCount + 1];
+            foreach (var province in map.CellToProvince)
+                if (province > 0 && province <= map.ProvinceCount) cells[province]++;
+            var towns = new long[map.ProvinceCount + 1];
+            var cities = CityCatalog.All;
+            var under = CityCatalog.ProvincesOf(map);
+            for (var index = 0; index < cities.Count && index < under.Length; index++)
+                if (under[index] > 0 && under[index] <= map.ProvinceCount) towns[under[index]] += Math.Max(0, cities[index].Population);
+            return Tuple.Create(cells, towns);
+        });
+        long Sum(IEnumerable<int> provinces, long[] values) { long total = 0; foreach (var p in provinces) total += values[p]; return total; }
+        long Count(IEnumerable<int> provinces) { long total = 0; foreach (var p in provinces) total += weights.Item1[p]; return total; }
+        var ground = Count(whole);
+        var groundShare = ground > 0 ? Count(piece) / (double)ground : piece.Count / (double)Math.Max(1, whole.Count);
+        var town = Sum(whole, weights.Item2);
+        if (town <= 0) return (float)groundShare;
+        var townShare = Sum(piece, weights.Item2) / (double)town;
+        var urban = Math.Clamp(state.Urbanization, 0f, 1f);
+        return (float)Math.Clamp(urban * townShare + (1 - urban) * groundShare, 0, 1);
     }
 
     /// <summary>
