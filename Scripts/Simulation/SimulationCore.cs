@@ -1203,6 +1203,13 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("lost lands")) LostLands.Tick(this);
             yield return 0;
 
+            // Pieces of one region that have come back under one flag become one region again
+            // today, not on the next load. Only an annexation used to ask; ground that changed
+            // hands any other way stayed two regions in the running game and one in its save,
+            // so saving and loading changed the world - and a player joining a network game,
+            // who is sent exactly that save, started in a different world from the host's.
+            using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
+
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
             CapitalCore.Tick(this);

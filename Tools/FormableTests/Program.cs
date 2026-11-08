@@ -341,6 +341,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         if (args.Contains("--state-failure-only")) { StateFailureTests.Run(); return; }
         if (args.Contains("--cue-queue-only")) { StrategicCueQueueTests.Run(); return; }
         if (args.Contains("--network-cadence-only")) { NetworkSyncCadenceTests.Run(); return; }
+        if (args.Contains("--network-lockstep-only")) { NetworkLockstepTests.Run(); return; }
         if (args.Contains("--snapshot-delivery-only")) { NetworkSnapshotDeliveryTests.Run(); return; }
         if (args.Contains("--claims-only")) { TerritorialClaimsTests.Run(); return; }
         if (args.Contains("--diplomatic-participation-only")) { DiplomaticParticipationTests.Run(); return; }
@@ -498,6 +499,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         CivilWarBudgetTests.Run();
         StrategicCueQueueTests.Run();
         NetworkSyncCadenceTests.Run();
+        NetworkLockstepTests.Run();
         NetworkSnapshotDeliveryTests.Run();
         StagedStepBoundaryTests.Run();
         ModFrontendActionTests.Run();

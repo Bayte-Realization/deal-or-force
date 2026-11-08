@@ -53,8 +53,10 @@ static class QuietWarTests
         Check(WarWeariness.NoContactPeaceReady(c, unreachable),
             "unreachable AI-only war ends before a full year without contact");
         unreachable.AttackerFront.Add(1);
-        Check(!WarWeariness.NoContactPeaceReady(c, unreachable),
-            "an actual front prevents early unreachable-war peace");
+        // A front on paper is not a route (WarWeariness.NoContactPeaceReady): an army assigned to
+        // a frontier the two sides do not share waited there for a year with nothing to fight.
+        Check(WarWeariness.NoContactPeaceReady(c, unreachable),
+            "a front on paper with no route between the sides does not keep an unreachable war alive");
         unreachable.AttackerFront.Clear();
         c.Defines.AiUnreachableWarPeaceDays = 0;
         Check(!WarWeariness.NoContactPeaceReady(c, unreachable),

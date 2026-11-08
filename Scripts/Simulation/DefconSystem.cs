@@ -167,16 +167,17 @@ public static class DefconSystem
                 var nameA = attacker?.DisplayName ?? "Holder";
                 var nameB = defender?.DisplayName ?? "Holder";
 
-                // Severe prolonged clash or extreme war score -> DEFCON 1
-                var prolonged = campaign.ElapsedDays - war.StartedDay >= 45;
-                var intense = MathF.Abs(war.WarScore) >= 40f;
-                if (prolonged || intense)
+                // The brink itself only when one of them is losing on its own soil - its capital
+                // taken, its war lost past recovery (NuclearPosture.Existential). Six weeks of
+                // fighting used to be enough: Kargil, the Ussuri and every Indian-Pakistani
+                // exchange since would each have been a DEFCON 1, a level the real world has
+                // never once declared. Two holders at war, however long and however one-sided,
+                // is the brink's antechamber (2).
+                if (NuclearPosture.Existential(campaign, attacker) || NuclearPosture.Existential(campaign, defender))
                 {
-                    target = 1;
                     primaryHotspot = Loc.Format("{0} — {1}: nuclear powers in open war", nameA, nameB);
-                    return target; // Lowest possible
+                    return 1; // Lowest possible
                 }
-
                 if (target > 2)
                 {
                     target = 2;
@@ -196,7 +197,7 @@ public static class DefconSystem
                     target = 2;
                     primaryHotspot = Loc.Format("{0}: in a world war", holder?.DisplayName ?? "");
                 }
-                else if (enemy is not null && AllianceSystem.GreatPowers(campaign).Contains(enemy.Id) && target > 3)
+                else if (enemy is not null && WorldWar.WorldPowers(campaign).Contains(enemy.Id) && target > 3)
                 {
                     target = 3;
                     primaryHotspot = Loc.Format("{0} — {1}: war with a leading military power", holder?.DisplayName ?? "", enemy.DisplayName);

@@ -14,6 +14,11 @@ public sealed partial class Defines
     public int InterventionReviewDays { get; set; } = 14;
     /// <summary>Willingness score threshold above which an AI government agrees to intervene in a foreign war.</summary>
     public float AiInterventionWillingness { get; set; } = 0.45f;
+    /// <summary>
+    /// What fighting a deterrent holder costs a government that holds one itself, in willingness:
+    /// the war it would join is a war between two nuclear powers. Zero restores the old reckoning.
+    /// </summary>
+    public float AiInterventionDeterrence { get; set; } = 1.2f;
 }
 
 public enum WarInterventionState { Pending, Joined, Declined, Withdrawn, Expired, Invalidated }
@@ -259,6 +264,11 @@ public static class WarInterventions
         var enemyStrength = CampaignIntel.EstimatedStrength(c, donorId, enemy, refreshAssessment: false);
         willingness += Math.Clamp(mine / MathF.Max(0.01f, enemyStrength) - 0.75f, -0.8f, 0.8f);
         if (c.Wars.Any(w => !w.Ended && w.Involves(donorId))) willingness -= 0.6f;
+        // Arms and money are one decision; troops against a nuclear power are another. The
+        // reckoning above priced the United States joining Ukraine's war by the size of the two
+        // armies, and found it worth doing by spring 2024. Every enemy holder counts once.
+        if (Deterrence.TierOf(c, donor) >= 1 && war.EnemiesOf(requesterId).Any(id => Deterrence.TierOf(c, c.NationById(id)) >= 1))
+            willingness -= Math.Max(0f, c.Defines.AiInterventionDeterrence);
         willingness = AiTemper.Willing(c, willingness);
         var aiWouldGrant = !donor.IsHuman && willingness >= c.Defines.AiInterventionWillingness;
 

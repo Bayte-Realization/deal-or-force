@@ -272,7 +272,7 @@ public partial class DealOrForceGame : Control
         finally { _applyingNetworkCommand = wasApplying; }
         if (_networkConnected && _networkIsHost && _networkGameStarted)
         {
-            Rpc(nameof(ClientAdvanceNetworkDay), campaign.ElapsedDays);
+            Rpc(nameof(ClientAdvanceNetworkHours), campaign.ElapsedHours, campaign.TickHours);
             BroadcastNetworkChecksum();
         }
     }

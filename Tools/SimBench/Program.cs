@@ -290,6 +290,33 @@ public static class Program
         if (Array.IndexOf(args, "--traits") >= 0) return ProtestReport.Traits(campaign, days);
         if (Array.IndexOf(args, "--peace") >= 0) return PeaceReport.Run(campaign, days);
         if (Array.IndexOf(args, "--navy") >= 0) return PeaceReport.Navy(campaign, days);
+        // `--trace TAG`: one country every fifteen days - people, ground, money - where a player
+        // saw a country lose a fifth of its people and nine tenths of its treasury in four months.
+        var traceAt = Array.IndexOf(args, "--trace");
+        if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
+        {
+            campaign.IsPaused = false;
+            void Line(int day)
+            {
+                var regions = campaign.StatesOf(traced);
+                var people = regions.Sum(r => r.Population);
+                var held = campaign.States.Where(r => r.HeldById == traced.Id || r.NationMapIndex == traced.MapIndex).Sum(r => r.Population);
+                var occupied = regions.Sum(r => (long)(r.Population * StabilityCore.OccupiedShare(campaign, r, traced)));
+                var deaths = regions.Sum(r => r.ReviewDeaths); var births = regions.Sum(r => r.ReviewBirths);
+                var migration = regions.Sum(r => r.ReviewNetMigration);
+                Console.WriteLine($"TRACE day {day,4} {campaign.Date}: pop {traced.Population:N0} (regions {regions.Length}, their people {people:N0}, occupied {occupied:N0}) " +
+                                  $"births {births:N0} deaths {deaths:N0} net migration {migration:N0} | treasury {traced.Treasury:0.00} bn, weekly {traced.WeeklyBalance:0.000} " +
+                                  $"(tax {traced.WeeklyTaxIncome:0.000}, spend {traced.WeeklyExpenses:0.000}), inflation {traced.Inflation:P1}, stability {traced.Stability:0.00}, " +
+                                  $"wars {campaign.Wars.Count(w => !w.Ended && w.Involves(traced.Id))}");
+            }
+            Line(0);
+            for (var day = 1; day <= days; day++)
+            {
+                campaign.TickDay();
+                if (day % 15 == 0 || day == days) Line(day);
+            }
+            return 0;
+        }
         var whyAt = Array.IndexOf(args, "--why");
         if (whyAt >= 0 && whyAt + 1 < args.Length) return PeaceReport.Why(campaign, days, args[whyAt + 1]);
         // `--ai-appetite`: why the wars that did NOT happen did not happen - the balance sheet
@@ -906,9 +933,34 @@ public static class Program
             var covert = new Dictionary<string, int>();
             var largest = 0;
             var bornFrom = campaign.Nations.Count;
+            // How long the world spends at each alert, and why it moved: a DEFCON 1 inside the
+            // first months of 2024 was a player's report before it was a number here.
+            var defconDays = new int[6];
+            var holderWars = new HashSet<string>();
+            var lastDefcon = campaign.DefconLevel;
             for (var day = 1; day <= pulseDays; day++)
             {
                 campaign.TickDay();
+                defconDays[Math.Clamp(campaign.DefconLevel, 1, 5)]++;
+                // Two deterrent holders on opposite sides of one war: who, in which war, and since when.
+                foreach (var war in campaign.Wars)
+                {
+                    if (war.Ended || war.CivilConflict) continue;
+                    var holdersA = war.Side(true).Where(id => Deterrence.TierOf(campaign, campaign.NationById(id)) >= 1).ToList();
+                    var holdersD = war.Side(false).Where(id => Deterrence.TierOf(campaign, campaign.NationById(id)) >= 1).ToList();
+                    if (holdersA.Count == 0 || holdersD.Count == 0) continue;
+                    var key = $"{war.Id}:{string.Join(",", holdersA)}:{string.Join(",", holdersD)}";
+                    if (!holderWars.Add(key)) continue;
+                    string Tags(IEnumerable<int> ids) => string.Join("+", ids.Select(id => campaign.NationById(id)?.Tag));
+                    Console.WriteLine($"   HOLDERS AT WAR day {day}: {campaign.NationById(war.AttackerId)?.Tag} -> {campaign.NationById(war.DefenderId)?.Tag} " +
+                                      $"(started day {war.StartedDay}, {war.BelligerentCount} in it): {Tags(holdersA)} vs {Tags(holdersD)}; attackers {Tags(war.Side(true))}; defenders {Tags(war.Side(false))}");
+                }
+                if (campaign.DefconLevel != lastDefcon)
+                {
+                    DefconSystem.EvaluateTarget(campaign, out var why);
+                    Console.WriteLine($"   DEFCON day {day}: {lastDefcon} -> {campaign.DefconLevel} ({why})");
+                    lastDefcon = campaign.DefconLevel;
+                }
                 var entries = campaign.Chronicle.Read(-1, -1, true);
                 foreach (var entry in entries.Where(e => e.Sequence > pulseSeen))
                 {
@@ -937,6 +989,7 @@ public static class Program
                 year.Clear();
                 largest = 0;
             }
+            Console.WriteLine($"PULSE defcon days: 5={defconDays[5]} 4={defconDays[4]} 3={defconDays[3]} 2={defconDays[2]} 1={defconDays[1]}; peak {campaign.DefconPeakLevel}");
             Console.WriteLine($"PULSE world GDP {campaign.Nations.Where(n => n.Population > 0).Sum(n => (double)n.Gdp):N0} bn; " + WorldMarketLine(campaign));
             Console.WriteLine("PULSE total: " + string.Join(", ", total.OrderByDescending(entry => entry.Value).ThenBy(entry => entry.Key).Select(entry => $"{entry.Key} {entry.Value}")));
             Console.WriteLine($"PULSE army: formations lost {campaign.Nations.Sum(n => n.FormationsLost)}, surrendered {WarLosses.SurrenderedFormations}, " +
@@ -12293,7 +12346,7 @@ public static class Program
         MediaLibraryCatalog.Load();
         Coups.ResetCatalog();
         Coups.GovernmentRisk(new Nation());
-        if (ConsoleVerse.TouchGrass("english").Length == 0) return "the console's verse came back empty";
+        if (Loc.Get("console.touchgrass.verse") == "console.touchgrass.verse") return "the console's verse came back empty";
 
         var asked = new HashSet<string>(GameDataLoader.Asked, StringComparer.OrdinalIgnoreCase);
         if (asked.Count == 0) return "nothing has asked the loader for any data at all";

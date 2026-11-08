@@ -473,7 +473,7 @@ public static class NuclearPosture
     /// Defeat on its own soil: a war (not a civil one) this country is losing past -60, or one in
     /// which the enemy holds its capital - and an enemy force standing on its ground to strike.
     /// </summary>
-    private static bool Existential(Campaign c, Nation n)
+    internal static bool Existential(Campaign c, Nation n)
     {
         var controllers = c.ProvinceController;
         var capitalLost = controllers is not null && n.CapitalProvinceId > 0 && n.CapitalProvinceId < controllers.Length &&
@@ -532,11 +532,15 @@ public static class NuclearPosture
             }
         }
         if (d.AiNuclearPosture) AiWeek(c);
-        if (DefconSystem.CurrentLevel(c) <= 2 && MovementRules.Roll(c.Seed, 0x4E55, c.ElapsedDays, 0x1983) < d.NuclearIncidentChance)
+        // A false warning in a tense season (DEFCON 3) takes the world to the brink's antechamber,
+        // never past it: 1983 was a satellite mistaking sunlight for missiles, and the man on
+        // duty did not pass it on. It used to fire at DEFCON 2 as well and take the world to 1 -
+        // a level reached by accident inside the first few months of most campaigns.
+        if (DefconSystem.CurrentLevel(c) == 3 && MovementRules.Roll(c.Seed, 0x4E55, c.ElapsedDays, 0x1983) < d.NuclearIncidentChance)
         {
             // Two holders the incident is between: the most alarmed pair.
             var pair = c.Nations.Where(n => n.Population > 0 && IsHolder(c, n)).OrderBy(n => n.NuclearPosture).ThenBy(n => n.Id).Take(2).ToList();
-            c.DefconLevel = Math.Max(1, c.DefconLevel - 1);
+            c.DefconLevel = Math.Max(2, c.DefconLevel - 1);
             c.DefconDaysInStage = 0;
             c.DefconPeakLevel = Math.Min(c.DefconPeakLevel, c.DefconLevel);
             c.Chronicle.Record(c, "nuclear_incident", pair.Count > 0 ? pair[0].Id : c.Player?.Id ?? 0,

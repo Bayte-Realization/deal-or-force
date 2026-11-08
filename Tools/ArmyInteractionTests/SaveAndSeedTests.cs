@@ -58,14 +58,17 @@ static class SaveAndSeedTests
             var untouched = SaveSystem.Load(folder, "editable", "test-mod");
             Check(untouched.Success, "untouched text campaign loads");
             untouched.Campaign.AttachProvinceTopology(campaign.ProvinceMap.CloneForOverrides());
-            Check(CampaignFingerprint.Of(untouched.Campaign) == CampaignFingerprint.Of(campaign),
-                "untouched save preserves the strategic world fingerprint");
             var beforeSnapshot = NetworkJson(campaign);
             var afterSnapshot = NetworkJson(untouched.Campaign);
             // Attaching the restored topology increments its cache-revision counter once.
             beforeSnapshot.AsObject().Remove("MapRevision");
             afterSnapshot.AsObject().Remove("MapRevision");
             var identical = JsonNode.DeepEquals(beforeSnapshot, afterSnapshot);
+            // Said with the first field that differs: the fingerprint alone says only that
+            // something did, and every snapshot sent to a joining player is this same save.
+            Check(CampaignFingerprint.Of(untouched.Campaign) == CampaignFingerprint.Of(campaign),
+                "untouched save preserves the strategic world fingerprint" +
+                (identical ? " (every serialised field is equal: a fingerprinted value is not saved)" : ": " + FirstDifference(beforeSnapshot, afterSnapshot)));
             Check(identical, "untouched save preserves every authored/active serialised field" +
                 (identical ? "" : ": " + FirstDifference(beforeSnapshot, afterSnapshot)));
             SaveSystem.Save(folder, "roundtrip", untouched.Campaign, "test-mod");

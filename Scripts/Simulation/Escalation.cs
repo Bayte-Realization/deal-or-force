@@ -439,12 +439,19 @@ public static class Escalation
         // at all, and Ukraine, fighting for its life against Russia, does not open a second front
         // on Belarus. A standoff in which neither side would fire first stays a crisis however
         // bad it gets.
-        var deterred = relation.Tension >= defines.TensionClashesAt && StageOf(relation) < TensionStage.Clashes &&
+        // Clashes already under way are held to the same test: an exchange of fire nobody is
+        // willing to open is a crisis by next week - the scenario opened the United States and
+        // Russia at "border clashes" and nothing ever asked again who was shooting.
+        var deterred = relation.Tension >= defines.TensionClashesAt && StageOf(relation) <= TensionStage.Clashes &&
                        Deterred(c, a, b);
         if (deterred) relation.Tension = defines.TensionClashesAt - 0.5f;
 
         var border = CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
-        SetStage(c, relation, a, b, StageFor(defines, relation));
+        var stage = StageFor(defines, relation);
+        // Hysteresis keeps a stage until tension is well below its line; nobody shooting is not
+        // a matter of degree.
+        if (deterred && stage >= TensionStage.Clashes) stage = TensionStage.Crisis;
+        SetStage(c, relation, a, b, stage);
 
         if (StageOf(relation) >= TensionStage.Clashes) Clash(c, relation, a, b, border, days);
         MaybeIncident(c, relation, a, b, border, days);
@@ -825,6 +832,12 @@ public static class Escalation
     {
         if (!CanFace(c, shooter, target, refreshAssessment)) return false;
         if (AiStatecraft.Restraint(c, shooter) >= c.Defines.AiDemocraticPeaceRestraint) return false;
+        // Two deterrent holders shoot at each other only across a border they share - Galwan,
+        // the Line of Control, the Ussuri. Without one, opening fire is a decision to fight a
+        // nuclear power far from home, and no government has taken it: the United States and
+        // Russia used to reach "border clashes" in the first week of 2024.
+        if (Deterrence.TierOf(c, shooter) >= 1 && Deterrence.TierOf(c, target) >= 1 &&
+            !CampaignDiplomacy.SharesLandBorder(c, shooter.MapIndex, target.MapIndex)) return false;
         foreach (var war in c.Wars)
             if (!war.Ended && war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
         return true;

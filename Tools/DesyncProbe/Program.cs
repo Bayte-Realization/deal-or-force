@@ -56,6 +56,8 @@ public static class Program
         }
         client.IsPaused = false;
 
+        if (args.Contains("lockstep")) return Lockstep(host, client, daysAfter, args.Contains("byday"));
+
         if (args.Contains("engagement"))
         {
             CompareEngagements(host, client);
@@ -81,6 +83,84 @@ public static class Program
             Console.WriteLine($"day {day + 1}: identical.");
         }
         Console.WriteLine("no divergence found - rerun the probe, the check may be flaky.");
+        return 0;
+    }
+
+    /// <summary>
+    /// The transport's rules played out without the transport: the host steps an hour at a
+    /// time and gives orders between steps, the client steps to the hour each step reports
+    /// and carries out each order as the game's NetworkHeldOrders would. "byday" plays the
+    /// rule the game had before: orders held to the host's day, the client aimed at the
+    /// start of that day. The worlds are compared every day.
+    /// </summary>
+    private static int Lockstep(Campaign host, Campaign client, int days, bool byDay)
+    {
+        host.Commands.SubmitInterceptor = null;
+        client.Commands.SubmitInterceptor = null;
+        var held = new NetworkHeldOrders();
+        var heldByDay = new List<(int Day, ICampaignCommand Command)>();
+        var issuers = new[] { "DEU", "USA", "IND", "BRA", "KOR" }.Select(host.NationByTag).Where(n => n is not null).ToArray();
+        var step = 0;
+        void ClientApply(ICampaignCommand command) { client.Commands.Enqueue(command); client.Commands.ApplyAll(client); }
+        void ClientDue()
+        {
+            if (!byDay) { held.ApplyDue(client.ElapsedHours); return; }
+            for (var i = 0; i < heldByDay.Count; i++)
+                if (heldByDay[i].Day <= client.ElapsedDays) { ClientApply(heldByDay[i].Command); heldByDay.RemoveAt(i); i--; }
+        }
+        for (var day = 1; day <= days; day++)
+        {
+            var until = host.ElapsedDays + 1;
+            while (host.ElapsedDays < until)
+            {
+                host.Tick();
+                step++;
+                // The step's report: the client steps to the hour (or, by day, the day's start).
+                var target = byDay ? host.ElapsedDays * 24L : host.ElapsedHours;
+                while (client.ElapsedHours < target) { client.Tick(); ClientDue(); }
+                // An order between two steps, at an hour that is not midnight.
+                if (step % 7 == 3 && issuers.Length > 0)
+                {
+                    var issuer = issuers[step % issuers.Length];
+                    var order = new SetMilitarySpendingCommand { IssuerId = issuer.Id, Value = 0.01f + (step % 9) * 0.004f };
+                    if (!NetworkCommandCodec.TryEncode(order, out var type, out var json) ||
+                        !NetworkCommandCodec.TryDecode(type, json, out var copy)) { Console.WriteLine("codec refused the order"); return 1; }
+                    host.Commands.Enqueue(order);
+                    host.Commands.ApplyAll(host);
+                    if (byDay)
+                    {
+                        if (host.ElapsedDays > client.ElapsedDays) heldByDay.Add((host.ElapsedDays, copy));
+                        else ClientApply(copy);
+                    }
+                    else held.ApplyOrHold(host.ElapsedHours, client.ElapsedHours, () => ClientApply(copy));
+                }
+                // A player leaves on day 3 and the AI takes the country, everywhere at once.
+                if (day == 3 && step % 24 == 11 && issuers.Length > 1 && !host.HumanSeats.Contains(issuers[1].Id))
+                {
+                    host.AddHumanSeat(issuers[0].Id); host.AddHumanSeat(issuers[1].Id);
+                    host.RemoveHumanSeat(issuers[1].Id);
+                    host.IsPaused = false;
+                    var a = issuers[0].Id; var b = issuers[1].Id;
+                    held.ApplyOrHold(host.ElapsedHours, client.ElapsedHours, () =>
+                    {
+                        client.AddHumanSeat(a); client.AddHumanSeat(b); client.RemoveHumanSeat(b);
+                        client.IsPaused = false;
+                    });
+                    if (byDay) held.ApplyDue(long.MaxValue);
+                }
+            }
+            var target2 = byDay ? host.ElapsedDays * 24L : host.ElapsedHours;
+            while (client.ElapsedHours < target2) { client.Tick(); ClientDue(); }
+            if (byDay) { while (client.ElapsedHours < host.ElapsedHours) { client.Tick(); ClientDue(); } }
+            var same = CampaignFingerprint.Of(host).ToString() == CampaignFingerprint.Of(client).ToString();
+            if (!same)
+            {
+                Console.WriteLine($"LOCKSTEP {(byDay ? "by day" : "by hour")}: worlds apart on day {day} (host hour {host.ElapsedHours}, client hour {client.ElapsedHours}): {FirstDrift(host, client) ?? "fingerprint only"}");
+                return 2;
+            }
+            Console.WriteLine($"day {day}: identical ({step} steps, {held.Count + heldByDay.Count} held)");
+        }
+        Console.WriteLine($"LOCKSTEP {(byDay ? "by day" : "by hour")}: {days} days identical.");
         return 0;
     }
 

@@ -106,10 +106,11 @@ static class DefconTests
         war.StartedDay = c.ElapsedDays - 50;
         war.WarScore = 45f;
         target = DefconSystem.EvaluateTarget(c, out _);
-        Check(target == 1, "prolonged high-score war between holders commands maximum DEFCON 1");
-        DefconSystem.Tick(c);
-        Check(c.DefconLevel == 1, "escalates to DEFCON 1 (launch-on-warning triad alert)");
-        Check(c.DefconPeakLevel == 1, "peak level reaches 1");
+        // The brink itself is a holder losing on its own soil (NuclearPosture.Existential), not a
+        // long war: six weeks of fighting made DEFCON 1 the ordinary state of a 2024 campaign.
+        Check(target == 2, "a prolonged high-score war between holders stays at DEFCON 2 while neither is losing at home");
+        c.DefconLevel = 1;
+        c.DefconPeakLevel = 1;
 
         // Save & Load roundtrip preservation
         var tempFolder = Path.Combine(Path.GetTempPath(), "dof-defcon-save-" + Guid.NewGuid().ToString("N"));
