@@ -82,6 +82,46 @@ static class LiveWarTests
             "the chronicle still names that war");
         Check(CampaignFingerprint.Of(second) == secondPrint && Has(Warfare.LiveWars(second), other),
             "ending a war in the first campaign does not touch the second");
+
+        ReplacedRecord();
+    }
+
+    static void ReplacedRecord()
+    {
+        var campaign = World(61111);
+        var historical = War(1, "The replaced old war", ended: true);
+        var open = War(2, "The replaced open war", ended: false);
+        campaign.Wars.Add(historical);
+        campaign.Wars.Add(open);
+        var seen = Warfare.LiveWars(campaign);
+        var passes = Warfare.LiveWarPasses;
+        var revision = campaign.WarRevision;
+        Check(ReferenceEquals(seen, Warfare.LiveWars(campaign)) && Warfare.LiveWarPasses == passes,
+            "an unchanged record reuses its board without a history walk");
+
+        // A restored record may contain new objects with the same IDs and length, without
+        // a declaration/end revision. The derived board must not keep the previous objects.
+        var restoredHistorical = War(1, "The replaced old war", ended: true);
+        var restoredOpen = War(2, "The replaced open war", ended: false);
+        campaign.Wars.Clear();
+        campaign.Wars.Add(restoredHistorical);
+        campaign.Wars.Add(restoredOpen);
+        var before = CampaignFingerprint.Of(campaign);
+        Check(campaign.Wars.Count == 2 && campaign.WarRevision == revision,
+            "replacement keeps the same record length and war revision");
+        var restoredSeen = Warfare.LiveWars(campaign);
+        Check(Warfare.LiveWarPasses == passes + 1 && Has(restoredSeen, restoredOpen) &&
+              !Has(restoredSeen, open) && !Has(restoredSeen, historical) && !Has(restoredSeen, restoredHistorical),
+            "same-length replacement refreshes to the restored open object with no old references");
+        Check(CampaignFingerprint.Of(campaign) == before,
+            "refreshing after replacement changes no authoritative state");
+        var advance = Warfare.AdvanceWars(campaign);
+        Check(advance.Count == 1 && Has(advance, restoredOpen) && !Has(advance, open),
+            "the advance snapshot also uses the restored objects");
+        Check(ReferenceEquals(restoredSeen, Warfare.LiveWars(campaign)) && Warfare.LiveWarPasses == passes + 1,
+            "repeated restored-record reads do not rebuild again");
+        Check(CampaignFingerprint.Of(campaign) == before,
+            "repeated reads and the advance snapshot leave the restored world unchanged");
     }
 
     static bool Has(System.Collections.Generic.IReadOnlyList<StrategicWar> wars, StrategicWar war)

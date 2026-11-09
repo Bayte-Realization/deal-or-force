@@ -423,6 +423,8 @@ public static partial class Warfare
         public readonly List<StrategicWar> Advance = new();
         public int Revision = int.MinValue;
         public int Count = -1;
+        /// <summary>The last object detects a whole record restored at the same length/revision.</summary>
+        public StrategicWar Tail;
     }
 
     static readonly ConditionalWeakTable<Campaign, LiveBoard> LiveBoards = new();
@@ -442,7 +444,8 @@ public static partial class Warfare
     {
         if (campaign is null) return Array.Empty<StrategicWar>();
         var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
-        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars))
+        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars) ||
+            !ReferenceEquals(board.Tail, campaign.Wars.Count > 0 ? campaign.Wars[^1] : null))
             RefreshLive(campaign, board);
         return board.Wars;
     }
@@ -495,6 +498,7 @@ public static partial class Warfare
         }
         board.Revision = campaign.WarRevision;
         board.Count = wars.Count;
+        board.Tail = wars.Count > 0 ? wars[^1] : null;
     }
 }
 
