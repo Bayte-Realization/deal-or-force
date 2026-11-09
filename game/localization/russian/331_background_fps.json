@@ -1,0 +1,5 @@
+{
+  "Frame rate when paused in the background": "Частота кадров на паузе в фоне",
+  "While the game is paused and another window is in front, the map is drawn at this rate instead of the full one - a cool graphics card for a game left open behind your other work. A running game is never slowed.": "Пока игра на паузе, а впереди другое окно, карта рисуется с этой частотой вместо полной — видеокарта не греется, пока игра открыта за другими окнами. Идущая игра никогда не замедляется.",
+  "Same as in front": "Как на переднем плане"
+}

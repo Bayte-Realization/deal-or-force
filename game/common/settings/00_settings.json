@@ -306,6 +306,14 @@
     "labels": ["Unlimited", "30", "60", "120", "144", "240"],
     "default": "0"
   },
+  "background_fps": {
+    "category": "video", "order": 321, "kind": "choice",
+    "name": "Frame rate when paused in the background",
+    "description": "While the game is paused and another window is in front, the map is drawn at this rate instead of the full one - a cool graphics card for a game left open behind your other work. A running game is never slowed.",
+    "values": ["0", "5", "10", "15", "30"],
+    "labels": ["Same as in front", "5", "10", "15", "30"],
+    "default": "10"
+  },
   "interface_scale": {
     "category": "video", "order": 330, "kind": "slider",
     "name": "Interface size",
