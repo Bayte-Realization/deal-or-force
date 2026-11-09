@@ -223,6 +223,13 @@ public sealed class FrameRateGovernor
     private double _slowFor;
     private double _fastFor;
     private double _sinceChange;
+    // How long the frame must stay fast before stepping back up: doubled after every step down,
+    // so a machine on the edge settles instead of bouncing between two pictures.
+    private double _stepUpWait = -1;
+    // Seconds of frames seen since the start or since the player changed the setting. The first
+    // twenty are loading - shaders compiling, textures going up - and decide nothing.
+    private double _warmedFor;
+    private const double WarmUpSeconds = 20.0;
 
     public QualityProfile Profile { get; private set; }
 
@@ -253,6 +260,8 @@ public sealed class FrameRateGovernor
     {
         if (!Automatic || frameMilliseconds <= 0 || double.IsNaN(frameMilliseconds)) return null;
         if (frameMilliseconds > QualityProfiles.SlowFrameMs * 4) return null;
+        _warmedFor += frameMilliseconds / 1000.0;
+        if (_warmedFor < WarmUpSeconds) return null;
         _sinceChange += frameMilliseconds / 1000.0;
         // Counted in frames rather than seconds: a game that is already slow would otherwise
         // take a minute to collect enough frames to admit it.
@@ -277,10 +286,19 @@ public sealed class FrameRateGovernor
             Array.Sort(gpu);
             gpuMedian = gpu[gpu.Length / 2];
         }
-        var cardBound = !gpuKnown || gpuMedian > QualityProfiles.SlowFrameMs * 0.6;
+        // Only a card that is really busy is the card's fault. A slow frame with the card idle, or
+        // with its time unknown, is the simulation or a load on the processor - fewer pixels would
+        // only blur the picture and change nothing.
+        var cardBound = gpuKnown && gpuMedian > QualityProfiles.SlowFrameMs * 0.75;
         var cardIdle = gpuKnown && gpuMedian < QualityProfiles.SlowFrameMs * 0.35;
+        // The card is the wall even though the frame rate is acceptable: the picture costs
+        // more of it than the machine needs to hold that rate, which is heat and fan noise
+        // for nothing a strategy game shows. Only counted at frame rates a cap already
+        // allows - a 144 fps run is asking for fewer frames, not a poorer picture, and the
+        // frame-rate limit is the lever for that, not the quality ladder.
+        var gpuSaturated = gpuKnown && median >= 12.0 && gpuMedian > median * 0.7;
 
-        if (median > QualityProfiles.SlowFrameMs && cardBound)
+        if (gpuSaturated || median > QualityProfiles.SlowFrameMs && cardBound)
         {
             _slowFor += windowSeconds;
             _fastFor = 0;
@@ -300,9 +318,14 @@ public sealed class FrameRateGovernor
         {
             _slowFor = 0;
             var cheaper = QualityProfiles.Next(Profile);
-            if (cheaper is not null && cheaper.Order <= _floorOrder) return Adopt(cheaper);
+            if (cheaper is not null && cheaper.Order <= _floorOrder)
+            {
+                _stepUpWait = Math.Min(300.0, Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait < 0 ? QualityProfiles.StepUpSeconds : _stepUpWait * 2));
+                return Adopt(cheaper);
+            }
         }
-        else if (_fastFor >= QualityProfiles.StepUpSeconds && _sinceChange >= QualityProfiles.StepUpSeconds)
+        else if (_fastFor >= Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait) &&
+                 _sinceChange >= Math.Max(QualityProfiles.StepUpSeconds, _stepUpWait))
         {
             _fastFor = 0;
             var better = QualityProfiles.Previous(Profile);
@@ -317,6 +340,7 @@ public sealed class FrameRateGovernor
         Profile = profile;
         _window.Clear();
         _slowFor = _fastFor = _sinceChange = 0;
+        _warmedFor = 0;
     }
 
     private QualityProfile Adopt(QualityProfile profile)

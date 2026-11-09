@@ -172,7 +172,10 @@ public static class SpriteCatalog
 
         foreach (var file in everything)
         {
-            if (!StructuredData.IsDocument(file)) continue;
+            // `*.source.json` sidecars record where a generated picture came from; they are
+            // provenance, not a sprite table, and their keys are not sprite names.
+            if (!StructuredData.IsDocument(file) ||
+                file.EndsWith(".source.json", StringComparison.OrdinalIgnoreCase)) continue;
             var normalized = file.Replace('\\', '/');
             if (normalized.Contains("/models/", StringComparison.OrdinalIgnoreCase)) continue;
             var origin = $"gfx/{Path.GetFileName(file)}";

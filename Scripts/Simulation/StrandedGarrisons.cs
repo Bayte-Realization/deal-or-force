@@ -526,11 +526,19 @@ public static class StrandedGarrisons
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (c?.ProvinceMap is null || !c.StepOpensNewDay || !c.Defines.StrandedGarrisonsEnabled) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily surrender pass, yielded between batches of formations.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null || !c.StepOpensNewDay || !c.Defines.StrandedGarrisonsEnabled) yield break;
         var d = c.Defines;
         List<Army> giving = null;
+        var scanned = 0;
         foreach (var army in c.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (!army.CutOff)
             {
                 if (army.HoldoutSinceDay >= 0) Relieved(c, army);
@@ -553,7 +561,8 @@ public static class StrandedGarrisons
             if (Roll(c.Seed, army.Id, army.NationId, c.ElapsedDays, 0x5A11) >= chance) continue;
             (giving ??= new List<Army>()).Add(army);
         }
-        if (giving is null) return;
+        if (giving is null) yield break;
+        yield return 0;
         foreach (var army in giving) Surrender(c, army, giving);
         c.MarkStrategicChange();
     }

@@ -304,17 +304,30 @@ public static class SupportCore
     /// <summary>The daily pass: training completes, readiness recovers, the AI minds its missions.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same support pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SupportCore))) yield break;
         // Warfare can change control after the step's initial reach index.
         SupportRepatriation.Reconcile(campaign);
+        yield return 0;
         Train(campaign);
+        yield return 0;
         AirReconnaissance.Expose(campaign);
+        yield return 0;
         // The salvos go before the day's losses are counted: an aircraft that flew into a
         // defended sky to launch is charged for it the same evening.
         LongRangeStrikes.Fire(campaign);
+        yield return 0;
         Attrition(campaign);
+        yield return 0;
         Recover(campaign);
+        yield return 0;
         CommandByAir(campaign);
+        yield return 0;
         LongRangeStrikes.Procure(campaign);
     }
 

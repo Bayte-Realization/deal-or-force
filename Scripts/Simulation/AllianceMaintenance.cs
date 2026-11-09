@@ -75,25 +75,26 @@ public static class AllianceMaintenance
 
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
         if (!c.Defines.DynamicAlliances || !MechanicFeatures.SystemEnabled(c, nameof(AllianceMaintenance)))
-        { AlliancePrograms.Pause(c); return; }
+        { AlliancePrograms.Pause(c); yield break; }
         AlliancePrograms.Tick(c);
         var interval = Math.Max(1, c.Defines.AllianceReviewDays);
         var graph = ReviewGraphs.GetOrCreateValue(c);
-        graph.Rebuild(c);
+        graph.Rebuild(c, interval);
         var DueAlliances = graph.Due;
-        foreach (var pair in c.Relations)
-        {
-            var rel = pair.Value;
-            if (rel.Stance != DiplomaticStance.Allied) continue;
-            if (rel.AllianceAssessmentDay >= 0 && c.ElapsedDays - rel.AllianceAssessmentDay < interval) continue;
-            DueAlliances.Add((pair.Key, rel));
-        }
-        if (DueAlliances.Count == 0) return;
+        if (DueAlliances.Count == 0) yield break;
         if (DueAlliances.Count > 1) DueAlliances.Sort((x, y) => x.Key.CompareTo(y.Key));
 
         for (var i = 0; i < DueAlliances.Count; i++)
         {
+            // The graph and sorted order live for this review, but each relationship is
+            // indivisible. Earlier ruptures still affect later ones in the same pass.
+            yield return 0;
             var r = DueAlliances[i].Relation;
             if (r.Stance != DiplomaticStance.Allied) continue;
             if (r.AllianceAssessmentDay < 0) { r.AllianceAssessmentDay = c.ElapsedDays; continue; }
@@ -113,11 +114,9 @@ public static class AllianceMaintenance
             var leaving = a.IsHuman ? b : a;
             var other = leaving.Id == a.Id ? b : a;
             if (AllianceSystem.Break(c, leaving, other, out _))
-            {
                 graph.Remove(leaving.Id, other.Id);
-                c.Chronicle.Record(c, "alliance_ended", leaving.Id, other.Id);
-            }
         }
+        yield return 0;
     }
 
     public static bool CanReaffirm(Campaign c, Nation a, Nation b) =>

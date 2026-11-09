@@ -53,11 +53,19 @@ public static class PocketBreakout
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || !campaign.StepOpensNewDay) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily breakout pass, yielded between batches of pockets.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign?.ProvinceMap is null || campaign.ProvinceController is null || !campaign.StepOpensNewDay) yield break;
 
         Pocketed.Clear();
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (army.BreakingOut && !army.CutOff && !army.IsMoving && !army.InBattle)
             {
                 // Home: the staff has it back.
@@ -76,8 +84,11 @@ public static class PocketBreakout
             Pocketed.Add(army.Id);
         }
 
+        yield return 0;
+        var pockets = 0;
         foreach (var id in Pocketed)
         {
+            if (++pockets % 8 == 0) yield return 0;
             var army = campaign.Armies.Find(candidate => candidate.Id == id);
             if (army is null) continue;
             var nation = campaign.NationById(army.NationId);

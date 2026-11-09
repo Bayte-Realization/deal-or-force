@@ -9,6 +9,16 @@ public sealed partial class Defines
     /// <summary>The stage ladder's formal crisis: relations at Crisis or above and not at war
     /// are an open diplomatic crisis the great powers can weigh in on.</summary>
     public bool CrisisLadderEnabled { get; set; } = true;
+    /// <summary>How far, in degrees of arc between capitals, a great power's interest in a crisis reaches (about 3,000 km).</summary>
+    public float CrisisInterestDegrees { get; set; } = 27f;
+    /// <summary>Or the share of its trade that goes through one of the two sides.</summary>
+    public float CrisisInterestTradeShare { get; set; } = 0.04f;
+    /// <summary>The chance, each week a crisis is reviewed, that a great power with a stake offers talks.</summary>
+    public float CrisisMediationChance { get; set; } = 0.35f;
+    /// <summary>How much tension a great power's warning takes off a crisis.</summary>
+    public float CrisisInterventionRelief { get; set; } = 10f;
+    /// <summary>A power intervenes only if it is at least this strong against the aggressor (output plus arms).</summary>
+    public float CrisisInterventionCredibility { get; set; } = 1.0f;
     /// <summary>How many days a crisis may burn before the powers force a compromise.</summary>
     public int CrisisCompromiseDays { get; set; } = 120;
     /// <summary>The opinion a great power needs with BOTH sides to act as a mediator.</summary>
@@ -91,12 +101,20 @@ public static class CrisisLadder
     /// </summary>
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly pass, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
         if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CrisisLadder)) ||
-            !c.Defines.CrisisLadderEnabled || c.ElapsedDays <= 0) return;
-        if (c.ElapsedDays % 7 != 3) return;
+            !c.Defines.CrisisLadderEnabled || c.ElapsedDays <= 0) yield break;
+        if (c.ElapsedDays % 7 != 3) yield break;
         var powers = AllianceSystem.GreatPowers(c);
+        var scanned = 0;
         foreach (var relation in c.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.TensionStage < (int)TensionStage.Crisis) { relation.CrisisOpenedDay = -1; continue; }
             var a = c.NationById(relation.A);
             var b = c.NationById(relation.B);
@@ -132,7 +150,9 @@ public static class CrisisLadder
                 relation.Tension = MathF.Min(100f, relation.Tension + c.Defines.CrisisPatronPressure);
             // A crisis nobody settles is settled for them: the powers' compromise, not a
             // winner. Tensions and grievances halved, the ladder walked back down.
-            if (c.ElapsedDays - relation.CrisisOpenedDay >= Math.Max(14, c.Defines.CrisisCompromiseDays))
+            // Clashes and patron-backed crises do not automatically deflate into quiet compromise.
+            if (c.ElapsedDays - relation.CrisisOpenedDay >= Math.Max(14, c.Defines.CrisisCompromiseDays) &&
+                relation.TensionStage <= (int)TensionStage.Crisis && patron is null)
             {
                 relation.Tension *= 0.5f;
                 relation.GrievanceA *= 0.5f;

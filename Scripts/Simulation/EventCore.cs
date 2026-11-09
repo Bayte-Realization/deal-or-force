@@ -57,6 +57,10 @@ public sealed class CampaignEventOption
     public int UnionFounderId { get; init; }
     public string UnionFormableId { get; init; } = "";
     public int ShardConsolidateFounderId { get; init; } = -1;
+    /// <summary>A separate peace put to a player (SeparatePeace.Offer): the war, the member that leaves, the terms.</summary>
+    public int SeparatePeaceWarId { get; init; } = -1;
+    public int SeparatePeaceMemberId { get; init; } = -1;
+    public int SeparatePeaceTermsId { get; init; }
     /// <summary>Saved recipient and explicit choice of the secession response. -1 is no response, so nation zero is valid.</summary>
     public int SecessionTargetId { get; init; } = -1;
     public string SecessionChoice { get; init; } = "";
@@ -531,7 +535,14 @@ public static class EventSystem
 {
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EventSystem))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between its three phases so a table full of
+    /// questions does not resolve in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(EventSystem))) yield break;
         // Nobody is asked anything in observer mode. It is the whole of what the mode is
         // for: a timelapse is a campaign at speed five with nobody at the wheel, and one
         // modal window waiting for an answer ends it.
@@ -539,6 +550,7 @@ public static class EventSystem
         {
             foreach (var nationId in campaign.HumanSeats)
             {
+                yield return 0;
                 var nation = campaign.NationById(nationId);
                 if (nation is null) continue;
                 var interval = nation.Landless && campaign.Defines.MovementEventIntervalDays >= 0
@@ -550,16 +562,24 @@ public static class EventSystem
             }
         }
 
+        yield return 0;
+
         // And anything already on the table is decided rather than left waiting, so turning
         // the mode on in the middle of a campaign does not leave a window behind it.
         // A union or a merger is the one question the first answer must not settle: it is
         // "yes". Those are answered the way a government nobody plays would answer them.
         if (campaign.NobodyPlays)
             foreach (var item in campaign.PendingEvents.ToArray())
+            {
+                yield return 0;
                 Resolve(campaign, item, ObserverAnswer(campaign, item));
+            }
 
         foreach (var item in campaign.PendingEvents.Where(item => item.ExpiresDay <= campaign.ElapsedDays).ToArray())
+        {
+            yield return 0;
             Resolve(campaign, item, 1);
+        }
     }
 
     /// <summary>The option observer mode takes: the first, except for a union or a merger, which the
@@ -608,6 +628,9 @@ public static class EventSystem
             if (founder is not null)
                 Consolidation.ExecuteShardConsolidation(campaign, founder, nation);
         }
+        if (option.SeparatePeaceWarId >= 0 && item.ExpiresDay > campaign.ElapsedDays &&
+            campaign.Wars.Find(w => w.Id == option.SeparatePeaceWarId) is { Ended: false } separateWar)
+            SeparatePeace.Sign(campaign, separateWar, option.SeparatePeaceMemberId, (SeparatePeaceTerms)option.SeparatePeaceTermsId);
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
         // By the country itself rather than by an id that means "nobody" at zero: nation 0 is

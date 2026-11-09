@@ -21,10 +21,19 @@ public static class AiPromises
     /// rest of the cabinet already uses, so the whole world does not promise on one morning.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.FeatureEnabled("government_promises")) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same pass, yielded between cabinets so a promise-heavy morning does not
+    /// land in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("government_promises")) yield break;
         var day = campaign.ElapsedDays;
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             // The player's own government decides for itself, unless its cabinet has been
             // handed to the AI (Delegation) - then it speaks like any other cabinet, because
             // it already spends like one. Movements are not a government any electorate holds

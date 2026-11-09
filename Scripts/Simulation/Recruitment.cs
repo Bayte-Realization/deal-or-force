@@ -78,9 +78,7 @@ public static class RecruitmentSystem
     public static int DynamicQueueCap(Campaign c, Nation nation, MobilisationMode mode = MobilisationMode.Standard)
     {
         if (c is null || nation is null) return 12;
-        var atWar = false;
-        foreach (var war in c.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+        var atWar = Fighting(c, nation.Id);
         var baseCap = atWar ? c.Defines.RecruitmentWartimeBatchCap : c.Defines.RecruitmentBatchCap;
         var barracks = 0;
         foreach (var st in c.StatesOf(nation))
@@ -89,6 +87,15 @@ public static class RecruitmentSystem
         if (mode == MobilisationMode.RapidCallUp) bonus += 12;
         else if (mode == MobilisationMode.TotalMobilisation) bonus += 36;
         return baseCap + bonus;
+    }
+
+    /// <summary>A war still being fought. An ended war does not keep the wartime queue.</summary>
+    static bool Fighting(Campaign c, int nationId)
+    {
+        var live = Warfare.LiveWars(c);
+        for (var index = 0; index < live.Count; index++)
+            if (live[index].Involves(nationId)) return true;
+        return false;
     }
 
     public static string Validate(Campaign c, int issuer, int stateId, string templateId, int count,
@@ -106,9 +113,7 @@ public static class RecruitmentSystem
             return Loc.Format("Choose a valid template and 1–{0} divisions.", maxBatch);
         if (DeploymentProvince(c, issuer, stateId) <= 0) return "No controlled province in this region.";
 
-        var atWar = false;
-        foreach (var war in c.Wars)
-            if (!war.Ended && war.Involves(issuer)) { atWar = true; break; }
+        var atWar = Fighting(c, issuer);
         var cap = DynamicQueueCap(c, nation, mode);
         if (c.Recruitment.Count(o => o.NationId == issuer) >= cap)
             return Loc.Format("Training capacity reached: {0} batches.", cap);
@@ -188,9 +193,17 @@ public static class RecruitmentSystem
 
     public static void Tick(Campaign c)
     {
-        if (!MechanicFeatures.SystemEnabled(c, nameof(RecruitmentSystem))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same recruitment pass, yielded between orders.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!MechanicFeatures.SystemEnabled(c, nameof(RecruitmentSystem))) yield break;
+        var ticked = 0;
         foreach (var order in c.Recruitment.ToArray())
         {
+            if (++ticked % 16 == 0) yield return 0;
             if (order.LastProcessedDay >= c.ElapsedDays) continue;
             order.LastProcessedDay = c.ElapsedDays;
             var province = DeploymentProvince(c, order.NationId, order.StateMapIndex);

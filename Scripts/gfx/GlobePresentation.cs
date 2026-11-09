@@ -275,6 +275,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     private float _distance = 12.5f;
     private float _targetDistance = 12.5f;
     private bool? _cachedFlatMapBorder;
+    private float _cachedDetailMix = -1f;
+    private float _cachedProvinceDetail = -1f;
+    private int _cachedFogViewerParam = -999;
 
     public event Action<GlobePick> CountryPicked;
     public bool CountrySelectionOnly { get; set; }
@@ -392,6 +395,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public void BindCampaign(Simulation.Campaign campaign)
     {
         _campaign = campaign;
+        // A mushroom cloud queued by the last world is not this world's weather: the queue is
+        // process-wide and a saved day number means nothing under a new calendar.
+        Simulation.NuclearDetonations.Clear();
         // A country picked in the last campaign is an id in somebody else's world.
         _mapModeSubjectId = -1;
         var repairs = (campaign.ScenarioId != "2024" || _mapTask is not null) ? Array.Empty<Simulation.TerritorialTopology.RepairSummary>()
@@ -627,10 +633,18 @@ public sealed partial class GlobePresentation : SubViewportContainer
                 Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_province_full_zoom", 0.95f), MinimumFlatZoom, 3f),
                 Math.Clamp(Simulation.InterfaceSkin.Metric("map.flat_province_hide_zoom", 3.8f), 3.1f, MaximumFlatZoom), _flatZoom)
             : Mathf.Clamp((9.3f - _distance) / 2.8f, 0f, 1f);
-        _globeMaterial?.SetShaderParameter("detail_mix", detailMix);
+        if (Mathf.Abs(detailMix - _cachedDetailMix) > 0.002f)
+        {
+            _cachedDetailMix = detailMix;
+            _globeMaterial?.SetShaderParameter("detail_mix", detailMix);
+        }
         // Tactical boundaries should emerge only at operational zoom. Keeping them
         // faint at country-selection scale avoids turning the map into a crosshatch.
-        _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
+        if (Mathf.Abs(provinceDetail - _cachedProvinceDetail) > 0.002f)
+        {
+            _cachedProvinceDetail = provinceDetail;
+            _globeMaterial?.SetShaderParameter("province_detail", provinceDetail);
+        }
         if (_cachedFlatMapBorder != _flatMap)
         {
             _cachedFlatMapBorder = _flatMap;
@@ -641,7 +655,12 @@ public sealed partial class GlobePresentation : SubViewportContainer
         }
         var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
-        _globeMaterial?.SetShaderParameter("fog_viewer", FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1);
+        var fogViewerParam = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.MapIndex : -1;
+        if (_cachedFogViewerParam != fogViewerParam)
+        {
+            _cachedFogViewerParam = fogViewerParam;
+            _globeMaterial?.SetShaderParameter("fog_viewer", fogViewerParam);
+        }
         UpdateFogTint();
         UpdateFogVisibility();
         UpdateWeather(delta);
@@ -1164,7 +1183,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         // The atlas is a device-wide budget, not a per-light switch: halving it is what makes
         // "no sun shadows" cost less rather than merely look different.
         RenderingServer.DirectionalShadowAtlasSetSize(
-            Math.Clamp((int)MathF.Round(4096f * _quality.RenderScale), 512, 4096), true);
+            Math.Clamp((int)MathF.Round((_quality.SunShadows ? 2048f : 512f) * _quality.RenderScale), 512, 2048), true);
     }
 
 
@@ -2167,7 +2186,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
         get => IsInstanceValid(_viewport) ? _viewport.Scaling3DScale : 1f;
         set
         {
-            if (IsInstanceValid(_viewport)) _viewport.Scaling3DScale = Mathf.Clamp(value, 0.25f, 2f);
+            if (!IsInstanceValid(_viewport)) return;
+            var scale = Mathf.Clamp(value, 0.25f, 2f);
+            _viewport.Scaling3DScale = scale;
+            // Fewer pixels than the screen, upscaled with FSR's sharpening rather than stretched:
+            // a plain bilinear stretch is what made a lowered tier look smeared.
+            _viewport.Scaling3DMode = scale < 0.999f ? Viewport.Scaling3DModeEnum.Fsr : Viewport.Scaling3DModeEnum.Bilinear;
+            _viewport.FsrSharpness = 0.2f;
         }
     }
 
@@ -2274,8 +2299,14 @@ uniform float political_saturation = 0.86;
 // and their fine grain as noise, so the flat map wears the colours thicker and the grain thinner.
 uniform float flat_projection = 0.0;
 uniform float terrain_repeat = 180.0;
+// From which latitude tiled textures leave the latitude-longitude grid for a plane about the
+// nearer pole, and over how many degrees the two are blended (polar_plane).
+uniform float polar_tiling_from = 50.0;
+uniform float polar_tiling_band = 14.0;
 uniform float terrain_blend_texels = 1.15;
-uniform float id_wander_texels = 0.62;
+// Small: the noise's slope must stay below the line's width, or a province line wobbles,
+// splits into strands and swells into blots (0.62 did; tested live against 0 and 0.15).
+uniform float id_wander_texels = 0.15;
 
 // Whether the map is smoothed at all, as a switch the player owns.
 //
@@ -2702,6 +2733,35 @@ float river_contour(vec2 uv, float linear_distance) {
 float seam_frequency(float freq, float width) {
     return sign(freq) * max(1.0, round(abs(freq) * width / 6.2831853)) * 6.2831853 / max(width, 1.0);
 }
+// The poles. Every meridian meets there, so anything tiled in latitude and longitude - a
+// terrain tile, a wave train - is squeezed into ever thinner wedges towards them, and the
+// ice caps wore a sunburst of streaks. Near a pole the tiles are laid instead on the
+// stereographic plane about it: conformal, so a tile keeps its shape, and with no seam and no
+// point where the columns meet. Measured in radians of the Earth's surface at the pole, so
+// `per_radian` repeats match the grid's own density and the two blend without a jump in size.
+// Only on the globe: the flat map is the grid, and a tile there is meant to follow it.
+float polar_blend(vec2 uv) {
+    if (flat_projection > 0.99) return 0.0;
+    float latitude = abs(0.5 - clamp(uv.y, 0.0, 1.0)) * 180.0;
+    if (latitude < polar_tiling_from) return 0.0;
+    return smoothstep(polar_tiling_from, polar_tiling_from + max(polar_tiling_band, 0.1), latitude)
+        * (1.0 - flat_projection);
+}
+vec2 polar_plane(vec2 uv, float per_radian) {
+    float lon = uv.x * 6.2831853;
+    float lat = (0.5 - clamp(uv.y, 0.0, 1.0)) * 3.1415927;
+    float c = cos(lat);
+    return vec2(c * sin(lon), c * cos(lon)) * (2.0 / (1.0 + abs(sin(lat)))) * per_radian;
+}
+float sea_wave_field(vec2 at, vec3 fx) {
+    return (sin(dot(at, vec2(fx.x, 0.0062)) + TIME * 0.55)
+          + 0.62 * sin(dot(at, vec2(fx.y, 0.0094)) + TIME * 0.41)
+          + 0.38 * sin(dot(at, vec2(fx.z, -0.0230)) + TIME * 0.72)) / 2.0;
+}
+float sea_crest_field(vec2 at) {
+    return sin(dot(at, vec2(-0.0180, 0.0094)) + TIME * 0.41
+             + 1.1 * sin(dot(at, vec2(0.0330, 0.0195)) + TIME * 0.9));
+}
 // Mipmaps are averaged inward, so the column at u=0 never meets the column at
 // u=1 and the date line reads as a second border. Near that cut, bilinear-sample
 // the base level with longitude wrapped and latitude clamped. Poles stay put.
@@ -2808,6 +2868,12 @@ void fragment() {
     // water rather than as a level in a depth chart.
     vec2 sea_size = vec2(textureSize(ocean_depth, 0));
     float sea_wander = grain(UV * sea_size * 0.85 + 17.0);
+    float sea_polar = polar_blend(UV);
+    vec2 sea_polar_at = vec2(0.0);
+    if (sea_polar > 0.001) {
+        sea_polar_at = polar_plane(UV, sea_size.x / 6.2831853);
+        sea_wander = mix(sea_wander, grain(sea_polar_at * 0.85 + 17.0), sea_polar);
+    }
     sea_floor = clamp(sea_floor + sea_wander * 0.014, 0.0, 1.0);
     float slope_rise = smoothstep(0.62, 0.955, sea_floor);
     float shelf = smoothstep(0.945, 0.992, sea_floor);
@@ -2830,10 +2896,13 @@ void fragment() {
     float warp_x = seam_frequency(0.002, sea_size.x);
     vec2 warp = vec2(sin(TIME * 0.05 + sea_texels.y * 0.002), cos(TIME * 0.04 + sea_texels.x * warp_x));
     vec2 wave_at = sea_texels + warp * 26.0;
-    float waves = sin(dot(wave_at, vec2(seam_frequency(0.0105, sea_size.x), 0.0062)) + TIME * 0.55)
-                + 0.62 * sin(dot(wave_at, vec2(seam_frequency(-0.0180, sea_size.x), 0.0094)) + TIME * 0.41)
-                + 0.38 * sin(dot(wave_at, vec2(seam_frequency(0.0072, sea_size.x), -0.0230)) + TIME * 0.72);
-    waves /= 2.0;
+    vec3 wave_fx = vec3(seam_frequency(0.0105, sea_size.x), seam_frequency(-0.0180, sea_size.x),
+                        seam_frequency(0.0072, sea_size.x));
+    float waves = sea_wave_field(wave_at, wave_fx);
+    if (sea_polar > 0.001) {
+        vec2 wave_polar_at = sea_polar_at + warp * 26.0;
+        waves = mix(waves, sea_wave_field(wave_polar_at, vec3(0.0105, -0.0180, 0.0072)), sea_polar);
+    }
     vec3 water = sea * (0.74 + rim * 0.26);
     water *= 1.0 + waves * 0.085 * wave_fade;
     // Sun glint riding the sharpest of the three - the crests catching light, which is what
@@ -2843,8 +2912,11 @@ void fragment() {
     // One crest train with its phase bent by the second wave, not the sum of the two: added
     // together they only reinforce along short diagonals, and the light landed as scattered
     // white scratches across the open sea rather than as a wave line.
-    float crest = sin(dot(wave_at, vec2(-0.0180, 0.0094)) + TIME * 0.41
-                + 1.1 * sin(dot(wave_at, vec2(0.0330, 0.0195)) + TIME * 0.9));
+    float crest = sea_crest_field(wave_at);
+    if (sea_polar > 0.001) {
+        vec2 wave_polar_at = sea_polar_at + warp * 26.0;
+        crest = mix(crest, sea_crest_field(wave_polar_at), sea_polar);
+    }
     float glint = pow(clamp(crest * 0.5 + 0.5, 0.0, 1.0), 6.0);
     water += vec3(0.58, 0.75, 0.84) * glint * 0.18 * wave_fade;
     // Foam & coastal ink: a pale surf line where the sea meets the shore, framed by a subtle
@@ -2931,6 +3003,17 @@ void fragment() {
         float slot_share = smoothstep(0.5 - slot_band, 0.5 + slot_band, slot_cover);
 
         vec2 terrain_uv = UV * vec2(terrain_repeat, terrain_repeat * 0.5);
+        // Near a pole the tiles lie on the plane about it (polar_plane), blended in over a band.
+        // The gradients are taken here, outside any branch, so a sample inside one stays defined.
+        float terrain_polar = polar_blend(UV);
+        vec2 terrain_polar_uv = vec2(0.0);
+        vec2 pdx = vec2(0.0), pdy = vec2(0.0);
+        if (terrain_polar > 0.001) {
+            terrain_polar_uv = polar_plane(UV, terrain_repeat / 6.2831853);
+            pdx = dFdx(terrain_polar_uv);
+            pdy = dFdy(terrain_polar_uv);
+        }
+        vec2 tdx = dFdx(terrain_uv), tdy = dFdy(terrain_uv);
         // One ground sample when unsmoothed rather than two mixed: the saving is a texture
         // fetch per pixel on the largest surface the game draws, which is the half of this
         // switch that matters on a machine that needed it.
@@ -2940,12 +3023,23 @@ void fragment() {
                          texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb, slot_share);
         else
             ground = texture(terrain_tiles, vec3(terrain_uv, near_slot)).rgb;
+        if (terrain_polar > 0.001) {
+            vec3 polar_ground;
+            if (map_smoothing > 0.5)
+                polar_ground = mix(textureGrad(terrain_tiles, vec3(terrain_polar_uv, other_slot), pdx, pdy).rgb,
+                                   textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb, slot_share);
+            else
+                polar_ground = textureGrad(terrain_tiles, vec3(terrain_polar_uv, near_slot), pdx, pdy).rgb;
+            ground = mix(ground, polar_ground, terrain_polar);
+        }
         // Close in a tile is magnified until its texels show. A second look at the same ground at
         // four times the frequency puts fine grain back under the coarse - as brightness only, so
         // the colours stay the tile's own - and only as close in as the province lines appear.
         if (terrain_detail > 0.001 && province_detail > 0.001 && flat_projection < 0.5) {
-            vec3 fine = texture(terrain_tiles, vec3(terrain_uv * 4.0, near_slot)).rgb;
-            vec3 tile_mean = textureLod(terrain_tiles, vec3(terrain_uv, near_slot), 7.0).rgb;
+            vec2 fine_uv = mix(terrain_uv, terrain_polar_uv, step(0.5, terrain_polar));
+            vec2 fdx = mix(tdx, pdx, step(0.5, terrain_polar)), fdy = mix(tdy, pdy, step(0.5, terrain_polar));
+            vec3 fine = textureGrad(terrain_tiles, vec3(fine_uv * 4.0, near_slot), fdx * 4.0, fdy * 4.0).rgb;
+            vec3 tile_mean = textureLod(terrain_tiles, vec3(fine_uv, near_slot), 7.0).rgb;
             float grain_shift = dot(fine - tile_mean, vec3(0.2126, 0.7152, 0.0722));
             ground *= 1.0 + terrain_detail * province_detail * grain_shift * 2.2;
         }
@@ -2962,8 +3056,13 @@ void fragment() {
         vec3 land_surface = terrain_mode > 1.5 ? relief_tint : (terrain_mode > 0.5 ? ground : colored_ground);
         base = mix(water, land_surface, political.a);
         vec2 ht = 1.0 / vec2(textureSize(relief_height, 0));
-        float west = seam_sample_relief_height(vec2(UV.x - ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
-        float east = seam_sample_relief_height(vec2(UV.x + ht.x, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        // East and west a texel of longitude apart is a texel of ground at the equator and almost
+        // none near a pole, where every slope then read north-south and pointed at the pole. On the
+        // globe they are stepped the same distance over the ground instead.
+        float relief_cos = max(cos((0.5 - clamp(UV.y, 0.0, 1.0)) * 3.1415927), 0.035);
+        float ew_step = ht.x * mix(1.0 / relief_cos, 1.0, flat_projection);
+        float west = seam_sample_relief_height(vec2(UV.x - ew_step, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
+        float east = seam_sample_relief_height(vec2(UV.x + ew_step, clamp(UV.y, ht.y, 1.0 - ht.y))).r;
         float north = seam_sample_relief_height(vec2(UV.x, clamp(UV.y - ht.y, 0.0, 1.0))).r;
         float south = seam_sample_relief_height(vec2(UV.x, clamp(UV.y + ht.y, 0.0, 1.0))).r;
         float elev = (west + east + north + south) * 0.25;
@@ -5211,14 +5310,18 @@ void fragment() {
         // at the same scale was full of them. It now runs down to the regional view - the
         // whole of Ukraine on the screen still names Ukraine, as a Paradox map does; the
         // letters follow the country's own extent, so they stay inside it.
+        // And out to the farthest view: the whole world on the screen still names its largest
+        // countries, as the world page of an atlas does.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
-            ? _flatZoom is >= 0.85f and <= 10.8f
-            : _distance is >= 7.9f and <= 16.5f);
+            ? _flatZoom >= 0.85f
+            : _distance >= 7.9f);
         if (!_countryLabelRoot.Visible) return;
         // Closer in than 1.7 the letters keep their places - spread across the country - and
         // grow no larger: at full size POLAND and UKRAINE ran into each other and out of their
         // borders. Smaller letters spaced wide are how an atlas names a country seen close.
-        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : 1f;
+        // Past the strategic view the globe's letters grow a little as it draws away, so the
+        // names left on a whole hemisphere are still big enough to read.
+        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : Math.Clamp(_distance / 16.5f, 1f, 1.3f);
         if (Math.Abs(glyphScale - _countryGlyphScale) > 0.02f)
         {
             _countryGlyphScale = glyphScale;

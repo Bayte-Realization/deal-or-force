@@ -104,7 +104,14 @@ public static class UnionCohesion
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(UnionCohesion))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly review, yielded between unions so a fracturing world does not
+    /// review every proclamation in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(UnionCohesion))) yield break;
         var defines = campaign.Defines;
         // SecessionEvents.Force appends a new country. Nation IDs keep their list
         // indices, so review only the initial cohort without a mutable enumerator
@@ -112,6 +119,7 @@ public static class UnionCohesion
         var nationsAtStart = campaign.Nations.Count;
         for (var index = 0; index < nationsAtStart; index++)
         {
+            if (index % 16 == 0) yield return 0;
             var nation = campaign.Nations[index];
             var isFormed = !string.IsNullOrEmpty(nation.FormedNationId);
             var isVulnerableFederation = !isFormed && campaign.FeatureEnabled("federal_fracture") &&
@@ -216,6 +224,20 @@ public static class UnionCohesion
     /// What a union's state of mind does to the country, through the ordinary modifier sources: a
     /// union in trouble costs stability and pays radicalism, one that holds gives a little back.
     /// </summary>
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null || string.IsNullOrEmpty(nation.FormedNationId)) return;
+        var cohesion = nation.UnionCohesion;
+        if (cohesion >= 0.6f)
+        {
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") + 0.0025f + cohesion * 0.0025f;
+            return;
+        }
+        var trouble = 0.6f - cohesion;
+        totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") - trouble * 0.03f;
+        totals["radicalism_weekly"] = totals.GetValueOrDefault("radicalism_weekly") + trouble * 0.035f;
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null || string.IsNullOrEmpty(nation.FormedNationId)) yield break;

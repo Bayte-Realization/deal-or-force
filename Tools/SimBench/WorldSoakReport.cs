@@ -20,6 +20,8 @@ internal static class WorldSoakReport
     {
         public int Seed { get; set; }
         public int RequestedDays { get; set; }
+        public int StartedDay { get; set; }
+        public int FinalDay { get; set; }
         public int HoursPerTick { get; set; }
         public int CompletedDays { get; set; }
         public List<Snapshot> Checkpoints { get; } = new();
@@ -51,7 +53,8 @@ internal static class WorldSoakReport
 
     public static int Run(Campaign campaign, int days, int seed, string outputPath)
     {
-        var result = new Result { Seed = seed, RequestedDays = days, HoursPerTick = campaign.TickHours };
+        var result = new Result { Seed = seed, RequestedDays = days, HoursPerTick = campaign.TickHours,
+            StartedDay = campaign.ElapsedDays };
         var startingGdp = campaign.Nations.ToDictionary(n => n.Id, n => n.Gdp);
         var initialWorldGdp = campaign.Nations.Sum(n => (double)Math.Max(0, n.Gdp));
         var peaks = new Dictionary<int, float>();
@@ -62,23 +65,28 @@ internal static class WorldSoakReport
 
         var watch = Stopwatch.StartNew();
         var allocatedBefore = GC.GetTotalAllocatedBytes(true);
-        var intervalDays = 0;
-        for (var day = 1; day <= days; day++)
+        var intervalStart = campaign.ElapsedDays;
+        var nextSample = 90;
+        while (campaign.ElapsedDays - result.StartedDay < days && result.Failures.Count == 0)
         {
-            campaign.TickDay();
-            intervalDays++;
-            if (day % 90 != 0 && day != days) continue;
+            if (!SimulationReportProgress.TickDay(campaign, out var failure))
+            { result.Failures.Add(failure); break; }
+            var day = campaign.ElapsedDays - result.StartedDay;
+            if (day < nextSample && day < days) continue;
             watch.Stop();
             var allocated = GC.GetTotalAllocatedBytes(true) - allocatedBefore;
+            var intervalDays = campaign.ElapsedDays - intervalStart;
             Sample(campaign, result, startingGdp, initialWorldGdp, peaks,
                 watch.Elapsed.TotalMilliseconds / intervalDays, allocated / 1024.0 / intervalDays);
             if (result.Failures.Count > 0) break;
-            intervalDays = 0;
+            intervalStart = campaign.ElapsedDays;
+            nextSample = (day / 90 + 1) * 90;
             allocatedBefore = GC.GetTotalAllocatedBytes(true);
             watch.Restart();
         }
 
-        result.CompletedDays = campaign.ElapsedDays;
+        result.FinalDay = campaign.ElapsedDays;
+        result.CompletedDays = campaign.ElapsedDays - result.StartedDay;
         if (!string.IsNullOrWhiteSpace(outputPath))
         {
             var absolute = Path.GetFullPath(outputPath);
@@ -241,6 +249,18 @@ internal static class WorldSoakReport
             nation.Gdp = float.PositiveInfinity;
             if (!Inspect(c).Any(x => x.Contains("invalid population/economy/stability")))
                 throw new Exception("economy detector missed infinity");
+            var stopped = new Campaign(61109);
+            stopped.IsPaused = true;
+            if (SimulationReportProgress.TickDay(stopped, out var stopReason) || !stopReason.Contains("clock did not advance"))
+                throw new Exception("progress detector missed a stopped clock");
+            stopped.IsPaused = false;
+            typeof(Campaign).GetProperty(nameof(Campaign.SimulationFault))!.SetValue(stopped, "injected diagnostic fault");
+            if (SimulationReportProgress.TickDay(stopped, out var faultReason) || !faultReason.Contains("injected diagnostic fault"))
+                throw new Exception("progress detector missed an explicit simulation fault");
+            stopped.Nations.Add(new Nation { Id = 0, Tag = "TEST", Population = 1000, Gdp = 1, Stability = .5f });
+            if (Run(stopped, 365000, 61109, null) != 1 || stopped.ElapsedDays != 0)
+                throw new Exception("a halted thousand-year request was misreported as a successful soak");
+            Console.WriteLine("PASS: paused clock and explicit fault reject advancement; halted 365000-day request exits FAIL immediately");
             Console.WriteLine("PASS: healthy baseline, invalid radicalism and non-finite GDP detection");
             return 0;
         }

@@ -12,9 +12,12 @@ public sealed partial class Campaign
     {
         if (nation is null) return false;
         if (ProvinceMap is null) return nation.Population > 0;
-        if (_diplomaticLandRevision != MapRevision || _diplomaticLandMap != ProvinceMap)
+        // The set answers "does this country hold a province", which only ProvinceToNation
+        // decides: MapRevision fires on every province a battle takes while the owners these
+        // lists are built from stay exactly as they were.
+        if (_diplomaticLandRevision != OwnershipRevision || _diplomaticLandMap != ProvinceMap)
         {
-            _diplomaticLandRevision = MapRevision;
+            _diplomaticLandRevision = OwnershipRevision;
             _diplomaticLandMap = ProvinceMap;
             _diplomaticLandNations.Clear();
             for (var p = 1; p <= ProvinceMap.ProvinceCount; p++)

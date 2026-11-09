@@ -316,18 +316,22 @@ public static class FormableNations
     }
 
     private static ProvinceTopology _peopleMap;
+    private static Campaign _peopleCampaign;
     private static int _peopleMapRevision = int.MinValue;
     private static Dictionary<int, int> _stateLandProvinceTotals;
 
-    /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
-    private static long People(Campaign campaign, HashSet<int> provinces)
+    public static Dictionary<int, int> StateLandProvinceTotals(Campaign campaign)
     {
-        if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
+        if (campaign?.ProvinceMap is null || campaign.States.Count == 0) return new Dictionary<int, int>();
         var map = campaign.ProvinceMap;
-        if (!ReferenceEquals(_peopleMap, map) || _peopleMapRevision != campaign.MapRevision || _stateLandProvinceTotals is null)
+        // Land provinces per region change only when regions are re-cut (OwnershipRevision), not
+        // when a controller takes one in battle.
+        if (!ReferenceEquals(_peopleMap, map) || !ReferenceEquals(_peopleCampaign, campaign) ||
+            _peopleMapRevision != campaign.OwnershipRevision || _stateLandProvinceTotals is null)
         {
             _peopleMap = map;
-            _peopleMapRevision = campaign.MapRevision;
+            _peopleCampaign = campaign;
+            _peopleMapRevision = campaign.OwnershipRevision;
             _stateLandProvinceTotals = new Dictionary<int, int>(campaign.States.Count);
             for (var province = 1; province <= map.ProvinceCount; province++)
             {
@@ -336,7 +340,15 @@ public static class FormableNations
                 _stateLandProvinceTotals[state] = _stateLandProvinceTotals.GetValueOrDefault(state) + 1;
             }
         }
-        var totals = _stateLandProvinceTotals;
+        return _stateLandProvinceTotals;
+    }
+
+    /// <summary>People living on these provinces, by each region's share of its own ground.</summary>
+    private static long People(Campaign campaign, HashSet<int> provinces)
+    {
+        if (provinces.Count == 0 || campaign.States.Count == 0) return 0;
+        var map = campaign.ProvinceMap;
+        var totals = StateLandProvinceTotals(campaign);
         var inside = new Dictionary<int, int>();
         foreach (var province in provinces)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -16,43 +17,75 @@ public sealed partial class Defines
 /// <summary>Administrative geography in AI judgement. Reads ownership, never temporary military control.</summary>
 public static class TerritorialCoherence
 {
-    private static Campaign _campaign;
-    private static int _revision = -1;
-    private static readonly Dictionary<int, Dictionary<int, int>> Neighbours = new();
-    private static readonly Dictionary<int, HashSet<int>> OwnedRegions = new();
-
-    private static void Ensure(Campaign c)
+    // Region adjacency and who owns which region. Both are functions of ProvinceToState and
+    // NationMapIndex. MapRevision also fires when a battle takes a province, and a long war
+    // does that every day, so keying this walk on MapRevision rebuilt every neighbour edge
+    // in the world for a border that had not moved. OwnershipRevision is the one that moves
+    // when those arrays move. Each campaign keeps its own tables: the old static pair was
+    // cleared by whichever world asked next.
+    private sealed class Board
     {
-        if (ReferenceEquals(_campaign, c) && _revision == c.MapRevision) return;
-        Neighbours.Clear(); _campaign = c; _revision = c.MapRevision;
-        OwnedRegions.Clear();
+        public ProvinceTopology Map;
+        public int Revision = int.MinValue;
+        public readonly Dictionary<int, Dictionary<int, int>> Neighbours = new();
+        public readonly Dictionary<int, HashSet<int>> OwnedRegions = new();
+        public readonly List<int> Stale = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Board> Boards = new();
+
+    /// <summary>How many times the province walk has run. The rule test reads it.</summary>
+    internal static int AdjacencyBuilds { get; private set; }
+
+    /// <summary>This campaign's region-adjacency table, or null before the first ask.</summary>
+    internal static Dictionary<int, Dictionary<int, int>> NeighbourTables(Campaign campaign) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) ? board.Neighbours : null;
+
+    private static Board Ensure(Campaign c)
+    {
+        var board = Boards.GetOrCreateValue(c);
+        var map = c.ProvinceMap;
+        if (map is null) return board;
+        if (ReferenceEquals(board.Map, map) && board.Revision == c.OwnershipRevision) return board;
+        board.Map = map;
+        board.Revision = c.OwnershipRevision;
+        AdjacencyBuilds++;
+
+        foreach (var next in board.Neighbours.Values) next.Clear();
+        foreach (var owned in board.OwnedRegions.Values) owned.Clear();
         foreach (var state in c.States)
         {
             if (state.NationMapIndex <= 0) continue;
-            if (!OwnedRegions.TryGetValue(state.NationMapIndex, out var owned))
-                OwnedRegions[state.NationMapIndex] = owned = new HashSet<int>();
+            if (!board.OwnedRegions.TryGetValue(state.NationMapIndex, out var owned))
+                board.OwnedRegions[state.NationMapIndex] = owned = new HashSet<int>();
             owned.Add(state.MapIndex);
         }
-        var map = c.ProvinceMap;
         for (var p = 1; p <= map.ProvinceCount; p++)
         {
             int a = map.ProvinceToState[p];
             if (a == 0) continue;
-            if (!Neighbours.TryGetValue(a, out var next)) Neighbours[a] = next = new();
+            if (!board.Neighbours.TryGetValue(a, out var next)) board.Neighbours[a] = next = new();
             foreach (var q in map.Neighbors[p])
             {
                 int b = map.ProvinceToState[q];
                 if (a != b && b != 0) next[b] = next.GetValueOrDefault(b) + 1;
             }
         }
+        // A region that no longer touches anything must leave the table. An empty dictionary
+        // left behind would still answer ContainsKey, and a package's component count would move.
+        board.Stale.Clear();
+        foreach (var (region, next) in board.Neighbours)
+            if (next.Count == 0) board.Stale.Add(region);
+        foreach (var region in board.Stale) board.Neighbours.Remove(region);
+        return board;
     }
 
     public static bool TouchesOwnedGround(Campaign c, Nation nation, int region)
     {
         if (c?.ProvinceMap is null || nation is null) return false;
-        Ensure(c);
-        if (!Neighbours.TryGetValue(region, out var next)) return false;
-        if (!OwnedRegions.TryGetValue(nation.MapIndex, out var owned)) return false;
+        var board = Ensure(c);
+        if (!board.Neighbours.TryGetValue(region, out var next)) return false;
+        if (!board.OwnedRegions.TryGetValue(nation.MapIndex, out var owned)) return false;
         foreach (var neighbour in next.Keys)
             if (owned.Contains(neighbour)) return true;
         return false;
@@ -64,16 +97,16 @@ public static class TerritorialCoherence
     public static IReadOnlyDictionary<int, int> RegionBorders(Campaign c, int region)
     {
         if (c?.ProvinceMap is null) return NoBorders;
-        Ensure(c);
-        return Neighbours.TryGetValue(region, out var next) ? next : NoBorders;
+        var board = Ensure(c);
+        return board.Neighbours.TryGetValue(region, out var next) ? next : NoBorders;
     }
 
     /// <summary>Read-only region adjacency, shared by administrative packages and treaties.</summary>
     public static IEnumerable<int> AdjacentRegions(Campaign c, int region)
     {
         if (c?.ProvinceMap is null) return Array.Empty<int>();
-        Ensure(c);
-        return Neighbours.TryGetValue(region, out var next)
+        var board = Ensure(c);
+        return board.Neighbours.TryGetValue(region, out var next)
             ? next.Keys.OrderBy(id => id) : Enumerable.Empty<int>();
     }
 
@@ -83,12 +116,12 @@ public static class TerritorialCoherence
         var gains = (gain ?? Array.Empty<int>()).ToHashSet();
         var yields = (yield ?? Array.Empty<int>()).ToHashSet();
         if (c?.ProvinceMap is null || nation is null || gains.Count + yields.Count == 0) return 0;
-        Ensure(c);
-        var before = c.States.Where(s => s.NationMapIndex == nation.MapIndex && Neighbours.ContainsKey(s.MapIndex))
+        var neighbours = Ensure(c).Neighbours;
+        var before = c.States.Where(s => s.NationMapIndex == nation.MapIndex && neighbours.ContainsKey(s.MapIndex))
             .Select(s => s.MapIndex).ToHashSet();
-        var after = before.Except(yields).Concat(gains.Where(Neighbours.ContainsKey)).ToHashSet();
-        var oldParts = Components(before);
-        var newParts = Components(after);
+        var after = before.Except(yields).Concat(gains.Where(neighbours.ContainsKey)).ToHashSet();
+        var oldParts = Components(neighbours, before);
+        var newParts = Components(neighbours, after);
         var newFragments = Math.Max(0, newParts.Count - oldParts.Count);
         // A package restoring a genuine historical home may reconnect it in a later war.
         // A remote office or diplomatic invitation is not a historical title.
@@ -100,7 +133,7 @@ public static class TerritorialCoherence
         var salient = 0f;
         foreach (var id in gains)
         {
-            if (titled.Contains(id) || !Neighbours.TryGetValue(id, out var next)) continue;
+            if (titled.Contains(id) || !neighbours.TryGetValue(id, out var next)) continue;
             var total = next.Values.Sum();
             var contact = next.Where(e => after.Contains(e.Key)).Sum(e => e.Value);
             // Filling a corner or a hole costs nothing; a thin spur has a real carrying cost.
@@ -113,7 +146,7 @@ public static class TerritorialCoherence
 
     private static float Weight(float value) => float.IsFinite(value) ? Math.Clamp(value, 0, 1000) : 0;
 
-    private static List<HashSet<int>> Components(HashSet<int> regions)
+    private static List<HashSet<int>> Components(Dictionary<int, Dictionary<int, int>> neighbours, HashSet<int> regions)
     {
         var unseen = new HashSet<int>(regions);
         var result = new List<HashSet<int>>();
@@ -124,7 +157,7 @@ public static class TerritorialCoherence
             var queue = new Queue<int>(); queue.Enqueue(start);
             while (queue.Count > 0)
             {
-                if (!Neighbours.TryGetValue(queue.Dequeue(), out var next)) continue;
+                if (!neighbours.TryGetValue(queue.Dequeue(), out var next)) continue;
                 foreach (var neighbour in next.Keys)
                     if (unseen.Remove(neighbour)) { part.Add(neighbour); queue.Enqueue(neighbour); }
             }

@@ -300,11 +300,19 @@ public static class OpinionSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly fade, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(OpinionSystem))) yield break;
         // A seventh of them each day, every relation still once a week. All on one day made
         // that day's frame walk thirty thousand relations at once.
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.MissionByA is not null || relation.MissionByB is not null) DiplomaticOutreach.Tick(campaign, relation);
             if ((campaign.ElapsedDays + (relation.A + relation.B) % 7) % 7 == 0)
                 Settle(campaign, relation);

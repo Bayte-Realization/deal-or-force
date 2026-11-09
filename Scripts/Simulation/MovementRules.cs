@@ -394,7 +394,11 @@ public static class MovementRules
         // people from the running campaign, despite identical serialized state/RNG.
         // Cache only within the same simulated day; never serialize derived counts.
         var day = campaign.ElapsedDays;
-        if (cache.Day == day && cache.MapRevision == campaign.MapRevision &&
+        // Who lives in a region does not change with who owns it: within the day only a change
+        // in the regions themselves (a carve or a reunion) throws the counts away.
+        var layout = 0;
+        foreach (var region in campaign.States) layout = unchecked(layout * 31 + region.MapIndex);
+        if (cache.Day == day && cache.MapRevision == layout &&
             cache.States == campaign.States.Count)
         {
             return;
@@ -403,7 +407,7 @@ public static class MovementRules
         cache.CultureTotals.Clear();
         cache.Indexed = false;
         cache.Day = day;
-        cache.MapRevision = campaign.MapRevision;
+        cache.MapRevision = layout;
         cache.States = campaign.States.Count;
     }
 

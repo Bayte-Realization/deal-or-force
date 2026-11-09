@@ -186,7 +186,7 @@ public static class Generals
         var nation = campaign.NationById(group.NationId);
         var generation = Generation(group, candidate);
         float Draw(int salt) => Escalation.Roll(campaign.Seed, group.Id, group.NationId, generation, salt);
-        var name = Rulers.GenerateName(nation, 1000 + group.Id * 13 + generation * 7, false, campaign.Seed);
+        var name = Rulers.GenerateName(nation, 1000 + group.Id * 13 + generation * 7, false, campaign.Seed, campaign);
         // Triangular around the ordinary, with the odd genius and the odd fool.
         var skill = M.Clamp(0.2f + 0.3f * (Draw(0x6E1) + Draw(0x6E2)), 0.2f, 0.8f);
         var pick = Draw(0x6E3) * _weights;

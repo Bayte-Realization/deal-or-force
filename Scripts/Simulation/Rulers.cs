@@ -372,7 +372,7 @@ public static class Rulers
         }
         else
         {
-            name = GenerateName(nation, 0, isState: true, campaignSeed: campaign?.Seed ?? 0);
+            name = GenerateName(nation, 0, isState: true, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             traitId = DefaultTraitFor(nation, 0, isState: true);
             birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(nation.Tag, 17));
         }
@@ -420,7 +420,7 @@ public static class Rulers
         }
         else
         {
-            name = GenerateName(nation, 1, isState: false, campaignSeed: campaign?.Seed ?? 0);
+            name = GenerateName(nation, 1, isState: false, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             traitId = DefaultTraitFor(nation, 1, isState: false);
             birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, 31));
         }
@@ -475,6 +475,26 @@ public static class Rulers
     {
         var year = campaign?.Date.Year ?? 2024;
         return Math.Max(18, year - MinisterBirthYear(campaign, nation, portfolioId));
+    }
+
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null) return;
+        EnsureLoaded();
+        var stateTraitId = nation.HeadOfStateTrait;
+        if (string.IsNullOrEmpty(stateTraitId) && Authored.TryGetValue(nation.Tag ?? "", out var authored))
+            stateTraitId = authored.StateTrait;
+        if (string.IsNullOrEmpty(stateTraitId) && TraitList.Count > 0)
+            stateTraitId = TraitList[Math.Abs(StableHash(nation.Tag ?? "DEF", 11)) % TraitList.Count].Id;
+        if (TraitOf(stateTraitId) is { Modifiers.Count: > 0 } stateTrait)
+            foreach (var (k, v) in stateTrait.Modifiers)
+                totals[k] = totals.GetValueOrDefault(k) + v;
+
+        if (nation.Cabinet.Count > 0)
+            foreach (var portfolio in Portfolios)
+                if (ActiveMinister(nation, portfolio.Id) is { Modifiers.Count: > 0 } opt)
+                    foreach (var (k, v) in opt.Modifiers)
+                        totals[k] = totals.GetValueOrDefault(k) + v;
     }
 
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
@@ -559,17 +579,26 @@ public static class Rulers
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || campaign.ElapsedDays < 0 || !campaign.Defines.RulersEnabled || !campaign.FeatureEnabled("rulers")) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same review, yielded between countries so a day of successions does not
+    /// settle in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || campaign.ElapsedDays < 0 || !campaign.Defines.RulersEnabled || !campaign.FeatureEnabled("rulers")) yield break;
         ElectoralPolitics.Tick(campaign);
         var every = Math.Max(1, campaign.Defines.RulerReviewDays);
         // The first morning is a review of its own: a ruler past the end of any life is
         // corrected before the world starts, and nothing else is disturbed.
         var firstMorning = campaign.ElapsedDays == 0;
-        if (!firstMorning && campaign.ElapsedDays % every != 17 % every) return;
+        if (!firstMorning && campaign.ElapsedDays % every != 17 % every) yield break;
         EnsureLoaded();
 
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null || campaign.Fallen.Contains(nation.Id)) continue;
             var office = OfficeOf(nation);
             PoliticalAppointments.ReviewMinisters(campaign, nation, every);
@@ -666,7 +695,7 @@ public static class Rulers
         for (var i = 0; i < count; i++)
         {
             var gen = baseGen + i * 7;
-            var name = GenerateName(nation, gen, isState: false, campaignSeed: campaign?.Seed ?? 0);
+            var name = GenerateName(nation, gen, isState: false, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             var traitId = DefaultTraitFor(nation, gen, isState: false);
             var trait = TraitOf(traitId) ?? (TraitList.Count > 0 ? TraitList[0] : new RulerTraitDefinition { Id = traitId, Name = traitId });
             var baseAge = 35 + Math.Abs(StableHash(nation.Tag, gen * 19 + 3)) % 31;
@@ -746,7 +775,7 @@ public static class Rulers
         EnsureLoaded();
         nation.RulerGeneration++;
         var year = campaign.Date.Year;
-        nation.HeadOfStateName = GenerateName(nation, nation.RulerGeneration * 2 + 1, isState: true, campaignSeed: campaign.Seed);
+        nation.HeadOfStateName = GenerateName(nation, nation.RulerGeneration * 2 + 1, isState: true, campaignSeed: campaign.Seed, campaign: campaign);
         nation.HeadOfStateTrait = DefaultTraitFor(nation, nation.RulerGeneration * 2 + 1, isState: true);
         var band = OfficeOf(nation).HereditaryState ? AgeBand.Hereditary : AgeBand.HeadOfState;
         nation.HeadOfStateBirthYear = year - AgeAtOffice(nation, band, StableHash(nation.Tag, nation.RulerGeneration * 13 + 7));
@@ -774,7 +803,7 @@ public static class Rulers
             return;
         }
         var year = campaign.Date.Year;
-        nation.HeadOfGovernmentName = GenerateName(nation, nation.RulerGeneration * 2 + 2, isState: false, campaignSeed: campaign.Seed);
+        nation.HeadOfGovernmentName = GenerateName(nation, nation.RulerGeneration * 2 + 2, isState: false, campaignSeed: campaign.Seed, campaign: campaign);
         nation.HeadOfGovernmentTrait = DefaultTraitFor(nation, nation.RulerGeneration * 2 + 2, isState: false);
         nation.HeadOfGovernmentBirthYear = year - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, nation.RulerGeneration * 19 + 5));
         nation.HeadOfGovernmentSinceDay = campaign.ElapsedDays;
@@ -818,10 +847,14 @@ public static class Rulers
         return TraitList[idx].Id;
     }
 
-    public static string GenerateName(Nation nation, int generation, bool isState, int campaignSeed = 0)
+    public static string GenerateName(Nation nation, int generation, bool isState, int campaignSeed = 0, Campaign campaign = null)
     {
         EnsureLoaded();
         var localPool = PersonNameCatalog.PoolFor(nation);
+        // A country with no culture of its own that no table knows - a rising, a junta - is
+        // named by the people of its capital, not by the English of the "default" pool.
+        var ground = localPool.Length == 0 ? GroundCulture(campaign, nation) : "";
+        if (ground.Length > 0) localPool = PersonNameCatalog.PoolFor(nation.Tag, ground);
         var monarch = isState && nation?.Government is "absolute_monarchy" or "constitutional_monarchy";
         if (PersonNameCatalog.TryGenerate(nation?.Tag, localPool, generation, campaignSeed,
             isState ? 17 : 31, out var person, monarch ? false : null))
@@ -830,7 +863,7 @@ public static class Rulers
                 return $"{person.Given} ({Cap(localHouse)})";
             return person.FullName;
         }
-        var poolKey = PoolFor(nation);
+        var poolKey = PoolFor(nation, ground);
         if (!_namePools.TryGetValue(poolKey, out var pool) && !_namePools.TryGetValue("default", out pool))
             return "Alexander Vance";
         var h1 = Math.Abs(StableHash(nation?.Tag ?? "NAT", generation * 41 + (isState ? 7 : 19)));
@@ -845,12 +878,27 @@ public static class Rulers
         return $"{given} {family}";
     }
 
-    public static string PoolFor(Nation nation)
+    /// <summary>The leading people of a country's capital, or of its largest region; empty without a campaign.</summary>
+    public static string GroundCulture(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.MapIndex <= 0) return "";
+        ScenarioState seat = null;
+        foreach (var state in campaign.States)
+        {
+            if (state.NationMapIndex != nation.MapIndex) continue;
+            if (state.MapIndex == nation.CapitalStateMapIndex) { seat = state; break; }
+            if (seat is null || state.Population > seat.Population) seat = state;
+        }
+        return seat is null ? "" : RegionalAdministration.DominantCulture(seat);
+    }
+
+    public static string PoolFor(Nation nation, string groundCulture = "")
     {
         if (nation is null) return "default";
         var culture = !string.IsNullOrWhiteSpace(nation.DeclaredCulture)
             ? nation.DeclaredCulture
             : nation.FoundedCultures.FirstOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(culture)) culture = groundCulture ?? "";
         if (string.IsNullOrWhiteSpace(culture)) culture = DemographyCatalog.PrimaryCulture(nation.Tag);
         if (!string.IsNullOrWhiteSpace(culture))
         {
@@ -1019,7 +1067,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
         var appointedName = authoredMin is { Name.Length: > 0 }
             ? authoredMin.Name
             : Rulers.GenerateName(nation, Rulers.StableHash(PortfolioId + ":" + OptionId, campaign.ElapsedDays),
-                false, campaign.Seed);
+                false, campaign.Seed, campaign);
         var appointedBirthYear = authoredMin is { Age: > 0 }
             ? Rulers.CalendarOriginYear(campaign) - Math.Clamp(authoredMin.Age, 18, 99)
             : campaign.Date.Year - Rulers.GeneratedMinisterAge(nation, PortfolioId + ":" + OptionId + ":" + campaign.ElapsedDays);

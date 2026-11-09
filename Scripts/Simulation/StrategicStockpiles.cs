@@ -377,7 +377,13 @@ public static class StrategicStockpiles
     /// </summary>
     public static void TickDay(Campaign campaign)
     {
-        if (campaign is null || !campaign.Defines.StrategicStockpilesEnabled) return;
+        foreach (var _ in TickDayStages(campaign)) { }
+    }
+
+    /// <summary>The same daily stockpile pass, yielded between batches of armies and countries.</summary>
+    public static IEnumerable<int> TickDayStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.Defines.StrategicStockpilesEnabled) yield break;
         var defines = campaign.Defines;
 
         // Pre-tally per nation: total divisions, marching divisions, fighting divisions, hulls at sea, hulls in action
@@ -387,8 +393,10 @@ public static class StrategicStockpiles
         var seaHulls = new Dictionary<int, int>();
         var actionHulls = new Dictionary<int, int>();
 
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (army.Divisions <= 0f) continue;
             totalDivs[army.NationId] = totalDivs.GetValueOrDefault(army.NationId) + army.Divisions;
             if (army.InBattle)
@@ -410,8 +418,11 @@ public static class StrategicStockpiles
                 actionHulls[fleet.NationId] = actionHulls.GetValueOrDefault(fleet.NationId) + fleet.Hulls;
         }
 
+        yield return 0;
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (!nation.StockpilesSeeded) EnsureSeeded(campaign, nation);
             else EnsureArsenal(campaign, nation);
@@ -516,6 +527,7 @@ public static class StrategicStockpiles
                 }
             }
         }
+        yield return 0;
         EquipmentLogistics.ReplenishDay(campaign);
     }
 

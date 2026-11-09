@@ -42,7 +42,7 @@ public static partial class FlagCatalog
         for (var i = names.Count-1; i >= 0; i--)
         {
             var name = names[i];
-            var stableIdentity = PreferCountryBase && n.Movement is null &&
+            var stableIdentity = PreferCountryBase && KeepsNationalIdentity(n) &&
                 (name == "flag_" + Slug(n.Tag) || name == "flag_formable_" + Slug(n.FormedNationId) ||
                  name == "flag_" + Slug(n.Tag) + "_" + Slug(n.FormedNationId));
             var resolved = false;

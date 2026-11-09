@@ -164,6 +164,20 @@ public static class ParliamentaryPolitics
         }
     }
 
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation?.Parliament is null) return;
+        if (nation.Parliament.MilitaryBudgetCutActive)
+        {
+            totals["reinforcement_rate"] = totals.GetValueOrDefault("reinforcement_rate") - 0.15f;
+            totals["recruitment_speed"] = totals.GetValueOrDefault("recruitment_speed") - 0.10f;
+        }
+        if (nation.Parliament.PeaceMandateActive)
+        {
+            totals["war_support_weekly"] = totals.GetValueOrDefault("war_support_weekly") - 0.0005f;
+        }
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation?.Parliament is null) yield break;

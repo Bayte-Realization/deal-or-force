@@ -134,7 +134,13 @@ public static partial class ForeignAssistance
     }
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.StepOpensNewDay) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same assistance pass, yielded between batches of requesters.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !c.StepOpensNewDay) yield break;
         for (var i = 0; i < c.AssistanceRequests.Count; i++)
         {
             var request = c.AssistanceRequests[i];
@@ -153,21 +159,29 @@ public static partial class ForeignAssistance
         }
         c.AssistanceCooldowns.RemoveAll(x => !CooldownReserved(c, x));
         if (c.AssistanceRequests.Count > MaxHistory + MaxActiveRequests) TrimHistory(c);
-        if (c.AssistanceLastTickDay == c.ElapsedDays) return;
+        if (c.AssistanceLastTickDay == c.ElapsedDays) yield break;
         c.AssistanceLastTickDay = c.ElapsedDays;
-        if (!Enabled(c)) return;
+        if (!Enabled(c)) yield break;
         var cadence = Math.Clamp(c.Defines.AiAidRequestReviewDays, 1, 365);
         var threshold = float.IsFinite(c.Defines.AiAidRequestWillingness) ? Math.Clamp(c.Defines.AiAidRequestWillingness, 0, 3) : .45f;
-        ReviewDonors(c, cadence, threshold);
+        foreach (var _ in ReviewDonorsStages(c, cadence, threshold)) yield return 0;
     }
 
     // Assessments stay live: a prior grant can change the next donor's cash.
     // Only traversal is shared within one review. Aid cannot create a country.
     internal static void ReviewDonors(Campaign c, int cadence, float threshold)
     {
+        foreach (var _ in ReviewDonorsStages(c, cadence, threshold)) { }
+    }
+
+    /// <summary>The same donor review, yielded between batches of requesters.</summary>
+    internal static IEnumerable<int> ReviewDonorsStages(Campaign c, int cadence, float threshold)
+    {
         Nation[] donors = null;
+        var reviewed = 0;
         for (var idx = 0; idx < c.Nations.Count; idx++)
         {
+            if (++reviewed % 8 == 0) yield return 0;
             var requester = c.Nations[idx];
             if (requester.IsHuman || requester.Population <= 0 || requester.Movement is not null) continue;
             if (((long)c.ElapsedDays + requester.Id) % cadence != 0) continue;

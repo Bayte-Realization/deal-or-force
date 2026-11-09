@@ -52,12 +52,21 @@ public static class HomelandIntegration
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(HomelandIntegration))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same monthly pass, yielded between regions so a newly independent world's
+    /// first integration sweep does not land in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(HomelandIntegration))) yield break;
         var d = c.Defines;
-        if (d.HomelandIntegrationYears <= 0 && d.HomelandFadeYears <= 0) return;
+        if (d.HomelandIntegrationYears <= 0 && d.HomelandFadeYears <= 0) yield break;
         var owners = c.NationsByMapIndex();
+        var scanned = 0;
         foreach (var region in c.States)
         {
+            if (++scanned % 64 == 0) yield return 0;
             if (!MovementRules.OnItsDay(c, region.MapIndex, Cycle)) continue;
             if (region.Unclaimed || region.Population <= 0) continue;
             if (region.TrackedOwnerMapIndex != region.NationMapIndex)

@@ -10,10 +10,40 @@ public static class PeacefulFormation
 {
     public static string ConsentKey(int founder, string formable) => "union_consent/" + founder + "/" + formable;
     private static string OfferKey(int founder, string formable) => "union_offer/" + founder + "/" + formable;
-    public static IEnumerable<int> Territory(Campaign campaign, FormableNation definition) =>
-        definition.RequiredProvinces.Concat(RegionProvinces(campaign, definition)).Concat(definition.RequiredTags.SelectMany(tag =>
-            campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
-                campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>()))).Distinct();
+
+    private static Campaign _territoryCampaign;
+    private static int _territoryMapRevision = int.MinValue;
+    private static int _territoryStateCount = -1;
+    private static readonly Dictionary<string, int[]> _territoryCache = new();
+
+    public static int[] Territory(Campaign campaign, FormableNation definition)
+    {
+        if (campaign?.ProvinceMap is null || definition is null) return Array.Empty<int>();
+        // Keyed on the region layout, not on MapRevision: a formable's ground is its provinces and
+        // the regions a border has carved from its named ones, none of which moves when a province
+        // is merely taken in battle - and MapRevision moves dozens of times a day in any war.
+        if (!ReferenceEquals(_territoryCampaign, campaign) || _territoryMapRevision != campaign.OwnershipRevision || _territoryStateCount != campaign.States.Count)
+        {
+            _territoryCampaign = campaign;
+            _territoryMapRevision = campaign.OwnershipRevision;
+            _territoryStateCount = campaign.States.Count;
+            _territoryCache.Clear();
+        }
+        if (_territoryCache.TryGetValue(definition.Id, out var cached)) return cached;
+
+        var set = new HashSet<int>(definition.RequiredProvinces);
+        foreach (var p in RegionProvinces(campaign, definition)) set.Add(p);
+        foreach (var tag in definition.RequiredTags)
+        {
+            var provinces = campaign.ScenarioId == "2024"
+                ? ProvinceOwnership.ProvincesOf(tag)
+                : campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>());
+            foreach (var p in provinces) set.Add(p);
+        }
+        var result = set.ToArray();
+        _territoryCache[definition.Id] = result;
+        return result;
+    }
 
     /// <summary>The provinces of a formable's named regions, and of the pieces a border has
     /// since cut out of them.</summary>

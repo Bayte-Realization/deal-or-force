@@ -213,14 +213,23 @@ public static class GovernanceEvents
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(GovernanceEvents))) return;
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly review, yielded between countries so a turbulent cabinet
+    /// reshuffle does not land in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(GovernanceEvents))) yield break;
+        if (campaign is null) yield break;
         Recent.Clear();
-        if (campaign.ElapsedDays % 7 != 0 || Transitions.Count == 0) return;
+        if (campaign.ElapsedDays % 7 != 0 || Transitions.Count == 0) yield break;
 
         var available = new List<GovernanceTransition>();
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             // The player's country is theirs to arrange. A cabinet that rearranged the
             // state out from under the person playing it would be the single most annoying
             // thing this game could do.

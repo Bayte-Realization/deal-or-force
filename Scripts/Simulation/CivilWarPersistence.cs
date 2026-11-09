@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System;
 using System.Linq;
 
@@ -33,9 +34,17 @@ public static class CivilWarPersistence
 
     public static void Tick(Campaign c)
     {
-        if (!MechanicFeatures.SystemEnabled(c, nameof(CivilWarPersistence)) || !c.FeatureEnabled("militia")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same escalation pass, yielded between wars.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!MechanicFeatures.SystemEnabled(c, nameof(CivilWarPersistence)) || !c.FeatureEnabled("militia")) yield break;
+        var ticked = 0;
         foreach (var war in c.Wars)
         {
+            if (++ticked % 4 == 0) yield return 0;
             if (war.Ended || !war.CivilConflict || c.ProvinceMap is null) continue;
             var due = StageDue(c, war);
             if (due <= war.EscalationStage || war.AttackerLosses + war.DefenderLosses <= .001f ||

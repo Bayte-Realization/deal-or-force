@@ -18,7 +18,7 @@
   // sixteen wars, fourteen of which end - and at 0.15 the world is identical to 0.05, so this is
   // the knee of the curve. Keep this in step with Defines.AiWarChance; SimBench holds the two to
   // each other, and a stale file here silently undid a whole rebalance once.
-  "AiWarChance": 0.05,
+  "AiWarChance": 0.08,
   "AiMayDeclareWar": true,
   "AiBorderFriction": -6,
   "AiTradeWarmth": 28,
@@ -56,7 +56,7 @@
   "AllianceNotorietyWeight": 0.40,
   "AllianceSharedRivalWeight": 0.12,
   "AiRivalryThreshold": -30,
-  "AiTreasuryFloor": 0.02,
+  "AiTreasuryFloor": 0.012,
   "AiTreasuryComfort": 0.12,
   "AiTaxStep": 0.012,
   // A government short of money broadens the base before raising the rate: the consumption tax

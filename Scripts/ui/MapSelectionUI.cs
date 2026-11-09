@@ -437,10 +437,14 @@ public partial class DealOrForceGame
         _countryCardStanding.AddThemeColorOverride("font_color", Ui.Colour(
             war is not null || relation.Opinion < -20 ? "state.negative" :
             relation.Opinion > 20 ? "state.positive" : "text.accent"));
-        _countryCardStanding.TooltipText = Ui.Tip(string.Join("\n", relation.OpinionDrivers.Entries
+        var standingFacts = string.Join("\n", relation.OpinionDrivers.Entries
             .OrderByDescending(entry => Math.Abs(entry.Value))
             .Take(5)
-            .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}")));
+            .Select(entry => $"{Tr(entry.Source)} {entry.Value:+0.0;-0.0;0.0}"));
+        var rivalLine = AllyRivalShift.Line(_campaign, relation);
+        if (rivalLine.Length > 0)
+            standingFacts = standingFacts.Length == 0 ? rivalLine : rivalLine + "\n" + standingFacts;
+        _countryCardStanding.TooltipText = Ui.Tip(standingFacts);
 
         if (_countryDossierTab == "Overview")
         {
@@ -489,10 +493,6 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Your guarantee", Tr("you have promised to fight for them"), null, "state.info");
         if (relation.GuaranteedBy(nation.Id))
             CardRow(_countryCardRows, "Guaranteed by them", Tr("they have promised to fight for you"), null, "state.positive");
-        var allies = AllianceSystem.AlliesOf(_campaign, nation);
-        if (allies.Count > 0)
-            CardRow(_countryCardRows, "Allied to", string.Join(", ", allies.Take(5).Select(CountryNames.Compact)) +
-                                                   (allies.Count > 5 ? $" +{allies.Count - 5:N0}" : ""));
         var through = player.TradePartners.GetValueOrDefault(nation.Id);
         if (through > 0.0001f)
             CardRow(_countryCardRows, "Trade through them", Simulation.Loc.Format("{0} a week · {1:P0} of all your trade",
@@ -608,6 +608,13 @@ public partial class DealOrForceGame
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
+            // Its cities, with the people they have now: they are where the region's people live.
+            var towns = Simulation.CityCatalog.CitiesOf(_campaign, state);
+            if (towns.Count > 0)
+                CardRow(_regionCardRegionRows, "Cities",
+                    string.Join(", ", towns.Take(3).Select(t => $"{t.City.DisplayName} {Fmt.People(t.People)}")) +
+                    (towns.Count > 3 ? Simulation.Loc.Format(" +{0}", towns.Count - 3) : ""),
+                    string.Join("\n", towns.Take(12).Select(t => $"{t.City.DisplayName}: {Fmt.PeopleExact(t.People)}")));
             CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
                 Tr(RegionalStatistics.GdpExplanation));
             // A half-state: owned by one country, held by another by lease or by troops without a war.
@@ -674,6 +681,7 @@ public partial class DealOrForceGame
                     chips.AddChild(BuildingIconControl(entry.Kind, 18));
                     var number = Title(entry.Count.ToString("N0"), 13, Ui.Colour("text.bright"));
                     number.AutowrapMode = TextServer.AutowrapMode.Off;
+                    number.CustomMinimumSize = new Vector2(12, 0);
                     number.MouseFilter = Control.MouseFilterEnum.Pass;
                     chips.AddChild(number);
                 }

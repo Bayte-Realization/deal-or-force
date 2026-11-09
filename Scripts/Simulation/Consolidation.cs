@@ -66,13 +66,21 @@ public static class Consolidation
 {
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Consolidation))) return;
-        if (c.ProvinceMap is null || c.ProvinceController is null) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same consolidation pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(Consolidation))) yield break;
+        if (c.ProvinceMap is null || c.ProvinceController is null) yield break;
         var defines = c.Defines;
-        if (c.ElapsedDays < defines.ConsolidationEarliestDay) return;
+        if (c.ElapsedDays < defines.ConsolidationEarliestDay) yield break;
         var every = Math.Max(7, defines.ConsolidationReviewDays);
+        var ticked = 0;
         foreach (var nation in c.Nations.ToArray())
         {
+            if (++ticked % 8 == 0) yield return 0;
             if ((c.ElapsedDays + (long)nation.Id * 7) % every != 0) continue;
             // A player's country pursues a union only when the player has handed diplomacy over.
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;

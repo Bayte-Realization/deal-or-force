@@ -80,8 +80,8 @@ public sealed partial class Defines
     /// <summary>How much a crisis argues for a war in the AI's sum, at full tension.</summary>
     public float AiEscalationAppetite { get; set; } = 0.9f;
     /// <summary>How long a shared border has to be shooting before a border war can come of it, the chance of one a week after that, and how long it is fought before the ceasefire.</summary>
-    public int BorderWarAfterDays { get; set; } = 90;
-    public float BorderWarChancePerWeek { get; set; } = 0.012f;
+    public int BorderWarAfterDays { get; set; } = 60;
+    public float BorderWarChancePerWeek { get; set; } = 0.025f;
     /// <summary>How strong a side has to be, against the other and the friends behind it, to open a border war.</summary>
     public float BorderWarStrengthRatio { get; set; } = 0.6f;
     public int BorderWarDays { get; set; } = 45;
@@ -93,6 +93,15 @@ public sealed partial class Defines
     public float TalksCost { get; set; } = 0.25f;
     public float TalksTensionPerWeek { get; set; } = 2.5f;
     public int TalksCooldownDays { get; set; } = 365;
+    /// <summary>
+    /// A pair that is not at war, and has a rival stance, a refused ultimatum, a claim on land
+    /// the other holds, or opinion at or under <see cref="AiRivalryThreshold"/> on a shared
+    /// border, takes one step up the tension ladder. A player is handed the existing ultimatum
+    /// instead of a war. False leaves that pair to the weekly drift above.
+    /// </summary>
+    public bool QuarrelStep { get; set; } = true;
+    /// <summary>How long the same pair waits before another step for the same cause. A different cause is not this wait.</summary>
+    public int QuarrelStepCooldownDays { get; set; } = 120;
 
     /// <summary>How a war grows: the age and the losses, as a share of the people, at which it becomes a major war and then a total one.</summary>
     public int WarMajorDays { get; set; } = 150;
@@ -138,6 +147,15 @@ public sealed partial class DiplomaticRelation
     /// <summary>The stage the tension is at (<see cref="TensionStage"/>) and the day it got there.</summary>
     public int TensionStage;
     public int TensionStageDay = -9999;
+    /// <summary>
+    /// The day this pair last stepped, or was handed an ultimatum, for that cause. 0 means
+    /// never, including a save from before the field existed. The same cause waits
+    /// <see cref="Defines.QuarrelStepCooldownDays"/>; a different cause does not.
+    /// </summary>
+    public int QuarrelRefusalDay;
+    public int QuarrelClaimDay;
+    public int QuarrelRivalDay;
+    public int QuarrelBorderDay;
     public int LastIncidentDay = -9999;
     public string LastIncident = "";
     public int LastIncidentBy = -1;
@@ -360,7 +378,10 @@ public static class Escalation
         var keys = new SortedSet<long>();
         foreach (var (key, relation) in c.Relations)
             if (relation.Tension > 0.01f || relation.StructuralTension > 0f || relation.GrievanceA > 0.01f ||
-                relation.GrievanceB > 0.01f || relation.Opinion < -20f || relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar)
+                relation.GrievanceB > 0.01f || relation.Opinion < -20f ||
+                relation.Stance is DiplomaticStance.Rival or DiplomaticStance.AtWar ||
+                OpinionSystem.Has(relation, "refused_our_ultimatum") ||
+                OpinionSystem.Has(relation, "took_our_land"))
                 keys.Add(key);
         foreach (var nation in c.Nations)
         {
@@ -434,6 +455,11 @@ public static class Escalation
         if (relation.TalksUntilDay > c.ElapsedDays)
             relation.Tension -= defines.TalksTensionPerWeek * days / 7f;
         relation.Tension = M.Clamp(relation.Tension, 0f, 100f);
+        var border = CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
+        var facts = QuarrelFacts.Read(c, relation, border, drivers);
+        // A step already taken stays on its rung. The weekly drift would walk a rivalry of ten
+        // points back under the friction line before the same cause is allowed to climb again.
+        HoldQuarrel(c, relation, a, b, facts);
         // Shooting needs somebody willing to shoot first. Russia does not fire across a border
         // with the whole of NATO behind the Finns, Finland's parliament does not fire across one
         // at all, and Ukraine, fighting for its life against Russia, does not open a second front
@@ -446,7 +472,6 @@ public static class Escalation
                        Deterred(c, a, b);
         if (deterred) relation.Tension = defines.TensionClashesAt - 0.5f;
 
-        var border = CampaignDiplomacy.SharesLandBorder(c, a.MapIndex, b.MapIndex);
         var stage = StageFor(defines, relation);
         // Hysteresis keeps a stage until tension is well below its line; nobody shooting is not
         // a matter of degree.
@@ -459,6 +484,163 @@ public static class Escalation
         // that says it is about to shoot.
         if (deterred) relation.Tension = MathF.Min(relation.Tension, defines.TensionClashesAt - 0.5f);
         MaybeBorderWar(c, relation, a, b, border, days);
+        // One rung, or the existing ultimatum. Not a new crisis, and not a war declared here.
+        PressQuarrel(c, relation, a, b, border, facts);
+    }
+
+    /// <summary>
+    /// Why a pair that is not at war is allowed one rung. An ended war is not one of these.
+    /// The live list already answered "are they fighting" before <see cref="Review"/> got here.
+    /// </summary>
+    private readonly struct QuarrelFacts
+    {
+        public readonly bool Refusal, Claim, Rival, Border;
+        public bool Any => Refusal || Claim || Rival || Border;
+        public QuarrelFacts(bool refusal, bool claim, bool rival, bool border)
+        {
+            Refusal = refusal; Claim = claim; Rival = rival; Border = border;
+        }
+
+        public static QuarrelFacts Read(Campaign c, DiplomaticRelation relation, bool border, TensionDrivers drivers)
+        {
+            var rival = relation.Stance == DiplomaticStance.Rival;
+            return new QuarrelFacts(
+                OpinionSystem.Has(relation, "refused_our_ultimatum"),
+                OpinionSystem.Has(relation, "took_our_land") || drivers.LostLand > 0.01f,
+                rival,
+                !rival && border && relation.Opinion <= c.Defines.AiRivalryThreshold);
+        }
+    }
+
+    private static bool QuarrelOpen(Campaign c, Nation a, Nation b) =>
+        c.Defines.QuarrelStep && !(a.IsHuman && b.IsHuman) &&
+        !(c.ObserverMode && (a.IsHuman || b.IsHuman)) &&
+        !a.AnswersTo(b.Id) && !b.AnswersTo(a.Id);
+
+    private static bool CauseCool(int stamped, int today, int wait) =>
+        stamped <= 0 || today - stamped >= wait;
+
+    private static bool CauseHeld(QuarrelFacts facts, DiplomaticRelation relation) =>
+        (relation.QuarrelRefusalDay > 0 && facts.Refusal) ||
+        (relation.QuarrelClaimDay > 0 && facts.Claim) ||
+        (relation.QuarrelRivalDay > 0 && facts.Rival) ||
+        (relation.QuarrelBorderDay > 0 && facts.Border);
+
+    private static float StageLine(Defines defines, TensionStage stage) => stage switch
+    {
+        TensionStage.Friction => defines.TensionFrictionAt,
+        TensionStage.Crisis => defines.TensionCrisisAt,
+        TensionStage.Clashes => defines.TensionClashesAt,
+        _ => 0f
+    };
+
+    /// <summary>Keep the rung a cause already earned. The next review asks for a new step separately.</summary>
+    private static void HoldQuarrel(Campaign c, DiplomaticRelation relation, Nation a, Nation b, QuarrelFacts facts)
+    {
+        if (!facts.Any || !QuarrelOpen(c, a, b) || !CauseHeld(facts, relation)) return;
+        var stage = StageOf(relation);
+        if (stage <= TensionStage.Calm || stage >= TensionStage.War) return;
+        var floor = StageLine(c.Defines, stage);
+        if (relation.Tension < floor) relation.Tension = floor;
+    }
+
+    /// <summary>
+    /// One step on the ladder already in this file, or the ultimatum already on the player's desk.
+    /// Two computers may climb. A player is not declared on and does not lose land here.
+    /// </summary>
+    private static void PressQuarrel(Campaign c, DiplomaticRelation relation, Nation a, Nation b, bool border,
+        QuarrelFacts facts)
+    {
+        if (!facts.Any || !QuarrelOpen(c, a, b)) return;
+        if (CampaignDiplomacy.AtWar(c, a.Id, b.Id)) return;
+        var wait = Math.Max(1, c.Defines.QuarrelStepCooldownDays);
+        var today = c.ElapsedDays;
+        var cause = "";
+        if (facts.Refusal && CauseCool(relation.QuarrelRefusalDay, today, wait)) cause = "refusal";
+        else if (facts.Claim && CauseCool(relation.QuarrelClaimDay, today, wait)) cause = "claim";
+        else if (facts.Rival && CauseCool(relation.QuarrelRivalDay, today, wait)) cause = "rival";
+        else if (facts.Border && CauseCool(relation.QuarrelBorderDay, today, wait)) cause = "border";
+        if (cause.Length == 0) return;
+
+        var actor = a.IsHuman ? b : a;
+        var target = ReferenceEquals(actor, a) ? b : a;
+        if (target.IsHuman && DeliverExistingUltimatum(c, actor, target))
+        {
+            StampQuarrel(relation, cause, today);
+            return;
+        }
+        if (!RaiseOneRung(c, relation, a, b, border)) return;
+        StampQuarrel(relation, cause, today);
+    }
+
+    private static void StampQuarrel(DiplomaticRelation relation, string cause, int today)
+    {
+        switch (cause)
+        {
+            case "refusal": relation.QuarrelRefusalDay = today; break;
+            case "claim": relation.QuarrelClaimDay = today; break;
+            case "rival": relation.QuarrelRivalDay = today; break;
+            case "border": relation.QuarrelBorderDay = today; break;
+        }
+    }
+
+    /// <summary>
+    /// The region <see cref="AiStatecraft.TryUltimatumFirst"/> would demand: lost homeland or
+    /// our own people, touching our ground. Delivery puts the paper on a player's desk.
+    /// It does not answer the paper and it does not read the war list.
+    /// </summary>
+    private static bool DeliverExistingUltimatum(Campaign c, Nation actor, Nation target)
+    {
+        if (actor is null || target is null || actor.IsHuman || !target.IsHuman) return false;
+        if (!c.Defines.AiUltimatumsBeforeWar || c.ProvinceMap is null) return false;
+        if (Ultimatum.PendingBetween(c, actor.Id, target.Id)) return true;
+        var key = "ultimatum/" + target.Id;
+        if (actor.DecisionAvailableDay.GetValueOrDefault(key) > c.ElapsedDays) return false;
+
+        var lost = new List<int>();
+        foreach (var (region, holder) in LostLands.Of(c, actor))
+            if (holder?.Id == target.Id) lost.Add(region.MapIndex);
+
+        ScenarioState best = null;
+        var bestScore = 0f;
+        foreach (var state in c.StatesOf(target))
+        {
+            if (state.Population <= 0) continue;
+            if (!Ultimatum.CanDemand(c, target, state.MapIndex)) continue;
+            if (!TerritorialCoherence.TouchesOwnedGround(c, actor, state.MapIndex)) continue;
+            long ours = 0;
+            foreach (var group in state.PopulationGroups)
+                if (DemographyCatalog.IsPrimary(actor.Tag, group.Culture)) ours += group.Size;
+            var kin = ours / (float)Math.Max(1, state.Population);
+            var claimed = false;
+            for (var index = 0; index < lost.Count; index++)
+                if (lost[index] == state.MapIndex) { claimed = true; break; }
+            if (kin < 0.5f && !claimed) continue;
+            var score = state.Population * (1f + 4f * kin) * (claimed ? 2f : 1f);
+            if (score <= bestScore) continue;
+            bestScore = score;
+            best = state;
+        }
+        if (best is null) return false;
+        var demand = new Ultimatum.Demand { Regions = new[] { best.MapIndex } };
+        if (!Ultimatum.ValidateTerms(c, actor, target, demand, out _)) return false;
+        actor.DecisionAvailableDay[key] = c.ElapsedDays + Math.Max(30, c.Defines.AiUltimatumIntervalDays);
+        return Ultimatum.Deliver(c, actor, target, demand).Accepted;
+    }
+
+    /// <summary>The next stage this file already has. Clashes stay behind the existing deterrent, and off a player's border.</summary>
+    private static bool RaiseOneRung(Campaign c, DiplomaticRelation relation, Nation a, Nation b, bool border)
+    {
+        var stage = StageOf(relation);
+        if (stage >= TensionStage.Clashes) return false;
+        var next = stage + 1;
+        if (next >= TensionStage.Clashes &&
+            (a.IsHuman || b.IsHuman || !border || Deterred(c, a, b))) return false;
+        var line = StageLine(c.Defines, next);
+        if (line <= 0f) return false;
+        if (relation.Tension < line) relation.Tension = line;
+        SetStage(c, relation, a, b, next);
+        return StageOf(relation) == next;
     }
 
     private static TensionStage StageFor(Defines defines, DiplomaticRelation relation)
@@ -724,9 +906,11 @@ public static class Escalation
     private static void GrowWars(Campaign c, int days)
     {
         var defines = c.Defines;
-        foreach (var war in c.Wars)
+        var live = Warfare.LiveWars(c);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended || war.Limited) continue;
+            var war = live[index];
+            if (war.Limited) continue;
             var age = c.ElapsedDays - war.StartedDay;
             var attacker = c.NationById(war.AttackerId);
             var defender = c.NationById(war.DefenderId);
@@ -781,6 +965,7 @@ public static class Escalation
             relation.NonAggressionPact || relation.TalksUntilDay > c.ElapsedDays) return;
         if (a.AnswersTo(b.Id) || b.AnswersTo(a.Id) || a.Movement is not null || b.Movement is not null) return;
         if (Roll(c.Seed, relation.A, relation.B, c.ElapsedDays, 0x60D) >= defines.BorderWarChancePerWeek * days / 7f) return;
+        // Finished border wars are the cooldown. They stay on the full record.
         foreach (var past in c.Wars)
             if (past.Limited && past.Ended && c.ElapsedDays - past.EndedDay < defines.BorderWarCooldownDays &&
                 past.Involves(a.Id) && past.Involves(b.Id)) return;
@@ -802,8 +987,9 @@ public static class Escalation
         }
         // A player starts its own wars; and nobody opens a second front while a big war of its own is on.
         if (attacker.IsHuman) return;
-        foreach (var other in c.Wars)
-            if (!other.Ended && other.Intensity >= 1 && other.Involves(attacker.Id)) return;
+        var fighting = Warfare.LiveWars(c);
+        for (var index = 0; index < fighting.Count; index++)
+            if (fighting[index].Intensity >= 1 && fighting[index].Involves(attacker.Id)) return;
 
         var claimed = BorderRegion(c, attacker, defender);
         var war = CampaignDiplomacy.DeclareWar(c, attacker.Id, defender.Id, claimed, "border_war",
@@ -838,8 +1024,12 @@ public static class Escalation
         // Russia used to reach "border clashes" in the first week of 2024.
         if (Deterrence.TierOf(c, shooter) >= 1 && Deterrence.TierOf(c, target) >= 1 &&
             !CampaignDiplomacy.SharesLandBorder(c, shooter.MapIndex, target.MapIndex)) return false;
-        foreach (var war in c.Wars)
-            if (!war.Ended && war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
+        var live = Warfare.LiveWars(c);
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (war.Intensity >= 1 && war.Involves(shooter.Id) && !war.Involves(target.Id)) return false;
+        }
         return true;
     }
 
@@ -887,9 +1077,15 @@ public static class Escalation
     /// </summary>
     private static void EndBorderWars(Campaign c, int days)
     {
-        foreach (var war in c.Wars.ToArray())
+        // Ending one war rebuilds the live list. This week keeps the wars it started with.
+        var live = Warfare.LiveWars(c);
+        var open = new List<StrategicWar>(live.Count);
+        for (var index = 0; index < live.Count; index++)
+            if (live[index].Limited) open.Add(live[index]);
+        for (var index = 0; index < open.Count; index++)
         {
-            if (war.Ended || !war.Limited || war.LimitedUntilDay < 0 || c.ElapsedDays < war.LimitedUntilDay) continue;
+            var war = open[index];
+            if (!war.Limited || war.LimitedUntilDay < 0 || c.ElapsedDays < war.LimitedUntilDay) continue;
             var attacker = c.NationById(war.AttackerId);
             var defender = c.NationById(war.DefenderId);
             if (attacker is null || defender is null) continue;
@@ -1006,6 +1202,9 @@ public static class Escalation
             return Loc.Get("Relations are not in crisis.");
         if (relation.InterveningPowerId >= 0 && relation.InterventionUntilDay > c.ElapsedDays)
             return Loc.Get("Great Power intervention is already active.");
+        // A warning has to be one the aggressor believes.
+        if (power.Gdp + power.MilitarySpending * 1000f < (aggressor.Gdp + aggressor.MilitarySpending * 1000f) * c.Defines.CrisisInterventionCredibility)
+            return Loc.Get("Not strong enough for the warning to be believed.");
         return "";
     }
 
@@ -1016,7 +1215,9 @@ public static class Escalation
         relation.InterveningPowerId = power.Id;
         relation.InterventionTargetId = aggressor.Id;
         relation.InterventionUntilDay = c.ElapsedDays + 180;
-        relation.Tension = MathF.Min(relation.Tension, c.Defines.TensionClashesAt - 1.5f);
+        // Calmed by a measure, not pinned under the line: a crisis a patron leans on can still
+        // run on to the border if what drives it does not stop.
+        relation.Tension = MathF.Max(0f, relation.Tension - MathF.Max(0f, c.Defines.CrisisInterventionRelief));
 
         var relP = CampaignDiplomacy.Get(c, power.Id, protege.Id);
         if (relP is not null) OpinionSystem.Remember(c, relP, "held_talks");
@@ -1049,6 +1250,9 @@ public static class Escalation
                 var relB = CampaignDiplomacy.Peek(c, power.Id, b.Id);
                 var backsA = relA is not null && (relA.Stance == DiplomaticStance.Allied || relA.GuaranteedBy(power.Id));
                 var backsB = relB is not null && (relB.Stance == DiplomaticStance.Allied || relB.GuaranteedBy(power.Id));
+                // A crisis on the far side of the world, between countries it neither borders, backs
+                // nor trades with, is not this power's business.
+                if (!backsA && !backsB && !HasStake(c, power, a) && !HasStake(c, power, b)) continue;
                 var powerA = a.Gdp + a.MilitarySpending * 1000f;
                 var powerB = b.Gdp + b.MilitarySpending * 1000f;
                 if (!backsA && !backsB)
@@ -1082,14 +1286,30 @@ public static class Escalation
                     InterveneInCrisis(c, power, b, a);
                     break;
                 }
+                // Talks are offered on some weeks, not the first week of every crisis: a crisis
+                // nobody hurries to calm can run on into clashes and a border war (Escalation).
                 if (MediationBlock(c, power, a, b).Length == 0 &&
-                    AiStatecraft.Restraint(c, power) >= 0.35f)
+                    AiStatecraft.Restraint(c, power) >= 0.35f &&
+                    Roll(c.Seed, power.Id, relation.A * 4099 + relation.B, c.ElapsedDays, 0x3ED1A7) < c.Defines.CrisisMediationChance)
                 {
                     StartMediation(c, power, a, b);
                     break;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a great power has a stake in a country's crisis: a land border, its capital within
+    /// Defines.CrisisInterestDegrees of the power's, or a real share of the power's trade.
+    /// </summary>
+    internal static bool HasStake(Campaign c, Nation power, Nation party)
+    {
+        if (power.MapIndex > 0 && party.MapIndex > 0 && CampaignDiplomacy.SharesLandBorder(c, power.MapIndex, party.MapIndex)) return true;
+        if (float.IsFinite(power.CapitalLatitude) && float.IsFinite(party.CapitalLatitude) &&
+            NavalOperations.Distance(power.CapitalLatitude, power.CapitalLongitude, party.CapitalLatitude, party.CapitalLongitude) <=
+            c.Defines.CrisisInterestDegrees) return true;
+        return power.TradeDependenceOn(party.Id) >= c.Defines.CrisisInterestTradeShare;
     }
 
     public static IEnumerable<DiplomaticRelation> Hottest(Campaign c, float above = 0f)

@@ -40,6 +40,7 @@ public sealed partial class Defines
 public static partial class AiStatecraft
 {
     private static readonly List<Nation> FriendlyCandidates = new();
+    private static readonly Dictionary<int, float> FriendlyOpinion = new();
     private static readonly HashSet<int> TouchingRegions = new();
 
     /// <summary>
@@ -96,7 +97,8 @@ public static partial class AiStatecraft
     }
 
     /// <summary>Use the same bilateral rules as a player, spending at most one diplomatic move.</summary>
-    internal static bool TryFriendlyMove(Campaign campaign, Nation nation, Nation friend)
+    internal static bool TryFriendlyMove(Campaign campaign, Nation nation, Nation friend,
+        DiplomaticOutreach.OfferScan missionScan = null, AllianceSystem.OfferScan allianceScan = null)
     {
         if (campaign is null || nation is null || friend is null || nation.Id == friend.Id) return false;
         var relation = CampaignDiplomacy.Get(campaign, nation.Id, friend.Id);
@@ -105,7 +107,8 @@ public static partial class AiStatecraft
         var defines = campaign.Defines;
         // Ask only for a useful bridge to a live opponent, never collect transit treaties
         // around the world. Human neighbours still decide through their inbox.
-        if (opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
+        using (SimProfiler.Measure("      dip:transit"))
+            if (opinion >= 0f && MilitaryAccess.TryWarTransit(campaign, nation, friend)) return true;
         // How readily this country reaches out at all. A sociable state offers trade, a pact
         // and an alliance at a lower opinion than a hermit does, and the profile says which it
         // is; the thresholds stay the world's, this only bends them per country.
@@ -151,9 +154,10 @@ public static partial class AiStatecraft
             }
         }
 
+        using (SimProfiler.Measure("      dip:missions"))
         if (campaign.Defines.DiplomaticMissionsEnabled && nation.PoliticalPoints >= 18f && nation.Treasury >= 0.2f &&
             opinion < allianceThreshold && DiplomaticOutreach.Of(relation, nation.Id) is null &&
-            DiplomaticOutreach.Refusal(campaign, nation.Id, friend.Id).Length == 0 &&
+            DiplomaticOutreach.Refusal(campaign, nation.Id, friend.Id, true, missionScan).Length == 0 &&
             (nation.TradeDependenceOn(friend.Id) > 0.02f || CampaignDiplomacy.SharesLandBorder(campaign, nation.MapIndex, friend.MapIndex) || opinion >= 10f))
         {
             var command = new ImproveRelationsCommand { IssuerId = nation.Id, TargetId = friend.Id, Active = true };
@@ -165,16 +169,20 @@ public static partial class AiStatecraft
             }
         }
 
-        if (opinion >= tradeThreshold &&
-            TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement)) return true;
-        if (opinion >= pactThreshold &&
-            TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
+        using (SimProfiler.Measure("      dip:agreements"))
+        {
+            if (opinion >= tradeThreshold &&
+                TryAgreement(campaign, nation, friend, AgreementKind.TradeAgreement)) return true;
+            if (opinion >= pactThreshold &&
+                TryAgreement(campaign, nation, friend, AgreementKind.NonAggressionPact)) return true;
+        }
 
+        using (SimProfiler.Measure("      dip:alliances"))
         if (relation.Stance != DiplomaticStance.Allied && opinion >= allianceThreshold &&
             !InternationalOrganizations.DefencePartners(campaign, nation.Id).Contains(friend.Id) &&
             AllianceSystem.CanPropose(campaign, nation, friend, out _) &&
-            AllianceSystem.Willingness(campaign, nation, friend, refreshAssessment: false) > defines.AllianceWillingness &&
-            (friend.IsHuman || AllianceSystem.Willingness(campaign, friend, nation, refreshAssessment: false) > defines.AllianceWillingness))
+            AllianceSystem.Willingness(campaign, nation, friend, null, false, allianceScan) > defines.AllianceWillingness &&
+            (friend.IsHuman || AllianceSystem.Willingness(campaign, friend, nation, null, false, allianceScan) > defines.AllianceWillingness))
         {
             // Ask only when the commitment benefits us and does not duplicate a defence
             // charter. An AI recipient uses the same acceptance score as a player offer;
@@ -184,9 +192,11 @@ public static partial class AiStatecraft
             return true;
         }
 
-        if (TryAid(campaign, nation, friend, relation)) return true;
+        using (SimProfiler.Measure("      dip:aid"))
+            if (TryAid(campaign, nation, friend, relation)) return true;
         // Optional visits and exchanges must not pre-empt the ally's existing
         // reserve-aware aid decision (or spend the operating cash it protects).
+        using (SimProfiler.Measure("      dip:acts"))
         if (opinion >= 15f && relation.Stance != DiplomaticStance.Allied &&
             DiplomaticActs.TryAi(campaign, nation, friend)) return true;
         // Warming a tie into friendship is a real move with a real price, and the price is the

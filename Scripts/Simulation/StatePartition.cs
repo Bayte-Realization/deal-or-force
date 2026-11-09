@@ -340,6 +340,26 @@ public static class StatePartition
         var topology = campaign?.ProvinceMap;
         if (topology is null) return 0;
 
+        if (campaign.LastReunifyMapRevision == campaign.MapRevision &&
+            campaign.LastReunifyStateCount == campaign.States.Count)
+        {
+            // Closing a territorial offer or a competing office is not a border change.
+            // Do not keep its former shard frozen until the next unrelated conquest/load.
+            // Unchanged worlds still avoid the full region/province walk and allocations.
+            var released = false;
+            foreach (var (survivor, piece) in campaign.ReunifyBlockedPairs)
+                if (MayAbsorb(campaign, survivor, piece)) { released = true; break; }
+            if (!released) return 0;
+        }
+        return ReunifyChanged(campaign, topology);
+    }
+
+    // Keep the slow pass separate: its captured predicates would otherwise allocate
+    // a display class even when the public cache guard returned without scanning.
+    private static int ReunifyChanged(Campaign campaign, ProvinceTopology topology)
+    {
+        campaign.ReunifyBlockedPairs.Clear();
+
         var families = new Dictionary<int, List<ScenarioState>>();
         foreach (var state in campaign.States)
         {
@@ -348,13 +368,26 @@ public static class StatePartition
                 families[state.ParentMapIndex] = children = new List<ScenarioState>();
             children.Add(state);
         }
-        if (families.Count == 0) return 0;
+        if (families.Count == 0)
+        {
+            campaign.LastReunifyMapRevision = campaign.MapRevision;
+            campaign.LastReunifyStateCount = campaign.States.Count;
+            return 0;
+        }
+
+        var neededRegions = new HashSet<int>();
+        foreach (var (parentIndex, children) in families)
+        {
+            neededRegions.Add(parentIndex);
+            foreach (var child in children)
+                neededRegions.Add(child.MapIndex);
+        }
 
         var provincesOf = new Dictionary<int, List<int>>();
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
             var region = topology.ProvinceToState[province];
-            if (region == 0) continue;
+            if (region == 0 || !neededRegions.Contains(region)) continue;
             if (!provincesOf.TryGetValue(region, out var list)) provincesOf[region] = list = new List<int>();
             list.Add(province);
         }
@@ -378,7 +411,14 @@ public static class StatePartition
                 // inconsistent legacy piece silently transfer another country's land.
                 if (owned is not null && owned.Any(p => topology.ProvinceToNation[p] != owner)) continue;
                 var match = survivors.FindIndex(s => s.Owner == owner && MayAbsorb(campaign, s.State, piece));
-                if (match < 0) { survivors.Add((piece, owner)); continue; }
+                if (match < 0)
+                {
+                    foreach (var blockedSurvivor in survivors)
+                        if (blockedSurvivor.Owner == owner)
+                            campaign.ReunifyBlockedPairs.Add((blockedSurvivor.State, piece));
+                    survivors.Add((piece, owner));
+                    continue;
+                }
                 var survivor = survivors[match].State;
                 Absorb(campaign, topology, survivor, piece, provincesOf);
                 survivor.NationMapIndex = owner;
@@ -393,6 +433,8 @@ public static class StatePartition
             campaign.InvalidateStateIndex();
             campaign.MarkMapChanged();
         }
+        campaign.LastReunifyMapRevision = campaign.MapRevision;
+        campaign.LastReunifyStateCount = campaign.States.Count;
         return merged;
     }
 
@@ -592,6 +634,12 @@ public static class StatePartition
         carved.Claims.AddRange(parent.Claims);
         var population = (long)MathF.Round(parent.Population * share);
         carved.Population = Math.Min(population, parent.Population);
+        // Its cities keep their size across the cut: the piece takes its share of the baseline.
+        if (parent.UrbanBaseline > 0)
+        {
+            carved.UrbanBaseline = Math.Max(1, (long)(parent.UrbanBaseline * (double)share));
+            parent.UrbanBaseline = Math.Max(1, parent.UrbanBaseline - carved.UrbanBaseline);
+        }
         parent.Population -= carved.Population;
 
         foreach (var group in parent.PopulationGroups)

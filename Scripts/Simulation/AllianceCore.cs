@@ -64,6 +64,24 @@ public sealed partial class Defines
 /// </summary>
 public static class AllianceSystem
 {
+    /// <summary>Read-only candidate assessment within ONE AI move. No day cache:
+    /// a successful move ends the scan, and the signature still uses the public live score.</summary>
+    internal sealed class OfferScan
+    {
+        private readonly Campaign _campaign;
+        private readonly Dictionary<int, List<Nation>> _allies = new();
+
+        internal OfferScan(Campaign campaign) { _campaign = campaign; }
+
+        internal List<Nation> Allies(Campaign campaign, Nation nation)
+        {
+            if (!ReferenceEquals(campaign, _campaign)) return AlliesOf(campaign, nation);
+            if (!_allies.TryGetValue(nation.Id, out var allies))
+                _allies[nation.Id] = allies = AlliesOf(campaign, nation);
+            return allies;
+        }
+    }
+
     /// <summary>Every country this one is allied to.</summary>
     public static List<Nation> AlliesOf(Campaign campaign, Nation nation)
     {
@@ -180,7 +198,10 @@ public static class AllianceSystem
     /// history were actually about.
     /// </summary>
     public static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why = null,
-        bool refreshAssessment = true)
+        bool refreshAssessment = true) => Willingness(campaign, asked, asking, why, refreshAssessment, null);
+
+    internal static float Willingness(Campaign campaign, Nation asked, Nation asking, Breakdown why,
+        bool refreshAssessment, OfferScan scan)
     {
         why?.Begin("Whether they would sign", "share");
         if (campaign is null || asked is null || asking is null) return 0f;
@@ -195,13 +216,17 @@ public static class AllianceSystem
         why?.Add(Loc.Get("Their standing in our society"), image);
 
         // An alliance with a country already at war is a war, and everybody knows it.
-        foreach (var war in campaign.Wars)
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Involves(asking.Id))
             {
                 willingness -= defines.AllianceWarPenalty;
                 why?.Add("They are already fighting", -defines.AllianceWarPenalty);
                 break;
             }
+        }
 
         // What they are worth as a friend, and what we are worth to them. A small country
         // wants somebody large to stand behind; a large one gains little from somebody it
@@ -264,8 +289,8 @@ public static class AllianceSystem
 
         // Which camp they are in. An alliance with a friend of our rival is an alliance with
         // their wars against us, and an ally of ours who cannot stand them will say so.
-        var askedAllies = AlliesOf(campaign, asked);
-        var askingAllies = AlliesOf(campaign, asking);
+        var askedAllies = scan?.Allies(campaign, asked) ?? AlliesOf(campaign, asked);
+        var askingAllies = scan?.Allies(campaign, asking) ?? AlliesOf(campaign, asking);
         foreach (var friend in askingAllies)
         {
             if (friend.Id == asked.Id || askedAllies.Contains(friend)) continue;
@@ -479,6 +504,10 @@ public static class AllianceSystem
         OpinionSystem.Forget(campaign, relation, "alliance");
         OpinionSystem.Remember(campaign, relation, "broke_our_alliance");
         campaign.MarkStrategicChange();
+        // One public fact for every caller. A cohesion rupture used to announce it
+        // afterwards, and the diplomacy button, an ultimatum and the console left
+        // the chronicle, the news and the public mark uninformed.
+        campaign.Chronicle.Record(campaign, "alliance_ended", nation.Id, other.Id);
         DiagnosticLogs.Write("simulation",
             $"ALLIANCE_END {nation.Tag}-{other.Tag} day={campaign.ElapsedDays}");
         return true;

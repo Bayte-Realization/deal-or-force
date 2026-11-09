@@ -67,7 +67,7 @@ public partial class DealOrForceGame
         if (string.IsNullOrWhiteSpace(tag)) return null;
         var sprite = FlagSprite(tag, out var nation);
         if (nation is not null && CampaignFlagTexture(nation) is { } custom) return custom;
-        if (nation is not null && ShouldUseDynamicRegionalFlag(nation, sprite))
+        if (nation is not null && FlagCatalog.NeedsRegionalBanner(FlagWorld, nation, sprite))
             return ProvisionalFlag(nation);
         return FlagSpriteTexture(sprite) ?? (nation is null ? null : ProvisionalFlag(nation));
     }
@@ -87,32 +87,6 @@ public partial class DealOrForceGame
             ? FlagDesignTexture(design, FlagDesignHeight) : null;
         CampaignFlagCache[nation.Id] = (document, texture);
         return texture;
-    }
-
-    private static bool ShouldUseDynamicRegionalFlag(Nation nation, string sprite)
-    {
-        if (nation.Movement is not null || !string.IsNullOrWhiteSpace(nation.CustomFlag) ||
-            !string.IsNullOrWhiteSpace(nation.FormedNationId)) return false;
-        if (nation.MapIndex < SecessionEvents.FirstDynamicMapIndex &&
-            nation.SecededFromId < 0 && nation.ReleasedFromId < 0) return false;
-        if (string.IsNullOrEmpty(sprite)) return true;
-        // If the country resolved to a generic culture/ideology/government/revolt fallback rather
-        // than a tag-specific flag, give regional/macro-regional/directional states (or states whose
-        // culture is already the primary culture of their parent) their own bespoke dynamic banner.
-        var isFallback = sprite.StartsWith("flag_culture_", System.StringComparison.OrdinalIgnoreCase) ||
-            sprite.StartsWith("flag_ideology_", System.StringComparison.OrdinalIgnoreCase) ||
-            sprite.StartsWith("flag_government_", System.StringComparison.OrdinalIgnoreCase) ||
-            sprite.StartsWith("flag_revolt_", System.StringComparison.OrdinalIgnoreCase);
-        if (!isFallback) return false;
-        if (nation.FoundNameKind is "land" or "region" or "direction") return true;
-        var parentId = nation.SecededFromId >= 0 ? nation.SecededFromId : nation.ReleasedFromId;
-        if (parentId >= 0 && FlagWorld?.NationById(parentId) is { } parent)
-        {
-            var primary = DemographyCatalog.PrimaryCulture(nation.Tag);
-            if (!string.IsNullOrEmpty(primary) && DemographyCatalog.IsPrimary(parent.Tag, primary))
-                return true;
-        }
-        return false;
     }
 
     /// <summary>

@@ -110,9 +110,14 @@ public sealed class CampaignHistory
         if (_warSupportScratch.Length < nationCount) _warSupportScratch = new float[nationCount];
         var warSupport = _warSupportScratch;
         for (var i = 0; i < nationCount; i++) warSupport[i] = campaign.Nations[i].WarSupport;
-        foreach (var war in campaign.Wars)
+        // Once a week, with the sample itself. This is a country's ledger, not a chart of
+        // finished wars, so the war-support line reads wars still going. The six days
+        // between samples do not walk the record at all.
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended) continue;
+            var war = live[index];
+            if (war is null || war.Ended) continue;
             if (war.AttackerId >= 0 && war.AttackerId < nationCount)
                 warSupport[war.AttackerId] = MathF.Min(warSupport[war.AttackerId], war.AttackerWarSupport);
             if (war.DefenderId >= 0 && war.DefenderId < nationCount)

@@ -1,0 +1,15 @@
+{
+  "chronicle.alliance_rival_guarantee": "{0} now counts {1} a rival because a guarantee was broken.",
+  "chronicle.alliance_rival_friend": "{0} now counts {1} a rival because one is at war with the other's friend.",
+  "chronicle.alliance_rival_land": "{0} now counts {1} a rival because one holds land the other lost.",
+  "chronicle.alliance_rival_opinion": "{0} now counts {1} a rival because opinion fell below the partnership floor.",
+  "paper.ally_rival_guarantee": "{0} would count you a rival because a guarantee was broken; the partnership holds until you end it, and no land changes hands.",
+  "paper.ally_rival_friend": "{0} would count you a rival because one of you is at war with the other's friend; the partnership holds until you end it, and no land changes hands.",
+  "paper.ally_rival_land": "{0} would count you a rival because one of you holds land the other lost; the partnership holds until you end it, and no land changes hands.",
+  "paper.ally_rival_opinion": "{0} would count you a rival because opinion fell below the partnership floor; the partnership holds until you end it, and no land changes hands.",
+  "Broke their guarantee of us": "Broke their guarantee of us",
+  "End the partnership": "End the partnership",
+  "Keep the partnership": "Keep the partnership",
+  "The partnership is over. No land changed hands.": "The partnership is over. No land changed hands.",
+  "The partnership stays. No land changed hands.": "The partnership stays. No land changed hands."
+}

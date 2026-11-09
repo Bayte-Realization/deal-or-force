@@ -120,8 +120,16 @@ static class MovementPowerStagingTests
         for (var day = 0; day < 9; day++)
         {
             eager.Tick();
+            var dayFrames = 0;
+            // Guard each day, like StageBudgetTests. The former cumulative 5000
+            // counted nine days together and rejected a finite sequence of more finely
+            // split passes even though every day's eager/staged fingerprints agree.
             while (!staged.StepFor(0))
-                if (++frames > 5000) throw new Exception("Movement staged fixture did not finish within 5000 stages.");
+            {
+                frames++;
+                if (++dayFrames > 5000) throw new Exception("Movement staged day did not finish within 5000 stages.");
+            }
+            Console.WriteLine($"MOVEMENT_DAY_SLICES day={staged.ElapsedDays} passes={dayFrames + 1} limit=5000");
             Check(eager.ElapsedHours == staged.ElapsedHours && !staged.MidStep &&
                 CampaignFingerprint.Of(eager) == CampaignFingerprint.Of(staged),
                 "public StepFor(0) and Tick agree after day " + staged.ElapsedDays);

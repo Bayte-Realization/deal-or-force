@@ -35,6 +35,12 @@ public sealed partial class Defines
     public float MovementCrushedFollowing { get; set; } = 0.06f;
     /// <summary>A peaceful movement this marginal and this tame folds into ordinary politics.</summary>
     public float MovementFoldFollowing { get; set; } = 0.04f;
+    /// <summary>
+    /// How settled under its new rulers every region of a government in exile's homeland must be
+    /// (ScenarioState.BorderHabit, 0..1) before, with its following gone, it fades into history.
+    /// 0.9 is about 28 years at BorderHabitYears 12. Above 1 keeps every exile for ever.
+    /// </summary>
+    public float MovementExileForgottenHabit { get; set; } = 0.9f;
     public float MovementFoldMilitancy { get; set; } = 0.08f;
     /// <summary>
     /// The chance a beaten rising or breakaway goes underground rather than ending, before what
@@ -82,6 +88,8 @@ public static class MovementFall
         {
             var owner = MovementRules.OwnerOf(campaign, region);
             if (owner is null || owner.Movement is not null || campaign.Homelands.ContainsKey(owner.Id)) continue;
+            // A map artefact (common/country_merges) is not a people's state: no homeland to return to.
+            if (CountryMerges.IsMerged(owner.Tag)) continue;
             held ??= new Dictionary<int, List<int>>();
             if (!held.TryGetValue(owner.Id, out var list)) held[owner.Id] = list = new List<int>();
             list.Add(region.MapIndex);
@@ -108,9 +116,12 @@ public static class MovementFall
             // A country that never held ground of its own was a line on a map, not a state: the
             // Siachen Glacier and Baikonur are drawn as countries by the map source and go to
             // whoever governs them on the first day. It has no government to send abroad.
-            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0)
+            // So is an entry of the merge table, whatever was remembered for it: no exile, no
+            // underground, nothing for a later rising to revive.
+            if (!campaign.Homelands.TryGetValue(nation.Id, out var held) || held.Count == 0 || CountryMerges.IsMerged(nation.Tag))
             {
                 nation.Population = 0;
+                if (CountryMerges.IsMerged(nation.Tag)) campaign.Homelands.Remove(nation.Id);
                 continue;
             }
             var chance = ExileChance(campaign, nation, out var refuge);
@@ -506,6 +517,20 @@ public static class MovementFall
         else if (!state.Exile && Matured(campaign, state) && state.Militancy >= 0f && state.Militancy < defines.MovementFoldMilitancy &&
                  following < defines.MovementFoldFollowing && !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
             Dissolve(campaign, nation, Loc.Get("What is left of it has joined ordinary politics: the movement has folded into the parties."));
+        // A government in exile outlives everything but its people's forgetting: a generation
+        // grown up at home under other flags, and almost nobody there still following it.
+        else if (state.Exile && Matured(campaign, state) && following < defines.MovementFoldFollowing &&
+                 HomelandSettled(campaign, state, defines.MovementExileForgottenHabit) &&
+                 !campaign.Wars.Any(w => !w.Ended && w.Involves(nation.Id)))
+            Dissolve(campaign, nation, Loc.Get("A generation has grown up at home under other flags: the government in exile is a memory now."));
+    }
+
+    private static bool HomelandSettled(Campaign campaign, MovementState state, float habit)
+    {
+        if (habit > 1f || state.Homeland.Count == 0) return false;
+        foreach (var id in state.Homeland)
+            if (Movements.StateById(campaign, id) is not { } region || region.BorderHabit < habit) return false;
+        return true;
     }
 
     /// <summary>A year since it was founded, or since the world began for one that was there already.</summary>

@@ -223,12 +223,20 @@ public static class ModifierSystem
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ModifierSystem))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same modifier pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ModifierSystem))) yield break;
         // Programme deadlines are campaign days, not the next economic settlement.
         // Remove first: otherwise today's national totals still contain yesterday's
         // expired bonus, including weekly drifts paid by NationalModifiers.Tick.
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 16 == 0) yield return 0;
             var changed = false;
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)
             {
@@ -241,10 +249,13 @@ public static class ModifierSystem
         }
         // Every day: what the modifiers add up to, and the weekly ones paid a day at a time.
         NationalModifiers.Tick(campaign);
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        yield return 0;
 
+        ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 16 == 0) yield return 0;
             if (nation.Modifiers.Count == 0) continue;
 
             for (var index = nation.Modifiers.Count - 1; index >= 0; index--)

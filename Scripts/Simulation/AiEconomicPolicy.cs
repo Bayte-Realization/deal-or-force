@@ -150,17 +150,37 @@ public static partial class AiStatecraft
         // A country at war builds guns while it is short of them, and otherwise what it would
         // build at peace.
         var armsTurn = atWar && AiBuilder.ShortOfArms(campaign, nation);
+        // A navy waiting on its slipways gets a yard, one at a time and on some months, on the
+        // coast that serves it best. The fleet of 2024 was all the yards a country ever had.
+        ScenarioState yard = null;
+        if (!congested && !armsTurn && (campaign.ElapsedDays / 30 + slot) % 4 == 2 && Shipbuilding.YardsShort(campaign, nation))
+        {
+            var building = false;
+            foreach (var project in campaign.Construction)
+                if (project.NationId == nation.Id && project.Building == BuildingKind.Shipyard) { building = true; break; }
+            var bestYard = 0f;
+            if (!building) foreach (var state in states)
+            {
+                var water = Waterfront.Yield(campaign, state.MapIndex, BuildingKind.Shipyard);
+                if (water <= 0f) continue;
+                var score = water * 4f + state.Population / 2_000_000f - state.Buildings.GetValueOrDefault(BuildingKind.Shipyard) * 0.5f;
+                if (score <= bestYard) continue;
+                bestYard = score;
+                yard = state;
+            }
+        }
         var wanted =
             congested ? BuildingKind.Infrastructure :
             armsTurn ? BuildingKind.ArmsIndustry :
+            yard is not null ? BuildingKind.Shipyard :
             !mature && needsTurn && nation.Literacy < 0.72f ? BuildingKind.University :
             !mature && needsTurn && nation.StandardOfLiving < 0.55f ? BuildingKind.Agriculture :
             BuildingKind.CivilianIndustry;
 
-        ScenarioState target = null;
+        ScenarioState target = yard;
         // The production-chain planner already understands recipes, deposits and
         // water access. Let a peaceful economy actually use it.
-        if (!congested && !armsTurn && (mature || !needsTurn))
+        if (yard is null && !congested && !armsTurn && (mature || !needsTurn))
             AiBuilder.Choose(campaign, nation, states, out wanted, out target);
         // A factory with nobody to work it makes nothing but a thinner spread of the workers the
         // others had: France tripled its civilian industry with 45 million jobs for 38 million

@@ -1,0 +1,8 @@
+// An ally or guarantor can become a rival from a broken guarantee, a war on a friend,
+// lost land, or opinion at or under AiRivalryThreshold. A human receives a letter.
+// Numbers here match Defines.cs. A mod lists only the keys it changes.
+{
+  "AllyRivalShift": true,
+  "AllyRivalShiftCooldownDays": 180,
+  "AllyRivalShiftPaperDays": 30
+}

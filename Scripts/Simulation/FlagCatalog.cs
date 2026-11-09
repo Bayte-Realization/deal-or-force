@@ -409,8 +409,9 @@ public static partial class FlagCatalog
     private static bool AtWar(Campaign campaign, Nation nation)
     {
         if (campaign is null) return false;
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) return true;
+        var active = WarsForFlags(campaign);
+        for (var i = 0; i < active.Count; i++)
+            if (active[i].Involves(nation.Id)) return true;
         return false;
     }
 
@@ -450,7 +451,7 @@ public static partial class FlagCatalog
         // A cabinet change does not erase a country's visual identity. Keep authored
         // national/formable/restored artwork before regime variants by default. Mods may
         // opt into the older qualifier-first policy without changing files or save fields.
-        if (PreferCountryBase && nation.Movement is null)
+        if (PreferCountryBase && KeepsNationalIdentity(nation))
         {
             if (FormableRestorations.RestoredTag(nation.FormedNationId) is { } identity)
                 names.Add("flag_" + Slug(identity));
@@ -465,10 +466,10 @@ public static partial class FlagCatalog
             // but before borrowed aliases or generic ideology art. A nation is not frozen.
         }
 
-        // A landless organisation's banner is its identity, not the hypothetical regime it
-        // might establish. Procedural government/ideology variants must not replace it.
-        // After taking territory or proclaiming a formable, ordinary dynamic rules resume.
-        if (PreferMovementBase && nation.Movement is { Landless: true, Exile: false } &&
+        // An organisation keeps its banner when it gains ground, too. Exiled governments
+        // instead continue the national resolution they used before losing their territory.
+        // A custom flag or a newly proclaimed formable can still replace either identity.
+        if (PreferMovementBase && nation.Movement is { Exile: false } &&
             string.IsNullOrEmpty(nation.FormedNationId))
         {
             names.Add($"flag_{tag}");
@@ -554,7 +555,7 @@ public static partial class FlagCatalog
         // being - in which case it goes to the very bottom, after everything else has had a
         // chance, because a communist banner over a conservative republic is worse than no
         // flag at all.
-        var ownFlagStillFits = PreferCountryBase && nation.Movement is null || Fits(campaign, nation, tag);
+        var ownFlagStillFits = PreferCountryBase && KeepsNationalIdentity(nation) || Fits(campaign, nation, tag);
         if (ownFlagStillFits) names.Add($"flag_{tag}");
         else if (Otherwise.TryGetValue(tag, out var instead) && instead.Length > 0)
             names.Add(instead);
@@ -789,6 +790,9 @@ public static partial class FlagCatalog
             lastWasBreak = true;
         }
         while (length > 0 && buffer[length - 1] == '_') length--;
-        return new string(buffer[..length]);
+        // Most live qualifiers already have this spelling. Compare the completed buffer
+        // instead of scanning the input twice or allocating an identical string; no cache.
+        var normalized = buffer[..length];
+        return normalized.SequenceEqual(value.AsSpan()) ? value : new string(normalized);
     }
 }

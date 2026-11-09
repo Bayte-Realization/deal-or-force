@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -220,9 +221,17 @@ public static class Expeditions
     /// <summary>Daily: volunteers go home when they have nothing left to do; once a week each AI looks for a friend to help.</summary>
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same expedition pass, yielded between batches of armies and sponsors.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay) yield break;
+        var scanned = 0;
         foreach (var army in c.Armies)
         {
+            if (++scanned % 256 == 0) yield return 0;
             if (army.LentById < 0 || army.InBattle) continue;
             var host = c.NationById(army.NationId);
             var sponsor = c.NationById(army.LentById);
@@ -233,9 +242,11 @@ public static class Expeditions
                 c.Wars.Any(w => !w.Ended && w.Involves(host.Id) && w.Involves(sponsor.Id)))
                 Return(c, army);
         }
-        if (c.Defines.AiVolunteerChance <= 0f || c.ElapsedDays % 7 != 0) return;
+        if (c.Defines.AiVolunteerChance <= 0f || c.ElapsedDays % 7 != 0) yield break;
+        var ticked = 0;
         foreach (var sponsor in c.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (sponsor.IsHuman || sponsor.Movement is not null || sponsor.Population <= 0) continue;
             if (c.Wars.Any(w => !w.Ended && w.Involves(sponsor.Id))) continue;   // its own wars come first
             if (MovementRules.Roll(c.Seed, sponsor.Id, c.ElapsedDays, 0x7011) >= c.Defines.AiVolunteerChance * AiTemper.Aggression(c)) continue;

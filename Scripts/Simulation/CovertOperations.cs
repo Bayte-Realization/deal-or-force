@@ -352,10 +352,19 @@ public static class CovertOperations
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !c.FeatureEnabled("intelligence") || !MechanicFeatures.SystemEnabled(c, nameof(CovertOperations))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between countries so a day of plots does not
+    /// resolve in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !c.FeatureEnabled("intelligence") || !MechanicFeatures.SystemEnabled(c, nameof(CovertOperations))) yield break;
         var day = c.ElapsedDays;
+        var scanned = 0;
         foreach (var owner in c.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (owner.CovertQuietUntil.Count > 0 && day % 7 == 0)
                 foreach (var targetId in owner.CovertQuietUntil.Where(p => p.Value <= day).Select(p => p.Key).ToList())
                     owner.CovertQuietUntil.Remove(targetId);

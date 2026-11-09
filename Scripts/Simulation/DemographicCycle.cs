@@ -167,8 +167,6 @@ public static class DemographicCycle
     /// deliberate - its births and deaths are the figures this moves on, and a second clock of its
     /// own would drift away from them.
     /// </summary>
-    private static readonly List<PopulationGroup> WealthOrder = new();
-
     public static void Tick(Campaign campaign)
     {
         foreach (var _ in Stages(campaign)) { }
@@ -207,6 +205,7 @@ public static class DemographicCycle
             if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
             KinTable(campaign);
             var changed = 0;
+            if (!campaign.Defines.ParallelRegions) options.MaxDegreeOfParallelism = 1;
             System.Threading.Tasks.Parallel.For(first, last, options, index =>
             {
                 var state = campaign.States[index];
@@ -342,6 +341,8 @@ public static class DemographicCycle
             var hasKin = kinAlive.GetOrAdd(key, k => SecessionEvents.KinState(campaign, owner, k.Culture) is not null);
             var rate = annual * interval * kin * faith * size * schooling * calm * (hasKin ? 0.6f : 1f) * policy;
             var moved = Math.Min(group.Size, (long)Math.Round(group.Size * (double)rate));
+            if (moved <= 0 && rate > 0f && group.Size <= 10)
+                moved = Math.Min(group.Size, group.Size <= 3 ? group.Size : 1L);
             if (moved <= 0) continue;
             group.Size -= moved;
             Counterpart(groups, group, target).Size += moved;
@@ -421,6 +422,23 @@ public static class DemographicCycle
     /// unusually young country carries schools instead. Both are paid in the numbers a player already
     /// watches, and neither is a rule of its own.
     /// </summary>
+    public static void AddTo(Dictionary<string, float> totals, Nation nation)
+    {
+        if (nation is null || nation.WorkingShare <= 0f) return;
+        var excess = nation.OldShareExcess;
+        if (excess > 0.005f)
+        {
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") - excess * 0.05f;
+            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - excess * 0.04f;
+            return;
+        }
+        if (nation.YoungShare > 0.34f)
+        {
+            totals["living_weekly"] = totals.GetValueOrDefault("living_weekly") - 0.004f;
+            totals["stability_weekly"] = totals.GetValueOrDefault("stability_weekly") + 0.003f;
+        }
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation nation)
     {
         if (nation is null || nation.WorkingShare <= 0f) yield break;
@@ -501,4 +519,10 @@ public sealed partial class Nation
 {
     /// <summary>What the age structure adds, kept between asks. Not saved; refilled from scratch.</summary>
     internal Dictionary<string, float> DemographicCycleModifiers;
+}
+
+public sealed partial class Defines
+{
+    /// <summary>Whether regions are worked side by side on the thread pool (demography, regional economy). Off: one at a time.</summary>
+    public bool ParallelRegions { get; set; } = true;
 }

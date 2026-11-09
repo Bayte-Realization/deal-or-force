@@ -247,9 +247,17 @@ public static class LandArrangementSystem
 
     public static void Tick(Campaign c)
     {
-        if (c.ElapsedDays % 7 != 5 || !c.FeatureEnabled("land_arrangements")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly arrangements pass, yielded between leases and offers.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c.ElapsedDays % 7 != 5 || !c.FeatureEnabled("land_arrangements")) yield break;
+        var ticked = 0;
         foreach (var arrangement in c.LandArrangements.ToList())
         {
+            if (++ticked % 16 == 0) yield return 0;
             var owner = c.NationById(arrangement.OwnerId);
             var holder = c.NationById(arrangement.HolderId);
             if (owner is null || holder is null) continue;
@@ -264,6 +272,7 @@ public static class LandArrangementSystem
                     Refuse(c, lapsed);
             }
         c.LeaseOffers.RemoveAll(offer => offer.State != "pending" && offer.ExpiresDay < c.ElapsedDays - 365);
+        yield return 0;
         if (c.ElapsedDays % 28 == 5) AiMonth(c);
     }
 

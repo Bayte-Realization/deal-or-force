@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -76,22 +76,30 @@ public static class SecessionEvents
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) return;
-        if (campaign?.ProvinceMap is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly secession pass, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SecessionEvents))) yield break;
+        if (campaign?.ProvinceMap is null) yield break;
         Recent.Clear();
         RecentWorld = campaign;
 
         // The pressure below is authored per week, so it is added once a week whatever the
         // step length - which is the same rule the rest of the day pass follows and the
         // reason a six-hour campaign and a three-day campaign lose the same regions.
-        if (campaign.ElapsedDays % 7 != 0) return;
+        if (campaign.ElapsedDays % 7 != 0) yield break;
         var weights = SecessionCore.Weights;
 
         // Countries are taken as a snapshot because a secession adds one, and a country
         // three seconds old has nothing to secede from it.
         var nations = campaign.Nations.ToArray();
+        var scanned = 0;
         foreach (var nation in nations)
         {
+            if (++scanned % 8 == 0) yield return 0;
             if (nation.Population <= 0) continue;
 
             var ripe = (List<ScenarioState>)null;
@@ -874,7 +882,10 @@ public static class SecessionEvents
         foreach (var piece in leaving)
             if (piece.Cause is SecessionCause.Nationality or SecessionCause.Federal &&
                 (seat is null || piece.Population > seat.Population)) seat = piece;
-        seat ??= leaving[0];
+        // Otherwise the most populous region that left, not whichever was listed first.
+        if (seat is null)
+            foreach (var piece in leaving)
+                if (seat is null || piece.Population > seat.Population) seat = piece;
         var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
         var theirs = NamedForItsPeople(campaign, culture, leaving);
 
@@ -1129,6 +1140,8 @@ public static class SecessionEvents
         foreach (var nation in campaign.Nations)
         {
             if (nation.Movement is not { Landless: true }) continue;
+            // A map artefact (common/country_merges) is not anybody's movement.
+            if (CountryMerges.IsMerged(nation.Tag)) continue;
             // Only match a movement if the seceding ground actually overlaps the movement's defined authentic homeland.
             // A temporary exile office / headquarters outside the homeland must NEVER confer ownership of a foreign region!
             var def = Movements.DefinitionOf(nation);

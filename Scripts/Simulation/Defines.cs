@@ -1195,7 +1195,7 @@ public sealed partial class Defines
 	/// wars, the same every count - so this is the knee of the curve and there is nothing above it
 	/// to buy. What remains is upstream: how many countries want a war at all.
 	/// </summary>
-	public float AiWarChance { get; set; } = 0.05f;
+	public float AiWarChance { get; set; } = 0.08f;
 
 	/// <summary>Whether countries start wars of their own at all.</summary>
 	public bool AiMayDeclareWar { get; set; } = true;
@@ -1262,7 +1262,7 @@ public sealed partial class Defines
 
 	// ---- Economy: how a country governs itself between crises ----
 
-	public float AiTreasuryFloor { get; set; } = 0.02f;
+	public float AiTreasuryFloor { get; set; } = 0.012f;
 	public float AiTreasuryComfort { get; set; } = 0.12f;
 	public float AiTaxStep { get; set; } = 0.012f;
 	/// <summary>How far a computer government takes the consumption tax and the tax on firms when it needs money, before it raises the income tax further.</summary>

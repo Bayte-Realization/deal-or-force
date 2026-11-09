@@ -38,10 +38,33 @@ public sealed partial class DiplomaticRelation
 
 public static class DiplomaticOutreach
 {
+    /// <summary>One read-only AI candidate scan, ending at its first successful move.
+    /// Count lazily once, not once per prospective embassy over the entire relation table.
+    /// Never retain this across moves/days; commands and public previews always count live.</summary>
+    internal sealed class OfferScan
+    {
+        private readonly Campaign _campaign;
+        private readonly int _issuer;
+        private int? _count;
+
+        internal OfferScan(Campaign campaign, int issuer) { _campaign = campaign; _issuer = issuer; }
+
+        internal int Count(Campaign campaign, int issuer) =>
+            ReferenceEquals(campaign, _campaign) && issuer == _issuer
+                ? (_count ??= CountMissions(campaign, issuer))
+                : CountMissions(campaign, issuer);
+    }
+
+    private static int CountMissions(Campaign c, int issuer) =>
+        c.Relations.Values.Count(r => Of(r, issuer) is not null);
+
     public static DiplomaticMission Of(DiplomaticRelation relation, int issuer) => relation is null ? null :
         issuer == relation.A ? relation.MissionByA : issuer == relation.B ? relation.MissionByB : null;
 
-    public static string Refusal(Campaign c, int issuer, int target, bool active = true)
+    public static string Refusal(Campaign c, int issuer, int target, bool active = true) =>
+        Refusal(c, issuer, target, active, null);
+
+    internal static string Refusal(Campaign c, int issuer, int target, bool active, OfferScan scan)
     {
         var n = c?.NationById(issuer); var other = c?.NationById(target);
         if (n is null || other is null || n.Id == other.Id || c.Fallen.Contains(issuer) || c.Fallen.Contains(target) ||
@@ -64,7 +87,7 @@ public static class DiplomaticOutreach
             !Valid(d.DiplomaticMissionStartCash) || !Valid(d.DiplomaticMissionWeeklyCash) ||
             !Valid(d.DiplomaticMissionWeeklyOpinion) || !Valid(d.DiplomaticMissionOpinionCap))
             return Loc.Get("The campaign data is damaged, so this cannot be done.");
-        if (c.Relations.Values.Count(r => Of(r, issuer) is not null) >= Math.Clamp(d.DiplomaticMissionLimit, 1, 12))
+        if ((scan?.Count(c, issuer) ?? CountMissions(c, issuer)) >= Math.Clamp(d.DiplomaticMissionLimit, 1, 12))
             return Loc.Get("Recall a diplomatic mission before opening another.");
         if (!float.IsFinite(n.PoliticalPoints) || n.PoliticalPoints < d.DiplomaticMissionPoliticalCost)
             return Loc.Format("Insufficient political credit: need {0:0.##}, available {1:0.##}.", d.DiplomaticMissionPoliticalCost, n.PoliticalPoints);

@@ -35,7 +35,7 @@ public static partial class Warfare
     {
         // Taking a province moves whoever took it, so the province index no longer
         // describes where everyone is standing.
-        _provinceIndexStale = true;
+        MarkIndexStale(campaign);
         // A battle keeps its original representative for its history, but that country
         // may have withdrawn all its units. An ally that actually occupies the ground
         // takes it (or liberates its owner); a support-only representative cannot annex it.
@@ -168,7 +168,6 @@ public static partial class Warfare
 
     private static void SecureOccupation(Campaign campaign)
     {
-        if (!ReferenceEquals(_measuredCampaign, campaign)) MeasureOccupation(campaign);
         var controllers = campaign.ProvinceController;
         var occupation = campaign.ProvinceOccupation;
         if (controllers is null || occupation is null) return;
@@ -177,19 +176,24 @@ public static partial class Warfare
         // occupied provinces times fourteen hundred divisions - and it made securing
         // occupations the single slowest thing the simulation did.
         EnsureIndexed(campaign);
-        foreach (var war in campaign.Wars)
-        foreach (var pair in war.OriginalController)
+        var live = LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            var province = pair.Key;
-            if (controllers[province] == pair.Value) { occupation[province] = 0f; continue; }
-            var garrison = 0f;
-            foreach (var army in InProvince(province))
-                if (!army.InBattle) garrison += army.Power;
-            // A rate, so it takes the step's share of a day. Without this a province was
-            // occupied twenty-four times faster at an hourly step than at a daily one.
-            occupation[province] = M.Clamp01(occupation[province] +
-                campaign.Defines.OccupationDailyProgress * campaign.TickScale *
-                M.Clamp(garrison / 3f, 0.25f, 1f));
+            var war = live[index];
+            if (war.Ended) continue;
+            foreach (var pair in war.OriginalController)
+            {
+                var province = pair.Key;
+                if (controllers[province] == pair.Value) { occupation[province] = 0f; continue; }
+                var garrison = 0f;
+                foreach (var army in InProvince(province))
+                    if (!army.InBattle) garrison += army.Power;
+                // A rate, so it takes the step's share of a day. Without this a province was
+                // occupied twenty-four times faster at an hourly step than at a daily one.
+                occupation[province] = M.Clamp01(occupation[province] +
+                    campaign.Defines.OccupationDailyProgress * campaign.TickScale *
+                    M.Clamp(garrison / 3f, 0.25f, 1f));
+            }
         }
     }
 
@@ -200,6 +204,7 @@ public static partial class Warfare
         var attacker = campaign.NationById(war.AttackerId);
         var defender = campaign.NationById(war.DefenderId);
         if (topology is null || controllers is null || attacker is null || defender is null) return;
+        var homeProvinces = UseArmyIndex(campaign).HomeProvinces;
         // Ground taken by anybody on a side counts for that side. Scoring the two leaders
         // alone meant an ally could occupy half a country and the war score would not move,
         // which is a coalition war that does not know it is one.
@@ -211,19 +216,19 @@ public static partial class Warfare
         {
             if (campaign.NationById(attackingId) is not { } member) continue;
             var map = (ushort)member.MapIndex;
-            attackerHome += HomeProvinces.GetValueOrDefault(map);
+            attackerHome += homeProvinces.GetValueOrDefault(map);
             foreach (var defendingId in war.Side(false))
                 if (campaign.NationById(defendingId) is { } foe)
-                    attackerOccupied += Occupied(map, (ushort)foe.MapIndex);
+                    attackerOccupied += Occupied(campaign, map, (ushort)foe.MapIndex);
         }
         foreach (var defendingId in war.Side(false))
         {
             if (campaign.NationById(defendingId) is not { } member) continue;
             var map = (ushort)member.MapIndex;
-            defenderHome += HomeProvinces.GetValueOrDefault(map);
+            defenderHome += homeProvinces.GetValueOrDefault(map);
             foreach (var attackingId in war.Side(true))
                 if (campaign.NationById(attackingId) is { } foe)
-                    defenderOccupied += Occupied(map, (ushort)foe.MapIndex);
+                    defenderOccupied += Occupied(campaign, map, (ushort)foe.MapIndex);
         }
         var attackerOccupiedShare = attackerHome == 0 ? 0f : (float)attackerOccupied / attackerHome;
         var defenderOccupiedShare = defenderHome == 0 ? 0f : (float)defenderOccupied / defenderHome;

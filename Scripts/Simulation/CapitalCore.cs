@@ -106,9 +106,15 @@ public static class CapitalCore
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(CapitalCore))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same seat watch, yielded between batches of nations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(CapitalCore))) yield break;
         var topology = campaign?.ProvinceMap;
-        if (topology is null) return;
+        if (topology is null) yield break;
         var regions = new Dictionary<int, ScenarioState>();
         foreach (var state in campaign.States) regions[state.MapIndex] = state;
         Dictionary<int, HashSet<int>> availableByOwner = null;
@@ -129,8 +135,10 @@ public static class CapitalCore
                 held.Add(topology.ProvinceToState[province]);
             }
         }
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 8 == 0) yield return 0;
             // A movement or a country never represented on this raster has no placed seat
             // to lose. Its field units are governed by its own lifecycle.
             if (nation.CapitalStateMapIndex <= 0 && nation.CapitalProvinceId <= 0 &&

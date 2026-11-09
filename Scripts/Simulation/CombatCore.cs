@@ -54,29 +54,60 @@ public static partial class Warfare
         perWar[outcome] = perWar.GetValueOrDefault(outcome) + 1;
     }
 
-    // Scratch shared by the whole pass. Warfare made three megabytes of garbage a
-    // campaign day, nearly all of it these indexes and the little arrays that LINQ hands
-    // back from a Where or an OrderBy - one set per advancing division per day, several
-    // hundred times over. They are all overwritten before they are read again, so they are
-    // kept and emptied instead of rebuilt. The simulation is single-threaded by
-    // construction, because it has to be to stay replayable, so one set is enough.
-    private static readonly Dictionary<int, List<Army>> ByWar = new();
+    // One campaign's army index. Warfare made three megabytes of garbage a campaign day,
+    // nearly all of it these indexes and the little arrays LINQ handed back. The lists are
+    // kept and emptied instead of rebuilt. They used to be one set for the process: the
+    // next campaign's rebuild cleared the first campaign's war buckets, province slots and
+    // id table, and a fresh flag left by that rebuild let the first campaign read the
+    // wrong armies. Two peers could run for years before a quiet day and a landing met,
+    // and then one division's rounding never came back together. Each campaign now owns
+    // its containers. Inside one campaign they are still cleared and filled again.
+    // The live tick stays single-threaded. ActiveIndex only names the index of the path
+    // now running; it does not allow Parallel.For around the tick.
+    //
+    // Province slots are an array, not a dictionary: the index is rebuilt every step, and
+    // a dictionary rebuilt every step was a hash lookup per division plus an emptying of
+    // every list any division had ever stood in. Only the slots filled last time are
+    // emptied. ById is filled when a battle first asks, from the armies this index saw,
+    // so the day's battles share one table.
+    private sealed class ArmyIndex
+    {
+        public readonly Dictionary<int, List<Army>> ByWar = new();
+        public List<Army>[] ByProvince = Array.Empty<List<Army>>();
+        public readonly List<int> ProvincesHeld = new();
+        public readonly Dictionary<int, Army> ById = new();
+        public readonly List<Army> IndexedArmies = new();
+        public readonly Dictionary<int, StrategicWar> WarById = new();
+        public readonly Dictionary<ushort, int> HomeProvinces = new();
+        public readonly Dictionary<long, int> OccupiedPairs = new();
+        public readonly Dictionary<long, (float Power, float Weight)> CoverCache = new();
+        public long CoverStep = -1;
+        public int CoverWarId = -1;
+        public int CoverMapRevision = -1;
+        public readonly Dictionary<int, ScenarioState> RegionByIndex = new();
+        public int RegionsCount = -1;
+        public int RegionsRevision = -1;
+        public readonly Dictionary<int, FailedOperationalRoute> NoRoute = new();
+        public bool ByIdStale = true;
+        public bool ProvinceStale = true;
+    }
 
-    // Who stands in each province, as a slot per province rather than a dictionary: the
-    // index is rebuilt every step, and a dictionary rebuilt every step was a hash lookup per
-    // division plus an emptying of every list any division had ever stood in. Only the slots
-    // filled last time are emptied.
-    private static List<Army>[] _byProvince = Array.Empty<List<Army>>();
-    private static readonly List<int> ProvincesHeld = new();
+    private static readonly ConditionalWeakTable<Campaign, ArmyIndex> ArmyIndexes = new();
+    private static ArmyIndex ActiveIndex;
+    private static readonly Dictionary<int, Army> NoArmyById = new();
 
-    // Divisions by id, for the battles - which resolve once a day, where the index is rebuilt
-    // every step. Built when a battle first asks, from the list as the index saw it, so it is
-    // the same table the index would have built and no longer built twenty-three times for
-    // nothing.
-    private static readonly Dictionary<int, Army> ById = new();
-    private static readonly List<Army> IndexedArmies = new();
-    private static bool _byIdStale = true;
-    private static readonly Dictionary<int, StrategicWar> WarById = new();
+    private static ArmyIndex UseArmyIndex(Campaign campaign) =>
+        ActiveIndex = ArmyIndexes.GetOrCreateValue(campaign);
+
+    private static ArmyIndex IndexOf(Campaign campaign) =>
+        campaign is not null && ArmyIndexes.TryGetValue(campaign, out var index) ? index : null;
+
+    /// <summary>A capture moved formations in this campaign. Another campaign's capture does not set the flag.</summary>
+    private static void MarkIndexStale(Campaign campaign)
+    {
+        if (campaign is not null && ArmyIndexes.TryGetValue(campaign, out var index)) index.ProvinceStale = true;
+    }
+
     private static readonly List<StrategicWar> Stale = new();
     private static readonly HashSet<int> Moved = new();
     private static readonly HashSet<ushort> BelligerentMaps = new();
@@ -85,8 +116,7 @@ public static partial class Warfare
     // one set for the process: the next campaign's battle cleared the first campaign's
     // sides, line, reserve, presence and reinforcements, then read what it had just
     // written. The live tick stays single-threaded. ActiveBuckets only names the buckets
-    // of the battle path now running. The army index above is still one set, rebuilt
-    // when the campaign asking is not the one it was filled from.
+    // of the battle path now running.
     private sealed class BattleBuckets
     {
         public readonly List<Army> Present = new();
@@ -156,54 +186,31 @@ public static partial class Warfare
         Board(campaign) is { } board ? board.DefenderReserve : Array.Empty<Army>();
 
     /// <summary>
-    /// Set whenever a province changes hands, because taking one moves the formations that
-    /// took it. The province index is only rebuilt when that has actually happened, which
-    /// keeps it exactly as truthful as walking every division would be and costs one pass
-    /// over the army list instead of one per battle.
+    /// This campaign's index. Rebuilt only when a capture in this campaign has moved
+    /// someone, which keeps it as truthful as walking every division and costs one pass
+    /// over the army list instead of one per battle. Another campaign's rebuild does not
+    /// clear these containers. A fresh index starts stale, so the first look builds it.
     /// </summary>
-    private static bool _provinceIndexStale;
-
-    /// <summary>
-    /// Which campaign the scratch above was last filled from.
-    ///
-    /// The note on those indexes says the simulation is single-threaded, so one set is
-    /// enough. That is true of one campaign and there are two: a client rebuilding from a
-    /// snapshot beside the world it replaces, a bench stepping two peers to prove they
-    /// agree. The staleness flag was shared by both of them, so a campaign could find the
-    /// index fresh - because the OTHER campaign had just rebuilt it - and read somebody
-    /// else's armies out of it.
-    ///
-    /// It needed a day on which nothing changed hands to leave the flag clear, and a
-    /// landing to read the index before warfare's own pass rebuilt it. That is rare: two
-    /// peers ran fourteen years in step before it happened once, and then they were apart
-    /// by a rounding error in one division and never came back together. A determinism bug
-    /// looks exactly like this, which is why the check that found it steps two worlds side
-    /// by side rather than trusting that the code is deterministic because it is single
-    /// -threaded.
-    /// </summary>
-    private static Campaign _indexedCampaign;
-    private static Campaign _measuredCampaign;
-
-    /// <summary>The index, for the campaign asking - rebuilding it if it is somebody else's.</summary>
     private static void EnsureIndexed(Campaign campaign)
     {
-        if (_provinceIndexStale || !ReferenceEquals(_indexedCampaign, campaign)) IndexArmies(campaign);
+        var index = UseArmyIndex(campaign);
+        if (index.ProvinceStale) IndexArmies(campaign);
     }
 
     // How much ground each country originally owned, and how much of it somebody else is
     // standing on. Every war used to work this out for itself by walking all thirty-eight
     // thousand provinces - with fifty wars going stale on the same day that was two million
-    // province reads for a table that is the same table every time.
-    private static readonly Dictionary<ushort, int> HomeProvinces = new();
+    // province reads for a table that is the same table every time. Kept per campaign so
+    // a second world's census cannot overwrite the first world's home and occupied counts.
     private static readonly HashSet<ushort> AttackerMaps = new();
     private static readonly HashSet<ushort> DefenderMaps = new();
-    private static readonly Dictionary<long, int> OccupiedPairs = new();
 
-    private static void MeasureOccupation(Campaign campaign)
+    internal static void MeasureOccupation(Campaign campaign)
     {
-        HomeProvinces.Clear();
-        OccupiedPairs.Clear();
-        _measuredCampaign = campaign;
+        if (campaign is null) return;
+        var index = UseArmyIndex(campaign);
+        index.HomeProvinces.Clear();
+        index.OccupiedPairs.Clear();
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         if (topology is null || controllers is null) return;
@@ -211,52 +218,126 @@ public static partial class Warfare
         {
             var original = topology.ProvinceToNation[province];
             if (original == 0) continue;
-            HomeProvinces[original] = HomeProvinces.GetValueOrDefault(original) + 1;
+            index.HomeProvinces[original] = index.HomeProvinces.GetValueOrDefault(original) + 1;
             var controller = controllers[province];
             if (controller == 0 || controller == original) continue;
             var key = ((long)original << 32) | controller;
-            OccupiedPairs[key] = OccupiedPairs.GetValueOrDefault(key) + 1;
+            index.OccupiedPairs[key] = index.OccupiedPairs.GetValueOrDefault(key) + 1;
         }
     }
 
-    private static int Occupied(ushort original, ushort by) =>
-        OccupiedPairs.GetValueOrDefault(((long)original << 32) | by);
+    private static int Occupied(Campaign campaign, ushort original, ushort by) =>
+        IndexOf(campaign)?.OccupiedPairs.GetValueOrDefault(((long)original << 32) | by) ?? 0;
+
+    private static void IndexWars(Campaign campaign)
+    {
+        var index = UseArmyIndex(campaign);
+        index.WarById.Clear();
+        var live = LiveWars(campaign);
+        for (var indexWar = 0; indexWar < live.Count; indexWar++)
+        {
+            var war = live[indexWar];
+            if (war.Ended) continue;
+            index.WarById[war.Id] = war;
+        }
+    }
 
     private static void IndexArmies(Campaign campaign)
     {
-        InvalidateCoverCache();
-        foreach (var province in ProvincesHeld) _byProvince[province].Clear();
-        ProvincesHeld.Clear();
-        foreach (var list in ByWar.Values) list.Clear();
-        IndexedArmies.Clear();
-        _byIdStale = true;
+        var index = UseArmyIndex(campaign);
+        InvalidateCoverCache(campaign);
+        foreach (var province in index.ProvincesHeld) index.ByProvince[province].Clear();
+        index.ProvincesHeld.Clear();
+        foreach (var list in index.ByWar.Values) list.Clear();
+        index.IndexedArmies.Clear();
+        index.ByIdStale = true;
         foreach (var army in campaign.Armies)
         {
-            IndexedArmies.Add(army);
+            index.IndexedArmies.Add(army);
             var province = army.ProvinceId;
             if (province > 0)
             {
-                if (province >= _byProvince.Length)
-                    Array.Resize(ref _byProvince, Math.Max(province + 1, (campaign.ProvinceMap?.ProvinceCount ?? 0) + 1));
-                var here = _byProvince[province] ??= new List<Army>();
-                if (here.Count == 0) ProvincesHeld.Add(province);
+                if (province >= index.ByProvince.Length)
+                    Array.Resize(ref index.ByProvince, Math.Max(province + 1, (campaign.ProvinceMap?.ProvinceCount ?? 0) + 1));
+                var here = index.ByProvince[province] ??= new List<Army>();
+                if (here.Count == 0) index.ProvincesHeld.Add(province);
                 here.Add(army);
             }
             if (army.AssignedWarId < 0) continue;
-            if (!ByWar.TryGetValue(army.AssignedWarId, out var fighting))
-                ByWar[army.AssignedWarId] = fighting = new List<Army>();
+            if (!index.ByWar.TryGetValue(army.AssignedWarId, out var fighting))
+                index.ByWar[army.AssignedWarId] = fighting = new List<Army>();
             fighting.Add(army);
         }
-        _indexedCampaign = campaign;
-        _provinceIndexStale = false;
+        index.ProvinceStale = false;
+    }
+
+    /// <summary>
+    /// Rebuilds this campaign's army index. It does not move a formation or rewrite an
+    /// order. A second campaign's rebuild cannot clear these lists.
+    /// </summary>
+    internal static void RebuildArmyIndex(Campaign campaign)
+    {
+        if (campaign is null) return;
+        IndexArmies(campaign);
+        IndexWars(campaign);
+    }
+
+    /// <summary>Wars by id from the last rebuild of this campaign. Null when it has not rebuilt.</summary>
+    internal static IReadOnlyDictionary<int, StrategicWar> IndexedWarById(Campaign campaign) => IndexOf(campaign)?.WarById;
+
+    /// <summary>Home province counts by map index from the last occupation census of this campaign.</summary>
+    internal static IReadOnlyDictionary<ushort, int> IndexedHomeProvinces(Campaign campaign) => IndexOf(campaign)?.HomeProvinces;
+
+    /// <summary>Occupied province pair counts from the last occupation census of this campaign.</summary>
+    internal static IReadOnlyDictionary<long, int> IndexedOccupiedPairs(Campaign campaign) => IndexOf(campaign)?.OccupiedPairs;
+
+    /// <summary>War buckets from the last rebuild of this campaign. Null when it has not rebuilt.</summary>
+    internal static Dictionary<int, List<Army>> IndexedWars(Campaign campaign) => IndexOf(campaign)?.ByWar;
+
+    /// <summary>Armies the last rebuild placed in this war. Null when this campaign has no such bucket.</summary>
+    internal static IReadOnlyList<Army> IndexedWarArmies(Campaign campaign, int warId)
+    {
+        var index = IndexOf(campaign);
+        if (index is null || !index.ByWar.TryGetValue(warId, out var list)) return null;
+        return list;
+    }
+
+    /// <summary>Province slots from the last rebuild. Null when this campaign has not rebuilt.</summary>
+    internal static List<Army>[] IndexedProvinceSlots(Campaign campaign) => IndexOf(campaign)?.ByProvince;
+
+    /// <summary>Armies the last rebuild placed in this province. Null when that slot was never filled.</summary>
+    internal static IReadOnlyList<Army> IndexedProvinceArmies(Campaign campaign, int province)
+    {
+        var slots = IndexOf(campaign)?.ByProvince;
+        if (slots is null || province <= 0 || province >= slots.Length) return null;
+        return slots[province];
+    }
+
+    /// <summary>Divisions by id for this campaign. Null when it has not rebuilt. Fills the table on first ask.</summary>
+    internal static Dictionary<int, Army> IndexedById(Campaign campaign)
+    {
+        var index = IndexOf(campaign);
+        if (index is null) return null;
+        FillById(index);
+        return index.ById;
     }
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Warfare))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>
+    /// The same passes in the same order as <see cref="Tick"/>, yielding between wars so a
+    /// frame can stop inside the step's heaviest pass rather than after all of it. Order is
+    /// unchanged; only the frame boundary moves.
+    /// </summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Warfare))) yield break;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
-        if (topology is null || controllers is null) return;
+        if (topology is null || controllers is null) yield break;
         if (campaign.StepOpensNewDay) ReconcileBattleAssignments(campaign);
 
         // RebuildFronts redraws every front in the world, so asking for it from inside the
@@ -265,8 +346,10 @@ public static partial class Warfare
         // system in the simulation. Decide once whether the map needs redrawing, redraw it
         // once, and then let each war do its own follow-up.
         Stale.Clear();
-        foreach (var war in campaign.Wars)
+        var live = LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
             if (war.Ended) continue;
             if (war.FrontDirty || war.LastFrontDay < 0 || campaign.ElapsedDays - war.LastFrontDay >= 5)
                 Stale.Add(war);
@@ -289,6 +372,7 @@ public static partial class Warfare
                     if (Moved.Contains(war.Id) || FrontPlanner.NeedsEmergencyStaff(campaign, war))
                         FrontPlanner.ReassignAi(campaign, war);
         }
+        yield return 0;
 
         // The staff keeps each front covered: every post held before any post is held twice.
         // Once a day for every front, and at once for a front that has just moved, because a
@@ -306,6 +390,7 @@ public static partial class Warfare
                 foreach (var war in Stale)
                     if (Moved.Contains(war.Id)) FrontManager.Balance(campaign, war);
         }
+        yield return 0;
 
         // Two indexes, built once. ResolveAdvances used to walk every division in the world
         // for every war - seventy wars against fourteen hundred divisions - and then walk
@@ -313,21 +398,27 @@ public static partial class Warfare
         using (SimProfiler.Measure("  war:index"))
         {
             IndexArmies(campaign);
-            WarById.Clear();
-            foreach (var war in campaign.Wars) WarById[war.Id] = war;
+            IndexWars(campaign);
         }
 
-        using (SimProfiler.Measure("  war:advances"))
-            foreach (var war in campaign.Wars)
+        // One war at a time with a frame boundary between them: a front-heavy war used to
+        // land its whole advance resolution - routing, targets, cover - in a single frame.
+        var advancing = AdvanceWars(campaign);
+        for (var index = 0; index < advancing.Count; index++)
+        {
+            var war = advancing[index];
+            using (SimProfiler.Measure("  war:advances"))
             {
                 if (war.Ended) continue;
                 // A capture in the preceding war invalidates province/war indexes.
                 // Refresh BEFORE obtaining its formation list: rebuilding that list
                 // from inside the opportunity predicate would mutate an active foreach.
                 EnsureIndexed(campaign);
-                using (SimProfiler.Measure("    adv:execution")) FrontPlanner.UpdateAiExecution(campaign, war, In(ByWar, war.Id));
+                using (SimProfiler.Measure("    adv:execution")) FrontPlanner.UpdateAiExecution(campaign, war, InWar(war.Id));
                 using (SimProfiler.Measure("    adv:resolve")) ResolveAdvances(campaign, war);
             }
+            yield return 0;
+        }
 
         // A round is a DAY of fighting - it carries a date, a note and a line in the battle
         // report - so it resolves on a day rather than on a step. At the shipped hourly step
@@ -344,20 +435,29 @@ public static partial class Warfare
 
     private static readonly List<Army> NoArmies = new();
 
-    private static List<Army> In(Dictionary<int, List<Army>> index, int key) =>
-        index.TryGetValue(key, out var list) ? list : NoArmies;
+    private static List<Army> InWar(int warId) =>
+        ActiveIndex is not null && ActiveIndex.ByWar.TryGetValue(warId, out var list) ? list : NoArmies;
 
-    /// <summary>Everyone the index has standing in this province, in the order the world lists them.</summary>
-    private static List<Army> InProvince(int province) =>
-        province > 0 && province < _byProvince.Length && _byProvince[province] is { } here ? here : NoArmies;
+    /// <summary>Everyone the active campaign's index has standing in this province, in the order the world lists them.</summary>
+    private static List<Army> InProvince(int province)
+    {
+        var slots = ActiveIndex?.ByProvince;
+        return slots is not null && province > 0 && province < slots.Length && slots[province] is { } here ? here : NoArmies;
+    }
+
+    private static void FillById(ArmyIndex index)
+    {
+        if (!index.ByIdStale) return;
+        index.ById.Clear();
+        foreach (var army in index.IndexedArmies) index.ById[army.Id] = army;
+        index.ByIdStale = false;
+    }
 
     private static Dictionary<int, Army> ArmiesById()
     {
-        if (!_byIdStale) return ById;
-        ById.Clear();
-        foreach (var army in IndexedArmies) ById[army.Id] = army;
-        _byIdStale = false;
-        return ById;
+        if (ActiveIndex is null) return NoArmyById;
+        FillById(ActiveIndex);
+        return ActiveIndex.ById;
     }
 
     private static void ResolveAdvances(Campaign campaign, StrategicWar war)
@@ -379,7 +479,7 @@ public static partial class Warfare
         BelligerentMaps.UnionWith(DefenderMaps);
         _belligerentSnapshot = null;
 
-        foreach (var army in In(ByWar, war.Id))
+        foreach (var army in InWar(war.Id))
         {
             if ((army.OrderKind != ArmyOrder.AdvanceFront && army.OrderKind != ArmyOrder.Spearhead) || !army.PlanActive ||
                 army.InBattle || army.IsMoving || army.ReadyDay > campaign.ElapsedDays ||
@@ -560,7 +660,7 @@ public static partial class Warfare
             foreach (var defending in DefendingSide) Join(battle, defending, false);
         }
         foreach (var army in landed) Join(battle, army, true);
-        _provinceIndexStale = true;
+        MarkIndexStale(campaign);
         return $"{landed.Count:N0} formation(s) landed into a contested beach";
     }
 
@@ -584,7 +684,8 @@ public static partial class Warfare
         foreach (var battle in campaign.Battles)
         {
             if (battle.Ended) continue;
-            WarById.TryGetValue(battle.WarId, out var war);
+            var warsById = IndexedWarById(campaign);
+            var war = warsById is not null && warsById.TryGetValue(battle.WarId, out var foundWar) ? foundWar : null;
             if (war is null || war.Ended) { Close(campaign, battle, -1, "War ended"); continue; }
 
             ReinforceBattle(campaign, battle);
@@ -981,7 +1082,7 @@ public static partial class Warfare
                             army.StateMapIndex = map.ProvinceToState[back];
                             (army.Latitude, army.Longitude) = map.CenterOf(back);
                         }
-                    _provinceIndexStale = true;
+                    MarkIndexStale(campaign);
                     EnsureIndexed(campaign);
                 }
             }

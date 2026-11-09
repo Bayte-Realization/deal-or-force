@@ -45,8 +45,8 @@
   "AiEscalationAppetite": 0.9,
   // How long a shared border has to be shooting before a border war can come of it, the chance
   // of one a week after that, and how long it is fought before the ceasefire.
-  "BorderWarAfterDays": 90,
-  "BorderWarChancePerWeek": 0.012,
+  "BorderWarAfterDays": 60,
+  "BorderWarChancePerWeek": 0.025,
   // How strong a side has to be, against the other and the friends behind it, to open one.
   "BorderWarStrengthRatio": 0.6,
   "BorderWarDays": 45,
@@ -55,6 +55,11 @@
   "TalksCost": 0.25,
   "TalksTensionPerWeek": 2.5,
   "TalksCooldownDays": 365,
+  // One step up the existing ladder for a pair that is not at war and already has a cause
+  // (rivalry, a refused ultimatum, a claim, or a bad opinion across a shared border). A
+  // player receives the existing ultimatum. The wait is that pair and that cause.
+  "QuarrelStep": true,
+  "QuarrelStepCooldownDays": 120,
   // How a war grows: the age and the losses, as a share of the people, at which it becomes a
   // major war and then a total one.
   "WarMajorDays": 150,

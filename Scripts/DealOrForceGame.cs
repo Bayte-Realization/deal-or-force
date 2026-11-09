@@ -104,6 +104,10 @@ public partial class DealOrForceGame : Control
             BuildInterface();
             _globe.LoadingInputBlocked = true;
             await LoadingPhase("Creating countries and regions", 30);
+            // Schema discovery is independent of the live world. Await it while loading,
+            // before creating a campaign; it must not become the first autosave's freeze.
+            await System.Threading.Tasks.Task.Run(SaveSystem.WarmSerializationContracts);
+            if (!IsInstanceValid(this) || !IsInsideTree()) return;
             StartCampaign();
             await WaitForMapPresentation();
             // Again, now that there is a map to apply them to. Several preferences reach
@@ -129,6 +133,7 @@ public partial class DealOrForceGame : Control
         // Before anything else in the frame: a machine that cannot hold thirty frames a second
         // has to be allowed to spend less on this frame, not the one after a settings screen.
         MaintainQuality(delta);
+        PaceBackgroundFrames();
         BindStepCompletion();
         RefreshMediaPreview();
         RefreshSoundtrackPlayer(delta);
@@ -625,6 +630,18 @@ public partial class DealOrForceGame : Control
             if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
         }
 
+        // B: building icons on the map, on and off - with nothing selected, so a selection keeps its letters.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } iconsKey && _hudLayer is { Visible: true } &&
+            _selectedArmies.Count == 0 && Letter(iconsKey) == Key.B && !iconsKey.CtrlPressed && !iconsKey.AltPressed &&
+            !iconsKey.ShiftPressed && !iconsKey.MetaPressed)
+        {
+            SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+            ApplySetting("map_region_icons");
+            RefreshMapVisualToggles();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
         // and only in the campaign, so H stays a letter everywhere else.
@@ -716,13 +733,24 @@ public partial class DealOrForceGame : Control
             CloseTradeScreen();
         else if (_productionLayer is { Visible: true })
             CloseProductionScreen();
+        // Context menus and HUD docks on the map (province card, fleet inspector, army
+        // roster, resource atlas, movement card, side dossier, country/region selection):
+        // Escape puts them away one layer at a time before ever reaching the pause menu.
+        else if (_provinceCardLayer is not null && IsInstanceValid(_provinceCardLayer) && _provinceCardLayer.Visible)
+            CloseProvinceCard();
+        else if (_fleetPanel is { Visible: true })
+            CloseFleetPanel();
+        else if (_armyPanel is { Visible: true })
+            ClearArmySelectionAndClose();
+        else if (_resourceAtlasPanel is { Visible: true })
+            _globe.SetMapMode(StrategicMapMode.Political);
         else if (_movementPanel is { Visible: true })
             CloseMovementPanel();
         else if (_sidePanel.Visible && _dossierReturnArmyIds is not null)
             ReturnToArmyOrders();
         else if (_sidePanel.Visible)
             CloseSidePanel();
-        else if (MapSelectionShowing)
+        else if (MapSelectionShowing || _regionCard is { Visible: true })
             CloseMapSelection();
         else if (_pickerLayer is { Visible: true })
             ShowMainMenu();

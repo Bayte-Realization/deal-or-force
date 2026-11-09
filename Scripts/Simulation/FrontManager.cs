@@ -50,6 +50,14 @@ public sealed partial class Defines
     /// closes it with a division taken off an advance when no reserve is free.
     /// </summary>
     public float FrontHoleAdvanceNeed { get; set; } = 3.5f;
+
+    /// <summary>
+    /// Whether one re-posting is spent on the empty post that reconnects a cut-off formation,
+    /// taken from a free reserve before any other hole. Off, a hole is still filled by how
+    /// threatened it is, and this rule does not order the reserve or claim the road is opening.
+    /// A mod sets this false. The 14-day bleed and the dry-out of an attack stay either way.
+    /// </summary>
+    public bool FrontStaffRelievesPockets { get; set; } = true;
 }
 
 /// <summary>
@@ -97,6 +105,8 @@ public static class FrontManager
         public readonly List<DrawnFrontLine> Lines = new();
         public readonly HashSet<int> LineEnemies = new();
         public readonly List<Army> Idle = new();
+        /// <summary>Empty posts this look refused to fill by pulling an attack off the line.</summary>
+        public readonly HashSet<int> ReliefNoAdvance = new();
     }
 
     private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
@@ -116,6 +126,7 @@ public static class FrontManager
     private static List<DrawnFrontLine> Lines => Active.Lines;
     private static HashSet<int> LineEnemies => Active.LineEnemies;
     private static List<Army> Idle => Active.Idle;
+    private static HashSet<int> ReliefNoAdvance => Active.ReliefNoAdvance;
 
     /// <summary>
     /// Provinces the last staff look posted in this campaign, in the order that look left them.
@@ -146,13 +157,15 @@ public static class FrontManager
         if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
         Active = Boards.GetOrCreateValue(campaign);
         CallUpIdle(campaign);
-        // Defensive copy to prevent InvalidOperationException if Wars list is modified during iteration.
-        var wars = campaign.Wars.ToList();
-        foreach (var war in wars)
+        // A copy: balancing one front can end a war and rebuild the live list under this look.
+        var live = Warfare.LiveWars(campaign);
+        var wars = new List<StrategicWar>(live.Count);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended) continue;
-            Balance(campaign, war);
+            var war = live[index];
+            if (!war.Ended) wars.Add(war);
         }
+        foreach (var war in wars) Balance(campaign, war);
         // A full withdrawal may detach the last formation and prune empty plans.
         // Walk this look's roster, not the live list that those commands can edit.
         // The roster stays on this campaign's board until its next look reuses the list.
@@ -203,8 +216,9 @@ public static class FrontManager
             // field was handed over. Then the same call-up every other country gets applies.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Command))) continue;
             var atWar = false;
-            foreach (var war in campaign.Wars)
-                if (!war.Ended && war.Involves(nation.Id)) { atWar = true; break; }
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
+                if (!live[index].Ended && live[index].Involves(nation.Id)) { atWar = true; break; }
             if (!atWar) continue;
             new SetArmyOrderCommand { IssuerId = nation.Id, ArmyId = army.Id, Order = ArmyOrder.DefendFront }.Apply(campaign);
             FrontPlanner.GiveIdleRole(campaign, army);
@@ -381,7 +395,13 @@ public static class FrontManager
         }
 
         var budget = defines.FrontRepostsPerLook + (int)(Posts.Count * defines.FrontRepostsPerPost);
-        var quota = (int)MathF.Ceiling(holders / (float)Posts.Count);
+        var quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
+
+        // One re-posting, before the threatened holes: a free reserve onto the empty post that
+        // reconnects a cut-off formation. The pocket itself is left where it is.
+        ReliefNoAdvance.Clear();
+        RelieveCutOff(campaign, nation, war, today, mayBorrow, ref budget, ref holders);
+        quota = (int)MathF.Ceiling(holders / (float)Math.Max(1, Posts.Count));
 
         // First the holes, the most threatened first.
         Posts.Sort((left, right) =>
@@ -429,7 +449,9 @@ public static class FrontManager
                     // next to may borrow one advance, and only after no reserve could take it.
                     var borrowedAdvance = false;
                     var reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: false);
-                    if (reserve is null &&
+                    // The post that would reopen a pocket already had its reserve. No attack is
+                    // pulled off the line to stand there. Other holes keep the threatened-hole rule.
+                    if (reserve is null && !ReliefNoAdvance.Contains(hole) &&
                         Need.GetValueOrDefault(hole, 1f) >= campaign.Defines.FrontHoleAdvanceNeed)
                     {
                         reserve = NearestReserve(campaign, nation, war, hole, today, advancesToo: true);
@@ -505,6 +527,104 @@ public static class FrontManager
             if (mover is null || !Repost(campaign, nation, mover, poorest)) break;
             budget--;
         }
+    }
+
+    /// <summary>
+    /// One existing re-posting onto the empty post that reconnects a cut-off formation.
+    /// The formation in the pocket is not disbanded and is not the one sent. A free reserve
+    /// goes first. If none can reach, the post is marked so this look does not pull an advance
+    /// or a spearhead onto it; a neighbour already holding this war may still walk there by
+    /// the ordinary donor pass. A human who has not handed over command is not given the move.
+    /// </summary>
+    private static void RelieveCutOff(Campaign campaign, Nation nation, StrategicWar war, int today,
+        bool mayBorrow, ref int budget, ref int holders)
+    {
+        if (!mayBorrow || budget <= 0 || war is null || !campaign.Defines.FrontStaffRelievesPockets) return;
+        var pocket = CutOffFormation(campaign, nation, war);
+        if (pocket is null) return;
+        var post = ReconnectingPost(campaign, nation, war, pocket.ProvinceId);
+        if (post < 0 || Count(post) > 0) return;
+        Refused.Clear();
+        for (var attempt = 0; attempt < 4; attempt++)
+        {
+            var reserve = NearestReserve(campaign, nation, war, post, today, advancesToo: false);
+            if (reserve is null) break;
+            if (reserve.Id == pocket.Id || reserve.DaysCutOff > 0 || reserve.SupplyDistance < 0)
+            {
+                Refused.Add(reserve.Id);
+                continue;
+            }
+            var duty = reserve.OrderKind;
+            reserve.OrderKind = ArmyOrder.DefendFront;
+            if (Repost(campaign, nation, reserve, post))
+            {
+                reserve.StaffNote = StaffNote.ReopenRoad;
+                budget--;
+                holders++;
+                return;
+            }
+            reserve.OrderKind = duty;
+            Refused.Add(reserve.Id);
+        }
+        ReliefNoAdvance.Add(post);
+    }
+
+    /// <summary>
+    /// A formation on this war with <see cref="Army.DaysCutOff"/> already counting, or with no
+    /// supply distance. The most isolated is the one the staff tries to reopen first.
+    /// </summary>
+    private static Army CutOffFormation(Campaign campaign, Nation nation, StrategicWar war)
+    {
+        Army best = null;
+        foreach (var army in campaign.Armies)
+        {
+            if (army.NationId != nation.Id || army.Divisions <= 0f || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0)
+                continue;
+            if (army.AssignedWarId != war.Id) continue;
+            if (army.DaysCutOff <= 0 && army.SupplyDistance >= 0) continue;
+            if (best is null || army.DaysCutOff > best.DaysCutOff ||
+                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance < best.SupplyDistance) ||
+                (army.DaysCutOff == best.DaysCutOff && army.SupplyDistance == best.SupplyDistance && army.Id < best.Id))
+                best = army;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// The empty front post on the near side of the gap: the friendly province the existing
+    /// breakout walk reaches outside the pocket, when that province is an empty post, otherwise
+    /// the empty post beside it. The pocket's own province is not a post to "fill".
+    /// </summary>
+    private static int ReconnectingPost(Campaign campaign, Nation nation, StrategicWar war, int pocketProvince)
+    {
+        var path = PocketBreakout.WayHome(campaign, nation, pocketProvince, war);
+        if (path is not null)
+        {
+            for (var i = path.Count - 1; i >= 0; i--)
+            {
+                var step = path[i];
+                if (step == pocketProvince) continue;
+                if (PostSet.Contains(step) && Count(step) == 0) return step;
+            }
+            if (path.Count > 0)
+            {
+                var beside = EmptyPostBeside(campaign, path[^1], pocketProvince);
+                if (beside > 0) return beside;
+            }
+        }
+        return EmptyPostBeside(campaign, pocketProvince, pocketProvince);
+    }
+
+    private static int EmptyPostBeside(Campaign campaign, int province, int pocketProvince)
+    {
+        if (province <= 0 || province >= campaign.ProvinceMap.Neighbors.Length) return -1;
+        var best = -1;
+        foreach (var next in campaign.ProvinceMap.Neighbors[province])
+        {
+            if (next == pocketProvince || !PostSet.Contains(next) || Count(next) > 0) continue;
+            if (best < 0 || next < best) best = next;
+        }
+        return best;
     }
 
     private static int Count(int post) => Allocated.TryGetValue(post, out var there) ? there.Count : 0;

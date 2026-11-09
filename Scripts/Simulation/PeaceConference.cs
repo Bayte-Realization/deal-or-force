@@ -354,6 +354,24 @@ public static class PeaceConference
         if (demand.IsEmpty) Add("empty");
     }
 
+    /// <summary>
+    /// Years this written settlement already keeps: ten when the demand asks for the long
+    /// truce, otherwise five. <see cref="Resolve"/> writes the same split onto the relation.
+    /// </summary>
+    public static int TruceYears(PeaceDemand demand) => demand is { LongTruce: true } ? 10 : 5;
+
+    /// <summary>
+    /// That length, in one sentence, or empty when there is no demand. Reading it does not
+    /// sign the peace and does not move a province.
+    /// </summary>
+    public static string TruceLine(PeaceDemand demand)
+    {
+        if (demand is null) return "";
+        return TruceYears(demand) == 10
+            ? Loc.Get("This settlement keeps a ten-year truce.")
+            : Loc.Get("This settlement keeps a five-year truce.");
+    }
+
     public static bool Resolve(Campaign campaign, StrategicWar war, PeaceDemand demand)
     {
         // A forged or stale recipient must not change even negotiation metadata, let alone a border.
@@ -476,7 +494,7 @@ public static class PeaceConference
         // Every pair across the two sides. One war, one settlement, one truce for all of
         // the people who were in it - a coalition that has to sign thirty separate treaties
         // is thirty wars wearing a coat.
-        var truceUntil = campaign.ElapsedDays + (demand.LongTruce ? 365 * 10 : 365 * 5);
+        var truceUntil = campaign.ElapsedDays + 365 * TruceYears(demand);
         var bitterness = demand.Provinces.Count > 0 ? -60f : -35f;
         foreach (var attackingId in war.Side(true))
             foreach (var defendingId in war.Side(false))

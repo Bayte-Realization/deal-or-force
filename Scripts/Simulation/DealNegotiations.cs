@@ -151,15 +151,24 @@ public static class DealNegotiations
 
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same inbox sweep, yielded between papers.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
         // Expiration is administrative cleanup, also when deals are switched off.
         // Don't revalidate every territorial raster per frame or rewrite open drafts.
+        var ticked = 0;
         foreach (var paper in c.DealOffers.Where(o => o.Pending).ToArray())
         {
+            if (++ticked % 32 == 0) yield return 0;
             if (paper.ExpiresDay <= c.ElapsedDays) Close(c, paper, DealOfferState.Expired, "The offer has expired.");
             else if (!c.FeatureEnabled("deals")) Close(c, paper, DealOfferState.Invalidated, "Deals are disabled in this campaign.");
             else if (c.NationById(paper.ToId)?.IsHuman != true)
                 Close(c, paper, DealOfferState.Invalidated, "The addressed country is no longer controlled by a player.");
         }
+        yield return 0;
         TrimHistory(c);
     }
 

@@ -7,7 +7,7 @@ static class RegionReunionTests
     static void Check(bool ok, string note)
     { if (!ok) throw new Exception("region reunion: " + note); Console.WriteLine("PASS region reunion: " + note); }
 
-    static Campaign Fixture()
+    internal static Campaign Fixture()
     {
         var c = new Campaign(57) { ScenarioId = "region_reunion_fixture" };
         c.AddNation(new Nation { Tag = "RUA", MapIndex = 501, Population = 1000 });
@@ -108,5 +108,6 @@ static class RegionReunionTests
         c = Fixture(); c.DealOffers.Add(new DealOffer { From = new Ultimatum.Side { Regions = new[] { 4000 } } });
         StatePartition.Reunify(c);
         Check(c.States.Any(s => s.MapIndex == 4000), "a pending paper retains the exact territory the recipient saw");
+        RegionReunionWakeTests.Run();
     }
 }

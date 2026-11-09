@@ -36,7 +36,8 @@ public partial class DealOrForceGame
             + Ultimatum.Incoming(_campaign, _campaign.Player.Id)
             + MilitaryAccess.Incoming(_campaign, _campaign.Player.Id)
             + LeaseOffersIncoming()
-            + DiplomaticActs.Incoming(_campaign, _campaign.Player.Id);
+            + DiplomaticActs.Incoming(_campaign, _campaign.Player.Id)
+            + AllyRivalShift.Incoming(_campaign, _campaign.Player.Id);
         var incoming = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.DealOffers
             .Where(o => o.Pending && o.ToId == _campaign.Player.Id && o.ExpiresDay > _campaign.ElapsedDays).Select(o => o.Id).ToHashSet();
         var ultimatums = _observerMode ? new System.Collections.Generic.HashSet<int>() : _campaign.UltimatumPapers
@@ -147,6 +148,7 @@ public partial class DealOrForceGame
         _dealInboxActions.Visible = false;
         var player = _campaign.Player;
         AddMilitaryAccessInboxRows();
+        AddAllyRivalInboxRows();
         AddDiplomaticActInboxRows();
         var papers = _campaign.DealOffers.Where(o => o.FromId == player.Id || o.ToId == player.Id)
             .OrderBy(o => !o.Pending).ThenBy(o => o.Pending ? o.ExpiresDay : -o.Id).ToArray();

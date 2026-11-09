@@ -970,7 +970,12 @@ public static class EconomySystem
                 nation.WeeklyTaxIncome = nation.WeeklyExpenses = nation.WeeklyBalance = 0;
                 continue;
             }
-            var atWar = campaign.Wars.Any(war => !war.Ended && war.Involves(nation.Id));
+            // A country at war is one in a war still being fought. An ended war stays
+            // on the record and does not keep this week's budget or drift.
+            var atWar = false;
+            var live = Warfare.LiveWars(campaign);
+            for (var warIndex = 0; warIndex < live.Count; warIndex++)
+                if (live[warIndex].Involves(nation.Id)) { atWar = true; break; }
             SovereignFinance.Prepare(campaign, nation);
             var weeklyOutput = nation.Gdp / 52f;
             // GDP is total economic activity, not the taxable budget base. Only a
@@ -1011,6 +1016,8 @@ public static class EconomySystem
                 if (line.Charge == BudgetBasis.Debt && line.Side == BudgetSide.Expense)
                     interest += BudgetCore.Amount(nation, line, weeklyOutput, atWar);
             SovereignFinance.Settle(campaign, nation, nation.WeeklyBalance, interest);
+            if (!nation.IsHuman || Delegation.Holds(nation, Delegation.Budget))
+                SovereignFinance.ManageLiquidity(campaign, nation);
 
             // What the week did to prices, before what prices do to the week. Placed here
             // on purpose: the budget has been worked out and paid, so the deficit inflation
@@ -1097,7 +1104,7 @@ public static class EconomySystem
                     atWar, welfareRadicalism, focusRadicalism);
                 MinorityPressure(campaign, nation, state);
             }
-            if (states.Length >= ParallelRegionsFrom)
+            if (states.Length >= ParallelRegionsFrom && campaign.Defines.ParallelRegions)
             {
                 if (states.Length > 0) ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
                 System.Threading.Tasks.Parallel.For(0, states.Length, RegionWorkers, index => Week(states[index]));
@@ -1639,6 +1646,18 @@ public static class ConstructionSystem
             // goes up. Capacity used to scale only the payment, and above one it paid the bill
             // early and finished on the same day - a stat every building raised and nothing read.
             var pace = ConstructionCost.Pace(campaign, nation);
+            // The console's "instabuild": everything this country has under way is finished today, free.
+            if (nation.InstantConstruction)
+            {
+                foreach (var project in sites)
+                {
+                    project.Paid = project.Cost;
+                    project.ProgressDays = project.DurationDays;
+                    Complete(campaign, nation, project);
+                    campaign.Construction.Remove(project);
+                }
+                continue;
+            }
             foreach (var project in sites)
             {
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||

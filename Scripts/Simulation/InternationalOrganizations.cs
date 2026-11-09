@@ -474,9 +474,17 @@ public static class InternationalOrganizations
 
     public static void Tick(Campaign c)
     {
-        if (!c.FeatureEnabled("organizations")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same organization pass, yielded between assemblies.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.FeatureEnabled("organizations")) yield break;
+        var ticked = 0;
         foreach (var org in Active(c).ToArray())
         {
+            if (++ticked % 4 == 0) yield return 0;
             // A live mod reload can remove a charter. Freeze its institution, do not crash
             // an assembly or silently reinterpret its voting rule.
             if (Charter(org.CharterId) is null) continue;

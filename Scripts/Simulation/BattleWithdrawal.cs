@@ -131,7 +131,7 @@ public static partial class Warfare
             // formation again. The part that stayed gets no rest - it never left the line.
             detachment.ReadyDay = Math.Max(army.ReadyDay, campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays);
         }
-        _provinceIndexStale = true;
+        MarkIndexStale(campaign);
         EnsureIndexed(campaign);
         campaign.MarkStrategicChange();
         result = attacking
@@ -192,7 +192,7 @@ public static partial class Warfare
             army.ReadyDay = Math.Max(army.ReadyDay, campaign.ElapsedDays + campaign.Defines.RestAfterRetreatDays);
         }
         // Do not heal strength, organisation, equipment or reset the battle's losses.
-        _provinceIndexStale = true;
+        MarkIndexStale(campaign);
         UseBattleBuckets(campaign);
         EnsureIndexed(campaign);
         var attackers = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);

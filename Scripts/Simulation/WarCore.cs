@@ -353,13 +353,15 @@ public static partial class Warfare
         if (belligerents.Length <= largestMapIndex)
             belligerents = Belligerents = new bool[largestMapIndex + 1];
         Array.Clear(belligerents);
-        foreach (var war in campaign.Wars)
+        var live = LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
+            if (war.Ended) continue;
             war.AttackerFront.Clear();
             war.DefenderFront.Clear();
             war.FrontDirty = false;
             war.LastFrontDay = campaign.ElapsedDays;
-            if (war.Ended) continue;
             // Every pair across the two sides, not just the two leaders. A coalition war
             // has a front wherever any of its members touches any of the other side's, and
             // filing only the leaders' pair left everybody else's border unmanned.
@@ -414,6 +416,86 @@ public static partial class Warfare
     /// <summary>Order-independent key for a pair of countries.</summary>
     private static long PairKey(int a, int b) =>
         a < b ? ((long)a << 32) | (uint)b : ((long)b << 32) | (uint)a;
+
+    sealed class LiveBoard
+    {
+        public readonly List<StrategicWar> Wars = new();
+        public readonly List<StrategicWar> Advance = new();
+        public int Revision = int.MinValue;
+        public int Count = -1;
+    }
+
+    static readonly ConditionalWeakTable<Campaign, LiveBoard> LiveBoards = new();
+
+    /// <summary>How many times a campaign's live list was rebuilt from the full war record.</summary>
+    internal static int LiveWarPasses { get; private set; }
+
+    /// <summary>
+    /// Wars the day's supply, fronts, scores and reviews still visit.
+    ///
+    /// An ended war stays on <see cref="Campaign.Wars"/>: the chronicle, the ledger and a
+    /// peace paper already on the table name it from there. The live list is rebuilt when
+    /// a war is declared or ends, and a day that changes neither does not walk the record.
+    /// Each campaign keeps its own list.
+    /// </summary>
+    public static IReadOnlyList<StrategicWar> LiveWars(Campaign campaign)
+    {
+        if (campaign is null) return Array.Empty<StrategicWar>();
+        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
+        if (board.Revision != campaign.WarRevision || board.Count != campaign.Wars.Count || EndedIn(board.Wars))
+            RefreshLive(campaign, board);
+        return board.Wars;
+    }
+
+    /// <summary>
+    /// A copy of <see cref="LiveWars"/> for the advance pass, which yields between wars.
+    /// Refreshing the live list while that pass is suspended does not drop a war the pass
+    /// has not reached.
+    /// </summary>
+    internal static List<StrategicWar> AdvanceWars(Campaign campaign)
+    {
+        var board = LiveBoards.GetValue(campaign, static _ => new LiveBoard());
+        var live = LiveWars(campaign);
+        board.Advance.Clear();
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (war is { Ended: false }) board.Advance.Add(war);
+        }
+        return board.Advance;
+    }
+
+    static bool EndedIn(List<StrategicWar> wars)
+    {
+        for (var index = 0; index < wars.Count; index++)
+            if (wars[index] is null || wars[index].Ended) return true;
+        return false;
+    }
+
+    static void RefreshLive(Campaign campaign, LiveBoard board)
+    {
+        LiveWarPasses++;
+        // The front rebuild used to clear an ended war on every pass. Once, as it leaves.
+        for (var index = 0; index < board.Wars.Count; index++)
+        {
+            var war = board.Wars[index];
+            if (war is not { Ended: true }) continue;
+            war.AttackerFront.Clear();
+            war.DefenderFront.Clear();
+            war.FrontDirty = false;
+            war.LastFrontDay = campaign.ElapsedDays;
+        }
+        board.Wars.Clear();
+        var wars = campaign.Wars;
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
+            if (war is null || war.Ended) continue;
+            board.Wars.Add(war);
+        }
+        board.Revision = campaign.WarRevision;
+        board.Count = wars.Count;
+    }
 }
 
 public static partial class FrontPlanner

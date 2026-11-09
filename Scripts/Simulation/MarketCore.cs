@@ -37,7 +37,7 @@ public enum Commodity
     Pharmaceuticals
 }
 
-public enum TradePolicy { OpenMarkets, BalancedTrade, StrategicAutarky }
+public enum TradePolicy { OpenMarkets, BalancedTrade, StrategicAutarky, Protectionism }
 
 /// <summary>
 /// How open a country is to the world market, asked of `common/trade_policies` rather than
@@ -623,9 +623,10 @@ public static class MarketSystem
                 var current = TallyByNation.GetValueOrDefault(fleet.NationId);
                 TallyByNation[fleet.NationId] = current with { Hulls = current.Hulls + fleet.Hulls };
             }
-            foreach (var war in campaign.Wars)
+            var wars = Warfare.LiveWars(campaign);
+            for (var index = 0; index < wars.Count; index++)
             {
-                if (war.Ended) continue;
+                var war = wars[index];
                 foreach (var side in new[] { war.AttackerId, war.DefenderId })
                 {
                     var current = TallyByNation.GetValueOrDefault(side);

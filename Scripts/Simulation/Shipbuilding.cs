@@ -43,6 +43,11 @@ public sealed partial class Defines
     public float AiNavalAmbition { get; set; } = 2.5f;
     /// <summary>The smallest economy (billions) that founds a navy of its own.</summary>
     public float AiNavyFoundingGdp { get; set; } = 15f;
+    /// <summary>
+    /// The hulls a squadron is kept at before a country nobody plays raises its next one, in a
+    /// harbour on another stretch of its coast. 0 keeps every navy in the fleets it has.
+    /// </summary>
+    public int AiSquadronHulls { get; set; } = 40;
 }
 
 /// <summary>
@@ -82,27 +87,43 @@ public static class Shipbuilding
     /// <summary>Once a day.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Shipbuilding))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same shipbuilding pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Shipbuilding))) yield break;
         Review(campaign);
         Ambitions(campaign);
+        yield return 0;
 
-        var anyOrdered = false;
+        // Fleets with hulls on order, once: the per-country passes below used to walk the
+        // whole fleet list twice for every nation - nations times fleets, every day.
+        var ordersByNation = new Dictionary<int, List<Fleet>>();
         foreach (var fleet in campaign.Fleets)
-            if (fleet.HullsOrdered > 0) { anyOrdered = true; break; }
-        if (!anyOrdered) return;
+        {
+            if (fleet.HullsOrdered <= 0 || fleet.Hulls <= 0) continue;
+            if (!ordersByNation.TryGetValue(fleet.NationId, out var list))
+                ordersByNation[fleet.NationId] = list = new List<Fleet>();
+            list.Add(fleet);
+        }
+        if (ordersByNation.Count == 0) yield break;
 
         var defines = campaign.Defines;
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
+            if (!ordersByNation.TryGetValue(nation.Id, out var orderedFleets)) continue;
             var baseBuildDays = BuildDays(campaign, nation);
             var ordered = 0;
             var highestMode = MobilisationMode.Standard;
-            foreach (var fleet in campaign.Fleets)
-                if (fleet.NationId == nation.Id && fleet.Hulls > 0 && fleet.HullsOrdered > 0)
-                {
-                    ordered += fleet.HullsOrdered;
-                    if (fleet.HullOrderMode > highestMode) highestMode = fleet.HullOrderMode;
-                }
+            foreach (var fleet in orderedFleets)
+            {
+                ordered += fleet.HullsOrdered;
+                if (fleet.HullOrderMode > highestMode) highestMode = fleet.HullOrderMode;
+            }
             if (ordered <= 0) continue;
 
             var slipMultiplier = highestMode switch
@@ -134,10 +155,10 @@ public static class Shipbuilding
 
             // The slipways go to the fleets in the order they were raised, as a navy's
             // yards go to whatever squadron was first to ask.
-            foreach (var fleet in campaign.Fleets)
+            foreach (var fleet in orderedFleets)
             {
                 if (working <= 0f) break;
-                if (fleet.NationId != nation.Id || fleet.HullsOrdered <= 0 || fleet.Hulls <= 0) continue;
+                if (fleet.HullsOrdered <= 0 || fleet.Hulls <= 0) continue;
                 var slips = MathF.Min(working, fleet.HullsOrdered);
                 working -= slips;
                 fleet.HullProgress += slips / buildDays;
@@ -270,7 +291,8 @@ public static class Shipbuilding
             if (fleets.Count == 0)
             {
                 var hulls = Math.Clamp(ambition / 4, 2, 8);
-                if (nation.Treasury < defines.HullCost * hulls * 2f) continue;
+                // The first hull is paid for at once and the rest on the slipways.
+                if (nation.Treasury < defines.HullCost * 2f) continue;
                 var order = new CommissionNewFleetCommand { IssuerId = nation.Id, ProvinceId = -1, Hulls = hulls, Mode = MobilisationMode.Standard };
                 order.Apply(campaign);
                 if (order.Refusal.Length == 0)
@@ -279,8 +301,72 @@ public static class Shipbuilding
             }
             var establishment = fleets.Sum(f => f.Establishment);
             if (establishment >= ambition) continue;
-            fleets.OrderByDescending(f => f.Establishment).ThenBy(f => f.Id).First().Establishment++;
+            // An eighth of the gap a quarter, at least a hull: a navy a third of what its economy
+            // can carry grows to it in a few years, not in the century one hull a quarter took.
+            var grow = Math.Max(1, (ambition - establishment) / 8);
+            var largest = fleets.OrderByDescending(f => f.Establishment).ThenBy(f => f.Id).First();
+            // A great navy grows as squadrons, each with a harbour of its own.
+            if (defines.AiSquadronHulls > 0 && largest.Establishment >= defines.AiSquadronHulls &&
+                nation.Treasury >= defines.HullCost * 2f && NewSquadronHarbour(campaign, nation, fleets) is var harbour and > 0)
+            {
+                var order = new CommissionNewFleetCommand
+                {
+                    IssuerId = nation.Id, ProvinceId = harbour, Hulls = Math.Clamp(grow, 2, defines.AiSquadronHulls / 2),
+                    Mode = MobilisationMode.Standard
+                };
+                order.Apply(campaign);
+                if (order.Refusal.Length == 0)
+                {
+                    DiagnosticLogs.Write("simulation", $"NAVY_SQUADRON {nation.Tag} hulls={order.Hulls} fleets={fleets.Count + 1}");
+                    continue;
+                }
+            }
+            largest.Establishment += grow;
         }
+    }
+
+    /// <summary>
+    /// A harbour of the country's own on a piece of sea none of its fleets calls home, as far
+    /// as can be from the ones they do - the Pacific coast for a navy based on the Atlantic - or
+    /// -1 when every stretch of its coast already has a squadron.
+    /// </summary>
+    private static int NewSquadronHarbour(Campaign campaign, Nation nation, List<Fleet> fleets)
+    {
+        var map = campaign.ProvinceMap;
+        var used = new HashSet<int>();
+        foreach (var fleet in fleets) used.Add(SeaLanes.HarbourOf(map, fleet.HomeProvinceId));
+        var best = -1;
+        var bestDistance = 0f;
+        foreach (var coast in SeaLanes.CoastalProvinces(map))
+        {
+            if (coast >= campaign.ProvinceController.Length || campaign.ProvinceController[coast] != nation.MapIndex ||
+                map.ProvinceToNation[coast] != nation.MapIndex) continue;
+            var sea = SeaLanes.HarbourOf(map, coast);
+            if (sea < 0 || used.Contains(sea) || !SeaLanes.TryHarbourPoint(map, coast, out var lat, out var lon)) continue;
+            var nearest = float.MaxValue;
+            foreach (var fleet in fleets)
+                nearest = MathF.Min(nearest, NavalOperations.Distance(lat, lon, fleet.HomeLatitude, fleet.HomeLongitude));
+            // Another basin, not the next bay along the same coast.
+            if (nearest < 8f || nearest <= bestDistance) continue;
+            bestDistance = nearest;
+            best = coast;
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// Whether a country's yards are the bottleneck of its navy: the hulls it has ordered are
+    /// more than a year and a half of what its slipways lay down. Such a country builds a
+    /// shipyard on its coast (AiEconomicPolicy) - the same test for every country.
+    /// </summary>
+    public static bool YardsShort(Campaign campaign, Nation nation)
+    {
+        var ordered = 0;
+        foreach (var fleet in campaign.Fleets)
+            if (fleet.NationId == nation.Id && fleet.Hulls > 0) ordered += fleet.HullsOrdered;
+        if (ordered <= 0) return false;
+        var perYear = Slipways(campaign, nation) * 365f / BuildDays(campaign, nation);
+        return ordered > perYear * 1.5f;
     }
 
     /// <summary>The navy an AI keeps for this fleet: what it began with, scaled by the budget.</summary>
@@ -379,11 +465,14 @@ public sealed class CommissionNewFleetCommand : ICampaignCommand
         var map = campaign?.ProvinceMap;
         if (nation is null || map is null || Hulls < 1) { Refusal = Loc.Get("Invalid naval order."); return; }
         var portProvince = ProvinceId;
-        if (portProvince <= 0 || SeaLanes.HarbourOf(map, portProvince) < 0 || campaign.ProvinceController[portProvince] != nation.MapIndex)
+        // Its own harbour, owned as well as held: a home on occupied ground is not one a load keeps.
+        if (portProvince <= 0 || SeaLanes.HarbourOf(map, portProvince) < 0 || campaign.ProvinceController[portProvince] != nation.MapIndex ||
+            map.ProvinceToNation[portProvince] != nation.MapIndex)
         {
             portProvince = -1;
             foreach (var coast in SeaLanes.CoastalProvinces(map))
-                if (campaign.ProvinceController[coast] == nation.MapIndex && SeaLanes.HarbourOf(map, coast) >= 0)
+                if (campaign.ProvinceController[coast] == nation.MapIndex && map.ProvinceToNation[coast] == nation.MapIndex &&
+                    SeaLanes.HarbourOf(map, coast) >= 0)
                 { portProvince = coast; break; }
         }
         if (portProvince <= 0)
@@ -391,14 +480,17 @@ public sealed class CommissionNewFleetCommand : ICampaignCommand
             Refusal = Loc.Get("No controlled coastal harbour available to commission a new fleet.");
             return;
         }
-        var upFrontCost = campaign.Defines.HullCost * Hulls * (Mode == MobilisationMode.TotalMobilisation ? 1.5f : 1.15f);
+        // What is commissioned at once is paid at once; the hulls still to come are paid on the
+        // slipways day by day like any other order (Shipbuilding.Tick), not twice.
+        var atOnce = Mode == MobilisationMode.TotalMobilisation ? Math.Max(1, Hulls / 2) : 1;
+        var upFrontCost = campaign.Defines.HullCost * atOnce * (Mode == MobilisationMode.TotalMobilisation ? 1.5f : 1.15f);
         if (nation.Treasury < upFrontCost)
         {
             Refusal = Loc.Format("Requires {0} in treasury to commission a new squadron.", Fmt.Money(upFrontCost));
             return;
         }
         nation.Treasury -= upFrontCost;
-        var bill = StrategicStockpiles.HullMaterialBill(Hulls, Mode);
+        var bill = StrategicStockpiles.HullMaterialBill(atOnce, Mode);
         StrategicStockpiles.ConsumeBill(campaign, nation, bill);
         if (Mode == MobilisationMode.TotalMobilisation)
             nation.Stability = M.Clamp(nation.Stability - 0.003f * Hulls, 0.05f, 1f);

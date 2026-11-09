@@ -11,6 +11,7 @@
 | Go | скомпилированный worker_executable, JSON stdin/stdout | только одиночная игра; не язык скриптов редактора |
 | Rust | тот же worker-протокол; шаблон serde в `_templates/rust_worker` | шаблон требует Cargo; сборка проверяется отдельно от работоспособности хоста |
 | Luau | официальный Luau Compiler + VM в `Tools/LuauWorker`, типизированный `.luau` | отдельный процесс, ограниченная VM, не интеграция классов Godot |
+| Kotlin | тот же worker-протокол; шаблон Kotlin/Native в `_templates/kotlin_worker` | нужен Kotlin/Native toolchain; JVM-вариант не подходит — worker_executable обязан быть exe внутри мода |
 
 Шаблоны выключены по умолчанию. Скопируйте один из `mods/_templates/*_worker` непосредственно в `mods/<ваш_мод>`, соберите его бинарник и включите `enabled`. Редактор не требует глобальной установки этих языков для запуска уже собранного мода. Для каждого ОС/архитектуры нужен свой бинарник. Игра **не компилирует автоматически** скачанный исходный код.
 
@@ -31,6 +32,8 @@ Go (из папки `go_worker/corecode`): `go test ./...`, затем `go build
 Rust (из `rust_worker/corecode`): `cargo build --release --locked`; результат `target/release/example-rust.exe` скопируйте в `corecode/example-rust.exe`. В этой итерации пример собран Rust 1.99.0; Cargo.lock закрепляет зависимости. Для локальной проверки компилятор установлен в `build/rustup` и `build/rust-cargo` без изменения системного PATH.
 
 Luau (из корня игры): `cmake -S Tools/LuauWorker -B build/luau-worker`, затем `cmake --build build/luau-worker --config Release`. Первый configure получает официальный исходный код Luau из GitHub, закреплённый по commit в CMakeLists. На Windows нужен C++ build toolchain. Результат находится в `build/luau-worker/Release/` для многоконфигурационного генератора.
+
+Kotlin (из `kotlin_worker/corecode`): `kotlinc-native Main.kt -opt -o worker`, результат переименовать в `worker.exe` и положить в `corecode/`. Нужен Kotlin/Native toolchain; собранный exe не требует Java. Подробности — в `corecode/README.md` шаблона.
 
 F#: используйте существующий `_templates/fsharp_mod`, собирайте проект с зависимостями. Загрузчик теперь разрешает зависимости через AssemblyDependencyResolver, затем соседние DLL; контракт игры/Godot делится с хостом, а не загружается повторно. Unload — кооперативный: сохранённые модом потоки/ссылки могут помешать освобождению контекста.
 

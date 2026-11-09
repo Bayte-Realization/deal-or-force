@@ -160,7 +160,10 @@ public static class HouseholdEconomy
             ? -Math.Clamp(n.Inflation - 0.08f, 0f, 0.30f) * 0.014f
             : 0f;
 
-        var atWar = c.Wars.Any(w => !w.Ended && w.Involves(n.Id));
+        var atWar = false;
+        var live = Warfare.LiveWars(c);
+        for (var index = 0; index < live.Count; index++)
+            if (live[index].Involves(n.Id)) { atWar = true; break; }
         var exhaustion = M.Clamp01(1f - n.WarSupport);
         var mobilizationShock = exhaustion > 0.08f ? -Math.Min(0.0075f, (exhaustion - 0.08f) * 0.02f) : 0f;
         if (atWar) mobilizationShock -= 0.0020f;

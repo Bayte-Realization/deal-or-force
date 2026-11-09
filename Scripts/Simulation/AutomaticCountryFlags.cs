@@ -7,6 +7,34 @@ namespace DealOrForce.Simulation;
 
 public static partial class FlagCatalog
 {
+    /// <summary>Exile is a location/status, not a replacement for the country's identity.</summary>
+    internal static bool KeepsNationalIdentity(Nation nation) =>
+        nation is not null && (nation.Movement is null || nation.Movement.Exile);
+
+    /// <summary>Use the same bespoke regional banner in diplomacy and headquarters,
+    /// including after a defeated regional country becomes an exiled movement.</summary>
+    public static bool NeedsRegionalBanner(Campaign campaign, Nation nation, string sprite)
+    {
+        if (!KeepsNationalIdentity(nation) || !string.IsNullOrWhiteSpace(nation.CustomFlag) ||
+            !string.IsNullOrWhiteSpace(nation.FormedNationId)) return false;
+        if (nation.MapIndex < SecessionEvents.FirstDynamicMapIndex &&
+            nation.SecededFromId < 0 && nation.ReleasedFromId < 0) return false;
+        if (string.IsNullOrEmpty(sprite)) return true;
+        var fallback = sprite.StartsWith("flag_culture_", StringComparison.OrdinalIgnoreCase) ||
+            sprite.StartsWith("flag_ideology_", StringComparison.OrdinalIgnoreCase) ||
+            sprite.StartsWith("flag_government_", StringComparison.OrdinalIgnoreCase) ||
+            sprite.StartsWith("flag_revolt_", StringComparison.OrdinalIgnoreCase);
+        if (!fallback) return false;
+        if (nation.FoundNameKind is "land" or "region" or "direction") return true;
+        var parentId = nation.SecededFromId >= 0 ? nation.SecededFromId : nation.ReleasedFromId;
+        if (parentId >= 0 && campaign?.NationById(parentId) is { } parent)
+        {
+            var primary = DemographyCatalog.PrimaryCulture(nation.Tag);
+            return !string.IsNullOrEmpty(primary) && DemographyCatalog.IsPrimary(parent.Tag, primary);
+        }
+        return false;
+    }
+
     /// <summary>Cheap presentation invalidation, never a network fingerprint. A static
     /// army can change its banner without changing its unit ID, position or template.</summary>
     public static int VisualStateHash(Campaign campaign)
@@ -29,7 +57,7 @@ public static partial class FlagCatalog
     /// live countries use this same list. No assets are removed from mods or saves.</summary>
     private static List<string> AutomaticCountryVariants(Campaign c, Nation n, List<string> names)
     {
-        if (n is null || n.Movement is not null || !string.IsNullOrEmpty(n.FormedNationId)) return names;
+        if (!KeepsNationalIdentity(n) || !string.IsNullOrEmpty(n.FormedNationId)) return names;
         var stem = "flag_" + Slug(n.Tag);
         var explicitSprites = new List<string>(); AddRegimeFlags(c, n, explicitSprites);
         var custom = string.IsNullOrWhiteSpace(n.CustomFlag) ? "" : Slug(n.CustomFlag);

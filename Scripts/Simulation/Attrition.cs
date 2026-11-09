@@ -126,10 +126,18 @@ public static class Attrition
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) return;
-        if (campaign is null) return;
-        StarveThePockets(campaign);
-        BuryTheBroken(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same attrition pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Attrition))) yield break;
+        if (campaign is null) yield break;
+        foreach (var _ in StarveThePocketsStages(campaign)) yield return 0;
+        yield return 0;
+        foreach (var _ in BuryTheBrokenStages(campaign)) yield return 0;
+        yield return 0;
         // Starving and burying are rates and take their share of the step. Rebuilding is a
         // decision a country makes on a day - it divides the day number by its own interval -
         // so at an hourly step it must happen once on that day rather than every hour of it.
@@ -169,11 +177,19 @@ public static class Attrition
     /// </summary>
     private static void StarveThePockets(Campaign campaign)
     {
+        foreach (var _ in StarveThePocketsStages(campaign)) { }
+    }
+
+    /// <summary>The same starving pass, yielded between batches of formations.</summary>
+    private static IEnumerable<int> StarveThePocketsStages(Campaign campaign)
+    {
         var defines = campaign.Defines;
         var scale = campaign.TickScale;
         var captured = M.Clamp01(defines.EncircledLossCapturedShare);
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (!army.CutOff || army.Divisions <= 0f)
             {
                 if (!army.CutOff) army.DaysCutOff = 0;
@@ -211,12 +227,19 @@ public static class Attrition
     /// </summary>
     private static void BuryTheBroken(Campaign campaign)
     {
+        foreach (var _ in BuryTheBrokenStages(campaign)) { }
+    }
+
+    /// <summary>The same burial pass, yielded between its two sweeps.</summary>
+    private static IEnumerable<int> BuryTheBrokenStages(Campaign campaign)
+    {
         var floor = campaign.Defines.DivisionBrokenStrength;
         Broken.Clear();
         foreach (var army in campaign.Armies)
             if (army.Divisions < 0.05f || army.Strength <= floor)
                 Broken.Add(army);
-        if (Broken.Count == 0) return;
+        if (Broken.Count == 0) yield break;
+        yield return 0;
 
         foreach (var army in Broken)
         {

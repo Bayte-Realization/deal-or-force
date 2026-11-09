@@ -168,18 +168,19 @@ public static class NationalModifiers
             foreach (var (key, value) in modifiers)
                 totals[key] = totals.GetValueOrDefault(key) + value;
         }
-        foreach (var (_, modifiers) in NationalCourses.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in UnionCohesion.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in DemographicCycle.Sources(nation)) Add(totals, modifiers);
-        foreach (var (_, modifiers) in TacticalDoctrines.Sources(nation)) Add(totals, modifiers);
+        NationalCourses.AddTo(totals, nation);
+        UnionCohesion.AddTo(totals, nation);
+        DemographicCycle.AddTo(totals, nation);
+        // Same-shelf books share a ceiling here, on this sum. Sources still names each book whole.
+        TacticalDoctrines.AddTo(totals, nation);
         if (StrategicDoctrines.Of(nation) is { } stratDoc) Add(totals, stratDoc.Modifiers);
-        foreach (var (_, modifiers) in ParliamentaryPolitics.Sources(nation)) Add(totals, modifiers);
+        ParliamentaryPolitics.AddTo(totals, nation);
         if (nation.LawsActive)
             foreach (var category in PoliticalPolicyCatalog.NationalCategories)
                 if (PoliticalPolicies.Effective(nation, category) is { } law) Add(totals, law.Modifiers);
         if (nation.AgendasActive && nation.Agenda is { Completed: false } agenda &&
             PoliticalPolicyCatalog.Find(agenda.Id, true) is { } definition) Add(totals, definition.Modifiers);
-        foreach (var (_, modifiers) in Rulers.Sources(nation)) Add(totals, modifiers);
+        Rulers.AddTo(totals, nation);
         foreach (var id in nation.Technologies)
             if (TechnologyCatalog.Of(id) is { } technology) Add(totals, technology.Effects);
         foreach (var active in nation.Modifiers)

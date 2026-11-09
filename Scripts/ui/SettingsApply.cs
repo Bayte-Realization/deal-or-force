@@ -282,6 +282,11 @@ public partial class DealOrForceGame
                 Engine.MaxFps = Math.Max(0, Whole("max_fps"));
                 break;
 
+            case "background_fps":
+                if (!GetWindow()?.HasFocus() == true)
+                    ApplyBackgroundFrameRate();
+                break;
+
             case "interface_scale":
                 // Godot scales the whole content of the window for us, which is the only
                 // way to do this that does not need every panel in the game to know about
@@ -298,6 +303,29 @@ public partial class DealOrForceGame
                 ApplyVolumes();
                 break;
         }
+    }
+
+    public override void _Notification(int what)
+    {
+        base._Notification(what);
+        if (what == NotificationApplicationFocusOut)
+        {
+            ApplyBackgroundFrameRate();
+        }
+        else if (what == NotificationApplicationFocusIn)
+        {
+            RestoreForegroundFrameRate();
+        }
+    }
+
+    private void ApplyBackgroundFrameRate()
+    {
+        PaceBackgroundFrames();
+    }
+
+    private void RestoreForegroundFrameRate()
+    {
+        PaceBackgroundFrames();
     }
 
     // The current base game has independent visual layers. A legacy mod may still declare

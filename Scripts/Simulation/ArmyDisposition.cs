@@ -104,7 +104,7 @@ public static class ArmyDisposition
         foreach (var army in Free.OrderBy(a => a.SupplyCongestion).ThenBy(a => a.Id).ToList())
         {
             if (moves >= budget) break;
-            if (army.CutOff) continue; // cut off is the staff's problem: it needs breaking out, not spreading
+            if (army.CutOff || army.ProvinceId <= 0 || army.ProvinceId >= map.ProvinceToState.Length) continue; // cut off is the staff's problem: it needs breaking out, not spreading
             if (army.SupplyCongestion >= d.DispositionCongestionLimit && army.SupplyLevel >= d.DispositionSupplyLimit) continue;
             var demand = Demand(campaign, army);
             var from = map.ProvinceToState[army.ProvinceId];
@@ -154,8 +154,12 @@ public static class ArmyDisposition
         // Who stands where, any formation of ours: a region with anybody in it is held.
         var held = new HashSet<int>();
         foreach (var army in campaign.Armies)
-            if (army.NationId == nation.Id && army.ProvinceId > 0)
-                held.Add(map.ProvinceToState[army.Route.Count > 0 && army.OrderProvinceId > 0 ? army.OrderProvinceId : army.ProvinceId]);
+        {
+            if (army.NationId != nation.Id || army.ProvinceId <= 0) continue;
+            var prov = army.Route.Count > 0 && army.OrderProvinceId > 0 ? army.OrderProvinceId : army.ProvinceId;
+            if (prov > 0 && prov < map.ProvinceToState.Length)
+                held.Add(map.ProvinceToState[prov]);
+        }
         var heaps = Free.GroupBy(a => a.ProvinceId).Where(g => g.Count() > 1)
             .OrderByDescending(g => g.Count()).ThenBy(g => g.Key).Select(g => g.ToList()).ToList();
         if (heaps.Count == 0) return;
@@ -167,6 +171,7 @@ public static class ArmyDisposition
             if (held.Contains(region.MapIndex)) continue;
             // The province of the region we hold and can stand in: its capital's for the capital.
             var post = region.MapIndex == nation.CapitalStateMapIndex && nation.CapitalProvinceId > 0 &&
+                       nation.CapitalProvinceId < controllers.Length &&
                        controllers[nation.CapitalProvinceId] == nation.MapIndex
                 ? nation.CapitalProvinceId
                 : StandingProvince(campaign, map, controllers, nation, region.MapIndex);
@@ -201,10 +206,12 @@ public static class ArmyDisposition
 
     private static bool BordersSomeone(ProvinceTopology map, ushort[] controllers, Nation nation, int province)
     {
-        if (province <= 0 || province > map.ProvinceCount) return false;
-        foreach (var next in map.Neighbors[province])
+        if (province <= 0 || province > map.ProvinceCount || province >= map.Neighbors.Length) return false;
+        var neighbors = map.Neighbors[province];
+        if (neighbors is null) return false;
+        foreach (var next in neighbors)
         {
-            if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
+            if (next <= 0 || next > map.ProvinceCount || next >= controllers.Length || map.IsWater(next)) continue;
             var who = controllers[next];
             if (who != 0 && who != (ushort)nation.MapIndex) return true;
         }

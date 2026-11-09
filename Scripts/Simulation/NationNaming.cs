@@ -1422,10 +1422,18 @@ public static class NationNaming
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
-        if (campaign.ElapsedDays % 30 != 11) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same monthly pass, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        if (campaign.ElapsedDays % 30 != 11) yield break;
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 32 == 0) yield return 0;
             if (string.IsNullOrEmpty(nation.FoundNameKind) || !string.IsNullOrWhiteSpace(nation.CustomName)) continue;
             if (nation.Movement is null || !nation.Movement.Landless) Refit(campaign, nation, "ground");
             if (nation.NameSettledDay >= 0)

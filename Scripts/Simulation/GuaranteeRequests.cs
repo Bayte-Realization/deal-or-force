@@ -287,9 +287,17 @@ public static class Guarantee
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same guarantee sweep, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.GuaranteeRequestedBy < 0) continue;
             if (Pending(campaign, relation)) continue;
             relation.GuaranteeRequestedBy = -1;

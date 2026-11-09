@@ -28,8 +28,12 @@ public static class MilitaryAccess
     {
         if (first == second) return false;
         if (CampaignDiplomacy.Peek(c, first, second)?.Stance == DiplomaticStance.AtWar) return true;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Opposes(first, second)) return true;
+        }
         return false;
     }
 
@@ -44,8 +48,12 @@ public static class MilitaryAccess
         if (!c.NationsByMapIndex().TryGetValue(controller, out var host) || Hostile(c, guest, host.Id)) return false;
         if (Granted(c, guest, host.Id)) return true;
         if (own.AnswersTo(host.Id) || host.AnswersTo(own.Id)) return true;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && WarCoalition.SameSide(war, guest, host.Id)) return true;
+        }
         return false;
     }
 
@@ -92,11 +100,15 @@ public static class MilitaryAccess
         var value = (r?.Opinion ?? 0f) / 100f - MathF.Min(.35f, MathF.Max(0f, guest.Notoriety) * .005f);
         if (r?.Stance == DiplomaticStance.Allied) value += .5f;
         if (r?.Stance == DiplomaticStance.Rival) value -= .6f;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
+        {
+            var war = wars[index];
             if (!war.Ended && war.Involves(guest.Id))
                 foreach (var enemy in war.EnemiesOf(guest.Id))
                     if (CampaignDiplomacy.Peek(c, host.Id, enemy)?.Stance == DiplomaticStance.Rival)
                         return value + .2f;
+        }
         return value;
     }
 
@@ -129,18 +141,28 @@ public static class MilitaryAccess
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily access pass, yielded between batches of relationships and armies.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay) yield break;
+        var scanned = 0;
         foreach (var r in c.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (r.MilitaryAccessRequestedBy >= 0 && !Pending(c, r))
             { r.MilitaryAccessRequestedBy = -1; c.DealInboxRevision++; }
             if ((r.MilitaryAccessByA || r.MilitaryAccessByB) && Hostile(c, r.A, r.B))
             { r.MilitaryAccessByA = r.MilitaryAccessByB = false; WarCoalition.InvalidateRoutes(c); Warfare.InvalidateAccessRoutes(c); c.MarkStrategicChange(); }
         }
-        if (c.ProvinceMap is null || c.ProvinceController is null) return;
+        if (c.ProvinceMap is null || c.ProvinceController is null) yield break;
         Dictionary<ushort, List<int>> homes = null;
+        var marched = 0;
         foreach (var army in c.Armies)
         {
+            if (++marched % 256 == 0) yield return 0;
             if (!MustReturn(c, army)) continue;
             if (army.InBattle && c.Battles.Exists(b => b.Id == army.BattleId && !b.Ended)) continue;
             if (homes is null)
@@ -192,15 +214,22 @@ public static class MilitaryAccess
 
     internal static bool TryWarTransit(Campaign c, Nation guest, Nation host)
     {
-        if (Refusal(c, guest, host).Length > 0 ||
+        // Most friendly candidates are distant partners, or have no current war to
+        // provide transit for. Do not inspect permissions for every one of them.
+        // These geographic/war queries are read-only; the real request below still
+        // uses exactly the same refusal and command as a player's request.
+        if (c is null || guest is null || host is null ||
             !CampaignDiplomacy.SharesLandBorder(c, guest.MapIndex, host.MapIndex)) return false;
-        foreach (var war in c.Wars)
+        var wars = Warfare.LiveWars(c);
+        for (var index = 0; index < wars.Count; index++)
         {
+            var war = wars[index];
             if (war.Ended || !war.Involves(guest.Id) || war.Involves(host.Id)) continue;
             foreach (var enemyId in war.EnemiesOf(guest.Id))
                 if (c.NationById(enemyId) is { } enemy &&
                     CampaignDiplomacy.SharesLandBorder(c, host.MapIndex, enemy.MapIndex))
                 {
+                    if (Refusal(c, guest, host).Length > 0) return false;
                     new MilitaryAccessCommand { IssuerId = guest.Id, TargetId = host.Id,
                         Action = MilitaryAccessAction.Request }.Apply(c);
                     return true;

@@ -87,18 +87,42 @@ public static class WarWeariness
     /// weary of its current war; support is the existing national willingness to fight.</summary>
     public static float NationalFatigue(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Involves(nation.Id)) return M.Clamp01(1f - nation.WarSupport);
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
+        {
+            var war = live[index];
+            if (war is { Ended: false } && war.Involves(nation.Id)) return M.Clamp01(1f - nation.WarSupport);
+        }
         return 0f;
     }
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly weariness pass, yielded between wars.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarWeariness))) yield break;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
         var defines = campaign.Defines;
         Mobilise(campaign);
-        foreach (var war in campaign.Wars.ToList())
+        yield return 0;
+        // Ending one war asks for the live list again and rebuilds it. This pass keeps the
+        // wars it started with. A war that has already ended is not among them, and a quiet
+        // week does not walk the record to find that out.
+        var live = Warfare.LiveWars(campaign);
+        var week = new List<StrategicWar>(live.Count);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
+            if (war is { Ended: false }) week.Add(war);
+        }
+        var weekIndex = 0;
+        for (var index = 0; index < week.Count; index++)
+        {
+            if (++weekIndex % 4 == 0) yield return 0;
+            var war = week[index];
             if (war.Ended) continue;
             // How it is going, felt at home: a side losing badly stops believing in it, and a side
             // whose front is collapsing - or half of whose country is under the enemy - stops
@@ -182,9 +206,11 @@ public static class WarWeariness
     {
         var defines = campaign.Defines;
         var overrun = new HashSet<int>();
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended) continue;
+            var war = live[index];
+            if (war is null || war.Ended) continue;
             if (war.AttackerOccupiedValue > 0.02f) foreach (var id in war.Side(true)) overrun.Add(id);
             if (war.DefenderOccupiedValue > 0.02f) foreach (var id in war.Side(false)) overrun.Add(id);
         }
@@ -209,9 +235,11 @@ public static class WarWeariness
     /// <summary>Whether this country is at war and has lost ground to the enemy - fighting for its life.</summary>
     public static bool Overrun(Campaign campaign, Nation nation)
     {
-        foreach (var war in campaign.Wars)
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
-            if (war.Ended || !war.Involves(nation.Id)) continue;
+            var war = live[index];
+            if (war is null || war.Ended || !war.Involves(nation.Id)) continue;
             var occupied = war.IsAttacking(nation.Id) ? war.AttackerOccupiedValue : war.DefenderOccupiedValue;
             if (occupied > 0.02f) return true;
         }
@@ -378,10 +406,10 @@ public static class WarWeariness
         string length = null;
         var forced = false;
         var atWar = false;
-        var wars = campaign.Wars;
-        for (var i = 0; i < wars.Count; i++)
+        var live = Warfare.LiveWars(campaign);
+        for (var i = 0; i < live.Count; i++)
         {
-            var war = wars[i];
+            var war = live[i];
             if (war is null || war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;
             var attacking = war.IsAttacking(nation.Id);

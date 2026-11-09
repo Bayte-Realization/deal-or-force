@@ -46,6 +46,12 @@ public static class WarEmergency
     public static int Rushed { get; private set; }
     public static int Raised { get; private set; }
 
+    /// <summary>Wars this pass has entered. An ended war is not one of them.</summary>
+    public static int WarsWalked { get; private set; }
+
+    /// <summary>The last war this pass entered, or -1 before the first.</summary>
+    public static int LastWarId { get; private set; } = -1;
+
     private static readonly List<int> Posts = new();
     private static readonly List<Army> Candidates = new();
     private static readonly HashSet<long> Seen = new();
@@ -54,22 +60,46 @@ public static class WarEmergency
     private static readonly HashSet<int> Held = new();
     private static readonly HashSet<int> RepostedToday = new();
     private static readonly Dictionary<int, int> ReinforcedToday = new();
+    private static readonly List<StrategicWar> Visiting = new();
 
     public static void Tick(Campaign campaign)
     {
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily emergency pass, yielded between wars.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null ||
-            !campaign.Defines.WarEmergencyEnabled || !campaign.StepOpensNewDay) return;
+            !campaign.Defines.WarEmergencyEnabled || !campaign.StepOpensNewDay) yield break;
         Seen.Clear();
         MilitiaToday.Clear();
         RaisedToday.Clear();
         RepostedToday.Clear();
         ReinforcedToday.Clear();
-        foreach (var war in campaign.Wars)
+        var ticked = 0;
+        // The archive keeps every war ever fought. A hole in a line belongs to a war that
+        // is still going, so a day that opens neither a war nor a peace visits that list
+        // and does not walk the record. The copy is the wars this pass will reach: posting
+        // a reserve must not drop one the pass has not come to.
+        Visiting.Clear();
+        var live = Warfare.LiveWars(campaign);
+        for (var index = 0; index < live.Count; index++)
         {
+            var war = live[index];
+            if (war is null || war.Ended) continue;
+            Visiting.Add(war);
+        }
+        for (var index = 0; index < Visiting.Count; index++)
+        {
+            var war = Visiting[index];
+            if (war is null || war.Ended) continue;
+            WarsWalked++;
+            LastWarId = war.Id;
+            if (++ticked % 4 == 0) yield return 0;
             // A limited border war does not need a general mobilisation, but the emergency
             // triggers below are still about holes and occupied ground; a limited war with
             // its line held never reaches the branch that acts.
-            if (war.Ended) continue;
             for (var side = 0; side < 2; side++)
             foreach (var nationId in war.Side(side == 0))
             {
@@ -81,6 +111,7 @@ public static class WarEmergency
                 Review(campaign, nation, war);
             }
         }
+        Visiting.Clear();
     }
 
     private static void Review(Campaign campaign, Nation nation, StrategicWar war)

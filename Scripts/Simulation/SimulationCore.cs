@@ -504,8 +504,8 @@ public sealed partial class Campaign
     public readonly List<Fleet> Fleets = new();
     public readonly List<StrategicWar> Wars = new();
 
-    /// <summary>Bumped whenever a war is added, ended or reshaped. Readers that keep a
-    /// snapshot of the active wars (AtWar's cache) use it as their change stamp.</summary>
+    /// <summary>Bumped whenever a war is added, ended or reshaped. The live war list
+    /// (<see cref="Warfare.LiveWars"/>) rebuilds from this stamp, not on a quiet day.</summary>
     public int WarRevision { get; private set; }
 
     /// <summary>Call at every war-list or war-state change a war-cache reader must see.</summary>
@@ -635,6 +635,11 @@ public sealed partial class Campaign
     internal int BorderDay = -1;
     internal int BorderRevision = -1;
     internal long BorderForgetStamp = -1;
+    internal int LastReunifyMapRevision = -1;
+    internal int LastReunifyStateCount = -1;
+    // Derived, per-world: papers/offices can close without moving a border. Remember
+    // only same-owner pairs refused last time so their eligibility can wake the cache.
+    internal readonly List<(ScenarioState Survivor, ScenarioState Piece)> ReunifyBlockedPairs = new();
     /// <summary>Per-world occupation tally for <see cref="ControlTally"/>; derived, never saved.</summary>
     internal ControlTally.TallyState ControlTallyTables;
     /// <summary>Per-world daily AI tables for <see cref="AiStatecraft"/>; derived, never saved.</summary>
@@ -936,45 +941,200 @@ public sealed partial class Campaign
         // fraction of a day gives them that fraction. They run once per step whatever the
         // step is, which is what lets a six-hour tick move an army a quarter of the way
         // instead of not at all.
-        using (SimProfiler.Measure("military access")) MilitaryAccess.Tick(this);
-        using (SimProfiler.Measure("expeditions")) Expeditions.Tick(this);
-        using (SimProfiler.Measure("border shape")) BorderShape.Tick(this);
-        using (SimProfiler.Measure("civil war fronts")) CivilWarFronts.Tick(this);
-        using (SimProfiler.Measure("movement mergers")) MovementMergers.Tick(this);
-        using (SimProfiler.Measure("diplomatic acts")) ModSimulationPasses.Run(this, SimulationPass.DiplomaticActs, DiplomaticActs.Tick);
+        using (var militaryAccess = MilitaryAccess.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("military access")) more = militaryAccess.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var expeditions = Expeditions.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("expeditions")) more = expeditions.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var borderShape = BorderShape.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("border shape")) more = borderShape.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var civilWarFronts = CivilWarFronts.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("civil war fronts")) more = civilWarFronts.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var movementMergers = MovementMergers.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("movement mergers")) more = movementMergers.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var diplomaticActs = ModSimulationPasses.RunStaged(this, SimulationPass.DiplomaticActs, DiplomaticActs.TickStages).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("diplomatic acts")) more = diplomaticActs.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         yield return 0;
-        using (SimProfiler.Measure("logistics")) ModSimulationPasses.Run(this, SimulationPass.Logistics, LogisticsSystem.Tick);
+        using (var logistics = ModSimulationPasses.RunStaged(this, SimulationPass.Logistics, LogisticsSystem.TickStages).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("logistics")) more = logistics.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         // A frame may stop here and between the fleets and the fighting: the same passes in the
         // same order, but the step's heaviest pair - supply and the battles with their staff
         // work, thirty milliseconds together - no longer has to land in one frame.
         yield return 0;
-        using (SimProfiler.Measure("military")) MilitaryOperations.Tick(this);
-        yield return 0;
-        using (SimProfiler.Measure("naval"))
+        using (var military = MilitaryOperations.TickStages(this).GetEnumerator())
         {
-            using (SimProfiler.Measure("  naval:admiralty")) AiAdmiralty.Tick(this);
-            using (SimProfiler.Measure("  naval:operations")) NavalOperations.Tick(this);
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("military")) more = military.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
         }
         yield return 0;
-        using (SimProfiler.Measure("warfare")) ModSimulationPasses.Run(this, SimulationPass.Warfare, Warfare.Tick);
+        using (var admiralty = AiAdmiralty.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("naval"))
+                using (SimProfiler.Measure("  naval:admiralty")) more = admiralty.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var navalOps = NavalOperations.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("naval"))
+                using (SimProfiler.Measure("  naval:operations")) more = navalOps.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         yield return 0;
+        // Staged, not measured as one block: the pass yields between its own sections and
+        // between wars, so wrapping the enumeration in a single Measure would bill the
+        // suspended frames to "warfare". Every section inside keeps its own measure.
+        foreach (var _ in ModSimulationPasses.RunStaged(this, SimulationPass.Warfare, Warfare.TickStages))
+            yield return 0;
         // Right after the fighting: the step's broken formations are removed and the
         // countries that lost them start replacing them.
-        using (SimProfiler.Measure("attrition")) Attrition.Tick(this);
+        using (var  attrition = Attrition.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("attrition")) more = attrition.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
         // A pocket the computer is in is a pocket it tries to leave.
-        using (SimProfiler.Measure("pocket breakout")) PocketBreakout.Tick(this);
+        using (var pocketBreakout = PocketBreakout.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("pocket breakout")) more = pocketBreakout.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         // And a pocket whose stores are gone, with nobody coming, gives up (StrandedGarrisons).
-        using (SimProfiler.Measure("pocket surrender")) StrandedGarrisons.Tick(this);
+        using (var pocketSurrender = StrandedGarrisons.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("pocket surrender")) more = pocketSurrender.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         // The ordinary staff is conservative by design. A war for existence is the one
         // exception: mend a hole with a reserve, take an empty enemy province, or queue an
         // emergency formation - all through the same commands and the same manpower/debt
         // rules every player uses.
-        using (SimProfiler.Measure("war emergency")) WarEmergency.Tick(this);
+        using (var warEmergency = WarEmergency.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("war emergency")) more = warEmergency.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         // What the services learned from that fighting, and what the army is reading: articles of
         // the war doctrine are studied by the day, and they are shares of the same arithmetic.
-        using (SimProfiler.Measure("military experience")) MilitaryExperience.Tick(this);
-        using (SimProfiler.Measure("tactical doctrines")) TacticalDoctrines.Tick(this);
-        using (SimProfiler.Measure("strategic doctrines")) StrategicDoctrines.Tick(this);
+        using (var militaryExperience = MilitaryExperience.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("military experience")) more = militaryExperience.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+        using (var tacticalDoctrines = TacticalDoctrines.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("tactical doctrines")) more = tacticalDoctrines.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
+        using (var strategicDoctrines = StrategicDoctrines.TickStages(this).GetEnumerator())
+        {
+            while (true)
+            {
+                bool more;
+                using (SimProfiler.Measure("strategic doctrines")) more = strategicDoctrines.MoveNext();
+                if (!more) break;
+                yield return 0;
+            }
+        }
         using (SimProfiler.Measure("construction")) ModSimulationPasses.Run(this, SimulationPass.Construction, ConstructionSystem.Tick);
         yield return 0;
 
@@ -1029,34 +1189,180 @@ public sealed partial class Campaign
             // profiler shows a single system eating the frame, and this list is where a reader looks
             // first.
             // =====================================================================================
-            using (SimProfiler.Measure("recruitment")) RecruitmentSystem.Tick(this);
+            using (var recruitment = RecruitmentSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("recruitment")) more = recruitment.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("contractors")) Contractors.Tick(this);
-            using (SimProfiler.Measure("stockpiles")) StrategicStockpiles.TickDay(this);
+            using (var contractors = Contractors.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("contractors")) more = contractors.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var stockpiles = StrategicStockpiles.TickDayStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("stockpiles")) more = stockpiles.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            SupportCore.Tick(this);
+            using (var supportCore = SupportCore.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("support")) more = supportCore.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("militia")) MilitiaCore.Tick(this);
+            foreach (var _ in MilitiaCore.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("modifiers")) ModifierSystem.Tick(this);
+            using (var modifiers = ModifierSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("modifiers")) more = modifiers.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("social memory")) SocialMemory.Tick(this);
+            foreach (var _ in SocialMemory.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("opinion")) OpinionSystem.Tick(this);
+            using (var opinions = OpinionSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("opinion")) more = opinions.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("alliances")) AllianceMaintenance.Tick(this);
+            using (var reviews = AllianceMaintenance.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("alliances"))
+                    using (SimProfiler.Measure("  alliance:maintenance")) more = reviews.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var shifts = AllyRivalShift.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("alliances"))
+                    using (SimProfiler.Measure("  alliance:rivalry")) more = shifts.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // Offers and requests that nobody answered stop occupying the tie. Both are state
             // that travels in a save, so both have to expire somewhere.
-            using (SimProfiler.Measure("diplomatic_offers")) { Guarantee.Tick(this); AgreementSystem.Tick(this); }
+            using (SimProfiler.Measure("diplomatic_offers"))
+            {
+                using (var guarantees = Guarantee.TickStages(this).GetEnumerator())
+                {
+                    while (true)
+                    {
+                        bool more;
+                        more = guarantees.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+                using (var agreements = AgreementSystem.TickStages(this).GetEnumerator())
+                {
+                    while (true)
+                    {
+                        bool more;
+                        more = agreements.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+            }
             // Visits, shows of force, mediation and loans (DiplomaticGestures): the instalments weekly, the computer's choices monthly.
-            using (SimProfiler.Measure("diplomatic_gestures")) { DiplomaticGestures.Tick(this); DiplomaticGestures.AiTick(this); }
+            using (SimProfiler.Measure("diplomatic_gestures"))
+            {
+                using (var gestures = DiplomaticGestures.TickStages(this).GetEnumerator())
+                {
+                    while (true)
+                    {
+                        bool more;
+                        more = gestures.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+                using (var gestureAi = DiplomaticGestures.AiTickStages(this).GetEnumerator())
+                {
+                    while (true)
+                    {
+                        bool more;
+                        more = gestureAi.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+            }
             // Rents, terms, the troops that stay and the owners who answer them (LandArrangements).
-            using (SimProfiler.Measure("land_arrangements")) LandArrangementSystem.Tick(this);
+            using (var landarrangements = LandArrangementSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("land_arrangements")) more = landarrangements.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // Why money does not pile up: erosion, the pressure to spend, the credit cycle, the bills nobody budgets for.
-            using (SimProfiler.Measure("treasury_dynamics")) TreasuryDynamics.Tick(this);
+            using (var treasury = TreasuryDynamics.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("treasury_dynamics")) more = treasury.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // Somebody else's paperwork inside somebody else's region: what it takes, what it
             // costs, and whether the host has noticed (ParallelAdministration).
-            using (SimProfiler.Measure("parallel administration")) ParallelAdministration.Tick(this);
+            using (var paralleladministration = ParallelAdministration.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("parallel administration")) more = paralleladministration.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // Votes under the troops in regions held a year or more (HeldRegions).
             HeldRegions.AiMonth(this);
             // A government relieves the commander who keeps losing (Generals).
@@ -1074,7 +1380,16 @@ public sealed partial class Campaign
                 }
             // And inside each country: from the regions that are worse off to the ones that are
             // better, and away from the fighting, carrying who they are.
-            using (SimProfiler.Measure("internal migration")) InternalMigration.Tick(this);
+            using (var internalmigration = InternalMigration.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("internal migration")) more = internalmigration.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // Before political actions read thresholds: comparisons with NaN can otherwise
             // authorise every uprising. Do not let one bad economy contaminate the map.
@@ -1087,69 +1402,308 @@ public sealed partial class Campaign
                 throw new CampaignIntegrityException(invalid);
             }
             yield return 0;
-            using (SimProfiler.Measure("war damage")) WarDamage.Tick(this);
+            using (var warDamage = WarDamage.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("war damage")) more = warDamage.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
+            using (var warWeariness = WarWeariness.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("war weariness")) more = warWeariness.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
+            using (var civilWar = CivilWarPersistence.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("civil war reserves")) more = civilWar.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
+            // Coalition members that want out of a war, the other side buying them out, leaders paying them to stay.
+            using (var separatePeace = SeparatePeace.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("separate peace")) more = separatePeace.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
-            using (SimProfiler.Measure("crisis ladder")) CrisisLadder.Tick(this);
+            using (var crisisLadder = CrisisLadder.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("crisis ladder")) more = crisisLadder.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             using (SimProfiler.Measure("defcon system")) DefconSystem.Tick(this);
-            using (SimProfiler.Measure("factions")) Factions.Tick(this);
+            using (var factions = Factions.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("factions")) more = factions.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // A formation that has been cut off or is standing among its own people can
             // change sides. Monthly, deterministic, and only after the fighting has moved.
-            using (SimProfiler.Measure("defections")) Defections.Tick(this);
-            using (SimProfiler.Measure("desertion")) Desertion.Tick(this);
+            using (var defections = Defections.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("defections")) more = defections.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var desertion = Desertion.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("desertion")) more = desertion.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("coups")) Coups.Tick(this);
+            using (var coups = Coups.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("coups")) more = coups.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("proxy wars")) ProxyWars.Tick(this);
+            using (var proxywars = ProxyWars.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("proxy wars")) more = proxywars.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("organizations")) InternationalOrganizations.Tick(this);
-            using (SimProfiler.Measure("organization life")) OrganizationDynamics.Tick(this);
+            using (var organizations = InternationalOrganizations.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("organizations")) more = organizations.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            foreach (var _ in OrganizationDynamics.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("deal inbox")) DealNegotiations.Tick(this);
-            using (SimProfiler.Measure("ultimatum desk")) Ultimatum.Tick(this);
-            using (SimProfiler.Measure("foreign assistance")) ForeignAssistance.Tick(this);
+            using (var deals = DealNegotiations.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("deal inbox")) more = deals.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var ultimatumdesk = Ultimatum.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("ultimatum desk")) more = ultimatumdesk.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var foreignassistance = ForeignAssistance.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("foreign assistance")) more = foreignassistance.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             foreach (var _ in MovementRules.TickStages(this)) yield return 0;
             foreach (var _ in MovementAi.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("movements"))
-            using (SimProfiler.Measure("  mov:methods")) MovementMethods.Tick(this);
+            using (SimProfiler.Measure("  mov:methods"))
+            {
+                using (var movMethods = MovementMethods.TickStages(this).GetEnumerator())
+                {
+                    while (true)
+                    {
+                        bool more;
+                        more = movMethods.MoveNext();
+                        if (!more) break;
+                        yield return 0;
+                    }
+                }
+            }
             yield return 0;
             // A country's own hand among its own people abroad (KinStatecraft): organisers and
             // volunteers across a border, monthly and quiet, where the demography gives it a
             // people to work. It happens after the movements have acted, because what it may do
             // about a rising is join one that already exists.
-            using (SimProfiler.Measure("kin statecraft")) KinStatecraft.Tick(this);
+            foreach (var _ in KinStatecraft.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("research")) ResearchSystem.Tick(this);
+            foreach (var _ in ResearchSystem.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("shipbuilding")) Shipbuilding.Tick(this);
+            using (var shipbuilding = Shipbuilding.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("shipbuilding")) more = shipbuilding.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("diplomacy")) Statecraft.Tick(this);
+            foreach (var _ in Statecraft.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("subjects")) SubjectSystem.Tick(this);
+            foreach (var _ in SubjectSystem.TickStages(this)) yield return 0;
             yield return 0;
             foreach (var _ in AiStatecraft.TickStages(this)) yield return 0;
-            using (SimProfiler.Measure("consolidation")) Consolidation.Tick(this);
+            using (var consolidation = Consolidation.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("consolidation")) more = consolidation.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("culture union")) CultureUnion.Tick(this);
+            using (var cultureunion = CultureUnion.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("culture union")) more = cultureunion.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("corridors")) Corridors.Tick(this);
-            using (SimProfiler.Measure("border diplomacy")) BorderDiplomacy.Tick(this);
+            using (var corridors = Corridors.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("corridors")) more = corridors.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var borderdiplomacy = BorderDiplomacy.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("border diplomacy")) more = borderdiplomacy.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("world war")) WorldWar.Tick(this);
+            using (var worldwar = WorldWar.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("world war")) more = worldwar.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("intel networks")) IntelNetworks.Tick(this);
-            using (SimProfiler.Measure("covert operations")) CovertOperations.Tick(this);
-            using (SimProfiler.Measure("addresses")) AddressToNation.Tick(this);
+            using (var intelNetworks = IntelNetworks.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("intel networks")) more = intelNetworks.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var covertOps = CovertOperations.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("covert operations")) more = covertOps.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var addresses = AddressToNation.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("addresses")) more = addresses.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             foreach (var _ in MovementPower.TickStages(this)) yield return 0;
             yield return 0;
-            using (SimProfiler.Measure("historical events")) HistoricalTimeline.Tick(this);
-            using (SimProfiler.Measure("events")) EventSystem.Tick(this);
+            using (var historicalEvents = HistoricalTimeline.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("historical events")) more = historicalEvents.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var events = EventSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("events")) more = events.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             using (SimProfiler.Measure("history")) History.Capture(this);
             yield return 0;
@@ -1158,10 +1712,28 @@ public sealed partial class Campaign
             // Last in the day, because it redraws the map the rest of the day was worked
             // out on; it keeps its own weekly schedule, because it also has to clear its
             // report list on the days it does nothing.
-            using (SimProfiler.Measure("secession")) SecessionEvents.Tick(this);
+            using (var secession = SecessionEvents.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("secession")) more = secession.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
         // A proclaimed state is tested once a day, not once: history does not stop at the moment a
         // country is proclaimed (UnionCohesion).
-        using (SimProfiler.Measure("union")) UnionCohesion.Tick(this);
+        using (var unionCohesion = UnionCohesion.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("union")) more = unionCohesion.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
         // Age structure and the cultures that migration moves: the demographic cycle reads the births
         // and deaths the household review has just counted, and aggregates the country's shape so a
         // tooltip or a modifier source reads one number (DemographicCycle).
@@ -1177,46 +1749,145 @@ public sealed partial class Campaign
         // A country that is running out of people is counted here, straight after the cycle that
         // counts them. What becomes of its empty ground is a later decision about inheritance,
         // deliberately not this line (DEMOGRAPHIC_EXTINCTION_DESIGN_RU.md).
-        using (SimProfiler.Measure("extinction")) DemographicExtinction.Tick(this);
+        using (var extinction = DemographicExtinction.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("extinction")) more = extinction.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
         // What holding somebody else's ground costs: once a week, an occupation nobody is
         // standing in slips (OccupationResistance, gated, off by default like extinction).
-        using (SimProfiler.Measure("resistance")) OccupationResistance.Tick(this);
+        using (var resistance = OccupationResistance.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("resistance")) more = resistance.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // And whether any country has lost its government's grip on part of itself.
-            using (SimProfiler.Measure("civil war outbreak")) CivilWarOutbreak.Tick(this);
+            using (var civilWarOutbreak = CivilWarOutbreak.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("civil war outbreak")) more = civilWarOutbreak.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // And whether a state failing on several fronts at once is coming apart, its capital
             // overthrowing its government, or a piece of a state that came apart going home
             // (StateFailure). After the single outbreak, so the two read the same day's world.
-            using (SimProfiler.Measure("state failure")) StateFailure.Tick(this);
+            using (var stateFailure = StateFailure.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("state failure")) more = stateFailure.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             CountryNames.Remember(this);
 
             // And whether any country has stopped being what it was. After secession
             // because a state that has just lost a province is a state in exactly the
             // condition this reads.
-            using (SimProfiler.Measure("governance")) GovernanceEvents.Tick(this);
-            using (SimProfiler.Measure("rulers")) Rulers.Tick(this);
+            using (var governanceEvents = GovernanceEvents.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("governance")) more = governanceEvents.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
+            using (var rulers = Rulers.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("rulers")) more = rulers.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
-            using (SimProfiler.Measure("domestic crises")) DomesticCrises.Tick(this);
+            using (var crises = DomesticCrises.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("domestic crises")) more = crises.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // And whether the country still agrees with the government that holds it. Derived
             // from what the residents have and believe, never a bonus or penalty per tag.
-            using (SimProfiler.Measure("political mood")) PoliticalMood.Tick(this);
+            using (var politicalMood = PoliticalMood.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("political mood")) more = politicalMood.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // And whether a promise made in public has come true or missed its date. Checked
             // continuously, so early fulfilment is credited the day it happens; a government
             // with no promises out costs nothing to ask.
-            using (SimProfiler.Measure("government promises")) GovernmentPromises.Tick(this);
+            using (var govPromises = GovernmentPromises.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("government promises")) more = govPromises.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
             // And whether a government the player does not run says something in public about
             // its own crisis: the same bet on the same terms, taken by everyone else.
-            using (SimProfiler.Measure("ai promises")) AiPromises.Tick(this);
+            using (var aiPromises = AiPromises.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("ai promises")) more = aiPromises.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // And what the player's own pinned goals say now that the day's facts are in.
             // Private bookkeeping: a goal met changes nothing in the world but the record.
-            using (SimProfiler.Measure("strategic goals")) StrategicGoals.Tick(this);
+            using (var strategicGoals = StrategicGoals.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("strategic goals")) more = strategicGoals.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // And first sight of identities: a country that declares nothing yet declares
@@ -1224,27 +1895,81 @@ public sealed partial class Campaign
             StateIdentity.EnsureDeclared(this);
             // And what a founded state has decided to call itself, once it has stood long
             // enough to have decided anything.
-            NationNaming.Tick(this);
+            using (var nationNaming = NationNaming.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("naming")) more = nationNaming.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // Settlers on land nobody owns, and whether anybody new sets out for it.
-            ColonisationCore.Tick(this);
+            using (var colonisation = ColonisationCore.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("colonisation")) more = colonisation.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
 
             // And whether any country nobody plays asks a smaller one to answer to it.
-            SubmissionSystem.Tick(this);
+            using (var submission = SubmissionSystem.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("submission")) more = submission.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
 
             // Ground held by a country nobody is at war with goes home: whatever ended the
             // war today - a peace, a submission, a subjugation - the troops do not stay.
             // Ground held by arrangement first - a lease, troops in without a war - so the
             // occupations that go home below are only the ones nothing holds there.
             if (FeatureEnabled("land_arrangements")) using (SimProfiler.Measure("land arrangements")) LandArrangementSystem.Enforce(this);
-            using (SimProfiler.Measure("occupations")) Occupations.Tick(this);
+            using (var occupations = Occupations.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("occupations")) more = occupations.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // And whether a country played by somebody has ground it lost that it could take back.
-            using (SimProfiler.Measure("lost lands")) LostLands.Tick(this);
+            using (var lostLands = LostLands.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("lost lands")) more = lostLands.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             // And what a generation under one flag makes of a region: home, or a memory (HomelandIntegration).
-            using (SimProfiler.Measure("homelands")) HomelandIntegration.Tick(this);
+            using (var homelands = HomelandIntegration.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("homelands")) more = homelands.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
             yield return 0;
 
             // Pieces of one region that have come back under one flag become one region again
@@ -1253,10 +1978,22 @@ public sealed partial class Campaign
             // so saving and loading changed the world - and a player joining a network game,
             // who is sent exactly that save, started in a different world from the host's.
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
+            // The relations of countries with nobody left go to sleep; a restored country's wake.
+            using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
+            CityLife.Note(this);
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.
-            CapitalCore.Tick(this);
+            using (var capitalCore = CapitalCore.TickStages(this).GetEnumerator())
+            {
+                while (true)
+                {
+                    bool more;
+                    using (SimProfiler.Measure("capital")) more = capitalCore.MoveNext();
+                    if (!more) break;
+                    yield return 0;
+                }
+            }
         }
         CampaignIntel.Invalidate(this);
         if (DiagnosticLogs.Enabled)
@@ -1521,6 +2258,9 @@ public sealed partial class Campaign
 
         var attachedRevision = MapRevision;
         MapRevision++;
+        // The corrections above rewrote ProvinceToNation and ProvinceToState wholesale:
+        // anything the attach itself already indexed is stale before the world ticks once.
+        InvalidateStateIndex();
         // A restored world arrives with its fronts drawn against the very controllers being
         // re-installed above; the bump is transport bookkeeping, not a border that moved.
         // Left alone, every line stamped at the old revision reads stale on the first tick
@@ -1683,6 +2423,9 @@ public sealed partial class Campaign
         BorderDay = -1;
         BorderRevision = -1;
         BorderForgetStamp = -1;
+        LastReunifyMapRevision = -1;
+        LastReunifyStateCount = -1;
+        ReunifyBlockedPairs.Clear();
         ControlTallyTables = null;
         AiStatecraftTables = null;
     }
@@ -1747,6 +2490,7 @@ public sealed partial class Campaign
         nation.IsPlayer = player;
         nation.IsHuman = player;
         Nations.Add(nation);
+        TacticalDoctrines.BindHome(this, nation);
         // Initial civil-war factions and later emergent states are added after the
         // bookmark's financial migration. They need the same books immediately.
         SovereignFinance.NormalizeAccounts(this, nation);

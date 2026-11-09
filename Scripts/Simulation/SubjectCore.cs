@@ -553,8 +553,14 @@ public static class SubjectSystem
     /// <summary>The weekly pass: tribute, manpower, and the slow drift towards leaving.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubjectSystem))) return;
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly pass, yielded between subjects.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(SubjectSystem))) yield break;
+        if (campaign is null) yield break;
 
         // Collected before anything is changed, because a subject that breaks free inside
         // the loop would otherwise be walked over while the list it is in is being edited.
@@ -566,9 +572,12 @@ public static class SubjectSystem
             nation.TributePaidWeekly = 0f;
             nation.TributeTakenWeekly = 0f;
         }
+        yield return 0;
 
+        var tick = 0;
         foreach (var subject in campaign.Nations)
         {
+            if (++tick % 8 == 0) yield return 0;
             if (!subject.IsSubject) continue;
             var type = SubjectCatalog.Of(subject.SubjectType);
             var overlord = campaign.NationById(subject.OverlordId);
@@ -641,6 +650,7 @@ public static class SubjectSystem
             if (subject.Population > overlord.Population * sizeCap) continue;
             if (MayAnnex(campaign, overlord, subject, out _)) absorbing.Add(subject);
         }
+        yield return 0;
 
         foreach (var subject in leaving)
         {

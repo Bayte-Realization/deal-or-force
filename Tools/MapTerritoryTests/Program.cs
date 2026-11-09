@@ -66,6 +66,17 @@ foreach (var p in coastalPockets)
 campaign.AttachProvinceTopology(topology);
 var israel = campaign.NationByTag("ISR").MapIndex;
 var palestine = campaign.NationByTag("PSE").MapIndex;
+var lebanon = campaign.NationByTag("LBN").MapIndex;
+// This two-cell province was still assigned to LBN by the numeric ownership export,
+// while both source-control cells are ISR. Pin the place, not the renumberable id.
+var borderPatch = ProvinceAt(35.84375, 33.40625);
+Check(topology.ProvinceToNation[borderPatch] == israel && campaign.ProvinceController[borderPatch] == israel,
+    "the two-cell border province follows its authored ISR source control and opening owner");
+Check(Enumerable.Range(0, topology.CellToProvince.Length).Where(cell => topology.CellToProvince[cell] == borderPatch)
+        .All(cell => Map.Control[cell] == israel), "every source cell of the repaired province is ISR");
+var lebaneseInterior = ProvinceAt(35.90625, 33.90625);
+Check(topology.ProvinceToNation[lebaneseInterior] == lebanon && campaign.ProvinceController[lebaneseInterior] == lebanon,
+    "the Lebanese interior remains LBN after the local ownership repair");
 // The one-cell scrap south of Gaza: part of Israel's Southern district, and no longer a
 // province of its own - it is folded into the district's province beside it.
 var scrap = ProvinceAt(34.28125, 31.21875);

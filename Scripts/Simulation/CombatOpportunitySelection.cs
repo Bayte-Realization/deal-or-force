@@ -64,31 +64,32 @@ public static partial class Warfare
         return CoverRefuses(c, c.ProvinceMap, war, army, target) ? -1 : target;
     }
 
-    private static Campaign _coverCampaign;
-    private static long _coverStep = -1;
-    private static int _coverWarId = -1;
-    private static int _coverMapRevision = -1;
-    private static readonly Dictionary<long, (float Power, float Weight)> CoverCache = new();
-
     private static void EnsureCoverCache(Campaign c, StrategicWar war)
     {
-        if (ReferenceEquals(_coverCampaign, c) && _coverStep == c.ElapsedHours &&
-            _coverWarId == war.Id && _coverMapRevision == c.MapRevision) return;
-        CoverCache.Clear();
-        _coverCampaign = c;
-        _coverStep = c.ElapsedHours;
-        _coverWarId = war.Id;
-        _coverMapRevision = c.MapRevision;
+        var index = UseArmyIndex(c);
+        if (index.CoverStep == c.ElapsedHours &&
+            index.CoverWarId == war.Id && index.CoverMapRevision == c.MapRevision) return;
+        index.CoverCache.Clear();
+        index.CoverStep = c.ElapsedHours;
+        index.CoverWarId = war.Id;
+        index.CoverMapRevision = c.MapRevision;
     }
 
-    internal static void InvalidateCoverCache() => _coverMapRevision = -1;
+    internal static void InvalidateCoverCache(Campaign c)
+    {
+        if (IndexOf(c) is { } index) index.CoverMapRevision = -1;
+    }
 
     private static int ChooseAssaultTarget(Campaign campaign, ProvinceTopology topology,
         StrategicWar war, Army army, ushort[] controllers, HashSet<ushort> enemyMaps)
     {
         Candidates.Clear();
-        foreach (var province in topology.Neighbors[army.ProvinceId])
-            if (enemyMaps.Contains(controllers[province])) Candidates.Add(province);
+        if (army is null || topology?.Neighbors is null || controllers is null || enemyMaps is null) return -1;
+        if (army.ProvinceId < 0 || army.ProvinceId >= topology.Neighbors.Length) return -1;
+        var armyNeighbors = topology.Neighbors[army.ProvinceId];
+        if (armyNeighbors is null) return -1;
+        foreach (var province in armyNeighbors)
+            if (province >= 0 && province < controllers.Length && enemyMaps.Contains(controllers[province])) Candidates.Add(province);
         if (Candidates.Count == 0) return -1;
         // A defender takes back its own before it invades. Until it is clearly winning, a
         // country fighting off an attack advances only onto its own ground - occupied, or its
@@ -268,8 +269,11 @@ public static partial class Warfare
     /// </summary>
     private static float PushingOn(Campaign campaign, ProvinceTopology topology, StrategicWar war, Army army, int target)
     {
+        if (target < 0 || topology?.Neighbors is null || target >= topology.Neighbors.Length) return army?.Power ?? 0f;
         var power = 0f;
-        foreach (var province in topology.Neighbors[target])
+        var neighbors = topology.Neighbors[target];
+        if (neighbors is not null)
+        foreach (var province in neighbors)
             foreach (var other in InProvince(province))
             {
                 if (!WarCoalition.SameSide(war, other.NationId, army.NationId) || other.InBattle || other.IsMoving) continue;
@@ -294,9 +298,10 @@ public static partial class Warfare
         int target, StrategicWar war, int advancingNationId, ref float coveringPower, ref float covering)
     {
         EnsureCoverCache(campaign, war);
+        var coverCache = UseArmyIndex(campaign).CoverCache;
         var sideBit = war.IsAttacking(advancingNationId) ? 1L : 0L;
         var cacheKey = ((long)target << 1) | sideBit;
-        if (CoverCache.TryGetValue(cacheKey, out var cached))
+        if (coverCache.TryGetValue(cacheKey, out var cached))
         {
             coveringPower += cached.Power;
             covering += cached.Weight;
@@ -319,22 +324,27 @@ public static partial class Warfare
         {
             next.Clear();
             foreach (var province in ring)
-            foreach (var neighbour in topology.Neighbors[province])
             {
-                if (!seen.Add(neighbour)) continue;
-                next.Add(neighbour);
-                foreach (var other in InProvince(neighbour))
+                if (province < 0 || province >= topology.Neighbors.Length) continue;
+                var neighbors = topology.Neighbors[province];
+                if (neighbors is null) continue;
+                foreach (var neighbour in neighbors)
                 {
-                    if (!war.Opposes(advancingNationId, other.NationId) || other.Divisions < 0.1f) continue;
-                    localPower += M.Max(other.Power,
-                        other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
-                    localCovering += weight;
+                    if (!seen.Add(neighbour)) continue;
+                    next.Add(neighbour);
+                    foreach (var other in InProvince(neighbour))
+                    {
+                        if (!war.Opposes(advancingNationId, other.NationId) || other.Divisions < 0.1f) continue;
+                        localPower += M.Max(other.Power,
+                            other.Presence * campaign.Defines.CoveringPresenceFloor) * weight;
+                        localCovering += weight;
+                    }
                 }
             }
             (ring, next) = (next, ring);
             weight *= falloff;
         }
-        CoverCache[cacheKey] = (localPower, localCovering);
+        coverCache[cacheKey] = (localPower, localCovering);
         coveringPower += localPower;
         covering += localCovering;
     }

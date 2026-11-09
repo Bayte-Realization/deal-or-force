@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace DealOrForce.Simulation;
 
@@ -85,42 +86,107 @@ public sealed partial class Defines
 /// </summary>
 public static class WarScoring
 {
-    private static readonly Dictionary<int, float> ValuePerProvince = new();
-    private static readonly Dictionary<int, int> ProvincesOf = new();
-    private static readonly Dictionary<ushort, int> SideOf = new();
-    private static readonly Dictionary<ushort, float> Occupied = new();
-    private static readonly Dictionary<ushort, float> Worth = new();
-
-    // One walk of the province map, reused by every war until the map changes.
+    // Score scratch and the province index, reused across the wars of ONE campaign.
+    // These tables used to be one set for the process: the next campaign's score cleared
+    // the side, worth and occupation dictionaries and replaced the province index, so the
+    // first campaign's lists were gone. Each campaign now keeps its own. Active only names
+    // the board of the score now being written. The live tick stays single-threaded.
     //
     // Each war used to scan all thirty-five thousand provinces three or four times: who owns
     // them, what the capitals are, and whether the war goal is held. Twenty wars on the same
-    // morning were eighty scans of a question that does not change between them. The lists
-    // below answer "which provinces are in this region" and "which provinces does this flag
-    // own". Occupation still reads the live controller. A second campaign never reads the
-    // first one's lists: the key is the campaign, its topology and its ownership revision -
-    // not MapRevision, which fires on every province a battle takes while the ownership
-    // arrays these lists are built from stay exactly as they were.
-    private static Campaign _indexCampaign;
-    private static ProvinceTopology _indexMap;
-    private static int _indexRevision = int.MinValue;
-    private static int[] _stateStart = Array.Empty<int>();
-    private static int[] _stateCount = Array.Empty<int>();
-    private static int[] _stateProvinces = Array.Empty<int>();
-    private static Dictionary<int, int[]> _byOwner = new();
+    // morning were eighty scans of a question that does not change between them. The index
+    // answers "which provinces are in this region" and "which provinces does this flag own".
+    // Occupation still reads the live controller. Inside one campaign the index is reused
+    // until the ownership revision changes, not MapRevision, which fires on every province
+    // a battle takes while the ownership arrays these lists are built from stay as they were.
+    private sealed class Scratch
+    {
+        public readonly Dictionary<int, float> ValuePerProvince = new();
+        public readonly Dictionary<int, int> ProvincesOf = new();
+        public readonly Dictionary<ushort, int> SideOf = new();
+        public readonly Dictionary<ushort, float> Occupied = new();
+        public readonly Dictionary<ushort, float> Worth = new();
+        public ProvinceTopology IndexMap;
+        public int IndexRevision = int.MinValue;
+        public int[] StateStart = Array.Empty<int>();
+        public int[] StateCount = Array.Empty<int>();
+        public int[] StateProvinces = Array.Empty<int>();
+        public Dictionary<int, int[]> ByOwner = new();
+    }
+
+    private static readonly ConditionalWeakTable<Campaign, Scratch> Boards = new();
+    private static Scratch Active;
+
+    private static Dictionary<int, float> ValuePerProvince => Active.ValuePerProvince;
+    private static Dictionary<int, int> ProvincesOf => Active.ProvincesOf;
+    private static Dictionary<ushort, int> SideOf => Active.SideOf;
+    private static Dictionary<ushort, float> Occupied => Active.Occupied;
+    private static Dictionary<ushort, float> Worth => Active.Worth;
+    private static int[] _stateStart
+    {
+        get => Active.StateStart;
+        set => Active.StateStart = value;
+    }
+    private static int[] _stateCount
+    {
+        get => Active.StateCount;
+        set => Active.StateCount = value;
+    }
+    private static int[] _stateProvinces
+    {
+        get => Active.StateProvinces;
+        set => Active.StateProvinces = value;
+    }
+    private static Dictionary<int, int[]> _byOwner
+    {
+        get => Active.ByOwner;
+        set => Active.ByOwner = value;
+    }
 
     /// <summary>How many times the province lists have been rebuilt. The rule test reads it.</summary>
     internal static int StateIndexBuilds { get; private set; }
+
+    private static Scratch Board(Campaign campaign) =>
+        campaign is not null && Boards.TryGetValue(campaign, out var board) ? board : null;
+
+    /// <summary>Provinces in the score index, region by region. Empty when this campaign has not built one.</summary>
+    internal static int[] IndexedProvinces(Campaign campaign) =>
+        Board(campaign) is { } board ? board.StateProvinces : Array.Empty<int>();
+
+    /// <summary>Where each region's run starts in <see cref="IndexedProvinces"/>. Empty when this campaign has not built one.</summary>
+    internal static int[] IndexedStateStarts(Campaign campaign) =>
+        Board(campaign) is { } board ? board.StateStart : Array.Empty<int>();
+
+    /// <summary>How many provinces each region contributes. Empty when this campaign has not built one.</summary>
+    internal static int[] IndexedStateCounts(Campaign campaign) =>
+        Board(campaign) is { } board ? board.StateCount : Array.Empty<int>();
+
+    /// <summary>Provinces each flag owns, for this campaign's score. Null when this campaign has not built an index.</summary>
+    internal static Dictionary<int, int[]> IndexedOwners(Campaign campaign) => Board(campaign)?.ByOwner;
+
+    /// <summary>Map flags on each side of the last score written for this campaign. Null when it has not scored.</summary>
+    internal static Dictionary<ushort, int> ScoreSides(Campaign campaign) => Board(campaign)?.SideOf;
+
+    /// <summary>Worth of each flag on that score. Another campaign cannot clear the dictionary.</summary>
+    internal static Dictionary<ushort, float> ScoreWorth(Campaign campaign) => Board(campaign)?.Worth;
+
+    /// <summary>Occupied worth of each flag on that score. Another campaign cannot clear the dictionary.</summary>
+    internal static Dictionary<ushort, float> ScoreOccupied(Campaign campaign) => Board(campaign)?.Occupied;
+
+    /// <summary>Worth of one province in each region on that score.</summary>
+    internal static Dictionary<int, float> ScoreValuePerProvince(Campaign campaign) => Board(campaign)?.ValuePerProvince;
+
+    /// <summary>How many of a region's provinces belong to the belligerents on that score.</summary>
+    internal static Dictionary<int, int> ScoreProvinceCounts(Campaign campaign) => Board(campaign)?.ProvincesOf;
 
     private static void EnsureProvinceIndex(Campaign campaign)
     {
         var map = campaign.ProvinceMap;
         if (map is null) return;
-        if (ReferenceEquals(_indexCampaign, campaign) && ReferenceEquals(_indexMap, map) &&
-            _indexRevision == campaign.OwnershipRevision) return;
-        _indexCampaign = campaign;
-        _indexMap = map;
-        _indexRevision = campaign.OwnershipRevision;
+        Active = Boards.GetOrCreateValue(campaign);
+        if (ReferenceEquals(Active.IndexMap, map) && Active.IndexRevision == campaign.OwnershipRevision) return;
+        Active.IndexMap = map;
+        Active.IndexRevision = campaign.OwnershipRevision;
         StateIndexBuilds++;
         var maxState = 0;
         for (var province = 1; province <= map.ProvinceCount; province++)

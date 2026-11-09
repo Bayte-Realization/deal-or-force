@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace DealOrForce.Simulation;
@@ -170,10 +171,18 @@ public static class MovementMethods
 
     public static void Tick(Campaign c)
     {
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly militancy pass, yielded between movements.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
         if (c is null || !c.FeatureEnabled("movements") || !c.FeatureEnabled("movement_lifecycle") ||
-            c.ElapsedDays % 7 != 5) return;
+            c.ElapsedDays % 7 != 5) yield break;
+        var ticked = 0;
         foreach (var movement in c.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             var state = movement.Movement;
             if (state is null || state.Dissolved) continue;
             var definition = Movements.DefinitionOf(movement);

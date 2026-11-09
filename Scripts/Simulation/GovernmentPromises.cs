@@ -178,9 +178,17 @@ public static class GovernmentPromises
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.FeatureEnabled("government_promises")) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily settlement, yielded between countries so a week of deadlines
+    /// does not fall due in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.FeatureEnabled("government_promises")) yield break;
         for (var index = 0; index < campaign.Nations.Count; index++)
         {
+            if (index % 16 == 0) yield return 0;
             var nation = campaign.Nations[index];
             if (nation.Promises.Count == 0) continue;
             for (var slot = nation.Promises.Count - 1; slot >= 0; slot--)

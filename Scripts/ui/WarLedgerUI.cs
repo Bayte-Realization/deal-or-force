@@ -1087,6 +1087,7 @@ public partial class DealOrForceGame
             }
         }
 
+        BuildSeparatePeaceActions(war, player);
         _warDetailActions.AddChild(RowLabel("ENDING IT", 12, Ui.Colour("text.caption")));
         var conference = ActionButton("Open the peace conference", () => OpenPeaceConference(war), 320, 34, true);
         conference.TooltipText = Ui.Tip(Tr("Draw the settlement on the map: claim the ground you mean to keep, " +

@@ -54,15 +54,26 @@ public static class Defections
 {
     public static int Tick(Campaign campaign, int? dayOverride = null)
     {
+        var moved = 0;
+        foreach (var chunk in TickStages(campaign, dayOverride)) moved += chunk;
+        return moved;
+    }
+
+    /// <summary>The same monthly pass, yielded between batches of armies; each yield carries the
+    /// defections counted so far in that stretch so the total survives the split.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign, int? dayOverride = null)
+    {
         var day = dayOverride ?? campaign?.ElapsedDays ?? 0;
         if (campaign?.ProvinceMap is null || campaign.ProvinceController is null ||
-            day <= 0 || day % 30 != 0) return 0;
+            day <= 0 || day % 30 != 0) yield break;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         var moved = 0;
         var touchedWars = new HashSet<int>();
+        var scanned = 0;
         foreach (var army in campaign.Armies.ToArray())
         {
+            if (++scanned % 32 == 0) { yield return moved; moved = 0; }
             if (army.NationId < 0 || army.InBattle || army.EmbarkedFleetId >= 0 ||
                 army.Divisions < 0.1f || army.ProvinceId <= 0 || army.ProvinceId > topology.ProvinceCount)
                 continue;
@@ -143,10 +154,11 @@ public static class Defections
                 $"DEFECTION army={army.Id} from={nation.Tag} to={enemy.Tag} war={chosen.Id} " +
                 $"civil={civil} province={army.ProvinceId} cohesion={army.Cohesion:0.00} supply={army.SupplyLevel:0.00}");
         }
+        yield return 0;
         foreach (var warId in touchedWars)
             if (campaign.Wars.Find(war => war.Id == warId) is { } war)
                 FrontPlanner.ReassignAi(campaign, war);
-        return moved;
+        yield return moved;
     }
 
     /// <summary>The same stable die the opening secession uses, kept local so a test can repeat it.</summary>

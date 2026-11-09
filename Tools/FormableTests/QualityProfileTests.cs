@@ -54,5 +54,19 @@ static class QualityProfileTests
         QualityProfile moved = null;
         for (var frame = 0; frame < 12 * 4000 && moved is null; frame++) moved = manual.Sample(90);
         Check(moved is null && manual.Profile.Id == ladder[0].Id, "a tier chosen by hand is never moved");
+
+        // A card that is the wall at an acceptable frame rate still buys a cheaper tier:
+        // heat and fan noise for a smoother-looking number is not a trade a strategy game
+        // should make silently. Above ~83 fps the answer is the frame cap, not the picture.
+        var warm = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
+        QualityProfile cooler = null;
+        for (var frame = 0; frame < 12 * 400 && cooler is null; frame++) cooler = warm.Sample(16.6, 14.0);
+        Check(cooler is not null && cooler.Order > ladder[0].Order,
+            "a saturated card at a good frame rate still steps down (now " + warm.Profile.Id + ")");
+
+        var fast = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
+        QualityProfile blurred = null;
+        for (var frame = 0; frame < 12 * 400 && blurred is null; frame++) blurred = fast.Sample(6.9, 5.5);
+        Check(blurred is null, "a fast uncapped run asks for a frame limit, not a poorer picture");
     }
 }

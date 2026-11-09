@@ -12,15 +12,13 @@ public static partial class Warfare
     /// has first been assigned a friendly staging leg and therefore should not attack today.
     /// </summary>
     private readonly record struct FailedOperationalRoute(int From, int To, int WarId, int Revision, ushort[] Controllers);
-    private static readonly Dictionary<int, FailedOperationalRoute> NoRoute = new();
-    private static Campaign _noRouteCampaign;
     // One immutable, exact membership snapshot shared by failures in this war/pass,
     // allocated only if a new search actually fails. No per-formation set or lossy hash.
     private static ushort[] _belligerentSnapshot;
 
     internal static void InvalidateAccessRoutes(Campaign c)
     {
-        if (ReferenceEquals(_noRouteCampaign, c)) NoRoute.Clear();
+        IndexOf(c)?.NoRoute.Clear();
     }
 
     private static bool PrepareOperationalRoute(Campaign campaign, StrategicWar war, Army army,
@@ -60,21 +58,21 @@ public static partial class Warfare
              !MilitaryAccess.CanEnter(campaign, army.NationId, controllers[army.PlannedRoute[0]])))
         {
             army.PlannedRoute.Clear();
-            if (!ReferenceEquals(_noRouteCampaign, campaign)) { NoRoute.Clear(); _noRouteCampaign = campaign; }
+            var noRoute = UseArmyIndex(campaign).NoRoute;
             // The same search on the same map finds the same nothing. A division whose objective
             // it cannot reach - or is already standing on - asked again every hour, flooding its
             // side's whole territory each time: a hundred and twenty such searches a step, half
             // of a day's simulation thirty-six years in. A failed search is remembered until
             // the division moves, its objective changes, or any province changes hands.
-            if (!NoRoute.TryGetValue(army.Id, out var failed) || failed.From != army.ProvinceId ||
+            if (!noRoute.TryGetValue(army.Id, out var failed) || failed.From != army.ProvinceId ||
                 failed.To != army.OrderProvinceId || failed.WarId != war.Id || failed.Revision != campaign.MapRevision ||
                 !BelligerentMaps.SetEquals(failed.Controllers))
             {
                 army.PlannedRoute.AddRange(WarCoalition.OperationalRoute(campaign, war, army.NationId,
                     army.ProvinceId, army.OrderProvinceId, controllers));
-                if (army.PlannedRoute.Count == 0) NoRoute[army.Id] = new FailedOperationalRoute(army.ProvinceId,
+                if (army.PlannedRoute.Count == 0) noRoute[army.Id] = new FailedOperationalRoute(army.ProvinceId,
                     army.OrderProvinceId, war.Id, campaign.MapRevision, _belligerentSnapshot ??= BelligerentMaps.ToArray());
-                else NoRoute.Remove(army.Id);
+                else noRoute.Remove(army.Id);
             }
             army.OrderRouteSteps = Math.Max(army.OrderStepsCompleted + army.PlannedRoute.Count,
                 army.OrderRouteSteps);

@@ -131,12 +131,20 @@ public static class CultureUnion
     /// a war or a grudge.</summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CultureUnion))) return;
-        if (c.ProvinceMap is null || c.ElapsedDays < c.Defines.CultureUnionEarliestDay) return;
-        if (c.ElapsedDays % Math.Max(1, c.Defines.CultureUnionReviewDays) != 0) return;
+        foreach (var _ in TickStages(c)) { }
+    }
 
+    /// <summary>The same union pass, yielded between kindred countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(CultureUnion))) yield break;
+        if (c.ProvinceMap is null || c.ElapsedDays < c.Defines.CultureUnionEarliestDay) yield break;
+        if (c.ElapsedDays % Math.Max(1, c.Defines.CultureUnionReviewDays) != 0) yield break;
+
+        var ticked = 0;
         foreach (var initiator in Kindred(c).ToArray())
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (c.Fallen.Contains(initiator.Id)) continue;
             foreach (var partner in Kindred(c))
             {

@@ -92,11 +92,19 @@ public static class LostLands
     /// <summary>Once a day: each human country on its own day of the cycle.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LostLands))) return;
-        if (campaign is null || campaign.ObserverMode || campaign.ElapsedDays <= 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LostLands))) yield break;
+        if (campaign is null || campaign.ObserverMode || campaign.ElapsedDays <= 0) yield break;
         var cycle = Math.Max(1, campaign.Defines.LostLandCheckDays);
+        var scanned = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (!nation.IsHuman || nation.Population <= 0 || nation.Movement is not null) continue;
             if (!MovementRules.OnItsDay(campaign, nation.Id, cycle)) continue;
             if (campaign.ElapsedDays - nation.LostLandAskedDay < campaign.Defines.LostLandAskCooldownDays) continue;

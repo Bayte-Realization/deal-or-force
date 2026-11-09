@@ -72,6 +72,11 @@ public static class CampaignFingerprint
             MixText("belief_conversion"); Mix(campaign.Defines.BeliefConversionEnabled ? 1 : 0);
             MixFloat(campaign.Defines.BeliefConversionAnnual);
         }
+        if (!campaign.Defines.QuarrelStep || campaign.Defines.QuarrelStepCooldownDays != 120)
+        {
+            MixText("quarrel_step_rules"); Mix(campaign.Defines.QuarrelStep ? 1 : 0);
+            Mix(campaign.Defines.QuarrelStepCooldownDays);
+        }
         if (campaign.Curse.Length > 0)
         {
             MixText("world_curse"); MixText(campaign.Curse); Mix(campaign.CurseDay); Mix(campaign.CurseDrowned);
@@ -115,6 +120,11 @@ public static class CampaignFingerprint
             MixText("supply_cutoff_days");
             Mix(campaign.Defines.SupplyCutoffDays);
         }
+        if (!campaign.Defines.FrontStaffRelievesPockets)
+        {
+            MixText("front_staff_relieves_pockets");
+            Mix(0);
+        }
         if (MathF.Abs(campaign.Defines.SupplyAttackCoverageFloor - 0.5f) > 0.0001f)
         {
             MixText("supply_attack_cover");
@@ -124,6 +134,11 @@ public static class CampaignFingerprint
         {
             MixText("doctrine_books_per_shelf");
             Mix(campaign.Defines.DoctrineBooksPerShelf);
+        }
+        if (MathF.Abs(campaign.Defines.DoctrineSameShelfStack - Defines.DefaultDoctrineSameShelfStack) > 0.0001f)
+        {
+            MixText("doctrine_same_shelf_stack");
+            MixFloat(campaign.Defines.DoctrineSameShelfStack);
         }
         if (MathF.Abs(campaign.Defines.ResearchUseShare - Defines.DefaultResearchUseShare) > 0.0001f ||
             MathF.Abs(campaign.Defines.ResearchUseCeiling - Defines.DefaultResearchUseCeiling) > 0.0001f)
@@ -385,7 +400,13 @@ public static class CampaignFingerprint
         // going away puts it back. Two worlds that disagree about how many regions exist
         // disagree about everything downstream of that.
         Mix(campaign.States.Count);
-        foreach (var pair in campaign.Relations.OrderBy(p => p.Key))
+        if (campaign.Nations.Exists(n => n.InstantConstruction))
+        {
+            MixText("instant_construction");
+            foreach (var n in campaign.Nations) if (n.InstantConstruction) Mix(n.Id);
+        }
+        // Waking and sleeping alike (RelationDormancy): which table a relation is in is told below.
+        foreach (var pair in campaign.Relations.Concat(campaign.DormantRelations).OrderBy(p => p.Key))
         {
             Mix(pair.Key); var r = pair.Value;
             if (r.MilitaryAccessByA || r.MilitaryAccessByB || r.MilitaryAccessRequestedBy >= 0 || r.MilitaryAccessRequestedDay != -9999)
@@ -412,6 +433,13 @@ public static class CampaignFingerprint
             {
                 MixText("diplomatic_act_v1");
                 Mix(r.DiplomaticActBy); Mix(r.DiplomaticActKind); Mix(r.DiplomaticActDay);
+            }
+            if (r.GuaranteeBrokenBy >= 0 || r.RivalShiftDay != -9999 || r.RivalShiftPaperBy >= 0 ||
+                r.RivalShiftPaperDay != -9999 || !string.IsNullOrEmpty(r.RivalShiftReason))
+            {
+                MixText("ally_rival_v1");
+                Mix(r.GuaranteeBrokenBy); Mix(r.RivalShiftDay); Mix(r.RivalShiftPaperBy); Mix(r.RivalShiftPaperDay);
+                MixText(r.RivalShiftReason ?? "");
             }
             Mix(r.AllianceAssessmentDay); Mix(r.AllianceStrainedDays); Mix(r.AllianceReaffirmedDay);
             Mix(r.AllianceRefusedDay); Mix(r.AllianceSinceDay);
@@ -445,6 +473,11 @@ public static class CampaignFingerprint
             Mix(r.TensionStage); Mix(r.LastIncidentDay); Mix(r.TalksUntilDay); Mix(r.LastTalksDay);
             Mix(r.MediatorId); Mix(r.LastMediationDay); Mix(r.InterveningPowerId); Mix(r.InterventionTargetId); Mix(r.InterventionUntilDay);
             if (r.CrisisOpenedDay >= 0) { MixText("crisis_opened"); Mix(r.CrisisOpenedDay); }
+            if (r.QuarrelRefusalDay > 0 || r.QuarrelClaimDay > 0 || r.QuarrelRivalDay > 0 || r.QuarrelBorderDay > 0)
+            {
+                MixText("quarrel_step");
+                Mix(r.QuarrelRefusalDay); Mix(r.QuarrelClaimDay); Mix(r.QuarrelRivalDay); Mix(r.QuarrelBorderDay);
+            }
         }
         // Who is arming whom in other people's wars (ProxyWars).
         Mix(campaign.NextOrganizationId);
@@ -966,6 +999,7 @@ public static class CampaignFingerprint
             }
             Mix(-20);
             MixFloat(state.SecessionPressure);
+            if (state.UrbanBaseline != 0) { MixText("urban_baseline"); Mix(state.UrbanBaseline); }
             MixFloat(state.ResidentAwareness);
             if (state.PoliticalDivergence >= 0f || state.LawApproval >= 0f || state.GovernmentApproval >= 0f)
             {
@@ -1112,6 +1146,15 @@ public static class CampaignFingerprint
                 }
             }
             // Coalition membership changes combat and access before any province moves.
+            if (war.SeparatePeaces.Count > 0)
+            {
+                MixText("separate_peaces");
+                foreach (var left in war.SeparatePeaces)
+                {
+                    Mix(left.NationId); Mix(left.WithId); Mix(left.Day); Mix((int)left.Terms);
+                    Mix(left.SwitchedSides ? 1 : 0); MixFloat(left.Payment); Mix(left.ProvincesCeded);
+                }
+            }
             // Keep the historical bilateral golden when there are no allied members.
             if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
             {

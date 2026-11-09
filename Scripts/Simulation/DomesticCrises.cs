@@ -143,11 +143,19 @@ public static partial class DomesticCrises
 
     public static void Tick(Campaign c)
     {
-        if (c is null) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily review, yielded between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null) yield break;
         var awarenessEnabled = c.FeatureEnabled("resident_awareness");
         var crisesEnabled = c.FeatureEnabled("domestic_crises") && c.FeatureEnabled("politics");
+        var tick = 0;
         foreach (var nation in c.Nations)
         {
+            if (++tick % 8 == 0) yield return 0;
             var memory = nation.DomesticCrisis ??= new();
             if (memory.LastReviewDay == c.ElapsedDays) continue;
             // Start at the current conditions; a legacy save never accrues years of backdated crises.

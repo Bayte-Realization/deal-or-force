@@ -165,9 +165,17 @@ public static class AddressToNation
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(AddressToNation))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same daily pass, yielded between countries.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(AddressToNation))) yield break;
+        var scanned = 0;
         foreach (var nation in c.Nations)
         {
+            if (++scanned % 32 == 0) yield return 0;
             if (nation.AddressPromise.Length == 0 || nation.AddressPromiseDueDay > c.ElapsedDays) continue;
             Settle(c, nation);
         }

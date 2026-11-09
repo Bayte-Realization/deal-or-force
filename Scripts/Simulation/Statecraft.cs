@@ -87,18 +87,25 @@ public static class Statecraft
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Statecraft))) return;
-        if (campaign is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly questions, yielded between relations and countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(Statecraft))) yield break;
+        if (campaign is null) yield break;
 
         // Time is the only thing that forgets, and it forgets slowly.
         var decay = NotorietyYearlyDecay / 365f;
         foreach (var nation in campaign.Nations)
             if (nation.Notoriety > 0f) nation.Notoriety = MathF.Max(0f, nation.Notoriety - decay);
+        yield return 0;
 
         // The rest is a weekly question. Coalitions are not formed on a Tuesday afternoon.
-        if (campaign.ElapsedDays % 7 != 0) return;
-        RememberNotoriety(campaign);
-        ReviewCoalitions(campaign);
+        if (campaign.ElapsedDays % 7 != 0) yield break;
+        foreach (var _ in RememberNotorietyStages(campaign)) yield return 0;
+        foreach (var _ in ReviewCoalitionsStages(campaign)) yield return 0;
     }
 
     /// <summary>
@@ -117,10 +124,14 @@ public static class Statecraft
     /// more. The cap stays at one and a half times the declared weight, because a bad name is
     /// a bystander's grievance and not a victim's.
     /// </summary>
-    private static void RememberNotoriety(Campaign campaign)
+    private static IEnumerable<int> RememberNotorietyStages(Campaign campaign)
     {
+        var tick = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++tick % 512 == 0) yield return 0;
+            using (SimProfiler.Measure("dip:notoriety"))
+            {
             var a = campaign.NationById(relation.A);
             var b = campaign.NationById(relation.B);
             if (a is null || b is null) continue;
@@ -132,6 +143,7 @@ public static class Statecraft
             var scale = M.Clamp(worst / 60f, 0.1f, 1.5f) * MathF.Min(1f, concern);
             if (scale < campaign.Defines.WitnessThreshold) OpinionSystem.Forget(campaign, relation, "notoriety");
             else OpinionSystem.Remember(campaign, relation, "notoriety", scale);
+            }
         }
     }
 
@@ -139,7 +151,7 @@ public static class Statecraft
     /// Form a coalition against anybody the neighbourhood has had enough of, and dissolve
     /// one whose target has been quiet long enough to be forgiven.
     /// </summary>
-    private static void ReviewCoalitions(Campaign campaign)
+    private static IEnumerable<int> ReviewCoalitionsStages(Campaign campaign)
     {
         Dissolved.Clear();
         foreach (var coalition in campaign.Coalitions)
@@ -160,8 +172,12 @@ public static class Statecraft
             campaign.Coalitions.Remove(gone);
         }
 
+        var tick = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++tick % 8 == 0) yield return 0;
+            using (SimProfiler.Measure("dip:coalition"))
+            {
             if (nation.Notoriety < CoalitionThreshold || nation.Population <= 0) continue;
             var existingCoalition = CoalitionAgainst(campaign, nation.Id);
 
@@ -221,6 +237,7 @@ public static class Statecraft
                     existingCoalition.MemberIds.Sort();
                     campaign.MarkStrategicChange();
                 }
+            }
             }
         }
     }

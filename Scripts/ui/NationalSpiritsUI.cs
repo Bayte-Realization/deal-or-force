@@ -34,12 +34,15 @@ public partial class DealOrForceGame
             CardRow(rows, Tr(spirit.Name), left, tip, spirit.IsPositive ? "state.positive" : "state.negative");
         }
 
-        // What it all adds up to, and from where.
+        // The same national sum the army uses, including the same-shelf doctrine ceiling.
+        // Each source below is still the book or spirit itself, named whole.
         var totals = new Dictionary<string, float>();
+        foreach (var key in NationalModifiers.Keys)
+        {
+            var value = NationalModifiers.Of(nation, key.Id);
+            if (value != 0f) totals[key.Id] = value;
+        }
         var sources = NationalModifiers.Sources(nation).ToList();
-        foreach (var (_, modifiers) in sources)
-            foreach (var (key, value) in modifiers)
-                totals[key] = totals.GetValueOrDefault(key) + value;
         var lines = NationalModifiers.Lines(totals);
         string summary;
         if (lines.Count == 0) summary = Tr("Nothing adds to or takes from the country's numbers.");

@@ -223,9 +223,18 @@ public static class DiplomaticActs
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !campaign.StepOpensNewDay) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same daily sweep, yielded between relations so a full ledger of pending
+    /// acts does not clear in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !campaign.StepOpensNewDay) yield break;
+        var scanned = 0;
         foreach (var relation in campaign.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.DiplomaticActBy < 0 || Pending(campaign, relation)) continue;
             relation.DiplomaticActBy = -1;
             relation.DiplomaticActKind = -1;

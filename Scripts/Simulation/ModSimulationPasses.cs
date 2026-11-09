@@ -96,4 +96,21 @@ public static class ModSimulationPasses
         }
         finally { active = false; entry.Running = false; }
     }
+
+    /// <summary>
+    /// The staged twin of <see cref="Run"/>: with no mod on the pass the built-in stages
+    /// yield to the caller's frame budget; with a mod installed the pass still runs as one
+    /// atomic continuation exactly as before, because a mod's Action cannot suspend.
+    /// </summary>
+    internal static IEnumerable<int> RunStaged(Campaign campaign, SimulationPass pass,
+        Func<Campaign, IEnumerable<int>> builtInStages)
+    {
+        if (!Registries.TryGetValue(campaign, out var registry) || !registry.Entries.TryGetValue(pass, out _))
+        {
+            foreach (var stage in builtInStages(campaign)) yield return stage;
+            yield break;
+        }
+        Run(campaign, pass, c => { foreach (var _ in builtInStages(c)) { } });
+        yield return 0;
+    }
 }

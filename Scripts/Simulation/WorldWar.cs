@@ -55,10 +55,18 @@ public static class WorldWar
 {
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(WorldWar))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same world-war pass, yielded between its phases.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(WorldWar))) yield break;
         Recognise(c);
-        if (c.ElapsedDays % 7 != 0) return;
-        Fear(c);
+        yield return 0;
+        if (c.ElapsedDays % 7 != 0) yield break;
+        foreach (var _ in FearStages(c)) yield return 0;
+        yield return 0;
         Incidents(c);
     }
 
@@ -159,10 +167,18 @@ public static class WorldWar
     /// <summary>Every country outside a world war is afraid while it lasts.</summary>
     private static void Fear(Campaign c)
     {
-        if (!Active(c)) return;
+        foreach (var _ in FearStages(c)) { }
+    }
+
+    /// <summary>The same weekly fear pass, yielded between batches of countries.</summary>
+    private static IEnumerable<int> FearStages(Campaign c)
+    {
+        if (!Active(c)) yield break;
         var shock = M.Clamp(c.Defines.WorldWarFearPerWeek, 0f, 0.05f);
+        var ticked = 0;
         foreach (var nation in c.Nations)
         {
+            if (++ticked % 16 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             if (c.Wars.Any(w => !w.Ended && w.WorldWarDay >= 0 && w.Involves(nation.Id))) continue;
             nation.Stability = M.Clamp01(nation.Stability - shock);

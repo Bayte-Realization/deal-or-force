@@ -60,14 +60,15 @@ static class WarScoreIndexTests
         WarScoring.Update(other, otherWar);
         Check(WarScoring.StateIndexBuilds == built + 2, "a second campaign does not reuse the first campaign's lists");
         WarScoring.Update(campaign, war);
-        Check(WarScoring.StateIndexBuilds == built + 3 && Near(war.WarScore, 29f),
-            "coming back to the first campaign rebuilds its own lists and keeps its score");
+        Check(WarScoring.StateIndexBuilds == built + 2 && Near(war.WarScore, 29f),
+            "coming back to the first campaign reuses its own lists and keeps its score");
 
         Check(campaign.SetProvinceController(4, 1), "the rest of the defender's own ground is occupied");
         WarScoring.Update(campaign, war);
         Check(war.Collapsed == 1 && war.WarScore == campaign.Defines.WarScoreMax && Near(war.OccupationScore, 50f),
             "occupying the defender's own ground, and not the neutral pore, collapses the score to the ceiling");
-        Check(WarScoring.StateIndexBuilds == built + 4, "a new occupation rebuilds the lists once, not once per province of the world");
+        Check(WarScoring.StateIndexBuilds == built + 2,
+            "a new occupation reads the live controller and does not rebuild the ownership lists");
         FSharpDifferentialTests();
     }
 

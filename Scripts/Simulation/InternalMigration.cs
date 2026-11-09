@@ -81,6 +81,7 @@ public static class InternalMigration
     private static Campaign _centresOf;
     private static int _centresRevision = -1;
     private static int _movedDay = -1;
+    private static Campaign _movedCampaign;
 
     /// <summary>
     /// What draws people to a region, and keeps them: the standard of living, work, order and
@@ -99,17 +100,28 @@ public static class InternalMigration
 
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null) return;
-        if (_movedDay != campaign.ElapsedDays) { MovedToday = 0; _movedDay = campaign.ElapsedDays; }
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same migration pass, yielded between batches of regions and countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null) yield break;
+        if (_movedDay != campaign.ElapsedDays || !ReferenceEquals(_movedCampaign, campaign))
+        { MovedToday = 0; _movedDay = campaign.ElapsedDays; _movedCampaign = campaign; }
         var defines = campaign.Defines;
-        if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) return;
-        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) return;
+        if (!defines.InternalMigrationEnabled || !defines.HouseholdDynamicsEnabled) yield break;
+        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % Math.Max(1, defines.EconomyTickDays) != 0) yield break;
         var interval = Math.Clamp(defines.EconomyTickDays, 1, 365) / 365f;
         EnsureCentres(campaign);
-        foreach (var state in campaign.States) state.ReviewInternalMigration = 0;
+        var reset = 0;
+        foreach (var state in campaign.States) { if (++reset % 512 == 0) yield return 0; state.ReviewInternalMigration = 0; }
+        yield return 0;
 
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null) continue;
             var states = campaign.StatesOf(nation);
             if (states.Length < 2) continue;

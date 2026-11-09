@@ -564,11 +564,21 @@ public static partial class ResearchSystem
     /// <summary>Once a week, with the economy: every country puts its week into what it is researching.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly research, yielded between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(ResearchSystem))) yield break;
+        if (campaign is null || campaign.ElapsedDays == 0 || campaign.ElapsedDays % 7 != 0 || TechnologyCatalog.All.Count == 0) yield break;
         var survey = Survey.Take(campaign);
+        var tick = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++tick % 4 == 0) yield return 0;
+            using (SimProfiler.Measure("research"))
+            {
             if (nation.Population <= 0) continue;
             var current = TechnologyCatalog.Of(nation.CurrentResearch);
             if (current is null || !Available(nation, current))
@@ -589,6 +599,7 @@ public static partial class ResearchSystem
             nation.ResearchProgress.Remove(current.Id);
             nation.CurrentResearch = "";
             if (nation.IsHuman) campaign.MarkStrategicChange();
+            }
         }
     }
 }

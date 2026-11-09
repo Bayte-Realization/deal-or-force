@@ -40,10 +40,20 @@ public static class MovementMergers
 {
     public static void Tick(Campaign c)
     {
-        if (!c.StepOpensNewDay || c.ElapsedDays % 30 != 17 || !c.FeatureEnabled("movements")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same monthly merge/absorb pass, yielded between its halves.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (!c.StepOpensNewDay || c.ElapsedDays % 30 != 17 || !c.FeatureEnabled("movements")) yield break;
         var active = c.Nations.Where(n => n.Movement is { Dissolved: false, Landless: true, Exile: false } && !n.IsHuman)
             .OrderBy(n => n.Id).ToList();
-        if (c.Defines.MovementMergeChance > 0f) Merge(c, active);
+        if (c.Defines.MovementMergeChance > 0f)
+        {
+            Merge(c, active);
+            yield return 0;
+        }
         if (c.Defines.MovementAbsorbChance > 0f) Absorb(c, active.Where(n => n.Movement is { Dissolved: false }).ToList());
     }
 

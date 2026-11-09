@@ -147,7 +147,8 @@ public sealed partial class Army
     public bool CutOff;
     public int DaysCutOff;
     /// <summary>
-    /// Set only when the staff fills a hole from a free reserve or a threatened-hole advance.
+    /// Set only when the staff fills a hole from a free reserve, sends that reserve to reopen
+    /// a pocket's road, or closes a threatened hole from an advance.
     /// None on a fresh formation. A later order command clears it.
     /// </summary>
     public StaffNote StaffNote;
@@ -276,13 +277,12 @@ public sealed class MoveArmyCommand : ICampaignCommand
             Result = ArmyMoveResult.NotControlled;
             return;
         }
-        if (TargetProvinceId <= 0 || TargetProvinceId > topology.ProvinceCount)
+        var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
+        if (TargetProvinceId <= 0 || TargetProvinceId > topology.ProvinceCount || TargetProvinceId >= controllers.Length)
         {
             SetResult(army, campaign, ArmyMoveResult.InvalidTarget);
             return;
         }
-
-        var controllers = campaign.ProvinceController ?? topology.ProvinceToNation;
         if (MilitaryAccess.MustReturn(campaign, army))
         {
             SetResult(army, campaign, ArmyMoveResult.TargetNotControlled);
@@ -376,7 +376,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
             // Only when the friendly route has failed, and only from where the formation
             // actually stands: a formation that can walk home through its own lines still
             // does, and a queued waypoint is not a breakout.
-            if (route.Length == 0 && routeStart == army.ProvinceId && !AppendWaypoint)
+            if (route.Length == 0 && routeStart == army.ProvinceId && !AppendWaypoint &&
+                army.ProvinceId > 0 && army.ProvinceId < controllers.Length)
             {
                 var standing = controllers[army.ProvinceId];
                 var captor = standing == nation.MapIndex ? null
@@ -406,7 +407,8 @@ public sealed class MoveArmyCommand : ICampaignCommand
             }
             // CombatCore owns every hostile step. The ordinary marcher receives only the
             // friendly prefix, while the complete corridor remains visible and guides it.
-            route = plannedRoute.TakeWhile(province => WarCoalition.FriendlyController(campaign, war, nation.Id, controllers[province])).ToArray();
+            route = plannedRoute.TakeWhile(province => province > 0 && province < controllers.Length &&
+                WarCoalition.FriendlyController(campaign, war, nation.Id, controllers[province])).ToArray();
         }
         if (route.Length == 0)
         {
@@ -646,7 +648,13 @@ public static class MilitaryOperations
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitaryOperations))) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same step's military work, yielded between batches of formations.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitaryOperations))) yield break;
         OffensivePlanning.Tick(campaign);
         var topology = campaign.ProvinceMap;
         // A nation's daily replacement capacity is shared out by priority - but only among
@@ -667,8 +675,11 @@ public static class MilitaryOperations
             reinforcementWeights[formation.NationId] = reinforcementWeights.GetValueOrDefault(formation.NationId) +
                                                        ReinforcementDoctrine.Weight(formation.ReinforcementPriority);
         }
+        yield return 0;
+        var marched = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++marched % 64 == 0) yield return 0;
             army.LastReinforced = 0f;
             // Interned on neutral ground with no safe home left: no offensive orders or
             // starvation. The repatriation pass will send it back once a home exists.

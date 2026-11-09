@@ -133,15 +133,15 @@ public static class FleetHistory
         var topology = campaign.ProvinceMap;
         if (topology is null) return;
         var coastal = SeaLanes.CoastalProvinces(topology);
-        var coastalSet = keepSaved ? new HashSet<int>(coastal) : null;
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
             if (nation is null) continue;
             // A loaded campaign's fleets already have homes - perhaps moved since the bookmark, when a
             // port was lost - and the coordinates they were first placed by would hand them back.
-            if (keepSaved && fleet.HomeProvinceId > 0 && fleet.HomeProvinceId <= topology.ProvinceCount &&
-                coastalSet.Contains(fleet.HomeProvinceId) && topology.ProvinceToNation[fleet.HomeProvinceId] == nation.MapIndex)
+            // What was saved is what loads: a home that fell is the running game's to move
+            // (NavalOperations.KeepPort), not the loader's to guess again.
+            if (keepSaved && fleet.HomeProvinceId > 0 && fleet.HomeProvinceId <= topology.ProvinceCount)
                 continue;
             if (fleet.Establishment <= 0) fleet.Establishment = fleet.Hulls;
             var basin = SeaLanes.BasinAt(topology, fleet.HomeLatitude, fleet.HomeLongitude);

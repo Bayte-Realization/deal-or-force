@@ -59,10 +59,18 @@ public static class BorderDiplomacy
 
     public static void Tick(Campaign c)
     {
-        if (c?.ProvinceMap is null || c.Defines.BorderDealReviewDays <= 0 || !c.FeatureEnabled("deals")) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same border review, yielded between batches of countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c?.ProvinceMap is null || c.Defines.BorderDealReviewDays <= 0 || !c.FeatureEnabled("deals")) yield break;
         var every = Math.Max(7, c.Defines.BorderDealReviewDays);
+        var ticked = 0;
         foreach (var nation in c.Nations.ToArray())
         {
+            if (++ticked % 8 == 0) yield return 0;
             if ((c.ElapsedDays + (long)nation.Id * 13) % every != 5) continue;
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if (nation.Movement is not null || nation.IsSubject || nation.Population <= 0 || !c.HasOwnedLand(nation)) continue;

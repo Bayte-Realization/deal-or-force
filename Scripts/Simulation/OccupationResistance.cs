@@ -117,22 +117,36 @@ public static class OccupationResistance
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign is null || !(campaign.Defines.OccupationResistanceEnabled || campaign.Defines.OccupationResistanceInCivilWars)) return;
-        if (campaign.ElapsedDays % 7 != 5) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly slip, yielded between wars and between the provinces a large
+    /// occupation ledger covers.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign is null || !(campaign.Defines.OccupationResistanceEnabled || campaign.Defines.OccupationResistanceInCivilWars)) yield break;
+        if (campaign.ElapsedDays % 7 != 5) yield break;
         var topology = campaign.ProvinceMap;
         var controllers = campaign.ProvinceController;
         var occupation = campaign.ProvinceOccupation;
-        if (topology is null || controllers is null || occupation is null) return;
+        if (topology is null || controllers is null || occupation is null) yield break;
 
         Dictionary<int, ScenarioState> states = null;
         Dictionary<int, List<Army>> garrisons = null;
         HashSet<int> applied = null;
-        foreach (var war in campaign.Wars)
+        // The slip follows wars still going. A war that has ended keeps its ledger and
+        // does not bleed a province on the weekly pass.
+        var live = Warfare.LiveWars(campaign);
+        var slips = 0;
+        for (var index = 0; index < live.Count; index++)
         {
+            if (index % 4 == 0) yield return 0;
+            var war = live[index];
             if (war is null || war.Ended) continue;
             if (!campaign.Defines.OccupationResistanceEnabled && !war.CivilConflict) continue;
             foreach (var pair in war.OriginalController)
             {
+                if (++slips % 1024 == 0) yield return 0;
                 var province = pair.Key;
                 if (province <= 0 || province >= controllers.Length || province >= occupation.Length) continue;
                 if (controllers[province] == pair.Value) continue;

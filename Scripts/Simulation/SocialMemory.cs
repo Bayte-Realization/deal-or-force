@@ -196,9 +196,15 @@ public static class SocialMemory
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(SocialMemory))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same reviews, yielded between countries, regions and relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(SocialMemory))) yield break;
         var habits = HabitsEnabled(c); var images = ImagesEnabled(c);
-        if (!habits && !images) return;
+        if (!habits && !images) yield break;
         if (images) PublicOutreachActions.Tick(c);
         var interval = Math.Max(1, c.Defines.SocialReviewDays);
         var subjects = SubjectsScratch; subjects.Clear();
@@ -210,8 +216,11 @@ public static class SocialMemory
             owners.TryAdd(subject.MapIndex, subject);
             byId[subject.Id] = subject;
         }
+        yield return 0;
+        var tick = 0;
         foreach (var n in c.Nations)
         {
+            if (++tick % 8 == 0) yield return 0;
             if (habits && Due(c.ElapsedDays, n.Id, n.LastInstitutionReviewDay, interval))
             {
                 var habitDays = n.LastInstitutionReviewDay < 0 ? 1 : Math.Min(3650, c.ElapsedDays - n.LastInstitutionReviewDay);
@@ -227,15 +236,23 @@ public static class SocialMemory
             n.DomesticImage.Review(c.ElapsedDays, domestic, c.Defines);
             ReviewCultures(c, n);
             ReviewOrganisations(c, n);
+            if (((c.ElapsedDays / interval) + n.Id) % 52 == 0) ForgetTheGone(c, n, subjects);
             // Scripted narratives may concern a known subject without a diplomatic relationship.
+            // Rare, and the walk is long in a long campaign: every fourth review.
+            if (((c.ElapsedDays / interval) + n.Id) % 4 == 0)
             foreach (var pair in n.PublicImages)
                 if (subjects.TryGetValue(pair.Key, out var subject) &&
                     subject.Id != n.Id && CampaignDiplomacy.Peek(c, n.Id, subject.Id) is null)
                     ReviewForeign(c, n, subject, null);
         }
-        if (habits) foreach (var s in c.States)
+        yield return 0;
+        if (habits)
         {
-            if (!Due(c.ElapsedDays, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
+            var scanned = 0;
+            foreach (var s in c.States)
+            {
+                if (++scanned % 128 == 0) yield return 0;
+                if (!Due(c.ElapsedDays, s.MapIndex, s.LastBorderReviewDay, interval)) continue;
             var days = s.LastBorderReviewDay < 0 ? 1 : Math.Min(3650, c.ElapsedDays - s.LastBorderReviewDay);
             s.LastBorderReviewDay = c.ElapsedDays;
             if (s.RememberedOwner < 0)
@@ -255,13 +272,20 @@ public static class SocialMemory
                 s.SettledBorderDays = Math.Max(0, s.SettledBorderDays - days * 2);
             else s.SettledBorderDays = Math.Min(365000, s.SettledBorderDays + days);
             s.BorderHabit = Habit(s.SettledBorderDays, c.Defines.BorderHabitYears);
+            }
         }
-        if (images) foreach (var relation in c.Relations.Values)
+        yield return 0;
+        if (images)
         {
-            if (((c.ElapsedDays + relation.A + relation.B) % interval) != 0) continue;
-            if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
-            ReviewForeign(c, a, b, relation);
-            ReviewForeign(c, b, a, relation);
+            var scanned = 0;
+            foreach (var relation in c.Relations.Values)
+            {
+                if (++scanned % 512 == 0) yield return 0;
+                if (((c.ElapsedDays + relation.A + relation.B) % interval) != 0) continue;
+                if (!byId.TryGetValue(relation.A, out var a) || !byId.TryGetValue(relation.B, out var b)) continue;
+                ReviewForeign(c, a, b, relation);
+                ReviewForeign(c, b, a, relation);
+            }
         }
     }
 
@@ -281,7 +305,8 @@ public static class SocialMemory
     }
     private static void ReviewForeign(Campaign c, Nation audience, Nation subject, DiplomaticRelation relation)
     {
-        var image = Image(audience, NationKey(subject));
+        var key = NationKey(subject);
+        var image = Image(audience, key);
         if (!Due(c.ElapsedDays, audience.Id + subject.Id, image?.LastReviewDay ?? -1,
             Math.Max(1, c.Defines.SocialReviewDays))) return;
         // Never feed the opinion bonus back into its own target.
@@ -299,8 +324,39 @@ public static class SocialMemory
             if (movement.RecognisedBy.Contains(audience.Id)) target += 0.25f;
             if (movement.DesignatedBy.Contains(audience.Id)) target -= 0.40f;
         }
-        (image ?? Image(audience, NationKey(subject), true)).Review(c.ElapsedDays, target, c.Defines);
+        if (image is null)
+        {
+            if (MathF.Abs(target) < 0.02f) return;
+            image = Image(audience, key, true);
+        }
+        image.Review(c.ElapsedDays, target, c.Defines);
+        if (image.Status == 0 && MathF.Abs(image.Esteem) < 0.01f && MathF.Abs(image.Incident) < 0.01f &&
+            MathF.Abs(target) < 0.02f && (image.LastIncidentDay < 0 || c.ElapsedDays - image.LastIncidentDay > 365))
+        {
+            audience.PublicImages.Remove(key);
+        }
     }
+    private static readonly List<string> ForgottenScratch = new();
+
+    /// <summary>
+    /// The images of countries that are gone, unreviewed for five years and never strong enough to
+    /// become a stigma or an ideal, are forgotten: a campaign of centuries is not carried by every
+    /// opinion of every rising that ever lived.
+    /// </summary>
+    private static void ForgetTheGone(Campaign c, Nation audience, Dictionary<string, Nation> subjects)
+    {
+        var forgotten = ForgottenScratch; forgotten.Clear();
+        foreach (var (key, image) in audience.PublicImages)
+        {
+            if (!key.StartsWith("nation:", StringComparison.Ordinal) || image.Status != 0) continue;
+            if (image.LastReviewDay >= 0 && c.ElapsedDays - image.LastReviewDay < 1825) continue;
+            if (subjects.TryGetValue(key, out var subject) &&
+                (subject.Population > 0 || subject.Movement is { Dissolved: false })) continue;
+            forgotten.Add(key);
+        }
+        foreach (var key in forgotten) audience.PublicImages.Remove(key);
+    }
+
     private static readonly Dictionary<string, long> CulturePopulationsScratch = new(StringComparer.Ordinal);
     private static readonly List<string> CultureSubjectsScratch = new();
     private static readonly HashSet<string> ActiveCoalitionsScratch = new(StringComparer.Ordinal);
@@ -326,8 +382,13 @@ public static class SocialMemory
         {
             var contact = M.Clamp(populations.GetValueOrDefault(culture) / (float)Math.Max(1, audience.Population), 0f, 1f);
             var shared = DemographyCatalog.IsPrimary(audience.Tag, culture) ? 0.15f : 0f;
-            Image(audience, "culture:" + culture, true).Review(c.ElapsedDays,
+            var image = Image(audience, "culture:" + culture, true);
+            image.Review(c.ElapsedDays,
                 shared + contact * 0.3f + (contact > 0f ? (audience.Stability - 0.5f) * 0.15f : 0f), c.Defines);
+            // A people it no longer lives with, once its image has faded to nothing, is forgotten
+            // rather than reviewed every week for the rest of the campaign.
+            if (contact <= 0f && shared <= 0f && image.Status == 0 && MathF.Abs(image.Esteem) < 0.02f && MathF.Abs(image.Incident) < 0.01f)
+                audience.PublicImages.Remove("culture:" + culture);
         }
     }
     private static void ReviewOrganisations(Campaign c, Nation audience)

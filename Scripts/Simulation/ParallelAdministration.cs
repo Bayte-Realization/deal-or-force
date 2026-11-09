@@ -237,9 +237,15 @@ public static class ParallelAdministration
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (campaign?.States is null || campaign?.Defines is null) return;
-        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % 7 != 0) return;
-        TickWeek(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly gate, staged so the frame can pause inside the region pass.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (campaign?.States is null || campaign?.Defines is null) yield break;
+        if (campaign.ElapsedDays <= 0 || campaign.ElapsedDays % 7 != 0) yield break;
+        foreach (var _ in TickWeekStages(campaign)) yield return 0;
     }
 
     /// <summary>
@@ -248,10 +254,18 @@ public static class ParallelAdministration
     /// </summary>
     internal static void TickWeek(Campaign campaign)
     {
-        if (campaign?.States is null || campaign?.Defines is null) return;
+        foreach (var _ in TickWeekStages(campaign)) { }
+    }
+
+    /// <summary>The same week, yielded between batches of regions.</summary>
+    internal static IEnumerable<int> TickWeekStages(Campaign campaign)
+    {
+        if (campaign?.States is null || campaign?.Defines is null) yield break;
         var defines = campaign.Defines;
+        var scanned = 0;
         foreach (var region in campaign.States)
         {
+            if (++scanned % 128 == 0) yield return 0;
             if (region is null || region.AdministeredById < 0) continue;
             var admin = campaign.NationById(region.AdministeredById);
             var host = KinStatecraft.HostOf(campaign, region);

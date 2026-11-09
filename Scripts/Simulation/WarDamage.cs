@@ -211,13 +211,25 @@ public static class WarDamage
     /// <summary>The week's rebuilding, and what the ruins cost in the meantime. Runs on the economy's week.</summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarDamage))) return;
-        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) return;
-        Week(campaign);
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same weekly gate, staged so the frame can pause inside the country pass.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(WarDamage))) yield break;
+        if (campaign.ElapsedDays == 0 || campaign.ElapsedDays % campaign.Defines.EconomyTickDays != 0) yield break;
+        foreach (var _ in WeekStages(campaign)) yield return 0;
     }
 
     /// <summary>One week of it, whatever the day - the bench runs a year of rebuilding without a year of the world.</summary>
     internal static void Week(Campaign campaign)
+    {
+        foreach (var _ in WeekStages(campaign)) { }
+    }
+
+    /// <summary>The same week, yielded between batches of countries.</summary>
+    internal static IEnumerable<int> WeekStages(Campaign campaign)
     {
         var defines = campaign.Defines;
         var ledger = LedgerOf(campaign);
@@ -225,8 +237,10 @@ public static class WarDamage
         HashSet<int> atWar = null;
         var abroad = new List<ScenarioState>();
 
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             var states = campaign.StatesOf(nation);
             var anyDamage = false;
             var anyDisplaced = false;

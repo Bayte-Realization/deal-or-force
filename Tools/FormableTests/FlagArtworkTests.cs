@@ -174,8 +174,8 @@ static class FlagArtworkTests
         try
         {
             hamas.Movement.Landless = false;
-            Check(FlagCatalog.Resolve(campaign, hamas) == "flag_hms_theocracy",
-                "territorial governments retain the normal dynamic flag rules");
+            Check(FlagCatalog.Resolve(campaign, hamas) == "flag_hms",
+                "a territorial movement keeps its authored banner instead of a hypothetical regime template");
             hamas.Movement.Landless = true;
             Check(FlagCatalog.ResolveFormationPreview(campaign, hamas, "benelux_union") != "flag_hms",
                 "a proclaimed formable outranks the movement's old banner");

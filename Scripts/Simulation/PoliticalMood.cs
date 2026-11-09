@@ -300,15 +300,24 @@ public static class PoliticalMood
 
     public static void Tick(Campaign c)
     {
-        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(PoliticalMood))) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same review, yielded between countries so every region's temper is not
+    /// taken in one frame.</summary>
+    public static System.Collections.Generic.IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || !MechanicFeatures.SystemEnabled(c, nameof(PoliticalMood))) yield break;
         var interval = c.Defines.PoliticalMoodReviewDays;
-        if (interval <= 0 || c.ElapsedDays % interval != 0) return;
+        if (interval <= 0 || c.ElapsedDays % interval != 0) yield break;
         var floor = MathF.Max(0f, c.Defines.PoliticalMoodMandateMultiple) /
             MathF.Max(1f, IdeologyCatalog.All.Count);
         var rise = MathF.Max(0f, c.Defines.PoliticalMoodRadicalismPerWeek);
         var calm = MathF.Max(0f, c.Defines.PoliticalMoodCalmPerWeek);
+        var scanned = 0;
         foreach (var nation in c.Nations)
         {
+            if (++scanned % 16 == 0) yield return 0;
             if (nation.Population <= 0 || nation.Movement is not null || !IdeologyCatalog.Knows(nation.Ideology)) continue;
             var mandate = Mandate(c, nation);
             var missing = MathF.Max(0f, floor - mandate);

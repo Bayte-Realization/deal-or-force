@@ -118,6 +118,8 @@ public static class CampaignDiplomacy
         var high = Math.Max(a, b);
         var key = ((long)low << 32) | (uint)high;
         if (campaign.Relations.TryGetValue(key, out var relation)) return relation;
+        // A sleeping relation (RelationDormancy) wakes when anything means to write to it.
+        if (campaign.DormantRelations.Count > 0 && RelationDormancy.Wake(campaign, key) is { } woken) return woken;
         relation = new DiplomaticRelation { A = low, B = high };
         campaign.Relations[key] = relation;
         return relation;
@@ -137,7 +139,9 @@ public static class CampaignDiplomacy
         if (a == b || a < 0 || b < 0) return null;
         var low = Math.Min(a, b);
         var high = Math.Max(a, b);
-        return campaign.Relations.TryGetValue(((long)low << 32) | (uint)high, out var relation)
+        var key = ((long)low << 32) | (uint)high;
+        return campaign.Relations.TryGetValue(key, out var relation) ||
+               campaign.DormantRelations.TryGetValue(key, out relation)
             ? relation
             : null;
     }
@@ -151,42 +155,9 @@ public static class CampaignDiplomacy
         a == b || a < 0 || b < 0 ? null : Peek(campaign, a, b)
             ?? new DiplomaticRelation { A = Math.Min(a, b), B = Math.Max(a, b) };
 
-    private static readonly List<StrategicWar> ActiveWars = new();
-    private static Campaign _activeWarsFor;
-    private static int _activeWarsStamp;
-
-    /// <summary>
-    /// Active wars, rebuilt when the war list's stamp changes, read everywhere. Called from
-    /// pair/third-country loops that run O(countries) times a day over O(wars) each: the
-    /// snapshot costs one filtered copy per war-list change, and each ask stops walking the
-    /// full war list with side-set tests. The stamp is the list's count against the
-    /// campaign's war revision, so a war declared and another ended between two asks still
-    /// reads as a change. Two campaigns in one process each keep their own snapshot.
-    /// </summary>
-    private static List<StrategicWar> ActiveWarsOf(Campaign campaign)
-    {
-        var stamp = campaign.Wars.Count * 1000003 + campaign.WarRevision;
-        if (!ReferenceEquals(_activeWarsFor, campaign) || stamp != _activeWarsStamp || !AllStillActive(ActiveWars))
-        {
-            ActiveWars.Clear();
-            foreach (var war in campaign.Wars)
-                if (!war.Ended) ActiveWars.Add(war);
-            _activeWarsFor = campaign;
-            _activeWarsStamp = stamp;
-        }
-        return ActiveWars;
-    }
-
-    private static bool AllStillActive(List<StrategicWar> wars)
-    {
-        for (var i = 0; i < wars.Count; i++)
-            if (wars[i].Ended) return false;
-        return true;
-    }
-
     public static bool AtWar(Campaign campaign, int a, int b)
     {
-        var wars = ActiveWarsOf(campaign);
+        var wars = Warfare.LiveWars(campaign);
         for (var index = 0; index < wars.Count; index++)
             if (!wars[index].Ended && wars[index].Opposes(a, b)) return true;
         return false;
@@ -195,8 +166,9 @@ public static class CampaignDiplomacy
     /// <summary>The war these two are fighting each other in, or null.</summary>
     public static StrategicWar WarBetween(Campaign campaign, int a, int b)
     {
-        foreach (var war in campaign.Wars)
-            if (!war.Ended && war.Opposes(a, b)) return war;
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
+            if (!wars[index].Ended && wars[index].Opposes(a, b)) return wars[index];
         return null;
     }
 
@@ -657,8 +629,23 @@ public sealed class GuaranteeCommand : ICampaignCommand
             relation.GuaranteeRequestedBy = -1;
             relation.GuaranteeRequestedDay = -9999;
         }
-        if (Guarantee) OpinionSystem.Remember(campaign, relation, "guaranteed_us");
-        else OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+        if (Guarantee)
+        {
+            // The country that tore the promise up is the one that can stitch it back.
+            // The other side's grievance stays until they do.
+            if (relation.GuaranteeBrokenBy == IssuerId)
+            {
+                relation.GuaranteeBrokenBy = -1;
+                OpinionSystem.Forget(campaign, relation, "withdrew_guarantee");
+            }
+            OpinionSystem.Remember(campaign, relation, "guaranteed_us");
+        }
+        else
+        {
+            relation.GuaranteeBrokenBy = IssuerId;
+            OpinionSystem.Forget(campaign, relation, "guaranteed_us");
+            OpinionSystem.Remember(campaign, relation, "withdrew_guarantee");
+        }
         campaign.MarkStrategicChange();
     }
 }

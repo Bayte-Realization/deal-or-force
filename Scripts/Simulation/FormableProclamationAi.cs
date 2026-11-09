@@ -133,9 +133,13 @@ public static class FormableProclamationAi
         // government which really has become a local successor may legitimately restore it.
         // A player's loyal single-player dependency is not consent to have the AI erase
         // their country. The command's older subject route predates that distinction.
-        var foreignOwners = PeacefulFormation.Territory(campaign, definition)
-            .Where(p => p > 0 && p <= campaign.ProvinceMap.ProvinceCount && !campaign.ProvinceMap.WaterByProvince[p])
-            .Select(p => (int)campaign.ProvinceMap.ProvinceToNation[p]).Where(index => index != nation.MapIndex).ToHashSet();
+        var foreignOwners = new HashSet<int>();
+        foreach (var p in PeacefulFormation.Territory(campaign, definition))
+        {
+            if (p <= 0 || p > campaign.ProvinceMap.ProvinceCount || campaign.ProvinceMap.WaterByProvince[p]) continue;
+            var owner = (int)campaign.ProvinceMap.ProvinceToNation[p];
+            if (owner != nation.MapIndex) foreignOwners.Add(owner);
+        }
         if (campaign.Nations.Any(partner => foreignOwners.Contains(partner.MapIndex) && HumanCountry(campaign, partner) &&
                 PeacefulFormation.Participates(campaign, nation, partner, definition) &&
                 !PeacefulFormation.Consented(campaign, nation, partner, definition)))
@@ -146,7 +150,7 @@ public static class FormableProclamationAi
 
         // Most monthly projects are nowhere near ready. Build a world-sized index only
         // for the rare score comparison that survived readiness and financing, once per review.
-        context.StateCounts ??= StateProvinceCounts(campaign.ProvinceMap);
+        context.StateCounts ??= FormableNations.StateLandProvinceTotals(campaign);
         var identity = FoundationIdentityShare(campaign, nation, definition, context.StateCounts);
         var preference = Preference(definition.Id);
         var project = nation.ConsolidationProject == definition.Id ? .18f : 0;
@@ -197,7 +201,7 @@ public static class FormableProclamationAi
             !campaign.FeatureEnabled("formable_nations") || !MechanicFeatures.SystemEnabled(campaign, nameof(FormableProclamationAi))) return;
         var interval = campaign.Defines.AiFormableReviewDays;
         if (interval <= 0 || campaign.ElapsedDays < Math.Max(0, campaign.Defines.AiFormableEarliestDay)) return;
-        foreach (var nation in campaign.Nations.OrderBy(n => n.Id).ToArray())
+        foreach (var nation in campaign.Nations.OrderBy(n => n.Id))
         {
             if (HumanCountry(campaign, nation) || nation.Population <= 0 || nation.IsSubject || !EstablishedCountry(nation) ||
                 campaign.Fallen.Contains(nation.Id) ||
@@ -218,12 +222,34 @@ public static class FormableProclamationAi
     private static bool HumanCountry(Campaign campaign, Nation nation) =>
         nation.IsHuman || nation.IsPlayer || campaign.HumanSeats.Contains(nation.Id);
 
-    private static Dictionary<int, int> StateProvinceCounts(ProvinceTopology map)
+    private static Campaign _foundationCampaign;
+    private static int _foundationRevision = int.MinValue;
+    private static readonly Dictionary<string, (HashSet<int> Provinces, Dictionary<int, int> Foundation)> _foundationCache = new();
+
+    private static (HashSet<int> Provinces, Dictionary<int, int> Foundation) GetDefinitionFoundation(Campaign campaign, FormableNation definition)
     {
-        var counts = new Dictionary<int, int>();
-        for (var p = 1; p <= map.ProvinceCount; p++)
-            if (!map.WaterByProvince[p]) counts[map.ProvinceToState[p]] = counts.GetValueOrDefault(map.ProvinceToState[p]) + 1;
-        return counts;
+        // Province-to-region content only (OwnershipRevision); a battle's captures leave it alone.
+        if (!ReferenceEquals(_foundationCampaign, campaign) || _foundationRevision != campaign.OwnershipRevision)
+        {
+            _foundationCampaign = campaign;
+            _foundationRevision = campaign.OwnershipRevision;
+            _foundationCache.Clear();
+        }
+        if (_foundationCache.TryGetValue(definition.Id, out var cached)) return cached;
+
+        var map = campaign.ProvinceMap;
+        var provinces = new HashSet<int>();
+        var foundation = new Dictionary<int, int>();
+        foreach (var p in PeacefulFormation.Territory(campaign, definition))
+        {
+            if (p <= 0 || p > map.ProvinceCount || map.WaterByProvince[p]) continue;
+            provinces.Add(p);
+            var state = map.ProvinceToState[p];
+            foundation[state] = foundation.GetValueOrDefault(state) + 1;
+        }
+        var entry = (provinces, foundation);
+        _foundationCache[definition.Id] = entry;
+        return entry;
     }
 
     private static float FoundationIdentityShare(Campaign campaign, Nation founder, FormableNation definition,
@@ -234,16 +260,8 @@ public static class FormableProclamationAi
         cultures.UnionWith(definition.EligibleCultures);
         foreach (var tag in definition.RequiredTags) cultures.UnionWith(DemographyCatalog.PrimaryCultures(tag));
         var groups = new HashSet<string>(definition.EligibleCultureGroups, StringComparer.OrdinalIgnoreCase);
-        var map = campaign.ProvinceMap;
-        var provinces = PeacefulFormation.Territory(campaign, definition).Where(p => p > 0 && p <= map.ProvinceCount && !map.WaterByProvince[p]).ToHashSet();
-        var foundation = new Dictionary<int, int>();
-        counts ??= StateProvinceCounts(map);
-        // A partly included region contributes only its foundation share, not its whole population.
-        foreach (var p in provinces)
-        {
-            var state = map.ProvinceToState[p];
-            foundation[state] = foundation.GetValueOrDefault(state) + 1;
-        }
+        var (provinces, foundation) = GetDefinitionFoundation(campaign, definition);
+        counts ??= FormableNations.StateLandProvinceTotals(campaign);
         double total = 0, represented = 0;
         foreach (var state in campaign.States)
         {

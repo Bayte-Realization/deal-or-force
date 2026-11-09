@@ -135,15 +135,51 @@ public static class MilitiaCore
     /// Every flag this country is at war with. Worked out once and handed down, because the
     /// alternative is a list lookup per province per neighbour per day.
     /// </summary>
-    private static void CollectEnemies(Campaign campaign, Nation nation, HashSet<ushort> into)
+    private static void CollectEnemies(Campaign campaign, Nation nation, HashSet<ushort> into) =>
+        CollectEnemies(campaign, nation, into, WarMembers(campaign));
+
+    /// <summary>
+    /// Every flag this country is at war with, read off the day's member lists: the same
+    /// set <see cref="StrategicWar.Involves"/> answers, without asking every war about every
+    /// nation once per country.
+    /// </summary>
+    private static void CollectEnemies(Campaign campaign, Nation nation, HashSet<ushort> into,
+        IReadOnlyDictionary<int, int[]> warMembers)
     {
         if (campaign is null || nation is null) return;
         foreach (var war in campaign.Wars)
         {
             if (war.Ended || !war.Involves(nation.Id)) continue;
-            foreach (var other in campaign.Nations)
-                if (other.Id != nation.Id && war.Involves(other.Id)) into.Add((ushort)other.MapIndex);
+            if (!warMembers.TryGetValue(war.Id, out var members)) continue;
+            foreach (var otherId in members)
+            {
+                if (otherId == nation.Id) continue;
+                var other = campaign.NationById(otherId);
+                if (other is not null) into.Add((ushort)other.MapIndex);
+            }
         }
+    }
+
+    /// <summary>Both sides of every open war as a flat id list, built once per day.</summary>
+    private static Dictionary<int, int[]> WarMembers(Campaign campaign)
+    {
+        var map = new Dictionary<int, int[]>(campaign.Wars.Count);
+        foreach (var war in campaign.Wars)
+        {
+            if (war.Ended) continue;
+            var members = new List<int>(war.BelligerentCount);
+            foreach (var id in war.Side(true)) members.Add(id);
+            foreach (var id in war.Side(false)) members.Add(id);
+            map[war.Id] = members.ToArray();
+        }
+        return map;
+    }
+
+    private static Dictionary<int, ScenarioState> StateByMap(Campaign campaign)
+    {
+        var map = new Dictionary<int, ScenarioState>(campaign.States.Count);
+        foreach (var state in campaign.States) map[state.MapIndex] = state;
+        return map;
     }
 
     // Scratch, cleared on the way in. Safe where the readiness was not: nothing is carried
@@ -161,21 +197,33 @@ public static class MilitiaCore
     /// </summary>
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitiaCore))) return;
-        if (campaign?.ProvinceMap is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same day of it, yielded between armies and countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(MilitiaCore))) yield break;
+        if (campaign?.ProvinceMap is null) yield break;
 
         var fighting = false;
         foreach (var war in campaign.Wars)
             if (!war.Ended) { fighting = true; break; }
 
-        StandDown(campaign, fighting);
-        if (!fighting) return;
+        // Who each war is between, once for the whole day: the per-country enemy lists
+        // below used to ask every war about every nation, which was the pass's whole cost.
+        var warMembers = WarMembers(campaign);
+
+        foreach (var _ in StandDownStages(campaign, fighting, warMembers)) yield return 0;
+        if (!fighting) yield break;
 
         var weights = Weights;
         Standing.Clear();
         Here.Clear();
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (army.TemplateId != TemplateId) continue;
             Standing[army.NationId] = Standing.GetValueOrDefault(army.NationId) + 1;
             var key = ((long)army.NationId << 32) | (uint)army.StateMapIndex;
@@ -187,7 +235,7 @@ public static class MilitiaCore
             if (army.Personnel < army.MaxPersonnel && army.Personnel >= 0)
             {
                 var controls = campaign.ProvinceController;
-                if (controls is not null && army.ProvinceId > 0 &&
+                if (controls is not null && army.ProvinceId > 0 && army.ProvinceId < controls.Length &&
                     controls[army.ProvinceId] == (ushort)army.NationId)
                 {
                     var room = army.MaxPersonnel - army.Personnel;
@@ -198,10 +246,13 @@ public static class MilitiaCore
             }
         }
 
+        yield return 0;
+        var tick = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++tick % 8 == 0) yield return 0;
             Enemies.Clear();
-            CollectEnemies(campaign, nation, Enemies);
+            CollectEnemies(campaign, nation, Enemies, warMembers);
             if (Enemies.Count == 0)
             {
                 if (nation.MilitiaReadiness.Count > 0) nation.MilitiaReadiness.Clear();
@@ -411,13 +462,17 @@ public static class MilitiaCore
     /// free divisions in 2040. The men are not returned to any pool because they never came
     /// out of one; they go back to the region they were always in.
     /// </summary>
-    private static void StandDown(Campaign campaign, bool fighting)
+    private static IEnumerable<int> StandDownStages(Campaign campaign, bool fighting,
+        IReadOnlyDictionary<int, int[]> warMembers)
     {
         var weights = Weights;
         List<Army> going = null;
         var lastNation = -1;
+        Dictionary<int, ScenarioState> stateByMap = null;
+        var scanned = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (army.TemplateId != TemplateId) continue;
             var nation = campaign.NationById(army.NationId);
             if (nation is null) continue;
@@ -427,13 +482,12 @@ public static class MilitiaCore
             if (army.NationId != lastNation)
             {
                 Enemies.Clear();
-                if (fighting) CollectEnemies(campaign, nation, Enemies);
+                if (fighting) CollectEnemies(campaign, nation, Enemies, warMembers);
                 lastNation = army.NationId;
             }
 
-            ScenarioState state = null;
-            foreach (var candidate in campaign.States)
-                if (candidate.MapIndex == army.StateMapIndex) { state = candidate; break; }
+            stateByMap ??= StateByMap(campaign);
+            var state = stateByMap.GetValueOrDefault(army.StateMapIndex);
 
             var threatened = state is not null && nation is not null &&
                              Threat(ControlTally.World(campaign, nation.MapIndex, state.MapIndex)) > 0.0001f;
@@ -450,7 +504,7 @@ public static class MilitiaCore
             if (campaign.ElapsedDays - since < weights.StandDownDays) continue;
             (going ??= new List<Army>()).Add(army);
         }
-        if (going is null) return;
+        if (going is null) yield break;
 
         foreach (var army in going)
         {

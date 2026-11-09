@@ -170,6 +170,23 @@ public static class NationalCourses
         }
     }
 
+    public static void AddTo(Dictionary<string, float> totals, Nation n)
+    {
+        var m = n.NationalCourse;
+        if (!n.NationalCourseActive || !m.Initialized) return;
+        if (m.Modifiers is null || m.ModifierRevision != NationalCourseCatalog.Revision)
+        {
+            m.Modifiers = new(StringComparer.Ordinal); m.ModifierRevision = NationalCourseCatalog.Revision;
+            foreach (var p in m.Convictions)
+                if (NationalCourseCatalog.Find(p.Key) is { } d)
+                    foreach (var effect in d.Modifiers)
+                        m.Modifiers[effect.Key] = m.Modifiers.GetValueOrDefault(effect.Key) + effect.Value * p.Value;
+        }
+        if (m.Modifiers is not null)
+            foreach (var (key, value) in m.Modifiers)
+                totals[key] = totals.GetValueOrDefault(key) + value;
+    }
+
     public static IEnumerable<(string Source, IReadOnlyDictionary<string, float> Modifiers)> Sources(Nation n)
     {
         var m = n.NationalCourse;

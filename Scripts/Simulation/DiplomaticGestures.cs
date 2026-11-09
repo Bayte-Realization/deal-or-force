@@ -381,9 +381,17 @@ public static class DiplomaticGestures
     /// </summary>
     public static void Tick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 6) return;
+        foreach (var _ in TickStages(c)) { }
+    }
+
+    /// <summary>The same weekly instalments, yielded between batches of relationships.</summary>
+    public static IEnumerable<int> TickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0 || c.ElapsedDays % 7 != 6) yield break;
+        var scanned = 0;
         foreach (var relation in c.Relations.Values)
         {
+            if (++scanned % 512 == 0) yield return 0;
             if (relation.LoanLender < 0 || relation.LoanOutstanding <= 0f) continue;
             var lender = c.NationById(relation.LoanLender);
             var borrower = c.NationById(relation.LoanLender == relation.A ? relation.B : relation.A);
@@ -426,9 +434,17 @@ public static class DiplomaticGestures
     /// </summary>
     public static void AiTick(Campaign c)
     {
-        if (c is null || c.ElapsedDays <= 0) return;
+        foreach (var _ in AiTickStages(c)) { }
+    }
+
+    /// <summary>The same monthly gesture pass, yielded between batches of countries.</summary>
+    public static IEnumerable<int> AiTickStages(Campaign c)
+    {
+        if (c is null || c.ElapsedDays <= 0) yield break;
+        var ticked = 0;
         foreach (var nation in c.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (nation.Movement is not null || nation.Population <= 0 || c.Fallen.Contains(nation.Id)) continue;
             if (nation.IsHuman && !Delegation.Holds(nation, Delegation.Diplomacy)) continue;
             if ((c.ElapsedDays + nation.Id * 7) % 30 != 0) continue;

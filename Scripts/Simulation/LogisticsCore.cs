@@ -129,12 +129,18 @@ public static class LogisticsSystem
 
     public static void Tick(Campaign campaign)
     {
-        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LogisticsSystem))) return;
-        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) return;
+        foreach (var _ in TickStages(campaign)) { }
+    }
+
+    /// <summary>The same supply pass, yielded inside the province scan and between countries.</summary>
+    public static IEnumerable<int> TickStages(Campaign campaign)
+    {
+        if (!MechanicFeatures.SystemEnabled(campaign, nameof(LogisticsSystem))) yield break;
+        if (campaign.ProvinceMap is null || campaign.ProvinceController is null) yield break;
         // Every third day, and once on it. Without the first half of this a campaign
         // stepping an hour at a time rebuilt the whole supply network twenty-four times on
         // the third day and not at all on the other two.
-        if (!campaign.StepOpensNewDay) return;
+        if (!campaign.StepOpensNewDay) yield break;
         // Every third day the roads are traced again. The days inside a pocket are still
         // days, so the clock below runs on the days the trace sits out as well.
         if (campaign.ElapsedDays <= 1 || campaign.ElapsedDays % 3 == 0)
@@ -147,8 +153,10 @@ public static class LogisticsSystem
         // Who holds what. The lists are kept between ticks and emptied rather than dropped,
         // so the province scan costs the scan and nothing else.
         foreach (var list in board.Controlled.Values) list.Clear();
+        var scanned = 0;
         for (var province = 1; province <= topology.ProvinceCount; province++)
         {
+            if (++scanned % 8192 == 0) yield return 0;
             var map = controllers[province];
             if (map == 0) continue;
             if (!board.Controlled.TryGetValue(map, out var list)) board.Controlled[map] = list = new List<int>();
@@ -159,8 +167,10 @@ public static class LogisticsSystem
         // sixty-one nations and fourteen hundred formations that is three hundred and
         // sixty-five thousand comparisons a tick turned into fourteen hundred.
         foreach (var list in board.ArmiesByNation.Values) list.Clear();
+        var indexed = 0;
         foreach (var army in campaign.Armies)
         {
+            if (++indexed % 512 == 0) yield return 0;
             if (!board.ArmiesByNation.TryGetValue(army.NationId, out var list))
                 board.ArmiesByNation[army.NationId] = list = new List<Army>();
             list.Add(army);
@@ -176,13 +186,17 @@ public static class LogisticsSystem
             board.Generation = 0;
         }
 
+        yield return 0;
+        var ticked = 0;
         foreach (var nation in campaign.Nations)
         {
+            if (++ticked % 8 == 0) yield return 0;
             if (!board.ArmiesByNation.TryGetValue(nation.Id, out var armies) || armies.Count == 0) continue;
             UpdateNation(campaign, nation, armies, board.Controlled.GetValueOrDefault((ushort)nation.MapIndex), board);
         }
         } // The trace above is every third day. The clock below is every day.
 
+        yield return 0;
         AgeCutOff(campaign);
     }
 
@@ -486,9 +500,17 @@ public static class LogisticsSystem
     private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board)
     {
         board.Corridors.Clear();
+        // A subject's ground is its overlord's road and the overlord's is the subject's, at war and at peace.
+        foreach (var host in campaign.Nations)
+            if (host.Id != nation.Id && host.Population > 0 && host.MapIndex > 0 &&
+                (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+                board.Corridors.Add((ushort)host.MapIndex);
         var atWar = false;
-        foreach (var war in campaign.Wars)
+        var wars = Warfare.LiveWars(campaign);
+        for (var index = 0; index < wars.Count; index++)
         {
+            var war = wars[index];
             if (war.Ended || !war.Involves(nation.Id)) continue;
             atWar = true;
             foreach (var id in war.Side(war.IsAttacking(nation.Id)))

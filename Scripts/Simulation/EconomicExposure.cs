@@ -79,22 +79,34 @@ public static class EconomicExposure
         return Loc.Get("Imports of this good are split across more than one partner.");
     }
 
-    // ─── Scratch, reused across calls ──────────────────────────────────────────
+    // в”Ђв”Ђв”Ђ Scratch, reused across calls в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     // This function is asked for by every AI country every week (TryHedgeSupply),
     // and each call used to allocate a fresh nested dictionary, a list, a supplier
-    // array per good and a LINQ ordering chain — 49 kB a call, 113 MB over a
+    // array per good and a LINQ ordering chain вЂ” 49 kB a call, 113 MB over a
     // 60-day profile. The scratch is the pattern LogisticsCore and WarScoring
     // already use: cleared per call, kept between them.
-    private static readonly Dictionary<Commodity, Dictionary<int, double>> Totals = new();
-    private static readonly List<Row> Rows = new();
-    private static Row[] _result = Array.Empty<Row>();
+    //
+    // It is per campaign, not per process: the returned row array is handed to the
+    // caller, and a client rebuilding a second campaign beside the host's would
+    // otherwise read rows the other world had just written.
+    private sealed class Scratch
+    {
+        public readonly Dictionary<Commodity, Dictionary<int, double>> Totals = new();
+        public readonly List<Row> Rows = new();
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, Scratch> Scratches = new();
+
+    private static Scratch ScratchOf(Campaign campaign) =>
+        Scratches.GetValue(campaign, _ => new Scratch());
 
     public static Row[] Read(Campaign campaign, Nation nation)
     {
         if (campaign is null || nation is null) return Array.Empty<Row>();
-        foreach (var inner in Totals.Values) inner.Clear();
-        Totals.Clear();
-        Rows.Clear();
+        var scratch = ScratchOf(campaign);
+        var totals = scratch.Totals;
+        var rows = scratch.Rows;
+        foreach (var inner in totals.Values) inner.Clear();
+        rows.Clear();
         // One attribution pass, not a filtered route array and a GroupBy for every good.
         // Keep double accumulators: LINQ Sum(float selector) also sums in double before
         // rounding once to float. Float += here would silently change supplier ties.
@@ -103,8 +115,8 @@ public static class EconomicExposure
             {
                 if (route.BuyerId != nation.Id || route.SellerId == nation.Id ||
                     campaign.NationById(route.SellerId) is null || !float.IsFinite(route.Volume) || route.Volume <= 0) continue;
-                if (!Totals.TryGetValue(route.Commodity, out var sellers))
-                    Totals[route.Commodity] = sellers = new Dictionary<int, double>();
+                if (!totals.TryGetValue(route.Commodity, out var sellers))
+                    totals[route.Commodity] = sellers = new Dictionary<int, double>();
                 sellers[route.SellerId] = sellers.GetValueOrDefault(route.SellerId) + route.Volume;
             }
         foreach (var quote in nation.Market.Values)
@@ -112,7 +124,7 @@ public static class EconomicExposure
             if (!float.IsFinite(quote.Demand) || quote.Demand <= .001f ||
                 !float.IsFinite(quote.Imports) || quote.Imports <= .001f) continue;
             Supplier[] suppliers = null;
-            if (Totals.TryGetValue(quote.Commodity, out var sellers))
+            if (totals.TryGetValue(quote.Commodity, out var sellers) && sellers.Count > 0)
             {
                 suppliers = new Supplier[sellers.Count];
                 var at = 0;
@@ -123,15 +135,16 @@ public static class EconomicExposure
             double named = 0;
             if (suppliers is not null)
                 foreach (var supplier in suppliers) named += supplier.Volume;
-            Rows.Add(new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
+            rows.Add(new Row(quote.Commodity, quote.Demand, quote.Imports, quote.Satisfaction,
                 Math.Max(0, quote.Imports - (float)named), suppliers ?? Array.Empty<Supplier>()));
         }
         // Preserve stable ordering even for hand-authored markets with duplicate goods.
-        if (_result.Length < Rows.Count) _result = new Row[Rows.Count];
-        for (var index = 0; index < Rows.Count; index++) _result[index] = Rows[index];
-        Array.Sort(_result, RowOrder);
-        Array.Resize(ref _result, Rows.Count);
-        return _result;
+        // This is a caller-owned snapshot, not scratch. Reusing the returned array
+        // silently rewrote earlier UI/AI readings on the very next call, even in the
+        // same campaign. The nested accumulation tables above are safe to reuse.
+        var result = rows.ToArray();
+        Array.Sort(result, RowOrder);
+        return result;
     }
 
     private static readonly Comparison<Row> RowOrder = (left, right) =>

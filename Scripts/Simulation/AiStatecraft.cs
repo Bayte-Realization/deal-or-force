@@ -138,8 +138,7 @@ public static partial class AiStatecraft
             regions[state.NationMapIndex] = regions.GetValueOrDefault(state.NationMapIndex) + 1;
         foreach (var army in campaign.Armies)
             if (strength.ContainsKey(army.NationId))
-                strength[army.NationId] += army.Divisions * army.Strength *
-                                                M.Max(0.15f, army.Organisation);
+                strength[army.NationId] += ArmyStrengthTerm(army);
 
         var powers = tables.GreatPowers;
         powers.Clear();
@@ -207,11 +206,15 @@ public static partial class AiStatecraft
             foreach (var partner in partners) Consider(campaign.NationById(partner));
         foreach (var power in tables.GreatPowers) Consider(power);
         if (worstRival is not null)
-            foreach (var war in campaign.Wars)
+        {
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
             {
+                var war = live[index];
                 if (war.Ended || !war.Involves(worstRival.Id)) continue;
                 Consider(campaign.NationById(war.AttackerId == worstRival.Id ? war.DefenderId : war.AttackerId));
             }
+        }
     }
 
     /// <summary>How much ground a country holds, from the day's table.</summary>
@@ -442,22 +445,35 @@ public static partial class AiStatecraft
         {
             using var friendlySample = SimProfiler.Measure("    dip:friendly");
             FriendlyCandidates.Clear();
+            FriendlyOpinion.Clear();
             foreach (var other in Circle)
             {
                 if (other.Id == nation.Id) continue;
-                var bond = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+                // Read, not created: no relation means no friendship to build on yet.
+                if (CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is not { } bond) continue;
                 if (bond.Stance != DiplomaticStance.AtWar &&
                     bond.Opinion >= defines.AiFriendshipThreshold)
+                {
                     FriendlyCandidates.Add(other);
+                    FriendlyOpinion[other.Id] = bond.Opinion;
+                }
             }
             FriendlyCandidates.Sort((left, right) =>
             {
-                var byOpinion = CampaignDiplomacy.Get(campaign, nation.Id, right.Id).Opinion
-                    .CompareTo(CampaignDiplomacy.Get(campaign, nation.Id, left.Id).Opinion);
+                var byOpinion = FriendlyOpinion[right.Id].CompareTo(FriendlyOpinion[left.Id]);
                 return byOpinion != 0 ? byOpinion : left.Id.CompareTo(right.Id);
             });
+            // Failed candidates cannot start a mission. A successful action exits this
+            // scan immediately; the command itself still rechecks the live mission limit.
+            var missionScan = new DiplomaticOutreach.OfferScan(campaign, nation.Id);
+            var allianceScan = new AllianceSystem.OfferScan(campaign);
+            // The warmest eight: past them a week's diplomacy is not going anywhere new.
+            var tries = 0;
             foreach (var friend in FriendlyCandidates)
-                if (TryFriendlyMove(campaign, nation, friend)) return;
+            {
+                if (++tries > 8) break;
+                if (TryFriendlyMove(campaign, nation, friend, missionScan, allianceScan)) return;
+            }
         }
 
         // Frightened, and somebody large enough to be worth asking: ask for a guarantee.
@@ -616,8 +632,12 @@ public static partial class AiStatecraft
     private static bool InstitutionsFailing(Campaign campaign, Nation client)
     {
         if (client.IsSubject || campaign.Fallen.Contains(client.Id) || client.Population <= 0) return false;
-        foreach (var war in campaign.Wars)
+        var civil = Warfare.LiveWars(campaign);
+        for (var index = 0; index < civil.Count; index++)
+        {
+            var war = civil[index];
             if (!war.Ended && war.CivilConflict && war.Involves(client.Id)) return true;
+        }
         var defines = campaign.Defines;
         if (!float.IsFinite(client.Stability) || client.Stability >= defines.CivilWarStabilityThreshold) return false;
         if (client.Population < defines.CivilWarMinimumPopulation) return false;
@@ -698,7 +718,10 @@ public static partial class AiStatecraft
         // no offer ever made, for years, while the same country's first war was negotiated normally.
         // A snapshot, because a settlement can end a war and a list being read must not change.
         var negotiating = false;
-        foreach (var existing in campaign.Wars.ToArray())
+        var live = Warfare.LiveWars(campaign);
+        var open = new StrategicWar[live.Count];
+        for (var index = 0; index < live.Count; index++) open[index] = live[index];
+        foreach (var existing in open)
         {
             if (existing.Ended || !existing.Involves(nation.Id)) continue;
             // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
@@ -712,7 +735,7 @@ public static partial class AiStatecraft
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);
         if (!fiscal.CanSpend)
         {
-            if (fiscal.Reason != AiFiscalReason.ShortRunway || nation.Treasury < nation.Gdp * defines.AiTreasuryFloor * 0.5f)
+            if (fiscal.Reason != AiFiscalReason.ShortRunway || nation.PaymentArrears > 0 || nation.Treasury < nation.Gdp * defines.AiTreasuryFloor * 0.25f)
             {
                 Count("war_fiscal_" + fiscal.Reason);
                 return;
@@ -830,7 +853,10 @@ public static partial class AiStatecraft
         // leaves is not small: a year reports wanted=104 against declared=2, and without this
         // line the difference cannot be attributed between the die, PreparationComplete and
         // the plan book - which is precisely the question AI-05 asks first.
-        if (roll > defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression)
+        var prepDays = nation.WarPlanSinceDay >= 0 ? campaign.ElapsedDays - nation.WarPlanSinceDay : 0;
+        var prepBonus = Math.Min(1.0f, Math.Max(0, prepDays - defines.AiWarPreparationDays) / 60f);
+        var warChance = defines.AiWarChance * bestJudgement * AiStrategyCatalog.Of(campaign, nation).Aggression * (1.25f + prepBonus);
+        if (roll > warChance)
         { Count("rolled_down"); return; }
 
         // An ultimatum threatens the same war, so it needs the same considered appetite,
@@ -1385,12 +1411,18 @@ public static partial class AiStatecraft
         var strength = nation.Gdp * campaign.Defines.AiEconomicWeight;
         foreach (var army in campaign.Armies)
             if (army.NationId == nation.Id)
-                strength += army.Divisions * army.Strength * M.Max(.15f, army.Organisation) *
-                    // A warehouse war is a war: the same divisions count for less when the
-                    // depot is empty, and the staff pricing a neighbour reads that too.
-                    (0.62f + army.Equipment * 0.38f);
+                strength += ArmyStrengthTerm(army);
         return strength;
     }
+
+    /// <summary>One formation's share of a country's strength. Shared by the daily table and
+    /// the cold-cache fallback on purpose: the two answers must be the same number, or a
+    /// client whose tables are cold reads a different army than the host whose are warm.</summary>
+    private static float ArmyStrengthTerm(Army army) =>
+        army.Divisions * army.Strength * M.Max(.15f, army.Organisation) *
+        // A warehouse war is a war: the same divisions count for less when the
+        // depot is empty, and the staff pricing a neighbour reads that too.
+        (0.62f + army.Equipment * 0.38f);
 
     /// <summary>A country's strength from today's cache when it is this campaign's, and counted afresh when it is not.</summary>
     internal static float CachedStrength(Campaign campaign, Nation nation)
@@ -1407,13 +1439,12 @@ public static partial class AiStatecraft
     /// <summary>A nation by its map index, without walking the whole list to find it.</summary>
     private static Nation ByMapIndex(Campaign campaign, int mapIndex)
     {
-        var tables = TablesOf(campaign);
-        // Readers like Threatened run before the AI's own daily build - on a campaign
-        // adopted from a snapshot the tables are still empty there, where a live world
-        // answers from yesterday's. NationByMapIndex does not change inside a day, so
-        // building it on first read is the same answer the host gives.
-        if (!tables.Built) EnsureDailyTables(campaign);
-        return tables.NationByMapIndex.TryGetValue(mapIndex, out var nation) ? nation : null;
+        // Attrition asks before today's statecraft assessment. Looking up a neighbour
+        // must not also pin strength, treaties and region counts: a restored client has
+        // cold daily tables where the host still has yesterday's, so warming them here
+        // froze different military figures on the two peers. Identity has its own index,
+        // including countries founded since the last daily assessment.
+        return campaign.NationsByMapIndex().GetValueOrDefault(mapIndex);
     }
 
     /// <summary>
@@ -1501,7 +1532,10 @@ public static partial class AiStatecraft
             var answer = ours.Opinion / 200f + M.Clamp(other.Stability - 0.5f, -0.3f, 0.3f);
             if (theirs is not null && theirs.Opinion <= defines.AiRivalryThreshold)
                 answer += defines.AiShelterSharedRival;
-            foreach (var war in campaign.Wars)
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
+            {
+                var war = live[index];
                 if (!war.Ended && war.Involves(other.Id))
                 {
                     // Not a refusal: a guarantee commits nothing today, and a power already
@@ -1510,6 +1544,7 @@ public static partial class AiStatecraft
                     answer -= defines.AiShelterWarPenalty;
                     break;
                 }
+            }
 
             if (answer <= bestAnswer) continue;
             bestAnswer = answer;
@@ -1593,8 +1628,12 @@ public static partial class AiStatecraft
         {
             var other = ByMapIndex(campaign, mapIndex);
             if (other is null) continue;
-            foreach (var war in campaign.Wars)
+            var live = Warfare.LiveWars(campaign);
+            for (var index = 0; index < live.Count; index++)
+            {
+                var war = live[index];
                 if (!war.Ended && war.Involves(other.Id)) return true;
+            }
             if (CampaignDiplomacy.Get(campaign, nation.Id, other.Id).Stance == DiplomaticStance.Rival) return true;
         }
         return false;

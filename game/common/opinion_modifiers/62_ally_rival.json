@@ -1,0 +1,9 @@
+{
+  "withdrew_guarantee": {
+    "name": "Broke their guarantee of us",
+    "opinion": -20,
+    "days": 1460,
+    "decays": true,
+    "max_stacks": 2
+  }
+}
