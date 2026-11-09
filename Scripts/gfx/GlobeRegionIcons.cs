@@ -43,6 +43,8 @@ public sealed partial class GlobePresentation
     private bool _regionIconsEnabled = true;
     private readonly Dictionary<string, Texture2D> _regionIconTextures = new(StringComparer.Ordinal);
     private readonly Dictionary<int, (float Latitude, float Longitude)> _regionAnchors = new();
+    // Each region's size as the radius of a disc of the same ground, in degrees of arc.
+    private readonly Dictionary<int, float> _regionRadius = new();
     private readonly Dictionary<int, RegionBadge> _regionBadges = new();
     private int _regionAnchorsRevision = -1;
     private Simulation.Campaign _regionAnchorsCampaign;
@@ -151,6 +153,7 @@ public sealed partial class GlobePresentation
         _regionAnchorsCampaign = _campaign;
         _regionAnchorsRevision = _campaign.MapRevision;
         _regionAnchors.Clear();
+        _regionRadius.Clear();
         _regionIconOrder.Clear();
         _regionIconOrder.AddRange(_campaign.States);
         _regionIconOrder.Sort((left, right) => right.Population != left.Population
@@ -210,6 +213,13 @@ public sealed partial class GlobePresentation
             }
             var anchor = map.CenterOf(best);
             _regionAnchors[region] = (anchor.Latitude, anchor.Longitude);
+            // Ground in square degrees of arc: a raster cell is (360 / width) degrees a side at the
+            // equator and narrower by the cosine of its latitude.
+            var cellDegrees = 360.0 / Math.Max(1, map.Width);
+            double ground = 0;
+            foreach (var province in list)
+                ground += Math.Max(1, cells[province]) * Math.Cos(map.CenterOf(province).Latitude * Math.PI / 180.0);
+            _regionRadius[region] = (float)Math.Sqrt(ground * cellDegrees * cellDegrees / Math.PI);
         }
     }
 
@@ -278,6 +288,10 @@ public sealed partial class GlobePresentation
             if (placed >= limit || keep.Contains(state.MapIndex)) return;
             if (state.Unclaimed || state.Population <= 0 || !_regionAnchors.TryGetValue(state.MapIndex, out var anchor)) return;
             if (BadgeScreenPoint(anchor.Latitude, anchor.Longitude) is not { } point || !screenRect.HasPoint(point)) return;
+            // As large on the screen as the badge, or no badge yet: closer in, it gets one.
+            var radius = _regionRadius.GetValueOrDefault(state.MapIndex);
+            if (radius > 0f && BadgeScreenPoint(Math.Clamp(anchor.Latitude + radius, -89.5f, 89.5f), anchor.Longitude) is { } edge &&
+                edge.DistanceTo(point) * 2.2f < iconSize * 1.6f) return;
             if (!_regionBadges.TryGetValue(state.MapIndex, out var badge))
                 _regionBadges[state.MapIndex] = badge = new RegionBadge { Region = state.MapIndex };
             badge.Latitude = anchor.Latitude; badge.Longitude = anchor.Longitude;

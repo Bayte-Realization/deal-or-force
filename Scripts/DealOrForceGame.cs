@@ -605,6 +605,18 @@ public partial class DealOrForceGame : Control
             if (letter == Key.X && SplitSupportSelection()) { GetViewport().SetInputAsHandled(); return; }
         }
 
+        // B: building icons on the map, on and off - with nothing selected, so a selection keeps its letters.
+        if (inputEvent is InputEventKey { Pressed: true, Echo: false } iconsKey && _hudLayer is { Visible: true } &&
+            _selectedArmies.Count == 0 && Letter(iconsKey) == Key.B && !iconsKey.CtrlPressed && !iconsKey.AltPressed &&
+            !iconsKey.ShiftPressed && !iconsKey.MetaPressed)
+        {
+            SettingsCatalog.Store("map_region_icons", !SettingsCatalog.Flag("map_region_icons"));
+            ApplySetting("map_region_icons");
+            RefreshMapVisualToggles();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
         // Halt, and come off the plan. Two keys because they are two decisions - see
         // HaltSelectedDivisions for what one key cost. Only while formations are selected
         // and only in the campaign, so H stays a letter everywhere else.

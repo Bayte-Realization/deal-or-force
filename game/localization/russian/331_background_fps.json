@@ -1,5 +1,7 @@
 {
   "Frame rate when paused in the background": "Частота кадров на паузе в фоне",
   "While the game is paused and another window is in front, the map is drawn at this rate instead of the full one - a cool graphics card for a game left open behind your other work. A running game is never slowed.": "Пока игра на паузе, а впереди другое окно, карта рисуется с этой частотой вместо полной — видеокарта не греется, пока игра открыта за другими окнами. Идущая игра никогда не замедляется.",
-  "Same as in front": "Как на переднем плане"
+  "Same as in front": "Как на переднем плане",
+  "BUILDINGS": "ЗДАНИЯ",
+  "Building icons on the map, on or off (key B). Zoomed in to regions, each region shows what it is known for - the industry it has more of than an ordinary region, with how many - and signs for building under way, unrest and shortages. In the resources map mode, its richest deposit.": "Иконки зданий на карте — включить или выключить (клавиша B). При приближении к регионам каждый показывает, чем он известен: отрасль, которой в нём больше, чем в обычном регионе, и сколько, — а также значки идущего строительства, волнений и дефицита. В режиме ресурсов — его богатейшее месторождение."
 }

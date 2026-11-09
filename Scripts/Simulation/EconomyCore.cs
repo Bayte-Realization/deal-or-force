@@ -1097,7 +1097,7 @@ public static class EconomySystem
                     atWar, welfareRadicalism, focusRadicalism);
                 MinorityPressure(campaign, nation, state);
             }
-            if (states.Length >= ParallelRegionsFrom)
+            if (states.Length >= ParallelRegionsFrom && campaign.Defines.ParallelRegions)
             {
                 if (states.Length > 0) ControlTally.World(campaign, nation.MapIndex, states[0].MapIndex);
                 System.Threading.Tasks.Parallel.For(0, states.Length, RegionWorkers, index => Week(states[index]));
@@ -1639,6 +1639,18 @@ public static class ConstructionSystem
             // goes up. Capacity used to scale only the payment, and above one it paid the bill
             // early and finished on the same day - a stat every building raised and nothing read.
             var pace = ConstructionCost.Pace(campaign, nation);
+            // The console's "instabuild": everything this country has under way is finished today, free.
+            if (nation.InstantConstruction)
+            {
+                foreach (var project in sites)
+                {
+                    project.Paid = project.Cost;
+                    project.ProgressDays = project.DurationDays;
+                    Complete(campaign, nation, project);
+                    campaign.Construction.Remove(project);
+                }
+                continue;
+            }
             foreach (var project in sites)
             {
                 if (!float.IsFinite(project.Cost) || project.Cost < 0 ||

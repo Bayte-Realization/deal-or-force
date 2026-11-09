@@ -669,6 +669,8 @@ public partial class DealOrForceGame
                     chips.AddChild(BuildingIconControl(entry.Kind, 18));
                     var number = Title(entry.Count.ToString("N0"), 13, Ui.Colour("text.bright"));
                     number.AutowrapMode = TextServer.AutowrapMode.Off;
+                    // Room for a lone digit: a "5" is narrower than the layout audit accepts as shown.
+                    number.CustomMinimumSize = new Vector2(12, 0);
                     number.MouseFilter = Control.MouseFilterEnum.Pass;
                     chips.AddChild(number);
                 }

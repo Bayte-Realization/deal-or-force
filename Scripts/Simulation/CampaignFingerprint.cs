@@ -379,6 +379,11 @@ public static class CampaignFingerprint
         // going away puts it back. Two worlds that disagree about how many regions exist
         // disagree about everything downstream of that.
         Mix(campaign.States.Count);
+        if (campaign.Nations.Exists(n => n.InstantConstruction))
+        {
+            MixText("instant_construction");
+            foreach (var n in campaign.Nations) if (n.InstantConstruction) Mix(n.Id);
+        }
         // Waking and sleeping alike (RelationDormancy): which table a relation is in is told below.
         foreach (var pair in campaign.Relations.Concat(campaign.DormantRelations).OrderBy(p => p.Key))
         {
