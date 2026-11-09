@@ -326,6 +326,39 @@ public static class Program
             }
             return 0;
         }
+        // `--separate-peace N`: coalition wars, the members that left them and how, and who was
+        // wavering - whether governments nobody plays use SeparatePeace at all.
+        var separateAt = Array.IndexOf(args, "--separate-peace");
+        if (separateAt >= 0)
+        {
+            var spDays = separateAt + 1 < args.Length && int.TryParse(args[separateAt + 1], out var sd) ? sd : 365;
+            campaign.IsPaused = false;
+            var peakWish = new Dictionary<(int War, int Nation), float>();
+            for (var day = 1; day <= spDays; day++)
+            {
+                campaign.TickDay();
+                if (day % 7 != 0) continue;
+                foreach (var w in campaign.Wars.Where(w => !w.Ended))
+                    foreach (var id in w.AttackerAllies.Concat(w.DefenderAllies))
+                        if (campaign.NationById(id) is { } n)
+                        {
+                            var wish = SeparatePeace.Wish(campaign, w, n);
+                            if (!peakWish.TryGetValue((w.Id, id), out var was) || wish > was) peakWish[(w.Id, id)] = wish;
+                        }
+                if (day % 91 == 0)
+                    Console.WriteLine($"SP day {day}: coalition wars {campaign.Wars.Count(w => !w.Ended && w.AttackerAllies.Count + w.DefenderAllies.Count > 0)}, " +
+                                      $"members {campaign.Wars.Where(w => !w.Ended).Sum(w => w.AttackerAllies.Count + w.DefenderAllies.Count)}, " +
+                                      $"separate peaces so far {campaign.Wars.Sum(w => w.SeparatePeaces.Count)}");
+            }
+            foreach (var w in campaign.Wars)
+                foreach (var left in w.SeparatePeaces)
+                    Console.WriteLine($"SP LEFT day {left.Day}: {campaign.NationById(left.NationId)?.Tag} from {WarNames.Of(campaign, w)} with {campaign.NationById(left.WithId)?.Tag}: " +
+                                      $"{left.Terms}{(left.SwitchedSides ? " + switched sides" : "")}, paid {left.Payment:0.00}, ceded {left.ProvincesCeded}");
+            foreach (var pair in peakWish.OrderByDescending(p => p.Value).Take(15))
+                Console.WriteLine($"SP WISH peak {pair.Value:0} {campaign.NationById(pair.Key.Nation)?.Tag} in {WarNames.Of(campaign, campaign.Wars.First(w => w.Id == pair.Key.War))}");
+            Console.WriteLine($"SP subsidies {campaign.Chronicle.Entries.Count(e => e.Kind == "war_subsidy")}");
+            return 0;
+        }
         var traceAt = Array.IndexOf(args, "--trace");
         if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
         {

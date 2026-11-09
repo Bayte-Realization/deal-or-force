@@ -1049,6 +1049,8 @@ public sealed partial class Campaign
             using (SimProfiler.Measure("war weariness")) WarWeariness.Tick(this);
             yield return 0;
             using (SimProfiler.Measure("civil war reserves")) CivilWarPersistence.Tick(this);
+            // Coalition members that want out of a war, the other side buying them out, leaders paying them to stay.
+            using (SimProfiler.Measure("separate peace")) SeparatePeace.Tick(this);
             yield return 0;
             foreach (var _ in Escalation.TickStages(this)) yield return 0;
             using (SimProfiler.Measure("crisis ladder")) CrisisLadder.Tick(this);

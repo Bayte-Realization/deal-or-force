@@ -172,6 +172,7 @@ static class Program
         if (args.Contains("--front-staff-only")) { FrontStaffTests.Run(map); return; }
         if (args.Contains("--modifiers-only")) { ModifierTests.Run(map); return; }
         if (args.Contains("--conflicts-only")) { ConflictTests.Run(map); return; }
+        if (args.Contains("--separate-peace-only")) { SeparatePeaceTests.Run(map); return; }
         if (args.Contains("--whole-front-only")) { WholeFrontTests.Run(map); return; }
         var war = c.Wars.First(w => !w.Ended && w.Involves(rus.Id) && w.Involves(ukr.Id));
         c.Wars.RemoveAll(w => w != war); c.Battles.Clear(); c.Armies.Clear();

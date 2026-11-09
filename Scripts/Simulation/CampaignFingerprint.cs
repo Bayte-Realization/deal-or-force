@@ -1088,6 +1088,15 @@ public static class CampaignFingerprint
                 }
             }
             // Coalition membership changes combat and access before any province moves.
+            if (war.SeparatePeaces.Count > 0)
+            {
+                MixText("separate_peaces");
+                foreach (var left in war.SeparatePeaces)
+                {
+                    Mix(left.NationId); Mix(left.WithId); Mix(left.Day); Mix((int)left.Terms);
+                    Mix(left.SwitchedSides ? 1 : 0); MixFloat(left.Payment); Mix(left.ProvincesCeded);
+                }
+            }
             // Keep the historical bilateral golden when there are no allied members.
             if (war.AttackerAllies.Count > 0 || war.DefenderAllies.Count > 0)
             {

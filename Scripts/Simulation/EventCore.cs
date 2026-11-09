@@ -57,6 +57,10 @@ public sealed class CampaignEventOption
     public int UnionFounderId { get; init; }
     public string UnionFormableId { get; init; } = "";
     public int ShardConsolidateFounderId { get; init; } = -1;
+    /// <summary>A separate peace put to a player (SeparatePeace.Offer): the war, the member that leaves, the terms.</summary>
+    public int SeparatePeaceWarId { get; init; } = -1;
+    public int SeparatePeaceMemberId { get; init; } = -1;
+    public int SeparatePeaceTermsId { get; init; }
     /// <summary>Saved recipient and explicit choice of the secession response. -1 is no response, so nation zero is valid.</summary>
     public int SecessionTargetId { get; init; } = -1;
     public string SecessionChoice { get; init; } = "";
@@ -608,6 +612,9 @@ public static class EventSystem
             if (founder is not null)
                 Consolidation.ExecuteShardConsolidation(campaign, founder, nation);
         }
+        if (option.SeparatePeaceWarId >= 0 && item.ExpiresDay > campaign.ElapsedDays &&
+            campaign.Wars.Find(w => w.Id == option.SeparatePeaceWarId) is { Ended: false } separateWar)
+            SeparatePeace.Sign(campaign, separateWar, option.SeparatePeaceMemberId, (SeparatePeaceTerms)option.SeparatePeaceTermsId);
         option.Effect.Apply(campaign, nation);
         foreach (var (id, days) in option.Modifiers) ModifierSystem.Grant(campaign, nation, id, days);
         // By the country itself rather than by an id that means "nobody" at zero: nation 0 is
