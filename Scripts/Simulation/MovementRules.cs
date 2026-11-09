@@ -346,7 +346,7 @@ public static class MovementRules
     // else moves people between regions moves a border with them, which clears it.
     internal sealed class MovementPeopleCache
 {
-    public int Week = -1;
+    public int Day = -1;
     public int MapRevision = -1;
     public int States = -1;
     public readonly Dictionary<MovementDefinition, Dictionary<ScenarioState, (long Own, long Faithful)>> PeopleToday = new();
@@ -389,12 +389,15 @@ public static class MovementRules
     private static void EnsurePeopleCache(Campaign campaign)
     {
         var cache = campaign.MovementPeople;
-        var week = campaign.ElapsedDays / 7;
-        // Who lives in a region does not change with who owns it: the index lives for the week
-        // unless the regions themselves change (a carve or a reunion changes their numbers).
+        // Population can change between weekly movement reviews: a reloaded campaign (empty
+        // cache) must see the same people as the running one, so the counts live for one
+        // simulated day. Who lives in a region does not change with who owns it, so a change of
+        // owner does not throw them away within the day - only a change in the regions does
+        // (a carve or a reunion changes their numbers).
+        var day = campaign.ElapsedDays;
         var layout = 0;
         foreach (var region in campaign.States) layout = unchecked(layout * 31 + region.MapIndex);
-        if (cache.Week == week && cache.MapRevision == layout &&
+        if (cache.Day == day && cache.MapRevision == layout &&
             cache.States == campaign.States.Count)
         {
             return;
@@ -402,7 +405,7 @@ public static class MovementRules
         cache.PeopleToday.Clear();
         cache.CultureTotals.Clear();
         cache.Indexed = false;
-        cache.Week = week;
+        cache.Day = day;
         cache.MapRevision = layout;
         cache.States = campaign.States.Count;
     }
