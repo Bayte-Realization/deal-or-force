@@ -171,7 +171,9 @@ public sealed partial class GlobePresentation
         var mistFull = defines?.MistFullDistance ?? 6.0f;
         var mistClear = defines?.MistClearDistance ?? 8.2f;
         var fogged = FogOfWarActive && _campaign?.Player is { IsHuman: true } && _visionImage is not null;
-        var mist = !allowed || !QualityWeather || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
+        // The mist is the fog of war - what the player cannot see - so no quality step takes it
+        // away: it answers to the FOG switch and the campaign's rules only.
+        var mist = !allowed || !_weatherEnabled || !_mistShown || !fogged || mistClear <= mistFull ? 0f
             : 1f - Mathf.SmoothStep(mistFull, mistClear, distance);
 
         // Weather keeps moving while the game is paused, only slower: a frozen sky reads as a

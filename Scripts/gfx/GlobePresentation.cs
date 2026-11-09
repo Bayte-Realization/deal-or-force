@@ -2282,7 +2282,9 @@ uniform float terrain_repeat = 180.0;
 uniform float polar_tiling_from = 50.0;
 uniform float polar_tiling_band = 14.0;
 uniform float terrain_blend_texels = 1.15;
-uniform float id_wander_texels = 0.62;
+// Small: the noise's slope must stay below the line's width, or a province line wobbles,
+// splits into strands and swells into blots (0.62 did; tested live against 0 and 0.15).
+uniform float id_wander_texels = 0.15;
 
 // Whether the map is smoothed at all, as a switch the player owns.
 //
@@ -5260,14 +5262,18 @@ void fragment() {
         // at the same scale was full of them. It now runs down to the regional view - the
         // whole of Ukraine on the screen still names Ukraine, as a Paradox map does; the
         // letters follow the country's own extent, so they stay inside it.
+        // And out to the farthest view: the whole world on the screen still names its largest
+        // countries, as the world page of an atlas does.
         _countryLabelRoot.Visible = _mapMode is not (StrategicMapMode.Terrain or StrategicMapMode.Relief) && (_flatMap
-            ? _flatZoom is >= 0.85f and <= 10.8f
-            : _distance is >= 7.9f and <= 16.5f);
+            ? _flatZoom >= 0.85f
+            : _distance >= 7.9f);
         if (!_countryLabelRoot.Visible) return;
         // Closer in than 1.7 the letters keep their places - spread across the country - and
         // grow no larger: at full size POLAND and UKRAINE ran into each other and out of their
         // borders. Smaller letters spaced wide are how an atlas names a country seen close.
-        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : 1f;
+        // Past the strategic view the globe's letters grow a little as it draws away, so the
+        // names left on a whole hemisphere are still big enough to read.
+        var glyphScale = _flatMap ? Math.Clamp(_flatZoom / 1.7f, 0.5f, 1f) : Math.Clamp(_distance / 16.5f, 1f, 1.3f);
         if (Math.Abs(glyphScale - _countryGlyphScale) > 0.02f)
         {
             _countryGlyphScale = glyphScale;

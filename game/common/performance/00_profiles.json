@@ -39,19 +39,19 @@
     "balanced": {
       "order": 1,
       "label": "Balanced",
-      "description": "Every pixel of the screen, without the sun's shadows and the weather: the cheapest things to lose are the least seen.",
+      "description": "Every pixel of the screen and the sky over it, without the sun's shadows: the cheapest thing to lose is the least seen.",
       "render_scale": 1.0,
       "map_smoothing": true,
       "sun_shadows": false,
       "city_labels": true,
       "trade_traffic": true,
-      "weather": false,
+      "weather": true,
       "max_fps": 0
     },
     "low": {
       "order": 2,
       "label": "Low",
-      "description": "A cheaper map: 85 % of the pixels sharpened back up, no sun shadows, no city names, no ships, no weather. Country names and armies stay.",
+      "description": "A cheaper map: 85 % of the pixels sharpened back up, no sun shadows, no city names, no ships, no clouds. Country names, armies and the fog of war stay.",
       "render_scale": 0.85,
       "map_smoothing": true,
       "sun_shadows": false,
