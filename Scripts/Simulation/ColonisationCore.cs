@@ -401,9 +401,13 @@ public static class UnclaimedLand
     // Some source polygons have a province but no administrative region (Bir Tawil).
     // Coordinate declarations bind a dossier to actual unowned ground; they do not
     // change ownership or let a file silently steal another country's province.
+    // They live with every other region of the bookmark, in history/states/<year> (a line with a
+    // point on it); the old map_data/unclaimed_regions folder is still read so a mod written
+    // for it keeps working.
     private static void EnsureAuthoredRegions(Campaign c, ProvinceTopology map)
     {
-        foreach (var document in GameDataLoader.DataDocuments("map_data", "unclaimed_regions"))
+        foreach (var document in GameDataLoader.DataDocuments("history", "states", "2024")
+                     .Concat(GameDataLoader.DataDocuments("map_data", "unclaimed_regions")))
         using (document)
         {
             if (document.RootElement.ValueKind != JsonValueKind.Object) continue;
