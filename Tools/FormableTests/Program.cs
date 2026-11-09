@@ -20,6 +20,7 @@ static class Program
         if (args.Length == 0) AllianceBreakTests.Run();
         if (args.Contains("--ended-war-walk-only")) { EndedWarWalkTests.Run(); return; }
         if (args.Contains("--live-wars-only")) { LiveWarTests.Run(); return; }
+        if (args.Length == 0) LiveWarTests.Run();
         if (args.Contains("--doctrine-stack-only")) { DoctrineStackTests.Run(); return; }
         if (args.Length == 0) DoctrineStackTests.Run();
         if (args.Contains("--border-adjacency-only")) { BorderAdjacencyTests.Run(); return; }
