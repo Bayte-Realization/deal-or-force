@@ -460,12 +460,21 @@ public static class LogisticsSystem
     /// the day it crossed the ally's border, however open the road behind it - a stack on the
     /// far side of Saudi Arabia starved with the Saudi roads open to it. Crossing is all it is:
     /// no depot stands on someone else's ground (only the country's own provinces become hubs),
-    /// and the trace's distance still counts every province of the way. Built only for a
-    /// country at war; at peace supply never needs to leave home.
+    /// and the trace's distance still counts every province of the way.
+    ///
+    /// A subject's ground is its overlord's road and the overlord's is the subject's, at war and
+    /// at peace: a puppet whose territory starved the empire's columns crossing it was a puppet in
+    /// name only, and a garrison an overlord keeps in its dependency at peace was fed from nowhere.
+    /// The rest - co-belligerents and granted access - only for a country at war.
     /// </summary>
     private static void CollectCorridors(Campaign campaign, Nation nation)
     {
         Corridors.Clear();
+        foreach (var host in campaign.Nations)
+            if (host.Id != nation.Id && host.Population > 0 && host.MapIndex > 0 &&
+                (host.AnswersTo(nation.Id) || nation.AnswersTo(host.Id)) &&
+                !MilitaryAccess.Hostile(campaign, nation.Id, host.Id))
+                Corridors.Add((ushort)host.MapIndex);
         var atWar = false;
         foreach (var war in campaign.Wars)
         {
