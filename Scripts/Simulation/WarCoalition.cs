@@ -107,10 +107,37 @@ public static class WarCoalition
     {
         if (c?.ProvinceMap is null || war is null || war.Ended || !war.Involves(nationId))
             return System.Array.Empty<int>();
-        var allowed = MilitaryAccess.Controllers(c, nationId);
-        FillControllers(c, war, true, allowed);
-        FillControllers(c, war, false, allowed);
-        return c.ProvinceMap.FindOperationalRoute(from, to, allowed, controllers);
+        return c.ProvinceMap.FindOperationalRoute(from, to, AllowedFor(c, war, nationId), controllers);
+    }
+
+    private static Campaign _allowedCampaign;
+    private static long _allowedHour = -1;
+    private static readonly Dictionary<(int Nation, int War), (int Belligerents, HashSet<ushort> Set)> OperationalAllowed = new();
+    private static readonly object AllowedGate = new();
+
+    /// <summary>
+    /// Where a nation's divisions may go in a war: every controller it may enter, and both sides
+    /// of the war. Built once per nation, war and game hour - it was built afresh for every
+    /// division's every search, asking every nation in the list each time.
+    /// </summary>
+    private static HashSet<ushort> AllowedFor(Campaign c, StrategicWar war, int nationId)
+    {
+        lock (AllowedGate)
+        {
+            if (!ReferenceEquals(_allowedCampaign, c) || _allowedHour != c.ElapsedHours)
+            {
+                _allowedCampaign = c;
+                _allowedHour = c.ElapsedHours;
+                OperationalAllowed.Clear();
+            }
+            if (OperationalAllowed.TryGetValue((nationId, war.Id), out var cached) && cached.Belligerents == war.BelligerentCount)
+                return cached.Set;
+            var allowed = MilitaryAccess.Controllers(c, nationId);
+            FillControllers(c, war, true, allowed);
+            FillControllers(c, war, false, allowed);
+            OperationalAllowed[(nationId, war.Id)] = (war.BelligerentCount, allowed);
+            return allowed;
+        }
     }
 
     private static bool EnemyStandsIn(Campaign c, StrategicWar war, int nationId, int province)

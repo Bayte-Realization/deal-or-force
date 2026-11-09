@@ -390,7 +390,11 @@ public static class MovementRules
     {
         var cache = campaign.MovementPeople;
         var week = campaign.ElapsedDays / 7;
-        if (cache.Week == week && cache.MapRevision == campaign.MapRevision &&
+        // Who lives in a region does not change with who owns it: the index lives for the week
+        // unless the regions themselves change (a carve or a reunion changes their numbers).
+        var layout = 0;
+        foreach (var region in campaign.States) layout = unchecked(layout * 31 + region.MapIndex);
+        if (cache.Week == week && cache.MapRevision == layout &&
             cache.States == campaign.States.Count)
         {
             return;
@@ -399,7 +403,7 @@ public static class MovementRules
         cache.CultureTotals.Clear();
         cache.Indexed = false;
         cache.Week = week;
-        cache.MapRevision = campaign.MapRevision;
+        cache.MapRevision = layout;
         cache.States = campaign.States.Count;
     }
 
