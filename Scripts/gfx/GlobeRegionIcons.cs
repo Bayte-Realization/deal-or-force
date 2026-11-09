@@ -276,6 +276,10 @@ public sealed partial class GlobePresentation
         foreach (var parts in _fleetNodes.Values) ReserveIconRoom(parts.Plate);
         if (CityLabelsEnabled) _regionIconTaken.AddRange(_cityTaken);
         _regionIconTaken.AddRange(_capitalNameBoxes);
+        ReserveCountryNames(screenRect);
+        // Room around each badge: a little close in, more from far out, where a crowd of icons
+        // is all a player would see.
+        var spacing = ViewDistance > 5f ? 12f : 4f;
 
         var projects = new Dictionary<int, int>();
         foreach (var project in _campaign.Construction) projects[project.StateMapIndex] = projects.GetValueOrDefault(project.StateMapIndex) + 1;
@@ -303,7 +307,7 @@ public sealed partial class GlobePresentation
             if (moving && badge.Wanted && badge.Alpha > 0.5f)
             {
                 var kept = new Rect2(point.X + badge.Offset.X - badge.Width / 2f, point.Y + badge.Offset.Y - iconSize / 2f,
-                    badge.Width, iconSize).Grow(3f);
+                    badge.Width, iconSize).Grow(spacing);
                 if (screenRect.Encloses(kept)) { _regionIconTaken.Add(kept); keep.Add(state.MapIndex); placed++; return; }
             }
             var step = iconSize + 6f;
@@ -312,7 +316,7 @@ public sealed partial class GlobePresentation
             Rect2? found = null;
             foreach (var offset in tries)
             {
-                var box = new Rect2(point.X + offset.X - badge.Width / 2f, point.Y + offset.Y - iconSize / 2f, badge.Width, iconSize).Grow(3f);
+                var box = new Rect2(point.X + offset.X - badge.Width / 2f, point.Y + offset.Y - iconSize / 2f, badge.Width, iconSize).Grow(spacing);
                 if (!screenRect.Encloses(box)) continue;
                 var free = true;
                 foreach (var other in _regionIconTaken) if (other.Intersects(box)) { free = false; break; }
@@ -333,6 +337,32 @@ public sealed partial class GlobePresentation
         foreach (var state in _regionIconOrder) Consider(state);
 
         foreach (var badge in _regionBadges.Values) badge.Wanted = keep.Contains(badge.Region);
+    }
+
+    /// <summary>
+    /// The letters of the country names, as boxes on the screen a badge must not cover. Each letter
+    /// is a node of its own; its size is read off the distance to the next letter of the same name.
+    /// </summary>
+    private void ReserveCountryNames(Rect2 screenRect)
+    {
+        Vector2? previous = null;
+        for (var index = 0; index < _countryGlyphs.Count; index++)
+        {
+            var glyph = _countryGlyphs[index].Node;
+            if (!IsInstanceValid(glyph) || !glyph.IsVisibleInTree() || _camera.IsPositionBehind(glyph.GlobalPosition)) { previous = null; continue; }
+            var point = _camera.UnprojectPosition(glyph.GlobalPosition);
+            if (!screenRect.HasPoint(point)) { previous = point; continue; }
+            var step = previous is { } before ? before.DistanceTo(point) : 0f;
+            if (index + 1 < _countryGlyphs.Count && IsInstanceValid(_countryGlyphs[index + 1].Node))
+            {
+                var after = _camera.UnprojectPosition(_countryGlyphs[index + 1].Node.GlobalPosition);
+                var next = after.DistanceTo(point);
+                if (next > 0f && (step <= 0f || next < step)) step = next;
+            }
+            var size = step is > 4f and < 160f ? step : 24f;
+            _regionIconTaken.Add(new Rect2(point.X - size * 0.55f, point.Y - size * 0.75f, size * 1.1f, size * 1.5f));
+            previous = point;
+        }
     }
 
     /// <summary>Where a point of the map is on the screen, or null on the far side of the globe or behind the camera.</summary>

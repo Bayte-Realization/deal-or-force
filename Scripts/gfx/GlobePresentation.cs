@@ -2164,7 +2164,13 @@ public sealed partial class GlobePresentation : SubViewportContainer
         get => IsInstanceValid(_viewport) ? _viewport.Scaling3DScale : 1f;
         set
         {
-            if (IsInstanceValid(_viewport)) _viewport.Scaling3DScale = Mathf.Clamp(value, 0.25f, 2f);
+            if (!IsInstanceValid(_viewport)) return;
+            var scale = Mathf.Clamp(value, 0.25f, 2f);
+            _viewport.Scaling3DScale = scale;
+            // Fewer pixels than the screen, upscaled with FSR's sharpening rather than stretched:
+            // a plain bilinear stretch is what made a lowered tier look smeared.
+            _viewport.Scaling3DMode = scale < 0.999f ? Viewport.Scaling3DModeEnum.Fsr : Viewport.Scaling3DModeEnum.Bilinear;
+            _viewport.FsrSharpness = 0.2f;
         }
     }
 
