@@ -10,10 +10,39 @@ public static class PeacefulFormation
 {
     public static string ConsentKey(int founder, string formable) => "union_consent/" + founder + "/" + formable;
     private static string OfferKey(int founder, string formable) => "union_offer/" + founder + "/" + formable;
-    public static IEnumerable<int> Territory(Campaign campaign, FormableNation definition) =>
+    public static IEnumerable<int> Territory(Campaign campaign, FormableNation definition)
+    {
+        if (campaign is null || definition is null) return Array.Empty<int>();
+        var cache = TerritoryCaches.GetValue(campaign, _ => new TerritoryCache());
+        lock (cache)
+        {
+            var revision = campaign.MapRevision;
+            var regions = campaign.States.Count;
+            if (cache.Revision != revision || cache.Regions != regions)
+            {
+                cache.Territories.Clear();
+                cache.Revision = revision;
+                cache.Regions = regions;
+            }
+            if (!cache.Territories.TryGetValue(definition.Id ?? "", out var provinces))
+                cache.Territories[definition.Id ?? ""] = provinces = BuildTerritory(campaign, definition).ToArray();
+            return provinces;
+        }
+    }
+
+    private static IEnumerable<int> BuildTerritory(Campaign campaign, FormableNation definition) =>
         definition.RequiredProvinces.Concat(RegionProvinces(campaign, definition)).Concat(definition.RequiredTags.SelectMany(tag =>
             campaign.ScenarioId == "2024" ? ProvinceOwnership.ProvincesOf(tag) :
                 campaign.ScenarioTerritories.GetValueOrDefault(tag, Array.Empty<int>()))).Distinct();
+
+    /// <summary>A campaign's formable territories, rebuilt when its map or its region list changes.</summary>
+    private sealed class TerritoryCache
+    {
+        public long Revision = long.MinValue;
+        public int Regions = -1;
+        public readonly Dictionary<string, int[]> Territories = new(StringComparer.Ordinal);
+    }
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Campaign, TerritoryCache> TerritoryCaches = new();
 
     /// <summary>The provinces of a formable's named regions, and of the pieces a border has
     /// since cut out of them.</summary>
