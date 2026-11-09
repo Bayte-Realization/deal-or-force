@@ -26,7 +26,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CACHE = Path(__file__).resolve().parent / "cache"
-MAXIMUM_SCALERANK = 7
+# Every place Natural Earth ranks (0-10): the towns below rank 7 are drawn only close in
+# (tier 3) and the map never lets two names overlap, so more of them costs nothing far out.
+MAXIMUM_SCALERANK = 10
 
 
 def read_dbf(path):
@@ -97,7 +99,9 @@ def main():
             continue
         cities.append(row)
     # The bigger first, so an id collision gives the suffix to the smaller place.
-    cities.sort(key=lambda r: (tier(r), -(r["POP_MAX"] or 0), r["NAME"]))
+    # The places of rank 7 and above take their keys first, as they did before the smaller towns
+    # were added, so no existing key moves to another place.
+    cities.sort(key=lambda r: ((r["SCALERANK"] if r["SCALERANK"] is not None else 10) > 7, tier(r), -(r["POP_MAX"] or 0), r["NAME"]))
     used, entries, english, russian = set(), {}, {}, {}
     for row in cities:
         base = f"{slug(row['NAME'] or row['NAMEASCII'])}_{row['ADM0_A3'].lower()}"
@@ -115,7 +119,6 @@ def main():
         kind = capital(row)
         if kind:
             entry["capital"] = kind
-        entry["country"] = row["ADM0_A3"]
         entries[key] = entry
         english[f"city.{key}.name"] = row["NAME"]
         russian[f"city.{key}.name"] = row.get("NAME_RU") or row["NAME"]
@@ -123,17 +126,18 @@ def main():
     header = [
         "// Deal or Force - the cities drawn on the map (GlobeCities, CityCatalog).",
         "//",
-        "// Where a city is, how many live there and how important a place it is. Nothing here is",
-        "// simulated: a city is a name and a dot, and the region and province under it are found",
-        "// from the map, so a city changes hands with the ground it stands on.",
+        "// Where a city is, how many lived there on the first day and how important a place it is.",
+        "// A city belongs to the region it stands in and to whoever holds that ground - the region and",
+        "// province under it are found from the map, so it changes hands with its ground - and its",
+        "// people are its region's: they grow and shrink as the region's urban population does",
+        "// (CityLife). There is no \"country\" field: a city is where it is, not whose.",
         "//",
         "//   latitude, longitude   where it stands",
-        "//   population            the urban area's people, for ordering and the tooltip",
+        "//   population            the urban area's people on the scenario's first day",
         "//   tier                  0 capitals and world cities, seen from far out; 1, 2; 3 towns seen",
         "//                         only close in. The map draws the lower tiers first and never lets",
         "//                         two names overlap",
         "//   capital               national, seat (a second seat of government) or regional",
-        "//   country               the ISO code Natural Earth gives it - information, not ownership",
         "//",
         "// Later files win, key by key: a mod adds a city under a key of its own, moves or renames one",
         "// by naming its key again, and removes one with \"tier\": -1. The name shown is",

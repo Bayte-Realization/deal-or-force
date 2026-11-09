@@ -603,6 +603,13 @@ public partial class DealOrForceGame
         if (state is not null)
         {
             CardRow(_regionCardRegionRows, "Population", Fmt.People(state.Population), Fmt.PeopleExact(state.Population));
+            // Its cities, with the people they have now: they are where the region's people live.
+            var towns = Simulation.CityCatalog.CitiesOf(_campaign, state);
+            if (towns.Count > 0)
+                CardRow(_regionCardRegionRows, "Cities",
+                    string.Join(", ", towns.Take(3).Select(t => $"{t.City.DisplayName} {Fmt.People(t.People)}")) +
+                    (towns.Count > 3 ? Simulation.Loc.Format(" +{0}", towns.Count - 3) : ""),
+                    string.Join("\n", towns.Take(12).Select(t => $"{t.City.DisplayName}: {Fmt.PeopleExact(t.People)}")));
             CardRow(_regionCardRegionRows, "GDP (estimate)", Fmt.Money(RegionalStatistics.EstimatedGdp(_campaign, state)),
                 Tr(RegionalStatistics.GdpExplanation));
             // A half-state: owned by one country, held by another by lease or by troops without a war.

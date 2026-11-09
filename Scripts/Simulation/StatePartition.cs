@@ -588,6 +588,12 @@ public static class StatePartition
         carved.Claims.AddRange(parent.Claims);
         var population = (long)MathF.Round(parent.Population * share);
         carved.Population = Math.Min(population, parent.Population);
+        // Its cities keep their size across the cut: the piece takes its share of the baseline.
+        if (parent.UrbanBaseline > 0)
+        {
+            carved.UrbanBaseline = Math.Max(1, (long)(parent.UrbanBaseline * (double)share));
+            parent.UrbanBaseline = Math.Max(1, parent.UrbanBaseline - carved.UrbanBaseline);
+        }
         parent.Population -= carved.Population;
 
         foreach (var group in parent.PopulationGroups)

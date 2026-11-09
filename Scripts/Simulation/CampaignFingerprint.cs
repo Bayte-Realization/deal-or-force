@@ -948,6 +948,7 @@ public static class CampaignFingerprint
             }
             Mix(-20);
             MixFloat(state.SecessionPressure);
+            if (state.UrbanBaseline != 0) { MixText("urban_baseline"); Mix(state.UrbanBaseline); }
             MixFloat(state.ResidentAwareness);
             if (state.PoliticalDivergence >= 0f || state.LawApproval >= 0f || state.GovernmentApproval >= 0f)
             {
