@@ -196,7 +196,9 @@ public static class NavalOperations
         foreach (var fleet in campaign.Fleets)
         {
             var nation = campaign.NationById(fleet.NationId);
-            if (nation is null || fleet.Hulls <= 0) continue;
+            if (nation is null) continue;
+            // A fleet sunk to its last hull is rebuilt in its home port, so it still needs one.
+            if (fleet.Hulls <= 0) { if (campaign.StepOpensNewDay) KeepPort(campaign, fleet, nation); continue; }
 
             // Readiness is what the treasury reaches the fleet with, and it moves slowly:
             // a navy is not re-crewed by a budget line in a fortnight. The drift is a day's, and
@@ -385,9 +387,10 @@ public static class NavalOperations
         var basin = SeaLanes.BasinAt(map, fleet.Latitude, fleet.Longitude);
         var best = -1;
         var bestDistance = float.MaxValue;
+        for (var anySea = 0; anySea < 2 && best <= 0; anySea++)
         foreach (var province in SeaLanes.CoastalProvinces(map))
         {
-            if (basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
+            if (anySea == 0 && basin >= 0 && SeaLanes.HarbourBasin(map, province) != basin) continue;
             var holder = HolderOf(campaign, province);
             if (holder is null || holder.Id != nation.Id) continue;
             if (!SeaLanes.TryHarbourPoint(map, province, out var latitude, out var longitude)) continue;
