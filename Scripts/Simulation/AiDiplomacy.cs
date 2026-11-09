@@ -40,6 +40,7 @@ public sealed partial class Defines
 public static partial class AiStatecraft
 {
     private static readonly List<Nation> FriendlyCandidates = new();
+    private static readonly Dictionary<int, float> FriendlyOpinion = new();
     private static readonly HashSet<int> TouchingRegions = new();
 
     /// <summary>

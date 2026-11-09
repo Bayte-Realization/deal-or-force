@@ -1005,6 +1005,14 @@ public static class SaveSystem
         public List<PendingCampaignEvent> PendingEvents = new();
         public List<ChronicleEntry> Chronicle = new();
         public Dictionary<long, DiplomaticRelation> Relations = new();
+
+        private static Dictionary<long, DiplomaticRelation> AllRelations(Campaign campaign)
+        {
+            var all = new Dictionary<long, DiplomaticRelation>(campaign.Relations.Count + campaign.DormantRelations.Count);
+            foreach (var entry in campaign.Relations) all[entry.Key] = entry.Value;
+            foreach (var entry in campaign.DormantRelations) all[entry.Key] = entry.Value;
+            return all;
+        }
         // The AI reads last week's supplier attribution before the next market pass.
         // Legacy files have no attribution; never invent it from today's diplomacy.
         public int TradeRoutesDay = -1;
@@ -1108,7 +1116,9 @@ public static class SaveSystem
             Construction = new List<ConstructionProject>(campaign.Construction),
             PendingEvents = new List<PendingCampaignEvent>(campaign.PendingEvents),
             Chronicle = new List<ChronicleEntry>(campaign.Chronicle.Entries),
-            Relations = new Dictionary<long, DiplomaticRelation>(campaign.Relations),
+            // The sleeping ones too (RelationDormancy), after the waking ones and marked, so a load
+            // restores both tables exactly and in the same order.
+            Relations = AllRelations(campaign),
             TradeRoutesDay = campaign.TradeRoutesDay,
             // Market passes reuse route records. Keep the captured week independent,
             // in its original order (exposure totals sum floating point volumes).
@@ -1194,7 +1204,9 @@ public static class SaveSystem
             Replace(campaign.PendingEvents, PendingEvents);
             campaign.Chronicle.Restore(Chronicle);
             campaign.Relations.Clear();
-            foreach (var entry in Relations) campaign.Relations[entry.Key] = entry.Value;
+            campaign.DormantRelations.Clear();
+            foreach (var entry in Relations)
+                (entry.Value.Dormant ? campaign.DormantRelations : campaign.Relations)[entry.Key] = entry.Value;
             campaign.TradeRoutesDay = TradeRoutesDay;
             Replace(campaign.TradeRoutes, TradeRoutes);
             campaign.History.Restore(History);

@@ -228,6 +228,8 @@ public static class SocialMemory
             ReviewCultures(c, n);
             ReviewOrganisations(c, n);
             // Scripted narratives may concern a known subject without a diplomatic relationship.
+            // Rare, and the walk is long in a long campaign: every fourth review.
+            if (((c.ElapsedDays / interval) + n.Id) % 4 == 0)
             foreach (var pair in n.PublicImages)
                 if (subjects.TryGetValue(pair.Key, out var subject) &&
                     subject.Id != n.Id && CampaignDiplomacy.Peek(c, n.Id, subject.Id) is null)

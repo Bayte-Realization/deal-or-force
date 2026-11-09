@@ -379,7 +379,8 @@ public static class CampaignFingerprint
         // going away puts it back. Two worlds that disagree about how many regions exist
         // disagree about everything downstream of that.
         Mix(campaign.States.Count);
-        foreach (var pair in campaign.Relations.OrderBy(p => p.Key))
+        // Waking and sleeping alike (RelationDormancy): which table a relation is in is told below.
+        foreach (var pair in campaign.Relations.Concat(campaign.DormantRelations).OrderBy(p => p.Key))
         {
             Mix(pair.Key); var r = pair.Value;
             if (r.MilitaryAccessByA || r.MilitaryAccessByB || r.MilitaryAccessRequestedBy >= 0 || r.MilitaryAccessRequestedDay != -9999)

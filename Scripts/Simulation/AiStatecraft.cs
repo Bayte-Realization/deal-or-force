@@ -434,22 +434,31 @@ public static partial class AiStatecraft
         {
             using var friendlySample = SimProfiler.Measure("    dip:friendly");
             FriendlyCandidates.Clear();
+            FriendlyOpinion.Clear();
             foreach (var other in Circle)
             {
                 if (other.Id == nation.Id) continue;
-                var bond = CampaignDiplomacy.Get(campaign, nation.Id, other.Id);
+                // Read, not created: no relation means no friendship to build on yet.
+                if (CampaignDiplomacy.Peek(campaign, nation.Id, other.Id) is not { } bond) continue;
                 if (bond.Stance != DiplomaticStance.AtWar &&
                     bond.Opinion >= defines.AiFriendshipThreshold)
+                {
                     FriendlyCandidates.Add(other);
+                    FriendlyOpinion[other.Id] = bond.Opinion;
+                }
             }
             FriendlyCandidates.Sort((left, right) =>
             {
-                var byOpinion = CampaignDiplomacy.Get(campaign, nation.Id, right.Id).Opinion
-                    .CompareTo(CampaignDiplomacy.Get(campaign, nation.Id, left.Id).Opinion);
+                var byOpinion = FriendlyOpinion[right.Id].CompareTo(FriendlyOpinion[left.Id]);
                 return byOpinion != 0 ? byOpinion : left.Id.CompareTo(right.Id);
             });
+            // The warmest eight: past them a week's diplomacy is not going anywhere new.
+            var tries = 0;
             foreach (var friend in FriendlyCandidates)
+            {
+                if (++tries > 8) break;
                 if (TryFriendlyMove(campaign, nation, friend)) return;
+            }
         }
 
         // Frightened, and somebody large enough to be worth asking: ask for a guarantee.

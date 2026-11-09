@@ -1213,6 +1213,8 @@ public sealed partial class Campaign
             // so saving and loading changed the world - and a player joining a network game,
             // who is sent exactly that save, started in a different world from the host's.
             using (SimProfiler.Measure("reunion")) StatePartition.Reunify(this);
+            // The relations of countries with nobody left go to sleep; a restored country's wake.
+            using (SimProfiler.Measure("relation dormancy")) RelationDormancy.Sweep(this);
 
             // And last, where each government now sits: a region ceded today takes its
             // capital with it, and the country moves to what it has left.

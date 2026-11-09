@@ -118,6 +118,8 @@ public static class CampaignDiplomacy
         var high = Math.Max(a, b);
         var key = ((long)low << 32) | (uint)high;
         if (campaign.Relations.TryGetValue(key, out var relation)) return relation;
+        // A sleeping relation (RelationDormancy) wakes when anything means to write to it.
+        if (campaign.DormantRelations.Count > 0 && RelationDormancy.Wake(campaign, key) is { } woken) return woken;
         relation = new DiplomaticRelation { A = low, B = high };
         campaign.Relations[key] = relation;
         return relation;
@@ -137,7 +139,9 @@ public static class CampaignDiplomacy
         if (a == b || a < 0 || b < 0) return null;
         var low = Math.Min(a, b);
         var high = Math.Max(a, b);
-        return campaign.Relations.TryGetValue(((long)low << 32) | (uint)high, out var relation)
+        var key = ((long)low << 32) | (uint)high;
+        return campaign.Relations.TryGetValue(key, out var relation) ||
+               campaign.DormantRelations.TryGetValue(key, out relation)
             ? relation
             : null;
     }
