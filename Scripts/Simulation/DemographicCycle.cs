@@ -207,6 +207,7 @@ public static class DemographicCycle
             if (campaign.Nations.Count > 0) campaign.HasOwnedLand(campaign.Nations[0]);
             KinTable(campaign);
             var changed = 0;
+            if (!campaign.Defines.ParallelRegions) options.MaxDegreeOfParallelism = 1;
             System.Threading.Tasks.Parallel.For(first, last, options, index =>
             {
                 var state = campaign.States[index];
@@ -501,4 +502,10 @@ public sealed partial class Nation
 {
     /// <summary>What the age structure adds, kept between asks. Not saved; refilled from scratch.</summary>
     internal Dictionary<string, float> DemographicCycleModifiers;
+}
+
+public sealed partial class Defines
+{
+    /// <summary>Whether regions are worked side by side on the thread pool (demography, regional economy). Off: one at a time.</summary>
+    public bool ParallelRegions { get; set; } = true;
 }

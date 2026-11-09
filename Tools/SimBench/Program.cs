@@ -244,6 +244,19 @@ public static class Program
         var territoryAt = Array.IndexOf(args, "--diagnose-territory");
         if (territoryAt >= 0 && territoryAt + 2 < args.Length)
             return mapped ? TerritoryDiagnosisReport.Run(campaign, args[territoryAt + 1], args[territoryAt + 2]) : 2;
+        // `--warm W` first plays the bench's own world W days, as the full bench does before these
+        // checks: a cache left behind by one campaign is what breaks the next one's determinism.
+        var warmAt = Array.IndexOf(args, "--warm");
+        if (warmAt >= 0 && warmAt + 1 < args.Length && int.TryParse(args[warmAt + 1], out var warmDays))
+        {
+            campaign.IsPaused = false;
+            for (var day = 0; day < warmDays; day++) campaign.TickDay();
+        }
+        var determinismAt = Array.IndexOf(args, "--determinism-only");
+        if (determinismAt >= 0)
+            return Check("the same seed gives the same world twice",
+                TheSameSeedGivesTheSameWorld(determinismAt + 1 < args.Length && int.TryParse(args[determinismAt + 1], out var determinismDays)
+                    ? Math.Clamp(determinismDays, 1, 365) : 90));
         var isolationAt = Array.IndexOf(args, "--isolation-only");
         if (isolationAt >= 0)
             return Check("two worlds in one process do not read each other's notes",
