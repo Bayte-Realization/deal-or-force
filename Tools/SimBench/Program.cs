@@ -94,6 +94,26 @@ public static class Program
             campaign = loaded.Campaign;
             Console.WriteLine($"  loaded {args[loadAt + 2]}: day {campaign.ElapsedDays}, {campaign.Date}");
         }
+        if (Array.IndexOf(args, "--census") >= 0)
+        {
+            var countries = campaign.Nations.Count(n => n.Movement is null && n.Population > 0);
+            var gone = campaign.Nations.Count(n => n.Movement is null && n.Population <= 0);
+            var live = campaign.Nations.Where(n => n.Movement is { Dissolved: false }).ToList();
+            var dissolved = campaign.Nations.Count(n => n.Movement is { Dissolved: true });
+            Console.WriteLine($"CENSUS day {campaign.ElapsedDays}: nations {campaign.Nations.Count} = countries {countries} + gone {gone} + live movements {live.Count} " +
+                              $"(landless {live.Count(n => n.Movement.Landless)}, exile {live.Count(n => n.Movement.Exile)}) + dissolved {dissolved}");
+            string Kind(int id) => campaign.NationById(id) is not { } n ? "none" : n.Movement is { Dissolved: false } ? "movement" :
+                n.Movement is not null ? "dissolved" : n.Population > 0 ? "country" : "gone";
+            foreach (var group in campaign.Relations.Values.GroupBy(r => string.Join("-", new[] { Kind(r.A), Kind(r.B) }.OrderBy(k => k)))
+                         .OrderByDescending(g => g.Count()))
+                Console.WriteLine($"CENSUS relations {group.Key}: {group.Count()}");
+            Console.WriteLine($"CENSUS dormant relations {campaign.DormantRelations.Count}");
+            foreach (var group in live.GroupBy(n => Movements.DefinitionOf(n)?.Id ?? "?").OrderByDescending(g => g.Count()).Take(12))
+                Console.WriteLine($"CENSUS movement {group.Key}: {group.Count()}");
+            var born = live.GroupBy(n => n.Movement.Exile ? "exile" : n.Movement.Landless ? "landless" : "landed");
+            foreach (var g in born) Console.WriteLine($"CENSUS movements {g.Key}: {g.Count()}, cadres median {g.Select(n => n.Movement.Cadres).OrderBy(x => x).ElementAt(g.Count() / 2):0}");
+            return 0;
+        }
         // Calendar stress only: this does NOT turn the modern roster/economy into a
         // historical scenario. Actual ancient worlds are authored through the editor.
         var calendarAt = Array.IndexOf(args, "--calendar");
