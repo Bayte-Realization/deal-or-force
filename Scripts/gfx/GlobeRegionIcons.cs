@@ -57,6 +57,7 @@ public sealed partial class GlobePresentation
     private float _badgeLayoutDistance = -1f;
     private double _badgeStill;
     private double _badgeDataAge;
+    private double _badgeMovingClock;
     private bool _badgeLayoutDue = true;
     private StrategicMapMode _badgeMode;
 
@@ -101,7 +102,21 @@ public sealed partial class GlobePresentation
                 _badgeDataAge = 0;
                 _badgeLayoutDistance = distance;
             }
-            else if (moved && _badgeStill == 0) _badgeLayoutDue = true;
+            else if (moved)
+            {
+                // While the view moves, a lighter pass four times a second: the badges already
+                // shown stay exactly where they are, and regions coming into view get theirs at
+                // once rather than when the drag ends - which made the icons look as if the right
+                // button switched them on.
+                _badgeLayoutDue = true;
+                _badgeMovingClock += delta;
+                if (_badgeMovingClock >= 0.25)
+                {
+                    _badgeMovingClock = 0;
+                    LayOutRegionBadges(moving: true);
+                    _badgeLayoutDistance = distance;
+                }
+            }
         }
 
         // Fades: in over a fifth of a second, out a little quicker.
@@ -240,7 +255,7 @@ public sealed partial class GlobePresentation
     /// kept first, where they still fit; the rest by population. Forces, city names and capitals
     /// keep their room as they stand at this moment.
     /// </summary>
-    private void LayOutRegionBadges()
+    private void LayOutRegionBadges(bool moving = false)
     {
         RefreshRegionAnchors();
         var (iconSize, signSize, fontSize) = BadgeMetrics();
@@ -271,6 +286,12 @@ public sealed partial class GlobePresentation
             // The middle first; where a city's name or a force stands there, just below, above or
             // beside it - still on the region - rather than no badge at all. The place found is kept
             // (and tried first next time), so a badge does not hop between them as the view moves.
+            if (moving && badge.Wanted && badge.Alpha > 0.5f)
+            {
+                var kept = new Rect2(point.X + badge.Offset.X - badge.Width / 2f, point.Y + badge.Offset.Y - iconSize / 2f,
+                    badge.Width, iconSize).Grow(3f);
+                if (screenRect.Encloses(kept)) { _regionIconTaken.Add(kept); keep.Add(state.MapIndex); placed++; return; }
+            }
             var step = iconSize + 6f;
             var tries = new[] { badge.Offset, Vector2.Zero, new Vector2(0f, step), new Vector2(0f, -step),
                 new Vector2(badge.Width * 0.6f + 4f, 0f), new Vector2(-badge.Width * 0.6f - 4f, 0f) };

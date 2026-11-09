@@ -488,10 +488,6 @@ public partial class DealOrForceGame
             CardRow(_countryCardRows, "Your guarantee", Tr("you have promised to fight for them"), null, "state.info");
         if (relation.GuaranteedBy(nation.Id))
             CardRow(_countryCardRows, "Guaranteed by them", Tr("they have promised to fight for you"), null, "state.positive");
-        var allies = AllianceSystem.AlliesOf(_campaign, nation);
-        if (allies.Count > 0)
-            CardRow(_countryCardRows, "Allied to", string.Join(", ", allies.Take(5).Select(CountryNames.Compact)) +
-                                                   (allies.Count > 5 ? $" +{allies.Count - 5:N0}" : ""));
         var through = player.TradePartners.GetValueOrDefault(nation.Id);
         if (through > 0.0001f)
             CardRow(_countryCardRows, "Trade through them", Simulation.Loc.Format("{0} a week · {1:P0} of all your trade",
