@@ -9,6 +9,16 @@ public sealed partial class Defines
     /// <summary>The stage ladder's formal crisis: relations at Crisis or above and not at war
     /// are an open diplomatic crisis the great powers can weigh in on.</summary>
     public bool CrisisLadderEnabled { get; set; } = true;
+    /// <summary>How far, in degrees of arc between capitals, a great power's interest in a crisis reaches (about 3,000 km).</summary>
+    public float CrisisInterestDegrees { get; set; } = 27f;
+    /// <summary>Or the share of its trade that goes through one of the two sides.</summary>
+    public float CrisisInterestTradeShare { get; set; } = 0.04f;
+    /// <summary>The chance, each week a crisis is reviewed, that a great power with a stake offers talks.</summary>
+    public float CrisisMediationChance { get; set; } = 0.35f;
+    /// <summary>How much tension a great power's warning takes off a crisis.</summary>
+    public float CrisisInterventionRelief { get; set; } = 10f;
+    /// <summary>A power intervenes only if it is at least this strong against the aggressor (output plus arms).</summary>
+    public float CrisisInterventionCredibility { get; set; } = 1.0f;
     /// <summary>How many days a crisis may burn before the powers force a compromise.</summary>
     public int CrisisCompromiseDays { get; set; } = 120;
     /// <summary>The opinion a great power needs with BOTH sides to act as a mediator.</summary>

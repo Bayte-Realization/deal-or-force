@@ -1006,6 +1006,9 @@ public static class Escalation
             return Loc.Get("Relations are not in crisis.");
         if (relation.InterveningPowerId >= 0 && relation.InterventionUntilDay > c.ElapsedDays)
             return Loc.Get("Great Power intervention is already active.");
+        // A warning has to be one the aggressor believes.
+        if (power.Gdp + power.MilitarySpending * 1000f < (aggressor.Gdp + aggressor.MilitarySpending * 1000f) * c.Defines.CrisisInterventionCredibility)
+            return Loc.Get("Not strong enough for the warning to be believed.");
         return "";
     }
 
@@ -1016,7 +1019,9 @@ public static class Escalation
         relation.InterveningPowerId = power.Id;
         relation.InterventionTargetId = aggressor.Id;
         relation.InterventionUntilDay = c.ElapsedDays + 180;
-        relation.Tension = MathF.Min(relation.Tension, c.Defines.TensionClashesAt - 1.5f);
+        // Calmed by a measure, not pinned under the line: a crisis a patron leans on can still
+        // run on to the border if what drives it does not stop.
+        relation.Tension = MathF.Max(0f, relation.Tension - MathF.Max(0f, c.Defines.CrisisInterventionRelief));
 
         var relP = CampaignDiplomacy.Get(c, power.Id, protege.Id);
         if (relP is not null) OpinionSystem.Remember(c, relP, "held_talks");
@@ -1049,6 +1054,9 @@ public static class Escalation
                 var relB = CampaignDiplomacy.Peek(c, power.Id, b.Id);
                 var backsA = relA is not null && (relA.Stance == DiplomaticStance.Allied || relA.GuaranteedBy(power.Id));
                 var backsB = relB is not null && (relB.Stance == DiplomaticStance.Allied || relB.GuaranteedBy(power.Id));
+                // A crisis on the far side of the world, between countries it neither borders, backs
+                // nor trades with, is not this power's business.
+                if (!backsA && !backsB && !HasStake(c, power, a) && !HasStake(c, power, b)) continue;
                 var powerA = a.Gdp + a.MilitarySpending * 1000f;
                 var powerB = b.Gdp + b.MilitarySpending * 1000f;
                 if (!backsA && !backsB)
@@ -1082,14 +1090,30 @@ public static class Escalation
                     InterveneInCrisis(c, power, b, a);
                     break;
                 }
+                // Talks are offered on some weeks, not the first week of every crisis: a crisis
+                // nobody hurries to calm can run on into clashes and a border war (Escalation).
                 if (MediationBlock(c, power, a, b).Length == 0 &&
-                    AiStatecraft.Restraint(c, power) >= 0.35f)
+                    AiStatecraft.Restraint(c, power) >= 0.35f &&
+                    Roll(c.Seed, power.Id, relation.A * 4099 + relation.B, c.ElapsedDays, 0x3ED1A7) < c.Defines.CrisisMediationChance)
                 {
                     StartMediation(c, power, a, b);
                     break;
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Whether a great power has a stake in a country's crisis: a land border, its capital within
+    /// Defines.CrisisInterestDegrees of the power's, or a real share of the power's trade.
+    /// </summary>
+    internal static bool HasStake(Campaign c, Nation power, Nation party)
+    {
+        if (power.MapIndex > 0 && party.MapIndex > 0 && CampaignDiplomacy.SharesLandBorder(c, power.MapIndex, party.MapIndex)) return true;
+        if (float.IsFinite(power.CapitalLatitude) && float.IsFinite(party.CapitalLatitude) &&
+            NavalOperations.Distance(power.CapitalLatitude, power.CapitalLongitude, party.CapitalLatitude, party.CapitalLongitude) <=
+            c.Defines.CrisisInterestDegrees) return true;
+        return power.TradeDependenceOn(party.Id) >= c.Defines.CrisisInterestTradeShare;
     }
 
     public static IEnumerable<DiplomaticRelation> Hottest(Campaign c, float above = 0f)

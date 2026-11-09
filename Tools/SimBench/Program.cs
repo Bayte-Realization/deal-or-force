@@ -372,6 +372,47 @@ public static class Program
             Console.WriteLine($"SP subsidies {campaign.Chronicle.Entries.Count(e => e.Kind == "war_subsidy")}");
             return 0;
         }
+        // `--century YEARS`: a long campaign, a line a year - how fast a day runs, its worst step, the
+        // managed heap, and every collection that can grow - so a thousand-year campaign can be
+        // judged by its trend rather than its first year.
+        var centuryAt = Array.IndexOf(args, "--century");
+        if (centuryAt >= 0)
+        {
+            var years = centuryAt + 1 < args.Length && int.TryParse(args[centuryAt + 1], out var cy) ? cy : 20;
+            campaign.IsPaused = false;
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var lastTotals = new Dictionary<string, double>();
+            for (var year = 1; year <= years; year++)
+            {
+                var yearStart = clock.Elapsed.TotalMilliseconds;
+                var worst = 0.0;
+                for (var day = 0; day < 365; day++)
+                {
+                    var before = clock.Elapsed.TotalMilliseconds;
+                    campaign.TickDay();
+                    worst = Math.Max(worst, clock.Elapsed.TotalMilliseconds - before);
+                }
+                var centuryPerDay = (clock.Elapsed.TotalMilliseconds - yearStart) / 365.0;
+                long images = 0, decisions = 0, modifiers = 0;
+                foreach (var n in campaign.Nations)
+                {
+                    images += n.PublicImages?.Count ?? 0;
+                    decisions += n.DecisionAvailableDay.Count;
+                    modifiers += n.Modifiers.Count;
+                }
+                Console.WriteLine($"CENTURY year {year} ({campaign.Date}): {centuryPerDay:0.0} ms/day, worst day {worst:0} ms, heap {GC.GetTotalMemory(false) / 1048576.0:0} MB | " +
+                                  $"nations {campaign.Nations.Count} (alive {campaign.Nations.Count(n => n.Population > 0)}), regions {campaign.States.Count}, " +
+                                  $"wars {campaign.Wars.Count} (open {campaign.Wars.Count(w => !w.Ended)}), relations {campaign.Relations.Count}+{campaign.DormantRelations.Count} dormant, " +
+                                  $"armies {campaign.Armies.Count}, battles {campaign.Battles.Count}, chronicle {campaign.Chronicle.Entries.Count}, images {images}, decisions {decisions}, modifiers {modifiers}, " +
+                                  $"events {campaign.PendingEvents.Count}, sponsorships {campaign.Sponsorships.Count}, organisations {campaign.Organizations.Count}, construction {campaign.Construction.Count}, routes {campaign.TradeRoutes.Count}");
+                var systems = SimProfiler.All.Where(sample => !sample.Name.StartsWith(" "))
+                    .Select(sample => (sample.Name, Ms: sample.TotalMilliseconds - lastTotals.GetValueOrDefault(sample.Name)))
+                    .OrderByDescending(pair => pair.Ms).Take(12).Select(pair => $"{pair.Name} {pair.Ms / 365.0:0.0}");
+                Console.WriteLine($"CENTURY systems year {year} (ms/day): " + string.Join(", ", systems));
+                foreach (var sample in SimProfiler.All) lastTotals[sample.Name] = sample.TotalMilliseconds;
+            }
+            return 0;
+        }
         var traceAt = Array.IndexOf(args, "--trace");
         if (traceAt >= 0 && traceAt + 1 < args.Length && campaign.NationByTag(args[traceAt + 1]) is { } traced)
         {
