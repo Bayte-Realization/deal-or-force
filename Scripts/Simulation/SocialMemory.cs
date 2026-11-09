@@ -227,6 +227,7 @@ public static class SocialMemory
             n.DomesticImage.Review(c.ElapsedDays, domestic, c.Defines);
             ReviewCultures(c, n);
             ReviewOrganisations(c, n);
+            if (((c.ElapsedDays / interval) + n.Id) % 52 == 0) ForgetTheGone(c, n, subjects);
             // Scripted narratives may concern a known subject without a diplomatic relationship.
             // Rare, and the walk is long in a long campaign: every fourth review.
             if (((c.ElapsedDays / interval) + n.Id) % 4 == 0)
@@ -303,6 +304,27 @@ public static class SocialMemory
         }
         (image ?? Image(audience, NationKey(subject), true)).Review(c.ElapsedDays, target, c.Defines);
     }
+    private static readonly List<string> ForgottenScratch = new();
+
+    /// <summary>
+    /// The images of countries that are gone, unreviewed for five years and never strong enough to
+    /// become a stigma or an ideal, are forgotten: a campaign of centuries is not carried by every
+    /// opinion of every rising that ever lived.
+    /// </summary>
+    private static void ForgetTheGone(Campaign c, Nation audience, Dictionary<string, Nation> subjects)
+    {
+        var forgotten = ForgottenScratch; forgotten.Clear();
+        foreach (var (key, image) in audience.PublicImages)
+        {
+            if (!key.StartsWith("nation:", StringComparison.Ordinal) || image.Status != 0) continue;
+            if (image.LastReviewDay >= 0 && c.ElapsedDays - image.LastReviewDay < 1825) continue;
+            if (subjects.TryGetValue(key, out var subject) &&
+                (subject.Population > 0 || subject.Movement is { Dissolved: false })) continue;
+            forgotten.Add(key);
+        }
+        foreach (var key in forgotten) audience.PublicImages.Remove(key);
+    }
+
     private static readonly Dictionary<string, long> CulturePopulationsScratch = new(StringComparer.Ordinal);
     private static readonly List<string> CultureSubjectsScratch = new();
     private static readonly HashSet<string> ActiveCoalitionsScratch = new(StringComparer.Ordinal);
@@ -328,8 +350,13 @@ public static class SocialMemory
         {
             var contact = M.Clamp(populations.GetValueOrDefault(culture) / (float)Math.Max(1, audience.Population), 0f, 1f);
             var shared = DemographyCatalog.IsPrimary(audience.Tag, culture) ? 0.15f : 0f;
-            Image(audience, "culture:" + culture, true).Review(c.ElapsedDays,
+            var image = Image(audience, "culture:" + culture, true);
+            image.Review(c.ElapsedDays,
                 shared + contact * 0.3f + (contact > 0f ? (audience.Stability - 0.5f) * 0.15f : 0f), c.Defines);
+            // A people it no longer lives with, once its image has faded to nothing, is forgotten
+            // rather than reviewed every week for the rest of the campaign.
+            if (contact <= 0f && shared <= 0f && image.Status == 0 && MathF.Abs(image.Esteem) < 0.02f && MathF.Abs(image.Incident) < 0.01f)
+                audience.PublicImages.Remove("culture:" + culture);
         }
     }
     private static void ReviewOrganisations(Campaign c, Nation audience)

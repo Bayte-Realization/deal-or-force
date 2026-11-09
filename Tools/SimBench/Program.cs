@@ -409,7 +409,17 @@ public static class Program
                     .Select(sample => (sample.Name, Ms: sample.TotalMilliseconds - lastTotals.GetValueOrDefault(sample.Name)))
                     .OrderByDescending(pair => pair.Ms).Take(12).Select(pair => $"{pair.Name} {pair.Ms / 365.0:0.0}");
                 Console.WriteLine($"CENTURY systems year {year} (ms/day): " + string.Join(", ", systems));
+                var parts = SimProfiler.All.Where(sample => sample.Name.StartsWith(" "))
+                    .Select(sample => (Name: sample.Name.Trim(), Ms: sample.TotalMilliseconds - lastTotals.GetValueOrDefault(sample.Name)))
+                    .OrderByDescending(pair => pair.Ms).Take(15).Select(pair => $"{pair.Name} {pair.Ms / 365.0:0.0}");
+                Console.WriteLine($"CENTURY parts year {year} (ms/day): " + string.Join(", ", parts));
                 foreach (var sample in SimProfiler.All) lastTotals[sample.Name] = sample.TotalMilliseconds;
+                var centurySaveAt = Array.IndexOf(args, "--century-save");
+                if (centurySaveAt >= 0 && centurySaveAt + 1 < args.Length && year % 5 == 0)
+                {
+                    SaveSystem.Save(args[centurySaveAt + 1], $"century_y{year}", campaign, "");
+                    Console.WriteLine($"CENTURY saved century_y{year}");
+                }
             }
             return 0;
         }
