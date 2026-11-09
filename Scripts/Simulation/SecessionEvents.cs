@@ -874,7 +874,10 @@ public static class SecessionEvents
         foreach (var piece in leaving)
             if (piece.Cause is SecessionCause.Nationality or SecessionCause.Federal &&
                 (seat is null || piece.Population > seat.Population)) seat = piece;
-        seat ??= leaving[0];
+        // Otherwise the most populous region that left, not whichever was listed first.
+        if (seat is null)
+            foreach (var piece in leaving)
+                if (seat is null || piece.Population > seat.Population) seat = piece;
         var seatState = campaign.States.Find(state => state.MapIndex == seat.MapIndex);
         var theirs = NamedForItsPeople(campaign, culture, leaving);
 

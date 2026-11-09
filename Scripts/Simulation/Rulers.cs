@@ -372,7 +372,7 @@ public static class Rulers
         }
         else
         {
-            name = GenerateName(nation, 0, isState: true, campaignSeed: campaign?.Seed ?? 0);
+            name = GenerateName(nation, 0, isState: true, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             traitId = DefaultTraitFor(nation, 0, isState: true);
             birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfState, StableHash(nation.Tag, 17));
         }
@@ -420,7 +420,7 @@ public static class Rulers
         }
         else
         {
-            name = GenerateName(nation, 1, isState: false, campaignSeed: campaign?.Seed ?? 0);
+            name = GenerateName(nation, 1, isState: false, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             traitId = DefaultTraitFor(nation, 1, isState: false);
             birthYear = Rulers.CalendarOriginYear(campaign) - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, 31));
         }
@@ -666,7 +666,7 @@ public static class Rulers
         for (var i = 0; i < count; i++)
         {
             var gen = baseGen + i * 7;
-            var name = GenerateName(nation, gen, isState: false, campaignSeed: campaign?.Seed ?? 0);
+            var name = GenerateName(nation, gen, isState: false, campaignSeed: campaign?.Seed ?? 0, campaign: campaign);
             var traitId = DefaultTraitFor(nation, gen, isState: false);
             var trait = TraitOf(traitId) ?? (TraitList.Count > 0 ? TraitList[0] : new RulerTraitDefinition { Id = traitId, Name = traitId });
             var baseAge = 35 + Math.Abs(StableHash(nation.Tag, gen * 19 + 3)) % 31;
@@ -746,7 +746,7 @@ public static class Rulers
         EnsureLoaded();
         nation.RulerGeneration++;
         var year = campaign.Date.Year;
-        nation.HeadOfStateName = GenerateName(nation, nation.RulerGeneration * 2 + 1, isState: true, campaignSeed: campaign.Seed);
+        nation.HeadOfStateName = GenerateName(nation, nation.RulerGeneration * 2 + 1, isState: true, campaignSeed: campaign.Seed, campaign: campaign);
         nation.HeadOfStateTrait = DefaultTraitFor(nation, nation.RulerGeneration * 2 + 1, isState: true);
         var band = OfficeOf(nation).HereditaryState ? AgeBand.Hereditary : AgeBand.HeadOfState;
         nation.HeadOfStateBirthYear = year - AgeAtOffice(nation, band, StableHash(nation.Tag, nation.RulerGeneration * 13 + 7));
@@ -774,7 +774,7 @@ public static class Rulers
             return;
         }
         var year = campaign.Date.Year;
-        nation.HeadOfGovernmentName = GenerateName(nation, nation.RulerGeneration * 2 + 2, isState: false, campaignSeed: campaign.Seed);
+        nation.HeadOfGovernmentName = GenerateName(nation, nation.RulerGeneration * 2 + 2, isState: false, campaignSeed: campaign.Seed, campaign: campaign);
         nation.HeadOfGovernmentTrait = DefaultTraitFor(nation, nation.RulerGeneration * 2 + 2, isState: false);
         nation.HeadOfGovernmentBirthYear = year - AgeAtOffice(nation, AgeBand.HeadOfGovernment, StableHash(nation.Tag, nation.RulerGeneration * 19 + 5));
         nation.HeadOfGovernmentSinceDay = campaign.ElapsedDays;
@@ -818,10 +818,14 @@ public static class Rulers
         return TraitList[idx].Id;
     }
 
-    public static string GenerateName(Nation nation, int generation, bool isState, int campaignSeed = 0)
+    public static string GenerateName(Nation nation, int generation, bool isState, int campaignSeed = 0, Campaign campaign = null)
     {
         EnsureLoaded();
         var localPool = PersonNameCatalog.PoolFor(nation);
+        // A country with no culture of its own that no table knows - a rising, a junta - is
+        // named by the people of its capital, not by the English of the "default" pool.
+        var ground = localPool.Length == 0 ? GroundCulture(campaign, nation) : "";
+        if (ground.Length > 0) localPool = PersonNameCatalog.PoolFor(nation.Tag, ground);
         var monarch = isState && nation?.Government is "absolute_monarchy" or "constitutional_monarchy";
         if (PersonNameCatalog.TryGenerate(nation?.Tag, localPool, generation, campaignSeed,
             isState ? 17 : 31, out var person, monarch ? false : null))
@@ -830,7 +834,7 @@ public static class Rulers
                 return $"{person.Given} ({Cap(localHouse)})";
             return person.FullName;
         }
-        var poolKey = PoolFor(nation);
+        var poolKey = PoolFor(nation, ground);
         if (!_namePools.TryGetValue(poolKey, out var pool) && !_namePools.TryGetValue("default", out pool))
             return "Alexander Vance";
         var h1 = Math.Abs(StableHash(nation?.Tag ?? "NAT", generation * 41 + (isState ? 7 : 19)));
@@ -845,12 +849,27 @@ public static class Rulers
         return $"{given} {family}";
     }
 
-    public static string PoolFor(Nation nation)
+    /// <summary>The leading people of a country's capital, or of its largest region; empty without a campaign.</summary>
+    public static string GroundCulture(Campaign campaign, Nation nation)
+    {
+        if (campaign is null || nation is null || nation.MapIndex <= 0) return "";
+        ScenarioState seat = null;
+        foreach (var state in campaign.States)
+        {
+            if (state.NationMapIndex != nation.MapIndex) continue;
+            if (state.MapIndex == nation.CapitalStateMapIndex) { seat = state; break; }
+            if (seat is null || state.Population > seat.Population) seat = state;
+        }
+        return seat is null ? "" : RegionalAdministration.DominantCulture(seat);
+    }
+
+    public static string PoolFor(Nation nation, string groundCulture = "")
     {
         if (nation is null) return "default";
         var culture = !string.IsNullOrWhiteSpace(nation.DeclaredCulture)
             ? nation.DeclaredCulture
             : nation.FoundedCultures.FirstOrDefault() ?? "";
+        if (string.IsNullOrWhiteSpace(culture)) culture = groundCulture ?? "";
         if (string.IsNullOrWhiteSpace(culture)) culture = DemographyCatalog.PrimaryCulture(nation.Tag);
         if (!string.IsNullOrWhiteSpace(culture))
         {
@@ -1019,7 +1038,7 @@ public sealed class AppointMinisterCommand : ICampaignCommand
         var appointedName = authoredMin is { Name.Length: > 0 }
             ? authoredMin.Name
             : Rulers.GenerateName(nation, Rulers.StableHash(PortfolioId + ":" + OptionId, campaign.ElapsedDays),
-                false, campaign.Seed);
+                false, campaign.Seed, campaign);
         var appointedBirthYear = authoredMin is { Age: > 0 }
             ? Rulers.CalendarOriginYear(campaign) - Math.Clamp(authoredMin.Age, 18, 99)
             : campaign.Date.Year - Rulers.GeneratedMinisterAge(nation, PortfolioId + ":" + OptionId + ":" + campaign.ElapsedDays);

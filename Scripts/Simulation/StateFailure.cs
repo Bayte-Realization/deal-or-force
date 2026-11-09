@@ -407,7 +407,11 @@ public static class StateFailure
     /// <summary>An armed side on this ground, named for its seat and believing what its seat believes.</summary>
     private static Nation Rise(Campaign c, Nation nation, List<ScenarioState> ground, bool countsAsOutbreak)
     {
+        // The ground grew from its worst-governed region, but a side sits where its people are:
+        // its seat, its capital and its name are its most populous region, not a glacier.
         var seed = ground[0];
+        foreach (var region in ground)
+            if (region.Population > seed.Population) seed = region;
         var (template, ideology, government) = Allegiance(c, nation, seed);
         var parentTag = nation.Tag;
         var parentName = nation.Name;
