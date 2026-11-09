@@ -23,8 +23,11 @@ internal static class OpeningPopulationTests
             "the regions Russia holds count for Russia with the people they were given");
         Check(OpeningOccupation.LastScaled.All(row => row.Scale <= c.Defines.OpeningOccupationMaximumScale),
             "no country is scaled past the bound");
-        Check(OpeningOccupation.LastScaled.All(row => row.Tag != "LBN"),
-            "Lebanon loses no region on the first morning (a border province once took a third of its people to Israel)");
+        // The Shebaa patch at the foot of Mount Hermon is Israel's (its source cells are), and it
+        // costs Lebanon a few thousand people of Southern Beqaa - not the third of the country one
+        // border province once took with it.
+        Check(OpeningOccupation.LastScaled.All(row => row.Tag != "LBN" || row.Scale < 1.01),
+            "Lebanon loses under one per cent on the first morning (a border province once took a third of its people to Israel)");
         Check(OpeningOccupation.LastScaled.All(row => row.Tag != "YEM"),
             "Yemen's figure stays the whole country's: the Houthis are cut out after, by Factions");
     }
