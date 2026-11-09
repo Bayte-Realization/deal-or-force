@@ -712,24 +712,22 @@ public static partial class AiStatecraft
     /// </summary>
     private static void Warmaking(Campaign campaign, Nation nation)
     {
-        // Every war it is in, not just the first one in the world's list. A country fighting three
-        // wars asked about whichever war the enumeration happened to reach first and never spoke
-        // about the other two: the bench found them at minus twenty with LastNegotiation empty and
-        // no offer ever made, for years, while the same country's first war was negotiated normally.
-        // A snapshot, because a settlement can end a war and a list being read must not change.
-        var negotiating = false;
-        var live = Warfare.LiveWars(campaign);
-        var open = new StrategicWar[live.Count];
-        for (var index = 0; index < live.Count; index++) open[index] = live[index];
-        foreach (var existing in open)
+        // Consider every own war, not just the first one. Negotiation may end a war,
+        // so snapshot only this country's live wars, never the complete historical archive.
+        List<StrategicWar> ownWars = null;
+        foreach (var candidate in Warfare.LiveWars(campaign))
+            if (candidate.Involves(nation.Id))
+                (ownWars ??= new List<StrategicWar>()).Add(candidate);
+        if (ownWars is not null)
         {
-            if (existing.Ended || !existing.Involves(nation.Id)) continue;
-            // In trouble, ask somebody in before deciding whether to ask the enemy for terms.
-            SeekRescue(campaign, nation, existing);
-            Negotiate(campaign, nation, existing);
-            negotiating = true;
+            foreach (var existing in ownWars)
+            {
+                if (existing.Ended) continue;
+                SeekRescue(campaign, nation, existing);
+                Negotiate(campaign, nation, existing);
+            }
+            return;
         }
-        if (negotiating) return;
         if (!campaign.Defines.AiMayDeclareWar) return;
         var defines = campaign.Defines;
         var fiscal = AiFiscalPolicy.Assess(campaign, nation, defines.AiTreasuryFloor);

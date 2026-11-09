@@ -53,6 +53,7 @@ public partial class ExportVerification : Node
                 Loc.Language = args[languageAt + 1];
             Check(tree.CurrentScene is MainMenuScene && tree.CurrentScene.FindChildren("*", "Button", true, false).Count > 3,
                 "managed main menu and its controls load");
+            VerifyReleaseDoctrineContent();
             // The F# pure-rule library is an optional dependency, and the hook that reaches it
             // is deliberately forgiving: on its first exception it answers with the managed
             // implementation from then on and writes one line to the log, so a pack that cannot
@@ -368,7 +369,7 @@ public partial class ExportVerification : Node
                     ApplicationExit.Request(this, _failures == 0 ? 0 : 1);
                     return;
                 }
-                if (developmentProbe && args.Contains("--verify-paused-doctrines-only"))
+                if (args.Contains("--verify-paused-doctrines-only"))
                 {
                     await VerifyPausedDoctrines(game);
                     GD.Print($"EXPORT_VERIFY failures={_failures}");

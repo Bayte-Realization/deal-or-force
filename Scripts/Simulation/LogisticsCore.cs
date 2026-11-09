@@ -494,8 +494,8 @@ public static class LogisticsSystem
     /// the day it crossed the ally's border, however open the road behind it - a stack on the
     /// far side of Saudi Arabia starved with the Saudi roads open to it. Crossing is all it is:
     /// no depot stands on someone else's ground (only the country's own provinces become hubs),
-    /// and the trace's distance still counts every province of the way. Built only for a
-    /// country at war; at peace supply never needs to leave home.
+    /// and the trace's distance still counts every province of the way. Subject-overlord
+    /// corridors also work at peace; co-belligerents and granted access require a war.
     /// </summary>
     private static void CollectCorridors(Campaign campaign, Nation nation, Scratch board)
     {

@@ -677,6 +677,7 @@ public static class KinStatecraft
             }
             if (++scanned % 48 == 0) yield return 0;
         }
+        yield break;
     }
 
     /// <summary>

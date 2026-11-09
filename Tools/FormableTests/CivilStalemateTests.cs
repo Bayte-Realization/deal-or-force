@@ -20,7 +20,7 @@ static class CivilStalemateTests
         Check(c.Nations[0].Id == 0 && c.Nations[0] == c.NationById(0),
             "nation id 0 sits at index 0");
         Check(SaveSystem.FormatVersion == 2, "save format stays 2");
-        Check(SaveSystem.MapDataVersion == "2024.11.03-a", "map data stays 2024.11.03-a");
+        Check(SaveSystem.MapDataVersion == "2024.11.09-a", "map data stays 2024.11.09-a");
 
         var attacker = c.Nations[0];
         var defender = c.Nations[1];
@@ -44,16 +44,22 @@ static class CivilStalemateTests
             "a war between states is not offered by the civil rule");
 
         var crushing = War(c, attacker, defender, stalled: true, age: 770, score: 100f);
-        var ahead = PeaceNegotiation.Acceptance(c, crushing, attacker.Id, PeaceTerms.StatusQuo);
-        var behind = PeaceNegotiation.Acceptance(c, crushing, defender.Id, PeaceTerms.StatusQuo);
-        Check(ahead < PeaceTermCatalog.Of(PeaceTerms.StatusQuo).MinimumAcceptance,
-            $"the side a hundred points ahead would still refuse the line ({ahead:0.0})");
-        Check(!AiStatecraft.CivilFrozenOfferReady(c, crushing, attacker.Id),
-            "that side does not offer a line it would still refuse");
-        Check(behind >= PeaceTermCatalog.Of(PeaceTerms.StatusQuo).MinimumAcceptance,
-            $"the side a hundred points behind would already sign ({behind:0.0})");
-        Check(AiStatecraft.CivilFrozenOfferReady(c, crushing, defender.Id),
-            "and that side may ask, because the front has stood still");
+        // Acceptance is the RESPONDER's answer, not the proposer's willingness. The
+        // attacker ahead on points asks the beaten defender, and vice versa.
+        var beatenResponder = PeaceNegotiation.Acceptance(c, crushing, attacker.Id, PeaceTerms.StatusQuo);
+        var winningResponder = PeaceNegotiation.Acceptance(c, crushing, defender.Id, PeaceTerms.StatusQuo);
+        Check(winningResponder < PeaceTermCatalog.Of(PeaceTerms.StatusQuo).MinimumAcceptance,
+            $"the winning responder still refuses the losing side's line ({winningResponder:0.0})");
+        Check(!AiStatecraft.CivilFrozenOfferReady(c, crushing, defender.Id),
+            "the losing proposer does not offer a line its winning opponent refuses");
+        Check(beatenResponder >= PeaceTermCatalog.Of(PeaceTerms.StatusQuo).MinimumAcceptance,
+            $"the beaten responder would sign the winning side's line ({beatenResponder:0.0})");
+        Check(AiStatecraft.CivilFrozenOfferReady(c, crushing, attacker.Id),
+            "the winning side may offer that accepted line because the front has stood still");
+        var mirrored = War(c, attacker, defender, stalled: true, age: 770, score: -100f);
+        Check(!AiStatecraft.CivilFrozenOfferReady(c, mirrored, attacker.Id) &&
+              AiStatecraft.CivilFrozenOfferReady(c, mirrored, defender.Id),
+            "reversing the score reverses the eligible proposer, not the acceptance meaning");
 
         var moving = War(c, attacker, defender, stalled: false, age: 770, score: 100f);
         Check(AiStatecraft.DecisivelyBeaten(c, moving, defender.Id),

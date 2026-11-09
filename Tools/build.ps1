@@ -26,6 +26,7 @@ param(
     # Headless tests cannot compile/draw a GPU material. Opt in on a Windows
     # release workstation; keep GPU-less build servers explicitly separate.
     [switch]$VerifyRenderers,
+    [switch]$VerifyDoctrines,
     # The in-game probe permits 420 seconds for a cold campaign load, followed
     # by UI/simulation checks. Its enclosing process must not be killed at 180.
     [ValidateRange(10, 900)][int]$RuntimeVerificationTimeoutSeconds = 600,
@@ -474,6 +475,12 @@ if ($VerifyRenderers) {
         if ($LASTEXITCODE -ne 0) { throw "GPU verification failed (exit $LASTEXITCODE); evidence: $rendererEvidence" }
     }
     else { & $rendererVerifier -Executable $exe -TimeoutSeconds $RuntimeVerificationTimeoutSeconds -OutputDirectory $rendererEvidence }
+}
+
+if ($VerifyDoctrines) {
+    Write-Host '== verifying complete doctrines and real UI in the exported executable ==' -ForegroundColor Cyan
+    & (Join-Path $PSScriptRoot 'verify-doctrines.ps1') -Executable $exe `
+        -LogDirectory (Join-Path $stage 'verification-doctrines') -TimeoutSeconds $RuntimeVerificationTimeoutSeconds
 }
 
 # ---------------------------------------------------------------- something to send

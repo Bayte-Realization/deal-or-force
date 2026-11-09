@@ -3006,14 +3006,9 @@ void fragment() {
         // Near a pole the tiles lie on the plane about it (polar_plane), blended in over a band.
         // The gradients are taken here, outside any branch, so a sample inside one stays defined.
         float terrain_polar = polar_blend(UV);
-        vec2 terrain_polar_uv = vec2(0.0);
-        vec2 pdx = vec2(0.0), pdy = vec2(0.0);
-        if (terrain_polar > 0.001) {
-            terrain_polar_uv = polar_plane(UV, terrain_repeat / 6.2831853);
-            pdx = dFdx(terrain_polar_uv);
-            pdy = dFdy(terrain_polar_uv);
-        }
+        vec2 terrain_polar_uv = polar_plane(UV, terrain_repeat / 6.2831853);
         vec2 tdx = dFdx(terrain_uv), tdy = dFdy(terrain_uv);
+        vec2 pdx = dFdx(terrain_polar_uv), pdy = dFdy(terrain_polar_uv);
         // One ground sample when unsmoothed rather than two mixed: the saving is a texture
         // fetch per pixel on the largest surface the game draws, which is the half of this
         // switch that matters on a machine that needed it.

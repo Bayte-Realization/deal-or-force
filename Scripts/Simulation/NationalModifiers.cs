@@ -125,13 +125,17 @@ public static class NationalModifiers
             yield return (focus.Name, focus.Modifiers);
     }
 
-    private static Dictionary<string, float> Build(Nation nation)
+    private static Dictionary<string, float> Build(Nation nation, bool inPlace = true)
     {
         // The dictionary is the country's own, kept and refilled: it is rebuilt every day
         // for every country, and a fresh dictionary a day for two hundred and sixty
         // countries is the collector's whole budget. Values are refilled from scratch, so
         // the sum is exactly what a new dictionary would have held.
-        var totals = nation.ModifierTotals ??= new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        // In place only for the daily rebuild on the main thread; a first build fills a table of
+        // its own, which Of publishes once it is complete.
+        var totals = inPlace && nation.ModifierTotals is { } own
+            ? own
+            : new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         totals.Clear();
         Fill(totals, nation);
         return totals;
@@ -203,7 +207,7 @@ public static class NationalModifiers
         {
             // Rebuild into the country's own dictionary rather than dropping it: same sums,
             // none of the allocation. Invalidate still drops it outright on a source change.
-            Build(nation);
+            nation.ModifierTotals = Build(nation);
             var stability = Of(nation, "stability_weekly");
             var support = Of(nation, "war_support_weekly");
             var radicalism = Of(nation, "radicalism_weekly");

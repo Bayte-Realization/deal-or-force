@@ -348,6 +348,8 @@ public partial class DealOrForceGame : Control
         }
         if (HandleConstructionPlacementInput(inputEvent)) return;
         if (HandleRecruitmentPlacementInput(inputEvent)) return;
+        if (IsInstanceValid(_regionGroupBuild) && inputEvent is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
+        { CloseRegionGroupBuild(); GetViewport().SetInputAsHandled(); return; }
         if (IsInstanceValid(_authorCanvas))
         {
             // Child inspectors and confirmation dialogs own their Escape key.

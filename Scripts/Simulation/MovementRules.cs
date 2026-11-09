@@ -389,13 +389,12 @@ public static class MovementRules
     private static void EnsurePeopleCache(Campaign campaign)
     {
         var cache = campaign.MovementPeople;
-        // Population can change between weekly movement reviews. Keeping Monday's
-        // counts until next week makes a reloaded campaign (empty cache) see different
-        // people from the running campaign, despite identical serialized state/RNG.
-        // Cache only within the same simulated day; never serialize derived counts.
+        // Population can change between weekly movement reviews: a reloaded campaign (empty
+        // cache) must see the same people as the running one, so the counts live for one
+        // simulated day. Who lives in a region does not change with who owns it, so a change of
+        // owner does not throw them away within the day - only a change in the regions does
+        // (a carve or a reunion changes their numbers).
         var day = campaign.ElapsedDays;
-        // Who lives in a region does not change with who owns it: within the day only a change
-        // in the regions themselves (a carve or a reunion) throws the counts away.
         var layout = 0;
         foreach (var region in campaign.States) layout = unchecked(layout * 31 + region.MapIndex);
         if (cache.Day == day && cache.MapRevision == layout &&

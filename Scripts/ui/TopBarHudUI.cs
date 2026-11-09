@@ -154,6 +154,7 @@ public partial class DealOrForceGame
         _identityTag.MouseFilter = MouseFilterEnum.Pass;
         identityBox.AddChild(_identityTag);
 
+        // The world's nuclear alert, and the door to its screen (DefconOverviewUI).
         _defconBadge = ActionButton("DEFCON 5", OpenDefconOverview, 84, 28);
         _defconBadge.Name = "HudDefconBadge";
         _defconBadge.ClipText = true;
@@ -349,7 +350,8 @@ public partial class DealOrForceGame
             _defconBadge.Visible = DefconSystem.Enabled(_campaign);
             var defcon = DefconSystem.CurrentLevel(_campaign);
             _defconBadge.Text = $"DEFCON {defcon}";
-            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign));
+            _defconBadge.TooltipText = Ui.Tip(DefconSystem.FormatSummary(_campaign) + "\n\n" +
+                Tr("Click for the ladder, the nuclear powers and our posture."));
             _defconBadge.AddThemeColorOverride("font_color", Ui.Colour(DefconSystem.LevelColourToken(defcon)));
         }
 
