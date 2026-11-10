@@ -47,3 +47,27 @@
   ends two years with 128 provinces on average instead of 102. The front moves more, and on
   one seed of the eight Ukraine now collapses. The numbers are in
   `game/common/defines/07_movement.json` for anyone who wants them back.
+
+## The planning bar
+
+- The battle-plan tools are now one row on the map, over the army bar, whenever divisions
+  are selected: **Whole front**, **Front**, **Attack**, **Defend**, the eraser, then an
+  **Execute** switch that reads **Executing** while the offensive runs and holds it when
+  pressed, **Halt** and **Clear plans**. The line under them says what the tool in hand
+  does and what it has drawn so far.
+- The two paragraphs of instructions on the orders page are gone; each tool explains
+  itself in its tooltip.
+- Placed and coloured by `game/gui/76_planning_bar.json`.
+
+## Why a battle goes the way it does
+
+- The battle report has a new section, **Why it goes this way**: the attacker's fire and
+  the defender's staying power as two columns of reasons with their multipliers -
+  terrain, river crossing, frontage, armour against piercing, guns and aircraft, a
+  prepared plan, attacking from several sides, training, stance, commander, research,
+  munitions, encirclement, spirit, trenches, shelling, homeland, capital, guerrilla
+  country, the day's manoeuvre and fortune - biggest first, green where they help you and
+  red where they hurt. The combat itself is unchanged; this only shows what it was
+  already doing.
+- The army bar no longer covers the bottom of a battle report or any other panel on the
+  left; it steps to the right of it.

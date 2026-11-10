@@ -75,9 +75,14 @@ public partial class DealOrForceGame
         if (_armyBar.Visible != show) _armyBar.Visible = show;
         if (!show) return;
 
-        // Beside the orders panel rather than under it.
+        // Beside the orders panel or an open dossier rather than over it.
         if (float.IsNaN(_armyBarBaseLeft)) _armyBarBaseLeft = _armyBar.OffsetLeft;
-        var left = _armyPanel is { Visible: true } ? MathF.Max(_armyBarBaseLeft, _armyPanel.OffsetRight + Ui.Gap(8)) : _armyBarBaseLeft;
+        var left = _armyBarBaseLeft;
+        var origin = _hudLayer.GetGlobalRect().Position.X;
+        foreach (var panel in new Control[] { _armyPanel, _sidePanel })
+            // Only what stands on the left half: a panel on the right is not in the bar's way.
+            if (IsInstanceValid(panel) && panel.Visible && panel.GetGlobalRect().Position.X - origin < _hudLayer.Size.X * 0.5f)
+                left = MathF.Max(left, panel.GetGlobalRect().End.X - origin + Ui.Gap(8));
         if (Math.Abs(_armyBar.OffsetLeft - left) > 0.5f) _armyBar.OffsetLeft = left;
 
         var groups = ArmyBarGroups();
