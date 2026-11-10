@@ -888,6 +888,46 @@ public static partial class Warfare
                 CombatTactics.EnemyAttack(attackerTactic);
             attackerProtection *= CombatTactics.Defence(attackerTactic) * CombatTactics.EnemyDefence(defenderTactic);
 
+            // The reasons, for the report (CombatFactors): read back, never fed into the round.
+            {
+                var attack = battle.AttackFactors; attack.Clear();
+                var defence = battle.DefenceFactors; defence.Clear();
+                var attackerSide = campaign.NationById(battle.AttackerId);
+                CombatFactors.Add(attack, "Terrain", terrain.Attack);
+                CombatFactors.Add(attack, "River crossing", riverAttackMultiplier);
+                CombatFactors.Add(attack, "Frontage", attackerEngagement);
+                CombatFactors.Add(attack, "Armour and piercing", attackerPierces);
+                CombatFactors.Add(attack, "Guns and aircraft", attackerFire);
+                CombatFactors.Add(attack, "Plan prepared", 1f + attackerPlanning * defines.MaxPlanningAttackBonus);
+                CombatFactors.Add(attack, "Attack from several sides", envelopmentBonus);
+                CombatFactors.Add(attack, "Training and equipment", CombatFactors.Mean(AttackerLine, DivisionRules.Attack));
+                CombatFactors.Add(attack, "Stance", CombatFactors.Mean(AttackerLine, army => MilitaryDoctrine.Attack(army.Stance)));
+                CombatFactors.Add(attack, "Commander", CombatFactors.Mean(AttackerLine, army => Generals.Factors(campaign, army).Attack));
+                CombatFactors.Add(attack, "Research", CombatFactors.Mean(AttackerLine, army => Researched(campaign, army, "army_attack")));
+                CombatFactors.Add(attack, "Munitions", StrategicStockpiles.CombatMunitionsFactor(campaign, attackerSide));
+                CombatFactors.Add(attack, "Encircled", CombatFactors.Mean(AttackerLine, army => CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff)));
+                CombatFactors.Add(attack, "Fighting spirit", GuerrillaWar.Spirit(campaign, war, attackerSide));
+                CombatFactors.Add(attack, "Manoeuvre of the day", CombatTactics.Attack(attackerTactic, defenderTactic, defines) * CombatTactics.EnemyAttack(defenderTactic));
+                CombatFactors.Add(attack, "Fortune", attackerFortune);
+
+                CombatFactors.Add(defence, "Terrain", terrain.Defense);
+                CombatFactors.Add(defence, "Entrenchment", 1f + dugIn * defines.EntrenchmentBonus);
+                CombatFactors.Add(defence, "Shelled", effectiveDefenderStripped);
+                CombatFactors.Add(defence, "Homeland", isHomeProvince ? defines.HomelandDefenseBonus : 1f);
+                CombatFactors.Add(defence, "Capital", isCapitalState ? defines.CapitalDefenseBonus : 1f);
+                CombatFactors.Add(defence, "Attacked from one side", frontalBonus);
+                CombatFactors.Add(defence, "Frontage", defenderEngagement);
+                CombatFactors.Add(defence, "Training and equipment", CombatFactors.Mean(DefenderLine, DivisionRules.Defense));
+                CombatFactors.Add(defence, "Stance", CombatFactors.Mean(DefenderLine, army => MilitaryDoctrine.Defense(army.Stance)));
+                CombatFactors.Add(defence, "Commander", CombatFactors.Mean(DefenderLine, army => Generals.Factors(campaign, army).Defence));
+                CombatFactors.Add(defence, "Research", CombatFactors.Mean(DefenderLine, army => Researched(campaign, army, "army_defense")));
+                CombatFactors.Add(defence, "Encircled", CombatFactors.Mean(DefenderLine, army => CombatTempo.EncirclementFactor(defines, army.CutOff, army.DaysCutOff)));
+                CombatFactors.Add(defence, "Fighting spirit", GuerrillaWar.Spirit(campaign, war, defenderNation));
+                CombatFactors.Add(defence, "Guerrilla country", 1f + defines.GuerrillaDefence * guerrillaCover);
+                CombatFactors.Add(defence, "Manoeuvre of the day", CombatTactics.Defence(defenderTactic) * CombatTactics.EnemyDefence(attackerTactic));
+                CombatFactors.Add(defence, "Fortune", defenderFortune);
+            }
+
             var pressureOnDefender = M.Clamp(attackerOffence / M.Max(0.01f, defenderProtection), 0.05f, 14f);
             var pressureOnAttacker = M.Clamp(defenderOffence / M.Max(0.01f, attackerProtection), 0.05f, 14f);
             var ratio = pressureOnDefender;
