@@ -42,12 +42,12 @@ static class QualityProfileTests
 
         var governor = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
         QualityProfile step = null;
-        for (var frame = 0; frame < 12 * 200 && step is null; frame++) step = governor.Sample(50);
+        for (var frame = 0; frame < 12 * 200 && step is null; frame++) step = governor.Sample(50, 45);
         Check(step is not null && step.Order > ladder[0].Order,
             "sustained fifty-millisecond frames buy a cheaper tier (now " + governor.Profile.Id + ")");
 
         QualityProfile back = null;
-        for (var frame = 0; frame < 12 * 4000 && back is null; frame++) back = governor.Sample(5);
+        for (var frame = 0; frame < 12 * 4000 && back is null; frame++) back = governor.Sample(5, 2);
         Check(back is not null, "and a machine that recovers is allowed back up");
 
         var manual = new FrameRateGovernor(ladder[0], automatic: false, windowFrames: 12);
@@ -55,14 +55,22 @@ static class QualityProfileTests
         for (var frame = 0; frame < 12 * 4000 && moved is null; frame++) moved = manual.Sample(90);
         Check(moved is null && manual.Profile.Id == ladder[0].Id, "a tier chosen by hand is never moved");
 
-        // A card that is the wall at an acceptable frame rate still buys a cheaper tier:
-        // heat and fan noise for a smoother-looking number is not a trade a strategy game
-        // should make silently. Above ~83 fps the answer is the frame cap, not the picture.
+        // A card that is busy at an acceptable frame rate is left alone: stepping down for it
+        // took an RTX 3060 from high to low and back all game, with the map's layers coming and going.
         var warm = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
         QualityProfile cooler = null;
         for (var frame = 0; frame < 12 * 400 && cooler is null; frame++) cooler = warm.Sample(16.6, 14.0);
-        Check(cooler is not null && cooler.Order > ladder[0].Order,
-            "a saturated card at a good frame rate still steps down (now " + warm.Profile.Id + ")");
+        Check(cooler is null && warm.Profile.Id == ladder[0].Id,
+            "a busy card at a good frame rate keeps the picture (now " + warm.Profile.Id + ")");
+
+        // And a real step down trades pixels and shadows only: the clouds, the fog's mist, the
+        // ships and the city names stay on the map.
+        var slow = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
+        QualityProfile cheaper = null;
+        for (var frame = 0; frame < 12 * 400; frame++) cheaper = slow.Sample(50, 45) ?? cheaper;
+        Check(cheaper is not null && slow.Profile.Order > ladder[0].Order && slow.Profile.Weather &&
+              slow.Profile.TradeTraffic && slow.Profile.CityLabels,
+            "an automatic step down keeps every layer of the map (now " + slow.Profile.Id + ")");
 
         var fast = new FrameRateGovernor(ladder[0], automatic: true, windowFrames: 12);
         QualityProfile blurred = null;

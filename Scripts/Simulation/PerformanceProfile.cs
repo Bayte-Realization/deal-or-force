@@ -236,9 +236,14 @@ public sealed class FrameRateGovernor
     /// <summary>False when the player chose a tier by hand, in which case the governor never moves it.</summary>
     public bool Automatic { get; }
 
+    // The layers the starting tier shows. The governor trades pixels and shadows for frames; it
+    // never takes the clouds, the fog's mist, the ships or the city names off the map by itself.
+    private QualityProfile _layers;
+
     public FrameRateGovernor(QualityProfile start, bool automatic, int windowFrames = 120)
     {
         Profile = start ?? throw new ArgumentNullException(nameof(start));
+        _layers = start;
         Automatic = automatic;
         _windowFrames = Math.Clamp(windowFrames, 12, 600);
         _floorOrder = QualityProfiles.AutomaticFloor(start);
@@ -291,14 +296,11 @@ public sealed class FrameRateGovernor
         // only blur the picture and change nothing.
         var cardBound = gpuKnown && gpuMedian > QualityProfiles.SlowFrameMs * 0.75;
         var cardIdle = gpuKnown && gpuMedian < QualityProfiles.SlowFrameMs * 0.35;
-        // The card is the wall even though the frame rate is acceptable: the picture costs
-        // more of it than the machine needs to hold that rate, which is heat and fan noise
-        // for nothing a strategy game shows. Only counted at frame rates a cap already
-        // allows - a 144 fps run is asking for fewer frames, not a poorer picture, and the
-        // frame-rate limit is the lever for that, not the quality ladder.
-        var gpuSaturated = gpuKnown && median >= 12.0 && gpuMedian > median * 0.7;
-
-        if (gpuSaturated || median > QualityProfiles.SlowFrameMs && cardBound)
+        // A card that is busy at an acceptable frame rate is a card doing its job. Stepping down
+        // for it ("heat and fan noise") took a mid-range card (RTX 3060, a heavy globe at 60 fps)
+        // from high to low and back every few minutes all game, and the player watched the
+        // clouds, the fog and the ships come and go. Only frames that are actually slow count.
+        if (median > QualityProfiles.SlowFrameMs && cardBound)
         {
             _slowFor += windowSeconds;
             _fastFor = 0;
@@ -338,6 +340,7 @@ public sealed class FrameRateGovernor
     public void Reset(QualityProfile profile)
     {
         Profile = profile;
+        if (profile is not null) _layers = profile;
         _window.Clear();
         _slowFor = _fastFor = _sinceChange = 0;
         _warmedFor = 0;
@@ -345,6 +348,11 @@ public sealed class FrameRateGovernor
 
     private QualityProfile Adopt(QualityProfile profile)
     {
+        // The step's pixels, shadows and frame cap; the starting tier's layers.
+        profile = profile.Clone();
+        profile.CityLabels = _layers.CityLabels;
+        profile.TradeTraffic = _layers.TradeTraffic;
+        profile.Weather = _layers.Weather;
         Profile = profile;
         _window.Clear();
         _sinceChange = 0;

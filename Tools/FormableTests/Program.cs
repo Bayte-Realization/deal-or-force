@@ -541,6 +541,7 @@ if (args.Contains("--support-report-only")) { SupportReportTests.Run(); return; 
         ResponsiveHudLayoutTests.Run();
         IdentityResearchTests.Run();
         RestorationTests.Run();
+        QualityProfileTests.Run();
         PeaceIntentTests.Run();
         WarAimsTests.Run();
         CombatTempoTests.Run();
