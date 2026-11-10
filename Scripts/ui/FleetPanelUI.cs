@@ -447,17 +447,30 @@ public partial class DealOrForceGame
 
         var wanted = new System.Collections.Generic.List<int>();
         var refused = "";
-        foreach (var army in _campaign.Armies)
+        var map = _campaign.ProvinceMap;
+        var room = NavalInvasion.Capacity(_campaign, _selectedFleet) - NavalInvasion.CarriedDivisions(_campaign, _selectedFleet);
+        // Those standing at the fleet: in its port, or on the coast within a degree of where it
+        // lies - never every division on every coast five degrees around, which is what this was.
+        foreach (var army in _campaign.Armies.OrderByDescending(a => a.Divisions * a.Strength).ThenBy(a => a.Id))
         {
-            if (army.NationId != _campaign.Player.Id || army.EmbarkedFleetId >= 0) continue;
-            if (NavalInvasion.CanEmbark(_campaign, _selectedFleet, army, out var reason)) wanted.Add(army.Id);
+            if (army.NationId != _campaign.Player.Id || army.EmbarkedFleetId >= 0 || army.ProvinceId <= 0 || map is null) continue;
+            var atPort = _selectedFleet.InPort && army.ProvinceId == _selectedFleet.BerthProvinceId;
+            if (!atPort && (!SeaLanes.TryHarbourPoint(map, army.ProvinceId, out var quayLatitude, out var quayLongitude) ||
+                            NavalOperations.Distance(_selectedFleet.Latitude, _selectedFleet.Longitude, quayLatitude, quayLongitude) > 1f))
+                continue;
+            if (army.Divisions > room + 0.001f) { if (refused.Length == 0) refused = Simulation.Loc.Format("{0} has no room for {1}.", Simulation.Loc.Get(_selectedFleet.Name), army.Name); continue; }
+            if (NavalInvasion.CanEmbark(_campaign, _selectedFleet, army, out var reason)) { wanted.Add(army.Id); room -= army.Divisions; }
             else if (refused.Length == 0 && reason.Length > 0) refused = reason;
         }
         if (wanted.Count == 0)
         {
-            SetFleetFeedback(refused.Length > 0
-                ? refused
-                : "No division of yours is standing at this fleet's port.");
+            var port = _selectedFleet.InPort && map is not null && _selectedFleet.BerthProvinceId > 0
+                ? _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[_selectedFleet.BerthProvinceId])?.DisplayName ?? "?"
+                : "";
+            SetFleetFeedback(refused.Length > 0 ? refused
+                : port.Length > 0
+                    ? Simulation.Loc.Format("No division of yours is standing at {0}, where the fleet lies. March them there - or select them and right-click across the sea: they will board by themselves.", port)
+                    : Simulation.Loc.Get("The fleet is at sea: bring it into port where your divisions stand, or select the divisions and right-click across the sea."));
             return;
         }
 

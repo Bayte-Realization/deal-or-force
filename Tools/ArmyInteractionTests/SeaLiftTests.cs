@@ -54,17 +54,35 @@ static class SeaLiftTests
 
         c.IsPaused = false;
         var aboard = false;
+        var withTheShip = true;
         var days = 0;
         for (; days < 150 && division.ProvinceId != belfast; days++)
         {
             c.TickDay();
-            aboard |= division.EmbarkedFleetId == fleet.Id;
+            if (division.EmbarkedFleetId != fleet.Id) continue;
+            aboard = true;
+            withTheShip &= division.ProvinceId == 0 && Math.Abs(division.Latitude - fleet.Latitude) < 0.001f &&
+                           Math.Abs(division.Longitude - fleet.Longitude) < 0.001f;
         }
         Check(aboard, "the division went aboard the fleet by itself");
+        Check(withTheShip, "and while aboard it was where the ship was, on no land province");
         Check(division.ProvinceId == belfast, $"and stands in Belfast {days} days later, with no other order given");
         Check(division.EmbarkedFleetId < 0 && !fleet.Carried.Contains(division.Id), "ashore, not still aboard");
         Check(c.SeaLifts.All(o => o.Id != order.Id), "the lift is over and leaves the list");
         Check(!SeaLift.Holds(c, fleet), "and the fleet is free again");
+
+        // Aboard a ship that is sinking: the share of the hulls that goes down takes the same
+        // share of the men; a formation with nothing left is lost at sea.
+        var swimmer = new Army { Id = c.Armies.Max(a => a.Id) + 1, NationId = gbr.Id, Name = "Drowning test",
+            ProvinceId = belfast, Divisions = 1, Organisation = 1, Strength = 1 };
+        c.Armies.Add(swimmer);
+        NavalInvasion.Embark(c, fleet, swimmer);
+        NavalInvasion.DrownWithHulls(c, fleet, 0.5f);
+        Check(Math.Abs(swimmer.Strength - 0.5f) < 0.001f && fleet.Carried.Contains(swimmer.Id),
+            "half the hulls sunk drown half the men aboard");
+        NavalInvasion.DrownWithHulls(c, fleet, 1f);
+        Check(!fleet.Carried.Contains(swimmer.Id) && c.Armies.All(a => a.Id != swimmer.Id),
+            "and a formation with nothing left is lost at sea");
         Console.WriteLine("sea lift: all passed");
     }
 }

@@ -602,6 +602,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         world.AddChild(_countryLabelRoot);
         CreateCityLayer(world);
         CreateRoutePreview(world);
+        CreateSeaLiftPreview(world);
         CreateFrontPreview(world);
         ApplyCamera();
     }
@@ -719,6 +720,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (visualDue && MilitaryMarkersEnabled) LayoutSupportCounters();
         if (IsInstanceValid(_battleRoot)) _battleRoot.Visible = MilitaryMarkersEnabled;
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
+        using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
         using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
@@ -1439,6 +1441,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
     public override void _Draw()
     {
         DrawRegionIcons();
+        DrawSeaLiftBadges();
         DrawFlatCounterLeaders();
         DrawBattleReadouts();
         if (!_boxSelecting) return;
@@ -4060,6 +4063,8 @@ void fragment() {
         RefreshShownNations(campaign);
         foreach (var army in campaign.Armies)
         {
+            // Aboard a ship it is the fleet's to show (an anchor on the fleet says how many).
+            if (army.EmbarkedFleetId >= 0) continue;
             var bucket = ArmyPresentationBucket(campaign, army);
             if (!CanShowArmy(army) || !_shownNations.Contains(army.NationId)) continue;
             if (!_armyStacks.TryGetValue(bucket, out var marker))

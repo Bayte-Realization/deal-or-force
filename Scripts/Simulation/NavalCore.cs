@@ -667,6 +667,8 @@ public static class NavalOperations
         if (sunk > 0)
         {
             var afloat = fleet.Hulls * fleet.Strength;
+            // Those aboard the hulls that went down went down with them.
+            NavalInvasion.DrownWithHulls(campaign, fleet, sunk / (float)Math.Max(1, fleet.Hulls));
             fleet.Hulls -= sunk;
             fleet.HullsLost += sunk;
             fleet.Strength = fleet.Hulls > 0 ? M.Clamp01(afloat / fleet.Hulls) : 0f;

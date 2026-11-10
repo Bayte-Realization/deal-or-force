@@ -94,8 +94,50 @@ public static class NavalInvasion
         army.OrderStateMapIndex = -1;
         army.AssignedWarId = -1;
         army.Entrenchment = 0f;
+        // Aboard is aboard: where the ship is, not on the quay it walked up from.
+        army.StateMapIndex = -1;
+        army.Latitude = fleet.Latitude;
+        army.Longitude = fleet.Longitude;
         BattlePlanning.Forget(campaign, army);
         if (!fleet.Carried.Contains(army.Id)) fleet.Carried.Add(army.Id);
+    }
+
+    /// <summary>
+    /// Everyone aboard is where their ship is, every step: a division at sea is at sea, not on the
+    /// quay it boarded at.
+    /// </summary>
+    public static void CarryAlong(Campaign campaign)
+    {
+        foreach (var fleet in campaign.Fleets)
+        {
+            if (fleet.Carried.Count == 0) continue;
+            foreach (var id in fleet.Carried)
+            {
+                var army = campaign.Armies.Find(candidate => candidate.Id == id);
+                if (army is null) continue;
+                army.Latitude = fleet.Latitude;
+                army.Longitude = fleet.Longitude;
+            }
+        }
+    }
+
+    /// <summary>
+    /// A share of a loaded fleet's hulls went to the bottom: the same share of every formation
+    /// aboard went down with them. A formation with nothing left is lost at sea.
+    /// </summary>
+    public static void DrownWithHulls(Campaign campaign, Fleet fleet, float share)
+    {
+        if (fleet.Carried.Count == 0 || share <= 0f) return;
+        share = M.Clamp01(share);
+        foreach (var id in fleet.Carried.ToArray())
+        {
+            var army = campaign.Armies.Find(candidate => candidate.Id == id);
+            if (army is null) continue;
+            army.Strength = M.Clamp01(army.Strength * (1f - share));
+            if (army.Strength > 0.04f) continue;
+            fleet.Carried.Remove(id);
+            Attrition.Destroy(campaign, army, "lost at sea");
+        }
     }
 
     /// <summary>Put everyone back on the shore the fleet is standing off.</summary>

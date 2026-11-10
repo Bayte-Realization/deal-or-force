@@ -7,6 +7,8 @@ namespace DealOrForce;
 public sealed partial class GlobePresentation
 {
     private readonly List<Vector3> _ribbonSamples = new();
+    // The mesh the ribbon being drawn goes into: the selected orders', or the sea lifts'.
+    private ImmediateMesh _ribbonMesh;
 
     private void CreateOrderMaterials()
     {
@@ -101,8 +103,14 @@ void fragment() {
             _ribbonSamples.Add(OnOrderSurface(start.Lerp(point, step / (float)steps)));
     }
 
-    private bool DrawOrderRibbon(Simulation.Army army, bool attack)
+    private bool DrawOrderRibbon(Simulation.Army army, bool attack) =>
+        DrawRibbon(_routeMesh, _routeMaterials[army.SupportOnly ? 2 : attack ? 1 : 0], OrderProgress(army));
+
+    /// <summary>One ribbon along _routePoints into a mesh, in an ink, filled to a progress.</summary>
+    private bool DrawRibbon(ImmediateMesh mesh, Material material, float progress)
     {
+        if (mesh is null || material is null || _routePoints.Count < 2) return false;
+        _ribbonMesh = mesh;
         _ribbonSamples.Clear();
         SampleRibbonTo(_routePoints[0]);
         // Round only the immediate corner; the route still visits its province corridor.
@@ -127,10 +135,8 @@ void fragment() {
         var headLength = MathF.Min(0.032f, length * 0.28f);
         var headStart = length - headLength;
         var halfWidth = MathF.Min(_flatMap ? 0.0060f : 0.0054f, headLength * 0.26f);
-        var progress = OrderProgress(army);
-        var material = _routeMaterials[army.SupportOnly ? 2 : attack ? 1 : 0];
         var headStarted = false;
-        _routeMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, material);
+        _ribbonMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip, material);
         for (var i = 0; i < _ribbonSamples.Count; i++)
         {
             var point = _ribbonSamples[i];
@@ -149,7 +155,7 @@ void fragment() {
             var width = headStarted ? halfWidth * 2.4f * MathF.Max(0f, (length - distances[i]) / headLength) : halfWidth;
             EmitRibbonPair(point, tangent, width, distances[i], length, progress, headStarted);
         }
-        _routeMesh.SurfaceEnd();
+        _ribbonMesh.SurfaceEnd();
         return true;
     }
 
@@ -160,10 +166,10 @@ void fragment() {
         var side = normal.Cross(tangent).Normalized() * halfWidth;
         for (var edge = 0; edge < 2; edge++)
         {
-            _routeMesh.SurfaceSetColor(new Color(1f, 1f, 1f, progress));
-            _routeMesh.SurfaceSetUV(new Vector2(distance / 0.07f, edge));
-            _routeMesh.SurfaceSetUV2(new Vector2(distance / length, head ? 1f : 0f));
-            _routeMesh.SurfaceAddVertex(OnOrderSurface(point + (edge == 0 ? side : -side)));
+            _ribbonMesh.SurfaceSetColor(new Color(1f, 1f, 1f, progress));
+            _ribbonMesh.SurfaceSetUV(new Vector2(distance / 0.07f, edge));
+            _ribbonMesh.SurfaceSetUV2(new Vector2(distance / length, head ? 1f : 0f));
+            _ribbonMesh.SurfaceAddVertex(OnOrderSurface(point + (edge == 0 ? side : -side)));
         }
     }
 }

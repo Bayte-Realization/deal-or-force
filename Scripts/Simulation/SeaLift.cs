@@ -142,10 +142,31 @@ public static class SeaLift
                         0.5f * NavalOperations.Distance(at.Latitude, at.Longitude, to.Latitude, to.Longitude);
             candidates.Add((coast, score));
         }
-        foreach (var (coast, _) in candidates.OrderBy(c => c.Score).ThenBy(c => c.Province).Take(10))
-            if (coast == lead.ProvinceId || MilitaryAccess.Route(campaign, nation.Id, lead.ProvinceId, coast, control).Length > 0)
-                return coast;
-        return -1;
+        // The nearest dozen by that first guess, scored again by the passage the fleet will really
+        // sail: a straight line across a peninsula is no measure of a voyage round it.
+        var beachKnown = SeaLanes.TryHarbourPoint(map, landing, out var toLatitude, out var toLongitude);
+        var course = new List<float>();
+        var best = -1;
+        var bestScore = float.MaxValue;
+        foreach (var (coast, _) in candidates.OrderBy(c => c.Score).ThenBy(c => c.Province).Take(12))
+        {
+            if (coast != lead.ProvinceId && MilitaryAccess.Route(campaign, nation.Id, lead.ProvinceId, coast, control).Length == 0)
+                continue;
+            var at = map.CenterOf(coast);
+            var march = NavalOperations.Distance(from.Latitude, from.Longitude, at.Latitude, at.Longitude);
+            var passage = NavalOperations.Distance(at.Latitude, at.Longitude, to.Latitude, to.Longitude);
+            if (beachKnown && SeaLanes.TryHarbourPoint(map, coast, out var quayLatitude, out var quayLongitude))
+            {
+                if (!SeaLanes.Plan(campaign, nation.Id, quayLatitude, quayLongitude, toLatitude, toLongitude, course, out var length))
+                    continue;
+                passage = length;
+            }
+            var score = march + passage / 5f;
+            if (score >= bestScore) continue;
+            bestScore = score;
+            best = coast;
+        }
+        return best;
     }
 
     /// <summary>

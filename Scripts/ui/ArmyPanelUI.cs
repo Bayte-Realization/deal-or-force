@@ -54,6 +54,24 @@ public partial class DealOrForceGame
         _ => "✕"
     };
 
+    /// <summary>Where a formation is in its sea lift, or empty when it is not on one.</summary>
+    private string SeaLiftCaption(Simulation.Army army)
+    {
+        if (Simulation.SeaLift.Of(_campaign, army) is not { } lift) return "";
+        string Region(int province)
+        {
+            var map = _campaign.ProvinceMap;
+            if (map is null || province <= 0 || province > map.ProvinceCount) return "?";
+            return _campaign.States.Find(s => s.MapIndex == map.ProvinceToState[province])?.DisplayName ?? "?";
+        }
+        var fleet = _campaign.Fleets.Find(f => f.Id == lift.FleetId);
+        var fleetName = fleet is null ? "?" : Simulation.Loc.Get(fleet.Name);
+        if (army.EmbarkedFleetId >= 0) return Simulation.Loc.Format("⚓ aboard {0}, landing at {1}", fleetName, Region(lift.LandingProvinceId));
+        return army.ProvinceId == lift.PortProvinceId
+            ? Simulation.Loc.Format("⚓ waiting at {0} for {1}", Region(lift.PortProvinceId), fleetName)
+            : Simulation.Loc.Format("⚓ marching to {0} to board {1}", Region(lift.PortProvinceId), fleetName);
+    }
+
     private void BuildArmyPanel()
     {
         _armyCaptionIconButtons.Clear();
@@ -532,6 +550,8 @@ public partial class DealOrForceGame
                 CommanderCaption(group),
                 divisions.Sum(army => army.Personnel),
                 divisions.Select(army => army.ArmyGroupId).Distinct().Count());
+        // A formation crossing the sea says where in the crossing it is.
+        if (SeaLiftCaption(divisions[0]) is { Length: > 0 } crossing) _armyPanelSubtitle.Text = crossing + " · " + _armyPanelSubtitle.Text;
         _armyPanelSubtitle.TooltipText = Ui.Tip(CommanderCaption(group) + (group is null ? "" :
             "\n" + Tr(Simulation.Generals.Trait(group.CommanderTrait).Description) +
             "\n" + Tr("Every commander, and relieving one: Military → Generals.")));
