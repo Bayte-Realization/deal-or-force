@@ -27,9 +27,9 @@ version to Itch.io are separate actions.
   capacity, and refusals explain where the fleet is.
 - The army-panel header now has a “1/2” button for the same half-selection action
   available through Ctrl+X.
-- Automatic quality reduction no longer hides clouds, fog of war, city labels or
+- Automatic quality reduction no longer hides clouds, visual mist, city labels or
   trade traffic against the player's settings. Render resolution, smoothing and
-  shadows remain the visual cost controls.
+  shadows and the frame cap remain the visual cost controls.
 - Regression coverage was updated for sea crossings, quality profiles and
   Lebanon's opening population. This is not a new national-border overhaul.
 
