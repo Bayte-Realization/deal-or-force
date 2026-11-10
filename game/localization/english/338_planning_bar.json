@@ -1,0 +1,27 @@
+// The planning bar (PlanningBarUI).
+{
+  "Whole front": "Whole front",
+  "One front along every land border with every country at war with you. It grows and shrinks by itself as the line moves and as enemies join or leave the war; the selection spreads along all of it.": "One front along every land border with every country at war with you. It grows and shrinks by itself as the line moves and as enemies join or leave the war; the selection spreads along all of it.",
+  "Front": "Front",
+  "Front line": "Front line",
+  "Drag with the right button along a border: the selection spreads along that stretch and digs in.": "Drag with the right button along a border: the selection spreads along that stretch and digs in.",
+  "Attack": "Attack",
+  "Offensive": "Offensive",
+  "With the selection on one front: drag with the right button where it should get to, inside the enemy's country. Shift+drag adds a later phase, Alt+drag redraws the current one.": "With the selection on one front: drag with the right button where it should get to, inside the enemy's country. Shift+drag adds a later phase, Alt+drag redraws the current one.",
+  "Defend": "Defend",
+  "Defensive line": "Defensive line",
+  "Drag with the right button across your own ground: the selection spreads along the line and holds it at once, in peace or war.": "Drag with the right button across your own ground: the selection spreads along the line and holds it at once, in peace or war.",
+  "Eraser": "Eraser",
+  "Click a plan on the map to erase it. An offensive arrow erases only its objective and keeps the front it leaves from.": "Click a plan on the map to erase it. An offensive arrow erases only its objective and keeps the front it leaves from.",
+  "Execute": "Execute",
+  "Executing": "Executing",
+  "The offensive is under way. Press to hold it: the divisions stop on their front, dig in and build up the plan again.": "The offensive is under way. Press to hold it: the divisions stop on their front, dig in and build up the plan again.",
+  "Set the selected offensive going: the divisions advance phase by phase and stop after the last objective. Fronts and defensive lines are not affected.": "Set the selected offensive going: the divisions advance phase by phase and stop after the last objective. Fronts and defensive lines are not affected.",
+  "Halt (H)": "Halt (H)",
+  "Stop the selection where it stands, out of any plan.": "Stop the selection where it stands, out of any plan.",
+  "Clear plans": "Clear plans",
+  "Delete the plans of the selected divisions and stop their planned movement. Battles already joined go on.": "Delete the plans of the selected divisions and stop their planned movement. Battles already joined go on.",
+  "Auto-deploy": "Auto-deploy",
+  "Spread the selection across unique sectors of the active front.": "Spread the selection across unique sectors of the active front.",
+  "Pick a tool, then drag with the right button on the map. Hover a tool for what it does.": "Pick a tool, then drag with the right button on the map. Hover a tool for what it does."
+}

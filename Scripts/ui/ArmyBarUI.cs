@@ -52,6 +52,7 @@ public partial class DealOrForceGame
         _armyBarCards = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Begin };
         _armyBarCards.AddThemeConstantOverride("separation", Ui.Gap(Ui.Metric("army_bar.gap", 6)));
         scroll.AddChild(_armyBarCards);
+        BuildPlanningBar();
     }
 
     /// <summary>A few times a second: cheap unless an army, its state or the selection changed.</summary>
@@ -62,6 +63,7 @@ public partial class DealOrForceGame
         if (_armyBarClock < 0.25) return;
         _armyBarClock = 0;
         RefreshArmyBar();
+        RefreshPlanningBar();
     }
 
     private void RefreshArmyBar(bool force = false)

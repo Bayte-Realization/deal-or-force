@@ -253,58 +253,14 @@ public partial class DealOrForceGame
         AddOrderButton(plans, "army_reserve", ArmyOrder.ReserveFront, "Reserve",
             "Stand behind the contact line, recover faster and reinforce defensive battles nearby.");
 
-        var execution = new HFlowContainer();
-        execution.AddThemeConstantOverride("h_separation", 4);
-        execution.AddThemeConstantOverride("v_separation", 4);
-        plansPage.AddChild(execution);
-        var prepare = ArmyIconButton("Prepare", () => IssuePlanExecution(false), 102, 32, false, "plan_prepare");
-        prepare.TooltipText = Ui.Tip(Tr("Hold offensive formations on their sector so they entrench and accumulate a plan."));
-        execution.AddChild(prepare);
-        var execute = ArmyIconButton("Execute", () => IssuePlanExecution(true), 104, 32, true, "plan_execute");
-        execute.TooltipText = Ui.Tip(Tr("Activate the selected offensive plans. Front-line and reserve orders stay as they are."));
-        execution.AddChild(execute);
-        var autoFront = ArmyIconButton("Auto-deploy", AutoDeployFront, 118, 32, false, "auto_deploy");
-        autoFront.TooltipText = Ui.Tip(Tr("Spread the selection across unique sectors of the active front."));
-        execution.AddChild(autoFront);
+        var autoFront = ArmyIconButton("", AutoDeployFront, 56, 36, false, "auto_deploy");
+        ArmyCommandTip(autoFront, "Auto-deploy", "Spread the selection across unique sectors of the active front.");
+        plans.AddChild(autoFront);
+        // The plan tools themselves - front, offensive, defensive line, eraser, execute - are
+        // on the map in the planning bar (PlanningBarUI), where the plan is drawn.
 
-        // ---- the brush ----------------------------------------------------------------
-        // An order names a role; a drawn line says where. The three buttons pick which
-        // kind of line the brush is drawing, and pressing the same one again commits it.
-        plansPage.AddChild(Title("DRAW ON THE MAP", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
-        // Two columns leave room for translated captions as well as the pictograms.
-        var draw = new GridContainer { Columns = 2, SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        draw.AddThemeConstantOverride("h_separation", 4);
-        draw.AddThemeConstantOverride("v_separation", 4);
-        plansPage.AddChild(draw);
-        // The default way to man a war: one front against everybody at once. A border front
-        // against a single country (the button after it) is still there for a player who
-        // wants a separate army group on each enemy.
-        var wholeFront = ArmyIconButton("Whole front", AssignWholeFront, 118, 30, true, "plan_front");
-        wholeFront.Name = "WholeFront";
-        ArmyCommandTip(wholeFront, "Whole front",
-            "One front along every land border with every country at war with you: all wars, their allies and occupied ground. It grows and shrinks by itself as the line moves and as enemies join the war or make peace, and the selection spreads along all of it. Pressing it for another army group adds that group to the same front.");
-        draw.AddChild(wholeFront);
-        AddDrawButton(draw, "Front", "plan_front", FrontLineKind.Defence, "Front line",
-            "Draw the line to hold. The selection spreads along its length and digs in.");
-        AddDrawButton(draw, "Attack", "plan_attack", FrontLineKind.Offensive, "Offensive line",
-            "Assign ONE front first. RMB-drag the destination line inside its target country; release to save. Shift+RMB adds a later phase (up to 24); Alt+RMB redraws the active phase. Prepare pauses locally; Execute advances through the phases and stops after the final objective.");
-        AddDrawButton(draw, "Defend", "plan_fallback", FrontLineKind.Fallback, "Defensive line",
-            "RMB-drag a connected line on controlled land. Release to distribute divisions evenly and hold immediately, in peace or war. Backtrack to shorten; Alt+RMB redraws the selected line; Esc cancels.");
-        var dropLine = ArmyIconButton("Clear plans", ClearDrawnLine, 96, 30, false, "plan_clear");
-        Tip(dropLine, "Delete the plans of the selected divisions and stop their planned movement. Other plans and ongoing battles remain.");
-        draw.AddChild(dropLine);
-        _planEraserButton = ArmyIconButton("Eraser", TogglePlanEraser, 90, 30, false, "plan_erase");
-        Tip(_planEraserButton, "Click a plan on the map to erase it. An offensive arrow or destination removes only the objective and keeps its departure front. Esc cancels.");
-        plansPage.AddChild(_planEraserButton);
+        // (The brush, its feedback line and its instructions are the planning bar now.)
 
-        _drawFeedback = Title("Pick a line, then drag along the map. Right button rubs out.",
-            11, Ui.Colour("text.muted"));
-        _drawFeedback.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        plansPage.AddChild(_drawFeedback);
-        var steps = Title("Defence: select divisions → Defend → right-drag on controlled land and release. Divisions occupy and hold the line immediately.\nOffensive: Front → Attack → Execute. Prepare pauses. Shift + right-drag adds a phase; Alt + right-drag redraws the active phase; Esc cancels drawing.",
-            12, Ui.Colour("text.caption"));
-        steps.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-        plansPage.AddChild(steps);
 
         // ---- posture and reinforcement -------------------------------------------------
         doctrinePage.AddChild(Title("POSTURE", (int)Ui.Metric("ui.font.micro", 10), Ui.Colour("text.caption"), upper: true));
