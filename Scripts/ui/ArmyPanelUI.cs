@@ -87,6 +87,11 @@ public partial class DealOrForceGame
         _armyPanelCount.ClipText = true;
         _armyPanelCount.CustomMinimumSize = new Vector2(84, 0);
         header.AddChild(_armyPanelCount);
+        // Halving the selection by hand as well as by Ctrl+X: half of several formations stay
+        // selected for the next order, and one formation of two or more divisions is cut in two.
+        var halve = ActionButton("½", SplitSelectionInHalf, 32, 28);
+        halve.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X): of several formations half stay selected for the next order and the rest stay where they stand; one formation of two or more divisions is cut in two."));
+        header.AddChild(halve);
         header.AddChild(HandbookButton("orders"));
         header.AddChild(ActionButton("×", ClearArmySelectionAndClose, 32, 28));
 

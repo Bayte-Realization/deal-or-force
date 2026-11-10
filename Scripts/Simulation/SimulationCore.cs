@@ -1049,6 +1049,9 @@ public sealed partial class Campaign
                 yield return 0;
             }
         }
+        // Formations crossing the sea by one order: march, board, sail, land, march on.
+        using (SimProfiler.Measure("naval"))
+        using (SimProfiler.Measure("  naval:sealift")) SeaLift.Tick(this);
         yield return 0;
         // Staged, not measured as one block: the pass yields between its own sections and
         // between wars, so wrapping the enumeration in a single Measure would bill the

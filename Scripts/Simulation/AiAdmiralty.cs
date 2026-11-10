@@ -87,6 +87,8 @@ public static class AiAdmiralty
             // A player's navy is the player's - unless they have handed it to the admiralty,
             // which then runs it exactly as it runs everybody else's.
             if (nation is null || (nation.IsHuman && !Delegation.Holds(nation, Delegation.Navy))) continue;
+            // A fleet carrying out a sea lift has its orders already.
+            if (SeaLift.Holds(campaign, fleet)) continue;
 
             // Each fleet thinks on its own day, so two hundred navies do not all think at
             // once.
@@ -153,7 +155,8 @@ public static class AiAdmiralty
         var groups = new Dictionary<(int Nation, int Berth), List<Fleet>>();
         foreach (var fleet in campaign.Fleets)
         {
-            if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0) continue;
+            if (fleet.Hulls <= 0 || !fleet.InPort || fleet.IsLoaded || fleet.HasOrder || fleet.HullsOrdered > 0 ||
+                SeaLift.Holds(campaign, fleet)) continue;
             var key = (fleet.NationId, fleet.BerthProvinceId);
             if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<Fleet>();
             list.Add(fleet);

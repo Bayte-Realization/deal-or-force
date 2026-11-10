@@ -286,6 +286,18 @@ public static class CampaignFingerprint
         // The world credit cycle (TreasuryDynamics); a campaign that has not started it carries no bytes.
         if (campaign.WorldLeverage >= 0f || campaign.LastFinancialCrisisDay != -100000)
         { MixText("credit_cycle"); MixFloat(campaign.WorldLeverage); Mix(campaign.LastFinancialCrisisDay); }
+        // Formations crossing the sea by one order (SeaLift).
+        if (campaign.SeaLifts.Count > 0)
+        {
+            MixText("sea_lifts"); Mix(campaign.SeaLifts.Count);
+            foreach (var lift in campaign.SeaLifts.OrderBy(l => l.Id))
+            {
+                Mix(lift.Id); Mix(lift.NationId); Mix(lift.FleetId); Mix(lift.PortProvinceId); Mix(lift.LandingProvinceId);
+                Mix(lift.TargetProvinceId); Mix(lift.Stage); Mix(lift.OrderedDay);
+                foreach (var id in lift.ArmyIds) Mix(id);
+                Mix(-106);
+            }
+        }
         // Leases and troops in without a war, and the offers of leases on a player's desk.
         if (campaign.LandArrangements.Count > 0 || campaign.NextLandArrangementId != 1)
         {

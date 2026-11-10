@@ -946,6 +946,7 @@ public static partial class SaveSystem
         public int NextUltimatumId = 1;
         public List<LandArrangement> LandArrangements = new();
         public int NextLandArrangementId = 1;
+        public List<SeaLiftOrder> SeaLifts = new();
         public List<LeaseOffer> LeaseOffers = new();
         public int NextLeaseOfferId = 1;
         public float WorldLeverage = -1f;
@@ -1092,6 +1093,7 @@ public static partial class SaveSystem
             UltimatumPapers = campaign.UltimatumPapers.Select(Ultimatum.Copy).ToList(),
             NextUltimatumId = campaign.NextUltimatumId,
             LandArrangements = new List<LandArrangement>(campaign.LandArrangements),
+            SeaLifts = new List<SeaLiftOrder>(campaign.SeaLifts),
             NextLandArrangementId = campaign.NextLandArrangementId,
             LeaseOffers = new List<LeaseOffer>(campaign.LeaseOffers),
             NextLeaseOfferId = campaign.NextLeaseOfferId,
@@ -1178,6 +1180,7 @@ public static partial class SaveSystem
             DealNegotiations.Restore(campaign, DealOffers, NextDealOfferId, ElapsedDays);
             Ultimatum.Restore(campaign, UltimatumPapers, NextUltimatumId);
             Replace(campaign.LandArrangements, LandArrangements ?? new());
+            Replace(campaign.SeaLifts, SeaLifts ?? new());
             Replace(campaign.LeaseOffers, LeaseOffers ?? new());
             campaign.NextLandArrangementId = Math.Max(NextLandArrangementId,
                 campaign.LandArrangements.Count == 0 ? 1 : campaign.LandArrangements.Max(a => a.Id) + 1);

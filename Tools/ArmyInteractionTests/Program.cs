@@ -126,6 +126,7 @@ static class Program
         c.AttachProvinceTopology(map);
         if (args.Contains("--map-peace-only")) { MapAndPeaceRegressionTests.Run(map); return; }
         if (args.Contains("--country-merges-map-only")) { CountryMergeTests.Run(c); return; }
+        if (args.Contains("--sea-lift-only")) { SeaLiftTests.Run(c); return; }
         if (args.Contains("--support-only")) { SupportTests.Run(c); return; }
         if (args.Contains("--airwar-only")) { AirWarTests.Run(c); return; }
         if (args.Contains("--long-range-only")) { LongRangeTests.Run(c); return; }

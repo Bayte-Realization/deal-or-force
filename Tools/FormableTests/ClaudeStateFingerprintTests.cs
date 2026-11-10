@@ -117,12 +117,20 @@ public static class ClaudeStateFingerprintTests
         // parent changing the hash.
         var fixture = CampaignFingerprint.Of(Fixture());
         // 2 November: MergeFleetsCommand and SplitFleetCommand joined the navy feature table.
-        Check(fixture == 0xD2110AF9B5F9FA1AUL,
+        // 10 November: SeaLiftCommand joined it too (0xD2110AF9B5F9FA1A -> 0x2158CC78B911DB8A);
+        // removing exactly that binding restores the previous value.
+        Check(fixture == 0x2158CC78B911DB8AUL,
             $"registered land arrangement metadata retains the recorded golden fingerprint (got 0x{fixture:X16})");
+        var withoutSeaLift = Fixture();
+        withoutSeaLift.Defines.FeatureCommands.Remove("SeaLiftCommand");
+        var withoutSeaLiftPrint = CampaignFingerprint.Of(withoutSeaLift);
+        Check(withoutSeaLiftPrint == 0xD2110AF9B5F9FA1AUL,
+            $"and without the SeaLiftCommand binding it is the previous golden (got 0x{withoutSeaLiftPrint:X16})");
         var beforeLand = Fixture();
         beforeLand.Defines.Features.Remove("land_arrangements");
         beforeLand.Defines.FeatureCommands.Remove("LandArrangementCommand");
         beforeLand.Defines.FeatureCommands.Remove("MergeFleetsCommand"); beforeLand.Defines.FeatureCommands.Remove("SplitFleetCommand");
+        beforeLand.Defines.FeatureCommands.Remove("SeaLiftCommand");
         beforeLand.Defines.FeatureSystems.Remove("LandArrangementSystem");
         MechanicFeatures.BuiltIns.Remove("land_arrangements");
         ulong beforeLandPrint;
@@ -135,6 +143,7 @@ public static class ClaudeStateFingerprintTests
         legacyMetadata.Defines.Features.Remove("land_arrangements");
         legacyMetadata.Defines.FeatureCommands.Remove("LandArrangementCommand");
         legacyMetadata.Defines.FeatureCommands.Remove("MergeFleetsCommand"); legacyMetadata.Defines.FeatureCommands.Remove("SplitFleetCommand");
+        legacyMetadata.Defines.FeatureCommands.Remove("SeaLiftCommand");
         legacyMetadata.Defines.FeatureSystems.Remove("LandArrangementSystem");
         legacyMetadata.Defines.Features.Remove("crisis_ladder");
         legacyMetadata.Defines.FeatureCommands.Remove("MediateCrisisCommand");

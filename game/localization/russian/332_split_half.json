@@ -1,0 +1,4 @@
+// The army panel's split-in-half button (ArmyPanelUI).
+{
+  "Split in half (Ctrl+X): of several formations half stay selected for the next order and the rest stay where they stand; one formation of two or more divisions is cut in two.": "Разделить пополам (Ctrl+X): из нескольких соединений половина остаётся выбранной для следующего приказа, остальные стоят на месте; одно соединение из двух и более дивизий делится надвое."
+}
