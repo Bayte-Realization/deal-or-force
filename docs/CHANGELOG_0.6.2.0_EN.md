@@ -1,11 +1,39 @@
 # Deal or Force — EntertAlpha 0.6.2.0
 
-November 9, 2026 · consolidated local update
+November 10, 2026 · consolidated local update with additions to the November 9 build
 
 This changelog brings accumulated interface, map, simulation, content and tooling
 changes together in one release snapshot. It does not mean the development plan
 is complete. A local build, publishing source to GitHub and uploading a new game
 version to Itch.io are separate actions.
+
+## November 10 additions: armies, fleets and graphics settings
+
+- A normal movement order can arrange a sea crossing when there is no land route.
+  It selects an accessible home port, a free national fleet with sufficient capacity
+  and a suitable landing shore. Formations march to port, board, cross and continue
+  towards their destination. An enemy shore uses the existing landing/battle rules;
+  this is not an instant transfer of territory.
+- The admiralty leaves a fleet assigned to a crossing alone. Sea-lift orders are
+  saved and included in the simulation fingerprint. Defines expose the gathering
+  timeout and the landing-shore search radius.
+- The map displays the land legs and sea passage, with progress captions on
+  formations and in the army panel.
+- Embarked formations follow their ships instead of leaving counters on land.
+  Fleets show the troops aboard. Sinking part of a fleet inflicts proportional
+  losses on its passengers; a formation with no survivors is removed.
+- Manual loading takes nearby troops at the fleet rather than collecting them
+  from approximately 550 km of coastline. Stronger formations board first within
+  capacity, and refusals explain where the fleet is.
+- The army-panel header now has a “1/2” button for the same half-selection action
+  available through Ctrl+X.
+- Automatic quality reduction no longer hides clouds, fog of war, city labels or
+  trade traffic against the player's settings. Render resolution, smoothing and
+  shadows remain the visual cost controls.
+- Regression coverage was updated for sea crossings, quality profiles and
+  Lebanon's opening population. This is not a new national-border overhaul.
+
+The complete accumulated changelog, including the expanded doctrines, follows.
 
 ## Doctrines and military development
 
