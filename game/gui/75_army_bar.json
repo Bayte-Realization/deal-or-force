@@ -1,0 +1,43 @@
+// The army bar along the bottom of the map: where it sits, its colours (one per state an army can be in) and its sizes.
+{
+  "layout": {
+    "hud.army_bar": {
+      "anchors": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "offsets": [
+        112,
+        -100,
+        -740,
+        -12
+      ]
+    }
+  },
+  "colours": {
+    "army_bar.card": "#101c27e6",
+    "army_bar.card_selected": "#1b3245f2",
+    "army_bar.border": "#2a3e50",
+    "army_bar.border_selected": "#d9b45a",
+    "army_bar.title": "#e8edf2",
+    "army_bar.count": "#d9b45a",
+    "army_bar.body": "#9fb0bf",
+    "army_bar.status.idle": "#6f7d89",
+    "army_bar.status.moving": "#7fb3d5",
+    "army_bar.status.holding": "#4fb477",
+    "army_bar.status.attacking": "#e0913a",
+    "army_bar.status.battle": "#d9534f",
+    "army_bar.status.sea": "#3d8fd1"
+  },
+  "metrics": {
+    "army_bar.card_width": 176,
+    "army_bar.card_height": 72,
+    "army_bar.new_width": 104,
+    "army_bar.gap": 6,
+    "army_bar.title_font": 13,
+    "army_bar.body_font": 11,
+    "army_bar.gauge_height": 3
+  }
+}

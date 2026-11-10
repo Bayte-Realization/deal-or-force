@@ -144,6 +144,7 @@ public partial class DealOrForceGame : Control
         // knowable after the layout pass rather than when the card is built. See the method.
         SyncCountryFactsHeight();
         TickNuclearAlert(delta);
+        MaintainArmyBar(delta);
         if (_globe is not null) _globe.FogOfWarActive = _campaign is not null && _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         if (_globe is not null) _globe.MilitaryMarkersEnabled = _menuLayer is { Visible: false } && (_pickerLayer is null || !_pickerLayer.Visible);
         // The lens and the roll move while a key is held, so the line that reports them
@@ -956,6 +957,8 @@ public partial class DealOrForceGame : Control
         BuildDossierSidePanel();
 
         BuildArmyPanel();
+        // Every army as a card along the bottom of the map (ArmyBarUI).
+        BuildArmyBar();
         BuildFleetPanel(_hudLayer);
 
         // Every screen below is built here, on the first frame of a campaign, whether or not the
