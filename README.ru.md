@@ -2,7 +2,9 @@
 
 # Deal or Force
 
-Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10. Версия **0.6.2.0** — **EntertAlpha 0.6.2.0**.
+Глобальная стратегия про весь мир, на Godot 4.8 (сборка .NET) и .NET 10. Версия **0.6.2.1** — **EntertAlpha 0.6.2.1**.
+
+[Список изменений](https://github.com/Bayte-Realization/deal-or-force/blob/EntertAlpha/docs/CHANGELOG_0.6.2.1_RU.md)
 
 > **[LanguageKit](LanguageKit/GUIDE_RU.md)** — языковой комплект Godot 4.8 Beta1: исходные интеграции
 > Luau, F#, Nim, Odin, Rust и Kotlin со сборочными рецептами, проверками и лабораторией

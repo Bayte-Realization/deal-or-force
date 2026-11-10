@@ -4,7 +4,7 @@
 
 ## Один раз: шаблоны экспорта
 
-Актуальный выпуск игры: **EntertAlpha 0.6.2.0**. Номер должен совпадать в
+Актуальный выпуск игры: **EntertAlpha 0.6.2.1**. Номер должен совпадать в
 `GameVersion.props`, `GameBuildInfo.Version`, `project.godot`, Windows-пресете
 и обоих README/инструкциях сборки; `Tools/Test-ReleaseVersion.ps1` проверяет это до экспорта.
 Версия `SaveSystem.GameVersion` берётся из `GameBuildInfo`.
