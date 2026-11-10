@@ -72,6 +72,37 @@ public partial class DealOrForceGame
             : Simulation.Loc.Format("⚓ marching to {0} to board {1}", Region(lift.PortProvinceId), fleetName);
     }
 
+    private Button _armyDisbandButton;
+    private ulong _disbandArmedUntil;
+
+    /// <summary>
+    /// Disband the selection: the first press asks, a second within four seconds sends them home.
+    /// </summary>
+    private void DisbandSelectedDivisions()
+    {
+        var mine = SelectedPlayerDivisions();
+        if (mine.Length == 0) return;
+        var now = Time.GetTicksMsec();
+        if (now > _disbandArmedUntil)
+        {
+            _disbandArmedUntil = now + 4000;
+            var men = mine.Sum(army => (long)(army.Personnel * army.Strength));
+            SetArmyFeedback(Simulation.Loc.Format("Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.", mine.Length, men));
+            if (IsInstanceValid(_armyDisbandButton)) _armyDisbandButton.Text = Tr("Confirm");
+            return;
+        }
+        _disbandArmedUntil = 0;
+        if (IsInstanceValid(_armyDisbandButton)) _armyDisbandButton.Text = Tr("Disband");
+        var order = new Simulation.DisbandArmiesCommand { IssuerId = _campaign.Player.Id, ArmyIds = mine.Select(army => army.Id).ToArray() };
+        _campaign.Commands.Enqueue(order);
+        _campaign.Commands.ApplyAll(_campaign);
+        var feedback = Simulation.Loc.Format("{0:N0} division(s) sent home.", order.StoodDown) +
+                       (order.Refusal.Length > 0 ? " " + order.Refusal : "");
+        if (_selectedArmies.All(army => !_campaign.Armies.Contains(army))) ClearArmySelectionAndClose();
+        else { _selectedArmies.RemoveAll(army => !_campaign.Armies.Contains(army)); ShowSelectedArmies(); }
+        SetArmyFeedback(feedback);
+    }
+
     private void BuildArmyPanel()
     {
         _armyCaptionIconButtons.Clear();
@@ -337,6 +368,11 @@ public partial class DealOrForceGame
         var dropLead = ActionButton("Drop lead", RemoveLeadFromSelection, 104, 30, false, Icon("drop_lead"));
         dropLead.TooltipText = Ui.Tip(Tr("Remove the lead division from the selection without moving or disbanding it."));
         selection.AddChild(dropLead);
+        // Home: the men go back to the reserve. Asked twice, because there is no undo.
+        var disband = ActionButton("Disband", () => DisbandSelectedDivisions(), 96, 30);
+        disband.TooltipText = Ui.Tip(Tr("Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm."));
+        selection.AddChild(disband);
+        _armyDisbandButton = disband;
         var region = ActionButton("Region info", ShowSelectedArmyRegion, 102, 30, false, Icon("region"));
         region.TooltipText = Ui.Tip(Tr("Open the region dossier for the lead division's position. ← Orders in its header, or Escape, brings the orders back."));
         selection.AddChild(region);

@@ -495,14 +495,8 @@ public static class Attrition
         }
         if (weakest is null) return;
 
-        nation.ManpowerReserve += weakest.Personnel * campaign.Defines.ArmyStandDownReturn;
-        var name = weakest.Name;
-        Destroy(campaign, weakest, "stood down", lost: false);
-        campaign.Chronicle.Record(campaign, "army_stood_down", nation.Id,
-            subject: name, place: "unpaid_surplus", isPublic: false);
-        DiagnosticLogs.Write("simulation",
-            $"STAND_DOWN nation={nation.Tag} army={weakest.Id} day={campaign.ElapsedDays} reason=unpaid_surplus");
-        campaign.MarkStrategicChange();
+        // The same stand-down as a player's order (Demobilisation): the men to the reserve.
+        Demobilisation.StandDown(campaign, nation, weakest, "unpaid_surplus");
     }
 
     /// <summary>

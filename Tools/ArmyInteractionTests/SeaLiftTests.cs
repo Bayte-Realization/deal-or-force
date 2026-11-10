@@ -83,6 +83,36 @@ static class SeaLiftTests
         NavalInvasion.DrownWithHulls(c, fleet, 1f);
         Check(!fleet.Carried.Contains(swimmer.Id) && c.Armies.All(a => a.Id != swimmer.Id),
             "and a formation with nothing left is lost at sea");
+        // Sending forces home (Demobilisation): men back to the reserve, nothing counted as lost.
+        var home = new Army { Id = c.Armies.Max(a => a.Id) + 1, NationId = gbr.Id, Name = "Stand-down test",
+            ProvinceId = london, Divisions = 1, Organisation = 1, Strength = 0.8f, Personnel = 15_000 };
+        c.Armies.Add(home);
+        var reserve = gbr.ManpowerReserve; var lostBefore = gbr.FormationsLost;
+        var foreign = new DisbandArmiesCommand { IssuerId = gbr.Id + 1000, ArmyIds = new[] { home.Id } };
+        foreign.Apply(c);
+        Check(c.Armies.Contains(home), "nobody else can send a country's division home");
+        var disband = new DisbandArmiesCommand { IssuerId = gbr.Id, ArmyIds = new[] { home.Id } };
+        disband.Apply(c);
+        Check(disband.StoodDown == 1 && !c.Armies.Contains(home), "a division is stood down by its own country's order");
+        Check(Math.Abs(gbr.ManpowerReserve - reserve - 15_000 * 0.8f * c.Defines.ArmyStandDownReturn) < 1f && gbr.FormationsLost == lostBefore,
+            "its men go back to the reserve and it is not counted as lost");
+        var carrier = c.Fleets.First(f => f.NationId == gbr.Id && f.Hulls > 0);
+        var passenger = new Army { Id = c.Armies.Max(a => a.Id) + 1, NationId = gbr.Id, Name = "Passenger", ProvinceId = london,
+            Divisions = 1, Organisation = 1, Strength = 1 };
+        c.Armies.Add(passenger);
+        NavalInvasion.Embark(c, carrier, passenger);
+        var blocked = new DecommissionFleetCommand { IssuerId = gbr.Id, FleetId = carrier.Id };
+        blocked.Apply(c);
+        Check(blocked.Refusal.Length > 0 && c.Fleets.Contains(carrier), "a fleet with troops aboard is not decommissioned");
+        new DisbandArmiesCommand { IssuerId = gbr.Id, ArmyIds = new[] { passenger.Id } }.Apply(c);
+        Check(c.Armies.Contains(passenger), "nor is a division aboard a ship stood down");
+        NavalInvasion.Disembark(c, carrier, london);
+        var treasury = gbr.Treasury; var hulls = carrier.Hulls;
+        var decommission = new DecommissionFleetCommand { IssuerId = gbr.Id, FleetId = carrier.Id };
+        decommission.Apply(c);
+        Check(decommission.Refusal.Length == 0 && !c.Fleets.Contains(carrier) &&
+              Math.Abs(gbr.Treasury - treasury - hulls * c.Defines.HullCost * c.Defines.FleetDecommissionRefund) < 0.001f,
+            "an empty fleet is decommissioned, a share of its price back to the treasury");
         Console.WriteLine("sea lift: all passed");
     }
 }

@@ -1,0 +1,19 @@
+// Disbanding divisions and decommissioning fleets (Demobilisation).
+{
+  "Disband": "Распустить",
+  "Confirm": "Подтвердить",
+  "Decommission": "Списать",
+  "Disband (Delete)\nSend the selected divisions home: their men go back to the manpower reserve. Not in battle or aboard a ship. Press twice to confirm.": "Распустить (Delete)\nОтправить выбранные дивизии по домам: люди возвращаются в резерв живой силы. Не в бою и не на борту. Нажмите дважды для подтверждения.",
+  "Disband {0:N0} division(s), {1:N0} men? Press Disband (or Delete) again to confirm.": "Распустить {0:N0} див., {1:N0} чел.? Нажмите «Распустить» (или Delete) ещё раз для подтверждения.",
+  "{0:N0} division(s) sent home.": "Распущено дивизий: {0:N0}.",
+  "Decommission\nTake this fleet out of the navy: a share of what its hulls cost comes back and the hulls on its slipways are cancelled. Not in action or with troops aboard. Press twice to confirm.": "Списать\nВывести флот из состава: часть стоимости кораблей вернётся в казну, заложенные для него корабли отменяются. Не в бою и не с войсками на борту. Нажмите дважды для подтверждения.",
+  "Decommission {0} ({1:N0} hulls)? Press Decommission again to confirm.": "Списать {0} ({1:N0} кор.)? Нажмите «Списать» ещё раз для подтверждения.",
+  "{0} decommissioned; {1} back to the treasury.": "{0} списан; в казну вернулось {1}.",
+  "That formation is not yours.": "Это соединение не ваше.",
+  "{0} is in action.": "{0} в бою.",
+  "{0} is aboard a ship. Put it ashore first.": "{0} на борту корабля. Сначала высадите.",
+  "{0} is serving abroad as volunteers.": "{0} воюет за рубежом как добровольцы.",
+  "That fleet is not yours.": "Этот флот не ваш.",
+  "Troops are aboard. Put them ashore first.": "На борту войска. Сначала высадите их.",
+  "The fleet is in action.": "Флот в бою."
+}

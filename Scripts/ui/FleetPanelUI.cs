@@ -502,6 +502,35 @@ public partial class DealOrForceGame
             Simulation.Plural.Key("{0:N0} division put ashore.", landed), landed));
     }
 
+    private Button _fleetDecommission;
+    private ulong _decommissionArmedUntil;
+    private int _decommissionArmedFleet = -1;
+
+    private void DecommissionSelectedFleet()
+    {
+        if (_selectedFleet is null || _campaign.Player is null || _selectedFleet.NationId != _campaign.Player.Id) return;
+        var now = Time.GetTicksMsec();
+        if (now > _decommissionArmedUntil || _decommissionArmedFleet != _selectedFleet.Id)
+        {
+            _decommissionArmedUntil = now + 4000;
+            _decommissionArmedFleet = _selectedFleet.Id;
+            SetFleetFeedback(Simulation.Loc.Format("Decommission {0} ({1:N0} hulls)? Press Decommission again to confirm.",
+                Simulation.Loc.Get(_selectedFleet.Name), _selectedFleet.Hulls));
+            if (IsInstanceValid(_fleetDecommission)) _fleetDecommission.Text = Tr("Confirm");
+            return;
+        }
+        _decommissionArmedUntil = 0;
+        _decommissionArmedFleet = -1;
+        if (IsInstanceValid(_fleetDecommission)) _fleetDecommission.Text = Tr("Decommission");
+        var name = Simulation.Loc.Get(_selectedFleet.Name);
+        var order = new Simulation.DecommissionFleetCommand { IssuerId = _campaign.Player.Id, FleetId = _selectedFleet.Id };
+        _campaign.Commands.Enqueue(order);
+        _campaign.Commands.ApplyAll(_campaign);
+        if (order.Refusal.Length > 0) { SetFleetFeedback(order.Refusal); return; }
+        CloseFleetPanel();
+        SetArmyFeedback(Simulation.Loc.Format("{0} decommissioned; {1} back to the treasury.", name, Fmt.Money(order.Refund)));
+    }
+
     private void SetFleetFeedback(string text)
     {
         if (IsInstanceValid(_fleetFeedback)) _fleetFeedback.Text = text;
@@ -591,6 +620,11 @@ public partial class DealOrForceGame
         _fleetSplit.TooltipText = Ui.Tip(Tr("Split in half (Ctrl+X)\nDetach half the hulls as a new squadron in the same place, on the same mission. " +
                                  "Troops aboard and hulls on the slipways stay with this fleet."));
         formation.AddChild(_fleetSplit);
+
+        // Out of the navy: a share of the price back, the slipways cancelled. Asked twice.
+        _fleetDecommission = ActionButton("Decommission", DecommissionSelectedFleet, 148, 30);
+        _fleetDecommission.TooltipText = Ui.Tip(Tr("Decommission\nTake this fleet out of the navy: a share of what its hulls cost comes back and the hulls on its slipways are cancelled. Not in action or with troops aboard. Press twice to confirm."));
+        formation.AddChild(_fleetDecommission);
 
         rows.AddChild(Title("TROOPS", 11, Ui.Colour("text.caption")));
         var cargo = new HBoxContainer();

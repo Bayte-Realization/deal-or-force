@@ -672,6 +672,12 @@ public partial class DealOrForceGame : Control
                     GetViewport().SetInputAsHandled();
                     return;
 
+                // Delete: send the selection home (asks once more first).
+                case Key.Delete:
+                    DisbandSelectedDivisions();
+                    GetViewport().SetInputAsHandled();
+                    return;
+
                 // Halve the selection: half the formations stay selected and take the next
                 // order, the other half stay where they are. One formation is cut in two.
                 case Key.X when Input.IsKeyPressed(Key.Ctrl):
