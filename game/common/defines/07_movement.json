@@ -22,7 +22,7 @@
 //                                  infrastructure in the region entered, up to RoadSpeedCap
 //
 // Progress accumulates until it reaches 1, and then the formation is in the next province.
-// So 0.22 a day is four and a half days to cross one - and a province here is a district,
+// So 0.75 a day is a day and a third to cross one - and a province here is a district,
 // not a country, because there are thirty-eight thousand of them.
 //
 // Taking ground that belongs to somebody else is a different sum and lives in 00_combat.json:
@@ -38,7 +38,12 @@
   // after two years of nobody playing, at 0.32 it keeps 75 %, and the bench's stalemate check
   // fails at both. Armies feeling right is not one number - it is a pass over entrenchment,
   // defence and how a front absorbs a breakthrough. Change it in a mod and see for yourself.
-  "MarchProgressPerDay": 0.22,
+  //
+  // 0.22 until 0.6.3.0: four and a half days a district read as a crawl against the hourly
+  // clock. At 0.75 (with open country and ordered advances doubled below) the 2024 front over
+  // 8 seeds ends with Ukraine at 128 provinces on average against 102 - more mobile, and a
+  // seed in eight now collapses where none did.
+  "MarchProgressPerDay": 0.75,
 
   // What supply can cost a march, at worst.
   //
@@ -70,13 +75,13 @@
   // UnopposedCapturePerDay, with supply counted at no less than OpenCountrySupplyFloor. A
   // gap in a line the enemy is still holding stays slow; what lies behind it no longer takes
   // three weeks a district.
-  "OpenCountryCapturePerDay": 0.35,
+  "OpenCountryCapturePerDay": 0.6,
   "OpenCountrySupplyFloor": 0.7,
 
   // Explicit orders into covered but unoccupied ground. These do not bypass a garrison,
   // combat, terrain or rivers; the autonomous planner's coverage refusal is unchanged.
   // Worst-case supply and coverage must not multiply a single district into months.
-  "OrderedCapturePerDay": 0.30,
+  "OrderedCapturePerDay": 0.5,
   "OrderedCaptureSupplyFloor": 0.7,
   "OrderedAdvanceFloor": 0.5
 }

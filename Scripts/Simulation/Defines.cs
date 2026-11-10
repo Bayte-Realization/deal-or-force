@@ -168,7 +168,7 @@ public sealed partial class Defines
 	/// the war for everybody. Raise it in a mod and see for yourself; that is what it is a
 	/// define for.
 	/// </summary>
-	public float MarchProgressPerDay { get; set; } = 0.22f;
+	public float MarchProgressPerDay { get; set; } = 0.75f;
 
 	/// <summary>
 	/// The least a formation's supply can slow it down, as a share of its full pace.
