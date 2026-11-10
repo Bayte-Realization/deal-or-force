@@ -19,7 +19,7 @@ curved_lines_2d/fill_in_parent_shape_with_brush=false
 [application]
 
 config/name="Deal or Force"
-config/version="0.6.3.0"
+config/version="0.6.3.1"
 run/main_scene="res://Scenes/MainMenu.tscn"
 config/project_settings_override="user://graphics_override.cfg"
 config/features=PackedStringArray("4.8", "C#", "Forward Plus")

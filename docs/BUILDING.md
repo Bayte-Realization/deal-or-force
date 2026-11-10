@@ -4,7 +4,7 @@
 
 For handing the game to somebody who has neither Godot nor the sources.
 
-Current game release: **EntertAlpha 0.6.3.0**. `Tools/Test-ReleaseVersion.ps1`
+Current game release: **EntertAlpha 0.6.3.1**. `Tools/Test-ReleaseVersion.ps1`
 checks the shared game/launcher/rules metadata, engine/export settings and current
 release documentation before export. `SaveSystem.GameVersion` uses `GameBuildInfo`;
 the save format and network protocol are independent of the release label.

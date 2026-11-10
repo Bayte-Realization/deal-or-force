@@ -23,7 +23,7 @@ static class PocketResistanceTests
     static void HoldsUntilTheDefenceActuallyFails()
     {
         var c = Fixture(); var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
-        Unit(c, 2, 0, 4); d.Organisation = .001f; d.PocketStores = 12;
+        Unit(c, 2, 0, 4); d.Organisation = .08f; d.PocketStores = 12;
         var battle = Battle(c, a, d);
         var fingerprint = CampaignFingerprint.Of(c); var random = c.Random.State;
         Check(PocketResistance.CanContinue(c, c.Wars[0], 3, new[] { d }) &&
@@ -32,15 +32,15 @@ static class PocketResistanceTests
         Warfare.Tick(c);
         Check(!battle.Ended && c.Armies.Contains(d) && c.ProvinceController[3] == 501 &&
             a.ProvinceId == 2 && d.ProvinceId == 3 && d.InBattle,
-            "organisation collapse alone neither captures the province nor deletes its trapped defenders");
+            "low organisation above zero permits a desperate last stand in the pocket");
         Check(d.Strength < 1 && battle.DefenderLosses > 0 && c.Wars[0].DefenderCaptured == 0 &&
             battle.Rounds.Last().Note == PocketResistance.BattleNote,
             "resistance takes normal combat losses and explains itself without invented prisoners");
-        d.Strength = .24f;
+        d.Organisation = .001f;
         Warfare.Tick(c);
         Check(battle.Ended && !c.Armies.Contains(d) && c.ProvinceController[3] == 500 &&
             c.Wars[0].DefenderCaptured > 0,
-            "a genuinely depleted closed defence falls and accounts for the survivors");
+            "trapped defenders with 0% morale surrender and disappear");
     }
 
     static void OpenRetreatAndToggle()
@@ -48,7 +48,7 @@ static class PocketResistanceTests
         foreach (var mode in new[] { "open", "disabled", "starved" })
         {
             var c = Fixture(); var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
-            Unit(c, 2, 0, 4); d.Organisation = .001f; d.PocketStores = 12;
+            Unit(c, 2, 0, 4); d.Organisation = .02f; d.PocketStores = 12;
             if (mode == "open") { c.Armies.RemoveAt(2); c.SetProvinceController(4, 502); }
             if (mode == "disabled") c.Defines.PocketResistanceEnabled = false;
             if (mode == "starved") { d.PocketStores = 0; d.SupplyLevel = 0; }
@@ -64,7 +64,7 @@ static class PocketResistanceTests
     {
         var c = Fixture(); c.Defines.RetreatSearchDepth = 4;
         var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
-        var battle = Battle(c, a, d); d.Organisation = .001f; d.PocketStores = 12;
+        var battle = Battle(c, a, d); d.Organisation = .02f; d.PocketStores = 12;
         d.PlanActive = true; d.DirectOrder = true; d.PlannedRoute.Add(2);
         Check(WarCoalition.SpreadRetreatProvince(c, c.Wars[0], d, 3, true) == 4,
             "a deep retreat chooses the neighbouring first step, not the distant home province");
@@ -167,7 +167,7 @@ static class PocketResistanceTests
         if (!prepared.Success) throw new Exception(prepared.Warning);
         c = prepared.Campaign; c.AttachProvinceTopology(Fixture().ProvinceMap);
         var a = Unit(c, 0, 0, 2); var d = Unit(c, 1, 1, 3);
-        Unit(c, 2, 0, 4); d.Organisation = .001f; d.PocketStores = 12;
+        Unit(c, 2, 0, 4); d.Organisation = .08f; d.PocketStores = 12;
         Battle(c, a, d); Warfare.Tick(c); c.ConfigureSinglePlayer(1);
         var fp = CampaignFingerprint.Of(c);
         var saved = SaveSystem.ImportNetworkSnapshot(SaveSystem.ExportNetworkSnapshot(c, "pocket-test"), "pocket-test");

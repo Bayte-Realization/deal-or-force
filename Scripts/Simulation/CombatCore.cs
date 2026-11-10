@@ -704,6 +704,19 @@ public static partial class Warfare
             var attacking = Side(war, battle.Attackers, battle.AttackerId, AttackingSide);
             var defending = Side(war, battle.Defenders, battle.DefenderId, DefendingSide);
             if (attacking.Count == 0) { Close(campaign, battle, battle.DefenderId, "Attackers withdrew"); continue; }
+            for (var i = defending.Count - 1; i >= 0; i--)
+            {
+                var army = defending[i];
+                if (army.Organisation <= 0.005f &&
+                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
+                {
+                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                    WarLosses.Surrender(campaign, army);
+                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    defending.RemoveAt(i);
+                    battle.Defenders.Remove(army.Id);
+                }
+            }
             if (defending.Count == 0)
             {
                 var occupied = Capture(campaign, war, battle.ProvinceId, battle.AttackerId, attacking, defending,
@@ -1037,6 +1050,22 @@ public static partial class Warfare
             WarLosses.Record(war, battle.AttackerId, attackerKilled, attackerLoss - attackerKilled, 0f);
             WarLosses.Record(war, battle.DefenderId, defenderKilled, defenderLoss - defenderKilled, 0f);
 
+            for (var i = defending.Count - 1; i >= 0; i--)
+            {
+                var army = defending[i];
+                if (army.Organisation <= 0.005f &&
+                    WarCoalition.SpreadRetreatProvince(campaign, war, army, battle.ProvinceId, beaten: true) <= 0)
+                {
+                    DiagnosticLogs.Write("simulation", $"SURRENDER army={army.Id} nation={army.NationId} province={battle.ProvinceId} war={war.Id} reason=zero_morale_in_pocket");
+                    WarLosses.Surrender(campaign, army);
+                    Attrition.Destroy(campaign, army, "destroyed: zero morale in pocket");
+                    defending.RemoveAt(i);
+                    battle.Defenders.Remove(army.Id);
+                    DefenderLine.Remove(army);
+                    DefenderReserve.Remove(army);
+                }
+            }
+
             var attackerOrg = AverageOrganisation(AttackerLine);
             var defenderOrg = AverageOrganisation(DefenderLine);
             if (DiagnosticLogs.Enabled)
@@ -1076,9 +1105,10 @@ public static partial class Warfare
             });
             if (battle.Rounds.Count > 90) battle.Rounds.RemoveAt(0);
 
-            var defendersSpent = defenderOrg <= campaign.Defines.BattleBreakOrganisation &&
-                !DefenderReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation);
-            var pocketResists = defendersSpent &&
+            var defendersSpent = defending.Count == 0 ||
+                (defenderOrg <= campaign.Defines.BattleBreakOrganisation &&
+                !DefenderReserve.Any(army => army.Organisation > campaign.Defines.BattleBreakOrganisation));
+            var pocketResists = defendersSpent && defending.Count > 0 &&
                 PocketResistance.CanContinue(campaign, war, battle.ProvinceId, defending);
             if (pocketResists) battle.Rounds[^1].Note = PocketResistance.BattleNote;
             if (defendersSpent && !pocketResists)
