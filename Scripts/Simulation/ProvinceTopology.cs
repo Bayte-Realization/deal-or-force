@@ -850,6 +850,25 @@ public sealed class ProvinceTopology
     /// </summary>
     public void AttachCrossings(IReadOnlyList<ResolvedCrossing> crossings)
     {
+        // Every entry is judged against the land borders before anything is changed: a refusal
+        // part of the way through used to leave the graph half-joined, with the old list still
+        // recorded as what was attached - so the next attempt could not even undo it.
+        var seen = new HashSet<long>();
+        if (crossings is not null)
+            foreach (var crossing in crossings)
+            {
+                if (crossing is null) continue;
+                int from = crossing.From, to = crossing.To;
+                if (from <= 0 || to <= 0 || from >= LandNeighbors.Length || to >= LandNeighbors.Length || from == to)
+                    throw new ArgumentException($"Crossing '{crossing.Id}' does not join two provinces of this map.");
+                if (WaterByProvince[from] || WaterByProvince[to])
+                    throw new ArgumentException($"Crossing '{crossing.Id}' ends in the water.");
+                if (Array.IndexOf(LandNeighbors[from], to) >= 0)
+                    throw new ArgumentException($"Crossing '{crossing.Id}' joins provinces {from} and {to}, which already share a border.");
+                if (!seen.Add(EdgeKey(from, to)))
+                    throw new ArgumentException($"Crossing '{crossing.Id}' repeats the link between provinces {from} and {to}.");
+            }
+
         foreach (var old in _crossings)
         {
             Neighbors[old.From] = LandNeighbors[old.From];
@@ -863,14 +882,7 @@ public sealed class ProvinceTopology
             {
                 if (crossing is null) continue;
                 int from = crossing.From, to = crossing.To;
-                if (from <= 0 || to <= 0 || from >= LandNeighbors.Length || to >= LandNeighbors.Length || from == to)
-                    throw new ArgumentException($"Crossing '{crossing.Id}' does not join two provinces of this map.");
-                if (WaterByProvince[from] || WaterByProvince[to])
-                    throw new ArgumentException($"Crossing '{crossing.Id}' ends in the water.");
-                if (AreNeighbors(from, to))
-                    throw new ArgumentException($"Crossing '{crossing.Id}' joins provinces {from} and {to}, which already share a border.");
-                if (!_crossingByEdge.TryAdd(EdgeKey(from, to), crossing))
-                    throw new ArgumentException($"Crossing '{crossing.Id}' repeats the link between provinces {from} and {to}.");
+                _crossingByEdge[EdgeKey(from, to)] = crossing;
                 Neighbors[from] = WithNeighbor(Neighbors[from], to);
                 Neighbors[to] = WithNeighbor(Neighbors[to], from);
                 _crossingEnd[from] = _crossingEnd[to] = true;

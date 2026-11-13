@@ -4925,8 +4925,13 @@ void fragment() {
             pixels[write + 3] = 255;
         }
         WriteUnownedPaletteEntry(pixels);
-        // The far plate carries these colours baked in; it is repainted with the next map refresh.
+        // The far plate carries these colours baked in, so it has to be painted again - and asked
+        // for here, not left to "the next map refresh": that refresh only comes when a province
+        // changes hands, and a country that changes its colour without gaining or losing ground
+        // (a new tag on the same land) would keep its old colour at the world view, beside its
+        // new one up close. The request is throttled like any other, so asking is cheap.
         _plateColoursStale = true;
+        RequestPlateRepaint(_campaign?.ProvinceMap);
         if (_nationPaletteImage is null) _nationPaletteImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _nationPaletteImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
         UpdateMapImage("nation_palette", _nationPaletteImage, ref _nationPaletteTexture);

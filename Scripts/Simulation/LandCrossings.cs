@@ -109,6 +109,16 @@ public sealed class ResolvedCrossing
     public float SeaLongitude { get; init; }
     /// <summary>Kilometres between the two authored shores.</summary>
     public float SpanKm { get; init; }
+    /// <summary>
+    /// The two shores as the data file gives them: where the bridge or the ferry actually
+    /// lands. The map draws the link between these, not between the centres of the provinces
+    /// it joins - a centre can lie a hundred kilometres inland, and a line from one to the
+    /// other is mostly a line across dry land.
+    /// </summary>
+    public float FromShoreLatitude { get; init; }
+    public float FromShoreLongitude { get; init; }
+    public float ToShoreLatitude { get; init; }
+    public float ToShoreLongitude { get; init; }
 
     /// <summary>Whether a navy that commands the strait stops the crossing, rather than merely threatening it.</summary>
     public bool ClosesUnderBlockade => Kind == LandCrossingKind.Ferry;
@@ -378,7 +388,11 @@ public static class LandCrossings
                 Attack = crossing.Attack,
                 SeaLatitude = sea.Latitude,
                 SeaLongitude = sea.Longitude,
-                SpanKm = span
+                SpanKm = span,
+                FromShoreLatitude = from.Latitude,
+                FromShoreLongitude = from.Longitude,
+                ToShoreLatitude = to.Latitude,
+                ToShoreLongitude = to.Longitude
             });
         }
         return resolved;
@@ -588,6 +602,8 @@ public static class LandCrossings
             var from = map.CenterOf(crossing.From);
             var to = map.CenterOf(crossing.To);
             var contested = viewerNationId >= 0 && Contested(campaign, crossing, viewerNationId);
+            var authored = crossing.FromShoreLatitude != 0f || crossing.FromShoreLongitude != 0f ||
+                           crossing.ToShoreLatitude != 0f || crossing.ToShoreLongitude != 0f;
             into.Add(new CrossingLink
             {
                 Id = crossing.Id,
@@ -595,10 +611,12 @@ public static class LandCrossings
                 Kind = crossing.Kind,
                 FromProvince = crossing.From,
                 ToProvince = crossing.To,
-                FromLatitude = from.Latitude,
-                FromLongitude = from.Longitude,
-                ToLatitude = to.Latitude,
-                ToLongitude = to.Longitude,
+                // Shore to shore where the data says where the shores are (it always does for
+                // a crossing read from map_data); centre to centre only for one built in code.
+                FromLatitude = authored ? crossing.FromShoreLatitude : from.Latitude,
+                FromLongitude = authored ? crossing.FromShoreLongitude : from.Longitude,
+                ToLatitude = authored ? crossing.ToShoreLatitude : to.Latitude,
+                ToLongitude = authored ? crossing.ToShoreLongitude : to.Longitude,
                 Contested = contested,
                 Closed = contested && crossing.ClosesUnderBlockade
             });

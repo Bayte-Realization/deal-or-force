@@ -27,6 +27,9 @@ public sealed partial class GlobePresentation
     private int _straitCrossingRevision = int.MinValue;
     private readonly List<Simulation.CrossingLink> _straitCrossingLinks = new();
     private readonly List<Vector3> _straitCrossingPoints = new();
+    private readonly List<Vector3> _straitCrossingVertices = new();
+    private readonly List<Vector2> _straitCrossingUvs = new();
+    private readonly List<Color> _straitCrossingColours = new();
 
     // Still dashes, not flowing ones: a supply line moves because supply does, and a bridge
     // stands where it is.
@@ -107,8 +110,25 @@ void fragment() {
         if (fingerprint != _straitCrossingFingerprint)
         {
             _straitCrossingFingerprint = fingerprint;
+            // Every link goes into one surface. A mesh holds 256 surfaces at most, and a surface
+            // each was one draw call each as well - a mod's archipelago map would have run out of
+            // the first and paid for the second.
             _straitCrossingMesh.ClearSurfaces();
+            _straitCrossingVertices.Clear();
+            _straitCrossingUvs.Clear();
+            _straitCrossingColours.Clear();
             foreach (var link in _straitCrossingLinks) AppendStraitCrossing(link);
+            if (_straitCrossingVertices.Count > 0)
+            {
+                _straitCrossingMesh.SurfaceBegin(Mesh.PrimitiveType.Triangles);
+                for (var index = 0; index < _straitCrossingVertices.Count; index++)
+                {
+                    _straitCrossingMesh.SurfaceSetColor(_straitCrossingColours[index]);
+                    _straitCrossingMesh.SurfaceSetUV(_straitCrossingUvs[index]);
+                    _straitCrossingMesh.SurfaceAddVertex(_straitCrossingVertices[index]);
+                }
+                _straitCrossingMesh.SurfaceEnd();
+            }
         }
         _straitCrossingPreview.Visible = MilitaryMarkersEnabled && _straitCrossingMesh.GetSurfaceCount() > 0;
     }
@@ -140,13 +160,14 @@ void fragment() {
 
         // The same thin strip a supply line is, a little narrower; broken at the date line on
         // the flat map rather than streaked across it.
-        const float halfWidth = 0.0019f;
+        const float halfWidth = 0.0011f;
         CollectDateLineRuns(_straitCrossingPoints);
         foreach (var run in _dateLineRuns)
         {
-            _straitCrossingMesh.SurfaceBegin(Mesh.PrimitiveType.TriangleStrip);
             var cumulative = 0f;
             var endIndex = run.Start + run.Count - 1;
+            Vector3 lastLeft = default, lastRight = default;
+            var lastAlong = 0f;
             for (var index = run.Start; index <= endIndex; index++)
             {
                 var point = _straitCrossingPoints[index];
@@ -157,14 +178,28 @@ void fragment() {
                 if (tangent == Vector3.Zero) tangent = Vector3.Right;
                 var normal = _flatMap ? Vector3.Forward : point.Normalized();
                 var side = normal.Cross(tangent).Normalized() * halfWidth;
-                _straitCrossingMesh.SurfaceSetColor(colour);
-                _straitCrossingMesh.SurfaceSetUV(new Vector2(cumulative, 0f));
-                _straitCrossingMesh.SurfaceAddVertex(OnOrderSurface(point + side));
-                _straitCrossingMesh.SurfaceSetColor(colour);
-                _straitCrossingMesh.SurfaceSetUV(new Vector2(cumulative, 1f));
-                _straitCrossingMesh.SurfaceAddVertex(OnOrderSurface(point - side));
+                var left = OnOrderSurface(point + side);
+                var right = OnOrderSurface(point - side);
+                // Two triangles for the stretch since the previous point; the first point of a
+                // run only opens it.
+                if (index > run.Start)
+                {
+                    StraitCrossingCorner(lastLeft, lastAlong, 0f, colour);
+                    StraitCrossingCorner(lastRight, lastAlong, 1f, colour);
+                    StraitCrossingCorner(left, cumulative, 0f, colour);
+                    StraitCrossingCorner(lastRight, lastAlong, 1f, colour);
+                    StraitCrossingCorner(right, cumulative, 1f, colour);
+                    StraitCrossingCorner(left, cumulative, 0f, colour);
+                }
+                lastLeft = left; lastRight = right; lastAlong = cumulative;
             }
-            _straitCrossingMesh.SurfaceEnd();
         }
+    }
+
+    private void StraitCrossingCorner(Vector3 vertex, float along, float across, Color colour)
+    {
+        _straitCrossingVertices.Add(vertex);
+        _straitCrossingUvs.Add(new Vector2(along, across));
+        _straitCrossingColours.Add(colour);
     }
 }
