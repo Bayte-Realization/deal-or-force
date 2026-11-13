@@ -65,7 +65,12 @@ perf.log
 /tmp_logs/
 /tmp_*.log
 /tmp_*.cmd
-/tmp_verify_headless*/
+/tmp_*.ps1
+/tmp_*.bat
+# Bench and probe output folders at the root. Two of them (tmp_simb_check, tmp_simb_run) were
+# committed once - forty-odd compiled DLLs in history for nobody - which is what a rule that
+# names folders one at a time gets you. Any tmp_* folder is scratch.
+/tmp_*/
 /naming_build.log
 /naming_test.log
 /tautology_probe*.log

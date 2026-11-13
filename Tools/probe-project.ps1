@@ -58,6 +58,10 @@ $keep = $lines | Where-Object {
     $_ -notmatch '^_fennara_game_capture=' -and
     $_ -notmatch '^MCPRuntimeServer=' -and
     $_ -notmatch '^_mcp_game_helper=' -and
+    # Godot MCP Pro injects these three while its editor plugin is enabled.
+    $_ -notmatch '^MCPScreenshot=' -and
+    $_ -notmatch '^MCPInputService=' -and
+    $_ -notmatch '^MCPGameInspector=' -and
     $_ -notmatch '^GDSync=' -and
     $_ -notmatch '^DialogueManager=' -and
     $_ -notmatch '^Ezcha=' -and
