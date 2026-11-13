@@ -142,6 +142,28 @@ instead of re-deriving the commands.
   — and together they were more than half of everything the editor walked. `addons/at-icons`
   (7 428 files) is `.gdignore`d with its plugin switched off in `project.godot`: no script, scene
   or resource referenced it.
+- **Looking at the running game while the editor is open — it works, through Godot MCP Pro.**
+  The note above ("the game cannot be captured while an editor has this project open") is true
+  for a SECOND Godot started beside the editor. It is not true for the editor's own Play, and
+  the Godot MCP Pro addon (`addons/godot_mcp`, server in
+  `D:\Godot Projects\deal-or-force-tools\godot-mcp-pro-v1.17.1\server`) drives exactly that. Its
+  command line needs no MCP client: `node <server>\build\cli.js scene play`, wait about a
+  minute for the menu, `editor screenshot` (JSON with `image_base64`), `input click --x --y`,
+  `input key --key`, `runtime exec --code "<GDScript>"`, `scene stop`. The map is the node with
+  a `FocusOn(latitude, longitude, distance)` method (`GlobePresentation`); calling it from
+  `runtime exec` points the camera anywhere. Verified on 14 November 2026: menu, country
+  picker, campaign and the Kerch crossing were photographed this way. Stop the game you
+  started (`scene stop`); never anything else.
+- **`Tools/advisor-mcp/server.mjs`** — a second model on call through OpenRouter, as MCP tools
+  (`deal-or-force-advisor`) and as a command line. `--ask` puts a prompt and project files in
+  front of a chat model for an independent review or a bulk read (long prompts via
+  `--prompt-file`; give `--max-tokens` room, a reasoning model can spend the whole answer
+  thinking). `--judge <questions.json>` uses the Decisions API (`google/gemini-decision-1`):
+  yes/no with a probability, one of named options, or a score on a ladder, each with a
+  confidence, for a few thousandths of a cent - the cheap way to triage findings, rank work
+  or take a vote without spending the main model's limit. It classifies and does not explain,
+  and its "safe" is not a safety review. The key comes from `OPENROUTER_API_KEY` (set by the
+  owner with `setx`); never write it anywhere.
 - **`Tools/knowledge-mcp/server.mjs`** — the same kind of dependency-free MCP server for the
   repository's own memory: `search_docs` (grep docs/game/Tools), `plan_status` (master-plan rows
   with the status vocabulary), `list_defines` (simulation tunables with their rationale),
