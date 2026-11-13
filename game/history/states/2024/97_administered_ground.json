@@ -1,0 +1,33 @@
+// Who else wants the ground the map source drew as countries of its own, on 1 January 2024.
+//
+// The Siachen Glacier, the British Indian Ocean Territory, South Georgia and Navassa Island are
+// rows of the map source's country table and are not countries: common/country_merges gives
+// each to the state that administers it, and its region is written with that state's other
+// regions (IND.json, GBR.json, USA.json). That table says who holds the ground, not who is
+// right. Who disputes it is said here, the way every other dispute is (96_irredenta.json): a
+// core is a homeland in law, a claim a weaker motive the AI weighs (LostLands). Neither changes
+// who owns or holds a region, and "cores" replaces the list, so the owner is named in it.
+//
+// Not here, because there is nothing to hang a claim on or nothing claimed:
+//   Scarborough Shoal, the Spratlys, Bajo Nuevo, Serranilla, Brazilian Island, Clipperton, the
+//     Coral Sea Islands, Ashmore and Cartier - smaller than a cell of the map, so no region;
+//   Guantanamo Bay and Baikonur - leases, in history/diplomacy/2024/40_arrangements.json;
+//   the Cyprus buffer zone and the Sovereign Base Areas - the Republic of Cyprus claims neither
+//     as lost ground, and Northern Cyprus's quarrel is with the Republic itself;
+//   the Southern Patagonian Ice Field - an undemarcated line, not a claim on a region;
+//   Bir Tawil - claimed by nobody, which is the whole of its fame (unclaimed.json).
+// Sources: the official positions of the claimants; see each line.
+{
+  // Siachen: held by India since Operation Meghdoot (1984) as part of Ladakh; Pakistan holds it
+  // to lie on its side of the line the 1949 Karachi Agreement left undrawn beyond NJ9842.
+  "99_x06": {"cores": ["IND"], "claims": ["PAK"]},
+  // The Chagos Archipelago: detached from Mauritius in 1965, claimed by it ever since (ICJ
+  // advisory opinion of 2019, UN General Assembly resolution 73/295).
+  "io_x01": {"claims": ["MUS"]},
+  // South Georgia and the South Sandwich Islands: claimed by Argentina with the Falklands
+  // (Argentine Constitution, transitional clause 1).
+  "gs_x01": {"claims": ["ARG"]},
+  // Navassa: claimed by Haiti in every constitution since 1801, by the United States under the
+  // Guano Islands Act since 1857.
+  "um_76": {"claims": ["HTI"]}
+}

@@ -1,0 +1,50 @@
+{
+  // The lines of the political map: one style for each rank, and nothing else decides how a
+  // border looks. A rank comes from who holds the two sides of an edge TODAY (Simulation.MapBorders):
+  // different holders make a country border whether the scenario drew it or a peace did, the
+  // same holder on both sides never does. Where two ranks lie on the same edge the higher one is
+  // drawn alone: country over region over province.
+  //
+  //   rank       colour                     opacity                        width (screen pixels)
+  //   country    map.border_country         map.country_border_opacity     map.country_border_width
+  //   region     map.border_region          map.region_border_opacity      map.region_border_width
+  //   province   map.border_province        map.province_border_opacity    map.province_border_width
+  //              map.border_province_halo   map.province_border_halo
+  //
+  // Colours are ordinary sRGB hex, converted for the shader; they are the same on the globe and
+  // on the flat map. A metric may be given again as map.flat_<name> for the flat map alone
+  // (game/gui/38_flat_map.json does that for the province line, which an atlas sheet wants finer).
+  "colours": {
+    // Near-black navy: the frontier is the darkest line on the map and must hold against every
+    // country colour, pale or dark.
+    "map.border_country": "#353f4d",
+    // A region line is a shade laid on the ground rather than a stroke, so its ink is black and
+    // its opacity (below) is small.
+    "map.border_region": "#000000",
+    "map.border_province": "#424d55",
+    // The pale shoulder that keeps a province line readable over dark terrain.
+    "map.border_province_halo": "#e5e7e3",
+    // Occupation is not a rank. This pale line over its dark key marks where held ground ends
+    // inside one owner's land; where that edge is also a country border, the country border is drawn.
+    "map.border_occupation": "#f6f1db",
+    "map.border_occupation_key": "#3c4850"
+  },
+  "metrics": {
+    // Solid for most of this width, then a soft shoulder of about as much again. Also the unit
+    // the frontier's inner cushion and the selection outlines are measured in.
+    "map.country_border_width": 1.35,
+    "map.country_border_opacity": 0.86,
+    // The least of its weight a country border keeps at the world view. Lower, and the frontier
+    // between two states becomes a hairline exactly where the strategic map needs it most.
+    "map.country_border_far_weight": 0.62,
+    // How far the region shade reaches from the line, and how dark it gets at the line itself.
+    "map.region_border_width": 3.78,
+    "map.region_border_opacity": 0.0416,
+    // From orbit a border is not a stroke but a darker run of the country's own paint on the far
+    // plate. These are the shares of the country colour that plate is painted with: on a country
+    // border or a shore, on a region line, and inland. Kept in that order by the game.
+    "map.plate_country_shade": 0.34,
+    "map.plate_region_shade": 0.70,
+    "map.plate_inland_shade": 0.92
+  }
+}

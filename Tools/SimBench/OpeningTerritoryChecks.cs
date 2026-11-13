@@ -32,8 +32,11 @@ internal static class OpeningTerritoryChecks
         foreach (var entry in declarations) graph[entry.Key] = entry.Value;
         foreach (var source in graph.Keys.OrderBy(tag => tag, StringComparer.Ordinal))
         {
-            var nation = campaign.NationByTag(source);
-            if (nation is null) continue; // A declaration can belong to another bookmark.
+            // A declared entry is not a country and so not in the nation list (CountryMerges):
+            // the ground it stands on is known by its row of the country table. A fixture
+            // world declares one of its own nations instead, and that is read the same way.
+            var sourceIndex = campaign.NationByTag(source)?.MapIndex ?? CountryMerges.MapIndexOf(source);
+            if (sourceIndex <= 0) continue; // A declaration can belong to another bookmark.
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var path = new List<string>();
             var current = source;
@@ -45,13 +48,13 @@ internal static class OpeningTerritoryChecks
                 path.Add(current);
                 if (string.Equals(current, CountryMerges.Nobody, StringComparison.OrdinalIgnoreCase))
                 {
-                    owners[nation.MapIndex] = 0;
+                    owners[sourceIndex] = 0;
                     break;
                 }
                 if (graph.TryGetValue(current, out var next)) { current = next; continue; }
                 var owner = campaign.NationByTag(current);
                 if (owner is null) return $"country_merges: {source} names missing owner {current}";
-                owners[nation.MapIndex] = owner.MapIndex;
+                owners[sourceIndex] = owner.MapIndex;
                 break;
             }
         }
@@ -109,19 +112,22 @@ internal static class OpeningTerritoryChecks
         // Corruption is confined to this diagnostic campaign, never the map files or a
         // player save. Restoration happens even if an assertion throws.
         var map = campaign.ProvinceMap;
-        var source = campaign.NationByTag("IOT");
+        // The British Indian Ocean Territory is a row of the country table and not a country:
+        // the raster paints Diego Garcia in its number, and nobody in the nation list has it.
+        var sourceMapIndex = CountryMerges.MapIndexOf("IOT");
         var wrong = campaign.NationByTag("FRA");
-        Require(source is not null && wrong is not null, "real-map negative fixtures are available");
+        Require(sourceMapIndex > 0 && campaign.NationByTag("IOT") is null && wrong is not null,
+            "real-map negative fixtures are available");
         int Ground(int p) => map.ProvinceCenterCell[p] >= 0 && map.ProvinceCenterCell[p] < WorldMapSource.Control.Length
             ? WorldMapSource.Control[map.ProvinceCenterCell[p]] : -1;
         var merged = Enumerable.Range(1, map.ProvinceCount).FirstOrDefault(p =>
-            Ground(p) == source.MapIndex && map.ProvinceToNation[p] != source.MapIndex && !map.IsWater(p));
+            Ground(p) == sourceMapIndex && map.ProvinceToNation[p] != sourceMapIndex && !map.IsWater(p));
         Require(merged > 0, "a real merged province exists");
         var fingerprint = CampaignFingerprint.Of(campaign);
         var saved = map.ProvinceToNation[merged];
         try
         {
-            map.ProvinceToNation[merged] = (ushort)source.MapIndex;
+            map.ProvinceToNation[merged] = (ushort)sourceMapIndex;
             Require(ownershipCheck(campaign).Length > 0, "a merged province retaining its obsolete source owner fails");
             map.ProvinceToNation[merged] = (ushort)wrong.MapIndex;
             Require(ownershipCheck(campaign).Length > 0, "giving the merged province to an unrelated real country fails");

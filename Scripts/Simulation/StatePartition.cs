@@ -583,7 +583,9 @@ public static class StatePartition
             while (queue.Count > 0)
             {
                 var province = queue.Dequeue();
-                foreach (var neighbour in topology.Neighbors[province])
+                // Drawn borders: a region splits into the pieces that touch, and two shores a bridge
+                // joins do not touch (ProvinceTopology.LandNeighbors).
+                foreach (var neighbour in topology.LandNeighbors[province])
                 {
                     if (!members.Contains(neighbour) || topology.ProvinceToNation[neighbour] != owner) continue;
                     if (!seen.Add(neighbour)) continue;

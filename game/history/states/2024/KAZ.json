@@ -1,4 +1,4 @@
-// Kazakhstan (KAZ) on 1 January 2024: 14 regions, 18,513,930 people.
+// Kazakhstan (KAZ) on 1 January 2024: 15 regions, 18,513,930 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -123,5 +123,14 @@
     "cultures": { "kazakh": 0.746, "russian": 0.15, "uzbek": 0.0191, "ukrainian": 0.015, "tatar": 0.0118, "german": 0.0096, "uyghur": 0.0092, "azerbaijani": 0.0064, "korean": 0.0064, "turkish": 0.0064, "hui": 0.0043, "belarusian": 0.0032, "armenian": 0.0021, "bashkir": 0.0021, "chechen": 0.0021, "chuvash": 0.0021, "kurdish": 0.0021, "polish": 0.0021 },
     "buildings": { "Infrastructure": 2 },
     "resources": { "Food": 1.433, "Coal": 0.02, "Oil": 15.391, "IronOre": 0.126, "RareEarths": 0.041, "NaturalGas": 0.537, "Timber": 2.155, "Bauxite": 0.2, "Uranium": 0.032 }
+  },
+  // Baikonur: Kazakh ground leased to Russia until 2050 (40_arrangements.json).
+  // Baikonur
+  "99_x05": {
+    "population": 36175,
+    "urbanization": 0.678,
+    "cultures": { "russian": 0.56, "kazakh": 0.38, "ukrainian": 0.03, "tatar": 0.02, "korean": 0.01 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.692, "Coal": 0.171, "Oil": 0.26, "IronOre": 0.113, "RareEarths": 0.022, "NaturalGas": 0.118, "Timber": 3.21, "Bauxite": 0.057, "Uranium": 0.002 }
   }
 }

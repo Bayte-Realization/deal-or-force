@@ -10,6 +10,7 @@ static class Program
     static void Check(bool ok, string label) { if (!ok) throw new Exception(label); Console.WriteLine("PASS " + label); }
     static void Main(string[] args)
     {
+        if (args.Contains("--non-countries-only")) { NonCountriesTests.Run(); return; }
         if (args.Contains("--recognition-index-only")) { RecognitionIndexTests.Run(); return; }
         if (args.Contains("--region-id-walk-only")) { RegionIdWalkTests.Run(); return; }
         if (args.Contains("--movement-quiet-think-only")) { MovementQuietThinkTests.Run(); return; }
@@ -23,6 +24,10 @@ static class Program
         if (args.Contains("--alliance-read-only")) { AllianceWillingnessReadTests.Run(); return; }
         if (args.Contains("--advance-route-cache-only")) { AdvanceRouteCacheTests.Run(); return; }
         if (args.Contains("--pocket-scratch-only")) { PocketScratchTests.Run(); return; }
+        // Strait crossings on the production map; the survey is the table a map author reads.
+        if (args.Contains("--crossings-only")) { StraitCrossingTests.Run(); return; }
+        if (args.Contains("--crossings-survey")) { StraitCrossingTests.Survey(); return; }
+        if (args.Length == 0) StraitCrossingTests.Run();
         // The thread pool's contract with the world: the same save, the same fingerprint,
         // whether a pass is handed out or run on the calling thread.
         if (args.Contains("--parallel-determinism-only")) { ParallelDeterminismTests.Run(); return; }
@@ -95,6 +100,8 @@ static class Program
         if (args.Length == 0) ExclaveSupplyTests.Run();
         if (args.Contains("--map-usability-only")) { MapUsabilityTests.Run(); return; }
         if (args.Length == 0) MapUsabilityTests.Run();
+        if (args.Contains("--border-rank-only")) { BorderRankTests.Run(); return; }
+        if (args.Length == 0) BorderRankTests.Run();
         if (args.Contains("--audit-formable-opening")) { FormableOpeningAudit.Run(args); return; }
         if (args.Contains("--mod-simulation-passes-only")) { ModSimulationPassTests.Run(); return; }
         if (args.Length == 0) ModSimulationPassTests.Run();

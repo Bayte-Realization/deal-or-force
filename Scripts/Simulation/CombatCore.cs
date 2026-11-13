@@ -879,7 +879,10 @@ public static partial class Warfare
                 // Support fire does not occupy empty ground. Wait for an actual battle;
                 // an ordinary RMB order can turn this into a march explicitly.
                 if (army.SupportOnly) continue;
-                var riverAdvance = WaterConditions.MovementMultiplier(campaign, army.ProvinceId, target);
+                // Ground nobody stands on is still on the far side of the water: a strait is
+                // crossed at the bridge's or the ferry's pace whether or not anyone is shooting.
+                var riverAdvance = WaterConditions.MovementMultiplier(campaign, army.ProvinceId, target) *
+                    LandCrossings.MarchMultiplier(campaign, army.ProvinceId, target);
                 // An empty province is not open ground. The divisions holding the provinces
                 // around it cover the gap by fire, which is what keeps a front a front rather
                 // than a race: a breach has to be widened and held, not strolled through
@@ -1163,6 +1166,10 @@ public static partial class Warfare
 
             var attackerPlanning = WeightedPlanning(AttackerLine);
             var riverAttackMultiplier = WaterConditions.AttackMultiplier(campaign, battle.RiverCrossingStrength, battle.ProvinceId);
+            // An assault over a bridge is one column wide and one from ferries arrives by
+            // boatloads. Charged on the share of the attack that is coming that way today,
+            // from where the attackers stand, so nothing about it has to be saved.
+            var straitAttackMultiplier = LandCrossings.AssaultMultiplier(campaign, battle.ProvinceId, AttackerLine);
 
             // ----------------------------------------------------------------------
             // Both sides shoot. The attacker's fire is measured against the defender's
@@ -1214,7 +1221,7 @@ public static partial class Warfare
                 atkEncSum += w * enc;
             }
             var attackerOffence = (float)attackerOffenceSum *
-                attackerEngagement * attackerPierces * riverAttackMultiplier * terrain.Attack *
+                attackerEngagement * attackerPierces * riverAttackMultiplier * straitAttackMultiplier * terrain.Attack *
                 (1f + attackerPlanning * defines.MaxPlanningAttackBonus) * envelopmentBonus * attackerFire;
 
             double defenderOffenceSum = 0d;
@@ -1337,6 +1344,7 @@ public static partial class Warfare
                 var attackerSide = campaign.NationById(battle.AttackerId);
                 CombatFactors.Add(attack, "Terrain", terrain.Attack);
                 CombatFactors.Add(attack, "River crossing", riverAttackMultiplier);
+                CombatFactors.Add(attack, "Strait crossing", straitAttackMultiplier);
                 CombatFactors.Add(attack, "Frontage", attackerEngagement);
                 CombatFactors.Add(attack, "Armour and piercing", attackerPierces);
                 CombatFactors.Add(attack, "Guns and aircraft", attackerFire);

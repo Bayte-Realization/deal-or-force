@@ -72,7 +72,27 @@ public sealed class ProvinceTopology
     private ushort[] _authoredState;
 
     public int[] ProvinceCenterCell { get; }
+
+    /// <summary>
+    /// Where a formation, a supply column or an attack can go next from a province: the
+    /// provinces it shares a border with, and the far shore of any strait crossing that
+    /// starts in it (<see cref="AttachCrossings"/>). This is the graph every march, front
+    /// and supply trace walks, which is the whole point of a crossing - the staff sees
+    /// Tarifa and Tangier as neighbours without being taught the word "ferry".
+    /// </summary>
     public int[][] Neighbors { get; }
+
+    /// <summary>
+    /// The provinces a province shares a drawn border with, and nothing else.
+    ///
+    /// A bridge lets a division cross a strait; it does not make Sicily part of Calabria.
+    /// Everything that asks what the map looks like rather than where an army can go -
+    /// which regions a peace may hand over as one piece, whether a country is in two
+    /// parts, what a breakaway takes with it, where a land corridor could be bought -
+    /// reads this one, so a crossing never welds two shores into one territory.
+    /// Row for row the same arrays as <see cref="Neighbors"/> except at a crossing's ends.
+    /// </summary>
+    public int[][] LandNeighbors { get; }
     public int Width { get; }
     public int Height { get; }
     public int EdgeCount { get; }
@@ -149,7 +169,11 @@ public sealed class ProvinceTopology
         ProvinceToState = provinceToState;
         ProvinceToNation = provinceToNation;
         ProvinceCenterCell = provinceCenterCell;
-        Neighbors = neighbors;
+        // The rows are shared and the spine is not: attaching a crossing replaces two rows of
+        // Neighbors and must leave the drawn borders, and every clone's own crossings, alone.
+        LandNeighbors = neighbors;
+        Neighbors = (int[][])neighbors.Clone();
+        _crossingEnd = new bool[neighbors.Length];
         Width = width;
         Height = height;
         var directedEdges = 0;
@@ -359,10 +383,15 @@ public sealed class ProvinceTopology
     /// A copy that shares the expensive parts and owns its own political arrays. Used to
     /// try a political override without touching the map the campaign is running on.
     /// </summary>
-    public ProvinceTopology CloneForOverrides() =>
-        new(CellToProvince, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
-            ProvinceCenterCell, Neighbors, Width, Height)
+    public ProvinceTopology CloneForOverrides()
+    {
+        var clone = new ProvinceTopology(CellToProvince, (ushort[])ProvinceToState.Clone(), (ushort[])ProvinceToNation.Clone(),
+            ProvinceCenterCell, LandNeighbors, Width, Height)
         { TerrainByProvince = (TerrainDefinition[])TerrainByProvince.Clone(), TerrainSurfaceSlots = TerrainSurfaceSlots };
+        // The same map, so the same straits are bridged on it.
+        if (_crossings.Length > 0) clone.AttachCrossings(_crossings);
+        return clone;
+    }
 
     internal ProvinceTopology WithGeometry(int[] cells, ushort[] regions, ushort[] nations)
     {
@@ -783,12 +812,93 @@ public sealed class ProvinceTopology
     public bool IsWater(int provinceId) => provinceId > 0 && WaterByProvince is not null &&
         provinceId < WaterByProvince.Length && (WaterByProvince[provinceId] || DestroyedByProvince[provinceId]);
 
+    // A river runs between provinces that share a bank, so this is asked of the drawn borders:
+    // the two ends of a bridge are neighbours for a march and never for a river.
     private bool AreNeighbors(int first, int second)
     {
-        if (first <= 0 || second <= 0 || first >= Neighbors.Length || second >= Neighbors.Length) return false;
-        foreach (var candidate in Neighbors[first]) if (candidate == second) return true;
+        if (first <= 0 || second <= 0 || first >= LandNeighbors.Length || second >= LandNeighbors.Length) return false;
+        foreach (var candidate in LandNeighbors[first]) if (candidate == second) return true;
         return false;
     }
+
+    // ─── Strait crossings ──────────────────────────────────────────────────────
+    // The links themselves are authored in map_data/crossings and resolved from their
+    // coordinates by LandCrossings; the topology only carries the result, because this
+    // is where "what is next to what" is answered and a second place to ask it would
+    // be a second answer.
+    private ResolvedCrossing[] _crossings = Array.Empty<ResolvedCrossing>();
+    private readonly Dictionary<long, ResolvedCrossing> _crossingByEdge = new();
+    private bool[] _crossingEnd;
+
+    /// <summary>Every crossing on this map, in the order they were attached (id order).</summary>
+    public IReadOnlyList<ResolvedCrossing> Crossings => _crossings;
+
+    /// <summary>
+    /// Bumped whenever the crossings change. Anything that keeps a copy of
+    /// <see cref="Neighbors"/> keeps this beside it and rebuilds when the two disagree.
+    /// </summary>
+    public int AdjacencyRevision { get; private set; }
+
+    /// <summary>
+    /// Replace the map's crossings with this set: each becomes an edge of
+    /// <see cref="Neighbors"/> in both directions, and the edges of the previous set are
+    /// taken out first, so attaching an empty list is how a map loses its bridges.
+    /// The caller has already checked each link (LandCrossings.Resolve); a link that
+    /// would not be a crossing - an end off the map or in the water, both ends the same
+    /// province, two provinces that already share a border, a pair already linked - is
+    /// refused here as well rather than quietly corrupting the graph.
+    /// </summary>
+    public void AttachCrossings(IReadOnlyList<ResolvedCrossing> crossings)
+    {
+        foreach (var old in _crossings)
+        {
+            Neighbors[old.From] = LandNeighbors[old.From];
+            Neighbors[old.To] = LandNeighbors[old.To];
+            _crossingEnd[old.From] = _crossingEnd[old.To] = false;
+        }
+        _crossingByEdge.Clear();
+        var kept = new List<ResolvedCrossing>(crossings?.Count ?? 0);
+        if (crossings is not null)
+            foreach (var crossing in crossings)
+            {
+                if (crossing is null) continue;
+                int from = crossing.From, to = crossing.To;
+                if (from <= 0 || to <= 0 || from >= LandNeighbors.Length || to >= LandNeighbors.Length || from == to)
+                    throw new ArgumentException($"Crossing '{crossing.Id}' does not join two provinces of this map.");
+                if (WaterByProvince[from] || WaterByProvince[to])
+                    throw new ArgumentException($"Crossing '{crossing.Id}' ends in the water.");
+                if (AreNeighbors(from, to))
+                    throw new ArgumentException($"Crossing '{crossing.Id}' joins provinces {from} and {to}, which already share a border.");
+                if (!_crossingByEdge.TryAdd(EdgeKey(from, to), crossing))
+                    throw new ArgumentException($"Crossing '{crossing.Id}' repeats the link between provinces {from} and {to}.");
+                Neighbors[from] = WithNeighbor(Neighbors[from], to);
+                Neighbors[to] = WithNeighbor(Neighbors[to], from);
+                _crossingEnd[from] = _crossingEnd[to] = true;
+                kept.Add(crossing);
+            }
+        _crossings = kept.ToArray();
+        AdjacencyRevision++;
+    }
+
+    /// <summary>A neighbour row with one more province in it, kept in id order like the rest.</summary>
+    private static int[] WithNeighbor(int[] row, int province)
+    {
+        var widened = new int[row.Length + 1];
+        var at = 0;
+        while (at < row.Length && row[at] < province) { widened[at] = row[at]; at++; }
+        widened[at] = province;
+        Array.Copy(row, at, widened, at + 1, row.Length - at);
+        return widened;
+    }
+
+    /// <summary>Whether any crossing starts or ends here: one array read, for the march and the assault.</summary>
+    public bool IsCrossingEnd(int province) =>
+        province > 0 && province < _crossingEnd.Length && _crossingEnd[province];
+
+    /// <summary>The crossing that joins two provinces, or null when they are joined by a border or not at all.</summary>
+    public ResolvedCrossing CrossingBetween(int firstProvince, int secondProvince) =>
+        IsCrossingEnd(firstProvince) && IsCrossingEnd(secondProvince) &&
+        _crossingByEdge.TryGetValue(EdgeKey(firstProvince, secondProvince), out var crossing) ? crossing : null;
 
     private static long EdgeKey(int first, int second)
     {

@@ -168,13 +168,26 @@ public static class ScenarioCatalog
             clock.Restart();
         }
 
+        // Entries of the country table that are not countries (common/country_merges): a glacier,
+        // a reef, a buffer zone, a base area. This is the one place the table is applied to who
+        // exists: such a row is read past, so nothing later - the economy, diplomacy, the AI, a
+        // list on a screen, a save - ever meets a country called the Siachen Glacier. What it
+        // maps to is the country holding its ground, which is whose regions its regions are below.
+        var mergedGround = CountryMerges.GroundByMapIndex();
+        var readPast = 0;
+
         foreach (var row in WorldMapTables.CountryRows)
         {
             var parts = row.Split('|');
             if (parts.Length < 10) continue;
 
             var mapIndex = ParseInt(parts[0]);
-            var iso = IsCode(parts[1]) ? parts[1] : IsCode(parts[9]) ? parts[9] : Slug(parts[2]).ToUpperInvariant();
+            if (mergedGround.ContainsKey(mapIndex))
+            {
+                readPast++;
+                continue;
+            }
+            var iso = CountryTag(parts);
             var id = iso.ToLowerInvariant();
             if (!usedIds.Add(id)) id = $"{id}_{mapIndex}";
 
@@ -244,6 +257,15 @@ public static class ScenarioCatalog
 
             var mapIndex = ParseInt(parts[0]);
             var nationMapIndex = ParseInt(parts[2]);
+            // A region of an entry that is not a country is a region of whoever holds its
+            // ground, from this line on; of nobody, when nobody does (Antarctica), and then it
+            // is unclaimed land like any other history says belongs to no one.
+            var nobodys = false;
+            if (mergedGround.TryGetValue(nationMapIndex, out var holder))
+            {
+                nationMapIndex = holder;
+                nobodys = holder == 0;
+            }
             countryIdByMapIndex.TryGetValue(nationMapIndex, out var nationId);
             var iso = parts[3];
             var id = string.IsNullOrWhiteSpace(iso) || iso.Length < 4
@@ -264,7 +286,8 @@ public static class ScenarioCatalog
                 Id = id,
                 Name = parts[1],
                 Iso = iso,
-                Kind = parts[4]
+                Kind = parts[4],
+                Unclaimed = nobodys
             });
         }
         Phase("regions");
@@ -288,10 +311,13 @@ public static class ScenarioCatalog
         // one state. Adding a correction is then an ordinary edit, while losing half the
         // source table is still caught before anything consumes the scenario.
         var correctedStates = campaign.States.Count - importedStates;
-        if (campaign.Nations.Count != WorldMapTables.CountryRows.Length || importedStates != WorldMapTables.StateRows.Length ||
+        // The countries are the table's rows less the ones read past above - still arithmetic,
+        // so a row lost for any other reason is still caught.
+        if (campaign.Nations.Count != WorldMapTables.CountryRows.Length - readPast || importedStates != WorldMapTables.StateRows.Length ||
             correctedStates != TerritorialTopology.RegionRuleCount)
             throw new InvalidOperationException(
-                $"Base scenario import drifted: {campaign.Nations.Count} nations, " +
+                $"Base scenario import drifted: {campaign.Nations.Count} nations " +
+                $"(expected {WorldMapTables.CountryRows.Length - readPast}), " +
                 $"{importedStates} imported states (expected {WorldMapTables.StateRows.Length}), " +
                 $"{correctedStates} region corrections (expected {TerritorialTopology.RegionRuleCount}).");
 
@@ -352,6 +378,15 @@ public static class ScenarioCatalog
         Phase("history capture");
         return campaign;
     }
+
+    /// <summary>
+    /// The tag a row of the country table is known by: its ISO code where it has one, the map
+    /// source's own three letters where it does not (Kosovo, Northern Cyprus, the Siachen
+    /// Glacier), and the name itself as a last resort. One rule, here, because the merge table
+    /// has to name the same rows by the same tags before any of them is a country.
+    /// </summary>
+    internal static string CountryTag(string[] parts) =>
+        IsCode(parts[1]) ? parts[1] : IsCode(parts[9]) ? parts[9] : Slug(parts[2]).ToUpperInvariant();
 
     private static bool IsCode(string value) =>
         value is { Length: 3 } && !value.StartsWith("-", StringComparison.Ordinal) && char.IsLetter(value[0]);

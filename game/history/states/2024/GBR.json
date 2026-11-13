@@ -1,4 +1,4 @@
-// United Kingdom (GBR) on 1 January 2024: 16 regions, 66,834,405 people.
+// United Kingdom (GBR) on 1 January 2024: 20 regions, 66,834,405 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -138,5 +138,44 @@
     "cultures": { "english": 0.7642, "indian_diaspora": 0.0577, "punjabi": 0.0298, "polish": 0.0261, "bengali_muslim": 0.0205, "romanian": 0.0149, "chinese_diaspora": 0.013, "akan": 0.0112, "igbo": 0.0112, "jamaican": 0.0112, "arab_levantine": 0.0093, "african_american": 0.0074, "tamil": 0.0074, "ukrainian": 0.0069, "somali": 0.0056, "kurdish": 0.0037 },
     "buildings": { "Agriculture": 6, "CivilianIndustry": 2, "Infrastructure": 3 },
     "resources": { "Food": 0.8, "Coal": 0.496, "Oil": 0.474, "IronOre": 0.215, "RareEarths": 0.101, "NaturalGas": 0.347, "Timber": 1.177, "Bauxite": 0.093, "Uranium": 0.009 }
+  },
+  // Dhekelia, one of the two Sovereign Base Areas kept on Cyprus in 1960: British sovereign
+  // territory run by the base commander, not a country and not a dependency with a government.
+  // Dhekelia
+  "99_x16": {
+    "population": 7850,
+    "urbanization": 0.722,
+    "cultures": { "english": 0.68, "greek": 0.22, "turkish": 0.06, "nepali": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.401, "Coal": 0.411, "Oil": 0.287, "IronOre": 0.301, "RareEarths": 0.093, "NaturalGas": 0.768, "Timber": 1.29, "Bauxite": 0.068, "Uranium": 0.014 }
+  },
+  // Akrotiri, the other Sovereign Base Area on Cyprus.
+  // Akrotiri
+  "99_x17": {
+    "population": 7850,
+    "urbanization": 0.811,
+    "cultures": { "english": 0.7, "greek": 0.2, "turkish": 0.06, "nepali": 0.04 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.471, "Coal": 0.549, "Oil": 0.946, "IronOre": 0.453, "RareEarths": 0.14, "NaturalGas": 0.574, "Timber": 1.369, "Bauxite": 0.11, "Uranium": 0.01 }
+  },
+  // The British Indian Ocean Territory: Diego Garcia's base and no permanent population since
+  // the Chagossians were removed. Mauritius claims it (97_administered_ground.json).
+  // British Indian Ocean Territory
+  "io_x01": {
+    "population": 3000,
+    "urbanization": 0.812,
+    "cultures": { "english": 0.52, "american": 0.3, "tamil": 0.1, "creole_african": 0.08 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 0.955, "Coal": 0.084, "Oil": 0.167, "IronOre": 0.103, "RareEarths": 0.045, "NaturalGas": 0.292, "Timber": 0.693, "Bauxite": 0.03, "Uranium": 0.004 }
+  },
+  // South Georgia and the South Sandwich Islands: a few dozen scientists and officials, no
+  // permanent population. Argentina claims them (97_administered_ground.json).
+  // South Georgia and the South Sandwich Islands
+  "gs_x01": {
+    "population": 30,
+    "urbanization": 0.932,
+    "cultures": { "english": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 3 },
+    "resources": { "Food": 1.111, "Coal": 0.192, "Oil": 0.257, "IronOre": 0.119, "RareEarths": 0.028, "NaturalGas": 0.148, "Timber": 2.85, "Bauxite": 0.039, "Uranium": 0.004 }
   }
 }

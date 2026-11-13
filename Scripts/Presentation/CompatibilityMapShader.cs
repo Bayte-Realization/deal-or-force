@@ -26,6 +26,11 @@ uniform float map_mode = 0.0;
 uniform float resource_mode = 0.0;
 uniform float province_detail = 0.0;
 uniform float province_border_opacity = 0.72;
+// The same line style the full material is given (Simulation.MapBorderStyle), under the same
+// names, so one set of skin tokens draws the borders of every material.
+uniform vec3 country_border_color = vec3(0.065, 0.105, 0.13);
+uniform float country_border_opacity = 0.85;
+uniform vec3 province_border_color = vec3(0.13, 0.19, 0.22);
 uniform float selected_region_id = -1.0;
 uniform float selected_province_id = -1.0;
 uniform float selected_region_live = 0.0;
@@ -60,7 +65,10 @@ void fragment() {
     vec4 front_ = texture(front_membership, entry);
     if (front_.a > 0.5) discard;
     float owner_id = owner_at(at);
-    vec3 land = mix(paint.rgb, owner_.rgb * 0.82, owner_.a);
+    // The plate is repainted from the live owners; this table holds only the provinces it has
+    // not caught up with yet, already in the colour and shade it will give them. Land a treaty
+    // moved is otherwise painted by the plate, like land nobody ever fought over.
+    vec3 land = mix(paint.rgb, owner_.rgb, owner_.a);
     // A treaty is solid ownership; military control remains an occupation ribbon.
     land = mix(land, control_.rgb * 0.82, step(0.95, control_.a));
     float occupied = step(0.10, control_.a) * (1.0 - step(0.75, control_.a));
@@ -82,8 +90,10 @@ void fragment() {
                          max(step(0.5, abs(owner_id - owner_at(at + dy))), step(0.5, abs(owner_id - owner_at(at - dy)))));
     float provincial = max(step(0.5, abs(province_ - code_id(texture(province_ids, at + dx)))),
                            step(0.5, abs(province_ - code_id(texture(province_ids, at + dy)))));
-    land = mix(land, vec3(0.13, 0.19, 0.22), provincial * province_detail * province_border_opacity * 0.65);
-    land = mix(land, vec3(0.065, 0.105, 0.13), national * 0.85);
+    // The highest rank wins: a province line that is also a frontier is drawn as the frontier
+    // alone. `national` asks only whether the owner changes here NOW (owner_at).
+    land = mix(land, province_border_color, provincial * (1.0 - national) * province_detail * province_border_opacity * 0.65);
+    land = mix(land, country_border_color, national * country_border_opacity);
     float planned = step(0.1, front_.b) * provincial;
     land = mix(land, vec3(0.90, 0.66, 0.22), planned * 0.75);
 

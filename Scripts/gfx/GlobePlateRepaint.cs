@@ -7,32 +7,55 @@ namespace DealOrForce;
 /// <summary>
 /// The far-away political map follows the borders as they are now.
 ///
-/// From orbit the globe is coloured from a plate painted once, when the map was built, because
-/// a mipmapped picture is what an eye wants at that distance and the country-id map would
+/// From orbit the globe is coloured from a plate painted when the map was built, because a
+/// mipmapped picture is what an eye wants at that distance and the country-id map would
 /// shimmer. Close up the colour comes from the live owner of every province. So every border a
 /// war or a secession had moved showed twice: the new country in its colour close in, and the
 /// old country's colour from far away - a conquered half of Siberia stood out of Kazakhstan as
-/// a pale patch of another country. Now, when owners move, the plate is painted again from the
-/// live owners on a worker thread, at most once every couple of seconds, and swapped in when it
-/// is ready. A border is shaded where the owner changes between neighbouring cells, an old
-/// country border that is now inside one country keeps only the softer shade of a region line.
+/// a pale patch of another country. When owners move, the plate is painted again from the live
+/// owners on a worker thread, at most once every couple of seconds, and swapped in when it is
+/// ready.
+///
+/// The opening plate and every later one come from the same painter
+/// (Simulation.PoliticalPlate), which is the point: a border is shaded where the holder changes
+/// between neighbouring cells, an old country border that is now inside one country keeps only
+/// the softer shade of a region line, and neither answer depends on when the border was drawn.
+/// The plate is asked for whenever the map changes, not only when something differs from the
+/// authored world - the question is whether the picture on screen matches the owners of today,
+/// and a province handed back at a peace, or a second campaign begun in the same session, moves
+/// the owners TOWARDS the authored world and still leaves the picture wrong.
 /// </summary>
 public sealed partial class GlobePresentation
 {
     private const double PlateRepaintSeconds = 2.0;
 
     private ImageTexture _plateTexture;
-    private byte[] _platePixels;
-    private ushort[] _plateProvinces;
-    private byte[] _plateShade;
-    private ushort[] _platePainted;
+    private Simulation.PoliticalPlateSource _plateSource;
+
+    /// <summary>The owners the plate on screen was painted from, and those of the one being painted.</summary>
+    private ushort[] _plateShownOwners;
+    private ushort[] _plateWorkOwners;
+
+    /// <summary>A country changed colour since the plate on screen was painted.</summary>
+    private bool _plateColoursStale;
+    private bool _plateFailureReported;
     private Task<Image> _plateWork;
     private ulong _plateRequestedMsec;
     private bool _platePending;
 
+    /// <summary>The opening plate has been uploaded: remember what it was painted from.</summary>
+    private void PlateApplied(Simulation.PoliticalPlateSource source, ushort[] owners)
+    {
+        _plateSource = source;
+        _plateShownOwners = owners;
+        _plateWorkOwners = null;
+        // Painted from the palette this campaign was bound with, a moment ago.
+        _plateColoursStale = false;
+    }
+
     private void RequestPlateRepaint(Simulation.ProvinceTopology topology)
     {
-        if (_plateProvinces is null || _platePixels is null || topology is null) return;
+        if (_plateSource is null || topology is null) return;
         _platePending = true;
         TryStartPlateRepaint(topology);
     }
@@ -40,23 +63,30 @@ public sealed partial class GlobePresentation
     private void TryStartPlateRepaint(Simulation.ProvinceTopology topology)
     {
         if (!_platePending || _plateWork is not null) return;
+        // The picture on screen already is today's owners in today's colours: nothing to do.
+        if (!_plateColoursStale && _plateShownOwners is not null &&
+            topology.ProvinceToNation.AsSpan().SequenceEqual(_plateShownOwners))
+        {
+            _platePending = false;
+            return;
+        }
         var now = Time.GetTicksMsec();
         if (_plateRequestedMsec > 0 && now - _plateRequestedMsec < PlateRepaintSeconds * 1000) return;
         _plateRequestedMsec = now;
         _platePending = false;
+        _plateColoursStale = false;
         var owners = (ushort[])topology.ProvinceToNation.Clone();
-        // Nothing has changed hands since the plate was last painted: nothing to do.
-        if (_platePainted is not null && owners.AsSpan().SequenceEqual(_platePainted)) return;
-        _platePainted = owners;
+        _plateWorkOwners = owners;
+        // Never written after the map is applied, so the worker may read it as it is.
+        var authoredOwners = _paintedOwner;
         var colors = new System.Collections.Generic.Dictionary<int, uint>(_colorByMapIndex);
-        var provinces = _plateProvinces;
-        var shade = _plateShade;
-        var source = _platePixels;
+        var source = _plateSource;
+        var shades = Simulation.MapBorderStyles.PlateShades();
         // The picture and its mipmaps are made on the worker too: the main thread only uploads.
         _plateWork = Task.Run(() =>
         {
-            var image = Image.CreateFromData(MapWidth / PoliticalScale, MapHeight / PoliticalScale,
-                false, Image.Format.Rgba8, PaintPlate(owners, colors, provinces, shade, source));
+            var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8,
+                Simulation.PoliticalPlate.Paint(source, owners, authoredOwners, colors, shades));
             image.GenerateMipmaps();
             return image;
         });
@@ -72,46 +102,35 @@ public sealed partial class GlobePresentation
             {
                 if (_plateTexture is not null) _plateTexture.Update(image);
                 image.Dispose();
+                _plateShownOwners = _plateWorkOwners;
+                // The plate has caught up: the stopgap table has nothing left to say about
+                // the provinces this repaint covered.
+                UploadPlateCatchUp();
             }
+            else if (!_plateFailureReported)
+            {
+                // The stopgap table keeps the colours right until a later repaint succeeds; the
+                // next change of the map asks again, because the picture still does not match.
+                _plateFailureReported = true;
+                GD.PushError($"[dof] far political plate repaint failed: {done.Exception?.GetBaseException().Message}");
+            }
+            _plateWorkOwners = null;
         }
         if (_platePending && _campaign?.ProvinceMap is { } topology) TryStartPlateRepaint(topology);
     }
 
-    private static byte[] PaintPlate(ushort[] owners, System.Collections.Generic.Dictionary<int, uint> colors,
-        ushort[] provinces, byte[] shade, byte[] source)
+    /// <summary>
+    /// The provinces the plate on screen has not caught up with (PoliticalPlate.PackCatchUp),
+    /// uploaded as the table both materials lay over the plate sample. Empty almost always.
+    /// </summary>
+    private void UploadPlateCatchUp()
     {
-        var width = MapWidth / PoliticalScale;
-        var height = MapHeight / PoliticalScale;
-        var pixels = (byte[])source.Clone();
-        ushort OwnerAt(int cell)
-        {
-            var province = provinces[cell];
-            return province > 0 && province < owners.Length ? owners[province] : (ushort)0;
-        }
-        for (var y = 0; y < height; y++)
-        {
-            for (var x = 0; x < width; x++)
-            {
-                var cell = y * width + x;
-                if (source[cell * 4 + 3] == 0) continue;           // sea stays sea
-                var owner = OwnerAt(cell);
-                if (owner == 0) continue;                          // nothing known: keep the authored paint
-                var east = y * width + (x + 1) % width;
-                var west = y * width + (x == 0 ? width - 1 : x - 1);
-                var north = (y == 0 ? y : y - 1) * width + x;
-                var south = (y == height - 1 ? y : y + 1) * width + x;
-                bool Differs(int other) => source[other * 4 + 3] != 0 && OwnerAt(other) is var o && o != 0 && o != owner;
-                var border = Differs(east) || Differs(west) || Differs(north) || Differs(south);
-                // The authored shade: 0.34 a country border, 0.70 a region line, 0.92 inland.
-                var authored = shade[cell] / 255f;
-                var factor = border ? 0.34f : authored < 0.8f ? 0.70f : 0.92f;
-                var packed = colors.TryGetValue(owner, out var color) ? color : 0x6E7B8BFFu;
-                var write = cell * 4;
-                pixels[write] = (byte)(((packed >> 24) & 0xFF) * factor);
-                pixels[write + 1] = (byte)(((packed >> 16) & 0xFF) * factor);
-                pixels[write + 2] = (byte)(((packed >> 8) & 0xFF) * factor);
-            }
-        }
-        return pixels;
+        if (_campaign?.ProvinceMap is not { } topology || _globeMaterial is null) return;
+        var pixels = _ownerPixels ??= new byte[256 * 256 * 4];
+        Simulation.PoliticalPlate.PackCatchUp(topology.ProvinceCount, topology.ProvinceToNation,
+            _plateShownOwners, _colorByMapIndex, Simulation.MapBorderStyles.PlateShades().Inland, pixels);
+        if (_ownerImage is null) _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
+        else _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
+        UpdateMapImage("province_owner_colors", _ownerImage, ref _ownerTexture);
     }
 }

@@ -273,7 +273,9 @@ public static class CivilWarOutbreak
         {
             var here = map.ProvinceToState[p];
             if (!adjacent.TryGetValue(here, out var set)) continue;
-            foreach (var next in map.Neighbors[p])
+            // Drawn borders: a side in a civil war is regions that touch on the map, not ones a
+            // ferry runs between (ProvinceTopology.LandNeighbors).
+            foreach (var next in map.LandNeighbors[p])
             {
                 var there = map.ProvinceToState[next];
                 if (there != here && byIndex.ContainsKey(there)) set.Add(there);

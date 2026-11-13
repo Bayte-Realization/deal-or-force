@@ -104,7 +104,9 @@ public static partial class Corridors
         var map = c.ProvinceMap;
         var around = new Dictionary<int, int>();
         foreach (var province in piece)
-            foreach (var next in map.Neighbors[province])
+            // Drawn borders: who surrounds a piece of ground is who it touches on the map, not who
+            // is a ferry away (ProvinceTopology.LandNeighbors).
+            foreach (var next in map.LandNeighbors[province])
             {
                 if (next <= 0 || next > map.ProvinceCount || map.IsWater(next)) continue;
                 var owner = map.ProvinceToNation[next];

@@ -1,0 +1,6 @@
+// Names that changed when the map source's glaciers, buffer zones and base areas stopped being countries (common/country_merges): the buffer zone's region is called what it is, and two countries whose only name was the long official one get the short one the map draws.
+{
+  "UN Buffer Zone": "Буферная зона ООН",
+  "country.SRB.map": "Сербия",
+  "country.TZA.map": "Танзания"
+}

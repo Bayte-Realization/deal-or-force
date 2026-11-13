@@ -1,4 +1,4 @@
-// Cuba (CUB) on 1 January 2024: 4 regions, 11,333,483 people.
+// Cuba (CUB) on 1 January 2024: 5 regions, 11,333,483 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -42,5 +42,15 @@
     "cultures": { "cuban": 0.9, "african_american": 0.07, "chinese_diaspora": 0.01, "haitian": 0.01, "spanish": 0.01 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 2.261, "Coal": 0.41, "Oil": 0.298, "IronOre": 0.195, "RareEarths": 0.035, "NaturalGas": 0.252, "Timber": 1.485, "Bauxite": 0.117, "Uranium": 0.007 }
+  },
+  // Guantanamo Bay: Cuban ground the United States has leased since 1903. Who holds it by
+  // that arrangement is history/diplomacy/2024/40_arrangements.json.
+  // USNB, Guantanamo Bay
+  "99_x13": {
+    "population": 6000,
+    "urbanization": 0.678,
+    "cultures": { "american": 0.76, "cuban": 0.14, "jamaican": 0.1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 1.383, "Coal": 0.261, "Oil": 0.977, "IronOre": 0.283, "RareEarths": 0.134, "NaturalGas": 1.005, "Timber": 1.793, "Bauxite": 0.112, "Uranium": 0.011 }
   }
 }

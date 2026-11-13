@@ -225,7 +225,9 @@ public static class SecessionEvents
                 if (here <= 0) continue;
                 if (!GlobalAdjacent.TryGetValue(here, out var list))
                     GlobalAdjacent[here] = list = new List<int>();
-                foreach (var next in topology.Neighbors[province])
+                // Drawn borders: a breakaway takes regions that touch on the map, not ones a ferry
+                // runs between (ProvinceTopology.LandNeighbors).
+                foreach (var next in topology.LandNeighbors[province])
                 {
                     var there = topology.ProvinceToState[next];
                     if (there == here || there <= 0) continue;
@@ -1229,8 +1231,6 @@ public static class SecessionEvents
         foreach (var nation in campaign.Nations)
         {
             if (nation.Movement is not { Landless: true }) continue;
-            // A map artefact (common/country_merges) is not anybody's movement.
-            if (CountryMerges.IsMerged(nation.Tag)) continue;
             // Only match a movement if the seceding ground actually overlaps the movement's defined authentic homeland.
             // A temporary exile office / headquarters outside the homeland must NEVER confer ownership of a foreign region!
             var def = Movements.DefinitionOf(nation);

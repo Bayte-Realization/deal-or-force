@@ -34,8 +34,11 @@ public static class ResourceAtlas
         {
             owners.TryGetValue(s.NationMapIndex, out var owner);
             var amount = Potential(s, good);
+            // Land with no owner is said to be nobody's, in the reader's language. It read
+            // "Unclaimed" - in English whatever the language - in the column where every other
+            // row names a country, which is how Antarctica came to look like one called that.
             return new ResourceRegion(s.MapIndex, s.Id, s.DisplayName, owner?.Id ?? 0,
-                owner?.DisplayName ?? "Unclaimed", amount, Intensity(amount, maximum));
+                owner?.DisplayName ?? Loc.Get("Land that belongs to nobody"), amount, Intensity(amount, maximum));
         }).OrderByDescending(r => r.Potential).ThenBy(r => r.MapIndex).ToArray();
         return new(good, (float)Math.Min(float.MaxValue, total), maximum, rows);
     }

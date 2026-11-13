@@ -1,4 +1,4 @@
-// Cyprus (CYP) on 1 January 2024: 1 region, 1,198,575 people.
+// Cyprus (CYP) on 1 January 2024: 2 regions, 1,198,575 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -18,5 +18,15 @@
     "cultures": { "greek": 0.76, "turkish": 0.1, "english": 0.045, "russian": 0.03, "romanian": 0.02, "ukrainian": 0.02, "bulgarian": 0.015, "armenian": 0.005, "maronite": 0.005 },
     "buildings": { "Agriculture": 1, "Infrastructure": 2 },
     "resources": { "Food": 2.207, "Coal": 0.125, "Oil": 0.374, "IronOre": 0.146, "RareEarths": 0.049, "NaturalGas": 0.284, "Timber": 0.876, "Bauxite": 0.031, "Uranium": 0.005 }
+  },
+  // The United Nations buffer zone - the Green Line. The map source draws it as a country;
+  // in law it is the Republic's, patrolled by UNFICYP, farmed and lived in by Cypriots.
+  // Northern Cyprus
+  "99_x04": {
+    "population": 10000,
+    "urbanization": 0.699,
+    "cultures": { "greek": 0.5, "turkish": 0.5 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 0.79, "Coal": 0.261, "Oil": 0.496, "IronOre": 0.197, "RareEarths": 0.042, "NaturalGas": 0.461, "Timber": 2.639, "Bauxite": 0.096, "Uranium": 0.01 }
   }
 }

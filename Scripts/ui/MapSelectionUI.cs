@@ -726,6 +726,17 @@ public partial class DealOrForceGame
                 crossings == 0
                     ? Tr("No river runs between this province and its neighbours.")
                     : Tr("Attacking across a river costs the attacker dearly; a major one costs more."));
+            // A strait an army can walk over from here is named, with what it costs and
+            // whether it is open today: otherwise the far shore looks like any other coast.
+            if (topology.IsCrossingEnd(province))
+                foreach (var strait in topology.Crossings)
+                {
+                    if (strait.From != province && strait.To != province) continue;
+                    var viewer = _campaign.Player?.Id ?? -1;
+                    CardRow(_regionCardProvinceRows, "Strait crossing", Tr(strait.Name),
+                        Simulation.LandCrossings.Describe(_campaign, strait, viewer),
+                        Simulation.LandCrossings.ClosedTo(_campaign, strait, viewer) ? "state.warning" : "text.bright");
+                }
             if (topology.HasLakeAccess(province)) CardRow(_regionCardProvinceRows, "Lake shore", Tr("yes"));
             var seen = _campaign.Armies.Count(army => army.ProvinceId == province && CampaignIntel.PlayerCanSeeArmy(_campaign, army));
             CardRow(_regionCardProvinceRows, "Divisions here", seen.ToString("N0"),

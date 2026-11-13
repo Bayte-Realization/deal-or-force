@@ -1,0 +1,188 @@
+using System;
+using System.Collections.Generic;
+
+namespace DealOrForce.Simulation;
+
+/// <summary>
+/// What the far plate is painted from, kept once when the map is built.
+///
+/// The plate is the political map at a third of the id rasters' size, mipmapped, and it is what
+/// the eye is given from orbit. Each of its cells stands for a block of raster cells, and this
+/// is what was kept of the block: the province that speaks for it, the country the authored
+/// raster gives that province's cell, and two facts of geography that no treaty changes.
+/// Nothing in here says where a border IS - that is worked out from the owners every time.
+/// </summary>
+public sealed class PoliticalPlateSource
+{
+    public int Width;
+    public int Height;
+
+    /// <summary>The province that speaks for each cell; 0 where the block has land but no province.</summary>
+    public ushort[] Provinces;
+
+    /// <summary>The country the authored raster gives each cell, <see cref="MapBorders.Sea"/> for water.</summary>
+    public ushort[] Holders;
+
+    /// <summary><see cref="PoliticalPlate.Coast"/> and <see cref="PoliticalPlate.RegionLine"/>, per cell.</summary>
+    public byte[] Geography;
+}
+
+/// <summary>
+/// The far political map, painted from who owns what now - the first time and every time after.
+///
+/// There used to be two painters. The plate a campaign opened with was shaded from the authored
+/// country raster at full size and shrunk; the plate after any border had moved was shaded again
+/// by a second routine, at the plate's own size, by a different rule. So the same frontier was
+/// one cell wide before the first treaty of a campaign and two after it, every coast on the
+/// planet lost its dark rim the day one province changed hands, and nothing repainted at all
+/// when the owners came back to where the raster had them - a province returned at a peace, or a
+/// second campaign started in the same session, kept the last picture.
+///
+/// One painter now, and the opening plate is simply its first run. A cell's holder is read by
+/// <see cref="MapBorders.CurrentHolder"/>, the rule the close-up shader uses; its rank is the
+/// highest line it touches (<see cref="MapBorders.Between"/>); its paint is its holder's colour
+/// at that rank's shade. Run twice on the same owners it gives the same bytes, whatever was
+/// painted in between, which is the whole of what "every border looks the same" means out here.
+///
+/// Pure arrays in and out, so it runs on a worker thread and under the test stand.
+/// </summary>
+public static class PoliticalPlate
+{
+    /// <summary>The block holds land that touches water: a shore, drawn as a country border.</summary>
+    public const byte Coast = 1;
+
+    /// <summary>The block holds land that touches another region: at least a region line.</summary>
+    public const byte RegionLine = 2;
+
+    /// <summary>The holder of every plate cell now. `into` is reused when it is the right size.</summary>
+    public static ushort[] Holders(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        ushort[] into = null)
+    {
+        var cells = source.Width * source.Height;
+        var holders = into is not null && into.Length == cells ? into : new ushort[cells];
+        for (var cell = 0; cell < cells; cell++)
+        {
+            var authored = source.Holders[cell];
+            holders[cell] = authored == MapBorders.Sea
+                ? MapBorders.Sea
+                : MapBorders.CurrentHolder(authored, source.Provinces[cell], owners, authoredOwners);
+        }
+        return holders;
+    }
+
+    /// <summary>
+    /// The rank a land cell is painted at: the highest line it touches.
+    ///
+    /// A country border where a neighbouring land cell is held by somebody else, or where the
+    /// block touches water. East and west wrap, because the world does; north and south stop.
+    /// Failing that a region line, where geography says the block lies on one - which is also
+    /// what an old country border becomes once one country holds both sides of it.
+    /// </summary>
+    public static MapBorderRank RankAt(PoliticalPlateSource source, ushort[] holders, int x, int y)
+    {
+        var width = source.Width;
+        var cell = y * width + x;
+        var holder = holders[cell];
+        if (holder == MapBorders.Sea) return MapBorderRank.None;
+        var geography = source.Geography[cell];
+        if ((geography & Coast) != 0) return MapBorderRank.Country;
+        var row = y * width;
+        if (Foreign(holders, holder, row + (x + 1 == width ? 0 : x + 1)) ||
+            Foreign(holders, holder, row + (x == 0 ? width - 1 : x - 1)) ||
+            (y > 0 && Foreign(holders, holder, cell - width)) ||
+            (y + 1 < source.Height && Foreign(holders, holder, cell + width)))
+            return MapBorderRank.Country;
+        return (geography & RegionLine) != 0 ? MapBorderRank.Region : MapBorderRank.None;
+    }
+
+    // Water next door is the Coast flag's business: it was read from the full raster, where a
+    // shore is a cell wide, and a plate cell beside an all-water one always carries it.
+    private static bool Foreign(ushort[] holders, ushort holder, int other)
+    {
+        var there = holders[other];
+        return there != MapBorders.Sea &&
+               MapBorders.Between(holder, there, 0, 0, 0, 0) == MapBorderRank.Country;
+    }
+
+    /// <summary>
+    /// Paint the whole plate: RGBA, one cell after another, water left transparent for the
+    /// shader's own sea.
+    /// </summary>
+    public static byte[] Paint(PoliticalPlateSource source, ushort[] owners, ushort[] authoredOwners,
+        IReadOnlyDictionary<int, uint> colours, MapPlateShades shades)
+    {
+        var width = source.Width;
+        var height = source.Height;
+        var holders = Holders(source, owners, authoredOwners);
+        var palette = Palette(colours);
+        var pixels = new byte[width * height * 4];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var cell = y * width + x;
+                var holder = holders[cell];
+                if (holder == MapBorders.Sea) continue;
+                var shade = shades.Of(RankAt(source, holders, x, y));
+                var packed = palette[holder];
+                var write = cell * 4;
+                pixels[write] = (byte)(((packed >> 24) & 0xFF) * shade);
+                pixels[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
+                pixels[write + 2] = (byte)(((packed >> 8) & 0xFF) * shade);
+                pixels[write + 3] = 255;
+            }
+        }
+        return pixels;
+    }
+
+    /// <summary>
+    /// The provinces the plate on screen has not caught up with, in the colour it will give them.
+    ///
+    /// A plate is repainted on a worker and no more often than every couple of seconds, so for a
+    /// moment after a treaty the far map still shows the old owner. This is the stopgap for that
+    /// moment and for nothing else: a 256x256 table, one texel a province, opaque where the owner
+    /// today is not the owner the plate was painted with (`shownOwners`), holding the new owner's
+    /// colour at the plate's inland shade - byte for byte what the repainted plate will show
+    /// there. The shader lays it over the plate sample alone. When the plate is swapped in the
+    /// table is packed again and comes out empty, and from then on the land a peace moved is
+    /// drawn by exactly the code that draws land nobody ever fought over.
+    ///
+    /// Returns whether any province is waiting.
+    /// </summary>
+    public static bool PackCatchUp(int provinceCount, ushort[] owners, ushort[] shownOwners,
+        IReadOnlyDictionary<int, uint> colours, float inlandShade, byte[] pixels)
+    {
+        Array.Clear(pixels, 0, pixels.Length);
+        if (owners is null || shownOwners is null) return false;
+        var count = Math.Min(provinceCount, Math.Min(owners.Length, shownOwners.Length) - 1);
+        count = Math.Min(count, pixels.Length / 4 - 1);
+        var waiting = false;
+        for (var province = 1; province <= count; province++)
+        {
+            var owner = owners[province];
+            if (owner == shownOwners[province]) continue;
+            var packed = owner != 0 && colours is not null && colours.TryGetValue(owner, out var colour) && colour != 0
+                ? colour
+                : MapBorders.UnownedColour;
+            var write = province * 4;
+            pixels[write] = (byte)(((packed >> 24) & 0xFF) * inlandShade);
+            pixels[write + 1] = (byte)(((packed >> 16) & 0xFF) * inlandShade);
+            pixels[write + 2] = (byte)(((packed >> 8) & 0xFF) * inlandShade);
+            pixels[write + 3] = 255;
+            waiting = true;
+        }
+        return waiting;
+    }
+
+    // One flat table rather than a dictionary probe per cell: the plate is 1.8 million cells.
+    // A country the palette has no colour for is painted the grey of unowned land, as it always was.
+    private static uint[] Palette(IReadOnlyDictionary<int, uint> colours)
+    {
+        var palette = new uint[65536];
+        Array.Fill(palette, MapBorders.UnownedColour);
+        if (colours is not null)
+            foreach (var (mapIndex, packed) in colours)
+                if (mapIndex > 0 && mapIndex < MapBorders.Unowned && packed != 0) palette[mapIndex] = packed;
+        return palette;
+    }
+}

@@ -254,7 +254,7 @@ public static class ProvinceOwnership
     /// </summary>
     public static int Apply(Campaign campaign, ProvinceTopology topology, ushort[] controllers)
     {
-        if (Entries.Count == 0 && PointEntries.Count == 0 || topology is null) return 0;
+        if (topology is null) return 0;
         var byTag = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase);
         foreach (var nation in campaign.Nations) byTag[nation.Tag] = (ushort)nation.MapIndex;
         // "none" is land nobody owns - map index 0 - the way Bir Tawil is: neither Egypt nor Sudan
@@ -262,19 +262,24 @@ public static class ProvinceOwnership
         byTag["none"] = 0;
 
         // Entries in the country table that are not countries - a reef, a glacier, a buffer
-        // zone, a base area (common/country_merges) - hand their ground to whoever administers
-        // it, or to nobody. Their tag is read as that owner's wherever the file names it, and
-        // any province the raster still paints in their colour is repainted below.
+        // zone, a base area (common/country_merges) - are not in the nation list, and their
+        // ground is whoever administers it, or nobody's. Their tag is read as that owner's
+        // wherever the file names it, and any province the raster still paints in their colour
+        // is repainted below - with or without a political map to lay, because a province in
+        // the colour of a country that does not exist is a province nothing can reach.
+        //
+        // By the country table's own numbers rather than by who is in the nation list, so a
+        // save from before the table was applied as the world is built - which still carries
+        // the entry as a nation - is laid on the map exactly as a new world is.
+        var present = new HashSet<int>();
+        foreach (var nation in campaign.Nations) present.Add(nation.MapIndex);
         var mergedIndex = new Dictionary<ushort, ushort>();
+        foreach (var (from, to) in CountryMerges.GroundByMapIndex())
+            if (to == 0 || present.Contains(to))
+                mergedIndex[(ushort)from] = (ushort)to;
         foreach (var tag in CountryMerges.All.Keys)
-        {
-            if (!byTag.TryGetValue(tag, out var from) || from == 0) continue;
-            if (!byTag.TryGetValue(CountryMerges.OwnerOf(tag), out var to) || to == from) continue;
-            mergedIndex[from] = to;
-        }
-        foreach (var (from, to) in mergedIndex)
-            foreach (var nation in campaign.Nations)
-                if (nation.MapIndex == from) byTag[nation.Tag] = to;
+            if (byTag.TryGetValue(CountryMerges.OwnerOf(tag), out var holder))
+                byTag[tag] = holder;
 
         var applied = 0;
         foreach (var entry in Entries.Values)

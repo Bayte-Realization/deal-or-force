@@ -92,7 +92,9 @@ public static class PeaceShape
             if (!regions.Provinces.TryGetValue(region, out var list)) regions.Provinces[region] = list = new List<int>();
             list.Add(province);
             if (!regions.Next.ContainsKey(region)) regions.Next[region] = new HashSet<int>();
-            foreach (var neighbour in topology.Neighbors[province])
+            // Drawn borders, not crossings: a peace hands over ground that is one piece on the map,
+            // and a bridge does not make the far shore part of it (ProvinceTopology.LandNeighbors).
+            foreach (var neighbour in topology.LandNeighbors[province])
             {
                 int other = topology.ProvinceToState[neighbour];
                 if (other == 0 || other == region) continue;
@@ -199,7 +201,7 @@ public static class PeaceShape
         for (var province = 1; province <= map.ProvinceCount && !near; province++)
         {
             if (map.ProvinceToNation[province] != ownerOther) continue;
-            foreach (var neighbour in map.Neighbors[province])
+            foreach (var neighbour in map.LandNeighbors[province])
                 if (map.ProvinceToNation[neighbour] == ownerFrom) { near = true; break; }
         }
         if (!near)
@@ -447,7 +449,7 @@ public static class PeaceShape
             if (heldGoal.Count > 0)
             {
                 var touches = new HashSet<int>(demand.Provinces);
-                bool Connects(int p) => topology.Neighbors[p].Any(n =>
+                bool Connects(int p) => topology.LandNeighbors[p].Any(n =>
                     topology.ProvinceToNation[n] == (ushort)winner.MapIndex || touches.Contains(n));
 
                 var reachableGoal = heldGoal.Where(Connects).ToList();
@@ -586,9 +588,9 @@ public static class PeaceShape
 
         var taken = new HashSet<int>();
         bool Home(int province) =>
-            topology.Neighbors[province].Any(neighbour => topology.ProvinceToNation[neighbour] == (ushort)winner.MapIndex);
+            topology.LandNeighbors[province].Any(neighbour => topology.ProvinceToNation[neighbour] == (ushort)winner.MapIndex);
         bool Joined(int province) =>
-            Home(province) || topology.Neighbors[province].Any(taken.Contains);
+            Home(province) || topology.LandNeighbors[province].Any(taken.Contains);
 
         var score = war is null ? 0f : war.IsAttacking(winner.Id) ? war.WarScore : -war.WarScore;
         if (budget > 0f && score >= 0f)
@@ -601,7 +603,7 @@ public static class PeaceShape
                     queue.Enqueue(province);
                 }
             while (queue.Count > 0)
-                foreach (var next in topology.Neighbors[queue.Dequeue()])
+                foreach (var next in topology.LandNeighbors[queue.Dequeue()])
                     if (pool.Contains(next) && taken.Add(next))
                     {
                         demand.Provinces.Add(next);
@@ -929,7 +931,7 @@ public static class PeaceShape
         }
         bool Land(int province) => province > 0 && province <= map.ProvinceCount && !map.IsWater(province);
         bool Home(int province) => Land(province) && map.ProvinceToNation[province] == (ushort)winner.MapIndex;
-        IEnumerable<int> Beside(int province) => map.Neighbors[province].Where(Land);
+        IEnumerable<int> Beside(int province) => map.LandNeighbors[province].Where(Land);
 
         var body = new HashSet<int>();
         var queue = new Queue<int>();

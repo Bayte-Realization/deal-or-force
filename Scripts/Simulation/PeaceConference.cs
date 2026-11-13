@@ -1004,13 +1004,15 @@ public sealed class PeaceLedger
         foreach (var province in held)
         {
             var home = false;
-            foreach (var neighbour in map.Neighbors[province])
+            // Drawn borders, not crossings: what a country keeps is ground joined to its own on the
+            // map, and a ferry to it is not a border (ProvinceTopology.LandNeighbors).
+            foreach (var neighbour in map.LandNeighbors[province])
                 if (neighbour > 0 && neighbour <= map.ProvinceCount && map.ProvinceToNation[neighbour] == flag)
                 { home = true; break; }
             if (home && kept.Add(province)) queue.Enqueue(province);
         }
         while (queue.Count > 0)
-            foreach (var neighbour in map.Neighbors[queue.Dequeue()])
+            foreach (var neighbour in map.LandNeighbors[queue.Dequeue()])
                 if (held.Contains(neighbour) && kept.Add(neighbour)) queue.Enqueue(neighbour);
         return kept;
     }

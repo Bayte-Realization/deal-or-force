@@ -80,25 +80,37 @@ public static class PocketBreakout
     }
 
     static readonly ConditionalWeakTable<Campaign, Scratch> Scratches = new();
-    static readonly ConditionalWeakTable<ProvinceTopology, int[][]> SortedNeighborsCache = new();
+    sealed class SortedNeighbors
+    {
+        public int Revision = -1;
+        public int[][] Rows;
+    }
+
+    static readonly ConditionalWeakTable<ProvinceTopology, SortedNeighbors> SortedNeighborsCache = new();
     private const int PocketLimit = 200;
 
-    static int[][] GetSortedNeighbors(ProvinceTopology map) =>
-        SortedNeighborsCache.GetValue(map, static m =>
+    // A copy of the map's adjacency, so it is only as good as the adjacency it was copied
+    // from: a strait crossing attached after the first search (a mod reloaded, a test taking
+    // the bridges away) changes Neighbors, and the copy is made again when it does.
+    static int[][] GetSortedNeighbors(ProvinceTopology map)
+    {
+        var kept = SortedNeighborsCache.GetOrCreateValue(map);
+        if (kept.Rows is not null && kept.Revision == map.AdjacencyRevision) return kept.Rows;
+        var src = map.Neighbors;
+        var dst = new int[src.Length][];
+        for (var i = 0; i < src.Length; i++)
         {
-            var src = m.Neighbors;
-            var dst = new int[src.Length][];
-            for (var i = 0; i < src.Length; i++)
-            {
-                var row = src[i];
-                if (row is null || row.Length == 0) { dst[i] = Array.Empty<int>(); continue; }
-                var copy = new int[row.Length];
-                Array.Copy(row, copy, row.Length);
-                Array.Sort(copy);
-                dst[i] = copy;
-            }
-            return dst;
-        });
+            var row = src[i];
+            if (row is null || row.Length == 0) { dst[i] = Array.Empty<int>(); continue; }
+            var copy = new int[row.Length];
+            Array.Copy(row, copy, row.Length);
+            Array.Sort(copy);
+            dst[i] = copy;
+        }
+        kept.Rows = dst;
+        kept.Revision = map.AdjacencyRevision;
+        return dst;
+    }
 
     static Scratch Board(Campaign campaign) => Scratches.GetOrCreateValue(campaign);
 

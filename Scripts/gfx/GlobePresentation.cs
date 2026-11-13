@@ -445,7 +445,9 @@ public sealed partial class GlobePresentation : SubViewportContainer
         if (_mapTask is null)
         {
             var colors = new Dictionary<int, uint>(_colorByMapIndex);
-            _mapTask = Task.Run(() => BuildPoliticalMap(colors));
+            // Read here, not on the worker: the skin is a table the main thread may reload.
+            var shades = Simulation.MapBorderStyles.PlateShades();
+            _mapTask = Task.Run(() => BuildPoliticalMap(colors, shades));
             // The terrain's pictures beside it, on other cores: they wait on nothing the map makes.
             StartTerrainImages();
             return;
@@ -651,9 +653,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             _cachedFlatMapBorder = _flatMap;
             _globeMaterial?.SetShaderParameter("front_pixels", Math.Clamp(Ui.Metric("map.front_width_pixels", 1.6f), .75f, 3f));
-            _globeMaterial?.SetShaderParameter("province_border_pixels", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_width" : "map.province_border_width", _flatMap ? 1.1f : 2.0f), 0.5f, 4f));
-            _globeMaterial?.SetShaderParameter("province_border_opacity", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_opacity" : "map.province_border_opacity", _flatMap ? 0.52f : 0.72f), 0f, 1f));
-            _globeMaterial?.SetShaderParameter("province_border_halo", Math.Clamp(Simulation.InterfaceSkin.Metric(_flatMap ? "map.flat_province_border_halo" : "map.province_border_halo", _flatMap ? 0.025f : 0.15f), 0f, 0.4f));
+            ApplyMapBorderStyle();
         }
         var fogViewer = FogOfWarActive && _campaign?.Player is { IsHuman: true } ? _campaign.Player.Id : -1;
         if (_fogViewer != fogViewer) { _fogViewer = fogViewer; _lastMapModeDay = -100; }
@@ -723,6 +723,7 @@ public sealed partial class GlobePresentation : SubViewportContainer
         using (Simulation.SimProfiler.Measure("f:routes")) UpdateRoutePreview();
         using (Simulation.SimProfiler.Measure("f:sealift")) UpdateSeaLiftPreview();
         using (Simulation.SimProfiler.Measure("f:supply lines")) UpdateSupplyLines();
+        using (Simulation.SimProfiler.Measure("f:strait crossings")) UpdateStraitCrossings();
         if (_mapApplied && _campaign is not null && _controlRevision != _campaign.MapRevision)
             using (Simulation.SimProfiler.Measure("f:map paint")) RefreshProvinceControllers();
         if (_mapApplied && _campaign is not null &&
@@ -772,18 +773,15 @@ public sealed partial class GlobePresentation : SubViewportContainer
         {
             case 0:
             {
-                // The worker already kept one pixel per 3x3 block, darkest land winning so a
-                // country border is not averaged into the interior. Uploading the full plate
-                // and Lanczos-shrinking it on this thread was the stall at the start of a campaign.
+                // The worker already painted the plate at its own size, one cell per 3x3 block of
+                // the raster. Uploading a full-size plate and Lanczos-shrinking it on this thread
+                // was the stall at the start of a campaign.
                 using var plate = Image.CreateFromData(MapWidth / PoliticalScale, MapHeight / PoliticalScale,
                     false, Image.Format.Rgba8, result.PoliticalPixels);
                 plate.GenerateMipmaps();
                 _plateTexture = ImageTexture.CreateFromImage(plate);
                 _globeMaterial.SetShaderParameter("political_map", _plateTexture);
-                _platePixels = result.PoliticalPixels;
-                _plateProvinces = result.PlateProvinces;
-                _plateShade = result.PlateShade;
-                _platePainted = null;
+                PlateApplied(result.PlateSource, result.PlateOwners);
                 result.PoliticalPixels = null;
                 break;
             }
@@ -2270,6 +2268,9 @@ uniform float water_repeat = 640.0;
 uniform float water_ripple_strength = 0.12;
 uniform float water_animation_speed = 0.0;
 uniform sampler2D province_control_colors : source_color, filter_nearest, repeat_disable;
+// The provinces the far plate (political_map) has not caught up with yet, in the colour it is
+// about to give them (PoliticalPlate.PackCatchUp). Empty except for the moment between a
+// border moving and the repainted plate arriving, and laid over the plate sample only.
 uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_disable;
 // Who owns each province now, for the provinces whose owner has changed since the country id
 // map was drawn: owner id in r/g, and b set where the entry means anything. Read as data, so
@@ -2277,10 +2278,27 @@ uniform sampler2D province_owner_colors : source_color, filter_nearest, repeat_d
 uniform sampler2D province_owner_ids : filter_nearest, repeat_disable;
 uniform float owners_moved = 0.0;
 uniform sampler2D nation_palette : source_color, filter_nearest, repeat_disable;
+// The lines of the map, one style a rank (Simulation.MapBorderStyle, game/gui/77_map_borders.json).
+// A rank is decided below from who holds the two sides NOW and from nothing else, so there is
+// no second set of these for a border that a treaty drew. Colours are linear, widths are in
+// screen pixels. border_pixels is the country line's width and the unit its cushion and the
+// selection outlines are measured in.
 uniform float border_pixels = 1.35;
+uniform vec3 country_border_color = vec3(0.035, 0.05, 0.075);
+uniform float country_border_opacity = 0.86;
+// The least of its weight a country line keeps as the camera pulls back to the world view.
+uniform float country_border_far_weight = 0.62;
+uniform float region_border_pixels = 3.78;
+uniform vec3 region_border_color = vec3(0.0, 0.0, 0.0);
+uniform float region_border_opacity = 0.0416;
 uniform float province_border_pixels = 2.0;
+uniform vec3 province_border_color = vec3(0.055, 0.075, 0.09);
 uniform float province_border_opacity = 0.72;
+uniform vec3 province_halo_color = vec3(0.78, 0.80, 0.77);
 uniform float province_border_halo = 0.15;
+// Not a rank: where held ground ends inside one owner's land. A pale line over a dark key.
+uniform vec3 occupation_line_color = vec3(0.92, 0.88, 0.71);
+uniform vec3 occupation_key_color = vec3(0.045, 0.065, 0.08);
 uniform float front_pixels = 1.6;
 uniform sampler2D front_membership : filter_nearest, repeat_disable;
 uniform sampler2D map_mode_colors : source_color, filter_nearest, repeat_disable;
@@ -2654,7 +2672,7 @@ float nation_coverage(vec2 uv, bool smooth_edges, out float near_id, out float o
     return coverage;
 }
 
-vec4 owner_color(float province) {
+vec4 plate_catch_up(float province) {
     float low = mod(province, 256.0);
     float high = floor(province / 256.0);
     return texture(province_owner_colors, (vec2(low, high) + vec2(0.5)) / 256.0);
@@ -2836,6 +2854,15 @@ void fragment() {
     // antialiased over one screen pixel. The raster is not being filtered; it is not being
     // asked.
     vec4 political_smooth = seam_sample_political_map(UV);
+    // The plate is repainted from the live owners whenever a border moves, on a worker, and
+    // for the moment that takes it still shows the old owner. The provinces it has not caught
+    // up with are painted here in the colour it is about to give them - over the plate sample
+    // alone, before it is mixed with anything, so the saturation, the land shade and every
+    // line below treat moved land exactly as they treat the rest. Once the plate arrives the
+    // table is empty and this does nothing.
+    float province = map_id(province_ids, map_uv);
+    vec4 plate_patch = plate_catch_up(province);
+    political_smooth.rgb = mix(political_smooth.rgb, plate_patch.rgb, plate_patch.a);
     // Smoothed boundaries only where a texel is bigger than a pixel - further out the raster
     // is averaged by its mipmaps and has no staircase to show - and only for a player who
     // has the map smoothed at all.
@@ -2943,43 +2970,20 @@ void fragment() {
     water = mix(water, water * 0.58, shore_edge * 0.38 * (1.0 - political.a));
     vec2 texel = 1.0 / vec2(textureSize(province_ids, 0));
     float region = map_id(region_ids, map_uv);
-    float province = map_id(province_ids, map_uv);
     vec2 destruction_uv = (vec2(mod(province, 256.0), floor(province / 256.0)) + 0.5) / 256.0;
     if (texture(front_membership, destruction_uv).a > 0.5) { discard; }
     float nation = map_id(nation_ids, map_uv);
     vec4 live_control = control_color(province);
     float political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
 
-    // Who owns this ground now, when that is no longer who owned it when the map was
-    // painted.
-    //
-    // The political raster is painted once, at load, from the scenario. Everything after
-    // that - every province a treaty signs over, every border a war moves, every save loaded
-    // in the middle of a conquest - changes ownership in the simulation and left the picture
-    // alone, so land taken at a peace conference kept the colour of the country that had
-    // lost it. The overlay that draws occupation could not help: it deliberately says nothing
-    // when the occupier and the owner are the same country, which is exactly what annexation
-    // makes them.
-    //
-    // So a second overlay carries the owner, and it is applied first: it repaints the ground
-    // itself, and any occupation stripes below are then drawn over the new owner rather than
-    // the old one.
-    //
-    // Painted at the shade this pixel already had RELATIVE to its own country's colour,
-    // rather than multiplied by that country's brightness. The difference is the whole of
-    // why land won at a peace conference used to read as duller than land held since the
-    // first morning: the new owner's colour was arriving scaled by how bright the loser's
-    // colour happened to be - 0.58 for a dark one, 0.94 for a pale one - while the same
-    // country's own provinces were painted at full strength. As a ratio it is one at full
-    // detail, where the pixel simply is its country's colour, and it is the raster's own
-    // border shading when zoomed out, which is what the multiplier was reaching for.
-    vec4 owner_paint = owner_color(province);
-    vec3 flat_here = nation_paint(near_nation).rgb;
-    float painted_flat = max(max(flat_here.r, flat_here.g), flat_here.b);
-    float painted_here = max(max(political.r, political.g), political.b);
-    float owner_shade = painted_flat > 0.001 ? clamp(painted_here / painted_flat, 0.30, 1.0) : 1.0;
-    political.rgb = mix(political.rgb, owner_paint.rgb * owner_shade, owner_paint.a);
-    political_light = clamp(max(max(political.r, political.g), political.b) * 1.25, 0.58, 0.94);
+    // Who owns this ground now is already in `political`: close up through nation_at, which
+    // reads the moved owners, and from far away through the plate, which is repainted from
+    // them. There used to be a third answer laid over both here - the new owner's colour per
+    // province, straight from the palette - and it is why a border a treaty had drawn never
+    // looked like one the scenario had: the overlay skipped the saturation every other
+    // country's paint goes through, so won land was a different tint from its own country,
+    // and it was keyed to the nearest texel's province, so its edge ran along the texel grid
+    // in steps beside the smooth, reconstructed line the border stroke follows.
     // Owner remains the ground; keylined controller ribbons mean occupation,
     // never annexation. One shared style for flat map and globe.
     float treaty = step(0.95, live_control.a);
@@ -3275,6 +3279,15 @@ void fragment() {
     float has_nation_border = step(0.5, abs(near_nation - other_nation)) * step(0.5, near_nation);
     float country_edge = 1.0 - smoothstep(border_pixels * 0.85, border_pixels * 2.05, nation_edge_pixels);
     country_edge *= has_nation_border * clamp(2.4 - pixel_texels, 0.0, 1.0);
+    // The highest rank wins. Where the province boundary under this pixel IS the country
+    // boundary - the same edge, reconstructed twice from the same block of ids, so the two
+    // reaches agree - only the country border is drawn: no province line and pale shoulder
+    // under it, and no occupation contour over it. A province line that merely runs up to a
+    // frontier is another edge with another reach, and is drawn to the junction as before.
+    float on_country_border = has_nation_border * step(0.5, abs(near_province - other_province_id)) *
+        (1.0 - smoothstep(0.10, 0.30, abs(nation_reach - province_reach)));
+    float province_line = province_edge * (1.0 - on_country_border);
+    float province_shoulder = province_halo * (1.0 - on_country_border);
     // Paradox-style inner frontier cushion: deepens and enriches each country's colour along the
     // inside of its international border and coastline, giving territories physical volume.
     float country_cushion = (1.0 - smoothstep(border_pixels * 1.0, border_pixels * 6.8, nation_edge_pixels)) *
@@ -3282,7 +3295,8 @@ void fragment() {
     float country_inner_rim = smoothstep(border_pixels * 0.75, border_pixels * 1.35, nation_edge_pixels) *
         (1.0 - smoothstep(border_pixels * 1.35, border_pixels * 2.35, nation_edge_pixels)) *
         has_nation_border * clamp(2.2 - pixel_texels, 0.0, 1.0) * (1.0 - step(0.5, terrain_mode));
-    float region_cushion = (1.0 - smoothstep(border_pixels * 0.5, border_pixels * 2.8, region_reach / region_aa)) *
+    // The region line is a shade rather than a stroke, and it gives way to a country border.
+    float region_cushion = (1.0 - smoothstep(region_border_pixels * 0.1786, region_border_pixels, region_reach / region_aa)) *
         step(0.5, abs(near_region - other_region_id)) * (1.0 - has_nation_border) * (1.0 - step(0.5, terrain_mode));
     vec3 front = front_data(province);
     // Use the same reconstructed boundary as the province contour, not a stripe
@@ -3309,19 +3323,21 @@ void fragment() {
     vec3 cushioned = mix(base * 0.74, base * 0.52 + saturated_nation * 0.38, 0.55);
     base = mix(base, cushioned, country_cushion * max(detail_mix, 0.48) * political.a * 0.58);
     base = mix(base, mix(base, saturated_nation, 0.38), country_wide_glow * max(detail_mix, 0.38) * political.a * 0.34);
-    base = mix(base, base * 0.87, region_cushion * detail_mix * political.a * 0.32);
+    base = mix(base, region_border_color, region_cushion * detail_mix * political.a * region_border_opacity);
     base = mix(base, clamp(base * 1.18 + vec3(0.055, 0.048, 0.032), vec3(0.0), vec3(1.0)),
         country_inner_rim * detail_mix * political.a * 0.40);
 
     // Zoom-gated, screen-space strokes: readable through relief at tactical distance,
     // absent on the world map. A restrained light shoulder also works on dark terrain.
-    base = mix(base, vec3(0.78, 0.80, 0.77), province_halo * province_detail * political.a * province_border_halo);
-    base = mix(base, vec3(0.055, 0.075, 0.09), province_edge * province_detail * political.a * province_border_opacity);
+    base = mix(base, province_halo_color, province_shoulder * province_detail * political.a * province_border_halo);
+    base = mix(base, province_border_color, province_line * province_detail * political.a * province_border_opacity);
     // The country border, drawn rather than baked. It replaces the one-texel darkening the
     // political raster used to carry, which was the most visible pixel grid on the map.
     // Full weight on the world map too: at 0.35 the frontier between two states was a hairline
     // under the province grid, and the strategic view lost the one line it is for.
-    base = mix(base, vec3(0.035, 0.05, 0.075), country_edge * max(detail_mix, 0.62) * political.a * 0.86);
+    // One ink for every frontier: has_nation_border asks only whether the holder changes here.
+    base = mix(base, country_border_color,
+        country_edge * max(detail_mix, country_border_far_weight) * political.a * country_border_opacity);
     // The country the player has asked about, drawn as one. Off the same coverage field as
     // the border above - the same stroke at a different weight and colour, rather than a
     // second idea of where a country ends - with a faint wash inside it so the outline reads
@@ -3352,15 +3368,19 @@ void fragment() {
     if (near_occupied * other_occupied > 0.5)
         control_change = step(0.5, abs(occupation_controller(near_province) - occupation_controller(other_province_id)));
     float occupation_pair = max(abs(near_occupied - other_occupied), control_change * max(near_occupied, other_occupied));
+    // The pale contour marks where held ground ends INSIDE one owner's land. Where the edge
+    // of an occupation is also a frontier - the occupier's own border, or a third country's -
+    // the frontier is still the frontier and is drawn as one: an occupation is not an
+    // annexation, and a country does not lose its outline by being overrun.
     float occupation_edge = occupation_pair * step(0.5, abs(near_province - other_province_id)) * political.a *
-        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode);
+        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode) * (1.0 - on_country_border);
     float occupation_key = 1.0 - smoothstep(1.1, 2.5, province_distance);
     float occupation_stroke = 1.0 - smoothstep(0.35, 1.1, province_distance);
-    base = mix(base, vec3(0.045, 0.065, 0.08), occupation_edge * occupation_key * 0.90);
-    base = mix(base, vec3(0.92, 0.88, 0.71), occupation_edge * occupation_stroke * 0.94);
+    base = mix(base, occupation_key_color, occupation_edge * occupation_key * 0.90);
+    base = mix(base, occupation_line_color, occupation_edge * occupation_stroke * 0.94);
     float lease_edge = abs(lease_mask(near_control) - lease_mask(other_control)) *
         step(0.5, abs(near_province - other_province_id)) * political.a *
-        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode);
+        (1.0 - step(0.5, terrain_mode)) * (1.0 - resource_mode) * (1.0 - map_mode) * (1.0 - on_country_border);
     float lease_dash = step(0.45, fract((UV.x * 2.0 - UV.y) * mix(90.0, 520.0, province_detail)));
     vec3 tenant = max(near_control.a, other_control.a) > 0.0
         ? (lease_mask(near_control) > 0.5 ? near_control.rgb : other_control.rgb) : vec3(0.9);
@@ -4905,6 +4925,8 @@ void fragment() {
             pixels[write + 3] = 255;
         }
         WriteUnownedPaletteEntry(pixels);
+        // The far plate carries these colours baked in; it is repainted with the next map refresh.
+        _plateColoursStale = true;
         if (_nationPaletteImage is null) _nationPaletteImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _nationPaletteImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
         UpdateMapImage("nation_palette", _nationPaletteImage, ref _nationPaletteTexture);
@@ -4916,6 +4938,9 @@ void fragment() {
         EnsureNationIndex();
         var topology = _campaign.ProvinceMap;
         var pixels = _controlPixels ??= new byte[256 * 256 * 4];
+        // The kernel still fills a colour for every province moved since the raster was drawn.
+        // Nothing draws that any more - close up the colour comes from the owner ids, like all
+        // other land - so the buffer is repacked below as the far plate's catch-up table.
         var ownerPixels = _ownerPixels ??= new byte[256 * 256 * 4];
         var ownerIds = _ownerIdPixels ??= new byte[256 * 256 * 4];
         // The regions held on lease, and by whom - read once, not once a province.
@@ -4968,14 +4993,15 @@ void fragment() {
         if (_controlImage is null) _controlImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, pixels);
         else _controlImage.SetData(256, 256, false, Image.Format.Rgba8, pixels);
         UpdateMapImage("province_control_colors", _controlImage, ref _controllerTexture);
-        if (_ownerImage is null) _ownerImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-        else _ownerImage.SetData(256, 256, false, Image.Format.Rgba8, ownerPixels);
-        UpdateMapImage("province_owner_colors", _ownerImage, ref _ownerTexture);
+        UploadPlateCatchUp();
         if (_ownerIdImage is null) _ownerIdImage = Image.CreateFromData(256, 256, false, Image.Format.Rgba8, ownerIds);
         else _ownerIdImage.SetData(256, 256, false, Image.Format.Rgba8, ownerIds);
         UpdateMapImage("province_owner_ids", _ownerIdImage, ref _ownerIdTexture);
         _globeMaterial.SetShaderParameter("owners_moved", ownersMoved ? 1.0f : 0.0f);
-        if (ownersMoved) RequestPlateRepaint(topology);
+        // Asked every time, not only when something differs from the authored world: owners
+        // that have come BACK to it leave the picture on screen just as wrong. The request
+        // itself is free when the plate already shows today's owners.
+        RequestPlateRepaint(topology);
         _controlRevision = _campaign.MapRevision;
         BuildFrontPreview();
         _frontRevision = _controlRevision;
@@ -5427,7 +5453,7 @@ void fragment() {
         return new Vector3(horizontal * Mathf.Sin(lon), Mathf.Sin(lat), horizontal * Mathf.Cos(lon)) * radius;
     }
 
-    private static MapBuildResult BuildPoliticalMap(Dictionary<int, uint> colors)
+    private static MapBuildResult BuildPoliticalMap(Dictionary<int, uint> colors, Simulation.MapPlateShades shades)
     {
         var control = SourceEarthData.Control;
         var states = SourceEarthData.States;
@@ -5435,9 +5461,13 @@ void fragment() {
         var sourceHeight = SourceEarthData.Height;
         var politicalWidth = MapWidth / PoliticalScale;
         var politicalHeight = MapHeight / PoliticalScale;
-        var political = new byte[politicalWidth * politicalHeight * 4];
-        var politicalShade = new byte[politicalWidth * politicalHeight];
+        // What the far plate is painted from (PoliticalPlateSource): for each of its cells the
+        // province that speaks for the block, the country the raster gives it, and the two
+        // facts of geography no treaty moves. `plateClass` only picks the speaker.
         var plateProvinces = new ushort[politicalWidth * politicalHeight];
+        var plateHolders = new ushort[politicalWidth * politicalHeight];
+        var plateGeography = new byte[politicalWidth * politicalHeight];
+        var plateClass = new byte[politicalWidth * politicalHeight];
         var regionIds = new byte[MapWidth * MapHeight * 2];
         var provinceIds = new byte[MapWidth * MapHeight * 2];
         var nationIds = new byte[MapWidth * MapHeight * 2];
@@ -5493,36 +5523,50 @@ void fragment() {
                     provinceIds[idWrite + 1] = (byte)((provinceId >> 8) & 0xFF);
                 }
 
-                // Alpha is a land mask; the shader supplies exactly the original ocean
-                // texture where the source raster says water. Water does not paint the plate.
+                // The plate's alpha is a land mask; the shader supplies exactly the original
+                // ocean texture where the source raster says water. Water does not paint the plate.
                 if (controlId == 0) continue;
 
-                var packed = colors.TryGetValue(controlId, out var color) ? color : 0x6E7B8BFFu;
                 var east = row + ((sourceX + 1) % sourceWidth);
                 var west = row + (sourceX == 0 ? sourceWidth - 1 : sourceX - 1);
                 var south = southRow + sourceX;
                 var north = (sourceY == 0 ? row : row - sourceWidth) + sourceX;
 
-                var shade = control[east] != controlId || control[west] != controlId ||
-                    control[south] != controlId || control[north] != controlId
-                    ? 0.34f
-                    : states[east] != states[index] || states[west] != states[index] ||
-                      states[south] != states[index] || states[north] != states[index]
-                        ? 0.70f
-                        : 0.92f;
-                var shadeByte = (byte)(shade * 255f);
+                var shore = control[east] == 0 || control[west] == 0 || control[south] == 0 || control[north] == 0;
+                var frontier = control[east] != controlId || control[west] != controlId ||
+                    control[south] != controlId || control[north] != controlId;
+                var regionLine = states[east] != states[index] || states[west] != states[index] ||
+                    states[south] != states[index] || states[north] != states[index];
                 var cell = (y / PoliticalScale) * politicalWidth + x / PoliticalScale;
-                // The darkest land in the block is the one a player reads as a border.
-                if (political[cell * 4 + 3] != 0 && shadeByte >= politicalShade[cell]) continue;
-                politicalShade[cell] = shadeByte;
+                // Geography is kept for the whole block, whichever of its cells speaks for it:
+                // a shore stays a shore and a region line a region line whoever comes to own them.
+                if (shore) plateGeography[cell] |= Simulation.PoliticalPlate.Coast;
+                if (regionLine) plateGeography[cell] |= Simulation.PoliticalPlate.RegionLine;
+                // A cell on a frontier speaks for its block before one on a region line, and that
+                // before one inland, so a thin country is not averaged out of the far map. This
+                // only chooses the speaker: whether the block is DRAWN as a border is decided by
+                // the painter, from who owns the speakers now.
+                var cellClass = (byte)(frontier ? 3 : regionLine ? 2 : 1);
+                if (cellClass <= plateClass[cell]) continue;
+                plateClass[cell] = cellClass;
                 plateProvinces[cell] = (ushort)provinceId;
-                var write = cell * 4;
-                political[write] = (byte)(((packed >> 24) & 0xFF) * shade);
-                political[write + 1] = (byte)(((packed >> 16) & 0xFF) * shade);
-                political[write + 2] = (byte)(((packed >> 8) & 0xFF) * shade);
-                political[write + 3] = 255;
+                plateHolders[cell] = controlId;
             }
         }
+
+        // The opening plate is the painter's first run, on the owners the raster was drawn with -
+        // not a separate picture. Every later plate is the same routine on the owners of the day
+        // (GlobePlateRepaint), so a border is shaded by one rule whenever it was drawn.
+        var plateSource = new Simulation.PoliticalPlateSource
+        {
+            Width = politicalWidth,
+            Height = politicalHeight,
+            Provinces = plateProvinces,
+            Holders = plateHolders,
+            Geography = plateGeography
+        };
+        var plateOwners = (ushort[])provinces.ProvinceToNation.Clone();
+        var political = Simulation.PoliticalPlate.Paint(plateSource, plateOwners, plateOwners, colors, shades);
 
         // A sea graph that could not be made here is made again where it is first asked for,
         // and fails there with the same reason; the map itself does not wait on it.
@@ -5536,8 +5580,8 @@ void fragment() {
         return new MapBuildResult
         {
             PoliticalPixels = political,
-            PlateProvinces = plateProvinces,
-            PlateShade = politicalShade,
+            PlateSource = plateSource,
+            PlateOwners = plateOwners,
             RegionIds = regionIds,
             ProvinceIds = provinceIds,
             NationIds = nationIds,
@@ -5569,8 +5613,8 @@ void fragment() {
     private sealed class MapBuildResult
     {
         public byte[] PoliticalPixels;
-        public ushort[] PlateProvinces;
-        public byte[] PlateShade;
+        public Simulation.PoliticalPlateSource PlateSource;
+        public ushort[] PlateOwners;
         public byte[] RegionIds;
         public byte[] ProvinceIds;
         public byte[] NationIds;

@@ -234,7 +234,9 @@ public static partial class Corridors
             count--;
             if (main.Contains(p)) { reached = p; break; }
             var here = cost[p];
-            var neighbors = map.Neighbors[p];
+            // Drawn borders: a corridor is land bought to join a country's pieces, and none can be
+            // laid over a strait (ProvinceTopology.LandNeighbors).
+            var neighbors = map.LandNeighbors[p];
             for (var i = 0; i < neighbors.Length; i++)
             {
                 var next = neighbors[i];
@@ -349,7 +351,7 @@ public static partial class Corridors
         around.Clear();
         foreach (var province in piece)
         {
-            var neighbors = map.Neighbors[province];
+            var neighbors = map.LandNeighbors[province];
             for (var i = 0; i < neighbors.Length; i++)
             {
                 var next = neighbors[i];
@@ -593,7 +595,7 @@ public static partial class Corridors
                     var key = ownerShift | (uint)state;
                     _ownerStateCounts[key] = _ownerStateCounts.GetValueOrDefault(key) + 1;
                 }
-                var neighbors = map.Neighbors[province];
+                var neighbors = map.LandNeighbors[province];
                 for (var ni = 0; ni < neighbors.Length; ni++)
                 {
                     var next = neighbors[ni];

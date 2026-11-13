@@ -1,0 +1,17 @@
+// Deal or Force - what three regions are really called.
+//
+// The map source draws the Siachen Glacier, the UN buffer zone on Cyprus and the Guantanamo
+// base as countries of their own, and names the one region inside each after something else:
+// the glacier's region was "Kashmir" (which is four other regions of the map), the buffer
+// zone's was "Northern Cyprus" (which is a country north of it), and the base's was the US
+// Navy's abbreviation for itself. While each sat inside a "country" carrying the right name
+// nobody read the region's. They are regions of India, Cyprus and Cuba now
+// (common/country_merges), and a region is read by its own name.
+//
+// Read after 00_states.json, so these three lines win over the generated roster; a mod that
+// prefers another spelling writes a later file with the same keys.
+{
+  "99_x06": { "name": "Siachen Glacier" },
+  "99_x04": { "name": "UN Buffer Zone" },
+  "99_x13": { "name": "Guantanamo Bay" }
+}

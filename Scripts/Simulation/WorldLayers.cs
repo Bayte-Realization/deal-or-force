@@ -28,7 +28,8 @@ public static class WorldLayers
         ["capitals"] = "capital stars",
         ["country_labels"] = "country names across their territory",
         ["military_counters"] = "army, fleet and battle counters",
-        ["supply_lines"] = "the selected army's supply line"
+        ["supply_lines"] = "the selected army's supply line",
+        ["strait_crossings"] = "the dashed links over straits an army can march across"
     };
 
     private static readonly Dictionary<string, bool> Switches = new(StringComparer.OrdinalIgnoreCase);

@@ -104,8 +104,13 @@ public static partial class Warfare
         if (army.ProvinceId < 0 || army.ProvinceId >= topology.Neighbors.Length) return -1;
         var armyNeighbors = topology.Neighbors[army.ProvinceId];
         if (armyNeighbors is null) return -1;
+        // The far shore of a strait is a neighbour like any other - unless it is reached by a
+        // ferry and an enemy fleet commands the water, when there is no way to send the assault.
+        var atCrossing = topology.IsCrossingEnd(army.ProvinceId);
         foreach (var province in armyNeighbors)
-            if (province >= 0 && province < controllers.Length && enemyMaps.Contains(controllers[province])) candidates.Add(province);
+            if (province >= 0 && province < controllers.Length && enemyMaps.Contains(controllers[province]) &&
+                !(atCrossing && LandCrossings.StepClosed(campaign, army.NationId, army.ProvinceId, province)))
+                candidates.Add(province);
         if (candidates.Count == 0) return -1;
         // A defender takes back its own before it invades. Until it is clearly winning, a
         // country fighting off an attack advances only onto its own ground - occupied, or its
@@ -215,7 +220,10 @@ public static partial class Warfare
                     enemyNeighbors++;
             if (enemyNeighbors <= 1) pocketBonus = -0.22f;
 
+            // A strait is weighed like a river, by what it takes off the attack: where there is
+            // a sector to assault by land, the staff takes it before the bridge.
             var score = topology.RiverCrossingStrength(army.ProvinceId, province) * terrainWeight +
+                (atCrossing ? LandCrossings.AssaultAversion(campaign, army.ProvinceId, province) * terrainWeight : 0f) +
                 terrainPenalty +
                 observedResistance * 0.018f +
                 observedEntrenchment * 0.008f * terrainWeight +

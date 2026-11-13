@@ -526,7 +526,9 @@ public static class StateFailure
         {
             var here = map.ProvinceToState[p];
             if (!adjacent.TryGetValue(here, out var set)) continue;
-            foreach (var next in map.Neighbors[p])
+            // Drawn borders: the regions that fall away together are the ones that touch on the
+            // map, not the ones a ferry runs between (ProvinceTopology.LandNeighbors).
+            foreach (var next in map.LandNeighbors[p])
             {
                 var there = map.ProvinceToState[next];
                 if (there != here && adjacent.ContainsKey(there)) set.Add(there);

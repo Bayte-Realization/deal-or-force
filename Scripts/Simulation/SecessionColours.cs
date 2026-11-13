@@ -46,7 +46,9 @@ public static class SecessionColours
             for (var p = 1; p <= map.ProvinceCount; p++)
             {
                 if (!regionIds.Contains(map.ProvinceToState[p])) continue;
-                foreach (var next in map.Neighbors[p])
+                // Drawn borders: colours have to differ where they are painted side by side, not
+                // across a strait (ProvinceTopology.LandNeighbors).
+                foreach (var next in map.LandNeighbors[p])
                     if (!regionIds.Contains(map.ProvinceToState[next])) adjacent.Add(map.ProvinceToNation[next]);
             }
         var near = c.Nations.Where(n => n.Tag != tag && (n.Id == parent.Id || adjacent.Contains(n.MapIndex)))

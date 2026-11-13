@@ -1,4 +1,4 @@
-// Australia (AUS) on 1 January 2024: 7 regions, 25,364,307 people.
+// Australia (AUS) on 1 January 2024: 9 regions, 25,364,307 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -66,5 +66,24 @@
     "cultures": { "australian": 0.7066, "english": 0.0589, "aboriginal_australian": 0.0343, "chinese_diaspora": 0.03, "indian_diaspora": 0.0278, "new_zealander": 0.0236, "tagalog": 0.0128, "vietnamese": 0.0118, "arab_levantine": 0.0107, "irish": 0.0107, "scottish": 0.0107, "italian": 0.0086, "nepali": 0.0086, "punjabi": 0.0086, "maori": 0.0075, "german": 0.0064, "greek": 0.0064, "malayali": 0.0064, "korean": 0.0054, "melanesian": 0.0043 },
     "buildings": { "Agriculture": 1, "Infrastructure": 3 },
     "resources": { "Food": 2.323, "Coal": 0.371, "Oil": 1.019, "IronOre": 17.656, "RareEarths": 19.091, "NaturalGas": 35.297, "Timber": 3.29, "Bauxite": 11.692, "Uranium": 0.037 }
+  },
+  // Heard Island and the McDonald Islands: an uninhabited Australian external territory.
+  // Heard Island and McDonald Islands
+  "hm_x01": {
+    "population": 0,
+    "urbanization": 0.95,
+    "buildings": { "Infrastructure": 3 },
+    "resources": { "Food": 1.385, "Coal": 0.095, "Oil": 0.295, "IronOre": 0.132, "RareEarths": 0.032, "NaturalGas": 0.183, "Timber": 2.696, "Bauxite": 0.025, "Uranium": 0.006 }
+  },
+  // Christmas Island, with the Cocos (Keeling) Islands: the map source draws the two as a
+  // country called "Indian Ocean Territories". They are Australian external territories with
+  // shire councils and no government of their own.
+  // Christmas Island
+  "99_x14": {
+    "population": 2387,
+    "urbanization": 0.494,
+    "cultures": { "australian": 0.6, "malay": 0.25, "chinese_diaspora": 0.15 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 1.994, "Coal": 0.111, "Oil": 0.222, "IronOre": 0.158, "RareEarths": 0.041, "NaturalGas": 0.327, "Timber": 2.571, "Bauxite": 0.035, "Uranium": 0.002 }
   }
 }

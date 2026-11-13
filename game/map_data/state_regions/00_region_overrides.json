@@ -307,6 +307,9 @@
       // and rings of a dartboard. The islands of the old "Region 2549", a hundred and fifty
       // specks off every coast, go to whichever land they lie off; the region keeps its index
       // as Graham Land.
+      //
+      // "ATA" is the country table's row for Antarctica, which is not a country
+      // (common/country_merges gives its ground to nobody): the lands are made unclaimed.
       "nation": "ATA",
       "carve_from_iso": "AQ-X01~",
       "also_carve_from_iso": ["AQ-X02~"],

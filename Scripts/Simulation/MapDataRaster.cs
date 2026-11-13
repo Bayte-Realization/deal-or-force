@@ -404,7 +404,11 @@ public static class MapRasterCatalog
             var definitions = LoadDefinitions(DefinitionPath);
             topology = ProvinceTopology.FromColorRaster(states, control, width, height, raster, definitions);
             topology.AttachTerrain(ground.GetAwaiter().GetResult());
-            message = $"{Path.GetFileName(ProvincePath)} + {Path.GetFileName(DefinitionPath)}";
+            // The straits an army can walk over (map_data/crossings) are part of what is next to
+            // what, so they are on the graph before anybody is handed it: the game, the bench
+            // and every test stand read the map through here and get the same edges.
+            LandCrossings.Attach(topology);
+            message =$"{Path.GetFileName(ProvincePath)} + {Path.GetFileName(DefinitionPath)}";
             return true;
         }
         catch (Exception exception)

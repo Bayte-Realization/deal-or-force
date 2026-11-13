@@ -1,0 +1,105 @@
+// Deal or Force - strait crossings: narrow water an army walks over.
+//
+// The province graph is cut wherever the map draws a cell of sea, so without this file
+// Tarifa and Tangier are as far apart as Lisbon and New York: a division reaches the other
+// shore only aboard a fleet, landed like an invasion. Each entry here joins the province on
+// one shore to the province on the other. Marches, supply, fronts, attacks and the AI's
+// planning all walk that edge; borders, enclaves and peace settlements do not see it
+// (Scripts/Simulation/LandCrossings.cs says why, consumer by consumer).
+//
+// THE RULE for what belongs here
+//   (a) a fixed road or rail link that is open in 2024 - a bridge, a tunnel, a causeway; or
+//   (b) a strait about 20 km wide or less at its narrowest, with a regular ferry or a long
+//       record of armies and caravans crossing it by boat inside a day.
+// Left out on purpose: the Strait of Dover (33 km, and a rail tunnel that shuts the day a
+// war opens), Hormuz (39 km), the Palk Strait (30 km, no link), the Taiwan, Bass, Cook,
+// Bering and Malacca straits, Sicily-Tunisia, Zanzibar, the Strait of Georgia (a 44 km
+// ferry run), and links that are announced and not built (Qatar-Bahrain, Tiran).
+//
+// Also not here, because this map draws no water there at all and the two shores are
+// already neighbours or one province: the Bosphorus and the Dardanelles, the Little Belt
+// and the Storstrøm, Rügen, Öland, the Menai Strait and the Solent, Chalkis (Evia), the
+// Suez Canal, Djerba, Johor-Singapore, the Bali Strait, Suramadu, Phuket, San Juanico,
+// Long Island, the Strait of Canso, the Chacao Channel and the Strait of Magellan.
+// An entry for one of those is refused when the map is read, and the log says so.
+//
+// AN ENTRY
+//   "from", "to"   [latitude, longitude] of each shore. Each becomes the land province
+//                  nearest that point, within CrossingResolveToleranceKm - never a province
+//                  number, which the map compiler is free to change. Put each point clearly
+//                  on its own side; the two must be no further apart than CrossingMaxSpanKm.
+//   "kind"         bridge | tunnel | causeway | ferry. Decides the cost (below) and whether a
+//                  navy can shut it: a ferry does not sail while an enemy fleet commands the
+//                  strait; a bridge, tunnel or causeway stays open and is only marked.
+//   "name"         the English name, which is also its localisation key.
+//   "sea"          optional [latitude, longitude] of the water that commands the crossing,
+//                  when that is not simply halfway between the shores.
+//   "march"        optional share of march pace kept on this crossing, instead of its kind's.
+//   "attack"       optional share of attacking power kept across it, instead of its kind's.
+//   "open": false  takes the crossing off the map - how a mod removes one it did not write.
+//
+// The costs by kind are in common/defines/105_strait_crossings.json. Files in this folder
+// are read in name order and later files win key by key: a mod adds a crossing with a new
+// key, changes one by naming it again with only the fields it changes, and removes one with
+// { "open": false }. An entry that cannot be placed is reported by name in the errors log
+// and left out; the rest still load.
+//
+// To see where every entry landed after an edit:
+//   dotnet run -c Release --project Tools/FormableTests -- --crossings-survey
+{
+  // Europe and the Mediterranean
+  "gibraltar_ferry": { "name": "Gibraltar ferry", "kind": "ferry", "from": [36.03, -5.62], "to": [35.82, -5.58] },
+  "messina_ferry": { "name": "Messina ferry", "kind": "ferry", "from": [38.20, 15.50], "to": [38.22, 15.70] },
+  "bonifacio_ferry": { "name": "Bonifacio ferry", "kind": "ferry", "from": [41.43, 9.17], "to": [41.20, 9.22] },
+  "corfu_ferry": { "name": "Corfu ferry", "kind": "ferry", "from": [39.50, 20.30], "to": [39.60, 19.90] },
+
+  // The Danish straits. Zealand and Falster are one piece of ground on this map, so the
+  // road south to Lolland is the Guldborgsund crossing alone.
+  "oresund_bridge": { "name": "Øresund Bridge", "kind": "bridge", "from": [55.63, 12.58], "to": [55.57, 13.03] },
+  "helsingor_ferry": { "name": "Helsingør ferry", "kind": "ferry", "from": [56.02, 12.55], "to": [56.05, 12.75] },
+  "great_belt_bridge": { "name": "Great Belt Bridge", "kind": "bridge", "from": [55.33, 11.20], "to": [55.31, 10.78] },
+  "guldborgsund_bridge": { "name": "Guldborgsund Bridge", "kind": "bridge", "from": [54.77, 11.95], "to": [54.77, 11.75] },
+  "fehmarn_belt_ferry": { "name": "Fehmarn Belt ferry", "kind": "ferry", "from": [54.68, 11.38], "to": [54.47, 11.20] },
+  "saaremaa_ferry": { "name": "Saaremaa ferry", "kind": "ferry", "from": [58.60, 23.58], "to": [58.57, 23.15] },
+  "soela_ferry": { "name": "Soela Strait ferry", "kind": "ferry", "from": [58.52, 22.72], "to": [58.75, 22.55] },
+
+  // The Black Sea. The bridge of 2018; before it, a ferry at the same place.
+  "crimean_bridge": { "name": "Crimean Bridge", "kind": "bridge", "from": [45.33, 36.42], "to": [45.22, 36.75] },
+
+  // Arabia and the Horn
+  "bab_el_mandeb_ferry": { "name": "Bab-el-Mandeb ferry", "kind": "ferry", "from": [12.72, 43.48], "to": [12.47, 43.28] },
+  "king_fahd_causeway": { "name": "King Fahd Causeway", "kind": "causeway", "from": [26.20, 50.15], "to": [26.15, 50.52] },
+  "qeshm_ferry": { "name": "Qeshm ferry", "kind": "ferry", "from": [27.08, 56.10], "to": [26.88, 56.12] },
+
+  // The Malay world. Java reaches Sumatra and, by land on this map, Bali and Madura.
+  "penang_bridge": { "name": "Penang Bridge", "kind": "bridge", "from": [5.36, 100.45], "to": [5.38, 100.27] },
+  "sunda_strait_ferry": { "name": "Sunda Strait ferry", "kind": "ferry", "from": [-5.95, 106.05], "to": [-5.83, 105.72] },
+  "bangka_strait_ferry": { "name": "Bangka Strait ferry", "kind": "ferry", "from": [-2.33, 104.95], "to": [-2.08, 105.20] },
+  "alas_strait_ferry": { "name": "Alas Strait ferry", "kind": "ferry", "from": [-8.50, 116.65], "to": [-8.53, 116.85] },
+
+  // The Philippines: the ferries of the Pan-Philippine Highway from Luzon to Mindanao,
+  // and the short hops that hang Mindoro, Panay, Negros and Cebu off it.
+  "verde_passage_ferry": { "name": "Verde Island Passage ferry", "kind": "ferry", "from": [13.75, 121.05], "to": [13.45, 121.00] },
+  "san_bernardino_ferry": { "name": "San Bernardino ferry", "kind": "ferry", "from": [12.60, 124.05], "to": [12.50, 124.32] },
+  "surigao_strait_ferry": { "name": "Surigao Strait ferry", "kind": "ferry", "from": [10.05, 125.20], "to": [9.78, 125.47] },
+  "tanon_strait_ferry": { "name": "Tañon Strait ferry", "kind": "ferry", "from": [9.33, 123.25], "to": [9.47, 123.38] },
+  "guimaras_strait_ferry": { "name": "Guimaras Strait ferry", "kind": "ferry", "from": [10.72, 122.55], "to": [10.67, 122.97] },
+
+  // China
+  "hainan_ferry": { "name": "Hainan ferry", "kind": "ferry", "from": [20.32, 110.18], "to": [19.98, 110.32] },
+  "kinmen_ferry": { "name": "Kinmen ferry", "kind": "ferry", "from": [24.55, 118.10], "to": [24.45, 118.38] },
+  "zhoushan_bridge": { "name": "Zhoushan Bridge", "kind": "bridge", "from": [29.93, 121.75], "to": [30.05, 122.12] },
+
+  // Japan: the four main islands are one road network.
+  "kanmon_bridge": { "name": "Kanmon Bridge", "kind": "bridge", "from": [34.05, 131.00], "to": [33.86, 130.92] },
+  "seto_bridge": { "name": "Great Seto Bridge", "kind": "bridge", "from": [34.52, 133.80], "to": [34.28, 133.85] },
+  "seikan_tunnel": { "name": "Seikan Tunnel", "kind": "tunnel", "from": [41.18, 140.40], "to": [41.52, 140.25] },
+
+  // The Russian Far East: seven kilometres at Cape Lazarev, a ferry in summer and ice in winter.
+  "nevelskoy_ferry": { "name": "Nevelskoy Strait ferry", "kind": "ferry", "from": [52.23, 141.40], "to": [52.22, 141.78] },
+
+  // North America. The Straits of Mackinac are lake water, which the map does draw.
+  "confederation_bridge": { "name": "Confederation Bridge", "kind": "bridge", "from": [46.13, -63.85], "to": [46.28, -63.65] },
+  "belle_isle_ferry": { "name": "Strait of Belle Isle ferry", "kind": "ferry", "from": [51.45, -57.18], "to": [51.20, -56.75] },
+  "mackinac_bridge": { "name": "Mackinac Bridge", "kind": "bridge", "from": [45.72, -84.75], "to": [45.92, -84.75] }
+}

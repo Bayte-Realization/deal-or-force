@@ -749,8 +749,16 @@ public static class MilitaryOperations
                 StepBlocked(campaign, topology, controllers, army, nation, nextProvince);
                 continue;
             }
+            // A ferry does not sail under an enemy squadron's guns. The formation keeps its
+            // route and the progress it has made and waits on the quay: the day the strait is
+            // clear it goes on, without anybody having to give the order again.
+            if (topology.IsCrossingEnd(army.ProvinceId) &&
+                LandCrossings.StepClosed(campaign, army.NationId, army.ProvinceId, nextProvince)) continue;
             var crossingStrength = topology.RiverCrossingStrength(army.ProvinceId, nextProvince);
-            var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength);
+            // A river and a strait are never the same step, so one factor carries both: the
+            // river's share of pace, or the bridge's or the ferry's (LandCrossings).
+            var riverMovement = M.Lerp(1f, campaign.Defines.RiverMovementMultiplier, crossingStrength) *
+                LandCrossings.MarchMultiplier(campaign, army.ProvinceId, nextProvince);
             var marchSupply = M.Clamp(army.SupplyLevel, campaign.Defines.MarchSupplyFloor, 1f);
             var cutOffSlow = army.CutOff && army.DaysCutOff > 3 ? (army.DaysCutOff >= 10 ? 0.20f : 0.35f) : 1.0f;
             var terrainSpeed = topology.TerrainAt(nextProvince).MovementSpeed;

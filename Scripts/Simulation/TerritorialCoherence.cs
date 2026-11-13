@@ -65,7 +65,9 @@ public static class TerritorialCoherence
             int a = map.ProvinceToState[p];
             if (a == 0) continue;
             if (!board.Neighbours.TryGetValue(a, out var next)) board.Neighbours[a] = next = new();
-            foreach (var q in map.Neighbors[p])
+            // Drawn borders: whether a country lies in pieces is a question about the map, and a
+            // ferry does not close an enclave (ProvinceTopology.LandNeighbors).
+            foreach (var q in map.LandNeighbors[p])
             {
                 int b = map.ProvinceToState[q];
                 if (a != b && b != 0) next[b] = next.GetValueOrDefault(b) + 1;

@@ -30,7 +30,7 @@
   },
   "cyprus_reunited": {
     "name": "Cyprus", "description": "The island under one government again - the buffer zone dissolved, North Nicosia and Nicosia one city.",
-    "eligible_tags": ["CYP", "CYN"], "required_tags": ["CYP", "CYN", "CNM"],
+    "eligible_tags": ["CYP", "CYN"], "required_tags": ["CYP", "CYN"],
     "minimum_stability": 0.5, "gdp_cost_share": 0.01, "governance_gain": 0.03, "productivity_gain": 0.01, "colour": "#c78a3c"
   },
   "somalia_reunited": {

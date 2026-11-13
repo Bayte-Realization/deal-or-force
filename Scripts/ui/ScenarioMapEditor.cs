@@ -278,7 +278,7 @@ public partial class ScenarioMapEditor : Control
         var region = Draft.Regions.FirstOrDefault(r => r.MapIndex == Draft.StateAt(p));
         var land = p > 0 && p <= Draft.ProvinceCount && !Topology.WaterByProvince[p];
         _selection.Text = p <= 0 ? Loc.Get("Select a province on the map to inspect it.") :
-            $"{Loc.Get("Province")} #{p}\n{Loc.Get(owner?.Name ?? "Unclaimed")}\n{Loc.Get(region?.Name ?? "Unknown")}";
+            $"{Loc.Get("Province")} #{p}\n{Loc.Get(owner?.Name ?? "Land that belongs to nobody")}\n{Loc.Get(region?.Name ?? "Unknown")}";
         _sample.Disabled = !land || owner is null || region is null || region.Owner != owner.MapIndex;
         _editSelectedCountry.Disabled = !land || owner is null;
         _editSelectedRegion.Disabled = !land || region is null;

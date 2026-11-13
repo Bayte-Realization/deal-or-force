@@ -1,0 +1,10 @@
+// The dashed links the map draws over straits an army can march across (map_data/crossings,
+// Scripts/gfx/GlobeStraitCrossings.cs): pale stone for a bridge, a tunnel or a causeway, pale
+// blue for a ferry, amber where an enemy fleet commands the water and red where it has
+// stopped the ferry.
+//
+// This switches the drawing only. A mod that wants the crossings themselves gone says so in
+// map_data/crossings, entry by entry, with { "open": false }.
+{
+  "strait_crossings": true
+}

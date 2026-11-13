@@ -1,0 +1,7 @@
+// Handbook: strait crossings (map_data/crossings, LandCrossings.cs). The words are
+// handbook.strait_crossings.title and .body in localisation.
+{
+  "articles": {
+    "strait_crossings": {"topic": "forces", "order": 15, "related": ["orders", "supply", "navy", "wars"]}
+  }
+}

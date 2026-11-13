@@ -6,21 +6,28 @@
 // the diplomacy list with Scarborough Reef and Bajo Nuevo Bank, and the ones with a province of
 // their own sat on the map as countries with no government, no army and nobody to talk to.
 //
-// Each line names such an entry and where its ground goes:
+// This is the one list of them, and it is applied once, as the world is built
+// (ScenarioCatalog, CountryMerges). Each line names such an entry and where its ground goes:
 //
-//   "into": "TAG"   the state that administers it on 1 January 2024 - its provinces are that
-//                   state's from the first day, whoever else claims them
+//   "into": "TAG"   the state that administers it on 1 January 2024 - its regions and provinces
+//                   are that state's from the first day, whoever else claims them
 //   "into": "none"  nobody's: unclaimed land, settled like any other (ColonisationCore)
 //
-// The entry itself is never a country in the game: with no ground it has no diplomacy entry,
-// and its fall is decided in the first weekly review like any country found with no ground
-// (MovementFall) - it never held any, so it simply ends. A province line in
+// An entry listed here is never a country in the game. It is read past when the country table
+// is turned into the world's countries, so it is not in the nation list at all: not in the
+// country picker, the diplomacy list, the rankings or the map's labels, not a party to any
+// relation, not something the AI weighs, and not in a save. Its regions are written with its
+// holder's own (history/states/2024/<holder>.json); who else wants them is a core or a claim
+// there, like every other dispute (97_administered_ground.json). A province line in
 // history/provinces still wins over this table if a mod names the province explicitly by point
-// or by id with another owner; this table only renames the owner the file gives.
+// or by id with another owner; this table only says whose the entry's own ground is.
 //
 // Every file in this folder is read in name order and a later file naming the same tag wins,
 // so a mod that wants the Siachen Glacier to be Pakistan's writes one line, and a mod that wants
-// one of these to be a country after all writes "into": "" to take it off the list.
+// one of these to be a country after all writes "into": "" to take it off the list - it is then
+// an ordinary row of the country table again, under the name that table gives it, and the mod
+// says the rest the way it would for any country it adds (common/countries, history/countries,
+// localisation, a flag): the base game writes nothing for a country it does not have.
 {
   // Disputed in law, administered in fact. The table says who holds the ground, not who is right.
   "SCR": { "into": "CHN" },  // Scarborough Shoal: Chinese coast guard control since the 2012 stand-off; the Philippines claims it.
@@ -37,12 +44,14 @@
   "ATA": { "into": "none" }, // Antarctica: claims frozen by the Antarctic Treaty since 1961.
 
   // Uninhabited or garrison-only territories of a state, run from its capital rather than by a
-  // government of their own. Inhabited dependencies with their own administration (Norfolk
-  // Island, Pitcairn, the Falklands, Christmas Island) stay countries.
+  // government of their own. A territory that is a place in its own right with its own
+  // institutions (Norfolk Island, Pitcairn, the Falklands) stays a country, as its sovereign's
+  // dependency (history/diplomacy/2024/20_subjects.json).
   "CLP": { "into": "FRA" },  // Clipperton Island: French state property, administered from Paris.
   "ATF": { "into": "FRA" },  // French Southern and Antarctic Lands: research stations, no permanent population.
   "CSI": { "into": "AUS" },  // Coral Sea Islands: an Australian external territory, a weather station.
   "ATC": { "into": "AUS" },  // Ashmore and Cartier Islands: Australian, a nature reserve.
+  "IOA": { "into": "AUS" },  // "Indian Ocean Territories": the map source's own lump of Christmas Island and the Cocos Islands under a tag no standard has. Two shires under Western Australian law and a federal administrator; no government.
   "HMD": { "into": "AUS" },  // Heard Island and McDonald Islands: Australian, uninhabited.
   "UMI": { "into": "USA" },  // US Minor Outlying Islands: Wake, Midway, Johnston and the rest - bases and refuges.
   "SGS": { "into": "GBR" },  // South Georgia and the South Sandwich Islands: British, a few dozen staff; Argentina claims them.

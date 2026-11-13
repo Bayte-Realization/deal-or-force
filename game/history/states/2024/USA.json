@@ -1,4 +1,4 @@
-// United States of America (USA) on 1 January 2024: 48 regions, 328,239,523 people.
+// United States of America (USA) on 1 January 2024: 49 regions, 328,239,523 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -395,5 +395,15 @@
     "cultures": { "american": 0.7266, "hispanic_american": 0.1, "native_american": 0.02, "chinese_diaspora": 0.0189, "indian_diaspora": 0.0177, "german": 0.0101, "irish": 0.0101, "tagalog": 0.0101, "african_american": 0.01, "arab_levantine": 0.0088, "italian": 0.0088, "jewish": 0.0088, "cuban": 0.0075, "korean": 0.0075, "puerto_rican": 0.0075, "vietnamese": 0.0075, "polish": 0.0051, "haitian": 0.0038, "jamaican": 0.0038, "russian": 0.0038, "japanese": 0.0026, "ukrainian": 0.001 },
     "buildings": { "Agriculture": 1, "Infrastructure": 1 },
     "resources": { "Food": 0.821, "Coal": 61.558, "Oil": 9.466, "IronOre": 0.247, "RareEarths": 6.043, "NaturalGas": 9.081, "Timber": 1.54, "Bauxite": 0.084, "Uranium": 17.531 }
+  },
+  // Navassa Island, of the United States Minor Outlying Islands: an uninhabited wildlife
+  // refuge. Haiti claims it (97_administered_ground.json).
+  // Navassa Island
+  "um_76": {
+    "population": 300,
+    "urbanization": 0.557,
+    "cultures": { "american": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.089, "Coal": 0.163, "Oil": 0.263, "IronOre": 0.154, "RareEarths": 0.035, "NaturalGas": 0.182, "Timber": 3.279, "Bauxite": 0.049, "Uranium": 0.006 }
   }
 }

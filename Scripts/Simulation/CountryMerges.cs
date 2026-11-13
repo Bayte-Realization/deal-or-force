@@ -11,23 +11,34 @@ namespace DealOrForce.Simulation;
 /// own as a country of its own: Scarborough Reef, the Siachen Glacier, the UN buffer zone on
 /// Cyprus, the British bases beside it, Bir Tawil, a dozen uninhabited islands, two leased bases.
 /// None of them has a government. In the game they were countries all the same - each with a
-/// line in the diplomacy list, a relation with every state on earth, and, where the map gave them
-/// a province, a patch of ground with no army and nobody to talk to on it.
+/// line in the diplomacy list, a relation with every state on earth, a ruler, a ranking, and,
+/// where the map gave them a province, a patch of ground with no army and nobody to talk to on it.
 ///
 /// `common/country_merges/` says which entries these are and who holds their ground on the first
-/// day (or that nobody does). Two things follow, and both are the same rule for every entry:
+/// day (or that nobody does). The table is applied once, where the world is built, and the rule
+/// is the same for every entry:
 ///
-/// - the political map gives the entry's provinces to that owner as it is laid on the ground
-///   (ProvinceOwnership.Apply), so Siachen is India's and the base areas are Britain's without a
-///   province line written for each;
-/// - an entry that holds no ground is not shown as a country (IsArtefact). It is kept in the
-///   nation list - ids are list positions, and a save, a fingerprint or a mod naming the country
-///   after it would all shift if it were dropped - and the weekly review ends it the way it ends
-///   any country found with no ground that never had any (MovementFall).
+/// - the entry is never made a country. ScenarioCatalog reads the country table past it, so it
+///   is not in the nation list at all - and so not in the country picker, the diplomacy list,
+///   the rankings, the map's labels, anybody's relations, the AI's considerations or a save;
+/// - its regions are its holder's from the first line of the world (GroundByMapIndex): the
+///   Siachen region is one of India's regions before the economy is dealt out, not a country's
+///   only region handed over afterwards. An entry merged into nobody leaves unclaimed land,
+///   settled like any other (ColonisationCore);
+/// - its provinces follow on the map: the raster still paints them in the entry's own colour,
+///   and the political map repaints that colour as the holder's wherever it is laid
+///   (ProvinceOwnership.Apply), so no province line has to be written for each.
+///
+/// Who else wants the ground is not this table's business. A dispute is a core or a claim on the
+/// region, in history/states with every other one (LostLands).
 ///
 /// Nothing is special-cased by tag in code: the table is data, a mod adds or removes a line, and
-/// an entry that somehow comes to hold ground again (a mod handing it a province, a secession
-/// reviving the tag) is a country again because it then has ground.
+/// an entry a mod takes off the list is an ordinary row of the country table again.
+///
+/// The one thing that still knows these as countries is a save written before the table was
+/// applied at the world's building: its nation list is its own, ids are positions in it, and
+/// nothing can be taken out of the middle of it. IsLegacyEntry names what such a save still
+/// carries so the lists that show every nation can leave it out.
 /// </summary>
 public static class CountryMerges
 {
@@ -86,10 +97,70 @@ public static class CountryMerges
     }
 
     /// <summary>
-    /// Whether this nation is one of the table's entries and holds no ground: something the map
-    /// source called a country that is not one, and so is not listed as one. A movement is never
-    /// an artefact - a government in exile holds no ground either, and it is still a country.
+    /// The table by the numbers the map is drawn in: the country-table index of every merged
+    /// entry, and the index of the country that holds its ground - zero for nobody.
+    ///
+    /// The world is built from this rather than from tags because the map knows a country only
+    /// by its index: a region row names its country by index, and the raster paints a province in
+    /// it. An entry whose holder is not a row of the country table - a misspelt tag, a chain that
+    /// never leaves the table - holds nobody's ground: the entry is not a country either way, and
+    /// land with no owner is at least land somebody can settle, where land owned by a country
+    /// that does not exist is land nothing can ever reach.
+    ///
+    /// Worked out when asked rather than kept: it is read once as a world is built and once as
+    /// its map is laid, and both tables it is made of can be replaced by a mod between two worlds.
     /// </summary>
-    public static bool IsArtefact(Campaign campaign, Nation nation) =>
+    public static Dictionary<int, int> GroundByMapIndex()
+    {
+        var ground = new Dictionary<int, int>();
+        if (Owners.Count == 0) return ground;
+        var indexByTag = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var rows = new List<(int MapIndex, string Tag)>();
+        foreach (var row in WorldMapTables.CountryRows)
+        {
+            var parts = row.Split('|');
+            if (parts.Length < 10 || !int.TryParse(parts[0], out var mapIndex) || mapIndex <= 0) continue;
+            var tag = ScenarioCatalog.CountryTag(parts);
+            indexByTag.TryAdd(tag, mapIndex);
+            rows.Add((mapIndex, tag));
+        }
+        foreach (var (mapIndex, tag) in rows)
+        {
+            if (!Owners.ContainsKey(tag)) continue;
+            var holder = OwnerOf(tag);
+            ground[mapIndex] = holder is not null && !Owners.ContainsKey(holder) &&
+                               indexByTag.TryGetValue(holder, out var held)
+                ? held
+                : 0;
+        }
+        return ground;
+    }
+
+    /// <summary>
+    /// The country-table index of a tag, whether or not the row became a country; zero when no
+    /// row answers to it. For whatever has to speak of an entry that is not in the nation list -
+    /// a check that its provinces went where the table says, a tool reading the raster.
+    /// </summary>
+    public static int MapIndexOf(string tag)
+    {
+        if (string.IsNullOrEmpty(tag)) return 0;
+        foreach (var row in WorldMapTables.CountryRows)
+        {
+            var parts = row.Split('|');
+            if (parts.Length >= 10 && int.TryParse(parts[0], out var mapIndex) &&
+                string.Equals(ScenarioCatalog.CountryTag(parts), tag, StringComparison.OrdinalIgnoreCase))
+                return mapIndex;
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// Whether this nation is one of the table's entries carried by a save from before the table
+    /// was applied as the world is built: a reef or a glacier that was a "country" there, holds
+    /// no ground and never will. A new campaign has none. A movement is never one - a government
+    /// in exile holds no ground either, and it is still a country - and neither is an entry that
+    /// holds ground, which only a mod or an old campaign's own history could have given it.
+    /// </summary>
+    public static bool IsLegacyEntry(Campaign campaign, Nation nation) =>
         campaign is not null && nation is { Movement: null } && IsMerged(nation.Tag) && !campaign.HasOwnedLand(nation);
 }

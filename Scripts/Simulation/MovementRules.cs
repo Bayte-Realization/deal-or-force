@@ -1704,7 +1704,9 @@ public static class MovementRules
         {
             int here = map.ProvinceToState[province];
             if (!wanted.Contains(here) && !held.Contains(here)) continue;
-            foreach (var next in map.Neighbors[province])
+            // Drawn borders: a homeland is claimed as ground that hangs together on the map, and
+            // a strait crossing is not a shared border (ProvinceTopology.LandNeighbors).
+            foreach (var next in map.LandNeighbors[province])
             {
                 int there = map.ProvinceToState[next];
                 if (there == here || (!wanted.Contains(there) && !held.Contains(there))) continue;

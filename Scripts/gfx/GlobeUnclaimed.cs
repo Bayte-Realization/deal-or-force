@@ -25,10 +25,10 @@ public sealed partial class GlobePresentation
     /// ocean the moment the camera came near it, while from further out, where the map is read
     /// from the authored picture, it was still there.
     /// </summary>
-    private const ushort UnownedPaletteIndex = 65535;
+    private const ushort UnownedPaletteIndex = Simulation.MapBorders.Unowned;
 
     /// <summary>The grey of land no flag flies over - the same one the far map already uses for it.</summary>
-    private const uint UnownedColour = 0x6E7B8BFFu;
+    private const uint UnownedColour = Simulation.MapBorders.UnownedColour;
 
     private static void WriteUnownedPaletteEntry(byte[] palette)
     {

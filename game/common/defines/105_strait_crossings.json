@@ -1,0 +1,59 @@
+// Deal or Force - strait crossings: what it costs to walk over narrow water.
+//
+// The crossings themselves are in map_data/crossings, each a pair of shores and a kind.
+// These numbers price the kinds. An entry there may carry its own "march" or "attack" and
+// then ignores the figure for its kind here.
+//
+// Every key overrides the value compiled into LandCrossings.cs; a key no file mentions keeps
+// its compiled value, and files in this folder are read in name order with later files
+// winning.
+{
+  // Reading the data file.
+  //
+  // How far a crossing's authored shore may lie from the nearest ground the map draws. The
+  // map's cells are seven kilometres across and its coasts are coarser still, so a point
+  // on the real quay is often a cell or two out to sea; 45 km finds the shore without ever
+  // reaching the far one, since the entries shipped are all narrower than that between
+  // points put well inland of their own side.
+  "CrossingResolveToleranceKm": 45,
+
+  // The longest span between the two authored shores before the entry is refused as a
+  // mistake. The widest shipped entry is the Guimaras Strait ferry at 46 km between its
+  // two quays; the rule for what qualifies is in the data file, not here.
+  "CrossingMaxSpanKm": 75,
+
+  // The march.
+  //
+  // Each is the share of march pace kept on the step that crosses, multiplied into the same
+  // product as terrain, roads and rivers (07_movement.json). At 0.75 progress a day a
+  // district takes a day and a third; over a bridge that is a day and two thirds, and by
+  // ferry four and a half days - a division loads, sails and unloads a battalion at a time,
+  // which is why armies that could wait for a bridge always did.
+  "CrossingFixedLinkMarch": 0.8,
+  "CrossingCausewayMarch": 0.85,
+  "CrossingFerryMarch": 0.3,
+
+  // The assault.
+  //
+  // The share of attacking power kept by the formations that come over the crossing; the
+  // rest of the same battle that came by land keeps all of its own. A major river leaves
+  // the attacker 0.70 (00_combat.json). A bridge is worse than any river: one column wide,
+  // registered by every gun on the far shore. A landing from ferries on a held shore is
+  // worse again, and is what a real staff would call an amphibious assault.
+  "CrossingFixedLinkAttack": 0.6,
+  "CrossingFerryAttack": 0.45,
+
+  // Who commands the strait.
+  //
+  // A fleet at sea within CrossingControlRangeDegrees of a crossing counts toward its side's
+  // presence there (Fleet.Presence - hulls, worn by damage and readiness). The strait is an
+  // enemy's when the hostile presence is at least CrossingBlockingPresence, so that a patrol
+  // boat is not a blockade, and more than CrossingDominanceRatio times the friendly presence,
+  // so that a contested strait is not a closed one. Then a ferry does not sail for that
+  // country until the fleet is driven off; a bridge, a tunnel or a causeway stays open and is
+  // marked on the map. 0.9 of a degree is a hundred kilometres: the fleet has to be on the
+  // strait, not somewhere in the same sea.
+  "CrossingControlRangeDegrees": 0.9,
+  "CrossingBlockingPresence": 6,
+  "CrossingDominanceRatio": 1.5
+}

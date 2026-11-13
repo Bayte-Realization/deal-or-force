@@ -719,6 +719,9 @@ public partial class DealOrForceGame
             army.SupplyCongestion < 0.999f ? ("△", "state.warning", LogisticsSystem.DescribeSupply(_campaign, army)) :
             army.SupplyLevel < 0.45f ? ("△", "state.warning", "Short of supply") :
             army.Organisation < 0.35f ? ("↓", "state.critical", "Organisation is spent") :
+            // Held on the quay by an enemy fleet: it has an order and is not moving, which
+            // without a word about the strait reads as an order ignored.
+            LandCrossings.WaitingAt(_campaign, army) is { } shutFerry ? ("!", "state.warning", LandCrossings.WaitingSentence(shutFerry)) :
             army.IsMoving ? ("→", "state.info", "On the march") :
             IsOffensive(army) && army.PlanActive ? ("▶", "state.positive", "Plan executing") :
             IsOffensive(army) ? ("◷", "text.muted", "Plan preparing") :

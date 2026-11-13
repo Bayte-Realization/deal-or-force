@@ -1,4 +1,4 @@
-// India (IND) on 1 January 2024: 29 regions, 1,366,417,754 people.
+// India (IND) on 1 January 2024: 30 regions, 1,366,417,754 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -242,5 +242,15 @@
     "cultures": { "bengali": 0.7, "bengali_muslim": 0.23, "hindustani": 0.04, "nepali": 0.015, "odia": 0.008, "punjabi": 0.004, "tamil": 0.003 },
     "buildings": { "Agriculture": 25, "CivilianIndustry": 4, "Infrastructure": 1 },
     "resources": { "Food": 1.801, "Coal": 3.572, "Oil": 1.018, "IronOre": 0.142, "RareEarths": 0.151, "NaturalGas": 0.568, "Timber": 0.757, "Bauxite": 0.159, "Uranium": 0.008 }
+  },
+  // The Siachen Glacier. The map source draws it as a country of its own; India has held it
+  // since Operation Meghdoot in 1984 and Pakistan claims it (97_administered_ground.json).
+  // Kashmir
+  "99_x06": {
+    "population": 6000,
+    "urbanization": 0.297,
+    "cultures": { "kashmiri": 0.5, "ladakhi": 0.3, "punjabi": 0.2 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 1 },
+    "resources": { "Food": 0.834, "Coal": 0.077, "Oil": 0.282, "IronOre": 0.146, "RareEarths": 0.039, "NaturalGas": 0.228, "Timber": 1.203, "Bauxite": 0.03, "Uranium": 0.003 }
   }
 }

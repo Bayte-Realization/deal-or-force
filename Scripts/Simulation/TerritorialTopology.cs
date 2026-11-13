@@ -569,9 +569,12 @@ public static class TerritorialTopology
     private static void ApplyPartition(Campaign campaign, ushort[] control, ushort[] states,
         int width, int height, RegionPartition partition, List<RepairSummary> summaries)
     {
-        var nation = campaign.NationByTag(partition.NationTag);
+        // Whose ground is being divided. A rule may name an entry of the country table that is
+        // not a country (common/country_merges): the shares are then regions of whoever holds
+        // its ground, or of nobody - Antarctica's lands are made here and nobody owns the ice.
+        var nation = campaign.NationByTag(CountryMerges.OwnerOf(partition.NationTag));
         var donorIndex = StateIndexByIso(partition.CarveFromIso);
-        if (nation is null || donorIndex == 0) return;
+        if ((nation is null && !CountryMerges.IsMerged(partition.NationTag)) || donorIndex == 0) return;
 
         // The ground being divided is the region plus everything already divided out of
         // it. Taking only what still carries the original index would re-divide the
@@ -619,20 +622,7 @@ public static class TerritorialTopology
             var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
             if (state is null)
             {
-                state = new ScenarioState
-                {
-                    MapIndex = piece.MapIndex,
-                    NationMapIndex = nation.MapIndex,
-                    NationId = nation.Tag,
-                    Id = piece.Iso.ToLowerInvariant().Replace('-', '_'),
-                    Name = piece.Name,
-                    Iso = piece.Iso,
-                    Kind = piece.Kind
-                };
-                campaign.States.Add(state);
-                if (donor is not null && piece.Population > 0)
-                    EconomySystem.AdjustStatePopulation(donor, -piece.Population);
-                EconomySystem.SeedState(campaign, state, nation, piece.Population);
+                state = NewShare(campaign, nation, donor, piece);
             }
             else if (carved.Contains((ushort)piece.MapIndex) && !string.IsNullOrWhiteSpace(piece.Name))
             {
@@ -740,20 +730,7 @@ public static class TerritorialTopology
             var state = campaign.States.FirstOrDefault(candidate => candidate.MapIndex == piece.MapIndex);
             if (state is null)
             {
-                state = new ScenarioState
-                {
-                    MapIndex = piece.MapIndex,
-                    NationMapIndex = nation.MapIndex,
-                    NationId = nation.Tag,
-                    Id = piece.Iso.ToLowerInvariant().Replace('-', '_'),
-                    Name = piece.Name,
-                    Iso = piece.Iso,
-                    Kind = piece.Kind
-                };
-                campaign.States.Add(state);
-                if (donor is not null && piece.Population > 0)
-                    EconomySystem.AdjustStatePopulation(donor, -piece.Population);
-                EconomySystem.SeedState(campaign, state, nation, piece.Population);
+                state = NewShare(campaign, nation, donor, piece);
             }
             else if (carved.Contains((ushort)piece.MapIndex) && !string.IsNullOrWhiteSpace(piece.Name))
             {
@@ -761,6 +738,35 @@ public static class TerritorialTopology
                 if (!string.IsNullOrWhiteSpace(piece.Kind)) state.Kind = piece.Kind;
             }
         }
+    }
+
+    /// <summary>
+    /// One share of a divided region, as a region of its own.
+    ///
+    /// Its people are dealt out the way its country's are everywhere else, which needs a country
+    /// to take the figures from. Ground nobody owns has neither: it is unclaimed land with what
+    /// history/states writes for it and nothing worked out, the same as a region made for an
+    /// unowned province (ColonisationCore.EnsureAuthoredRegions).
+    /// </summary>
+    private static ScenarioState NewShare(Campaign campaign, Nation nation, ScenarioState donor, RegionPiece piece)
+    {
+        var state = new ScenarioState
+        {
+            MapIndex = piece.MapIndex,
+            NationMapIndex = nation?.MapIndex ?? 0,
+            NationId = nation?.Tag ?? "",
+            Id = piece.Iso.ToLowerInvariant().Replace('-', '_'),
+            Name = piece.Name,
+            Iso = piece.Iso,
+            Kind = piece.Kind,
+            Unclaimed = nation is null
+        };
+        campaign.States.Add(state);
+        if (donor is not null && piece.Population > 0)
+            EconomySystem.AdjustStatePopulation(donor, -piece.Population);
+        if (nation is not null) EconomySystem.SeedState(campaign, state, nation, piece.Population);
+        else state.Population = piece.Population;
+        return state;
     }
 
     private static Dictionary<ushort, int> CountShares(ushort[] states, HashSet<ushort> shares)

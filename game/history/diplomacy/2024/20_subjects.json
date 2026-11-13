@@ -64,9 +64,9 @@
     { "overlord": "CHN", "subject": "HKG", "type": "dependent_territory" },
     { "overlord": "CHN", "subject": "MAC", "type": "dependent_territory" },
 
-    // Australian external territories.
+    // Australian external territories. Christmas Island and the Cocos Islands - the map
+    // source's "Indian Ocean Territories" - are Australia's own ground (common/country_merges).
     { "overlord": "AUS", "subject": "NFK", "type": "dependent_territory" },
-    { "overlord": "AUS", "subject": "IOA", "type": "dependent_territory" },
 
     // Breakaways that exist on a patron's garrison and budget.
     { "overlord": "RUS", "subject": "ABK", "type": "associated_state" },

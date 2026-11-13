@@ -34,7 +34,9 @@ public static class Dismantlement
         {
             changed = false;
             foreach (var p in ground.Where(p => connected.Contains(map.ProvinceToState[p])))
-                foreach (var other in map.Neighbors[p])
+                // Drawn borders: a settlement is one connected piece of the map, and a bridge between
+                // two islands does not make them one (ProvinceTopology.LandNeighbors).
+                foreach (var other in map.LandNeighbors[p])
                     if (selected.Contains(map.ProvinceToState[other])) changed |= connected.Add(map.ProvinceToState[other]);
         } while (changed);
         if (connected.Count != regions.Length) return Loc.Get("Released regions must form one connected settlement.");

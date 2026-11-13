@@ -1,4 +1,4 @@
-// France (FRA) on 1 January 2024: 29 regions, 67,059,887 people.
+// France (FRA) on 1 January 2024: 30 regions, 67,059,887 people.
 //
 // Every region the country holds when the bookmark opens, and what it has: how many people
 // live there and how many of them in towns, who they are, what is built there and what lies
@@ -242,5 +242,14 @@
     "cultures": { "french": 0.8142, "arab_maghrebi": 0.0699, "berber": 0.02, "occitan": 0.015, "portuguese": 0.012, "breton": 0.008, "italian": 0.008, "bambara": 0.006, "spanish": 0.006, "turkish": 0.006, "wolof": 0.006, "chinese_diaspora": 0.004, "corsican": 0.004, "vietnamese": 0.004, "catalan": 0.003, "german": 0.003, "haitian": 0.003, "romani": 0.003, "basque": 0.002, "polish": 0.002, "ukrainian": 0.001 },
     "buildings": { "Agriculture": 5, "CivilianIndustry": 2, "Infrastructure": 3 },
     "resources": { "Food": 1.514, "Coal": 0.235, "Oil": 0.328, "IronOre": 0.144, "RareEarths": 0.062, "NaturalGas": 0.326, "Timber": 2.28, "Bauxite": 0.068, "Uranium": 0.009 }
+  },
+  // The French Southern and Antarctic Lands: research stations on Kerguelen, nobody settled.
+  // Kerguelen Islands
+  "tf_x01": {
+    "population": 140,
+    "urbanization": 0.694,
+    "cultures": { "french": 1 },
+    "buildings": { "Agriculture": 1, "Infrastructure": 2 },
+    "resources": { "Food": 2.223, "Coal": 0.206, "Oil": 0.209, "IronOre": 0.176, "RareEarths": 0.044, "NaturalGas": 0.315, "Timber": 2.116, "Bauxite": 0.065, "Uranium": 0.003 }
   }
 }
